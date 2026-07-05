@@ -2,8 +2,6 @@
 
 A universal AI router for coding tools. Omni Gateway provides smart auto-fallback, token compression, and seamless format translation so local agents, IDE assistants, and automation scripts can use free and premium LLM capacity through one stable API surface.
 
-Repository: https://github.com/nguywnben/omni-gateway
-
 ## Why Omni Gateway
 
 Modern coding workflows often mix clients and providers: OpenAI-compatible tools, Gemini-native SDKs, Anthropic-style agents, Google-backed credentials, and experimental model routes. Omni Gateway sits between those clients and model backends so each tool can keep speaking the format it already understands while the gateway handles routing, retries, request cleanup, and response normalization.
@@ -70,7 +68,7 @@ Open the control panel at:
 http://127.0.0.1:7861
 ```
 
-The default API/control-panel password is `pwd`. Change it before exposing the service.
+On first run, open the control panel and create the console password on the setup screen. No default password is shipped.
 
 ### Docker
 
@@ -78,8 +76,6 @@ The default API/control-panel password is `pwd`. Change it before exposing the s
 docker run -d \
   --name omni-gateway \
   -p 7861:7861 \
-  -e OGW_API_PASSWORD=change-me \
-  -e OGW_PANEL_PASSWORD=change-me-too \
   -v "$(pwd)/backend/data/creds:/app/backend/data/creds" \
   nguywnben/omni-gateway:latest
 ```
@@ -100,9 +96,9 @@ Omni Gateway reads configuration from environment variables first, then stored c
 | --- | --- | --- |
 | `OGW_HOST` | `0.0.0.0` | Bind address. |
 | `OGW_PORT` | `7861` | HTTP port. |
-| `OGW_API_PASSWORD` | `pwd` via fallback | Password for API requests. |
-| `OGW_PANEL_PASSWORD` | `pwd` via fallback | Password for the web control panel. |
-| `OGW_PASSWORD` | `pwd` | Shared fallback password for API and panel. |
+| `OGW_API_PASSWORD` | empty until setup | Password for API requests. |
+| `OGW_PANEL_PASSWORD` | empty until setup | Password for the web control panel. |
+| `OGW_PASSWORD` | empty until setup | Shared fallback password for API and panel. |
 | `OGW_CREDENTIALS_DIR` | `./backend/data/creds` | Local credential storage directory. |
 | `OGW_CODE_ASSIST_ENDPOINT` | `https://cloudcode-pa.googleapis.com` | Code Assist backend endpoint. |
 | `OGW_API_URL` | `https://daily-cloudcode-pa.googleapis.com` | Omni backend endpoint. |
@@ -195,7 +191,7 @@ Provider adapters normalize these feature names before sending upstream requests
 
 1. Start Omni Gateway.
 2. Open `http://127.0.0.1:7861`.
-3. Sign in to the control panel with `OGW_PANEL_PASSWORD`.
+3. Create the console password on the first-run setup screen, or sign in with `OGW_PANEL_PASSWORD` when it is preconfigured.
 4. Add credentials through OAuth or upload existing credential JSON files.
 5. Verify credentials and watch cooldown/error state in the panel.
 6. Point your coding tool to one of the API surfaces above.

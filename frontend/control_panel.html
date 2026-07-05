@@ -35,6 +35,26 @@
         </div>
     </section>
 
+    <section id="setupSection" class="login-wrapper" aria-label="Initial setup">
+        <div class="login-card">
+            <div class="login-brand">
+                <span class="app-mark" aria-hidden="true">
+                    <img class="app-mark-image" src="/frontend/assets/icon.png" alt="">
+                </span>
+                <div class="login-brand-title">Omni Gateway</div>
+            </div>
+            <h1 class="login-title">Create your console password</h1>
+            <p class="login-copy">Secure this new Omni Gateway instance before opening the management console.</p>
+            <div class="login-form">
+                <label for="setupPassword">Console password</label>
+                <input type="password" id="setupPassword" placeholder="At least 8 characters" autocomplete="new-password" onkeypress="handleSetupEnter(event)">
+                <label for="setupPasswordConfirm">Confirm password</label>
+                <input type="password" id="setupPasswordConfirm" placeholder="Re-enter password" autocomplete="new-password" onkeypress="handleSetupEnter(event)">
+                <button type="button" class="btn" onclick="completeInitialSetup()">Create password</button>
+            </div>
+        </div>
+    </section>
+
     <section id="mainSection" class="dashboard-wrapper hidden" aria-label="Dashboard">
         <aside class="dashboard-sidebar" aria-label="Primary navigation">
             <div class="sidebar-brand">

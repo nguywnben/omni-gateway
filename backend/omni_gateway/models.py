@@ -349,6 +349,11 @@ class LoginRequest(BaseModel):
     password: str
 
 
+class SetupRequest(BaseModel):
+    password: str
+    confirm_password: Optional[str] = None
+
+
 class AuthStartRequest(BaseModel):
     project_id: Optional[str] = None
     mode: Optional[str] = "code_assist"

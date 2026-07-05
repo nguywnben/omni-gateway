@@ -622,6 +622,10 @@ TOKEN_EXPIRY = 3600
 
 async def verify_password(password: str) -> bool:
     """Internal implementation detail."""
-    from config import get_panel_password
+    from config import get_panel_password, has_password_configured
+    if not await has_password_configured():
+        return False
     correct_password = await get_panel_password()
+    if not correct_password:
+        return False
     return password == correct_password

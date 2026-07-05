@@ -12,6 +12,7 @@ router = APIRouter(tags=["root"])
 
 @router.get("/", response_class=HTMLResponse)
 @router.get("/login", response_class=HTMLResponse)
+@router.get("/setup", response_class=HTMLResponse)
 @router.get("/dashboard", response_class=HTMLResponse)
 @router.get("/code_assist", response_class=HTMLResponse)
 @router.get("/omni", response_class=HTMLResponse)

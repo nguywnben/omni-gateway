@@ -7,8 +7,8 @@ services:
     restart: unless-stopped
     network_mode: host
     environment:
-      # Password configuration
-      - OGW_PASSWORD=${OGW_PASSWORD:-pwd}
+      # Password configuration. Leave unset for the first-run web setup screen.
+      # - OGW_PASSWORD=${OGW_PASSWORD}
       # - OGW_API_PASSWORD=${OGW_API_PASSWORD:-your_api_password}
       # - OGW_PANEL_PASSWORD=${OGW_PANEL_PASSWORD:-your_panel_password}
 

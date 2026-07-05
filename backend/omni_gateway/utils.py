@@ -243,6 +243,8 @@ async def verify_panel_token(credentials: HTTPAuthorizationCredentials = Depends
     """Internal implementation detail."""
 
     password = await get_panel_password()
+    if not password:
+        raise HTTPException(status_code=428, detail="Initial setup is required")
     if credentials.credentials != password:
         raise HTTPException(status_code=401, detail="Incorrect password")
     return credentials.credentials

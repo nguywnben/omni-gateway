@@ -1046,6 +1046,32 @@ function navigate(path, pushState = true) {
 
     }
 
+    const setupEl = document.getElementById('setupSection');
+
+    const loginEl = document.getElementById('loginSection');
+
+    const mainEl = document.getElementById('mainSection');
+
+    if (AppState.setupRequired) {
+
+        targetPath = '/setup';
+
+        if (window.location.pathname !== '/setup') {
+
+            history.replaceState(null, '', '/setup');
+
+        }
+
+        if (setupEl) setupEl.style.setProperty('display', 'flex', 'important');
+
+        if (loginEl) loginEl.style.setProperty('display', 'none', 'important');
+
+        if (mainEl) mainEl.style.setProperty('display', 'none', 'important');
+
+        return;
+
+    }
+
     const savedToken = localStorage.getItem('ogw_auth_token') || AppState.authToken;
 
     const isAuthenticated = !!savedToken;
@@ -1060,9 +1086,7 @@ function navigate(path, pushState = true) {
 
         }
 
-        const loginEl = document.getElementById('loginSection');
-
-        const mainEl = document.getElementById('mainSection');
+        if (setupEl) setupEl.style.setProperty('display', 'none', 'important');
 
         if (loginEl) loginEl.style.setProperty('display', 'flex', 'important');
 
@@ -1078,9 +1102,13 @@ function navigate(path, pushState = true) {
 
         }
 
-        const loginEl = document.getElementById('loginSection');
+        if (targetPath === '/setup') {
 
-        const mainEl = document.getElementById('mainSection');
+            targetPath = '/dashboard';
+
+        }
+
+        if (setupEl) setupEl.style.setProperty('display', 'none', 'important');
 
         if (loginEl) loginEl.style.setProperty('display', 'none', 'important');
 
@@ -1165,6 +1193,8 @@ const AppState = {
     // Comment translated/cleaned for compliance
 
     authToken: '',
+
+    setupRequired: false,
 
     authInProgress: false,
 
@@ -2663,6 +2693,106 @@ async function toggleCredDetailsCommon(pathId, manager) {
 
 // =====================================================================
 
+async function refreshSetupStatus() {
+
+    try {
+
+        const response = await fetch('./ogw/auth/setup/status');
+
+        const data = await response.json();
+
+        AppState.setupRequired = Boolean(data.setup_required);
+
+        if (AppState.setupRequired) {
+
+            localStorage.removeItem('ogw_auth_token');
+
+            AppState.authToken = '';
+
+        }
+
+        return AppState.setupRequired;
+
+    } catch (error) {
+
+        AppState.setupRequired = false;
+
+        return false;
+
+    }
+
+}
+
+async function completeInitialSetup() {
+
+    const password = document.getElementById('setupPassword')?.value || '';
+
+    const confirmPassword = document.getElementById('setupPasswordConfirm')?.value || '';
+
+    if (password.length < 8) {
+
+        showStatus('Password must be at least 8 characters.', 'error');
+
+        return;
+
+    }
+
+    if (password !== confirmPassword) {
+
+        showStatus('Passwords do not match.', 'error');
+
+        return;
+
+    }
+
+    try {
+
+        const response = await fetch('./ogw/auth/setup', {
+
+            method: 'POST',
+
+            headers: { 'Content-Type': 'application/json' },
+
+            body: JSON.stringify({ password, confirm_password: confirmPassword })
+
+        });
+
+        const data = await response.json();
+
+        if (response.ok) {
+
+            AppState.setupRequired = false;
+
+            AppState.authToken = data.token;
+
+            localStorage.setItem('ogw_auth_token', AppState.authToken);
+
+            showStatus('Initial setup completed.', 'success');
+
+            navigate('/dashboard');
+
+            await fetchAndDisplayVersion();
+
+        } else {
+
+            showStatus(data.detail || data.error || 'Initial setup failed.', 'error');
+
+        }
+
+    } catch (error) {
+
+        showStatus(t('status_net_error', {error: error.message}), 'error');
+
+    }
+
+}
+
+function handleSetupEnter(event) {
+
+    if (event.key === 'Enter') completeInitialSetup();
+
+}
+
 async function login() {
 
     const password = document.getElementById('loginPassword').value;
@@ -2701,6 +2831,16 @@ async function login() {
 
         } else {
 
+            if (response.status === 428) {
+
+                AppState.setupRequired = true;
+
+                navigate('/setup', false);
+
+                return;
+
+            }
+
             showStatus(t('login_failed_datadetail_dataerror_u', {data_detail____data_error: data.detail || data.error || t('unknown_error')}), 'error');
 
         }
@@ -2714,6 +2854,14 @@ async function login() {
 }
 
 async function autoLogin() {
+
+    if (AppState.setupRequired) {
+
+        navigate('/setup', false);
+
+        return false;
+
+    }
 
     const savedToken = localStorage.getItem('ogw_auth_token');
 
@@ -5851,7 +5999,7 @@ function populateConfigForm() {
 
     setConfigField('configPanelPassword', c.ogw_panel_password || '');
 
-    setConfigField('configPassword', c.ogw_password || 'pwd');
+    setConfigField('configPassword', c.ogw_password || '');
 
     setConfigField('credentialsDir', c.ogw_credentials_dir || '');
 
@@ -5968,7 +6116,7 @@ async function saveConfig() {
 
             ogw_panel_password: getValue('configPanelPassword'),
 
-            ogw_password: getValue('configPassword', 'pwd'),
+            ogw_password: getValue('configPassword'),
 
             ogw_code_assist_endpoint: getValue('codeAssistEndpoint'),
 
@@ -6625,6 +6773,16 @@ window.onload = async function () {
         navigate(window.location.pathname, false);
 
     });
+
+    const setupRequired = await refreshSetupStatus();
+
+    if (setupRequired) {
+
+        navigate('/setup', false);
+
+        return;
+
+    }
 
     const autoLoginSuccess = await autoLogin();
 

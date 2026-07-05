@@ -108,6 +108,19 @@ async def get_config_value(key: str, default: Any = None, env_var: Optional[str]
     return default
 
 
+async def has_password_configured() -> bool:
+    """Return True when any panel/API password source has been configured."""
+    if not _config_initialized:
+        await init_config()
+
+    password_env_vars = ("OGW_PANEL_PASSWORD", "OGW_API_PASSWORD", "OGW_PASSWORD")
+    if any(os.getenv(name) for name in password_env_vars):
+        return True
+
+    password_keys = ("ogw_panel_password", "ogw_api_password", "ogw_password")
+    return any(bool(_get_cached_config(key)) for key in password_keys)
+
+
 # Configuration getters - all async
 async def get_proxy_config():
     """Get proxy configuration."""
@@ -232,7 +245,7 @@ async def get_api_password() -> str:
 
     Environment variable: OGW_API_PASSWORD
     Database config key: ogw_api_password
-    Default: Uses OGW_PASSWORD when no specific password is set.
+    Default: Empty string until the first-run setup creates a password.
     """
     # Prefer OGW_API_PASSWORD before falling back to OGW_PASSWORD.
     api_password = await get_config_value("ogw_api_password", None, "OGW_API_PASSWORD")
@@ -240,7 +253,7 @@ async def get_api_password() -> str:
         return str(api_password)
 
 
-    return str(await get_config_value("ogw_password", "pwd", "OGW_PASSWORD"))
+    return str(await get_config_value("ogw_password", "", "OGW_PASSWORD") or "")
 
 
 async def get_panel_password() -> str:
@@ -249,7 +262,7 @@ async def get_panel_password() -> str:
 
     Environment variable: OGW_PANEL_PASSWORD
     Database config key: ogw_panel_password
-    Default: Uses OGW_PASSWORD when no specific password is set.
+    Default: Empty string until the first-run setup creates a password.
     """
     # Prefer OGW_PANEL_PASSWORD before falling back to OGW_PASSWORD.
     panel_password = await get_config_value("ogw_panel_password", None, "OGW_PANEL_PASSWORD")
@@ -257,7 +270,7 @@ async def get_panel_password() -> str:
         return str(panel_password)
 
 
-    return str(await get_config_value("ogw_password", "pwd", "OGW_PASSWORD"))
+    return str(await get_config_value("ogw_password", "", "OGW_PASSWORD") or "")
 
 
 async def get_server_password() -> str:
@@ -266,9 +279,9 @@ async def get_server_password() -> str:
 
     Environment variable: OGW_PASSWORD
     Database config key: ogw_password
-    Default: pwd
+    Default: empty until first-run setup.
     """
-    return str(await get_config_value("ogw_password", "pwd", "OGW_PASSWORD"))
+    return str(await get_config_value("ogw_password", "", "OGW_PASSWORD") or "")
 
 
 async def get_credentials_dir() -> str:

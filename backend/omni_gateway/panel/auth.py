@@ -10,6 +10,7 @@ from typing import Any, Dict, List
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import JSONResponse
 
+import config
 from log import log
 from omni_gateway.auth import (
     asyncio_complete_auth_flow,
@@ -20,10 +21,12 @@ from omni_gateway.auth import (
 )
 from omni_gateway.models import (
     LoginRequest,
+    SetupRequest,
     AuthStartRequest,
     AuthCallbackRequest,
     AuthCallbackUrlRequest,
 )
+from omni_gateway.storage_adapter import get_storage_adapter
 from omni_gateway.utils import verify_panel_token
 
 
@@ -197,6 +200,9 @@ def _build_env_status() -> Dict[str, Any]:
 async def login(request: LoginRequest):
     """Internal implementation detail."""
     try:
+        if not await config.has_password_configured():
+            raise HTTPException(status_code=428, detail="Initial setup is required before login")
+
         if await verify_password(request.password):
             # Directly use password as token, simplifying auth flow
             return JSONResponse(content={"token": request.password, "message": "Login successful"})
@@ -206,6 +212,52 @@ async def login(request: LoginRequest):
         raise
     except Exception as e:
         log.error(f"Login failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/setup/status")
+async def setup_status():
+    """Return whether the control panel still needs first-run setup."""
+    try:
+        return JSONResponse(content={"setup_required": not await config.has_password_configured()})
+    except Exception as e:
+        log.error(f"Failed to determine setup status: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/setup")
+async def complete_setup(request: SetupRequest):
+    """Create the first control-panel password when no password exists yet."""
+    try:
+        if await config.has_password_configured():
+            raise HTTPException(status_code=409, detail="Initial setup has already been completed")
+
+        password = request.password.strip()
+        confirm_password = (request.confirm_password or request.password).strip()
+
+        if len(password) < 8:
+            raise HTTPException(status_code=400, detail="Password must be at least 8 characters")
+
+        if password != confirm_password:
+            raise HTTPException(status_code=400, detail="Passwords do not match")
+
+        storage_adapter = await get_storage_adapter()
+        for key in ("ogw_password", "ogw_panel_password", "ogw_api_password"):
+            await storage_adapter.set_config(key, password)
+
+        await config.reload_config()
+
+        return JSONResponse(
+            content={
+                "token": password,
+                "message": "Initial setup completed",
+                "setup_required": False,
+            }
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        log.error(f"Initial setup failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 

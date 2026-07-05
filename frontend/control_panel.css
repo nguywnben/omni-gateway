@@ -89,6 +89,7 @@ code {
 }
 
 #loginSection,
+#setupSection,
 #mainSection {
     display: none !important;
 }
@@ -120,10 +121,9 @@ code {
 
 .login-card {
     width: min(100%, 392px);
-    background: rgba(255, 255, 255, 0.94);
+    background: var(--surface);
     border: 1px solid var(--border);
     border-radius: var(--radius);
-    box-shadow: var(--shadow-pop);
     padding: 28px;
 }
 
