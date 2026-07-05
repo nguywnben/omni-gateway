@@ -1,4 +1,4 @@
-full_hash=695df1f0f5f6b5839fb13e9131e250019b3dad18
-short_hash=695df1f
-message=chore: finalize Omni Gateway architecture and console polish
-date=2026-07-05 16:40:29 +0700
+full_hash=df5d4d2056dea9be4afbbdd333c7f0eecbd8ddb2
+short_hash=df5d4d2
+message=chore: switch project license to MIT
+date=2026-07-05 16:52:36 +0700
