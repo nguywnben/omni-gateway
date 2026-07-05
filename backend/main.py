@@ -43,22 +43,22 @@ async def lifespan(app: FastAPI):
     """Internal implementation detail."""
     global global_credential_manager
 
-    log.info("Starting Omni Gateway main service")
+    log.info("Starting the Omni Gateway main service.")
 
 
     try:
         import config
         await config.init_config()
-        log.info("Configuration cache initialized successfully")
+        log.info("Configuration cache initialized successfully.")
     except Exception as e:
-        log.error(f"Failed to initialize configuration cache: {e}")
+        log.error(f"Failed to initialize the configuration cache: {e}")
 
 
     try:
 
 
         await credential_manager._get_or_create()
-        log.info("Credential manager initialized successfully")
+        log.info("Credential manager initialized successfully.")
     except Exception as e:
         log.error(f"Credential manager initialization failed: {e}")
         global_credential_manager = None
@@ -69,23 +69,23 @@ async def lifespan(app: FastAPI):
     try:
         await keepalive_service.start()
     except Exception as e:
-        log.error(f"Failed to start keep-alive service: {e}")
+        log.error(f"Failed to start the keep-alive service: {e}")
 
     yield
 
 
-    log.info("Starting shutdown of Omni Gateway main service")
+    log.info("Starting shutdown of the Omni Gateway main service.")
 
 
     try:
         await keepalive_service.stop()
     except Exception as e:
-        log.error(f"Error while shutting down keep-alive service: {e}")
+        log.error(f"Error while shutting down the keep-alive service: {e}")
 
 
     try:
         await shutdown_all_tasks(timeout=10.0)
-        log.info("All asynchronous tasks have been shut down")
+        log.info("All asynchronous tasks have been shut down.")
     except Exception as e:
         log.error(f"Error while shutting down asynchronous tasks: {e}")
 
@@ -93,11 +93,11 @@ async def lifespan(app: FastAPI):
     if global_credential_manager:
         try:
             await global_credential_manager.close()
-            log.info("Credential manager closed")
+            log.info("Credential manager closed.")
         except Exception as e:
-            log.error(f"Error while shutting down credential manager: {e}")
+            log.error(f"Error while shutting down the credential manager: {e}")
 
-    log.info("Omni Gateway Master Service Stopped")
+    log.info("Omni Gateway service stopped.")
 
 
 
@@ -163,11 +163,11 @@ def main():
         host = await get_server_host()
 
         log.info("=" * 60)
-        log.info("Starting Omni Gateway")
+        log.info("Starting Omni Gateway.")
         log.info("=" * 60)
         log.info(f"Control panel: http://127.0.0.1:{port}")
         if workers > 1:
-            log.info(f"Number of Workers: {workers}")
+            log.info(f"Workers: {workers}")
         log.info("=" * 60)
 
         config = Config()
@@ -186,10 +186,10 @@ def main():
         host = os.environ.get("OGW_HOST", "0.0.0.0")
 
         log.info("=" * 60)
-        log.info("Starting Omni Gateway")
+        log.info("Starting Omni Gateway.")
         log.info("=" * 60)
         log.info(f"Control panel: http://127.0.0.1:{port}")
-        log.info(f"Number of Workers: {workers}")
+        log.info(f"Workers: {workers}")
         log.info("=" * 60)
 
         config = Config()

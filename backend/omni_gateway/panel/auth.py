@@ -317,7 +317,7 @@ async def auth_callback(request: AuthCallbackRequest, token: str = Depends(verif
                 content={
                     "credentials": result["credentials"],
                     "file_path": result["file_path"],
-                    "message": "Authentication successful, credentials saved",
+                    "message": "Authentication successful. Credentials saved.",
                     "auto_detected_project": result.get("auto_detected_project", False),
                 }
             )

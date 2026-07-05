@@ -259,7 +259,7 @@ async def enable_required_apis(credentials: Credentials, project_id: str) -> boo
         headers = {'Authorization': f'Bearer {credentials.access_token}', 'Content-Type': 'application/json', 'User-Agent': 'code_assist-oauth/1.0'}
         required_services = ['geminicloudassist.googleapis.com', 'cloudaicompanion.googleapis.com']
         for service in required_services:
-            log.info(f'Checking and enabling service: {service}')
+            log.info(f'Checking API service: {service}')
             service_usage_base_url = await get_service_usage_api_url()
             check_url = f"{service_usage_base_url.rstrip('/')}/v1/projects/{project_id}/services/{service}"
             try:
@@ -267,28 +267,28 @@ async def enable_required_apis(credentials: Credentials, project_id: str) -> boo
                 if check_response.status_code == 200:
                     service_data = check_response.json()
                     if service_data.get('state') == 'ENABLED':
-                        log.info(f'Service {service} enabled')
+                        log.info(f'Service {service} is already enabled.')
                         continue
             except Exception as e:
-                log.debug(f'Failed to check service status, attempting to enable: {e}')
+                log.debug(f'Failed to check service status. Attempting to enable it now: {e}')
             enable_url = f"{service_usage_base_url.rstrip('/')}/v1/projects/{project_id}/services/{service}:enable"
             try:
                 enable_response = await post_async(enable_url, headers=headers, json={})
                 if enable_response.status_code in [200, 201]:
-                    log.info('OAuth flow event')
+                    log.info(f'Service {service} enabled successfully.')
                 elif enable_response.status_code == 400:
                     error_data = enable_response.json()
                     if 'already enabled' in error_data.get('error', {}).get('message', '').lower():
-                        log.info('OAuth flow event')
+                        log.info(f'Service {service} is already enabled.')
                     else:
-                        log.warning('OAuth flow warning')
+                        log.warning(f'Failed to enable service {service}: {error_data}')
                 else:
-                    log.warning('OAuth flow warning')
+                    log.warning(f'Failed to enable service {service}: HTTP {enable_response.status_code}')
             except Exception as e:
-                log.warning('OAuth flow warning')
+                log.warning(f'Failed to enable service {service}: {e}')
         return True
     except Exception as e:
-        log.error(f'Error while enabling API service: {e}')
+        log.error(f'Error while enabling API services: {e}')
         return False
 
 async def get_user_projects(credentials: Credentials) -> List[Dict[str, Any]]:
@@ -301,14 +301,14 @@ async def get_user_projects(credentials: Credentials) -> List[Dict[str, Any]]:
         url = f"{resource_manager_base_url.rstrip('/')}/v1/projects"
         log.info(f'Calling API: {url}')
         response = await get_async(url, headers=headers)
-        log.info(f'API Response Status Code: {response.status_code}')
+        log.info(f'API response status code: {response.status_code}')
         if response.status_code != 200:
             log.error(f'API response content: {response.text}')
         if response.status_code == 200:
             data = response.json()
             projects = data.get('projects', [])
             active_projects = [project for project in projects if project.get('lifecycleState') == 'ACTIVE']
-            log.info(f'Retrieved {len(active_projects)} active projects')
+            log.info(f'Retrieved {len(active_projects)} active projects.')
             return active_projects
         else:
             log.warning(f'Failed to retrieve project list: {response.status_code} - {response.text}')
@@ -359,7 +359,7 @@ async def fetch_project_id_and_tier(access_token: str, user_agent: str, api_base
             if include_credits:
                 return (project_id, subscription_tier, credit_amount)
             return (project_id, subscription_tier)
-        log.warning('[fetch_project_id_and_tier] loadCodeAssist did not return project_id, falling back to onboardUser')
+        log.warning('[fetch_project_id_and_tier] loadCodeAssist did not return a Project ID; falling back to onboardUser.')
     except Exception as e:
         log.warning(f'[fetch_project_id_and_tier] loadCodeAssist failed: {type(e).__name__}: {e}')
         log.warning('[fetch_project_id_and_tier] Falling back to onboardUser')
@@ -369,7 +369,7 @@ async def fetch_project_id_and_tier(access_token: str, user_agent: str, api_base
             if include_credits:
                 return (project_id, subscription_tier, credit_amount)
             return (project_id, subscription_tier)
-        log.error('[fetch_project_id_and_tier] Failed to get project_id from both loadCodeAssist and onboardUser')
+        log.error('[fetch_project_id_and_tier] Failed to get a Project ID from both loadCodeAssist and onboardUser.')
         if include_credits:
             return (None, subscription_tier, credit_amount)
         return (None, subscription_tier)
@@ -385,7 +385,7 @@ async def _try_load_code_assist(api_base_url: str, headers: dict) -> Tuple[Optio
     """Internal implementation detail."""
     request_url = f"{api_base_url.rstrip('/')}/v1internal:loadCodeAssist"
     request_body = {'metadata': {'ideType': 'OMNI'}}
-    log.debug(f'[loadCodeAssist] Fetching project_id from: {request_url}')
+    log.debug(f'[loadCodeAssist] Fetching Project ID from: {request_url}')
     log.debug(f'[loadCodeAssist] Request body: {request_body}')
     response = await post_async(request_url, json=request_body, headers=headers, timeout=30.0)
     log.debug(f'[loadCodeAssist] Response status: {response.status_code}')
@@ -415,9 +415,9 @@ async def _try_load_code_assist(api_base_url: str, headers: dict) -> Tuple[Optio
             log.info('[loadCodeAssist] User is already activated')
             project_id = data.get('cloudaicompanionProject')
             if project_id:
-                log.info(f'[loadCodeAssist] Successfully fetched project_id: {project_id}, tier: {subscription_tier}')
+                log.info(f'[loadCodeAssist] Fetched Project ID: {project_id}; tier: {subscription_tier}.')
                 return (project_id, subscription_tier, credit_amount)
-            log.warning('[loadCodeAssist] No project_id in response')
+            log.warning('[loadCodeAssist] No Project ID found in response.')
             return (None, subscription_tier, credit_amount)
         else:
             log.info('[loadCodeAssist] User not activated yet (no currentTier)')
@@ -459,10 +459,10 @@ async def _try_onboard_user(api_base_url: str, headers: dict) -> Optional[str]:
                 else:
                     project_id = None
                 if project_id:
-                    log.info(f'[onboardUser] Successfully fetched project_id: {project_id}')
+                    log.info(f'[onboardUser] Fetched Project ID: {project_id}.')
                     return project_id
                 else:
-                    log.warning('[onboardUser] Operation completed but no project_id in response')
+                    log.warning('[onboardUser] Operation completed, but no Project ID was returned.')
                     return None
             else:
                 log.debug('[onboardUser] Operation still in progress, waiting 2 seconds...')

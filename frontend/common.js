@@ -2,16 +2,16 @@ const TRANSLATIONS = {
     en: {
     "app_title": "Omni Gateway",
     "panel_title": "Omni Gateway Management Console",
-    "login_subtitle": "Please enter passcode to access control panel",
+    "login_subtitle": "Enter your password to access the control panel.",
     "login_placeholder": "Enter password",
-    "login_btn": "Login",
+    "login_btn": "Sign in",
     "logout_btn": "Logout",
     "version_label": "Version",
     "check_update_btn": "Check for Updates",
     "loading_text": "Loading...",
     "mirror_switch_warning": "Mirror reverse proxy setup switches API domains to proxy servers.",
-    "copy_success": "Copied to clipboard!",
-    "copy_fail": "Copy failed!",
+    "copy_success": "Copied to clipboard.",
+    "copy_fail": "Copy failed.",
     "btn_close": "Close",
     "dialog_tip": "Tip",
     "error_prefix": "Error: ",
@@ -24,39 +24,39 @@ const TRANSLATIONS = {
     "tab_manage_code_assist": "Code Assist Credentials",
     "tab_manage_code_assist_short": "Code Assist Creds",
     "tab_manage_ag": "Omni Credentials",
-    "tab_manage_ag_short": "AG Creds",
+    "tab_manage_ag_short": "Omni credentials",
     "tab_config": "System Config",
     "tab_logs": "Real-time Logs",
     "tab_about": "About Project",
-    "oauth_banner_title": "Automation Enabled:",
-    "oauth_banner_text": "System will auto-detect and enable necessary API services (Gemini Cloud Assist API, Gemini for Google Cloud API) after login.",
+    "oauth_banner_title": "Automation enabled:",
+    "oauth_banner_text": "The system will detect and enable the required API services after authorization.",
     "oauth_advanced_title": "Advanced: Specify Google Cloud Project ID (Optional)",
     "oauth_advanced_note": "Leave blank to auto-detect and create project.",
-    "oauth_link_btn": "Get Google OAuth Auth Link",
-    "oauth_auth_title": "Auth Link:",
-    "oauth_auth_instruction": "Click this link to authorize Google Account",
+    "oauth_link_btn": "Generate Google OAuth link",
+    "oauth_auth_title": "Authorization link:",
+    "oauth_auth_instruction": "Click this link to authorize your Google account.",
     "oauth_guide_title": "OAuth Interactive Guide:",
-    "oauth_guide_1": "Click the link above, log in and grant access in the new tab;",
-    "oauth_guide_2": "After redirection, you may see a connection failed error at localhost:11451, which is normal;",
-    "oauth_guide_3": "Return to this page, and click 'Get & Save Credentials' below;",
+    "oauth_guide_1": "Click the link above, sign in, and grant access in the new tab.",
+    "oauth_guide_2": "After the redirect, you may see a connection error at localhost:11451. This is expected.",
+    "oauth_guide_3": "Return to this page, then click 'Get and Save Credentials' below.",
     "oauth_guide_4": "For remote servers or VPS without a browser, expand the callback tunnel below.",
-    "oauth_callback_title": "No Auto-Redirection? Use Callback Tunnel",
+    "oauth_callback_title": "No automatic redirect? Use the callback tunnel.",
     "oauth_callback_note": "Suitable for VPS, Docker, or port 11451 blocks.",
-    "oauth_callback_instructions": "Copy the full URL from address bar after redirection (even if it shows failure) and paste below.",
+    "oauth_callback_instructions": "Copy the full URL from the address bar after redirection, even if the page shows an error, and paste it below.",
     "oauth_callback_btn": "Parse Credentials from Callback URL",
-    "oauth_save_btn": "Get & Save Credentials",
-    "oauth_success_title": "Authentication Successful! Saved credentials:",
-    "ag_banner_title": "Google Omni Auth Mode",
+    "oauth_save_btn": "Get and save credentials",
+    "oauth_success_title": "Authentication successful. Saved credentials:",
+    "ag_banner_title": "Google Omni authentication mode",
     "ag_banner_text": "Obtain Google Cloud SDK native authentication credentials.",
-    "ag_link_btn": "Get Omni Auth Link",
-    "ag_link_title": "Omni Auth Link:",
-    "ag_link_instruction": "Click this link to authorize Omni mode",
+    "ag_link_btn": "Generate Omni authorization link",
+    "ag_link_title": "Omni authorization link:",
+    "ag_link_instruction": "Click this link to authorize Omni mode.",
     "ag_guide_title": "Steps:",
-    "ag_guide_1": "Click the link above to perform Google OAuth authorization;",
-    "ag_guide_2": "When redirected to localhost:11451 showing failure, return to this panel;",
-    "ag_guide_3": "Click the button below to retrieve and save credentials directly;",
+    "ag_guide_1": "Click the link above to start Google OAuth authorization.",
+    "ag_guide_2": "When the browser redirects to localhost:11451 and shows an error, return to this panel.",
+    "ag_guide_3": "Click the button below to retrieve and save credentials directly.",
     "ag_guide_4": "If unable to auto-redirect, copy the final URL and parse it below.",
-    "ag_save_btn": "Get & Save Omni Credentials",
+    "ag_save_btn": "Get and save Omni credentials",
     "ag_success_title": "Saved Omni Credentials:",
     "ag_download_btn": "Download Credentials File",
     "upload_title": "Batch Upload Credentials",
@@ -117,7 +117,7 @@ const TRANSLATIONS = {
     "card_disabled": "Disabled",
     "card_no_error": "No Error",
     "card_error_code": "Error: {code}",
-    "card_no_email": "No Email Loaded",
+    "card_no_email": "Email not loaded",
     "card_loading_details": "Loading file content...",
     "card_loading_errors": "Loading error details...",
     "card_loading_quota": "Loading quota details...",
@@ -138,53 +138,53 @@ const TRANSLATIONS = {
     "config_desc": "Adjust network proxies, API endpoints, error limits, and retry configurations. Settings take effect immediately upon saving.",
     "btn_save_config": "Save Global Config",
     "btn_reload_config": "Reload Configuration",
-    "config_loading": "Syncing configuration settings with server...",
-    "group_network": " Listen & Security Settings",
+    "config_loading": "Syncing configuration settings with the server...",
+    "group_network": "Listen and security settings",
     "config_host_label": "Server Bind Host IP Address:",
     "config_host_note": "IP address to listen on (0.0.0.0 listens globally, requires restart).",
     "config_port_label": "Listen Port:",
     "config_port_note": "TCP Port to bind on (requires restart).",
-    "config_api_pwd_label": "API Access Password (API Key):",
-    "config_api_pwd_note": "Used for Bearer Token validation when making proxy requests.",
-    "config_panel_pwd_label": "Web Panel Login Password:",
+    "config_api_pwd_label": "API access password:",
+    "config_api_pwd_note": "Used for Bearer token validation when making proxy requests.",
+    "config_panel_pwd_label": "Web panel login password:",
     "config_panel_pwd_note": "Protects this management console page.",
-    "config_pwd_label": "Unified Password Override (Optional):",
+    "config_pwd_label": "Unified password override (optional):",
     "config_pwd_note": "If provided, overrides both API and Panel password. Recommended to leave blank.",
-    "group_storage": " Storage & Proxy Settings",
-    "config_storage_label": "Credentials Storage Path:",
+    "group_storage": "Storage and proxy settings",
+    "config_storage_label": "Credentials storage path:",
     "config_storage_note": "Absolute path where JSON credentials are saved.",
     "config_proxy_label": "Global Outbound Proxy URL:",
     "config_proxy_note": "SOCKS5 or HTTP proxy URL for Google endpoints (leave blank for direct connection).",
-    "group_endpoints": " API Endpoint Settings",
-    "config_mirror_btn": " Switch to Mirror Proxies",
-    "config_official_btn": " Restore Google Official Domains",
+    "group_endpoints": "API endpoint settings",
+    "config_mirror_btn": "Use mirror proxies",
+    "config_official_btn": "Restore official Google domains",
     "config_endpoint_code": "Code Assist API Endpoint:",
     "config_endpoint_oauth": "OAuth Auth Endpoint:",
     "config_endpoint_apis": "Google APIs Core Endpoint:",
     "config_endpoint_resource": "Resource Manager Endpoint:",
     "config_endpoint_service": "Service Usage Endpoint:",
     "config_endpoint_ag": "Omni API Endpoint:",
-    "group_ban": " Auto-Ban & Fuse Settings",
+    "group_ban": "Auto-ban and fuse settings",
     "config_ban_checkbox": "Enable automatic ban/fuse for specified error codes",
     "config_ban_codes_label": "HTTP Error Codes to trigger ban (comma-separated):",
     "config_ban_codes_note": "Accounts receiving these errors will be automatically disabled (403 is highly recommended).",
-    "group_retry": " Auto-Retry & Failover Options",
+    "group_retry": "Auto-retry and failover options",
     "config_retry_checkbox": "Automatically retry requests on alternative credentials upon failure",
     "config_retry_count": "Maximum retry attempts:",
     "config_retry_interval": "Interval between retries (seconds):",
-    "group_compat": " Model Protocol Compatibility",
+    "group_compat": "Model protocol compatibility",
     "config_compat_checkbox": "Force compatibility mode (flattens system instructions into user messages)",
     "config_compat_note": "Solves empty response errors in older client libraries by avoiding system_instructions, with slight prompt quality trade-offs.",
     "config_thinking_checkbox": "Pass-through Gemini 2.0 Reasoning/Thinking process chain in responses",
     "config_thinking_note": "Outputs reasoning block contents for reasoning models. If disabled, trims thinking outputs.",
-    "config_ag_stream_checkbox": "Enable stream compilation for Omni mode (Stream to Non-stream)",
+    "config_ag_stream_checkbox": "Compile Omni streaming responses for non-stream clients.",
     "config_ag_retry_checkbox": "Auto-switch alternative credentials on Omni request failure",
-    "group_trunc": " Truncation Recovery Options",
+    "group_trunc": "Truncation recovery options",
     "config_trunc_count": "Max recovery attempts for truncated streams:",
     "config_trunc_note": "Maximum attempts to resume generation if a stream gets cut off (applicable to models suffixed with '-streaming anti-truncation').",
-    "group_keepalive": " Application Keep-Alive Settings",
+    "group_keepalive": "Application keep-alive settings",
     "config_keepalive_label": "Keep-Alive Heartbeat URL:",
-    "config_keepalive_btn": "Detect and Auto-fill current Keep-Alive URL",
+    "config_keepalive_btn": "Detect and autofill the current keep-alive URL",
     "config_keepalive_interval": "Heartbeat interval (seconds):",
     "logs_title": "System Logs Console",
     "logs_desc": "Monitor request cycles, rotation decisions, and errors dispatched to Google Cloud APIs.",
@@ -194,15 +194,15 @@ const TRANSLATIONS = {
     "btn_log_clear": "Clear Log Window",
     "log_filter_level": "Filter Level:",
     "log_scroll_lock": "Auto-scroll to bottom",
-    "log_status_label": "Websocket Status:",
-    "log_status_text": "Not Connected",
+    "log_status_label": "WebSocket status:",
+    "log_status_text": "Not connected",
     "log_waiting_text": "Awaiting logs from the server...",
     "about_title": "About Omni Gateway",
     "tab_dashboard": "Dashboard",
     "regenerate_keys_btn": "Regenerate Keys",
     "copy_btn": "Copy",
     "confirm_regenerate_key": "Are you sure you want to regenerate this API key? Previous key will become invalid immediately.",
-    "regenerate_success": "API Keys regenerated successfully",
+    "regenerate_success": "API keys regenerated successfully.",
     "tooltip_total_calls": "Total number of API requests routed through this gateway in the last 24 hours.",
     "tooltip_total_files": "The number of active Google/Omni credentials currently configured and monitored.",
     "tooltip_avg_calls": "Average number of API requests processed per credential in the past 24 hours.",
@@ -236,11 +236,11 @@ const TRANSLATIONS = {
     "dashboard_avg_calls_desc": "Average number of API requests handled per active credential.",
     "dashboard_total_files": "Monitored Credentials",
     "dashboard_avg_calls": "Avg Requests / Credential",
-    "dashboard_welcome": "Welcome to the redesigned Omni Gateway console! You can quickly switch management tasks in the sidebar. The system automatically rotates active credentials for load balancing, performing failover and retries on rate limits (429) or ban (403) errors to ensure high availability.",
+    "dashboard_welcome": "Welcome to the Omni Gateway console. Use the sidebar to switch between management tasks. The system rotates active credentials for load balancing, failover, and retries when upstream rate limits or authorization errors occur.",
     "dashboard_breakdown": "24-Hour Request Breakdown",
     "oauth_desc": "Generate Google Cloud authorization credentials. Supports standard Code Assist OAuth and Omni credentials export.",
     "about_desc": "Omni Gateway is a universal AI router for coding tools. Features smart auto-fallback, token compression, and seamless format translation to maximize free and premium LLMs.",
-    "about_github": "GitHub Repository:",
+    "about_github": "GitHub repository:",
     "about_notice": "Disclaimer: This software is open-source. Commercial reselling or distribution is strictly prohibited. For educational and research purposes only.",
     "about_features_title": "Key Features",
     "feat_1_title": "Quota Failover Rotation",
@@ -259,23 +259,23 @@ const TRANSLATIONS = {
     "about_support_desc": "Report bugs, request features, and follow roadmap work through GitHub Issues.",
     "about_support_cta": "Open GitHub Issues",
     "about_feedback_title": "Feedback & Bug Reports",
-    "about_feedback_desc": "Report issues or submit feature requests directly on our GitHub Issues page. PRs are welcome!",
-    "auth_fail_relogin": "Authentication failed. Re-authenticating...",
+    "about_feedback_desc": "Report issues or submit feature requests through GitHub Issues. Pull requests are welcome.",
+    "auth_fail_relogin": "Authentication failed. Please sign in again.",
     "check_update_info": "Checking for updates...",
-    "update_success": "Checked successfully!",
+    "update_success": "Update check completed.",
     "load_cred_stats": "Loaded stats for {count} credentials",
     "net_error": "Network connection error: {msg}",
     "confirm_delete_cred": "Are you sure you want to delete this credential?\\n{filename}",
-    "save_config_success": "System configuration saved successfully!",
-    "load_config_success": "System configuration loaded successfully!",
-    "log_connected": "Log websocket connected.",
-    "log_disconnected": "Log websocket disconnected.",
-    "select_at_least_one": "Please select at least one credential first!",
+    "save_config_success": "System configuration saved successfully.",
+    "load_config_success": "System configuration loaded successfully.",
+    "log_connected": "Log WebSocket connected.",
+    "log_disconnected": "Log WebSocket disconnected.",
+    "select_at_least_one": "Please select at least one credential first.",
     "confirm_batch_action": "Are you sure you want to execute {action} on {count} selected credentials?",
-    "batch_action_success": "Batch {action} executed successfully!",
-    "input_password_prompt": "Enter password first!",
-    "login_success": "Logged in successfully!",
-    "login_failed": "Login failed! Please check your passcode.",
+    "batch_action_success": "Batch {action} completed successfully.",
+    "input_password_prompt": "Enter the password first.",
+    "login_success": "Signed in successfully.",
+    "login_failed": "Login failed. Please check your password.",
     "net_error_prefix": "Network error: ",
     "action_success_prefix": "Action succeeded: ",
     "action_fail_prefix": "Action failed: ",
@@ -285,10 +285,10 @@ const TRANSLATIONS = {
     "pagination_next": "Next Page",
     "pagination_info": "Page {page} of {total} (Showing {start}-{end} of {count} items)",
     "code_assist_oauth_auth_title": "Code Assist OAuth Authentication",
-    "oauth_guide_2_fail_suffix": ", which is normal;",
+    "oauth_guide_2_fail_suffix": ", which is expected.",
     "oauth_paste_url": "Paste the full URL below:",
     "ag_auth_title": "Omni Authentication",
-    "ag_guide_2_fail_suffix": ", return to this panel;",
+    "ag_guide_2_fail_suffix": ", then return to this panel.",
     "upload_file_or_zip": "file or ZIP archive",
     "click_to_copy": "Click to copy",
     "support_link_label": "GitHub Issues",
@@ -321,27 +321,27 @@ const TRANSLATIONS = {
     "btn_view_errors": "View Errors",
     "btn_view_errors_title": "View detailed error messages for this credential",
     "email_not_fetched": "Email not fetched",
-    "click_view_content_to_load": "Click 'View Content' button to load file details...",
-    "click_view_errors_to_load": "Click 'View Errors' button to load error messages...",
-    "click_view_quota_to_load": "Click 'View Quota' button to load quota usage details...",
+    "click_view_content_to_load": "Click 'View Content' to load file details.",
+    "click_view_errors_to_load": "Click 'View Errors' to load error messages.",
+    "click_view_quota_to_load": "Click 'View Quota' to load quota usage details.",
     "status_loading_file_content": "Loading file content...",
-    "status_test_failed": " Test failed - {error}",
+    "status_test_failed": "Test failed: {error}",
     "remaining_label": "Remaining",
     "credits_label": "Credits",
     "all": "All",
     "omni_mode_enabled_streamtono": "Omni mode enabled stream-to-non-stream response transformation",
-    "test_successful": " Test successful!",
+    "test_successful": "Test completed successfully.",
     "oauth_interaction_guide": "OAuth Interaction Guide:",
     "error_code": "Error Code:",
-    "no_logs_at_appstatecurrentlogfilter": "No logs at {AppState_currentLogFilter} level currently...",
+    "no_logs_at_appstatecurrentlogfilter": "No logs are currently available at the {AppState_currentLogFilter} level.",
     "credential_file_name": "Credential File Name",
     "nfailed_step_step": "\\nFailed Step: {step}",
-    "batch_verification_completed_succes": " Batch verification completed: {successCount}/{selectedFiles_length} succeeded, {failCount} failed",
+    "batch_verification_completed_succes": "Batch verification completed: {successCount}/{selectedFiles_length} succeeded, {failCount} failed.",
     "currently_disabled": "Currently Disabled",
-    "omni_authentication_successf": " Omni authentication successful! File saved to: {path}",
+    "omni_authentication_successf": "Omni authentication completed successfully. File saved to: {path}.",
     "loaded_usage_statistics_for_aggdata": "Loaded usage statistics for {aggData_total_files____Object_keys_AppState_usageStatsData__length} files",
     "upload_failed_connection_interrupte": "Upload failed: Connection interrupted - Likely cause: Too many files ({this_selectedFiles_length}) or network instability. Please upload in batches.",
-    "please_select_the_omni_crede": "Please select the Omni credentials to verify first",
+    "please_select_the_omni_crede": "Please select Omni credentials to verify first.",
     "downloaded_file_filename": "Downloaded file: {filename}",
     "oneclick_credential_deduplication": "One-click Credential Deduplication",
     "message_test": "Message Test",
@@ -350,27 +350,27 @@ const TRANSLATIONS = {
     "authentication_steps": "Authentication Steps:",
     "fetching_authentication_link": "Fetching authentication link...",
     "upload_failed_request_timeout_proce": "Upload failed: Request timeout - Processing time is too long, please reduce the number of files or check your network connection.",
-    "manual_project_id_specification_req": "Manual Project ID specification required. Please enter the Google Cloud Project ID in advanced options and try again.",
+    "manual_project_id_specification_req": "A Google Cloud Project ID is required. Enter it in advanced options and try again.",
     "resource_manager_api_endpoint": "Resource Manager API Endpoint:",
     "intelligently_capture_and_automatic": "Intelligently capture and automatically write current keep-alive heartbeat URL",
     "a_hrefhref_target_blank_relnoopener": "<a href=\"{href}\" target=\"_blank\" rel=\"noopener noreferrer\" class=\"message-link\" onclick=\"event.stopPropagation()\" title=\"Click to open link\\nRight-click to copy link\">{url}</a>",
-    "this_is_not_a_valid_callback_url_pl": " This is not a valid callback URL! Please ensure:\\n1. Google OAuth authorization is completed\\n2. You have copied the full URL from the browser address bar\\n3. The URL contains code and state parameters",
+    "this_is_not_a_valid_callback_url_pl": "This is not a valid callback URL. Please ensure:\\n1. Google OAuth authorization is complete.\\n2. You copied the full URL from the browser address bar.\\n3. The URL contains code and state parameters.",
     "file_filename_format_is_not_support": "File {file_name} format is not supported; only JSON and ZIP files are allowed.",
     "the_following_configurations_have_t": ", the following configurations have taken effect immediately: {list}",
-    "click_the_link_above_to_proceed_wit": "Click the link above to proceed with Google OAuth authorization;",
-    "unable_to_determine_if_updates_are": "Unable to determine if updates are available",
-    "please_select_the_credentials_to_ve": " Please select the credentials to verify first",
+    "click_the_link_above_to_proceed_wit": "Click the link above to proceed with Google OAuth authorization.",
+    "unable_to_determine_if_updates_are": "Unable to determine if updates are available.",
+    "please_select_the_credentials_to_ve": "Please select credentials to verify first.",
     "downloaded_file_name": "Downloaded file: {name}",
-    "please_obtain_the_omni_authe": "Please obtain the Omni authentication link and complete authorization first",
+    "please_obtain_the_omni_authe": "Please obtain the Omni authentication link and complete authorization first.",
     "refresh_credential_list": "Refresh Credential List",
     "all_credential_files_have_been_down": "All credential files have been downloaded",
-    "preview_channel_configuration_succe": " Preview channel configuration successful!\\n\\nFile: {filename}\\n\\n{data_message}\\n\\nSetting ID: {data_setting_id_____N_A}\\nBinding ID: {data_binding_id_____N_A}",
-    "all_verifications_successful_verifi": " All verifications successful! Verified {successCount}/{selectedFiles_length} Omni credentials",
+    "preview_channel_configuration_succe": "Preview channel configured successfully.\\n\\nFile: {filename}\\n\\n{data_message}\\n\\nSetting ID: {data_setting_id_____N_A}\\nBinding ID: {data_binding_id_____N_A}",
+    "all_verifications_successful_verifi": "All verifications passed. Verified {successCount}/{selectedFiles_length} Omni credentials.",
     "are_you_sure_you_want_to_batch_veri": "Are you sure you want to batch verify Project IDs for {selectedFiles_length} Omni credentials?\\n\\nThey will be verified in parallel to speed up the process.",
     "failed_to_load_usage_statistics": "Failed to load usage statistics",
-    "failed_to_download_logs_datadetail": "Failed to download logs: ${data.detail || data.error || 'Unknown error'}",
+    "failed_to_download_logs_datadetail": "Failed to download logs: {data_detail____data_error}",
     "generating_authentication_link_usin": "Generating authentication link using the specified Project ID...",
-    "not_enabled": " Not Enabled",
+    "not_enabled": "Not enabled",
     "download_credential_files_locally": "Download credential files locally",
     "average_calls_per_volume": "Average Requests per Credential",
     "failed_to_get_authentication_link_e": "Failed to get authentication link: {error}",
@@ -383,123 +383,123 @@ const TRANSLATIONS = {
     "successfully_retrieved_email_email": "Successfully retrieved email: {email}",
     "get_google_oauth_authentication_lin": "Get Google OAuth Authentication Link",
     "failed_to_fetch_version_information": "Failed to fetch version information",
-    "switch_to_mirror_proxy_address_with": " Switch to Mirror Proxy Address with one click",
+    "switch_to_mirror_proxy_address_with": "Switch to mirror proxy addresses with one click.",
     "enable_automatic_retry_of_failed_re": "Enable automatic retry of failed requests using other rotated credentials",
     "level": "Level:",
-    "please_enter_password_to_login": "Please enter password to login",
+    "please_enter_password_to_login": "Please enter your password to sign in.",
     "failed_to_retrieve_credentials_from": "Failed to retrieve credentials from callback URL: {error}",
-    "please_select_the_credentials_to_ve_dup": "Please select the credentials to verify first",
+    "please_select_the_credentials_to_ve_dup": "Please select credentials to verify first.",
     "retrieved_authentication_link": "Retrieved Authentication Link:",
-    "upload_failed_errordetail_errorerro": "Upload failed: ${error.detail || error.error || 'Unknown error'}",
-    "are_you_sure_you_want_to_perform_on": "Are you sure you want to perform one-click credential deduplication?\\n\\nOnly one credential per email will be kept, others will be deleted.\\nThis action cannot be undone!",
+    "upload_failed_errordetail_errorerro": "Upload failed: {error_detail____error_error}",
+    "are_you_sure_you_want_to_perform_on": "Are you sure you want to perform one-click credential deduplication?\\n\\nOnly one credential per email will be kept, and all others will be deleted.\\nThis action cannot be undone.",
     "omni_file_list_pending_uploa": "Omni file list pending upload:",
-    "successfully_imported_loadedtotal_c": " Successfully imported {loaded}/{total} credential files",
+    "successfully_imported_loadedtotal_c": "Successfully imported {loaded}/{total} credential files.",
     "keepalive_request_interval_seconds": "Keep-alive request interval (seconds):",
     "healthy_no_errors_dup": "Healthy, no errors",
-    "clear_failed_datadetail_dataerror_u": "Clear failed: ${data.detail || data.error || 'Unknown error'}",
+    "clear_failed_datadetail_dataerror_u": "Clear failed: {data_detail____data_error}",
     "network_error_while_clearing_logs_e": "Network error while clearing logs: {error_message}",
     "save_log_file_as": "Save log file as...",
     "upload_failed_connection_interrupte_dup": "Upload failed: Connection interrupted - Likely cause: Too many files ({count}) or network instability. Please upload in batches.",
-    "resultfilename_resultmessage_config": " {result_filename}: ${result.message || 'Configuration successful'}",
+    "resultfilename_resultmessage_config": "{result_filename}: {result_message}",
     "disable_credits": "Disable Credits",
-    "please_select_the_files_to_operate": "Please select the files to operate on first",
+    "please_select_the_files_to_operate": "Please select files before continuing.",
     "batch_operation_failed_error": "Batch operation failed: {error}",
-    "account_risk_control_and_circuit_br": " Account Risk Control and Circuit Breaking Strategy",
+    "account_risk_control_and_circuit_br": "Account risk control and circuit-breaking strategy",
     "determine_account_downgrade_or_disa": "Determine account downgrade or disabling within seconds based on API errors.",
     "reset_statistics": "Reset Statistics",
     "google_omni_authentication": "Google Omni Authentication",
     "failed_to_download_package_error": "Failed to download package: {error}",
     "div_stylecolor_dc3545reason_escapeh": "<div style=\"color: #dc3545;\">Reason: {escapeHtml_detail_reason}</div>",
-    "test_successful_dup": "Test successful",
+    "test_successful_dup": "Test completed successfully.",
     "are_you_sure_you_want_to_refresh_us": "Are you sure you want to refresh user emails for all credentials? This may take some time.",
     "filter_filter": "(Filter: {filter})",
     "view_content": "View Content",
-    "open_source_disclaimer_commercial_r": "Open Source Disclaimer: Commercial resale or distribution of Hippy in any form is prohibited. For testing, personal research, and academic exchange purposes only.",
+    "open_source_disclaimer_commercial_r": "Open-source disclaimer: commercial resale or redistribution of Omni Gateway is not permitted without authorization. Use it for testing, personal research, and educational workflows.",
     "failed_to_save_configuration_error": "Failed to save configuration: {error}",
     "total_credentials": "Total Credentials",
     "contact_and_feedback_channels": "Contact and Feedback Channels",
     "supports_json_credentials_or_zip_ar": "Supports .json credentials or .zip archives",
-    "revert_to_google_official_address": " Revert to Google official address",
+    "revert_to_google_official_address": "Revert to the official Google endpoint.",
     "failed_to_retrieve_omni_cred": "Failed to retrieve Omni credentials from callback URL",
-    "import_failed_datadetail_dataerror": "Import failed: ${data.detail || data.error || 'Unknown error'}",
-    "new_version_foundncurrent_vversionn": "New version found!\\nCurrent: v{version}\\nLatest: v{latest}\\n\\nUpdate details: {log}",
+    "import_failed_datadetail_dataerror": "Import failed: {data_detail____data_error}",
+    "new_version_foundncurrent_vversionn": "New version available.\\nCurrent: v{version}\\nLatest: v{latest}\\n\\nUpdate details: {log}",
     "network_error_msg": "Network error: {msg}",
     "unable_to_retrieve_user_email_error": "Unable to retrieve user email: {error}",
-    "batch_action_operation_completed_su": "Batch {action} operation completed successfully!",
+    "batch_action_operation_completed_su": "Batch {action} operation completed successfully.",
     "api_integration_endpoint_addresses": "API Integration Endpoint Addresses",
     "system_runtime_log_stream": "System Runtime Log Stream",
     "import_failed_error": "Import failed: {error}",
     "google_apis_core_endpoints": "Google APIs Core Endpoints:",
-    "authentication_successful_saved_fil": "Authentication successful! Saved file content:",
-    "click_the_view_quota_button_to_load": "Click the \"View Quota\" button to load quota information...",
-    "waiting_to_fetch_the_latest_system": "Waiting to fetch the latest system console log output...",
+    "authentication_successful_saved_fil": "Authentication successful. Saved file content:",
+    "click_the_view_quota_button_to_load": "Click \"View Quota\" to load quota information.",
+    "waiting_to_fetch_the_latest_system": "Waiting for the latest system console log output...",
     "control_panel_login_password": "Control Panel Login Password:",
     "unable_to_autodetect_project_id_ple": "Unable to auto-detect Project ID. Please manually enter your Google Cloud Project ID:",
     "click_this_link_to_authorize_your_g": "Click this link to authorize your Google account",
     "email_groupemailnkeep_groupkept_fil": "Email: {group_email}\\nKeep: {group_kept_file}\\nDelete: {group_deleted_files_join}\\n\\n",
-    "omni_authentication_link_gen": " Omni authentication link generated! Please click the link to complete authorization.",
-    "check_successful_already_running_th": "Check successful! Already running the latest version.",
-    "switched_to_official_endpoint_confi": " Switched to official endpoint configuration. Remember to click the \"Save Config\" button to save settings.",
-    "nplease_enter_index_1dataavailable": "\\nPlease enter index (1-{data_available_projects_length}):",
+    "omni_authentication_link_gen": "Omni authentication link generated. Click the link to complete authorization.",
+    "check_successful_already_running_th": "Update check completed. You are already running the latest version.",
+    "switched_to_official_endpoint_confi": "Switched to the official endpoint configuration. Click \"Save Config\" to save the settings.",
+    "nplease_enter_index_1dataavailable": "\\nPlease enter an index (1-{data_available_projects_length}):",
     "fetch_and_save_authentication_file": "Fetch and Save Authentication File",
-    "failed_to_generate_authentication_l": " Failed to generate authentication link: {error}",
+    "failed_to_generate_authentication_l": "Failed to generate authentication link: {error}",
     "action": "Action",
     "save_config": "Save Config",
     "fetch_omni_credentials": "Fetch Omni Credentials",
     "failed_to_generate_authentication_l_dup": "Failed to generate authentication link",
-    "retry_using_the_selected_project": "Retry using the selected project...",
+    "retry_using_the_selected_project": "Retrying with the selected project...",
     "div_styletextalign_center_padding_2_dup": "<div style=\"text-align: center; padding: 20px; color: #dc3545;\">\n\n                        <div style=\"font-size: 48px; margin-bottom: 10px;\"></div>\n\n                        <div style=\"font-weight: bold; margin-bottom: 5px;\">Network Error</div>\n\n                        <div style=\"font-size: 13px; color: #666;\">{error_message}</div>\n\n                    </div>",
     "credential_available": "Credential available",
     "google_omni_authentication_m": "Google Omni Authentication Mode",
     "zip_archive": "(ZIP Archive)",
     "are_you_sure_you_want_to_delete_fil": "Are you sure you want to delete {filename}?",
     "page_thiscurrentpage_of_totalpages": "Page {this_currentPage} of {totalPages} (Showing {startItem}-{endItem}, Total {this_totalCount})",
-    "failed_to_clear_logs_datadetail_dat": "Failed to clear logs: ${data.detail || data.error || 'Unknown error'}",
-    "please_select_the_credentials_to_co": "Please select the credentials to configure Preview first",
+    "failed_to_clear_logs_datadetail_dat": "Failed to clear logs: {data_detail____data_error}",
+    "please_select_the_credentials_to_co": "Please select credentials to configure Preview first.",
     "websocket_connected": "WebSocket connected",
     "enable_autoban_for_credentials_on_s": "Enable Auto-Ban for credentials on specific error codes",
-    "preview_channel_configuration_faile": " Preview channel configuration failed\\n\\nFile: {filename}\\n\\n{errorMsg}",
-    "autobacksource_failed_use_the_quick": "Auto-back-source failed? Use the quick callback channel",
+    "preview_channel_configuration_faile": "Preview channel configuration failed.\\n\\nFile: {filename}\\n\\n{errorMsg}",
+    "autobacksource_failed_use_the_quick": "Automatic callback failed? Use the quick callback channel.",
     "operation_failed_error": "Operation failed: {error}",
-    "please_fetch_the_authentication_lin": "Please fetch the authentication link and complete authorization first",
+    "please_fetch_the_authentication_lin": "Please fetch the authentication link and complete authorization first.",
     "bidirectional_native_format_convers": "Bidirectional native format conversion",
     "oneclick_deduplication_failed_error": "One-click deduplication failed: {error}",
     "disable": "Disable",
-    "click_this_link_to_authorize_antigr": "Click this link to authorize Omni mode",
+    "click_this_link_to_authorize_antigr": "Click this link to authorize Omni mode.",
     "deduplication_network_error_errorme": "Deduplication network error: {error_message}",
-    "after_successful_authorization_the": "After successful authorization, the browser will redirect and display a connection error for localhost:11451; this is normal behavior;",
+    "after_successful_authorization_the": "After successful authorization, the browser will redirect and may display a connection error for localhost:11451. This is expected.",
     "failed_to_get_environment_variable": "Failed to get environment variable status: {error}",
     "max_antitruncation_resume_attempts": "Max anti-truncation resume attempts:",
     "log_connection_channel_established": "Log connection channel established successfully.",
-    "test_failednfile_filenamen": " Test failed\\nFile: {filename}\\n",
-    "global_configuration_saved_successf": "Global configuration saved successfully!",
+    "test_failednfile_filenamen": "Test failed.\\nFile: {filename}\\n",
+    "global_configuration_saved_successf": "Global configuration saved successfully.",
     "executing_batch_actionlabel_operati": "Executing batch {actionLabel} operation...",
     "monitor_credential_count": "Monitor credential count",
     "switched_to_official_endpoint_confi_dup": "Switched to official endpoint configuration. Remember to click the 'Save Config' button to save settings.",
     "local_credential_storage_absolute_p": "Local credential storage absolute path:",
     "click_to_open_linknrightclick_to_co": "Click to open link\\nRight-click to copy link",
     "upload_failed_http_xhrstatus": "Upload failed: HTTP {xhr_status}",
-    "verification_successful": "Verification successful",
+    "verification_successful": "Verification successful.",
     "force_enable_compatibility_mode_mer": "Force enable compatibility mode (merge System protocol messages into User)",
     "clear_buffer_logs": "Clear buffer logs",
     "div_stylefontsize_12px_color_666_ma": "<div style=\"font-size: 12px; color: #666; margin-bottom: 5px;\">Details:</div>",
-    "error_dataerror_failed_to_get_authe": " Error: ${data.error || 'Failed to get authentication file'}",
+    "error_dataerror_failed_to_get_authe": "Error: {data_error}",
     "select_all": "Select All",
     "if_this_field_is_configured_it_will": "If this field is configured, it will force-override the API and panel passwords. It is recommended to leave it blank.",
-    "autologin_successful": "Auto-login successful",
-    "failed_to_save_config_datadetail_da": "Failed to save config: ${data.detail || data.error || 'Unknown error'}",
-    "batch_operation_completed_processed": "Batch operation completed: Processed {success}/{total} files successfully.",
+    "autologin_successful": "Auto-login completed successfully.",
+    "failed_to_save_config_datadetail_da": "Failed to save configuration: {data_detail____data_error}",
+    "batch_operation_completed_processed": "Batch operation completed. Processed {success}/{total} files successfully.",
     "tip_leave_blank_for_firsttime_use_t": "Tip: Leave blank for first-time use; the system will automatically allocate and detect.",
     "configuration_failed": "Configuration failed",
-    "successfully_imported_dataloaded_co": " Successfully imported {data_loaded_count}/{data_total_count} credential files",
-    "switched_to_mirror_url_configuratio": " Switched to mirror URL configuration. Remember to click the \"Save Config\" button to save settings.",
+    "successfully_imported_dataloaded_co": "Successfully imported {data_loaded_count}/{data_total_count} credential files.",
+    "switched_to_mirror_url_configuratio": "Switched to the mirror URL configuration. Click \"Save Config\" to save the settings.",
     "zip_files_will_automatically_extrac": "ZIP files will automatically extract all JSON credential files.",
     "adjust_system_proxy_endpoint_addres": "Adjust system proxy, endpoint addresses, security policies, and high-frequency retry parameters. Most items take effect immediately after saving.",
     "loaded_count_type_credential_files": "Loaded {count} {type} credential files",
     "log_stream_connection_error": "Log stream connection error:",
-    "quota_information_loaded_successful": " Quota information loaded successfully",
+    "quota_information_loaded_successful": "Quota information loaded successfully.",
     "failed_to_fetch_authentication_link": "Failed to fetch authentication link",
-    "return_directly_to_the_current_cont": "Return directly to the current control panel page and click the \"Fetch and Save Authentication File\" button below to complete integration;",
+    "return_directly_to_the_current_cont": "Return to the current control panel page and click \"Fetch and Save Authentication File\" to complete integration.",
     "retry_interval_seconds": "Retry interval (seconds):",
     "autoban_circuit_breaker": "Auto-Ban Circuit Breaker",
     "usage_statistics_loaded_for_count_f": "Usage statistics loaded for {count} files",
@@ -507,74 +507,74 @@ const TRANSLATIONS = {
     "download": "Download",
     "new_version_available": "New version available",
     "openai_compatibility": "OpenAI Compatibility:",
-    "verification_successfulnfile_filena": " Verification successful!\\nFile: {filename}\\nProject ID: {data_project_id}{tierLine}{creditLine}\\n\\n{data_message}",
+    "verification_successfulnfile_filena": "Verification successful.\\nFile: {filename}\\nProject ID: {data_project_id}{tierLine}{creditLine}\\n\\n{data_message}",
     "div_styletextalign_center_padding_2_dup_dup": "<div style=\"text-align: center; padding: 20px; color: #dc3545;\">\n\n                            <div style=\"font-size: 48px; margin-bottom: 10px;\"></div>\n\n                            <div style=\"font-weight: bold; margin-bottom: 5px;\">Failed to fetch quota info</div>\n\n                            <div style=\"font-size: 13px; color: #666;\">{errorMsg}</div>\n\n                        </div>",
     "delete": "Delete",
     "div_styletextalign_center_padding_2_dup_dup_dup": "<div style=\"text-align: center; padding: 20px; color: #dc3545;\">\n\n                            <div style=\"font-size: 48px; margin-bottom: 10px;\"></div>\n\n                            <div style=\"font-weight: bold;\">Load failed</div>\n\n                            <div style=\"font-size: 12px; margin-top: 8px;\">{errorMsg}</div>\n\n                        </div>",
-    "file_format_of_name_not_supported_o": "File format of {name} not supported; only JSON and ZIP files are supported",
+    "file_format_of_name_not_supported_o": "The file format for {name} is not supported. Only JSON and ZIP files are supported.",
     "project_info": "Project Info",
     "the_following_configurations_have_t_dup": ", the following configurations have taken effect immediately: {data_hot_updated_join}",
     "unable_to_fetch_user_email": "Unable to fetch user email",
     "failed_to_fetch_credentials_from_ca": "Failed to fetch credentials from callback URL",
     "advanced_settings_specify_google_cl": "Advanced Settings: Specify Google Cloud Project ID (Optional)",
-    "starting_batch_project_id_verificat": "Starting batch Project ID verification task...",
+    "starting_batch_project_id_verificat": "Starting batch Project ID verification...",
     "open_github_issues": "Open GitHub Issues",
     "when_google_apis_return_these_error": "When Google APIs return these error codes, the system will automatically disable this account. It is recommended to enable circuit breaking for 403 errors.",
     "failed_to_fetch_error_message": "Failed to fetch error message",
-    "error_dataerror_failed_to_generate": " Error: ${data.error || 'Failed to generate authentication link'}",
-    "service_network_listening_configura": " Service Network Listening Configuration",
+    "error_dataerror_failed_to_generate": "Error: {data_error}",
+    "service_network_listening_configura": "Service network listening configuration",
     "connecting": "Connecting...",
-    "credentials_fetched_successfully_fr": "Credentials fetched successfully from callback URL!",
+    "credentials_fetched_successfully_fr": "Credentials fetched successfully from the callback URL.",
     "click_the_link_above_sign_in_to_you": "Click the link above, sign in to your Google account in a new browser tab, and grant authorization.",
     "omni_credential_file_managem": "Omni Credential File Management",
     "failed_to_configure_preview_channel": "Failed to configure Preview channel: {error_message}",
-    "authentication_successful_project_i": " Authentication successful! Project ID automatically detected as: {id}, file saved to: {path}",
-    "please_enter_a_valid_url_starting_w": "Please enter a valid URL (starting with http:// or https://)",
-    "successfully_updated_preview_channe": "Successfully updated Preview channel status for {count} credential files",
+    "authentication_successful_project_i": "Authentication successful. Project ID automatically detected as {id}. File saved to: {path}.",
+    "please_enter_a_valid_url_starting_w": "Please enter a valid URL starting with http:// or https://.",
+    "successfully_updated_preview_channe": "Updated Preview channel status for {count} credential files.",
     "pending_code_assist_file_upload_list": "Pending Code Assist file upload list:",
     "exclusive_industrywide_support_for": "Exclusive industry-wide support for streaming resumable uploads.",
-    "configuration_failed_for_all_failed": " Configuration failed for all! Failed {failCount}/{selectedFiles_length} credentials",
-    "omni_batch_verification_comp_dup": "Omni batch verification complete!\\n\\nSuccess: {successCount}\\nFailed: {failCount}\\nTotal: {selectedFiles_length}\\n\\nDetailed results:\\n{resultMessages_join___n}",
-    "enabled": " Enabled",
+    "configuration_failed_for_all_failed": "Configuration failed for all credentials. Failed {failCount}/{selectedFiles_length} credentials.",
+    "omni_batch_verification_comp_dup": "Omni batch verification complete.\\n\\nSuccess: {successCount}\\nFailed: {failCount}\\nTotal: {selectedFiles_length}\\n\\nDetailed results:\\n{resultMessages_join___n}",
+    "enabled": "Enabled",
     "display_and_maintain_your_code_assist_prox": "Display and maintain your Code Assist proxy channels, supporting individual or batch verification, download, status toggling, and deletion.",
     "batch_operation_network_error_error": "Batch operation network error: {error}",
     "retrying_with_manually_entered_proj": "Retrying with manually entered Project ID...",
     "get_omni_authentication_link": "Get Omni authentication link",
     "json_file": "(JSON file)",
-    "are_you_sure_you_want_to_deduplicat": "Are you sure you want to deduplicate Omni credentials?\\n\\nOnly one credential per email will be kept, and others will be deleted.\\nThis action cannot be undone!",
+    "are_you_sure_you_want_to_deduplicat": "Are you sure you want to deduplicate Omni credentials?\\n\\nOnly one credential per email will be kept, and all others will be deleted.\\nThis action cannot be undone.",
     "display_and_maintain_your_antigravi": "Display and maintain your Omni proxy accounts and associated usage quotas.",
     "supports_json_files_or_zip_archives": "Supports .json files or .zip archives",
     "code_assist_api_endpoint": "Code Assist API Endpoint:",
-    "failed_to_fetch_error_message_error": " Failed to fetch error message: {errorMsg}",
+    "failed_to_fetch_error_message_error": "Failed to fetch error message: {errorMsg}",
     "failed_to_load_file_content": "Failed to load file content:",
     "div_stylebackground_white_borderlef": "<div style=\"background: var(--bg); border: 1px solid var(--border); border-left: 4px solid {percentageColor}; border-radius: var(--radius); padding: 8px 10px;\">\n\n                                    <div style=\"display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;\">\n\n                                        <div style=\"font-weight: bold; color: #333; font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; margin-right: 8px;\" title=\"{modelName} - {remainingPercentage}% remaining - {resetTime}\">\n\n                                            {modelName}\n\n                                        </div>\n\n                                        <div style=\"font-size: 13px; font-weight: bold; color: {percentageColor}; white-space: nowrap;\">\n\n                                            {remainingPercentage}%\n\n                                        </div>\n\n                                    </div>\n\n                                    <div style=\"width: 100%; height: 8px; background-color: var(--bg-subtle); border-radius: var(--radius); overflow: hidden; margin-bottom: 4px;\">\n\n                                        <div style=\"width: {usedPercentage}%; height: 100%; background-color: {percentageColor}; transition: none;\"></div>\n\n                                    </div>\n\n                                    <div style=\"font-size: 10px; color: #666; text-align: right;\">\n\n                                        {resetTime______N_A___________resetTime}\n\n                                    </div>\n\n                                </div>",
     "failed_to_check_for_updates_error": "Failed to check for updates: {error}",
-    "preview_channel_configuration_succe_dup": "Preview channel configuration successful",
+    "preview_channel_configuration_succe_dup": "Preview channel configured successfully.",
     "clear_selection_list": "Clear selection list",
-    "logs_cleared_waiting_for_new_logs": "Logs cleared, waiting for new logs...",
+    "logs_cleared_waiting_for_new_logs": "Logs cleared. Waiting for new logs...",
     "running_normally": "Running normally",
     "lightweight_singlefile_deployment": "Lightweight single-file deployment",
-    "button_to_save_settings_success_fun": "button to save settings', 'success');\n\n    }\n\n}\n\n\n\nfunction restoreOfficialUrls() {\n\n    if (confirm('Are you sure you want to reset all endpoints to official URLs?')) {\n\n        for (const [fieldId, url] of Object.entries(officialUrls)) {\n\n            const field = document.getElementById(fieldId);\n\n            if (field && !field.disabled) field.value = url;\n\n        }\n\n        showStatus(' Switched to official endpoint configuration, remember to click",
-    "test_successfulnfile_filenamenstatu": " Test successful!\\nFile: {filename}\\nStatus: ${data.message || 'Omni credential valid'} ({data_status_code____200})",
+    "button_to_save_settings_success_fun": "Click the save button to apply these settings.",
+    "test_successfulnfile_filenamenstatu": "Test completed successfully.\\nFile: {filename}\\nStatus: {data_message} ({data_status_code____200})",
     "full_version_datafull_hashncommit_m": "Full version: {data_full_hash}\\nCommit message: {data_message}\\nCommit time: {data_date}",
     "importing_credentials_from_environm": "Importing credentials from environment variables...",
     "server_bound_host_ip_address": "Server bound Host IP Address:",
-    "verification_failed_for_all_failed": " Verification failed for all! Failed {failCount}/{selectedFiles_length} Omni credentials",
+    "verification_failed_for_all_failed": "Verification failed for all credentials. Failed {failCount}/{selectedFiles_length} Omni credentials.",
     "github_issues_support": "GitHub Issues",
     "download_failed_name": "Download failed: {name}",
-    "login_successful": "Login successful!",
+    "login_successful": "Signed in successfully.",
     "network_error_error": "Network error: {error}",
-    "batch_verification_completennsucces": "Batch verification complete!\\n\\nSuccess: {successCount}\\nFailed: {failCount}\\nTotal: {selectedFiles_length}\\n\\nDetailed results:\\n{resultMessages_join___n}",
+    "batch_verification_completennsucces": "Batch verification complete.\\n\\nSuccess: {successCount}\\nFailed: {failCount}\\nTotal: {selectedFiles_length}\\n\\nDetailed results:\\n{resultMessages_join___n}",
     "http_error_codes_that_trigger_circu": "HTTP error codes that trigger circuit breaker/ban (comma separated):",
     "upload_failed_error": "Upload failed: {error}",
     "batch_verification_complete": "Batch verification complete",
-    "storage_and_proxy_settings": " Storage and Proxy Settings",
+    "storage_and_proxy_settings": "Storage and proxy settings",
     "performing_batch_action_operation": "Performing batch {action} operation...",
     "this_setting_may_slightly_reduce_co": "This setting may slightly reduce comprehension for complex prompts but perfectly resolves empty returns or streaming circuit breaker errors in specific third-party clients caused by missing system_instructions.",
     "fetching_environment_variable_statu": "Fetching environment variable status...",
     "nnerror_details_errordetail": "\\n\\nError details: {errorDetail}",
     "highquality_aesthetic_panel_layout": "High-quality, aesthetic panel layout, compatible with all modern browsers.",
-    "load_failed_datadetail_dataerror_un": "Load failed: ${data.detail || data.error || 'Unknown error'}",
+    "load_failed_datadetail_dataerror_un": "Load failed: {data_detail____data_error}",
     "access_password_to_protect_this_con": "Access password to protect this console page from malicious tampering.",
     "if_running_on_a_remote_vps_or_a_hea": "If running on a remote VPS or a headless environment: please expand \"Unable to access origin shortcut channel\" below for instructions.",
     "log_file_download_successful_filena": "Log file download successful: {filename}",
@@ -584,13 +584,13 @@ const TRANSLATIONS = {
     "div_span_classfilenamefileicon_file": "<div>\n\n                        <span class=\"file-name\">{fileIcon} {file_name}</span>\n\n                        <span class=\"file-size\">({formatFileSize_file_size}{fileType})</span>\n\n                    </div>\n\n                    <button class=\"remove-btn\" onclick=\"{type______omni_____removeOmniFile_____removeFile}({index})\">Delete</button>",
     "passthrough_model_thinking_process": "Pass-through model thinking process to frontend response",
     "log_connection_channel_disconnected": "Log connection channel disconnected.",
-    "parallel_verifying_selectedfileslen": " Parallel verifying {selectedFiles_length} credentials, please wait...",
-    "failed_to_retrieve_authentication_f": " Failed to retrieve authentication file: {error}",
+    "parallel_verifying_selectedfileslen": "Verifying {selectedFiles_length} credentials in parallel. Please wait...",
+    "failed_to_retrieve_authentication_f": "Failed to retrieve authentication file: {error}",
     "applicable_to_the_latest_gemini_20": "Applicable to the latest Gemini 2.0 series models with reasoning capabilities. If disabled, thinking process content will be filtered out for cleaner direct responses.",
     "log_stream_connection_disconnected": "Log stream connection disconnected",
     "environment_variable_status_check_c": "Environment variable status check complete",
     "project_description": "Omni Gateway is a universal AI router for coding tools. Features smart auto-fallback, token compression, and seamless format translation to maximize free and premium LLMs.",
-    "click_the_view_error_button_to_load": "Click the \"View Error\" button to load error information...",
+    "click_the_view_error_button_to_load": "Click \"View Error\" to load error information.",
     "loaded_datatotal_type_omni_a": "Loaded {data_total} {type______omni_____Omni} credential files",
     "email_not_retrieved": "Email not retrieved",
     "tip": "Tip",
@@ -600,25 +600,25 @@ const TRANSLATIONS = {
     "verification_failed": "Verification failed",
     "gemini_native": "Gemini Native:",
     "error_code_code": "Error code: {code}",
-    "api_endpoint_proxy_setup": " API Endpoint Proxy Setup",
-    "login_failed_incorrect_password": "Login failed! Incorrect password.",
+    "api_endpoint_proxy_setup": "API endpoint proxy setup",
+    "login_failed_incorrect_password": "Incorrect password. Please try again.",
     "used_for_http_authorization_bearer": "Used for HTTP Authorization Bearer Token verification on proxy endpoint requests.",
     "enable_batch": "Enable batch",
     "failed_to_download_package_errormes": "Failed to download package: {error_message}",
-    "batch_configuration_complete_succes": " Batch configuration complete: {successCount}/{selectedFiles_length} successful, {failCount} failed",
+    "batch_configuration_complete_succes": "Batch configuration complete: {successCount}/{selectedFiles_length} succeeded, {failCount} failed.",
     "claude_compatible": "Claude Compatible:",
-    "verifying_omni_project_id_pl": " Verifying Omni Project ID, please wait...",
-    "invalid_selection_please_restart_th": "Invalid selection, please restart the authentication process",
+    "verifying_omni_project_id_pl": "Verifying Omni Project ID. Please wait...",
+    "invalid_selection_please_restart_th": "Invalid selection. Please restart the authentication process.",
     "error_code_dup": "Error code:",
-    "configuration_data_loaded_successfu": "Configuration data loaded successfully!",
+    "configuration_data_loaded_successfu": "Configuration data loaded successfully.",
     "leave_blank_to_attempt_automatic_de": "Leave blank to attempt automatic detection and project creation.",
     "no_usage_breakdown_statistics_avail": "No usage breakdown statistics available",
-    "all_verifications_successful_succes": " All verifications successful! Successfully verified {successCount}/{selectedFiles_length} credentials",
-    "successfully_deleted_datadeleted_co": " Successfully deleted {data_deleted_count} environment variable credential files",
+    "all_verifications_successful_succes": "All verifications passed. Verified {successCount}/{selectedFiles_length} credentials.",
+    "successfully_deleted_datadeleted_co": "Deleted {data_deleted_count} environment variable credential files.",
     "are_you_sure_you_want_to_delete_fil_dup": "Are you sure you want to delete {filename}?",
     "verify": "Verify",
     "click_to_select_files_or_drag_and_d": "Click to select files, or drag and drop files here",
-    "configuration_successful": "Configuration successful",
+    "configuration_successful": "Configuration successful.",
     "error": "Error:",
     "retrieving_credentials_from_callbac": "Retrieving credentials from callback URL...",
     "preview_channel_configuration_faile_dup": "Preview channel configuration failed",
@@ -630,32 +630,32 @@ const TRANSLATIONS = {
     "failed_to_check_for_updates_dataerr": "Failed to check for updates: {data_error}",
     "network_error_errormessage": "Network error: {error_message}",
     "minimal_resource_footprint_perfectl": "Minimal resource footprint, perfectly adapted for all major PAAS and Docker environments.",
-    "application_keepalive_settings": " Application Keep-Alive Settings",
+    "application_keepalive_settings": "Application keep-alive settings",
     "save_global_configuration": "Save global configuration",
-    "failed_to_load_configuration_datade": "Failed to load configuration: ${data.detail || data.error || 'Unknown error'}",
+    "failed_to_load_configuration_datade": "Failed to load configuration: {data_detail____data_error}",
     "uploading_and_extracting_zip_file": "Uploading and extracting ZIP file...",
     "are_you_sure_you_want_to_batch_veri_dup": "Are you sure you want to batch verify Project IDs for {selectedFiles_length} credentials?\\n\\nVerification will be processed in parallel to increase speed.",
     "refreshing_all_user_emails": "Refreshing all user emails...",
-    "operation_failed_datadetail_dataerr": "Operation failed: ${data.detail || data.error || 'Unknown error'}",
-    "are_you_sure_you_want_to_delete_the": "Are you sure you want to delete the {selectedFiles_length} selected files?\\nNote: This action cannot be undone!",
-    "new_version_foundncurrent_vdatavers": "New version found!\\nCurrent: v{data_version}\\nLatest: v{data_latest_version}\\n\\nRelease Notes: ${data.latest_message || 'None'}",
+    "operation_failed_datadetail_dataerr": "Operation failed: {data_detail____data_error}",
+    "are_you_sure_you_want_to_delete_the": "Are you sure you want to delete the {selectedFiles_length} selected files?\\nNote: This action cannot be undone.",
+    "new_version_foundncurrent_vdatavers": "New version available.\\nCurrent: v{data_version}\\nLatest: v{data_latest_version}\\n\\nRelease notes: {data_latest_message}",
     "div_stylecolor_007bfftype_highlight": "<div style=\"color: #007bff;\">Type: {highlightedType}</div>",
     "failed_to_check_for_updates_errorme": "Failed to check for updates: {error_message}",
     "nerror_detailsndataerror": "\\nError details:\\n{data_error}",
-    "omni_authentication_successf_dup": " Omni authentication successful! File saved to: {data_file_path}",
+    "omni_authentication_successf_dup": "Omni authentication completed successfully. File saved to: {data_file_path}.",
     "batch_verify_project_id": "Batch verify Project ID",
-    "filter_thiscurrentstatusfilter_enab": "(Filter: ${this.currentStatusFilter === 'enabled' ? 'Enabled only' : 'Disabled only'})",
+    "filter_thiscurrentstatusfilter_enab": "(Filter: {filter})",
     "are_you_sure_you_want_to_configure": "Are you sure you want to configure all endpoints to official addresses?",
     "perfect_responsive_support": "Perfect responsive support",
     "welcome_to_join_us_to_discuss_usage": "Welcome to join us to discuss usage and submit feature requests:",
-    "successfully_deleted_count_environm": " Successfully deleted {count} environment variable credential files",
+    "successfully_deleted_count_environm": "Deleted {count} environment variable credential files.",
     "monitor_realtime_request_details_an": "Monitor real-time request details and rotation logic sent to the Google Cloud API to quickly troubleshoot network proxy or rate limiting issues.",
     "error_errormsg": "Error: {errorMsg}",
     "unlimited": "Unlimited",
     "drag_and_drop_or_select_your_existi": "Drag and drop or select your existing Code Assist or Omni authentication JSON/ZIP file to upload to the server.",
-    "authentication_successful_file_save": " Authentication successful! File saved to: {data_file_path}",
+    "authentication_successful_file_save": "Authentication successful. File saved to: {data_file_path}.",
     "connection_lost": "Connection lost",
-    "batch_preview_channel_configuration": "Batch Preview channel configuration complete!\\n\\nSuccess: {successCount}\\nFailed: {failCount}\\nTotal: {selectedFiles_length}\\n\\nDetailed results:\\n{resultMessages_join___n}",
+    "batch_preview_channel_configuration": "Batch Preview channel configuration complete.\\n\\nSuccess: {successCount}\\nFailed: {failCount}\\nTotal: {selectedFiles_length}\\n\\nDetailed results:\\n{resultMessages_join___n}",
     "are_you_sure_you_want_to_actionlabe": "Are you sure you want to {actionLabel} the {selectedFiles_length} selected files?",
     "page_page_of_total_showing_startend": "Page {page} of {total} (Showing {start}-{end}, {count} items in total)",
     "loading_file_content": "Loading file content...",
@@ -663,29 +663,29 @@ const TRANSLATIONS = {
     "failed_to_refresh_emails": "Failed to refresh emails",
     "preview_only": "Preview only",
     "max_retries_on_failure": "Max retries on failure:",
-    "batch_operation_complete_successful": "Batch operation complete: Successfully processed {successCount}/{selectedFiles_length} files",
+    "batch_operation_complete_successful": "Batch operation complete. Processed {successCount}/{selectedFiles_length} files successfully.",
     "deduplication_detailsnn": "Deduplication details:\\n\\n",
     "synchronizing_current_system_config": "Synchronizing current system configuration to the server...",
     "ip_address_to_listen_on_0000_allows": "IP address to listen on. 0.0.0.0 allows public access. Requires a restart to apply changes.",
     "are_you_sure_you_want_to_reset_usag": "Are you sure you want to reset usage statistics for {filename}?",
-    "please_select_at_least_one_credenti": "Please select at least one credential to proceed!",
-    "authentication_successful_file_save_dup": " Authentication successful! File saved to: {path}",
+    "please_select_at_least_one_credenti": "Please select at least one credential to proceed.",
+    "authentication_successful_file_save_dup": "Authentication successful. File saved to: {path}.",
     "retrieving_omni_credentials": "Retrieving Omni credentials from callback URL...",
-    "configuring_preview_channel_please": " Configuring Preview channel, please wait...",
+    "configuring_preview_channel_please": "Configuring Preview channel. Please wait...",
     "verification_failed_error": "Verification failed: {error}",
-    "please_select_the_omni_crede_dup": " Please select the Omni credential to verify first",
-    "successfully_uploaded_datauploaded": "Successfully uploaded {data_uploaded_count} {type______omni_____Omni} file(s)",
+    "please_select_the_omni_crede_dup": "Please select an Omni credential to verify first.",
+    "successfully_uploaded_datauploaded": "Uploaded {data_uploaded_count} {type______omni_____Omni} file(s) successfully.",
     "dataexisting_env_files_count_files": "{data_existing_env_files_count} file(s)",
     "waiting_for_omni_oauth_callb": "Waiting for Omni OAuth callback...",
-    "model_protocol_compatibility_overri": " Model Protocol Compatibility Override",
+    "model_protocol_compatibility_overri": "Model protocol compatibility override",
     "maximum_retries_for_resuming_stream": "Maximum retries for resuming stream data from the break point when calling models with the '-stream-truncation-prevention' suffix.",
-    "successfully_uploaded_count_type_fi": "Successfully uploaded {count} {type} file(s)",
+    "successfully_uploaded_count_type_fi": "Uploaded {count} {type} file(s) successfully.",
     "failed_to_retrieve_credentials_from_dup": "Failed to retrieve credentials from callback URL: {error_message}",
     "enable_credits": "Enable Credits",
     "code_assist_creds__environment_variable_no": "CODE_ASSIST_CREDS_* environment variable not found",
     "autoscroll_to_bottom": "Auto-scroll to bottom",
-    "please_select_the_credential_to_con": " Please select the credential to configure Preview for first",
-    "please_select_the_file_to_upload_fi": "Please select the file to upload first",
+    "please_select_the_credential_to_con": "Please select a credential before configuring Preview.",
+    "please_select_the_file_to_upload_fi": "Please select a file to upload first.",
     "failed_to_check_for_updates": "Failed to check for updates:",
     "enabled_dup": "Enabled",
     "retrieve_the_latest_google_cloud_sd": "Retrieve the latest Google Cloud SDK Omni native authentication credentials.",
@@ -694,8 +694,8 @@ const TRANSLATIONS = {
     "24h_total_calls": "24h Total Requests",
     "status": "Status:",
     "maximum_retry_limit_for_resuming_st": "Maximum retry limit for resuming stream output if it gets truncated while using models with the '-stream-truncation-prevention' suffix.",
-    "omni_verification_successful": " Omni verification successful!\\n\\nFile: {filename}\\nProject ID: {data_project_id}{tierLine}{creditLine}\\n\\n{data_message}",
-    "all_configured_successfully_preview": " All configured successfully! Preview channel configured for {successCount}/{selectedFiles_length} credentials",
+    "omni_verification_successful": "Omni verification successful.\\n\\nFile: {filename}\\nProject ID: {data_project_id}{tierLine}{creditLine}\\n\\n{data_message}",
+    "all_configured_successfully_preview": "All credentials configured successfully. Preview channel configured for {successCount}/{selectedFiles_length} credentials.",
     "enable_credit": "Enable Credit",
     "24hour_call_breakdown_statistics": "24-hour request breakdown statistics",
     "are_you_sure_you_want_to_refresh_us_dup": "Are you sure you want to refresh user emails for all Omni credentials? This may take some time.",
@@ -703,9 +703,9 @@ const TRANSLATIONS = {
     "batch_disable_dup": "Batch disable",
     "div_styletextalign_center_padding_2_dup_dup_dup_dup": "<div style=\"text-align: center; padding: 20px; color: #dc3545;\">\n\n                        <div style=\"font-size: 48px; margin-bottom: 10px;\"></div>\n\n                        <div style=\"font-weight: bold;\">Network Error</div>\n\n                        <div style=\"font-size: 12px; margin-top: 8px;\">{error_message}</div>\n\n                    </div>",
     "upstream_network_proxy_required_for": "Upstream network proxy required for local access to Google APIs. Leave empty for direct connection.",
-    "if_you_find_any_bugs_or_have_design": "If you find any bugs or have design suggestions, feel free to open Issues on our GitHub repository. Pull Requests are also welcome to help enrich the ecosystem.",
+    "if_you_find_any_bugs_or_have_design": "If you find a bug or have a design suggestion, open an issue on GitHub. Pull requests are welcome.",
     "view_error": "View error",
-    "verification_failednnerrormsg": " Verification failed\\n\\n{errorMsg}",
+    "verification_failednnerrormsg": "Verification failed.\\n\\n{errorMsg}",
     "failed_to_retrieve_omni_cred_dup": "Failed to retrieve Omni credentials from callback URL: {error_message}",
     "code_assist_credential_batch_upload": "Code Assist Credential Batch Upload",
     "checking_for_updates": "Checking for updates...",
@@ -714,17 +714,17 @@ const TRANSLATIONS = {
     "operation_successful_action": "Operation successful: {action}",
     "download_failed_filename": "Download failed: {filename}",
     "retrieve_and_save_omni_crede": "Retrieve and save Omni credentials",
-    "ag_credentials": "AG Credentials",
+    "ag_credentials": "Omni credentials",
     "view_quota": "View quota",
     "logged_out": "Logged out",
-    "are_you_sure_you_want_to_reset_usag_dup": "Are you sure you want to reset ALL usage statistics?",
-    "configuration_successfulnfile_filen": " Configuration successful!\\nFile: {filename}\\nStatus: {data_message}",
+    "are_you_sure_you_want_to_reset_usag_dup": "Are you sure you want to reset all usage statistics?",
+    "configuration_successfulnfile_filen": "Configuration successful.\\nFile: {filename}\\nStatus: {data_message}",
     "batch_delete_dup": "Batch delete",
     "modelname_remainingpercentage_remai": "{modelName} - {remainingPercentage}% remaining - {resetTime}",
     "configuration_management": "Configuration Management",
     "retrieving_user_emails": "Retrieving user emails...",
     "set_preview": "Set Preview",
-    "authentication_successful_project_i_dup": " Authentication successful! Project ID automatically detected as: {data_credentials_project_id}, file saved to: {data_file_path}",
+    "authentication_successful_project_i_dup": "Authentication successful. Project ID automatically detected as {data_credentials_project_id}. File saved to: {data_file_path}.",
     "automatic_quota_avoidance_rotation": "Automatic Quota Avoidance Rotation",
     "reload_configuration_data": "Reload Configuration Data",
     "key_technical_highlights": "Key Technical Highlights",
@@ -732,50 +732,50 @@ const TRANSLATIONS = {
     "generating_omni_authenticati": "Generating Omni authentication link...",
     "upload_failed_errormessage": "Upload failed: {error_message}",
     "failed_to_update_preview_status_in": "Failed to update Preview status in bulk: {error}",
-    "downloaded_filename": " Downloaded: {filename}",
+    "downloaded_filename": "Downloaded: {filename}",
     "bulk_upload_local_credentials": "Bulk Upload Local Credentials",
     "div_stylebackground_lineargradient1": "<div style=\"background: var(--bg-subtle); color: var(--text-primary); padding: 14px 0; border-bottom: 1px solid var(--border); margin-bottom: 15px;\">\n\n                                <h4 style=\"margin: 0; font-size: 16px; display: flex; align-items: center; gap: 8px;\">\n\n                                    <span style=\"font-size: 20px;\"></span>\n\n                                    <span>Quota Information Details</span>\n\n                                </h4>\n\n                                <div style=\"font-size: 12px; opacity: 0.9; margin-top: 5px;\">File: {filename}</div>\n\n                            </div>\n\n                            <div style=\"display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 10px;\">",
-    "automatic_retry_reconnection_mechan": " Automatic Retry & Reconnection Mechanism",
+    "automatic_retry_reconnection_mechan": "Automatic retry and reconnection mechanism",
     "download_all_credentials_as_archive": "Download All Credentials as Archive",
     "waiting_for_oauth_callback": "Waiting for OAuth callback...",
     "local_storage_directory_for_uploade": "Local storage directory for uploaded and authorized JSON files.",
     "bulk_preview_channel_configuration": "Bulk Preview channel configuration complete",
     "disable_credit": "Disable Credit",
     "no_logs_yet": "No logs yet...",
-    "already_up_to_date": "Already up to date!",
-    "test_successfulnfile_filenamenstatu_dup": " Test successful!\\nFile: {filename}\\nStatus: ${data.message || 'Credentials available'} ({data_status_code____200})",
-    "deduplication_complete_deleted_data": "Deduplication complete: Deleted {data_deleted_count} duplicate credentials, kept {data_kept_count} credentials ({data_unique_emails_count} unique emails)",
+    "already_up_to_date": "Already up to date.",
+    "test_successfulnfile_filenamenstatu_dup": "Test completed successfully.\\nFile: {filename}\\nStatus: {data_message} ({data_status_code____200})",
+    "deduplication_complete_deleted_data": "Deduplication complete. Deleted {data_deleted_count} duplicate credentials and kept {data_kept_count} credentials ({data_unique_emails_count} unique emails).",
     "are_you_sure_you_want_to_perform_th": "Are you sure you want to perform the {action} bulk operation on the {count} selected credentials?",
-    "bulk_operation_failed_datadetail_da": "Bulk operation failed: ${data.detail || data.error || 'Unknown error'}",
+    "bulk_operation_failed_datadetail_da": "Bulk operation failed: {data_detail____data_error}",
     "ncredit_datacredit_amount": "\\nCredit: {data_credit_amount}",
-    "authentication_failed_please_log_in": "Authentication failed, please log in again",
+    "authentication_failed_please_log_in": "Authentication failed. Please sign in again.",
     "code_assist_credential_file_management": "Code Assist Credential File Management",
     "failed_to_retrieve_version_informat": "Failed to retrieve version information:",
     "filter_level": "Filter Level:",
     "failed_to_get_email_errormessage": "Failed to get email: {error_message}",
     "suitable_for_cloud_servervps_deploy": "Suitable for cloud server/VPS deployment, Docker container environments, or scenarios where port 11451 is blocked by a firewall.",
     "connection_error": "Connection error",
-    "omni_credentials_successfull": "Omni credentials successfully retrieved from callback URL!",
+    "omni_credentials_successfull": "Omni credentials retrieved successfully from the callback URL.",
     "are_you_sure_you_want_to_configure_dup": "Are you sure you want to configure all endpoints as mirror URLs?",
-    "sever_log_channel": "Sever log channel",
-    "configuration_loaded_successfully": "Configuration loaded successfully",
+    "sever_log_channel": "Server log channel",
+    "configuration_loaded_successfully": "Configuration loaded successfully.",
     "unable_to_load_file_content": "Unable to load file content:",
     "bulk_enable_credit": "Bulk enable Credit",
     "live_connection_status": "Live connection status:",
     "div_styletextalign_center_padding_2_dup_dup_dup_dup_dup": "<div style=\"text-align: center; padding: 20px; color: #666;\"> Loading quota information...</div>",
     "connection_failed": "Connection failed",
-    "oneclick_deduplication_complete_del": "One-click deduplication complete! Deleted {deleted} duplicate files, kept {kept} unique account files.",
-    "verifying_project_id_please_wait": " Verifying Project ID, please wait...",
+    "oneclick_deduplication_complete_del": "One-click deduplication complete. Deleted {deleted} duplicate files and kept {kept} unique account files.",
+    "verifying_project_id_please_wait": "Verifying Project ID. Please wait...",
     "email_refresh_network_error_errorme": "Email refresh network error: {error_message}",
     "waiting_for_oauth_callback_this_may": "Waiting for OAuth callback, this may take some time...",
-    "project_id_required_to_complete_aut": "Project ID required to complete authentication, please restart and enter the correct Project ID",
+    "project_id_required_to_complete_aut": "A Project ID is required to complete authentication. Restart the flow and enter the correct Project ID.",
     "error_code_datastatus_code_response": "Error code: {data_status_code____response_status}",
     "cooling_down": "Cooling down:",
     "start_bulk_upload": "Start bulk upload",
     "attempting_to_autodetect_project_id": "Attempting to auto-detect Project ID, generating authentication link...",
-    "check_for_updates_failed_dataupdate": "Check for updates failed: ${data.update_error || 'Unknown error'}",
+    "check_for_updates_failed_dataupdate": "Update check failed: {data_update_error}",
     "upload_failed": "Upload failed:",
-    "all_verifications_failed_failed_fai": " All verifications failed! Failed {failCount}/{selectedFiles_length} credentials",
+    "all_verifications_failed_failed_fai": "All verifications failed. Failed {failCount}/{selectedFiles_length} credentials.",
     "upload_failed_server_response_forma": "Upload failed: Server response format error",
     "deduplication_failed": "Deduplication failed",
     "credit_resultcreditamount": "(Credit: {result_creditAmount})",
@@ -785,109 +785,109 @@ const TRANSLATIONS = {
     "github_open_source_repository": "GitHub Open Source Repository:",
     "test_failed_errormessage": "Test failed: {error_message}",
     "view_account_email": "View account email",
-    "longtext_truncation_recovery_contro": " Long-text Truncation Recovery Control",
+    "longtext_truncation_recovery_contro": "Long-text truncation recovery control",
     "automation_enabled": "Automation enabled:",
     "div_stylepadding_12px_marginbottom": "<div style=\"padding: 12px; margin-bottom: 10px; border-left: 3px solid #dc3545; background-color: #f8f9fa;\">\n\n                                    <div style=\"font-weight: bold; color: #dc3545; margin-bottom: 8px;\">Error code: {errorCode}</div>\n\n                                    <div style=\"line-height: 1.6; color: #333; white-space: pre-wrap; word-break: break-word;\">\n\n                                        {highlightedMsg}\n\n                                    </div>\n\n                                    {detailsHtml}\n\n                                </div>",
     "refresh_all_account_emails": "Refresh all account emails",
     "about_omni-gateway": "About Omni Gateway",
     "get_authentication_file": "Get authentication file",
     "n_restart_reminder_notice": "\\n Restart Reminder: {notice}",
-    "test_failed_datamessage_error_code": " Test failed - ${data.message || 'Error code: ' + (data.status_code || response.status)}",
+    "test_failed_datamessage_error_code": "Test failed: {data_message}",
     "service_keepalive_heartbeat_request": "Service keep-alive heartbeat request URL:",
     "after_the_google_authorization_redi": "After the Google authorization redirect, copy the full URL from your browser address bar (even if it shows a connection error) and paste it into the input box below.",
     "disabled": "Disabled",
     "upload_failed_http_status": "Upload failed: HTTP {status}",
     "disconnected": "Disconnected",
-    "if_the_redirect_fails_and_shows_an": "If the redirect fails and shows an error about being unable to connect to localhost:11451, return to this control panel;",
+    "if_the_redirect_fails_and_shows_an": "If the redirect fails and shows an error about being unable to connect to localhost:11451, return to this control panel.",
     "unknown_error": "Unknown error",
-    "testing_omni_credentials_ple": " Testing Omni credentials, please wait...",
+    "testing_omni_credentials_ple": "Testing Omni credentials. Please wait...",
     "if_you_cannot_return_to_the_source": "If you cannot return to the source, you can copy the full URL after the redirect and expand the quick channel below to parse it.",
     "verification_failed_errormessage": "Verification failed: {error_message}",
     "nerror_detailsnjsonstringifyerrorob": "\\nError details:\\n{JSON_stringify_errorObj__null__2}",
-    "log_stream_connected_successfully": "Log stream connected successfully",
+    "log_stream_connected_successfully": "Log stream connected successfully.",
     "clearing_environment_variable_crede": "Clearing environment variable credential files...",
     "get_authentication_link": "Get authentication link",
     "resulterror_step_resultstep": "{result_error} (Step: {result_step})",
     "network_error": "Network error:",
-    "failed_to_retrieve_environment_vari": "Failed to retrieve environment variable status: ${data.detail || data.error || 'Unknown error'}",
+    "failed_to_retrieve_environment_vari": "Failed to retrieve environment variable status: {data_detail____data_error}",
     "count_items_selected": "{count} items selected",
     "are_you_sure_you_want_to_clear_all": "Are you sure you want to clear all credential files imported from environment variables?\\nThis will delete all authentication files starting with \"env-\".",
     "bulk_operation_network_error_errorm": "Bulk operation network error: {error_message}",
     "streaming_truncation_recovery": "-Streaming truncation recovery",
-    "failed_to_get_quota_information": "Failed to get quota information",
-    "click_the_button_below_to_retrieve": "Click the button below to retrieve and automatically save the credential file directly;",
+    "failed_to_get_quota_information": "Failed to get quota information.",
+    "click_the_button_below_to_retrieve": "Click the button below to retrieve and automatically save the credential file.",
     "seamlessly_switch_to_idle_accounts": "Seamlessly switch to idle accounts to effectively avoid 429 rate limits.",
     "bind_the_listening_tcp_port_changes": "Bind the listening TCP port; changes require a restart to take effect.",
     "bulk_disable_credit": "Bulk disable Credit",
     "failed": "Failed",
     "reset_failed_datamessage_datadetail": "Reset failed: {data_message____data_detail____data_error}",
-    "failed_to_get_quota_information_err": " Failed to get quota information: {error_message}",
+    "failed_to_get_quota_information_err": "Failed to get quota information: {error_message}",
     "realtime_logs": "Real-time logs",
-    "please_enter_the_access_password": "Please enter the access password!",
+    "please_enter_the_access_password": "Please enter the access password.",
     "zip_files_will_be_automatically_dec": "ZIP files will be automatically decompressed and filtered to extract JSON credentials.",
     "oauth_authentication_server_endpoin": "OAuth authentication server endpoint:",
     "are_you_sure_you_want_to_batch_set": "Are you sure you want to batch set the Preview channel for {selectedFiles_length} credentials?\\n\\nConfiguration will be processed in parallel for speed.",
-    "settings_saved_successfully_success": "Settings saved successfully",
-    "configuration_saved_successfully": "Configuration saved successfully",
+    "settings_saved_successfully_success": "Settings saved successfully.",
+    "configuration_saved_successfully": "Configuration saved successfully.",
     "preview_not_supported": "Preview not supported",
     "please_select_a_projectnn": "Please select a project:\\n\\n",
-    "please_select_the_files_to_upload": "Please select the files to upload",
+    "please_select_the_files_to_upload": "Please select files to upload.",
     "are_you_sure_you_want_to_action_the": "Are you sure you want to {action} the selected {count} files?",
     "a_hrefurl_target_blank_stylecolor_0": "<a href=\"{url}\" target=\"_blank\" style=\"color: #007bff; text-decoration: underline; word-break: break-all;\" title=\"Click to open: {url}\">{url}</a>",
     "retry_fetching_authentication_file": "Retry fetching authentication file",
     "manually_connect_log_channel": "Manually connect log channel",
-    "error_information_loaded_successful": " Error information loaded successfully",
+    "error_information_loaded_successful": "Error information loaded successfully.",
     "universal_shortcut_override_passwor": "Universal shortcut override password (optional):",
-    "login_failed_datadetail_dataerror_u": "Login failed: ${data.detail || data.error || 'Unknown error'}",
+    "login_failed_datadetail_dataerror_u": "Login failed. Please try again.",
     "div_styletextalign_center_padding_2_dup_dup_dup_dup_dup_dup": "<div style=\"text-align: center; padding: 20px; color: #666;\"> Loading error information...</div>",
     "log_stream_connection_disconnected_dup": "Log stream connection disconnected",
-    "system_configuration_saved_successf": " System configuration saved successfully",
+    "system_configuration_saved_successf": "System configuration saved successfully.",
     "div_stylefontsize_12px_color_666sta": "<div style=\"font-size: 12px; color: #666;\">Status: {escapeHtml_parsedMsg_error_status}</div>",
     "api_access_authentication_password": "API access authentication password (API Key):",
-    "parallel_testing_selectedfileslengt": " Parallel testing {selectedFiles_length} Omni credentials, please wait...",
+    "parallel_testing_selectedfileslengt": "Testing {selectedFiles_length} Omni credentials in parallel. Please wait...",
     "operation_failed": "Operation failed:",
-    "all_omni_credentials_packed": " All Omni credentials packed and downloaded",
+    "all_omni_credentials_packed": "All Omni credentials have been packed and downloaded.",
     "operation_successful_action_dup": "Operation successful: {action}",
     "omni_api_endpoint": "Omni API endpoint:",
-    "authentication_link_generated_proje": "Authentication link generated (Project ID: {data_detected_project_id}), please click the link to complete authorization",
+    "authentication_link_generated_proje": "Authentication link generated for Project ID {data_detected_project_id}. Click the link to complete authorization.",
     "configuring_preview_channel_status": "Configuring Preview channel status in batch...",
-    "after_successful_authorization_the_dup": "After successful authorization, the system will automatically detect and activate the necessary Gemini Cloud Assist API and Gemini for Google Cloud API services for your Google Cloud project, no manual configuration required.",
+    "after_successful_authorization_the_dup": "After successful authorization, the system will automatically detect and activate the required Gemini Cloud Assist API and Gemini for Google Cloud API services for your Google Cloud project. No manual configuration is required.",
     "batch_upload_omni_credential": "Batch upload Omni credentials",
     "checking": "Checking...",
-    "please_enter_the_callback_url": "Please enter the callback URL",
+    "please_enter_the_callback_url": "Please enter the callback URL.",
     "extract_credentials_from_callback_l": "Extract credentials from callback link",
     "div_styletextalign_center_padding_2_dup_dup_dup_dup_dup_dup_dup": "<div style=\"text-align: center; padding: 20px; color: #28a745;\"><div style=\"font-size: 48px; margin-bottom: 10px;\"></div><div style=\"font-weight: bold;\">No error records</div><div style=\"font-size: 12px; color: #666; margin-top: 8px;\">This credential is running normally</div></div>",
     "no_details_available": "No details available",
     "global_system_configuration": "Global system configuration",
     "network_error_while_downloading_log": "Network error while downloading logs: {error_message}",
-    "authentication_link_generated_proje_dup": "Authentication link generated (Project ID: {id}), please click the link to complete authorization",
+    "authentication_link_generated_proje_dup": "Authentication link generated for Project ID {id}. Click the link to complete authorization.",
     "listening_port": "Listening Port:",
-    "email_refresh_complete_successfully": "Email refresh complete: Successfully retrieved {data_success_count}/{data_total_count} email addresses",
+    "email_refresh_complete_successfully": "Email refresh complete. Retrieved {data_success_count}/{data_total_count} email addresses.",
     "already_up_to_date_dup": "Already up to date",
     "no_credential_files_available": "No credential files available",
-    "validation_successfulnnfile_filenam": " Validation successful!\\n\\nFile: {filename}\\nProject ID: {data_project_id}{tierLine}{creditLine}\\n\\n{data_message}",
+    "validation_successfulnnfile_filenam": "Validation successful.\\n\\nFile: {filename}\\nProject ID: {data_project_id}{tierLine}{creditLine}\\n\\n{data_message}",
     "selectedcount_items_selected": "{selectedCount} items selected",
     "click_the_view_content_button_to_lo": "Click the \"View Content\" button to load file details...",
-    "please_enter_the_password": "Please enter the password",
+    "please_enter_the_password": "Please enter your password.",
     "upload_progress_dup": "Upload progress",
-    "error_dataerror_failed_to_fetch_aut": "Error: ${data.error || 'Failed to fetch authentication link'}",
-    "are_you_sure_you_want_to_delete_the_dup_dup": "Are you sure you want to delete the {count} selected files?\\nNote: This action cannot be undone!",
-    "configuring_preview_channel_for_sel": " Configuring Preview channel for {selectedFiles_length} credentials, please wait...",
+    "error_dataerror_failed_to_fetch_aut": "Error: {data_error}",
+    "are_you_sure_you_want_to_delete_the_dup_dup": "Are you sure you want to delete the {count} selected files?\\nNote: This action cannot be undone.",
+    "configuring_preview_channel_for_sel": "Configuring Preview channel for {selectedFiles_length} credentials. Please wait...",
     "none": "None",
-    "this_is_not_a_valid_callback_url_pl_dup": " This is not a valid callback URL! Please ensure it includes code and state parameters",
+    "this_is_not_a_valid_callback_url_pl_dup": "This is not a valid callback URL. Please ensure it includes code and state parameters.",
     "retrieved_credential_file_content": "Retrieved credential file content:",
     "enable": "Enable",
     "antitruncation_output_protection": "Anti-truncation Output protection",
-    "authentication_link_generated_proje_dup_dup": "Authentication link generated (Project ID will be detected after authorization), please click the link to complete authorization",
+    "authentication_link_generated_proje_dup_dup": "Authentication link generated. The Project ID will be detected after authorization. Click the link to complete authorization.",
     "failed_to_configure_preview_channel_dup": "Failed to configure Preview channel",
-    "testing_credentials_please_wait": " Testing credentials, please wait...",
-    "validation_complete_processed_activ": "Validation complete! Processed: {active} valid, {changed} IDs updated, {disabled} marked invalid",
-    "login_successful_dup": "Login successful",
+    "testing_credentials_please_wait": "Testing credentials. Please wait...",
+    "validation_complete_processed_activ": "Validation complete. Processed: {active} valid, {changed} IDs updated, {disabled} marked invalid.",
+    "login_successful_dup": "Signed in successfully.",
     "batch_task_control": "Batch task control",
     "24h_api_call_volume": "24H API Request Volume",
     "minimalist_parsing_mapping_for_cutt": "Minimalist parsing mapping for cutting-edge protocols like System/Thinking.",
-    "multiple_projects_detected_please_s": "Multiple projects detected, please specify a Project ID in advanced options:",
-    "failed_to_fetch_error_information_e": " Failed to fetch error information: {error_message}",
+    "multiple_projects_detected_please_s": "Multiple projects were detected. Specify a Project ID in advanced options:",
+    "failed_to_fetch_error_information_e": "Failed to fetch error information: {error_message}",
     "status_net_error": "Network error: {error}",
     "status_no_filter_data": "No usage statistics found.",
     "table_calls": "Requests",
@@ -899,8 +899,6 @@ const TRANSLATIONS = {
 };
 
 // =====================================================================
-
-// Comment translated/cleaned for compliance
 
 // =====================================================================
 
@@ -1000,13 +998,9 @@ function applyLanguage() {
 
 }
 
-// Comment translated/cleaned for compliance
-
 document.addEventListener('DOMContentLoaded', initLanguage);
 
 // =====================================================================
-
-// Comment translated/cleaned for compliance
 
 // =====================================================================
 
@@ -1178,19 +1172,13 @@ function navigate(path, pushState = true) {
 
 // =====================================================================
 
-// Comment translated/cleaned for compliance
-
 // =====================================================================
 
 // =====================================================================
-
-// Comment translated/cleaned for compliance
 
 // =====================================================================
 
 const AppState = {
-
-    // Comment translated/cleaned for compliance
 
     authToken: '',
 
@@ -1200,31 +1188,21 @@ const AppState = {
 
     currentProjectId: '',
 
-    // Comment translated/cleaned for compliance
-
     omniAuthState: null,
 
     omniAuthInProgress: false,
-
-    // Comment translated/cleaned for compliance
 
     creds: createCredsManager('normal'),
 
     omniCreds: createCredsManager('omni'),
 
-    // Comment translated/cleaned for compliance
-
     uploadFiles: createUploadManager('normal'),
 
     omniUploadFiles: createUploadManager('omni'),
 
-    // Comment translated/cleaned for compliance
-
     currentConfig: {},
 
     envLockedFields: new Set(),
-
-    // Comment translated/cleaned for compliance
 
     logWebSocket: null,
 
@@ -1234,19 +1212,13 @@ const AppState = {
 
     currentLogFilter: 'all',
 
-    // Comment translated/cleaned for compliance
-
     usageStatsData: {},
-
-    // Comment translated/cleaned for compliance
 
     cooldownTimerInterval: null
 
 };
 
 // =====================================================================
-
-// Comment translated/cleaned for compliance
 
 // =====================================================================
 
@@ -1282,8 +1254,6 @@ function createCredsManager(type) {
 
         statsData: { total: 0, normal: 0, disabled: 0 },
 
-        // Comment translated/cleaned for compliance
-
         getEndpoint: (action) => {
 
             const endpoints = {
@@ -1316,17 +1286,9 @@ function createCredsManager(type) {
 
         },
 
-        // Comment translated/cleaned for compliance
-
         getModeParam: () => modeParam,
 
-        // Comment translated/cleaned for compliance
-
         getElementId: (suffix) => {
-
-            // Comment translated/cleaned for compliance
-
-            // Comment translated/cleaned for compliance
 
             if (type === 'omni') {
 
@@ -1337,8 +1299,6 @@ function createCredsManager(type) {
             return suffix.charAt(0).toLowerCase() + suffix.slice(1);
 
         },
-
-        // Comment translated/cleaned for compliance
 
         async refresh() {
 
@@ -1408,15 +1368,11 @@ function createCredsManager(type) {
 
                     this.totalCount = data.total;
 
-                    // Comment translated/cleaned for compliance
-
                     if (data.stats) {
 
                         this.statsData = data.stats;
 
                     } else {
-
-                        // Comment translated/cleaned for compliance
 
                         this.calculateStats();
 
@@ -1458,8 +1414,6 @@ function createCredsManager(type) {
 
         },
 
-        // Comment translated/cleaned for compliance
-
         calculateStats() {
 
             this.statsData = { total: this.totalCount, normal: 0, disabled: 0 };
@@ -1480,8 +1434,6 @@ function createCredsManager(type) {
 
         },
 
-        // Comment translated/cleaned for compliance
-
         updateStatsDisplay() {
 
             document.getElementById(this.getElementId('StatTotal')).textContent = this.statsData.total;
@@ -1491,8 +1443,6 @@ function createCredsManager(type) {
             document.getElementById(this.getElementId('StatDisabled')).textContent = this.statsData.disabled;
 
         },
-
-        // Comment translated/cleaned for compliance
 
         renderList() {
 
@@ -1528,15 +1478,11 @@ function createCredsManager(type) {
 
         },
 
-        // Comment translated/cleaned for compliance
-
         getTotalPages() {
 
             return Math.ceil(this.totalCount / this.pageSize);
 
         },
-
-        // Comment translated/cleaned for compliance
 
         updatePagination() {
 
@@ -1556,8 +1502,6 @@ function createCredsManager(type) {
 
         },
 
-        // Comment translated/cleaned for compliance
-
         changePage(direction) {
 
             const newPage = this.currentPage + direction;
@@ -1572,8 +1516,6 @@ function createCredsManager(type) {
 
         },
 
-        // Comment translated/cleaned for compliance
-
         changePageSize() {
 
             this.pageSize = parseInt(document.getElementById(this.getElementId('PageSizeSelect')).value);
@@ -1583,8 +1525,6 @@ function createCredsManager(type) {
             this.refresh();
 
         },
-
-        // Comment translated/cleaned for compliance
 
         applyStatusFilter() {
 
@@ -1611,8 +1551,6 @@ function createCredsManager(type) {
             this.refresh();
 
         },
-
-        // Comment translated/cleaned for compliance
 
         updateBatchControls() {
 
@@ -1674,8 +1612,6 @@ function createCredsManager(type) {
 
         },
 
-        // Comment translated/cleaned for compliance
-
         async action(filename, action) {
 
             try {
@@ -1711,8 +1647,6 @@ function createCredsManager(type) {
             }
 
         },
-
-        // Comment translated/cleaned for compliance
 
         async batchAction(action) {
 
@@ -1798,8 +1732,6 @@ function createCredsManager(type) {
 
 // =====================================================================
 
-// Comment translated/cleaned for compliance
-
 // =====================================================================
 
 function createUploadManager(type) {
@@ -1815,10 +1747,6 @@ function createUploadManager(type) {
         selectedFiles: [],
 
         getElementId: (suffix) => {
-
-            // Comment translated/cleaned for compliance
-
-            // Comment translated/cleaned for compliance
 
             if (type === 'omni') {
 
@@ -2070,27 +1998,19 @@ function showStatus(message, type = 'info') {
 
     if (statusSection) {
 
-        // Comment translated/cleaned for compliance
-
         if (window._statusTimeout) {
 
             clearTimeout(window._statusTimeout);
 
         }
 
-        // Comment translated/cleaned for compliance
-
         statusSection.innerHTML = `<div class="status ${type}">${message}</div>`;
 
         const statusDiv = statusSection.querySelector('.status');
 
-        // Comment translated/cleaned for compliance
-
         statusDiv.offsetHeight;
 
         statusDiv.classList.add('show');
-
-        // Comment translated/cleaned for compliance
 
         window._statusTimeout = setTimeout(() => {
 
@@ -2100,7 +2020,7 @@ function showStatus(message, type = 'info') {
 
                 statusSection.innerHTML = '';
 
-            }, 300); // Comment translated/cleaned for compliance
+            }, 300);
 
         }, 3000);
 
@@ -2199,21 +2119,15 @@ async function regenerateApiKey() {
     }
 }
 
-// Comment translated/cleaned for compliance
-
 function linkifyText(text) {
 
     if (!text) return text;
-
-    // Comment translated/cleaned for compliance
 
     const urlPattern = /(https?:\/\/[^\s"'<>()[\]{}]+)|(www\.[^\s"'<>()[\]{}]+)/gi;
 
     return text.replace(urlPattern, function(url) {
 
         let href = url;
-
-        // Comment translated/cleaned for compliance
 
         if (url.startsWith('www.')) {
 
@@ -2227,11 +2141,7 @@ function linkifyText(text) {
 
 }
 
-// Comment translated/cleaned for compliance
-
 function showMessageModal(title, message, type = 'info') {
-
-    // Comment translated/cleaned for compliance
 
     const modal = document.createElement('div');
 
@@ -2265,11 +2175,7 @@ function showMessageModal(title, message, type = 'info') {
 
     `;
 
-    // Comment translated/cleaned for compliance
-
     document.body.appendChild(modal);
-
-    // Comment translated/cleaned for compliance
 
     modal.addEventListener('click', function(e) {
 
@@ -2280,8 +2186,6 @@ function showMessageModal(title, message, type = 'info') {
         }
 
     });
-
-    // Comment translated/cleaned for compliance
 
     const escHandler = function(e) {
 
@@ -2339,8 +2243,6 @@ function formatCooldownTime(remainingSeconds) {
 
 // =====================================================================
 
-// Comment translated/cleaned for compliance
-
 // =====================================================================
 
 function createCredCard(credInfo, manager) {
@@ -2351,11 +2253,7 @@ function createCredCard(credInfo, manager) {
 
     const managerType = manager.type;
 
-    // Comment translated/cleaned for compliance
-
     div.className = status.disabled ? 'cred-card disabled' : 'cred-card';
-
-    // Comment translated/cleaned for compliance
 
     let statusBadges = '';
 
@@ -2383,8 +2281,6 @@ function createCredCard(credInfo, manager) {
 
     }
 
-    // Comment translated/cleaned for compliance
-
     if (managerType !== 'omni' && credInfo.preview !== undefined) {
 
         if (credInfo.preview) {
@@ -2399,8 +2295,6 @@ function createCredCard(credInfo, manager) {
 
     }
 
-    // Comment translated/cleaned for compliance
-
     const tier = (credInfo.tier || 'pro').toString().toLowerCase();
 
     const tierLabel = tier.toUpperCase();
@@ -2408,8 +2302,6 @@ function createCredCard(credInfo, manager) {
     const tierClass = tier === 'ultra' ? 'tier-ultra' : (tier === 'free' ? 'tier-free' : 'tier-pro');
 
     statusBadges += `<span class="status-badge ${tierClass}" title="${t('tier_badge_title')}: ${tierLabel}">Tier: ${tierLabel}</span>`;
-
-    // Comment translated/cleaned for compliance
 
     if (managerType === 'omni') {
 
@@ -2424,8 +2316,6 @@ function createCredCard(credInfo, manager) {
         }
 
     }
-
-    // Comment translated/cleaned for compliance
 
     if (credInfo.model_cooldowns && Object.keys(credInfo.model_cooldowns).length > 0) {
 
@@ -2477,11 +2367,7 @@ function createCredCard(credInfo, manager) {
 
     }
 
-    // Comment translated/cleaned for compliance
-
     const pathId = (managerType === 'omni' ? 'omni_' : '') + btoa(encodeURIComponent(filename)).replace(/[+/=]/g, '_');
-
-    // Comment translated/cleaned for compliance
 
     const actionButtons = `
 
@@ -2520,8 +2406,6 @@ function createCredCard(credInfo, manager) {
         <button class="cred-btn delete" data-filename="${filename}" data-action="delete">${t('action_delete')}</button>
 
     `;
-
-    // Comment translated/cleaned for compliance
 
     const emailInfo = credInfo.user_email
 
@@ -2583,8 +2467,6 @@ function createCredCard(credInfo, manager) {
 
     `;
 
-    // Comment translated/cleaned for compliance
-
     div.querySelectorAll('[data-filename][data-action]').forEach(button => {
 
         button.addEventListener('click', function () {
@@ -2616,8 +2498,6 @@ function createCredCard(credInfo, manager) {
 }
 
 // =====================================================================
-
-// Comment translated/cleaned for compliance
 
 // =====================================================================
 
@@ -2671,13 +2551,13 @@ async function toggleCredDetailsCommon(pathId, manager) {
 
                 } else {
 
-                    contentDiv.textContent = t('status_load_failed_prefix') + (data.error || data.detail || t('unknown_error'));
+                    contentDiv.textContent = `${t('unable_to_load_file_content')} ${data.error || data.detail || t('unknown_error')}`;
 
                 }
 
             } catch (error) {
 
-                contentDiv.textContent = t('status_load_failed_prefix') + error.message;
+                contentDiv.textContent = `${t('unable_to_load_file_content')} ${error.message}`;
 
             }
 
@@ -2688,8 +2568,6 @@ async function toggleCredDetailsCommon(pathId, manager) {
 }
 
 // =====================================================================
-
-// Comment translated/cleaned for compliance
 
 // =====================================================================
 
@@ -2841,7 +2719,15 @@ async function login() {
 
             }
 
-            showStatus(t('login_failed_datadetail_dataerror_u', {data_detail____data_error: data.detail || data.error || t('unknown_error')}), 'error');
+            if (response.status === 401) {
+
+                showStatus(t('login_failed_incorrect_password'), 'error');
+
+                return;
+
+            }
+
+            showStatus(t('login_failed'), 'error');
 
         }
 
@@ -2947,11 +2833,7 @@ function handlePasswordEnter(event) {
 
 // =====================================================================
 
-// Comment translated/cleaned for compliance
-
 // =====================================================================
-
-// Comment translated/cleaned for compliance
 
 function updateTabSlider(targetTab, animate = true) {
 
@@ -2961,15 +2843,11 @@ function updateTabSlider(targetTab, animate = true) {
 
     if (!slider || !tabs || !targetTab) return;
 
-    // Comment translated/cleaned for compliance
-
     const tabLeft = targetTab.offsetLeft;
 
     const tabWidth = targetTab.offsetWidth;
 
     const tabsWidth = tabs.scrollWidth;
-
-    // Comment translated/cleaned for compliance
 
     const rightValue = tabsWidth - tabLeft - tabWidth;
 
@@ -2981,15 +2859,11 @@ function updateTabSlider(targetTab, animate = true) {
 
     } else {
 
-        // Comment translated/cleaned for compliance
-
         slider.style.transition = 'none';
 
         slider.style.left = `${tabLeft}px`;
 
         slider.style.right = `${rightValue}px`;
-
-        // Comment translated/cleaned for compliance
 
         slider.offsetHeight;
 
@@ -2998,8 +2872,6 @@ function updateTabSlider(targetTab, animate = true) {
     }
 
 }
-
-// Comment translated/cleaned for compliance
 
 function initTabSlider() {
 
@@ -3012,8 +2884,6 @@ function initTabSlider() {
     }
 
 }
-
-// Comment translated/cleaned for compliance
 
 document.addEventListener('DOMContentLoaded', initTabSlider);
 
@@ -3032,8 +2902,6 @@ function switchTab(tabName) {
     navigate(route, true);
 
 }
-
-// Comment translated/cleaned for compliance
 
 function triggerTabDataLoad(tabName) {
 
@@ -3056,8 +2924,6 @@ function triggerTabDataLoad(tabName) {
 }
 
 // =====================================================================
-
-// Comment translated/cleaned for compliance
 
 // =====================================================================
 
@@ -3257,8 +3123,6 @@ async function getCredentials() {
 
 // =====================================================================
 
-// Comment translated/cleaned for compliance
-
 // =====================================================================
 
 async function startOmniAuth() {
@@ -3404,8 +3268,6 @@ function downloadOmniCredentials() {
 }
 
 // =====================================================================
-
-// Comment translated/cleaned for compliance
 
 // =====================================================================
 
@@ -3643,11 +3505,7 @@ async function processOmniCallbackUrl() {
 
 // =====================================================================
 
-// Comment translated/cleaned for compliance
-
 // =====================================================================
-
-// Comment translated/cleaned for compliance
 
 function refreshCredsStatus() { AppState.creds.refresh(); }
 
@@ -3762,8 +3620,6 @@ async function downloadAllCreds() {
     }
 
 }
-
-// Comment translated/cleaned for compliance
 
 function refreshOmniCredsList() { AppState.omniCreds.refresh(); }
 
@@ -3885,8 +3741,6 @@ async function downloadAllOmniCreds() {
 
 }
 
-// Comment translated/cleaned for compliance
-
 function handleFileSelect(event) { AppState.uploadFiles.handleFileSelect(event); }
 
 function removeFile(index) { AppState.uploadFiles.removeFile(index); }
@@ -3915,13 +3769,7 @@ function clearOmniFiles() { AppState.omniUploadFiles.clearFiles(); }
 
 function uploadOmniFiles() { AppState.omniUploadFiles.upload(); }
 
-// Comment translated/cleaned for compliance
-
-// Comment translated/cleaned for compliance
-
 function updateEmailDisplay(filename, email, managerType = 'normal') {
-
-    // Comment translated/cleaned for compliance
 
     const containerId = managerType === 'omni' ? 'omniCredsList' : 'credsList';
 
@@ -3929,19 +3777,13 @@ function updateEmailDisplay(filename, email, managerType = 'normal') {
 
     if (!container) return false;
 
-    // Comment translated/cleaned for compliance
-
     const checkbox = container.querySelector(`input[data-filename="${filename}"]`);
 
     if (!checkbox) return false;
 
-    // Comment translated/cleaned for compliance
-
     const card = checkbox.closest('.cred-card');
 
     if (!card) return false;
-
-    // Comment translated/cleaned for compliance
 
     const emailDiv = card.querySelector('.cred-email');
 
@@ -3981,8 +3823,6 @@ async function fetchUserEmail(filename) {
 
             showStatus(t('successfully_retrieved_email_dataus', {data_user_email: data.user_email}), 'success');
 
-            // Comment translated/cleaned for compliance
-
             updateEmailDisplay(filename, data.user_email, 'normal');
 
         } else {
@@ -4019,8 +3859,6 @@ async function fetchOmniUserEmail(filename) {
 
             showStatus(t('successfully_retrieved_email_dataus', {data_user_email: data.user_email}), 'success');
 
-            // Comment translated/cleaned for compliance
-
             updateEmailDisplay(filename, data.user_email, 'omni');
 
         } else {
@@ -4041,8 +3879,6 @@ async function verifyProjectId(filename) {
 
     try {
 
-        // Comment translated/cleaned for compliance
-
         showStatus(t('verifying_project_id_please_wait'), 'info');
 
         const response = await fetch(`./ogw/creds/verify-project/${encodeURIComponent(filename)}`, {
@@ -4057,8 +3893,6 @@ async function verifyProjectId(filename) {
 
         if (response.ok && data.success) {
 
-            // Comment translated/cleaned for compliance
-
             const tierLine = data.subscription_tier ? `\nTier: ${data.subscription_tier}` : '';
 
             const creditLine = data.credit_amount !== undefined && data.credit_amount !== null
@@ -4071,15 +3905,11 @@ async function verifyProjectId(filename) {
 
             showStatus(successMsg.replace(/\n/g, '<br>'), 'success');
 
-            // Comment translated/cleaned for compliance
-
             showMessageModal(t('verification_successful'), t('validation_successfulnnfile_filenam', {filename: filename, data_project_id: data.project_id, tierLine: tierLine, creditLine: creditLine, data_message: data.message}), 'success');
 
             await AppState.creds.refresh();
 
         } else {
-
-            // Comment translated/cleaned for compliance
 
             const errorMsg = data.message || t('verification_failed');
 
@@ -4105,8 +3935,6 @@ async function verifyOmniProjectId(filename) {
 
     try {
 
-        // Comment translated/cleaned for compliance
-
         showStatus(t('verifying_omni_project_id_pl'), 'info');
 
         const response = await fetch(`./ogw/creds/verify-project/${encodeURIComponent(filename)}?mode=omni`, {
@@ -4121,8 +3949,6 @@ async function verifyOmniProjectId(filename) {
 
         if (response.ok && data.success) {
 
-            // Comment translated/cleaned for compliance
-
             const tierLine = data.subscription_tier ? `\nTier: ${data.subscription_tier}` : '';
 
             const creditLine = data.credit_amount !== undefined && data.credit_amount !== null
@@ -4135,15 +3961,11 @@ async function verifyOmniProjectId(filename) {
 
             showStatus(successMsg.replace(/\n/g, '<br>'), 'success');
 
-            // Comment translated/cleaned for compliance
-
             showMessageModal(t('verification_successful'), t('validation_successfulnnfile_filenam', {filename: filename, data_project_id: data.project_id, tierLine: tierLine, creditLine: creditLine, data_message: data.message}), 'success');
 
             await AppState.omniCreds.refresh();
 
         } else {
-
-            // Comment translated/cleaned for compliance
 
             const errorMsg = data.message || t('verification_failed');
 
@@ -4169,8 +3991,6 @@ async function testCredential(filename) {
 
     try {
 
-        // Comment translated/cleaned for compliance
-
         showStatus(t('testing_credentials_please_wait'), 'info');
 
         const response = await fetch(`./ogw/creds/test/${encodeURIComponent(filename)}`, {
@@ -4181,15 +4001,11 @@ async function testCredential(filename) {
 
         });
 
-        // Comment translated/cleaned for compliance
-
         const data = await response.json();
 
         if (response.status === 200) {
 
-            // Comment translated/cleaned for compliance
-
-            const successMsg = ` ${t('status_action_success', {action: t('btn_message_test')})}\n${t('table_filename')}: ${filename}\n${t('log_status_label')}: ${data.message || t('credential_available')} (${data.status_code || 200})`;
+            const successMsg = `${t('status_action_success', {action: t('btn_message_test')})}\n${t('table_filename')}: ${filename}\n${t('log_status_label')} ${data.message || t('credential_available')} (${data.status_code || 200})`;
 
             showStatus(t('test_successful'), 'success');
 
@@ -4201,25 +4017,17 @@ async function testCredential(filename) {
 
         else {
 
-            // Comment translated/cleaned for compliance
-
-            let errorDetails = ` ${t('status_action_failed', {error: t('btn_message_test')})}\n${t('table_filename')}: ${filename}\n`;
-
-            // Comment translated/cleaned for compliance
+            let errorDetails = `${t('status_action_failed', {error: t('btn_message_test')})}\n${t('table_filename')}: ${filename}\n`;
 
             if (data.error) {
 
                 try {
-
-                    // Comment translated/cleaned for compliance
 
                     const errorObj = JSON.parse(data.error);
 
                     errorDetails += t('nerror_detailsnjsonstringifyerrorob', {JSON_stringify_errorObj__null__2: JSON.stringify(errorObj, null, 2)});
 
                 } catch {
-
-                    // Comment translated/cleaned for compliance
 
                     errorDetails += t('nerror_detailsndataerror', {data_error: data.error});
 
@@ -4231,7 +4039,7 @@ async function testCredential(filename) {
 
             }
 
-            showStatus(`Test Failed - ${data.message || t('error_code_prefix') + (data.status_code || response.status)}`, 'error');
+            showStatus(`Test failed: ${data.message || `${t('error_code_prefix')} ${data.status_code || response.status}`}`, 'error');
 
             showMessageModal(t('test_failed'), errorDetails, 'error');
 
@@ -4241,9 +4049,9 @@ async function testCredential(filename) {
 
         const errorMsg = t('test_failed_errormessage', {error_message: error.message});
 
-        showStatus(` ${errorMsg}`, 'error');
+        showStatus(errorMsg, 'error');
 
-        showMessageModal(t('test_failed'), ` ${errorMsg}`, 'error');
+        showMessageModal(t('test_failed'), errorMsg, 'error');
 
     }
 
@@ -4252,8 +4060,6 @@ async function testCredential(filename) {
 async function testOmniCredential(filename) {
 
     try {
-
-        // Comment translated/cleaned for compliance
 
         showStatus(t('testing_omni_credentials_ple'), 'info');
 
@@ -4265,15 +4071,11 @@ async function testOmniCredential(filename) {
 
         });
 
-        // Comment translated/cleaned for compliance
-
         const data = await response.json();
 
         if (response.status === 200) {
 
-            // Comment translated/cleaned for compliance
-
-            const successMsg = ` ${t('status_action_success', {action: t('btn_message_test')})}\n${t('table_filename')}: ${filename}\n${t('log_status_label')}: ${data.message || t('omni_credential_valid')} (${data.status_code || 200})`;
+            const successMsg = `${t('status_action_success', {action: t('btn_message_test')})}\n${t('table_filename')}: ${filename}\n${t('log_status_label')} ${data.message || t('omni_credential_valid')} (${data.status_code || 200})`;
 
             showStatus(t('test_successful'), 'success');
 
@@ -4285,25 +4087,17 @@ async function testOmniCredential(filename) {
 
         else {
 
-            // Comment translated/cleaned for compliance
-
-            let errorDetails = ` ${t('status_action_failed', {error: t('btn_message_test')})}\n${t('table_filename')}: ${filename}\n`;
-
-            // Comment translated/cleaned for compliance
+            let errorDetails = `${t('status_action_failed', {error: t('btn_message_test')})}\n${t('table_filename')}: ${filename}\n`;
 
             if (data.error) {
 
                 try {
-
-                    // Comment translated/cleaned for compliance
 
                     const errorObj = JSON.parse(data.error);
 
                     errorDetails += t('nerror_detailsnjsonstringifyerrorob', {JSON_stringify_errorObj__null__2: JSON.stringify(errorObj, null, 2)});
 
                 } catch {
-
-                    // Comment translated/cleaned for compliance
 
                     errorDetails += t('nerror_detailsndataerror', {data_error: data.error});
 
@@ -4315,7 +4109,7 @@ async function testOmniCredential(filename) {
 
             }
 
-            showStatus(`Test Failed - ${data.message || t('error_code_prefix') + (data.status_code || response.status)}`, 'error');
+            showStatus(`Test failed: ${data.message || `${t('error_code_prefix')} ${data.status_code || response.status}`}`, 'error');
 
             showMessageModal(t('test_failed'), errorDetails, 'error');
 
@@ -4325,9 +4119,9 @@ async function testOmniCredential(filename) {
 
         const errorMsg = t('test_failed_errormessage', {error_message: error.message});
 
-        showStatus(` ${errorMsg}`, 'error');
+        showStatus(errorMsg, 'error');
 
-        showMessageModal(t('test_failed'), ` ${errorMsg}`, 'error');
+        showMessageModal(t('test_failed'), errorMsg, 'error');
 
     }
 
@@ -4336,8 +4130,6 @@ async function testOmniCredential(filename) {
 async function configurePreviewChannel(filename) {
 
     try {
-
-        // Comment translated/cleaned for compliance
 
         showStatus(t('configuring_preview_channel_please'), 'info');
 
@@ -4353,21 +4145,15 @@ async function configurePreviewChannel(filename) {
 
         if (response.ok && data.success) {
 
-            // Comment translated/cleaned for compliance
-
-            const successMsg = ` ${t('status_action_success', {action: t('btn_setup_preview')})}\n${t('table_filename')}: ${filename}\n${t('log_status_label')}: ${data.message}`;
+            const successMsg = `${t('status_action_success', {action: t('btn_setup_preview')})}\n${t('table_filename')}: ${filename}\n${t('log_status_label')} ${data.message}`;
 
             showStatus(successMsg.replace(/\n/g, '<br>'), 'success');
 
-            showMessageModal(t('preview_channel_configuration_succe_dup'), ` ${t('status_action_success', {action: t('btn_setup_preview')})}\n\n${t('table_filename')}: ${filename}\n\n${data.message}\n\nSetting ID: ${data.setting_id || 'N/A'}\nBinding ID: ${data.binding_id || 'N/A'}`, 'success');
-
-            // Comment translated/cleaned for compliance
+            showMessageModal(t('preview_channel_configuration_succe_dup'), `${t('status_action_success', {action: t('btn_setup_preview')})}\n\n${t('table_filename')}: ${filename}\n\n${data.message}\n\nSetting ID: ${data.setting_id || 'N/A'}\nBinding ID: ${data.binding_id || 'N/A'}`, 'success');
 
             await AppState.creds.refresh();
 
         } else {
-
-            // Comment translated/cleaned for compliance
 
             const errorMsg = data.message || t('configuration_failed');
 
@@ -4375,7 +4161,7 @@ async function configurePreviewChannel(filename) {
 
             const step = data.step || '';
 
-            let alertMsg = ` ${t('status_action_failed', {error: t('btn_setup_preview')})}\n\n${t('table_filename')}: ${filename}\n\n${errorMsg}`;
+            let alertMsg = `${t('status_action_failed', {error: t('btn_setup_preview')})}\n\n${t('table_filename')}: ${filename}\n\n${errorMsg}`;
 
             if (step) {
 
@@ -4389,7 +4175,7 @@ async function configurePreviewChannel(filename) {
 
             }
 
-            showStatus(` ${errorMsg}`, 'error');
+            showStatus(errorMsg, 'error');
 
             showMessageModal(t('preview_channel_configuration_faile_dup'), alertMsg, 'error');
 
@@ -4399,9 +4185,9 @@ async function configurePreviewChannel(filename) {
 
         const errorMsg = t('failed_to_configure_preview_channel', {error_message: error.message});
 
-        showStatus(` ${errorMsg}`, 'error');
+        showStatus(errorMsg, 'error');
 
-        showMessageModal(t('failed_to_configure_preview_channel_dup'), ` ${errorMsg}`, 'error');
+        showMessageModal(t('failed_to_configure_preview_channel_dup'), errorMsg, 'error');
 
     }
 
@@ -4413,27 +4199,19 @@ async function toggleOmniQuotaDetails(pathId) {
 
     if (!quotaDetails) return;
 
-    // Comment translated/cleaned for compliance
-
     const isShowing = quotaDetails.style.display === 'block';
 
     if (isShowing) {
 
-        // Comment translated/cleaned for compliance
-
         quotaDetails.style.display = 'none';
 
     } else {
-
-        // Comment translated/cleaned for compliance
 
         quotaDetails.style.display = 'block';
 
         const contentDiv = quotaDetails.querySelector('.cred-quota-content');
 
         const filename = contentDiv.getAttribute('data-filename');
-
-        // Comment translated/cleaned for compliance
 
         if (filename) {
 
@@ -4452,8 +4230,6 @@ async function toggleOmniQuotaDetails(pathId) {
                 const data = await response.json();
 
                 if (response.ok && data.success) {
-
-                    // Comment translated/cleaned for compliance
 
                     const models = data.models || {};
 
@@ -4493,27 +4269,21 @@ async function toggleOmniQuotaDetails(pathId) {
 
                         for (const [modelName, quotaData] of Object.entries(models)) {
 
-                            // Comment translated/cleaned for compliance
-
                             const remainingFraction = quotaData.remaining || 0;
 
                             const resetTime = quotaData.resetTime || 'N/A';
-
-                            // Comment translated/cleaned for compliance
 
                             const usedPercentage = Math.round((1 - remainingFraction) * 100);
 
                             const remainingPercentage = Math.round(remainingFraction * 100);
 
-                            // Comment translated/cleaned for compliance
+                            let percentageColor = '#28a745';
 
-                            let percentageColor = '#28a745'; // Comment translated/cleaned for compliance
+                            if (usedPercentage >= 90) percentageColor = '#dc3545';
 
-                            if (usedPercentage >= 90) percentageColor = '#dc3545'; // Comment translated/cleaned for compliance
+                            else if (usedPercentage >= 70) percentageColor = '#ffc107';
 
-                            else if (usedPercentage >= 70) percentageColor = '#ffc107'; // Comment translated/cleaned for compliance
-
-                            else if (usedPercentage >= 50) percentageColor = '#17a2b8'; // Comment translated/cleaned for compliance
+                            else if (usedPercentage >= 50) percentageColor = '#17a2b8';
 
                             quotaHTML += `
 
@@ -4563,8 +4333,6 @@ async function toggleOmniQuotaDetails(pathId) {
 
                 } else {
 
-                    // Comment translated/cleaned for compliance
-
                     const errorMsg = data.error || t('failed_to_get_quota_information');
 
                     contentDiv.innerHTML = `
@@ -4609,8 +4377,6 @@ async function toggleOmniQuotaDetails(pathId) {
 
 // =====================================================================
 
-// Comment translated/cleaned for compliance
-
 // =====================================================================
 
 async function toggleErrorDetails(pathId) {
@@ -4631,8 +4397,6 @@ async function toggleErrorDetailsCommon(pathId, manager) {
 
     if (!errorDetails) return;
 
-    // Comment translated/cleaned for compliance
-
     const isShowing = errorDetails.classList.toggle('show');
 
     if (isShowing) {
@@ -4640,8 +4404,6 @@ async function toggleErrorDetailsCommon(pathId, manager) {
         const contentDiv = errorDetails.querySelector('.cred-content');
 
         const filename = contentDiv.getAttribute('data-filename');
-
-        // Comment translated/cleaned for compliance
 
         if (filename) {
 
@@ -4685,13 +4447,9 @@ async function toggleErrorDetailsCommon(pathId, manager) {
 
                         let errorHTML = '';
 
-                        // Comment translated/cleaned for compliance
-
                         errorCodes.forEach((errorCode) => {
 
                             const messageStr = errorMessages[errorCode] || t('no_details_available');
-
-                            // Comment translated/cleaned for compliance
 
                             let displayMsg = messageStr;
 
@@ -4699,21 +4457,15 @@ async function toggleErrorDetailsCommon(pathId, manager) {
 
                             try {
 
-                                // Comment translated/cleaned for compliance
-
                                 const parsedMsg = JSON.parse(messageStr);
 
                                 if (parsedMsg.error) {
-
-                                    // Comment translated/cleaned for compliance
 
                                     if (parsedMsg.error.message) {
 
                                         displayMsg = parsedMsg.error.message;
 
                                     }
-
-                                    // Comment translated/cleaned for compliance
 
                                     if (parsedMsg.error.details && Array.isArray(parsedMsg.error.details)) {
 
@@ -4743,8 +4495,6 @@ async function toggleErrorDetailsCommon(pathId, manager) {
 
                                             }
 
-                                            // Comment translated/cleaned for compliance
-
                                             if (detail.metadata) {
 
                                                 detailsHtml += '<div style="margin-left: 10px; margin-top: 3px;">';
@@ -4769,8 +4519,6 @@ async function toggleErrorDetailsCommon(pathId, manager) {
 
                                     }
 
-                                    // Comment translated/cleaned for compliance
-
                                     if (parsedMsg.error.status) {
 
                                         if (!detailsHtml) {
@@ -4793,11 +4541,7 @@ async function toggleErrorDetailsCommon(pathId, manager) {
 
                             } catch (e) {
 
-                                // Comment translated/cleaned for compliance
-
                             }
-
-                            // Comment translated/cleaned for compliance
 
                             const highlightedMsg = highlightHttpLinks(escapeHtml(displayMsg));
 
@@ -4828,8 +4572,6 @@ async function toggleErrorDetailsCommon(pathId, manager) {
                     // showStatus(t('error_information_loaded_successful'), 'success');
 
                 } else {
-
-                    // Comment translated/cleaned for compliance
 
                     const errorMsg = data.detail || data.error || t('failed_to_fetch_error_message');
 
@@ -4873,8 +4615,6 @@ async function toggleErrorDetailsCommon(pathId, manager) {
 
 }
 
-// Comment translated/cleaned for compliance
-
 function escapeHtml(text) {
 
     const div = document.createElement('div');
@@ -4885,11 +4625,7 @@ function escapeHtml(text) {
 
 }
 
-// Comment translated/cleaned for compliance
-
 function highlightHttpLinks(text) {
-
-    // Comment translated/cleaned for compliance
 
     const urlRegex = /(https?:\/\/[^\s<>"]+)/gi;
 
@@ -4922,8 +4658,6 @@ async function batchVerifyProjectIds() {
     }
 
     showStatus(t('parallel_verifying_selectedfileslen', {selectedFiles_length: selectedFiles.length}), 'info');
-
-    // Comment translated/cleaned for compliance
 
     const promises = selectedFiles.map(async (filename) => {
 
@@ -4969,11 +4703,7 @@ async function batchVerifyProjectIds() {
 
     });
 
-    // Comment translated/cleaned for compliance
-
     const results = await Promise.all(promises);
-
-    // Comment translated/cleaned for compliance
 
     let successCount = 0;
 
@@ -5055,8 +4785,6 @@ async function batchVerifyOmniProjectIds() {
 
     showStatus(t('parallel_testing_selectedfileslengt', {selectedFiles_length: selectedFiles.length}), 'info');
 
-    // Comment translated/cleaned for compliance
-
     const promises = selectedFiles.map(async (filename) => {
 
         try {
@@ -5101,11 +4829,7 @@ async function batchVerifyOmniProjectIds() {
 
     });
 
-    // Comment translated/cleaned for compliance
-
     const results = await Promise.all(promises);
-
-    // Comment translated/cleaned for compliance
 
     let successCount = 0;
 
@@ -5187,8 +4911,6 @@ async function batchConfigurePreview() {
 
     showStatus(t('configuring_preview_channel_for_sel', {selectedFiles_length: selectedFiles.length}), 'info');
 
-    // Comment translated/cleaned for compliance
-
     const promises = selectedFiles.map(async (filename) => {
 
         try {
@@ -5245,11 +4967,7 @@ async function batchConfigurePreview() {
 
     });
 
-    // Comment translated/cleaned for compliance
-
     const results = await Promise.all(promises);
-
-    // Comment translated/cleaned for compliance
 
     let successCount = 0;
 
@@ -5407,8 +5125,6 @@ async function deduplicateByEmail() {
 
             await AppState.creds.refresh();
 
-            // Comment translated/cleaned for compliance
-
             if (data.duplicate_groups && data.duplicate_groups.length > 0) {
 
                 let details = t('deduplication_detailsnn');
@@ -5463,8 +5179,6 @@ async function deduplicateOmniByEmail() {
 
             await AppState.omniCreds.refresh();
 
-            // Comment translated/cleaned for compliance
-
             if (data.duplicate_groups && data.duplicate_groups.length > 0) {
 
                 let details = t('deduplication_detailsnn');
@@ -5495,8 +5209,6 @@ async function deduplicateOmniByEmail() {
 
 // =====================================================================
 
-// Comment translated/cleaned for compliance
-
 // =====================================================================
 
 function connectWebSocket() {
@@ -5514,8 +5226,6 @@ function connectWebSocket() {
         const wsPath = new URL('./ogw/logs/stream', window.location.href).href;
 
         const wsUrl = wsPath.replace(/^http/, 'ws');
-
-        // Comment translated/cleaned for compliance
 
         const wsUrlWithAuth = `${wsUrl}?token=${encodeURIComponent(AppState.authToken)}`;
 
@@ -5753,8 +5463,6 @@ function displayLogs() {
 
 // =====================================================================
 
-// Comment translated/cleaned for compliance
-
 // =====================================================================
 
 async function checkEnvCredsStatus() {
@@ -5847,7 +5555,7 @@ async function loadEnvCredentials() {
 
             } else {
 
-                showStatus(` ${data.message}`, 'info');
+                showStatus(data.message, 'info');
 
             }
 
@@ -5908,8 +5616,6 @@ async function clearEnvCredentials() {
 }
 
 // =====================================================================
-
-// Comment translated/cleaned for compliance
 
 // =====================================================================
 
@@ -6212,8 +5918,6 @@ async function saveConfig() {
 
 }
 
-// Comment translated/cleaned for compliance
-
 const mirrorUrls = {
 
     codeAssistEndpoint: 'https://cloudcode-pa.googleapis.com',
@@ -6283,8 +5987,6 @@ function restoreOfficialUrls() {
 }
 
 // =====================================================================
-
-// Comment translated/cleaned for compliance
 
 // =====================================================================
 
@@ -6482,8 +6184,6 @@ async function resetAllUsageStats() {
 
 // =====================================================================
 
-// Comment translated/cleaned for compliance
-
 // =====================================================================
 
 function startCooldownTimer() {
@@ -6518,8 +6218,6 @@ function updateCooldownDisplays() {
 
     let needsRefresh = false;
 
-    // Comment translated/cleaned for compliance
-
     for (const credInfo of Object.values(AppState.creds.data)) {
 
         if (credInfo.model_cooldowns && Object.keys(credInfo.model_cooldowns).length > 0) {
@@ -6547,8 +6245,6 @@ function updateCooldownDisplays() {
         return;
 
     }
-
-    // Comment translated/cleaned for compliance
 
     document.querySelectorAll('.cooldown-badge').forEach(badge => {
 
@@ -6602,11 +6298,7 @@ function updateCooldownDisplays() {
 
 // =====================================================================
 
-// Comment translated/cleaned for compliance
-
 // =====================================================================
-
-// Comment translated/cleaned for compliance
 
 async function fetchAndDisplayVersion() {
 
@@ -6619,8 +6311,6 @@ async function fetchAndDisplayVersion() {
         const versionText = document.getElementById('versionText');
 
         if (data.success) {
-
-            // Comment translated/cleaned for compliance
 
             versionText.textContent = `v${data.version}`;
 
@@ -6652,8 +6342,6 @@ async function fetchAndDisplayVersion() {
 
 }
 
-// Comment translated/cleaned for compliance
-
 async function checkForUpdates() {
 
     const checkBtn = document.getElementById('checkUpdateBtn');
@@ -6664,13 +6352,9 @@ async function checkForUpdates() {
 
     try {
 
-        // Comment translated/cleaned for compliance
-
         checkBtn.textContent = t('checking');
 
         checkBtn.disabled = true;
-
-        // Comment translated/cleaned for compliance
 
         const response = await fetch('./ogw/version/info?check_update=true');
 
@@ -6680,19 +6364,13 @@ async function checkForUpdates() {
 
             if (data.check_update === false) {
 
-                // Comment translated/cleaned for compliance
-
                 showStatus(t('check_for_updates_failed_dataupdate', {data_update_error: data.update_error || t('unknown_error')}), 'error');
 
             } else if (data.has_update === true) {
 
-                // Comment translated/cleaned for compliance
-
                 const updateMsg = t('new_version_foundncurrent_vdatavers', {data_version: data.version, data_latest_version: data.latest_version, data_latest_message: data.latest_message || t('none')});
 
                 showStatus(updateMsg.replace(/\n/g, ' '), 'warning');
-
-                // Comment translated/cleaned for compliance
 
                 checkBtn.style.backgroundColor = '#ffc107';
 
@@ -6707,8 +6385,6 @@ async function checkForUpdates() {
                 }, 5000);
 
             } else if (data.has_update === false) {
-
-                // Comment translated/cleaned for compliance
 
                 showStatus(t('already_up_to_date'), 'success');
 
@@ -6725,8 +6401,6 @@ async function checkForUpdates() {
                 }, 3000);
 
             } else {
-
-                // Comment translated/cleaned for compliance
 
                 showStatus(t('unable_to_determine_if_updates_are'), 'info');
 
@@ -6759,8 +6433,6 @@ async function checkForUpdates() {
 }
 
 // =====================================================================
-
-// Comment translated/cleaned for compliance
 
 // =====================================================================
 
@@ -6803,8 +6475,6 @@ window.onload = async function () {
     }
 
 };
-
-// Comment translated/cleaned for compliance
 
 document.addEventListener('DOMContentLoaded', function () {
 

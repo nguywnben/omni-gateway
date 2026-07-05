@@ -601,14 +601,14 @@ async def verify_credential_project_common(filename: str, mode: str = "code_assi
 
         await storage_adapter.update_credential_state(filename, state_update, mode=mode)
 
-        log.info(f"Successfully verified {mode} credential: {filename} - Project ID: {project_id}, Tier: {subscription_tier} - Disabled status removed and error codes cleared")
+        log.info(f"Successfully verified {mode} credential: {filename}. Project ID: {project_id}. Tier: {subscription_tier}. Disabled status removed and error codes cleared.")
 
         response_data = {
             "success": True,
             "filename": filename,
             "project_id": project_id,
             "subscription_tier": subscription_tier,
-            "message": "Verification successful! Project ID updated, disabled state lifted, and error codes cleared. The 403 error should be resolved now."
+            "message": "Verification successful. Project ID updated, disabled state lifted, and error codes cleared. The 403 error should be resolved now."
         }
 
         if mode == "omni" and credit_amount is not None:

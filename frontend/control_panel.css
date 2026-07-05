@@ -9,12 +9,17 @@
     --text-soft: #8a8a8a;
     --border: #e7e7e7;
     --border-strong: #d8d8d8;
+    --field-hover-border: #bdbdbd;
     --accent: #111111;
+    --accent-hover: #000000;
     --accent-contrast: #ffffff;
+    --control-hover: #f3f3f3;
     --success: #137333;
     --success-bg: #eef7f0;
     --danger: #b3261e;
     --danger-bg: #fceeee;
+    --danger-hover: #fae2df;
+    --danger-border-hover: #e8aaa4;
     --warning: #9a6700;
     --warning-bg: #fff7df;
     --info: #1a73e8;
@@ -130,7 +135,7 @@ code {
 .login-brand {
     display: flex;
     align-items: center;
-    gap: 10px;
+    gap: 8px;
     margin-bottom: 28px;
 }
 
@@ -281,7 +286,7 @@ code {
 .mobile-topbar-brand {
     display: flex;
     align-items: center;
-    gap: 10px;
+    gap: 8px;
     font-size: 18px;
     font-weight: 700;
     line-height: 1.2;
@@ -297,6 +302,11 @@ code {
     background: var(--surface);
     color: var(--text);
     cursor: pointer;
+}
+
+.mobile-menu-btn:hover {
+    background: var(--control-hover);
+    border-color: var(--border-strong);
 }
 
 .sidebar-overlay {
@@ -466,6 +476,15 @@ code {
     word-break: break-word;
 }
 
+button.endpoint-code-card {
+    cursor: copy;
+}
+
+button.endpoint-code-card:hover {
+    background: var(--control-hover);
+    border-color: var(--border-strong);
+}
+
 .credentials {
     max-height: 280px;
     overflow: auto;
@@ -547,6 +566,16 @@ textarea {
     outline: 0;
 }
 
+input[type="text"]:not(:disabled):not([readonly]):not(.disabled):not(:focus):hover,
+input[type="password"]:not(:disabled):not([readonly]):not(.disabled):not(:focus):hover,
+input[type="number"]:not(:disabled):not([readonly]):not(.disabled):not(:focus):hover,
+input[type="url"]:not(:disabled):not([readonly]):not(.disabled):not(:focus):hover,
+select:not(:disabled):not([readonly]):not(.disabled):not(:focus):hover,
+textarea:not(:disabled):not([readonly]):not(.disabled):not(:focus):hover {
+    border-color: var(--field-hover-border);
+    background: var(--bg-subtle);
+}
+
 textarea {
     border-radius: var(--radius);
 }
@@ -626,6 +655,7 @@ textarea[readonly] {
 .batch-btn,
 .pagination-btn,
 .cred-btn,
+.remove-btn,
 .message-modal-btn {
     min-height: 34px;
     display: inline-flex;
@@ -648,8 +678,15 @@ textarea[readonly] {
 .batch-btn:hover,
 .pagination-btn:hover,
 .cred-btn:hover,
+.remove-btn:hover,
 .message-modal-btn:hover {
     text-decoration: none;
+}
+
+.btn:not(.btn-secondary):not(.btn-danger):not(:disabled):hover {
+    background: var(--accent-hover);
+    border-color: var(--accent-hover);
+    color: var(--accent-contrast);
 }
 
 .btn-secondary,
@@ -662,11 +699,31 @@ textarea[readonly] {
     color: var(--text);
 }
 
+.btn-secondary:not(:disabled):hover,
+.batch-btn:not(:disabled):hover,
+.pagination-btn:not(:disabled):hover,
+.cred-btn:not(:disabled):hover,
+.message-modal-btn:hover {
+    background: var(--control-hover);
+    border-color: var(--border-strong);
+    color: var(--text);
+}
+
 .btn-danger,
 .batch-delete,
-.cred-btn.delete {
+.cred-btn.delete,
+.remove-btn {
     background: var(--danger-bg);
     border-color: #f0c9c6;
+    color: var(--danger);
+}
+
+.btn-danger:not(:disabled):hover,
+.batch-delete:not(:disabled):hover,
+.cred-btn.delete:not(:disabled):hover,
+.remove-btn:hover {
+    background: var(--danger-hover);
+    border-color: var(--danger-border-hover);
     color: var(--danger);
 }
 
@@ -1150,6 +1207,11 @@ textarea[readonly] {
     border-radius: var(--radius);
     background: var(--surface);
     cursor: pointer;
+}
+
+.message-modal-close:hover {
+    background: var(--control-hover);
+    border-color: var(--border-strong);
 }
 
 .message-modal-body {
