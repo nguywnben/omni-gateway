@@ -2911,6 +2911,8 @@ async function login() {
 
             navigate('/dashboard');
 
+            await fetchAndDisplayVersion();
+
         } else {
 
             if (response.status === 428) {
