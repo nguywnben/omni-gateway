@@ -1,6 +1,4 @@
-﻿"""
-å‡­è¯ç®¡ç†è·¯ç”±æ¨¡å— - å¤„ç† /ogw/creds/* ç›¸å…³ç„HTTPè¯·æ±‚
-"""
+"""Internal implementation detail."""
 
 import asyncio
 import io
@@ -27,27 +25,27 @@ from config import get_code_assist_endpoint, get_ogw_api_url
 from .utils import validate_mode
 
 
-# åˆ›å»ºè·¯ç”±å™¨
+
 router = APIRouter(prefix="/ogw/creds", tags=["credentials"])
 
 
 # =============================================================================
-# å·¥å…·å‡½æ•° (Helper Functions)
+
 # =============================================================================
 
 
 async def extract_json_files_from_zip(zip_file: UploadFile) -> List[dict]:
-    """ä»ZIPæ–‡ä»¶ä¸­æå–JSONæ–‡ä»¶"""
+    """Internal implementation detail."""
     try:
-        # è¯»å–ZIPæ–‡ä»¶å†…å®¹
+
         zip_content = await zip_file.read()
 
-        # ä¸é™åˆ¶ZIPæ–‡ä»¶å¤§å°ï¼Œåªåœ¨å¤„ç†æ—¶æ§åˆ¶æ–‡ä»¶æ•°é‡
+
 
         files_data = []
 
         with zipfile.ZipFile(io.BytesIO(zip_content), "r") as zip_ref:
-            # è·å–ZIPä¸­ç„æ‰€æœ‰æ–‡ä»¶
+
             file_list = zip_ref.namelist()
             json_files = [
                 f for f in file_list if f.endswith(".json") and not f.startswith("__MACOSX/")
@@ -60,7 +58,7 @@ async def extract_json_files_from_zip(zip_file: UploadFile) -> List[dict]:
 
             for json_filename in json_files:
                 try:
-                    # è¯»å–JSONæ–‡ä»¶å†…å®¹
+
                     with zip_ref.open(json_filename) as json_file:
                         content = json_file.read()
 
@@ -70,7 +68,7 @@ async def extract_json_files_from_zip(zip_file: UploadFile) -> List[dict]:
                             log.warning(f"Skipping file with encoding error: {json_filename}")
                             continue
 
-                        # ä½¿ç”¨åŸå§‹æ–‡ä»¶åï¼ˆå»æ‰è·¯å¾„ï¼‰
+
                         filename = os.path.basename(json_filename)
                         files_data.append({"filename": filename, "content": content_str})
 
@@ -93,7 +91,7 @@ async def clear_all_model_cooldowns_for_credential(
     filename: str,
     mode: str,
 ) -> None:
-    """æ¸…ç©ºæŒ‡å®å‡­è¯ç„æ‰€æœ‰æ¨¡å‹å†·å´ï¼ˆåç«¯æ”¯æŒæ—¶æ‰§è¡Œï¼‰ă€‚"""
+    """Internal implementation detail."""
     try:
         cleared = await storage_adapter._backend.clear_all_model_cooldowns(filename, mode=mode)
         if not cleared:
@@ -105,13 +103,13 @@ async def clear_all_model_cooldowns_for_credential(
 async def upload_credentials_common(
     files: List[UploadFile], mode: str = "code_assist"
 ) -> JSONResponse:
-    """æ‰¹é‡ä¸ä¼ å‡­è¯æ–‡ä»¶ç„é€ç”¨å‡½æ•°"""
+    """Internal implementation detail."""
     mode = validate_mode(mode)
 
     if not files:
         raise HTTPException(status_code=400, detail="Please select files to upload")
 
-    # æ£€æŸ¥æ–‡ä»¶æ•°é‡é™åˆ¶
+
     if len(files) > 100:
         raise HTTPException(
             status_code=400, detail=f"Too many files; maximum of 100 supported, current: {len(files)}"
@@ -119,14 +117,14 @@ async def upload_credentials_common(
 
     files_data = []
     for file in files:
-        # æ£€æŸ¥æ–‡ä»¶ç±»å‹ï¼æ”¯æŒJSONå’ŒZIP
+
         if file.filename.endswith(".zip"):
             zip_files_data = await extract_json_files_from_zip(file)
             files_data.extend(zip_files_data)
             log.info(f"Extracted {file.filename} JSON files from ZIP file {len(zip_files_data)}")
 
         elif file.filename.endswith(".json"):
-            # å¤„ç†å•ä¸ªJSONæ–‡ä»¶ - æµå¼è¯»å–
+
             content_chunks = []
             while True:
                 chunk = await file.read(8192)
@@ -160,12 +158,12 @@ async def upload_credentials_common(
         async def process_single_file(file_data):
             try:
                 filename = file_data["filename"]
-                # ç¡®ä¿æ–‡ä»¶ååªä¿å­˜basenameï¼Œé¿å…è·¯å¾„é—®é¢˜
+
                 filename = os.path.basename(filename)
                 content_str = file_data["content"]
                 credential_data = json.loads(content_str)
 
-                # æ ¹æ®å‡­è¯ç±»å‹è°ƒç”¨ä¸åŒç„æ·»å æ–¹æ³•
+
                 if mode == "omni":
                     await credential_manager.add_omni_credential(filename, credential_data)
                 else:
@@ -234,9 +232,9 @@ async def get_creds_status_common(
     offset: int, limit: int, status_filter: str, mode: str = "code_assist",
     error_code_filter: str = None, cooldown_filter: str = None, preview_filter: str = None, tier_filter: str = None
 ) -> JSONResponse:
-    """è·å–å‡­è¯æ–‡ä»¶ç¶æ€ç„é€ç”¨å‡½æ•°"""
+    """Internal implementation detail."""
     mode = validate_mode(mode)
-    # éªŒè¯åˆ†é¡µå‚æ•°
+
     if offset < 0:
         raise HTTPException(status_code=400, detail="offset must be greater than or equal to 0")
     if limit not in [20, 50, 100, 200, 500, 1000]:
@@ -256,7 +254,7 @@ async def get_creds_status_common(
     backend_info = await storage_adapter.get_backend_info()
     backend_type = backend_info.get("backend_type", "unknown")
 
-    # ä½¿ç”¨é«˜æ€§èƒ½ç„åˆ†é¡µæ‘˜è¦æŸ¥è¯¢
+
     result = await storage_adapter._backend.get_credentials_summary(
         offset=offset,
         limit=limit,
@@ -299,7 +297,7 @@ async def get_creds_status_common(
 
 
 async def download_all_creds_common(mode: str = "code_assist") -> Response:
-    """æ‰“åŒ…ä¸‹è½½æ‰€æœ‰å‡­è¯æ–‡ä»¶ç„é€ç”¨å‡½æ•°"""
+    """Internal implementation detail."""
     mode = validate_mode(mode)
     zip_filename = "omni_credentials.zip" if mode == "omni" else "credentials.zip"
 
@@ -341,7 +339,7 @@ async def download_all_creds_common(mode: str = "code_assist") -> Response:
 
 
 async def fetch_user_email_common(filename: str, mode: str = "code_assist") -> JSONResponse:
-    """è·å–æŒ‡å®å‡­è¯æ–‡ä»¶ç”¨æˆ·é‚®ç®±ç„é€ç”¨å‡½æ•°"""
+    """Internal implementation detail."""
     mode = validate_mode(mode)
 
     filename_only = os.path.basename(filename)
@@ -465,7 +463,7 @@ async def deduplicate_credentials_by_email_common(mode: str = "code_assist") -> 
                 }
             )
 
-        # æ‰§è¡Œåˆ é™¤æ“ä½œ
+
         deleted_count = 0
         delete_errors = []
         result_duplicate_groups = []
@@ -525,34 +523,34 @@ async def deduplicate_credentials_by_email_common(mode: str = "code_assist") -> 
 
 
 async def verify_credential_project_common(filename: str, mode: str = "code_assist") -> JSONResponse:
-    """éªŒè¯å¹¶é‡æ–°è·å–å‡­è¯ç„project idç„é€ç”¨å‡½æ•°"""
+    """Internal implementation detail."""
     mode = validate_mode(mode)
 
-    # éªŒè¯æ–‡ä»¶å
+
     if not filename.endswith(".json"):
         raise HTTPException(status_code=400, detail="Invalid file name")
 
 
     storage_adapter = await get_storage_adapter()
 
-    # è·å–å‡­è¯æ•°æ®
+
     credential_data = await storage_adapter.get_credential(filename, mode=mode)
     if not credential_data:
         raise HTTPException(status_code=404, detail="Credential does not exist")
 
-    # åˆ›å»ºå‡­è¯å¯¹è±¡
+
     credentials = Credentials.from_dict(credential_data)
 
-    # ç¡®ä¿tokenæœ‰æ•ˆï¼ˆè‡ªå¨åˆ·æ–°ï¼‰
+
     token_refreshed = await credentials.refresh_if_needed()
 
-    # å¦‚æœtokenè¢«åˆ·æ–°äº†ï¼Œæ›´æ–°å­˜å‚¨
+
     if token_refreshed:
         log.info(f"Token automatically refreshed: {filename} (mode = {mode})")
         credential_data = credentials.to_dict()
         await storage_adapter.store_credential(filename, credential_data, mode=mode)
 
-    # é‡æ–°è·å–project idï¼ˆä»… omni æ¨¡å¼è¯·æ±‚ç§¯åˆ†ï¼‰
+
     if mode == "omni":
         api_base_url = await get_ogw_api_url()
         user_agent = OGW_USER_AGENT
@@ -563,7 +561,7 @@ async def verify_credential_project_common(filename: str, mode: str = "code_assi
             include_credits=True,
         )
     else:
-        # code_assist æ¨¡å¼ï¼é€è¿‡é¡¹ç›®åˆ—è¡¨è·å– project_id
+
         credit_amount = None
         subscription_tier = None
         user_projects = await get_user_projects(credentials)
@@ -588,16 +586,16 @@ async def verify_credential_project_common(filename: str, mode: str = "code_assi
     if project_id or subscription_tier:
         await storage_adapter.store_credential(filename, credential_data, mode=mode)
 
-        # æ£€éªŒæˆåŸåè‡ªå¨è§£é™¤ç¦ç”¨ç¶æ€å¹¶æ¸…é™¤é”™è¯¯ç 
+
         state_update = {
             "disabled": False,
             "error_codes": []
         }
 
-        # åŒæ­¥æ›´æ–°ç¶æ€è¡¨ä¸­ç„ tier å­—æ®µ
+
         state_update["tier"] = subscription_tier
 
-        # å¦‚æœæ˜¯ code_assist æ¨¡å¼ï¼Œç›´æ¥è®¾ç½® preview=True
+
         if mode == "code_assist":
             state_update["preview"] = True
 
@@ -629,7 +627,7 @@ async def verify_credential_project_common(filename: str, mode: str = "code_assi
 
 
 # =============================================================================
-# è·¯ç”±å¤„ç†å‡½æ•° (Route Handlers)
+
 # =============================================================================
 
 
@@ -639,7 +637,7 @@ async def upload_credentials(
     token: str = Depends(verify_panel_token),
     mode: str = "code_assist"
 ):
-    """æ‰¹é‡ä¸ä¼ å‡­è¯æ–‡ä»¶"""
+    """Internal implementation detail."""
     try:
         mode = validate_mode(mode)
         return await upload_credentials_common(files, mode=mode)
@@ -662,22 +660,7 @@ async def get_creds_status(
     tier_filter: str = "all",
     mode: str = "code_assist"
 ):
-    """
-    è·å–å‡­è¯æ–‡ä»¶ç„ç¶æ€ï¼ˆè½»é‡çº§æ‘˜è¦ï¼Œä¸åŒ…å«å®Œæ•´å‡­è¯æ•°æ®ï¼Œæ”¯æŒåˆ†é¡µå’Œç¶æ€ç­›é€‰ï¼‰
-
-    Args:
-        offset: è·³è¿‡ç„è®°å½•æ•°ï¼ˆé»˜è®¤0ï¼‰
-        limit: æ¯é¡µè¿”å›ç„è®°å½•æ•°ï¼ˆé»˜è®¤50ï¼Œå¯é€‰ï¼20, 50, 100, 200, 500, 1000ï¼‰
-        status_filter: ç¶æ€ç­›é€‰ï¼ˆall=å…¨éƒ¨, enabled=ä»…å¯ç”¨, disabled=ä»…ç¦ç”¨ï¼‰
-        error_code_filter: é”™è¯¯ç ç­›é€‰ï¼ˆall=å…¨éƒ¨, æˆ–å…·ä½“é”™è¯¯ç å¦‚"400", "403"ï¼‰
-        cooldown_filter: å†·å´ç¶æ€ç­›é€‰ï¼ˆall=å…¨éƒ¨, in_cooldown=å†·å´ä¸­, no_cooldown=æœªå†·å´ï¼‰
-        preview_filter: Previewç­›é€‰ï¼ˆall=å…¨éƒ¨, preview=æ”¯æŒpreview, no_preview=ä¸æ”¯æŒpreviewï¼Œä»…code_assistæ¨¡å¼æœ‰æ•ˆï¼‰
-        tier_filter: tierç­›é€‰ï¼ˆall=å…¨éƒ¨, free/pro/ultraï¼‰
-        mode: å‡­è¯æ¨¡å¼ï¼ˆcode_assist æˆ– omniï¼‰
-
-    Returns:
-        åŒ…å«å‡­è¯åˆ—è¡¨ă€æ€»æ•°ă€åˆ†é¡µä¿¡æ¯ç„å“åº”
-    """
+    """Internal implementation detail."""
     try:
         mode = validate_mode(mode)
         return await get_creds_status_common(
@@ -700,13 +683,10 @@ async def get_cred_detail(
     token: str = Depends(verify_panel_token),
     mode: str = "code_assist"
 ):
-    """
-    æŒ‰éœ€è·å–å•ä¸ªå‡­è¯ç„è¯¦ç»†æ•°æ®ï¼ˆåŒ…å«å®Œæ•´å‡­è¯å†…å®¹ï¼‰
-    ç”¨äºç”¨æˆ·æŸ¥çœ‹/ç¼–è¾‘å‡­è¯è¯¦æƒ…
-    """
+    """Internal implementation detail."""
     try:
         mode = validate_mode(mode)
-        # éªŒè¯æ–‡ä»¶å
+
         if not filename.endswith(".json"):
             raise HTTPException(status_code=400, detail="Invalid file name")
 
@@ -716,12 +696,12 @@ async def get_cred_detail(
         backend_info = await storage_adapter.get_backend_info()
         backend_type = backend_info.get("backend_type", "unknown")
 
-        # è·å–å‡­è¯æ•°æ®
+
         credential_data = await storage_adapter.get_credential(filename, mode=mode)
         if not credential_data:
             raise HTTPException(status_code=404, detail="Credential does not exist")
 
-        # è·å–ç¶æ€ä¿¡æ¯
+
         file_status = await storage_adapter.get_credential_state(filename, mode=mode)
         if not file_status:
             file_status = {
@@ -766,7 +746,7 @@ async def creds_action(
     token: str = Depends(verify_panel_token),
     mode: str = "code_assist"
 ):
-    """å¯¹å‡­è¯æ–‡ä»¶æ‰§è¡Œæ“ä½œï¼ˆå¯ç”¨/ç¦ç”¨/åˆ é™¤/enable_creditå¼€å…³ï¼‰"""
+    """Internal implementation detail."""
     try:
         mode = validate_mode(mode)
 
@@ -777,18 +757,18 @@ async def creds_action(
 
         log.info(f"Performing action '{action}' on file: {filename} (mode={mode})")
 
-        # éªŒè¯æ–‡ä»¶å
+
         if not filename.endswith(".json"):
             log.error(f"Invalid filename: {filename} (not a .json file)")
             raise HTTPException(status_code=400, detail=f"Invalid file name: {filename}")
 
-        # è·å–å­˜å‚¨é€‚é…å™¨
+
         storage_adapter = await get_storage_adapter()
 
-        # å¯¹äºåˆ é™¤æ“ä½œï¼Œä¸éœ€è¦æ£€æŸ¥å‡­è¯æ•°æ®æ˜¯å¦å®Œæ•´ï¼Œåªéœ€æ£€æŸ¥æ¡ç›®æ˜¯å¦å­˜åœ¨
-        # å¯¹äºå…¶ä»–æ“ä½œï¼Œéœ€è¦ç¡®ä¿å‡­è¯æ•°æ®å­˜åœ¨ä¸”å®Œæ•´
+
+
         if action != "delete":
-            # æ£€æŸ¥å‡­è¯æ•°æ®æ˜¯å¦å­˜åœ¨
+
             credential_data = await storage_adapter.get_credential(filename, mode=mode)
             if not credential_data:
                 log.error(f"Credential not found: {filename} (mode={mode})")
@@ -869,7 +849,7 @@ async def creds_batch_action(
     token: str = Depends(verify_panel_token),
     mode: str = "code_assist"
 ):
-    """æ‰¹é‡å¯¹å‡­è¯æ–‡ä»¶æ‰§è¡Œæ“ä½œï¼ˆå¯ç”¨/ç¦ç”¨/åˆ é™¤/enable_creditå¼€å…³ï¼‰"""
+    """Internal implementation detail."""
     try:
         mode = validate_mode(mode)
 
@@ -984,22 +964,22 @@ async def download_cred_file(
     token: str = Depends(verify_panel_token),
     mode: str = "code_assist"
 ):
-    """ä¸‹è½½å•ä¸ªå‡­è¯æ–‡ä»¶"""
+    """Internal implementation detail."""
     try:
         mode = validate_mode(mode)
-        # éªŒè¯æ–‡ä»¶åå®‰å…¨æ€§
+
         if not filename.endswith(".json"):
             raise HTTPException(status_code=404, detail="Invalid file name")
 
-        # è·å–å­˜å‚¨é€‚é…å™¨
+
         storage_adapter = await get_storage_adapter()
 
-        # ä»å­˜å‚¨ç³»ç»Ÿè·å–å‡­è¯æ•°æ®
+
         credential_data = await storage_adapter.get_credential(filename, mode=mode)
         if not credential_data:
             raise HTTPException(status_code=404, detail="File does not exist")
 
-        # è½¬æ¢ä¸ºJSONå­—ç¬¦ä¸²
+
         content = json.dumps(credential_data, ensure_ascii=False, indent=2)
 
         from fastapi.responses import Response
@@ -1023,7 +1003,7 @@ async def fetch_user_email(
     token: str = Depends(verify_panel_token),
     mode: str = "code_assist"
 ):
-    """è·å–æŒ‡å®å‡­è¯æ–‡ä»¶ç„ç”¨æˆ·é‚®ç®±åœ°å€"""
+    """Internal implementation detail."""
     try:
         mode = validate_mode(mode)
         return await fetch_user_email_common(filename, mode=mode)
@@ -1039,7 +1019,7 @@ async def refresh_all_user_emails(
     token: str = Depends(verify_panel_token),
     mode: str = "code_assist"
 ):
-    """åˆ·æ–°æ‰€æœ‰å‡­è¯æ–‡ä»¶ç„ç”¨æˆ·é‚®ç®±åœ°å€"""
+    """Internal implementation detail."""
     try:
         mode = validate_mode(mode)
         return await refresh_all_user_emails_common(mode=mode)
@@ -1053,7 +1033,7 @@ async def deduplicate_credentials_by_email(
     token: str = Depends(verify_panel_token),
     mode: str = "code_assist"
 ):
-    """æ‰¹é‡å»é‡å‡­è¯æ–‡ä»¶ - åˆ é™¤é‚®ç®±ç›¸åŒç„å‡­è¯ï¼ˆåªä¿ç•™ä¸€ä¸ªï¼‰"""
+    """Internal implementation detail."""
     try:
         mode = validate_mode(mode)
         return await deduplicate_credentials_by_email_common(mode=mode)
@@ -1067,10 +1047,7 @@ async def download_all_creds(
     token: str = Depends(verify_panel_token),
     mode: str = "code_assist"
 ):
-    """
-    æ‰“åŒ…ä¸‹è½½æ‰€æœ‰å‡­è¯æ–‡ä»¶ï¼ˆæµå¼å¤„ç†ï¼ŒæŒ‰éœ€å è½½æ¯ä¸ªå‡­è¯æ•°æ®ï¼‰
-    åªåœ¨å®é™…ä¸‹è½½æ—¶æ‰å è½½å®Œæ•´å‡­è¯å†…å®¹ï¼Œæœ€å¤§åŒ–æ€§èƒ½
-    """
+    """Internal implementation detail."""
     try:
         mode = validate_mode(mode)
         return await download_all_creds_common(mode=mode)
@@ -1087,10 +1064,7 @@ async def verify_credential_project(
     token: str = Depends(verify_panel_token),
     mode: str = "code_assist"
 ):
-    """
-    æ£€éªŒå‡­è¯ç„project idï¼Œé‡æ–°è·å–project id
-    æ£€éªŒæˆåŸå¯ä»¥ä½¿403é”™è¯¯æ¢å¤
-    """
+    """Internal implementation detail."""
     try:
         mode = validate_mode(mode)
         return await verify_credential_project_common(filename, mode=mode)
@@ -1107,33 +1081,24 @@ async def get_credential_errors(
     token: str = Depends(verify_panel_token),
     mode: str = "code_assist"
 ):
-    """
-    è·å–æŒ‡å®å‡­è¯ç„é”™è¯¯ä¿¡æ¯ï¼ˆåŒ…å« error_codes å’Œ error_messagesï¼‰
-
-    Args:
-        filename: å‡­è¯æ–‡ä»¶å
-        mode: å‡­è¯æ¨¡å¼ï¼ˆcode_assist æˆ– omniï¼‰
-
-    Returns:
-        åŒ…å« error_codes å’Œ error_messages ç„ JSON å“åº”
-    """
+    """Internal implementation detail."""
     try:
         mode = validate_mode(mode)
 
-        # éªŒè¯æ–‡ä»¶å
+
         if not filename.endswith(".json"):
             raise HTTPException(status_code=400, detail="Invalid file name")
 
         storage_adapter = await get_storage_adapter()
 
-        # æ£€æŸ¥åç«¯æ˜¯å¦æ”¯æŒ get_credential_errors æ–¹æ³•
+
         if not hasattr(storage_adapter._backend, 'get_credential_errors'):
             raise HTTPException(
                 status_code=501,
                 detail="The current storage backend does not support retrieving error messages"
             )
 
-        # è·å–é”™è¯¯ä¿¡æ¯
+
         error_info = await storage_adapter._backend.get_credential_errors(filename, mode=mode)
 
         return JSONResponse(content=error_info)
@@ -1151,44 +1116,42 @@ async def get_credential_quota(
     token: str = Depends(verify_panel_token),
     mode: str = "omni"
 ):
-    """
-    è·å–æŒ‡å®å‡­è¯ç„é¢åº¦ä¿¡æ¯ï¼ˆä»…æ”¯æŒ omni æ¨¡å¼ï¼‰
-    """
+    """Internal implementation detail."""
     try:
         mode = validate_mode(mode)
-        # éªŒè¯æ–‡ä»¶å
+
         if not filename.endswith(".json"):
             raise HTTPException(status_code=400, detail="Invalid file name")
 
 
         storage_adapter = await get_storage_adapter()
 
-        # è·å–å‡­è¯æ•°æ®
+
         credential_data = await storage_adapter.get_credential(filename, mode=mode)
         if not credential_data:
             raise HTTPException(status_code=404, detail="Credential does not exist")
 
-        # ä½¿ç”¨ Credentials å¯¹è±¡è‡ªå¨å¤„ç† token åˆ·æ–°
+
         from omni_gateway.google_oauth_api import Credentials
 
         creds = Credentials.from_dict(credential_data)
 
-        # è‡ªå¨åˆ·æ–° tokenï¼ˆå¦‚æœéœ€è¦ï¼‰
+
         await creds.refresh_if_needed()
 
-        # å¦‚æœ token è¢«åˆ·æ–°äº†ï¼Œæ›´æ–°å­˜å‚¨
+
         updated_data = creds.to_dict()
         if updated_data != credential_data:
             log.info(f"Token automatically refreshed: {filename}")
             await storage_adapter.store_credential(filename, updated_data, mode=mode)
             credential_data = updated_data
 
-        # è·å–è®¿é—®ä»¤ç‰Œ
+
         access_token = credential_data.get("access_token") or credential_data.get("token")
         if not access_token:
             raise HTTPException(status_code=400, detail="No access token in credential")
 
-        # è·å–é¢åº¦ä¿¡æ¯
+
         quota_info = await fetch_quota_info(access_token)
 
         if quota_info.get("success"):
@@ -1220,40 +1183,29 @@ async def configure_preview_channel(
     token: str = Depends(verify_panel_token),
     mode: str = "code_assist"
 ):
-    """
-    ä¸º code_assist å‡­è¯é…ç½® preview é€é“
-
-    é€è¿‡è°ƒç”¨ Google Cloud API è®¾ç½® release_channel ä¸º EXPERIMENTAL
-
-    Args:
-        filename: å‡­è¯æ–‡ä»¶å
-        mode: å‡­è¯æ¨¡å¼ï¼ˆä»…æ”¯æŒ code_assistï¼‰
-
-    Returns:
-        é…ç½®ç»“æœä¿¡æ¯
-    """
+    """Internal implementation detail."""
     try:
         mode = validate_mode(mode)
 
-        # åªæ”¯æŒ code_assist æ¨¡å¼
+
         if mode != "code_assist":
             raise HTTPException(
                 status_code=400,
                 detail="Configuring the preview channel only supports 'code_assist' mode"
             )
 
-        # éªŒè¯æ–‡ä»¶å
+
         if not filename.endswith(".json"):
             raise HTTPException(status_code=400, detail="Invalid file name")
 
         storage_adapter = await get_storage_adapter()
 
-        # è·å–å‡­è¯æ•°æ®
+
         credential_data = await storage_adapter.get_credential(filename, mode=mode)
         if not credential_data:
             raise HTTPException(status_code=404, detail="Credential does not exist")
 
-        # åˆ›å»ºå‡­è¯å¯¹è±¡å¹¶åˆ·æ–° tokenï¼ˆå¦‚æœéœ€è¦ï¼‰
+
         credentials = Credentials.from_dict(credential_data)
         token_refreshed = await credentials.refresh_if_needed()
 
@@ -1262,7 +1214,7 @@ async def configure_preview_channel(
             credential_data = credentials.to_dict()
             await storage_adapter.store_credential(filename, credential_data, mode=mode)
 
-        # è·å– access_token å’Œ project_id
+
         access_token = credential_data.get("access_token") or credential_data.get("token")
         project_id = credential_data.get("project_id", "")
 
@@ -1271,14 +1223,14 @@ async def configure_preview_channel(
         if not project_id:
             raise HTTPException(status_code=400, detail="No project ID in credential")
 
-        # è°ƒç”¨ Google Cloud API é…ç½® preview é€é“
-        # æ ¹æ®æ–‡æ¡£ï¼Œéœ€è¦ä¸¤ä¸ªæ­¥éª¤ï¼
-        # 1. åˆ›å»º Release Channel Setting (EXPERIMENTAL)
-        # 2. åˆ›å»º Setting Binding (ç»‘å®åˆ°ç›®æ ‡é¡¹ç›®)
+
+
+
+
         from omni_gateway.httpx_client import post_async
         import uuid
 
-        # ç”Ÿæˆå”¯ä¸€ç„ ID
+
         setting_id = f"preview-setting-{uuid.uuid4().hex[:8]}"
         binding_id = f"preview-binding-{uuid.uuid4().hex[:8]}"
 
@@ -1290,7 +1242,7 @@ async def configure_preview_channel(
 
         log.info(f"Starting configuration of preview channel: {filename} (project_id={project_id})")
 
-        # æ­¥éª¤ 1: åˆ›å»º Release Channel Setting
+
         setting_url = f"{base_url}/releaseChannelSettings"
         setting_response = await post_async(
             url=setting_url,
@@ -1302,14 +1254,14 @@ async def configure_preview_channel(
 
         setting_status = setting_response.status_code
 
-        # è°ƒç”¨ Google Cloud API é…ç½® preview é€é“
-        # æ ¹æ®æ–‡æ¡£ï¼Œéœ€è¦ä¸¤ä¸ªæ­¥éª¤ï¼
-        # 1. åˆ›å»º Release Channel Setting (EXPERIMENTAL)
-        # 2. åˆ›å»º Setting Binding (ç»‘å®åˆ°ç›®æ ‡é¡¹ç›®)
+
+
+
+
         from omni_gateway.httpx_client import post_async, get_async
         import uuid
 
-        # ç”Ÿæˆå”¯ä¸€ç„ ID
+
         setting_id = f"preview-setting-{uuid.uuid4().hex[:8]}"
         binding_id = f"preview-binding-{uuid.uuid4().hex[:8]}"
 
@@ -1321,7 +1273,7 @@ async def configure_preview_channel(
 
         log.info(f"Starting configuration of preview channel: {filename} (project_id={project_id})")
 
-        # æ­¥éª¤ 1: åˆ›å»º Release Channel Setting
+
         setting_url = f"{base_url}/releaseChannelSettings"
         setting_response = await post_async(
             url=setting_url,
@@ -1336,7 +1288,7 @@ async def configure_preview_channel(
         if setting_status == 200 or setting_status == 201:
             log.info(f"Step 1/2: Release Channel Setting created successfully (setting_id={setting_id})")
         elif setting_status == 409:
-            # Setting å·²å­˜åœ¨ï¼Œéœ€è¦ LIST è·å–çœŸå®ç„ setting_idï¼Œå¦åˆ™ Step 2 ç„ URL ä¼ç”¨é”™è¯¯ç„ ID
+
             log.info(f"Step 1/2: Release Channel Setting already exists, retrieving existing setting_id...")
             list_response = await get_async(
                 url=setting_url,
@@ -1358,7 +1310,7 @@ async def configure_preview_channel(
             else:
                 log.warning(f"Step 1/2: LIST request failed (status={list_response.status_code}), keeping random setting_id")
         else:
-            # æ­¥éª¤ 1 å¤±è´¥
+
             error_text = setting_response.text if hasattr(setting_response, 'text') else ""
             log.error(f"Step 1/2 failed: {filename} - Status: {setting_status}, Error: {error_text}")
 
@@ -1448,59 +1400,47 @@ async def test_credential(
     mode: str = "code_assist",
     _token: str = Depends(verify_panel_token)
 ):
-    """
-    æµ‹è¯•æŒ‡å®å‡­è¯æ˜¯å¦å¯ç”¨
-
-    Args:
-        filename: å‡­è¯æ–‡ä»¶å
-        mode: å‡­è¯æ¨¡å¼ï¼ˆcode_assist æˆ– omniï¼‰
-
-    Returns:
-        è¿”å›ç¶æ€ç ï¼
-        - 200: å‡­è¯å¯ç”¨
-        - 429: å‡­è¯è¢«é™æµä½†æœ‰æ•ˆ
-        - å…¶ä»–: å‡­è¯å¤±è´¥ï¼ˆè¿”å›å®é™…é”™è¯¯ç ï¼‰
-    """
+    """Internal implementation detail."""
     try:
         mode = validate_mode(mode)
 
-        # éªŒè¯æ–‡ä»¶å
+
         if not filename.endswith(".json"):
             raise HTTPException(status_code=400, detail="Invalid file name")
 
         storage_adapter = await get_storage_adapter()
 
-        # è·å–å‡­è¯æ•°æ®
+
         credential_data = await storage_adapter.get_credential(filename, mode=mode)
         if not credential_data:
             raise HTTPException(status_code=404, detail="Credential does not exist")
 
-        # åˆ›å»ºå‡­è¯å¯¹è±¡å¹¶å°è¯•åˆ·æ–° tokenï¼ˆå¦‚æœéœ€è¦ï¼‰
+
         credentials = Credentials.from_dict(credential_data)
         token_refreshed = await credentials.refresh_if_needed()
 
-        # å¦‚æœ token è¢«åˆ·æ–°äº†ï¼Œæ›´æ–°å­˜å‚¨
+
         if token_refreshed:
             log.info(f"Token automatically refreshed: {filename} (mode = {mode})")
             credential_data = credentials.to_dict()
             await storage_adapter.store_credential(filename, credential_data, mode=mode)
 
-        # è·å–è®¿é—®ä»¤ç‰Œ
+
         access_token = credential_data.get("access_token") or credential_data.get("token")
         if not access_token:
             raise HTTPException(status_code=400, detail="No access token in credential")
 
-        # æ ¹æ®æ¨¡å¼æ„é€ æµ‹è¯•è¯·æ±‚
+
         from omni_gateway.httpx_client import post_async
 
-        # è·å– project_id
+
         project_id = credential_data.get("project_id", "")
         if not project_id:
             raise HTTPException(status_code=400, detail="No project ID in credential")
 
-        # æ ¹æ®æ¨¡å¼é€‰æ‹© API ç«¯ç‚¹å’Œè¯·æ±‚å¤´
-        # å¯¹äº code_assist æ¨¡å¼ï¼Œä½¿ç”¨ä¸¤æ¬¡æµ‹è¯•ï¼gemini-2.5-flash å’Œ gemini-3-flash-preview
-        # å¯¹äº omni æ¨¡å¼ï¼Œåªä½¿ç”¨ gemini-2.5-flash
+
+
+
         test_model = "gemini-2.5-flash"
 
         if mode == "omni":
@@ -1515,7 +1455,7 @@ async def test_credential(
                 "User-Agent": OGW_CODE_ASSIST_USER_AGENT,
             }
 
-        # ç¬¬ä¸€æ¬¡æµ‹è¯•ï¼ä½¿ç”¨ gemini-2.5-flash
+
         response = await post_async(
             url=f"{api_base_url}/v1internal:generateContent",
             json={
@@ -1530,19 +1470,19 @@ async def test_credential(
             timeout=30.0
         )
 
-        # è¿”å›å®é™…ç„ç¶æ€ç å’Œè¯¦ç»†ä¿¡æ¯
+
         status_code = response.status_code
 
         if status_code == 200 or status_code == 429:
             log.info(f"Credential test successful: {filename} (mode={mode}, model={test_model}, status={status_code})")
-            # æµ‹è¯•æˆåŸæ—¶æ¸…é™¤é”™è¯¯ç¶æ€
+
             if status_code == 200:
                 await storage_adapter.update_credential_state(filename, {
                     "error_codes": [],
                     "error_messages": {}
                 }, mode=mode)
 
-                # å¦‚æœæ˜¯ code_assist æ¨¡å¼ä¸”ç¬¬ä¸€æ¬¡æµ‹è¯•æˆåŸï¼Œç»§ç»­æµ‹è¯• gemini-3-flash-preview
+
                 if mode == "code_assist":
                     preview_model = "gemini-3-flash-preview"
                     log.info(f"Starting preview model test: {filename} (model={preview_model})")
@@ -1565,24 +1505,24 @@ async def test_credential(
                         preview_status = preview_response.status_code
 
                         if preview_status == 200 or preview_status == 429:
-                            # preview æ¨¡å‹æµ‹è¯•æˆåŸï¼Œè®¾ç½® preview=True
+
                             log.info(f"Preview model tested successfully: {filename} (status = {preview_status})")
                             await storage_adapter.update_credential_state(filename, {
                                 "preview": True
                             }, mode=mode)
                         elif preview_status == 404:
-                            # preview æ¨¡å‹è¿”å› 404ï¼Œè¯´æ˜ä¸æ”¯æŒï¼Œè®¾ç½® preview=False
+
                             log.warning(f"Preview model does not support: {filename} (status = 404)")
                             await storage_adapter.update_credential_state(filename, {
                                 "preview": False
                             }, mode=mode)
                         else:
-                            # å…¶ä»–é”™è¯¯ï¼Œä¿æŒé»˜è®¤ preview ç¶æ€
+
                             log.warning(f"Preview model test failed: {filename} (status = {preview_status})")
                     except Exception as e:
                         log.error(f"Preview Model Test Exception: {filename} - {e}")
 
-            # è¿”å›æˆåŸå“åº”
+
             return JSONResponse(
                 status_code=status_code,
                 content={
@@ -1594,18 +1534,18 @@ async def test_credential(
             )
         else:
             log.warning(f"Credential test failed: {filename} (mode={mode}, status={status_code})")
-            # æµ‹è¯•å¤±è´¥æ—¶ä¿å­˜é”™è¯¯ç å’Œé”™è¯¯æ¶ˆæ¯ï¼ˆè¦†ç›–æ¨¡å¼ï¼Œåªä¿å­˜æœ€æ–°ç„ä¸€ä¸ªé”™è¯¯ï¼‰
+
             try:
                 error_text = response.text if hasattr(response, 'text') else ""
 
-                # æ‰“å°è¯¦ç»†é”™è¯¯å†…å®¹åˆ°æ—¥å¿—
+
                 log.error(f"Credential test error details - file: {filename}, mode: {mode}, status code: {status_code}, error: {error_text}")
 
-                # ä½¿ç”¨è¦†ç›–æ¨¡å¼ä¿å­˜é”™è¯¯ï¼ˆä¸ credential_manager ä¿æŒä¸€è‡´ï¼‰
+
                 error_codes = [status_code]
                 error_messages = {str(status_code): error_text if error_text else f"HTTP {status_code}"}
 
-                # æ›´æ–°ç¶æ€
+
                 await storage_adapter.update_credential_state(filename, {
                     "error_codes": error_codes,
                     "error_messages": error_messages
@@ -1615,7 +1555,7 @@ async def test_credential(
             except Exception as e:
                 log.error(f"Failed to save test error message: {e}")
 
-        # è¿”å›é”™è¯¯å“åº”ï¼ŒåŒ…å«å®Œæ•´ç„é”™è¯¯ä¿¡æ¯
+
         error_text = response.text if hasattr(response, 'text') else ""
 
         return JSONResponse(

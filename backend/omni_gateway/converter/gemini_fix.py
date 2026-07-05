@@ -1,15 +1,11 @@
-﻿"""
-Gemini Format Utilities - ç»Ÿä¸€ç„ Gemini æ ¼å¼å¤„ç†å’Œè½¬æ¢å·¥å…·
-æä¾›å¯¹ Gemini API è¯·æ±‚ä½“å’Œå“åº”ç„æ ‡å‡†åŒ–å¤„ç†
-â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-"""
+"""Internal implementation detail."""
 import json
 from typing import Any, Dict, Optional
 
 from log import log
 from omni_gateway.converter.thoughtSignature_fix import SKIP_THOUGHT_SIGNATURE_VALIDATOR
 
-# ==================== Gemini API é…ç½® ====================
+
 
 # ====================== Model Configuration ======================
 
@@ -360,20 +356,13 @@ SUPPORTED_ASPECT_RATIOS = [
 
 
 def _parse_size_to_image_config(size_str: str) -> Dict[str, str]:
-    """
-    è§£æç”¨æˆ·ä¼ å…¥ç„ size å‚æ•°ä¸º Gemini imageConfig å‚æ•°
-
-    æ”¯æŒæ ¼å¼: "1024x1536", "1024*1536", "1024X1536"
-
-    Returns:
-        åŒ…å« aspectRatio å’Œ/æˆ– imageSize ç„å­—å…¸
-    """
+    """Internal implementation detail."""
     import re
 
     config = {}
     size_str = size_str.strip()
 
-    match = re.match(r"^(\d+)\s*[xX*Ă—]\s*(\d+)$", size_str)
+    match = re.match(r"^(\d+)\s*[xX*]\s*(\d+)$", size_str)
     if not match:
         return config
 
@@ -382,7 +371,7 @@ def _parse_size_to_image_config(size_str: str) -> Dict[str, str]:
     if width <= 0 or height <= 0:
         return config
 
-    # è®¡ç®—æœ€æ¥è¿‘ç„æ”¯æŒå®½é«˜æ¯”
+
     target_ratio = width / height
     best_ratio = None
     best_diff = float("inf")
@@ -394,7 +383,7 @@ def _parse_size_to_image_config(size_str: str) -> Dict[str, str]:
     if best_ratio:
         config["aspectRatio"] = best_ratio
 
-    # æ ¹æ®æœ€å¤§è¾¹é•¿ç¡®å® imageSizeï¼ˆä½¿ç”¨æœ€æ¥è¿‘ç„æ¡£ä½ï¼‰
+
     max_dim = max(width, height)
     if max_dim <= 1280:
         config["imageSize"] = "1K"
@@ -410,31 +399,17 @@ def prepare_image_generation_request(
     request_body: Dict[str, Any],
     model: str
 ) -> Dict[str, Any]:
-    """
-    å›¾åƒç”Ÿæˆæ¨¡å‹è¯·æ±‚ä½“åå¤„ç†
-
-    æ”¯æŒä¸‰ç§æ–¹å¼æŒ‡å®å›¾ç‰‡å‚æ•°ï¼ˆä¼˜å…ˆçº§ä»é«˜åˆ°ä½ï¼‰:
-    1. size å‚æ•°: å¦‚ "1024x1536"ï¼Œè‡ªå¨è®¡ç®— aspectRatio å’Œ imageSize
-    2. æ¨¡å‹ååç¼€: å¦‚ -4k, -2k, -16x9, -1x1
-    3. é»˜è®¤å€¼: ä¸è®¾ç½®é¢å¤–å‚æ•°
-
-    Args:
-        request_body: åŸå§‹è¯·æ±‚ä½“
-        model: æ¨¡å‹åç§°
-
-    Returns:
-        å¤„ç†åç„è¯·æ±‚ä½“
-    """
+    """Internal implementation detail."""
     request_body = request_body.copy()
     model_lower = model.lower()
 
-    # ä¼˜å…ˆä½¿ç”¨ size å‚æ•°
+
     size_str = request_body.pop("size", None)
     if size_str:
         image_config = _parse_size_to_image_config(size_str)
         log.debug(f"[IMAGE] Parsed from size parameter '{size_str}': {image_config}")
     else:
-        # ä»æ¨¡å‹ååç¼€è§£æ
+
         image_size = "4K" if "-4k" in model_lower else "2K" if "-2k" in model_lower else None
 
         aspect_ratio = None
@@ -452,92 +427,81 @@ def prepare_image_generation_request(
         if image_size:
             image_config["imageSize"] = image_size
 
-    request_body["model"] = "gemini-3.1-flash-image"  # ç»Ÿä¸€ä½¿ç”¨åŸºç¡€æ¨¡å‹å
+    request_body["model"] = "gemini-3.1-flash-image"
     request_body["generationConfig"] = {
         "candidateCount": 1,
         "imageConfig": image_config
     }
 
-    # ç§»é™¤ä¸éœ€è¦ç„å­—æ®µ
+
     for key in ("systemInstruction", "tools", "toolConfig"):
         request_body.pop(key, None)
 
     return request_body
 
 
-# ==================== æ¨¡å‹ç‰¹æ€§è¾…å©å‡½æ•° ====================
+
 
 def get_base_model_name(model_name: str) -> str:
-    """ç§»é™¤æ¨¡å‹åç§°ä¸­ç„åç¼€,è¿”å›åŸºç¡€æ¨¡å‹å"""
-    # æŒ‰ç…§ä»é•¿åˆ°çŸ­ç„é¡ºåºæ’åˆ—ï¼Œé¿å…çŸ­åç¼€å…ˆäºé•¿åç¼€è¢«åŒ¹é…
+    """Internal implementation detail."""
     suffixes = [
-        "-maxthinking", "-nothinking",  # å…¼å®¹æ—§æ¨¡å¼
-        "-minimal", "-medium", "-search", "-think",  # ä¸­ç­‰é•¿åº¦åç¼€
-        "-high", "-max", "-low"  # çŸ­åç¼€
+        "-maxthinking", "-nothinking",
+        "-minimal", "-medium", "-search", "-think",
+        "-high", "-max", "-low"
     ]
     result = model_name
     changed = True
-    # æŒç»­å¾ªç¯ç›´åˆ°æ²¡æœ‰ä»»ä½•åç¼€å¯ä»¥ç§»é™¤
+
     while changed:
         changed = False
         for suffix in suffixes:
             if result.endswith(suffix):
                 result = result[:-len(suffix)]
                 changed = True
-                # ä¸ä½¿ç”¨ breakï¼Œç»§ç»­æ£€æŸ¥æ˜¯å¦è¿˜æœ‰å…¶ä»–åç¼€
+
     return result
 
 
 def get_thinking_settings(model_name: str) -> tuple[Optional[int], Optional[str]]:
-    """
-    æ ¹æ®æ¨¡å‹åç§°è·å–æ€è€ƒé…ç½®
-
-    æ”¯æŒä¸¤ç§æ¨¡å¼:
-    1. CLI æ¨¡å¼æ€è€ƒé¢„ç®— (Gemini 2.5 ç³»åˆ—): -max, -high, -medium, -low, -minimal
-    2. CLI æ¨¡å¼æ€è€ƒç­‰çº§ (Gemini 3 Preview ç³»åˆ—): -high, -medium, -low, -minimal (ä»… 3-flash)
-    3. å…¼å®¹æ—§æ¨¡å¼: -maxthinking, -nothinking (ä¸è¿”å›ç»™ç”¨æˆ·)
-
-    Returns:
-        (thinking_budget, thinking_level): æ€è€ƒé¢„ç®—å’Œæ€è€ƒç­‰çº§
-    """
+    """Internal implementation detail."""
     base_model = get_base_model_name(model_name)
 
-    # ========== å…¼å®¹æ—§æ¨¡å¼ (ä¸è¿”å›ç»™ç”¨æˆ·) ==========
+
     if "-nothinking" in model_name:
-        # nothinking æ¨¡å¼: é™åˆ¶æ€è€ƒ
+
         if "flash" in base_model:
             return 0, None
         return 128, None
     elif "-maxthinking" in model_name:
-        # maxthinking æ¨¡å¼: æœ€å¤§æ€è€ƒé¢„ç®—
+
         budget = 24576 if "flash" in base_model else 32768
         if "gemini-3" in base_model:
-            # Gemini 3 ç³»åˆ—ä¸æ”¯æŒ thinkingBudgetï¼Œè¿”å› high ç­‰çº§
+
             return None, "high"
         else:
             return budget, None
 
-    # ========== æ–° CLI æ¨¡å¼: åŸºäºæ€è€ƒé¢„ç®—/ç­‰çº§ ==========
 
-    # Gemini 3 Preview ç³»åˆ—: ä½¿ç”¨ thinkingLevel
+
+
     if "gemini-3" in base_model:
         if "-high" in model_name:
             return None, "high"
         elif "-medium" in model_name:
-            # ä»… 3-flash-preview æ”¯æŒ medium
+
             if "flash" in base_model:
                 return None, "medium"
-            # pro ç³»åˆ—ä¸æ”¯æŒ mediumï¼Œè¿”å› Default
+
             return None, None
         elif "-low" in model_name:
             return None, "low"
         elif "-minimal" in model_name:
             return None, None
         else:
-            # Default: ä¸è®¾ç½® thinking é…ç½®
+
             return None, None
 
-    # Gemini 2.5 ç³»åˆ—: ä½¿ç”¨ thinkingBudget
+
     elif "gemini-2.5" in base_model:
         if "-max" in model_name:
             # 2.5-flash-max: 24576, 2.5-pro-max: 32768
@@ -557,22 +521,22 @@ def get_thinking_settings(model_name: str) -> tuple[Optional[int], Optional[str]
             budget = 0 if "flash" in base_model else 128
             return budget, None
         else:
-            # Default: ä¸è®¾ç½® thinking budget
+
             return None, None
 
-    # å…¶ä»–æ¨¡å‹: ä¸è®¾ç½® thinking é…ç½®
+
     return None, None
 
 
 def is_search_model(model_name: str) -> bool:
-    """æ£€æŸ¥æ˜¯å¦ä¸ºæœç´¢æ¨¡å‹"""
+    """Internal implementation detail."""
     return "-search" in model_name
 
 
-# ==================== ç»Ÿä¸€ç„ Gemini è¯·æ±‚åå¤„ç† ====================
+
 
 def is_thinking_model(model_name: str) -> bool:
-    """æ£€æŸ¥æ˜¯å¦ä¸ºæ€è€ƒæ¨¡å‹ (åŒ…å« -thinking æˆ– pro)"""
+    """Internal implementation detail."""
     return "think" in model_name or "pro" in model_name.lower()
 
 
@@ -580,66 +544,52 @@ async def normalize_gemini_request(
     request: Dict[str, Any],
     mode: str = "code_assist"
 ) -> Dict[str, Any]:
-    """
-    è§„èŒƒåŒ– Gemini è¯·æ±‚
+    """Internal implementation detail."""
 
-    å¤„ç†é€»è¾‘:
-    1. æ¨¡å‹ç‰¹æ€§å¤„ç† (thinking config, search tools)
-    3. å‚æ•°èŒƒå›´é™åˆ¶ (maxOutputTokens, topK)
-    4. å·¥å…·æ¸…ç†
-
-    Args:
-        request: åŸå§‹è¯·æ±‚å­—å…¸
-        mode: æ¨¡å¼ ("code_assist" æˆ– "omni")
-
-    Returns:
-        è§„èŒƒåŒ–åç„è¯·æ±‚
-    """
-    # å¯¼å…¥é…ç½®å‡½æ•°
     from config import get_return_thoughts_to_frontend
 
     result = request.copy()
     model = result.get("model", "")
-    generation_config = (result.get("generationConfig") or {}).copy()  # åˆ›å»ºå‰¯æœ¬é¿å…ä¿®æ”¹åŸå¯¹è±¡
+    generation_config = (result.get("generationConfig") or {}).copy()
     tools = result.get("tools")
     system_instruction = result.get("systemInstruction") or result.get("system_instructions")
-    
-    # è®°å½•åŸå§‹è¯·æ±‚
+
+
     log.debug(f"[GEMINI_FIX] Original request - model: {model}, mode: {mode}, generationConfig: {generation_config}")
 
-    # è·å–é…ç½®å€¼
+
     return_thoughts = await get_return_thoughts_to_frontend()
 
-    # ========== æ¨¡å¼ç‰¹å®å¤„ç† ==========
+
     if mode == "code_assist":
-        # 1. æ€è€ƒè®¾ç½®
-        # ä¼˜å…ˆä½¿ç”¨ get_thinking_settings è·å–ç„æ€è€ƒé¢„ç®—å’Œç­‰çº§
+
+
         thinking_budget, thinking_level = get_thinking_settings(model)
 
-        # å…¶æ¬¡ä½¿ç”¨ä¼ å…¥ç„æ€è€ƒé¢„ç®—ï¼ˆå¦‚æœæœªä»æ¨¡å‹åç§°è·å–ï¼‰
+
         if thinking_budget is None and thinking_level is None:
             thinking_budget = generation_config.get("thinkingConfig", {}).get("thinkingBudget")
             thinking_level = generation_config.get("thinkingConfig", {}).get("thinkingLevel")
 
-        # å‡å¦‚ is_thinking_model ä¸ºçœŸæˆ–è€…æ€è€ƒé¢„ç®—/ç­‰çº§ä¸ä¸ºç©ºï¼Œè®¾ç½® thinkingConfig
+
         if is_thinking_model(model) or thinking_budget is not None or thinking_level is not None:
-            # ç¡®ä¿ thinkingConfig å­˜åœ¨
+
             if "thinkingConfig" not in generation_config:
                 generation_config["thinkingConfig"] = {}
 
             thinking_config = generation_config["thinkingConfig"]
 
-            # è®¾ç½®æ€è€ƒé¢„ç®—æˆ–ç­‰çº§ï¼ˆäº’æ–¥ï¼‰
+
             if thinking_budget is not None:
                 thinking_config["thinkingBudget"] = thinking_budget
-                thinking_config.pop("thinkingLevel", None)  # é¿å…ä¸ thinkingBudget å†²çª
+                thinking_config.pop("thinkingLevel", None)
             elif thinking_level is not None:
                 thinking_config["thinkingLevel"] = thinking_level
-                thinking_config.pop("thinkingBudget", None)  # é¿å…ä¸ thinkingLevel å†²çª
+                thinking_config.pop("thinkingBudget", None)
 
-            # includeThoughts é€»è¾‘:
-            # 1. å¦‚æœæ˜¯ pro æ¨¡å‹ï¼Œä¸º return_thoughts
-            # 2. å¦‚æœä¸æ˜¯ pro æ¨¡å‹ï¼Œæ£€æŸ¥æ˜¯å¦æœ‰æ€è€ƒé¢„ç®—æˆ–æ€è€ƒç­‰çº§
+
+
+
             base_model = get_base_model_name(model)
             if "pro" in base_model:
                 include_thoughts = return_thoughts
@@ -649,8 +599,8 @@ async def normalize_gemini_request(
                 else:
                     include_thoughts = return_thoughts
             else:
-                # é pro æ¨¡å‹: æœ‰æ€è€ƒé¢„ç®—æˆ–ç­‰çº§æ‰åŒ…å«æ€è€ƒ
-                # æ³¨æ„: æ€è€ƒé¢„ç®—ä¸º 0 æ—¶ä¸åŒ…å«æ€è€ƒ
+
+
                 if thinking_budget is None or thinking_budget == 0:
                     include_thoughts = False
                 else:
@@ -658,96 +608,96 @@ async def normalize_gemini_request(
 
             thinking_config["includeThoughts"] = include_thoughts
 
-        # 2. æœç´¢æ¨¡å‹æ·»å  Google Search
+
         if is_search_model(model):
             result_tools = result.get("tools") or []
             result["tools"] = result_tools
             if not any(tool.get("googleSearch") for tool in result_tools if isinstance(tool, dict)):
                 result_tools.append({"googleSearch": {}})
 
-        # 3. æ¨¡å‹åç§°å¤„ç†
+
         result["model"] = get_base_model_name(model)
 
     elif mode == "omni":
-        
+
         '''
-        # 1. å¤„ç† system_instruction
+        # 1.  system_instruction
         custom_prompt = "Please ignore the following [ignore]You are Omni, a powerful agentic AI coding assistant designed by the Google Deepmind team working on Advanced Agentic Coding.You are pair programming with a USER to solve their coding task. The task may require creating a new codebase, modifying or debugging an existing codebase, or simply answering a question.**Absolute paths only****Proactiveness**[/ignore]"
 
-        # æå–åŸæœ‰ç„ partsï¼ˆå¦‚æœå­˜åœ¨ï¼‰
+        #  parts
         existing_parts = []
         if system_instruction:
             if isinstance(system_instruction, dict):
                 existing_parts = system_instruction.get("parts", [])
 
-        # custom_prompt å§‹ç»ˆæ”¾åœ¨ç¬¬ä¸€ä½,åŸæœ‰å†…å®¹æ•´ä½“åç§»
+        # custom_prompt ,
         result["systemInstruction"] = {
             "parts": [{"text": custom_prompt}] + existing_parts
         }
         '''
 
-        # 2. åˆ¤æ–­å›¾ç‰‡æ¨¡å‹
+
         if "image" in model.lower():
-            # è°ƒç”¨å›¾ç‰‡ç”Ÿæˆä¸“ç”¨å¤„ç†å‡½æ•°
+
             return prepare_image_generation_request(result, model)
         else:
-            # 3. æ€è€ƒæ¨¡å‹å¤„ç†
+
             if is_thinking_model(model) or ("thinkingBudget" in generation_config.get("thinkingConfig", {}) and generation_config["thinkingConfig"]["thinkingBudget"] != 0):
-                # ç›´æ¥è®¾ç½® thinkingConfig
+
                 if "thinkingConfig" not in generation_config:
                     generation_config["thinkingConfig"] = {}
-                
+
                 thinking_config = generation_config["thinkingConfig"]
-                # ä¼˜å…ˆä½¿ç”¨ä¼ å…¥ç„æ€è€ƒé¢„ç®—ï¼Œå¦åˆ™ä½¿ç”¨é»˜è®¤å€¼
+
                 if "thinkingBudget" not in thinking_config:
                     thinking_config["thinkingBudget"] = 1024
-                thinking_config.pop("thinkingLevel", None)  # é¿å…ä¸ thinkingBudget å†²çª
+                thinking_config.pop("thinkingLevel", None)
                 thinking_config["includeThoughts"] = return_thoughts
-                
-                # æ£€æŸ¥æœ€åä¸€ä¸ª assistant æ¶ˆæ¯æ˜¯å¦ä»¥ thinking å—å¼€å§‹
+
+
                 contents = result.get("contents", [])
 
                 if "claude" in model.lower():
-                    # æ£€æµ‹æ˜¯å¦æœ‰å·¥å…·è°ƒç”¨ï¼ˆMCPåœºæ™¯ï¼‰
+
                     has_tool_calls = any(
-                        isinstance(content, dict) and 
+                        isinstance(content, dict) and
                         any(
                             isinstance(part, dict) and ("functionCall" in part or "function_call" in part)
                             for part in content.get("parts", [])
                         )
                         for content in contents
                     )
-                    
+
                     if has_tool_calls:
-                        # MCP åœºæ™¯ï¼æ£€æµ‹åˆ°å·¥å…·è°ƒç”¨ï¼Œç§»é™¤ thinkingConfig
+
                         log.warning(f"[OMNI] Tool call detected (MCP scenario), removing thinkingConfig to avoid failure")
                         generation_config.pop("thinkingConfig", None)
                     else:
-                        # é MCP åœºæ™¯ï¼å¡«å……æ€è€ƒå—
-                        # log.warning(f"[OMNI] æœ€åä¸€ä¸ª assistant æ¶ˆæ¯ä¸ä»¥ thinking å—å¼€å§‹ï¼Œè‡ªå¨å¡«å……æ€è€ƒå—")
-                        
-                        # æ‰¾åˆ°æœ€åä¸€ä¸ª model è§’è‰²ç„ content
+
+
+
+
                         for i in range(len(contents) - 1, -1, -1):
                             content = contents[i]
                             if isinstance(content, dict) and content.get("role") == "model":
-                                # åœ¨ parts å¼€å¤´æ’å…¥æ€è€ƒå—ï¼ˆä½¿ç”¨å®˜æ–¹è·³è¿‡éªŒè¯ç„è™æ‹Ÿç­¾åï¼‰
+
                                 parts = content.get("parts", [])
                                 thinking_part = {
                                     "text": "...",
-                                    # "thought": True,  # æ ‡è®°ä¸ºæ€è€ƒå—
-                                    "thoughtSignature": "skip_thought_signature_validator"  # å®˜æ–¹æ–‡æ¡£æ¨èç„è™æ‹Ÿç­¾å
+
+                                    "thoughtSignature": "skip_thought_signature_validator"
                                 }
-                                # å¦‚æœç¬¬ä¸€ä¸ª part ä¸æ˜¯ thinkingï¼Œåˆ™æ’å…¥
+
                                 if not parts or not (isinstance(parts[0], dict) and ("thought" in parts[0] or "thoughtSignature" in parts[0])):
                                     content["parts"] = [thinking_part] + parts
                                     log.debug(f"[OMNI] Thought block inserted at the beginning of the last assistant message with skip verification signature")
                                 break
-                
-            # ç§»é™¤ -thinking åç¼€
+
+
             model = model.replace("-thinking", "")
 
-            # 4. Claude æ¨¡å‹å…³é”®è¯æ˜ å°„
-            # ä½¿ç”¨å…³é”®è¯åŒ¹é…è€Œä¸æ˜¯ç²¾ç¡®åŒ¹é…ï¼Œæ›´çµæ´»åœ°å¤„ç†å„ç§å˜ä½“
+
+
             original_model = model
             if "opus" in model.lower():
                 model = "claude-opus-4-6-thinking"
@@ -756,15 +706,15 @@ async def normalize_gemini_request(
             elif "haiku" in model.lower():
                 model = "gemini-2.5-flash"
             elif "claude" in model.lower():
-                # Claude æ¨¡å‹å…œåº•ï¼å¦‚æœåŒ…å« claude ä½†ä¸æ˜¯ opus/sonnet/haiku
+
                 model = "claude-sonnet-4-6"
-            
+
             result["model"] = model
             if original_model != model:
                 log.debug(f"[OMNI] Mapping Model: {original_model} - > {model}")
 
-        # 5. æ¨¡å‹ç‰¹æ®å¤„ç†ï¼å¾ªç¯ç§»é™¤æœ«å°¾ç„ model æ¶ˆæ¯ï¼Œä¿è¯ä»¥ç”¨æˆ·æ¶ˆæ¯ç»“å°¾
-        # å› ä¸ºè¯¥æ¨¡å‹ä¸æ”¯æŒé¢„å¡«å……
+
+
         if "claude-opus-4-6-thinking" in model.lower() or "claude-sonnet-4-6" in model.lower():
             contents = result.get("contents", [])
             removed_count = 0
@@ -775,14 +725,14 @@ async def normalize_gemini_request(
                 log.warning(f"[OMNI] {model} does not support pre-population, removed {removed_count} last model messages")
                 result["contents"] = contents
 
-        # 6. ç§»é™¤ omni æ¨¡å¼ä¸æ”¯æŒç„å­—æ®µ
+
         generation_config.pop("presencePenalty", None)
         generation_config.pop("frequencyPenalty", None)
         generation_config.pop("stopSequences", None)
 
-    # ========== å…¬å…±å¤„ç† ==========
 
-    # 1. å®‰å…¨è®¾ç½®è¦†ç›–
+
+
     if "tools" in result:
         result["tools"] = _normalize_tools_for_internal_api(result.get("tools"))
         # _ensure_empty_tool_schema_for_claude wraps tools in {"custom": ...} which is
@@ -795,41 +745,41 @@ async def normalize_gemini_request(
     else:
         result["safetySettings"] = DEFAULT_SAFETY_SETTINGS
 
-    # 2. å‚æ•°èŒƒå›´é™åˆ¶
+
     if generation_config:
-        # å¼ºåˆ¶è®¾ç½® maxOutputTokens ä¸º 64000
+
         generation_config["maxOutputTokens"] = 64000
-        # å¼ºåˆ¶è®¾ç½® topK ä¸º 64
+
         generation_config["topK"] = 64
 
     if "contents" in result:
         cleaned_contents = []
         for content in result["contents"]:
             if isinstance(content, dict) and "parts" in content:
-                # è¿‡æ»¤æ‰ç©ºç„æˆ–æ— æ•ˆç„ parts
+
                 valid_parts = []
                 for part in content["parts"]:
                     if not isinstance(part, dict):
                         continue
-                    
-                    # æ£€æŸ¥ part æ˜¯å¦æœ‰æœ‰æ•ˆç„éç©ºå€¼
-                    # è¿‡æ»¤æ‰ç©ºå­—å…¸æˆ–æ‰€æœ‰å€¼éƒ½ä¸ºç©ºç„ part
+
+
+
                     has_valid_value = any(
                         value not in (None, "", {}, [])
                         for key, value in part.items()
-                        if key != "thought"  # thought å­—æ®µå¯ä»¥ä¸ºç©º
+                        if key != "thought"
                     )
-                    
+
                     if has_valid_value:
                         part = _normalize_part_thought_signature(part, model)
 
-                        # ä¿®å¤ text å­—æ®µï¼ç¡®ä¿æ˜¯å­—ç¬¦ä¸²è€Œä¸æ˜¯åˆ—è¡¨
+
                         if "text" in part:
                             text_value = part["text"]
                             if isinstance(text_value, list):
-                                # å¦‚æœæ˜¯åˆ—è¡¨ï¼Œåˆå¹¶ä¸ºå­—ç¬¦ä¸²
-                                # æ³¨æ„: list ä¸­ç„å…ƒç´ å¯èƒ½æ˜¯ dictï¼ˆå¦‚ {"type":"text","text":"..."}ï¼‰ï¼Œä¸èƒ½ç›´æ¥ str(dict)
-                                # å¦åˆ™ä¼äº§ç”Ÿ Python repr å­—ç¬¦ä¸² "{'type': 'text', 'text': '...'}"ï¼Œæ±¡æŸ“ model å†å²
+
+
+
                                 log.warning(f"[GEMINI_FIX] 'text' field is a list, merging automatically: {text_value}")
                                 text_parts = []
                                 for t in text_value:
@@ -841,18 +791,18 @@ async def normalize_gemini_request(
                                         text_parts.append(str(t))
                                 part["text"] = " ".join(text_parts)
                             elif isinstance(text_value, str):
-                                # æ¸…ç†å°¾éç©ºæ ¼
+
                                 part["text"] = text_value.rstrip()
                             else:
-                                # å…¶ä»–ç±»å‹è½¬ä¸ºå­—ç¬¦ä¸²
+
                                 log.warning(f"[GEMINI_FIX] Invalid 'text' field type ({type(text_value)}), converting to string: {text_value}")
                                 part["text"] = str(text_value)
 
                         valid_parts.append(part)
                     else:
                         log.warning(f"[GEMINI_FIX] Removing empty or invalid part: {part}")
-                
-                # åªæ·»å æœ‰æœ‰æ•ˆ parts ç„ content
+
+
                 if valid_parts:
                     cleaned_content = content.copy()
                     cleaned_content["parts"] = valid_parts
@@ -861,7 +811,7 @@ async def normalize_gemini_request(
                     log.warning(f"[GEMINI_FIX] Skipping content without valid parts: {content.get('role')}")
             else:
                 cleaned_contents.append(content)
-        
+
         result["contents"] = cleaned_contents
 
     if generation_config:

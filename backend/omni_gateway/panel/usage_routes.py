@@ -1,4 +1,4 @@
-﻿from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 import time
@@ -26,7 +26,7 @@ async def get_aggregated_stats(token: str = Depends(verify_panel_token)):
         total_calls = sum(item["calls_24h"] for item in data_24h.values())
         total_files = await get_total_files_count()
         avg_calls = total_calls / total_files if total_files > 0 else 0.0
-        
+
         return {
             "success": True,
             "data": {

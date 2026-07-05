@@ -1,15 +1,11 @@
-﻿from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional, Union
 
 from pydantic import BaseModel, Field
 
 
-# Pydantic v1/v2 å…¼å®¹æ€§è¾…å©å‡½æ•°
+
 def model_to_dict(model: BaseModel) -> Dict[str, Any]:
-    """
-    å…¼å®¹ Pydantic v1 å’Œ v2 ç„æ¨¡å‹è½¬å­—å…¸æ–¹æ³•ï¼Œæ’é™¤ None å€¼
-    - v1: model.dict(exclude_none=True)
-    - v2: model.model_dump(exclude_none=True)
-    """
+    """Internal implementation detail."""
     if hasattr(model, 'model_dump'):
         # Pydantic v2
         return model.model_dump(exclude_none=True)
@@ -78,7 +74,7 @@ class OpenAIChatCompletionRequest(BaseModel):
         extra = "allow"  # Allow additional fields not explicitly defined
 
 
-# é€ç”¨ç„èå¤©å®Œæˆè¯·æ±‚æ¨¡å‹ï¼ˆå…¼å®¹OpenAIå’Œå…¶ä»–æ ¼å¼ï¼‰
+
 ChatCompletionRequest = OpenAIChatCompletionRequest
 
 
@@ -126,10 +122,10 @@ class GeminiPart(BaseModel):
     text: Optional[str] = None
     inlineData: Optional[Dict[str, Any]] = None
     fileData: Optional[Dict[str, Any]] = None
-    thought: Optional[bool] = None  # æ”¹ä¸º Noneï¼Œé¿å…åºåˆ—åŒ–æ—¶åŒ…å« False
-    
+    thought: Optional[bool] = None
+
     class Config:
-        extra = "allow"  # å…è®¸é¢å¤–å­—æ®µï¼ˆå¦‚ functionCall, functionResponseï¼‰
+        extra = "allow"
 
 
 class GeminiContent(BaseModel):
@@ -142,7 +138,7 @@ class GeminiSystemInstruction(BaseModel):
 
 
 class GeminiImageConfig(BaseModel):
-    """å›¾ç‰‡ç”Ÿæˆé…ç½®"""
+    """Internal implementation detail."""
     aspect_ratio: Optional[str] = None  # "1:1", "2:3", "3:2", "3:4", "4:3", "4:5", "5:4", "9:16", "16:9", "21:9"
     image_size: Optional[str] = None  # "1K", "2K", "4K"
 
@@ -160,7 +156,7 @@ class GeminiGenerationConfig(BaseModel):
     frequencyPenalty: Optional[float] = Field(None, ge=-2.0, le=2.0)
     presencePenalty: Optional[float] = Field(None, ge=-2.0, le=2.0)
     thinkingConfig: Optional[Dict[str, Any]] = None
-    # å›¾ç‰‡ç”Ÿæˆç›¸å…³å‚æ•°
+
     response_modalities: Optional[List[str]] = None  # ["TEXT", "IMAGE"]
     image_config: Optional[GeminiImageConfig] = None
 
@@ -180,7 +176,7 @@ class GeminiRequest(BaseModel):
     cachedContent: Optional[str] = None
 
     class Config:
-        extra = "allow"  # å…è®¸é€ä¼ æœªå®ä¹‰ç„å­—æ®µ
+        extra = "allow"
 
 
 class GeminiCandidate(BaseModel):
@@ -354,19 +350,19 @@ class LoginRequest(BaseModel):
 
 
 class AuthStartRequest(BaseModel):
-    project_id: Optional[str] = None  # ç°åœ¨æ˜¯å¯é€‰ç„
-    mode: Optional[str] = "code_assist"  # å‡­è¯æ¨¡å¼: code_assist æˆ– omni
+    project_id: Optional[str] = None
+    mode: Optional[str] = "code_assist"
 
 
 class AuthCallbackRequest(BaseModel):
-    project_id: Optional[str] = None  # ç°åœ¨æ˜¯å¯é€‰ç„
-    mode: Optional[str] = "code_assist"  # å‡­è¯æ¨¡å¼: code_assist æˆ– omni
+    project_id: Optional[str] = None
+    mode: Optional[str] = "code_assist"
 
 
 class AuthCallbackUrlRequest(BaseModel):
-    callback_url: str  # OAuthå›è°ƒå®Œæ•´URL
-    project_id: Optional[str] = None  # å¯é€‰ç„é¡¹ç›®ID
-    mode: Optional[str] = "code_assist"  # å‡­è¯æ¨¡å¼: code_assist æˆ– omni
+    callback_url: str
+    project_id: Optional[str] = None
+    mode: Optional[str] = "code_assist"
 
 
 class CredFileActionRequest(BaseModel):
@@ -376,7 +372,7 @@ class CredFileActionRequest(BaseModel):
 
 class CredFileBatchActionRequest(BaseModel):
     action: str  # "enable", "disable", "delete"
-    filenames: List[str]  # æ‰¹é‡æ“ä½œç„æ–‡ä»¶ååˆ—è¡¨
+    filenames: List[str]
 
 
 class ConfigSaveRequest(BaseModel):

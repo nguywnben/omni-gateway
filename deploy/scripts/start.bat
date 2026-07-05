@@ -1,7 +1,24 @@
-git fetch --all
-for /f "delims=" %%b in ('git rev-parse --abbrev-ref HEAD') do set branch=%%b
-git reset --hard origin/%branch%
+@echo off
+setlocal
+
+set "SCRIPT_DIR=%~dp0"
+for %%I in ("%SCRIPT_DIR%..\..") do set "REPO_ROOT=%%~fI"
+cd /d "%REPO_ROOT%"
+
+where uv >nul 2>nul
+if errorlevel 1 (
+    echo [ERROR] uv is required. Install it from https://docs.astral.sh/uv/ and run this script again.
+    exit /b 1
+)
+
+if not exist ".venv\Scripts\python.exe" (
+    echo [INFO] Creating virtual environment...
+    uv venv
+)
+
+echo [INFO] Installing Python dependencies...
 uv pip install -r requirements.txt
-call .venv\Scripts\activate.bat
-python backend/main.py
-pause
+if errorlevel 1 exit /b 1
+
+echo [INFO] Starting Omni Gateway...
+".venv\Scripts\python.exe" backend\main.py

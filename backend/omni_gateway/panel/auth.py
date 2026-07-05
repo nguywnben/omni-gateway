@@ -1,6 +1,4 @@
-﻿"""
-è®¤è¯è·¯ç”±æ¨¡å— - å¤„ç† /ogw/auth/* ç›¸å…³ç„HTTPè¯·æ±‚
-"""
+"""Internal implementation detail."""
 
 import base64
 import binascii
@@ -29,7 +27,7 @@ from omni_gateway.models import (
 from omni_gateway.utils import verify_panel_token
 
 
-# åˆ›å»ºè·¯ç”±å™¨
+
 router = APIRouter(prefix="/ogw/auth", tags=["auth"])
 
 ENV_CREDENTIAL_SOURCE = "environment"
@@ -197,7 +195,7 @@ def _build_env_status() -> Dict[str, Any]:
 
 @router.post("/login")
 async def login(request: LoginRequest):
-    """ç”¨æˆ·ç™»å½•ï¼ˆç®€åŒ–ç‰ˆï¼ç›´æ¥è¿”å›å¯†ç ä½œä¸ºtokenï¼‰"""
+    """Internal implementation detail."""
     try:
         if await verify_password(request.password):
             # Directly use password as token, simplifying auth flow
@@ -213,14 +211,14 @@ async def login(request: LoginRequest):
 
 @router.post("/start")
 async def start_auth(request: AuthStartRequest, token: str = Depends(verify_panel_token)):
-    """å¼€å§‹è®¤è¯æµç¨‹ï¼Œæ”¯æŒè‡ªå¨æ£€æµ‹é¡¹ç›®ID"""
+    """Internal implementation detail."""
     try:
-        # å¦‚æœæ²¡æœ‰æä¾›é¡¹ç›®IDï¼Œå°è¯•è‡ªå¨æ£€æµ‹
+
         project_id = request.project_id
         if not project_id:
             log.info("User did not provide a project ID; auto-detection will be used hereafter...")
 
-        # ä½¿ç”¨è®¤è¯ä»¤ç‰Œä½œä¸ºç”¨æˆ·ä¼è¯æ ‡è¯†
+
         user_session = token if token else None
         result = await create_auth_url(
             project_id, user_session, mode=request.mode
@@ -236,7 +234,9 @@ async def start_auth(request: AuthStartRequest, token: str = Depends(verify_pane
                 }
             )
         else:
-            raise HTTPException(status_code=500, detail=result["error"])
+            error_message = result.get("error", "Unable to start authentication flow")
+            status_code = 400 if "Missing OAuth client configuration" in error_message else 500
+            raise HTTPException(status_code=status_code, detail=error_message)
 
     except HTTPException:
         raise
@@ -247,20 +247,20 @@ async def start_auth(request: AuthStartRequest, token: str = Depends(verify_pane
 
 @router.post("/callback")
 async def auth_callback(request: AuthCallbackRequest, token: str = Depends(verify_panel_token)):
-    """å¤„ç†è®¤è¯å›è°ƒï¼Œæ”¯æŒè‡ªå¨æ£€æµ‹é¡¹ç›®ID"""
+    """Internal implementation detail."""
     try:
-        # é¡¹ç›®IDç°åœ¨æ˜¯å¯é€‰ç„ï¼Œåœ¨å›è°ƒå¤„ç†ä¸­è¿›è¡Œè‡ªå¨æ£€æµ‹
+
         project_id = request.project_id
 
-        # ä½¿ç”¨è®¤è¯ä»¤ç‰Œä½œä¸ºç”¨æˆ·ä¼è¯æ ‡è¯†
+
         user_session = token if token else None
-        # å¼‚æ­¥ç­‰å¾…OAuthå›è°ƒå®Œæˆ
+
         result = await asyncio_complete_auth_flow(
             project_id, user_session, mode=request.mode
         )
 
         if result["success"]:
-            # å•é¡¹ç›®è®¤è¯æˆåŸ
+
             return JSONResponse(
                 content={
                     "credentials": result["credentials"],
@@ -270,15 +270,15 @@ async def auth_callback(request: AuthCallbackRequest, token: str = Depends(verif
                 }
             )
         else:
-            # å¦‚æœéœ€è¦æ‰‹å¨é¡¹ç›®IDæˆ–é¡¹ç›®é€‰æ‹©ï¼Œåœ¨å“åº”ä¸­æ ‡æ˜
+
             if result.get("requires_manual_project_id"):
-                # ä½¿ç”¨JSONå“åº”
+
                 return JSONResponse(
                     status_code=400,
                     content={"error": result["error"], "requires_manual_project_id": True},
                 )
             elif result.get("requires_project_selection"):
-                # è¿”å›é¡¹ç›®åˆ—è¡¨ä¾›ç”¨æˆ·é€‰æ‹©
+
                 return JSONResponse(
                     status_code=400,
                     content={
@@ -299,19 +299,19 @@ async def auth_callback(request: AuthCallbackRequest, token: str = Depends(verif
 
 @router.post("/callback-url")
 async def auth_callback_url(request: AuthCallbackUrlRequest, token: str = Depends(verify_panel_token)):
-    """ä»å›è°ƒURLç›´æ¥å®Œæˆè®¤è¯"""
+    """Internal implementation detail."""
     try:
-        # éªŒè¯URLæ ¼å¼
+
         if not request.callback_url or not request.callback_url.startswith(("http://", "https://")):
             raise HTTPException(status_code=400, detail="Please provide a valid callback URL")
 
-        # ä»å›è°ƒURLå®Œæˆè®¤è¯
+
         result = await complete_auth_flow_from_callback_url(
             request.callback_url, request.project_id, mode=request.mode
         )
 
         if result["success"]:
-            # å•é¡¹ç›®è®¤è¯æˆåŸ
+
             return JSONResponse(
                 content={
                     "credentials": result["credentials"],
@@ -321,7 +321,7 @@ async def auth_callback_url(request: AuthCallbackUrlRequest, token: str = Depend
                 }
             )
         else:
-            # å¤„ç†å„ç§é”™è¯¯æƒ…å†µ
+
             if result.get("requires_manual_project_id"):
                 return JSONResponse(
                     status_code=400,
@@ -348,7 +348,7 @@ async def auth_callback_url(request: AuthCallbackUrlRequest, token: str = Depend
 
 @router.get("/status/{project_id}")
 async def check_auth_status(project_id: str, token: str = Depends(verify_panel_token)):
-    """æ£€æŸ¥è®¤è¯ç¶æ€"""
+    """Internal implementation detail."""
     try:
         if not project_id:
             raise HTTPException(status_code=400, detail="Project ID cannot be empty")
@@ -363,7 +363,7 @@ async def check_auth_status(project_id: str, token: str = Depends(verify_panel_t
 
 @router.get("/keys")
 async def get_api_keys(token: str = Depends(verify_panel_token)):
-    """è·å– API Key"""
+    """Internal implementation detail."""
     try:
         from config import get_api_key
         api_key = await get_api_key()
@@ -378,17 +378,17 @@ async def get_api_keys(token: str = Depends(verify_panel_token)):
 
 @router.post("/keys/reset")
 async def reset_api_key(token: str = Depends(verify_panel_token)):
-    """é‡ç½®/é‡æ–°ç”Ÿæˆ API Key"""
+    """Internal implementation detail."""
     try:
         import secrets
         from omni_gateway.storage_adapter import get_storage_adapter
         from config import _config_cache
         storage_adapter = await get_storage_adapter()
-        
+
         new_key = f"sk-ogw-{secrets.token_hex(20)}"
         await storage_adapter.set_config("ogw_api_key", new_key)
         _config_cache["ogw_api_key"] = new_key
-        
+
         return JSONResponse(content={
             "success": True,
             "ogw_api_key": new_key

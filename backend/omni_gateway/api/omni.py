@@ -1,7 +1,4 @@
-﻿"""
-Omni API Client - Handles communication with Google's Omni API
-å¤„ç†ä¸ Google Omni API ç„é€ä¿¡
-"""
+"""Internal implementation detail."""
 
 import asyncio
 import hashlib
@@ -26,7 +23,7 @@ from omni_gateway.httpx_client import stream_post_async, post_async
 from omni_gateway.models import Model, model_to_dict
 from omni_gateway.utils import OGW_USER_AGENT
 
-# å¯¼å…¥å…±åŒç„åŸºç¡€åŸèƒ½
+
 from omni_gateway.api.utils import (
     handle_error_with_retry,
     get_retry_config,
@@ -36,12 +33,12 @@ from omni_gateway.api.utils import (
     collect_streaming_response,
 )
 
-# ==================== å…¨å±€å‡­è¯ç®¡ç†å™¨ ====================
-
-# ä½¿ç”¨å…¨å±€å•ä¾‹ credential_managerï¼Œè‡ªå¨åˆå§‹åŒ–
 
 
-# ==================== ä¼è¯ç¶æ€ç®¡ç† ====================
+
+
+
+
 
 SESSION_TTL_SECONDS = 6 * 60 * 60
 MAX_SESSION_STATES = 1024
@@ -58,16 +55,16 @@ class OmniSessionState:
     last_used_at: float
 
 
-# å†…å­˜å›é€€å­˜å‚¨
+
 _session_states: Dict[str, OmniSessionState] = {}
 
-# Redis å®¢æˆ·ç«¯ï¼ˆæ‡’åˆå§‹åŒ–ï¼ŒOGW_REDIS_URL å­˜åœ¨æ—¶ä½¿ç”¨ï¼‰
+
 _redis_client = None
 _redis_checked = False
 
 
 async def _get_redis():
-    """æ‡’åˆå§‹åŒ– Redis å®¢æˆ·ç«¯ï¼ŒOGW_REDIS_URL æœªè®¾ç½®æ—¶è¿”å› Noneă€‚"""
+    """Internal implementation detail."""
     global _redis_client, _redis_checked
     if _redis_checked:
         return _redis_client
@@ -165,7 +162,7 @@ async def _get_session_state(request_payload: Dict[str, Any], model: str = "") -
         except Exception as e:
             log.warning(f"[SESSION] Redis error, falling back to memory: {e}")
 
-    # å†…å­˜å›é€€
+
     _prune_session_states(now)
     state = _session_states.get(key)
     if state:
@@ -198,26 +195,23 @@ async def wrap_cli_request(
     model: str,
     project_id: str,
 ) -> Tuple[Dict[str, Any], str]:
-    """
-    å°† Gemini æ ¼å¼è¯·æ±‚åŒ…è£…æˆ Omni CLI æ ¼å¼ă€‚
-    è¿”å› (payload, request_id)ă€‚
-    """
+    """Internal implementation detail."""
     inner = dict(gemini_request)
 
-    # ç§»é™¤ safetySettingsï¼ˆCLI ä¸å‘é€ï¼‰
+
     inner.pop("safetySettings", None)
 
-    # è·å–/æ›´æ–°ä¼è¯ç¶æ€
+
     state = await _get_session_state(inner, model)
 
-    # æ³¨å…¥ sessionId
+
     if not inner.get("sessionId"):
         inner["sessionId"] = state.session_id
 
-    # æ³¨å…¥ labels
+
     inner["labels"] = _build_labels(model, state.trajectory_id, state.step_index)
 
-    # toolConfig é»˜è®¤ VALIDATED
+
     tool_config = inner.get("toolConfig") or {}
     func_config = tool_config.get("functionCallingConfig") or {}
     if "mode" not in func_config:
@@ -239,10 +233,10 @@ async def wrap_cli_request(
     return payload, request_id
 
 
-# ==================== è¾…å©å‡½æ•° ====================
+
 
 def build_omni_headers(access_token: str) -> Dict[str, str]:
-    """æ„å»º Omni CLI API è¯·æ±‚å¤´ă€‚"""
+    """Internal implementation detail."""
     return {
         "User-Agent": OGW_USER_AGENT,
         "Authorization": f"Bearer {access_token}",
@@ -252,7 +246,7 @@ def build_omni_headers(access_token: str) -> Dict[str, str]:
 
 
 def _is_retryable_status(status_code: int, disable_error_codes: List[int]) -> bool:
-    """ç»Ÿä¸€åˆ¤æ–­æ˜¯å¦å±äºå¯é‡è¯•ç¶æ€ç ă€‚"""
+    """Internal implementation detail."""
     return status_code in (429, 503) or status_code in disable_error_codes
 
 
@@ -264,7 +258,7 @@ async def _switch_credential_for_retry(
     apply_cred_result: Callable[[Tuple[str, Dict[str, Any]]], bool],
     log_prefix: str,
 ) -> Tuple[bool, Optional[asyncio.Task]]:
-    """ä¼˜å…ˆä½¿ç”¨é¢„çƒ­å‡­è¯ï¼Œå¤±è´¥åé€€å›åŒæ­¥åˆ·æ–°ă€‚"""
+    """Internal implementation detail."""
     if next_cred_task is not None:
         try:
             cred_result = await next_cred_task
@@ -283,33 +277,23 @@ async def _switch_credential_for_retry(
     return False, next_cred_task
 
 
-# ==================== æ–°ç„æµå¼å’Œéæµå¼è¯·æ±‚å‡½æ•° ====================
+
 
 async def stream_request(
     body: Dict[str, Any],
     native: bool = False,
     headers: Optional[Dict[str, str]] = None,
 ):
-    """
-    æµå¼è¯·æ±‚å‡½æ•°
-
-    Args:
-        body: è¯·æ±‚ä½“
-        native: æ˜¯å¦è¿”å›åŸç”Ÿbytesæµï¼ŒFalseåˆ™è¿”å›stræµ
-        headers: é¢å¤–ç„è¯·æ±‚å¤´
-
-    Yields:
-        Responseå¯¹è±¡ï¼ˆé”™è¯¯æ—¶ï¼‰æˆ– bytesæµ/stræµï¼ˆæˆåŸæ—¶ï¼‰
-    """
+    """Internal implementation detail."""
     model_name = body.get("model", "")
 
-    # 1. è·å–æœ‰æ•ˆå‡­è¯
+
     cred_result = await credential_manager.get_valid_credential(
         mode="omni", model_name=model_name
     )
 
     if not cred_result:
-        # å¦‚æœè¿”å›å€¼æ˜¯Noneï¼Œç›´æ¥è¿”å›é”™è¯¯500
+
         log.error("[OMNI stream] No credentials currently available")
         yield Response(
             content=json.dumps({"error": "No credentials available"}),
@@ -331,30 +315,30 @@ async def stream_request(
         )
         return
 
-    # 2. æ„å»ºURLå’Œè¯·æ±‚å¤´
+
     omni_url = await get_ogw_api_url()
     target_url = f"{omni_url}/v1internal:streamGenerateContent?alt=sse"
 
     auth_headers = build_omni_headers(access_token)
 
-    # åˆå¹¶è‡ªå®ä¹‰headers
+
     if headers:
         auth_headers.update(headers)
 
-    # æ„å»º CLI æ ¼å¼è¯·æ±‚ä½“
+
     inner_request = body.get("request", body)
     final_payload, _ = await wrap_cli_request(inner_request, model_name, project_id)
 
-    # 3. è°ƒç”¨stream_post_asyncè¿›è¡Œè¯·æ±‚
+
     retry_config = await get_retry_config()
     max_retries = retry_config["max_retries"]
     retry_interval = retry_config["retry_interval"]
 
-    DISABLE_ERROR_CODES = await get_auto_disable_error_codes()  # ç¦ç”¨å‡­è¯ç„é”™è¯¯ç 
-    last_error_response = None  # è®°å½•æœ€åä¸€æ¬¡ç„é”™è¯¯å“åº”
-    next_cred_task = None  # é¢„çƒ­ç„ä¸‹ä¸€ä¸ªå‡­è¯ä»»å¡
+    DISABLE_ERROR_CODES = await get_auto_disable_error_codes()
+    last_error_response = None
+    next_cred_task = None
 
-    # å†…éƒ¨å‡½æ•°ï¼å¿«é€Ÿæ›´æ–°å‡­è¯(åªæ›´æ–°tokenå’Œproject_id,é¿å…é‡å»ºæ•´ä¸ªè¯·æ±‚)
+
     async def refresh_credential_fast():
         nonlocal current_file, access_token, auth_headers, project_id, final_payload
         cred_result = await credential_manager.get_valid_credential(
@@ -367,7 +351,7 @@ async def stream_request(
         project_id = credential_data.get("project_id", "")
         if not access_token:
             return None
-        # åªæ›´æ–°tokenå’Œproject_id,ä¸é‡å»ºæ•´ä¸ªheaderså’Œpayload
+
         auth_headers["Authorization"] = f"Bearer {access_token}"
         final_payload["project"] = project_id
         return True
@@ -384,8 +368,8 @@ async def stream_request(
         return True
 
     for attempt in range(max_retries + 1):
-        success_recorded = False  # æ ‡è®°æ˜¯å¦å·²è®°å½•æˆåŸ
-        need_retry = False  # æ ‡è®°æ˜¯å¦éœ€è¦é‡è¯•
+        success_recorded = False
+        need_retry = False
 
         try:
             async for chunk in stream_post_async(
@@ -394,23 +378,23 @@ async def stream_request(
                 native=native,
                 headers=auth_headers
             ):
-                # åˆ¤æ–­æ˜¯å¦æ˜¯Responseå¯¹è±¡
+
                 if isinstance(chunk, Response):
                     status_code = chunk.status_code
-                    last_error_response = chunk  # è®°å½•æœ€åä¸€æ¬¡é”™è¯¯
+                    last_error_response = chunk
 
-                    # ç¼“å­˜é”™è¯¯è§£æç»“æœ,é¿å…é‡å¤decode
+
                     error_body = None
                     try:
                         error_body = chunk.body.decode('utf-8') if isinstance(chunk.body, bytes) else str(chunk.body)
                     except Exception:
                         error_body = ""
 
-                    # å¦‚æœé”™è¯¯ç æ˜¯429ă€503æˆ–è€…åœ¨ç¦ç”¨ç å½“ä¸­ï¼Œåå¥½è®°å½•åè¿›è¡Œé‡è¯•
+
                     if _is_retryable_status(status_code, DISABLE_ERROR_CODES):
                         log.warning(f"[OMNI stream] streaming request failed (status = {status_code}), credentials: {current_file}, response: {error_body[:500] if error_body else 'None'}")
 
-                        # è§£æå†·å´æ—¶é—´
+
                         cooldown_until = None
                         if (status_code == 429 or status_code == 503) and error_body:
                             try:
@@ -418,7 +402,7 @@ async def stream_request(
                             except Exception:
                                 pass
 
-                        # é¢„çƒ­ä¸‹ä¸€ä¸ªå‡­è¯
+
                         if next_cred_task is None and attempt < max_retries:
                             next_cred_task = asyncio.create_task(
                                 credential_manager.get_valid_credential(
@@ -426,14 +410,14 @@ async def stream_request(
                                 )
                             )
 
-                        # è®°å½•é”™è¯¯å¹¶åˆ‡æ¢å‡­è¯
+
                         await record_api_call_error(
                             credential_manager, current_file, status_code,
                             cooldown_until, mode="omni", model_name=model_name,
                             error_message=error_body
                         )
 
-                        # æ£€æŸ¥æ˜¯å¦åº”è¯¥é‡è¯•
+
                         should_retry = await handle_error_with_retry(
                             credential_manager, status_code, current_file,
                             retry_config["retry_enabled"], attempt, max_retries, retry_interval,
@@ -442,14 +426,14 @@ async def stream_request(
 
                         if should_retry and attempt < max_retries:
                             need_retry = True
-                            break  # è·³å‡ºå†…å±‚å¾ªç¯ï¼Œå‡†å¤‡é‡è¯•
+                            break
                         else:
-                            # ä¸é‡è¯•ï¼Œç›´æ¥è¿”å›åŸå§‹é”™è¯¯
+
                             log.error(f"[OMNI stream] Maximum number of retries reached or should not be retried, returning original error")
                             yield chunk
                             return
                     else:
-                        # é”™è¯¯ç ä¸åœ¨ç¦ç”¨ç å½“ä¸­ï¼Œç›´æ¥è¿”å›ï¼Œæ— éœ€é‡è¯•
+
                         log.error(f"[OMNI stream] streaming request failed, non-retry error code (status = {status_code}), credentials: {current_file}, response: {error_body[:500] if error_body else 'None'}")
                         await record_api_call_error(
                             credential_manager, current_file, status_code,
@@ -459,8 +443,8 @@ async def stream_request(
                         yield chunk
                         return
                 else:
-                    # ä¸æ˜¯Responseï¼Œè¯´æ˜æ˜¯çœŸæµï¼Œç›´æ¥yieldè¿”å›
-                    # åªåœ¨ç¬¬ä¸€ä¸ªchunkæ—¶è®°å½•æˆåŸ
+
+
                     if not success_recorded:
                         await record_api_call_success(
                             credential_manager, current_file, mode="omni", model_name=model_name
@@ -468,7 +452,7 @@ async def stream_request(
                         success_recorded = True
                         log.debug(f"[OMNI stream] started receiving streaming responses, model: {model_name}")
 
-                    # è®°å½•åŸå§‹chunkå†…å®¹ï¼ˆç”¨äºè°ƒè¯•ï¼‰
+
                     if isinstance(chunk, bytes):
                         log.debug(f"[OMNI STREAM RAW] chunk(bytes): {chunk}")
                     else:
@@ -476,19 +460,19 @@ async def stream_request(
 
                     yield chunk
 
-            # æµå¼è¯·æ±‚å®Œæˆï¼Œæ£€æŸ¥ç»“æœ
+
             if success_recorded:
                 log.debug(f"[OMNI stream] Streaming response completed, model: {model_name}")
                 return
             elif not need_retry:
-                # æ²¡æœ‰æ”¶åˆ°ä»»ä½•æ•°æ®ï¼ˆç©ºå›å¤ï¼‰ï¼Œéœ€è¦é‡è¯•
+
                 log.warning(f"[OMNI stream] received an empty reply with no content, voucher: {current_file}")
                 await record_api_call_error(
                     credential_manager, current_file, 200,
                     None, mode="omni", model_name=model_name,
                     error_message="Empty response from API"
                 )
-                
+
                 if attempt < max_retries:
                     need_retry = True
                 else:
@@ -499,8 +483,8 @@ async def stream_request(
                         media_type="application/json"
                     )
                     return
-            
-            # ç»Ÿä¸€å¤„ç†é‡è¯•
+
+
             if need_retry:
                 log.info(f"[OMNI stream] retry request (attempt {attempt + 2}/{max_retries + 1})...")
 
@@ -519,7 +503,7 @@ async def stream_request(
                         media_type="application/json"
                     )
                     return
-                continue  # é‡è¯•
+                continue
 
         except Exception as e:
             log.error(f"[OMNI stream] Streaming Request Exception: {e}, Credentials: {current_file}")
@@ -528,12 +512,12 @@ async def stream_request(
                 await asyncio.sleep(retry_interval)
                 continue
             else:
-                # æ‰€æœ‰é‡è¯•éƒ½å¤±è´¥ï¼Œè¿”å›æœ€åä¸€æ¬¡ç„é”™è¯¯ï¼ˆå¦‚æœæœ‰ï¼‰
+
                 log.error(f"[OMNI stream] All retries failed with last exception: {e}")
                 if last_error_response:
                     yield last_error_response
                 else:
-                    # å¦‚æœæ²¡æœ‰è®°å½•åˆ°é”™è¯¯å“åº”ï¼Œè¿”å›500é”™è¯¯
+
                     yield Response(
                         content=json.dumps({"error": f"Streaming request exception: {str(e)}"}),
                         status_code=500,
@@ -541,7 +525,7 @@ async def stream_request(
                     )
                 return
 
-    # æ‰€æœ‰é‡è¯•å‡å·²è€—å°½ï¼ˆforå¾ªç¯æ­£å¸¸ç»“æŸï¼‰ï¼Œè¿”å›æœ€åè®°å½•ç„é”™è¯¯
+
     log.error("[OMNI stream] All retries failed")
     if last_error_response:
         yield last_error_response
@@ -557,40 +541,31 @@ async def non_stream_request(
     body: Dict[str, Any],
     headers: Optional[Dict[str, str]] = None,
 ) -> Response:
-    """
-    éæµå¼è¯·æ±‚å‡½æ•°
+    """Internal implementation detail."""
 
-    Args:
-        body: è¯·æ±‚ä½“
-        headers: é¢å¤–ç„è¯·æ±‚å¤´
-
-    Returns:
-        Responseå¯¹è±¡
-    """
-    # æ£€æŸ¥æ˜¯å¦å¯ç”¨æµå¼æ”¶é›†æ¨¡å¼
     if await get_ogw_stream_to_nonstream():
         log.debug("[OMNI] Streaming collection mode for non-streaming requests")
 
-        # è°ƒç”¨stream_requestè·å–æµ
+
         stream = stream_request(body=body, native=False, headers=headers)
 
-        # æ”¶é›†æµå¼å“åº”
-        # stream_requestæ˜¯ä¸€ä¸ªå¼‚æ­¥ç”Ÿæˆå™¨ï¼Œå¯èƒ½yield Responseï¼ˆé”™è¯¯ï¼‰æˆ–æµæ•°æ®
-        # collect_streaming_responseä¼è‡ªå¨å¤„ç†è¿™ä¸¤ç§æƒ…å†µ
+
+
+
         return await collect_streaming_response(stream)
 
-    # å¦åˆ™ä½¿ç”¨ä¼ ç»Ÿéæµå¼æ¨¡å¼
+
     log.debug("[OMNI] Direct non-streaming mode enabled")
 
     model_name = body.get("model", "")
 
-    # 1. è·å–æœ‰æ•ˆå‡­è¯
+
     cred_result = await credential_manager.get_valid_credential(
         mode="omni", model_name=model_name
     )
 
     if not cred_result:
-        # å¦‚æœè¿”å›å€¼æ˜¯Noneï¼Œç›´æ¥è¿”å›é”™è¯¯500
+
         log.error("[OMNI] No credentials currently available")
         return Response(
             content=json.dumps({"error": "No credentials available"}),
@@ -610,30 +585,30 @@ async def non_stream_request(
             media_type="application/json"
         )
 
-    # 2. æ„å»ºURLå’Œè¯·æ±‚å¤´
+
     omni_url = await get_ogw_api_url()
     target_url = f"{omni_url}/v1internal:generateContent"
 
     auth_headers = build_omni_headers(access_token)
 
-    # åˆå¹¶è‡ªå®ä¹‰headers
+
     if headers:
         auth_headers.update(headers)
 
-    # æ„å»º CLI æ ¼å¼è¯·æ±‚ä½“
+
     inner_request = body.get("request", body)
     final_payload, _ = await wrap_cli_request(inner_request, model_name, project_id)
 
-    # 3. è°ƒç”¨post_asyncè¿›è¡Œè¯·æ±‚
+
     retry_config = await get_retry_config()
     max_retries = retry_config["max_retries"]
     retry_interval = retry_config["retry_interval"]
 
-    DISABLE_ERROR_CODES = await get_auto_disable_error_codes()  # ç¦ç”¨å‡­è¯ç„é”™è¯¯ç 
-    last_error_response = None  # è®°å½•æœ€åä¸€æ¬¡ç„é”™è¯¯å“åº”
-    next_cred_task = None  # é¢„çƒ­ç„ä¸‹ä¸€ä¸ªå‡­è¯ä»»å¡
+    DISABLE_ERROR_CODES = await get_auto_disable_error_codes()
+    last_error_response = None
+    next_cred_task = None
 
-    # å†…éƒ¨å‡½æ•°ï¼å¿«é€Ÿæ›´æ–°å‡­è¯(åªæ›´æ–°tokenå’Œproject_id,é¿å…é‡å»ºæ•´ä¸ªè¯·æ±‚)
+
     async def refresh_credential_fast():
         nonlocal current_file, access_token, auth_headers, project_id, final_payload
         cred_result = await credential_manager.get_valid_credential(
@@ -646,7 +621,7 @@ async def non_stream_request(
         project_id = credential_data.get("project_id", "")
         if not access_token:
             return None
-        # åªæ›´æ–°tokenå’Œproject_id,ä¸é‡å»ºæ•´ä¸ªheaderså’Œpayload
+
         auth_headers["Authorization"] = f"Bearer {access_token}"
         final_payload["project"] = project_id
         return True
@@ -663,8 +638,8 @@ async def non_stream_request(
         return True
 
     for attempt in range(max_retries + 1):
-        need_retry = False  # æ ‡è®°æ˜¯å¦éœ€è¦é‡è¯•
-        
+        need_retry = False
+
         try:
             response = await post_async(
                 url=target_url,
@@ -675,19 +650,19 @@ async def non_stream_request(
 
             status_code = response.status_code
 
-            # æˆåŸ
+
             if status_code == 200:
-                # æ£€æŸ¥æ˜¯å¦ä¸ºç©ºå›å¤
+
                 if not response.content or len(response.content) == 0:
                     log.warning(f"[OMNI] Received 200 response but the content is empty, voucher: {current_file}")
-                    
-                    # è®°å½•é”™è¯¯
+
+
                     await record_api_call_error(
                         credential_manager, current_file, 200,
                         None, mode="omni", model_name=model_name,
                         error_message="Empty response from API"
                     )
-                    
+
                     if attempt < max_retries:
                         need_retry = True
                     else:
@@ -698,7 +673,7 @@ async def non_stream_request(
                             media_type="application/json"
                         )
                 else:
-                    # æ­£å¸¸å“åº”
+
                     await record_api_call_success(
                         credential_manager, current_file, mode="omni", model_name=model_name
                     )
@@ -708,7 +683,7 @@ async def non_stream_request(
                         headers=dict(response.headers)
                     )
 
-            # å¤±è´¥ - è®°å½•æœ€åä¸€æ¬¡é”™è¯¯
+
             if status_code != 200:
                 last_error_response = Response(
                     content=response.content,
@@ -716,8 +691,8 @@ async def non_stream_request(
                     headers=dict(response.headers)
                 )
 
-                # åˆ¤æ–­æ˜¯å¦éœ€è¦é‡è¯•
-                # ç¼“å­˜é”™è¯¯æ–‡æœ¬,é¿å…é‡å¤è§£æ
+
+
                 error_text = ""
                 try:
                     error_text = response.text
@@ -727,7 +702,7 @@ async def non_stream_request(
                 if _is_retryable_status(status_code, DISABLE_ERROR_CODES):
                     log.warning(f"[OMNI] Non streaming request failed (status = {status_code}), credentials: {current_file}, response: {error_text[:500] if error_text else 'None'}")
 
-                    # è§£æå†·å´æ—¶é—´
+
                     cooldown_until = None
                     if (status_code == 429 or status_code == 503) and error_text:
                         try:
@@ -735,7 +710,7 @@ async def non_stream_request(
                         except Exception:
                             pass
 
-                    # å¹¶è¡Œé¢„çƒ­ä¸‹ä¸€ä¸ªå‡­è¯,ä¸é˜»å¡å½“å‰å¤„ç†
+
                     if next_cred_task is None and attempt < max_retries:
                         next_cred_task = asyncio.create_task(
                             credential_manager.get_valid_credential(
@@ -743,14 +718,14 @@ async def non_stream_request(
                             )
                         )
 
-                    # è®°å½•é”™è¯¯å¹¶åˆ‡æ¢å‡­è¯
+
                     await record_api_call_error(
                         credential_manager, current_file, status_code,
                         cooldown_until, mode="omni", model_name=model_name,
                         error_message=error_text
                     )
 
-                    # æ£€æŸ¥æ˜¯å¦åº”è¯¥é‡è¯•
+
                     should_retry = await handle_error_with_retry(
                         credential_manager, status_code, current_file,
                         retry_config["retry_enabled"], attempt, max_retries, retry_interval,
@@ -760,11 +735,11 @@ async def non_stream_request(
                     if should_retry and attempt < max_retries:
                         need_retry = True
                     else:
-                        # ä¸é‡è¯•ï¼Œç›´æ¥è¿”å›åŸå§‹é”™è¯¯
+
                         log.error(f"[OMNI] Maximum number of retries reached or should not be retried, returning original error")
                         return last_error_response
                 else:
-                    # é”™è¯¯ç ä¸åœ¨ç¦ç”¨ç å½“ä¸­ï¼Œç›´æ¥è¿”å›ï¼Œæ— éœ€é‡è¯•
+
                     log.error(f"[OMNI] Non Streaming Request Failed, Non Retry Error Code (status = {status_code}), Credential: {current_file}, Response: {error_text[:500] if error_text else 'None'}")
                     await record_api_call_error(
                         credential_manager, current_file, status_code,
@@ -772,8 +747,8 @@ async def non_stream_request(
                         error_message=error_text
                     )
                     return last_error_response
-            
-            # ç»Ÿä¸€å¤„ç†é‡è¯•
+
+
             if need_retry:
                 log.info(f"[OMNI] Retry request (attempt {attempt + 2}/{max_retries + 1})...")
 
@@ -791,7 +766,7 @@ async def non_stream_request(
                         status_code=500,
                         media_type="application/json"
                     )
-                continue  # é‡è¯•
+                continue
 
         except Exception as e:
             log.error(f"[OMNI] Non Streaming Request Exception: {e}, Credentials: {current_file}")
@@ -800,7 +775,7 @@ async def non_stream_request(
                 await asyncio.sleep(retry_interval)
                 continue
             else:
-                # æ‰€æœ‰é‡è¯•éƒ½å¤±è´¥ï¼Œè¿”å›æœ€åä¸€æ¬¡ç„é”™è¯¯ï¼ˆå¦‚æœæœ‰ï¼‰æˆ–500é”™è¯¯
+
                 log.error(f"[OMNI] All retries failed with last exception: {e}")
                 if last_error_response:
                     return last_error_response
@@ -811,7 +786,7 @@ async def non_stream_request(
                         media_type="application/json"
                     )
 
-    # æ‰€æœ‰é‡è¯•éƒ½å¤±è´¥ï¼Œè¿”å›æœ€åä¸€æ¬¡ç„åŸå§‹é”™è¯¯ï¼ˆå¦‚æœæœ‰ï¼‰æˆ–500é”™è¯¯
+
     log.error("[OMNI] All retries failed")
     if last_error_response:
         return last_error_response
@@ -823,19 +798,11 @@ async def non_stream_request(
         )
 
 
-# ==================== æ¨¡å‹å’Œé…é¢æŸ¥è¯¢ ====================
+
 
 async def fetch_available_models() -> List[Dict[str, Any]]:
-    """
-    è·å–å¯ç”¨æ¨¡å‹åˆ—è¡¨ï¼Œè¿”å›ç¬¦åˆ OpenAI API è§„èŒƒç„æ ¼å¼
-    
-    Returns:
-        æ¨¡å‹åˆ—è¡¨ï¼Œæ ¼å¼ä¸ºå­—å…¸åˆ—è¡¨ï¼ˆç”¨äºå…¼å®¹ç°æœ‰ä»£ç ï¼‰
-        
-    Raises:
-        è¿”å›ç©ºåˆ—è¡¨å¦‚æœè·å–å¤±è´¥
-    """
-    # è·å–å‡­è¯ç®¡ç†å™¨å’Œå¯ç”¨å‡­è¯
+    """Internal implementation detail."""
+
     cred_result = await credential_manager.get_valid_credential(mode="omni")
     if not cred_result:
         log.error("[OMNI] No valid credentials available for fetching models")
@@ -848,16 +815,16 @@ async def fetch_available_models() -> List[Dict[str, Any]]:
         log.error(f"[OMNI] No access token in credential: {current_file}")
         return []
 
-    # æ„å»ºè¯·æ±‚å¤´
+
     headers = build_omni_headers(access_token)
 
     try:
-        # ä½¿ç”¨ POST è¯·æ±‚è·å–æ¨¡å‹åˆ—è¡¨
+
         omni_url = await get_ogw_api_url()
 
         response = await post_async(
             url=f"{omni_url}/v1internal:fetchAvailableModels",
-            json={},  # ç©ºç„è¯·æ±‚ä½“
+            json={},
             headers=headers
         )
 
@@ -865,12 +832,12 @@ async def fetch_available_models() -> List[Dict[str, Any]]:
             data = response.json()
             log.debug(f"[OMNI] Raw models response: {json.dumps(data, ensure_ascii=False)[:500]}")
 
-            # è½¬æ¢ä¸º OpenAI æ ¼å¼ç„æ¨¡å‹åˆ—è¡¨ï¼Œä½¿ç”¨ Model ç±»
+
             model_list = []
             current_timestamp = int(datetime.now(timezone.utc).timestamp())
 
             if 'models' in data and isinstance(data['models'], dict):
-                # éå†æ¨¡å‹å­—å…¸
+
                 for model_id in data['models'].keys():
                     model = Model(
                         id=model_id,
@@ -879,7 +846,7 @@ async def fetch_available_models() -> List[Dict[str, Any]]:
                         owned_by='google'
                     )
                     model_list.append(model_to_dict(model))
-            # æ·»å é¢å¤–ç„ claude-sonnet-4-6-thinking æ¨¡å‹
+
             if "claude-sonnet-4-6" in data.get('models', {}):
                 model = Model(
                     id='claude-sonnet-4-6-thinking',
@@ -888,7 +855,7 @@ async def fetch_available_models() -> List[Dict[str, Any]]:
                     owned_by='google'
                 )
                 model_list.append(model_to_dict(model))
-            # æ·»å é¢å¤–ç„ claude-opus-4-6 æ¨¡å‹
+
             if "claude-opus-4-6-thinking" in data.get('models', {}):
                 claude_opus_model = Model(
                     id='claude-opus-4-6',
@@ -912,26 +879,7 @@ async def fetch_available_models() -> List[Dict[str, Any]]:
 
 
 async def fetch_quota_info(access_token: str) -> Dict[str, Any]:
-    """
-    è·å–æŒ‡å®å‡­è¯ç„é¢åº¦ä¿¡æ¯
-    
-    Args:
-        access_token: Omni è®¿é—®ä»¤ç‰Œ
-        
-    Returns:
-        åŒ…å«é¢åº¦ä¿¡æ¯ç„å­—å…¸ï¼Œæ ¼å¼ä¸ºï¼
-        {
-            "success": True/False,
-            "models": {
-                "model_name": {
-                    "remaining": 0.95,
-                    "resetTime": "12-20 10:30",
-                    "resetTimeRaw": "2025-12-20T02:30:00Z"
-                }
-            },
-            "error": "é”™è¯¯ä¿¡æ¯" (ä»…åœ¨å¤±è´¥æ—¶)
-        }
-    """
+    """Internal implementation detail."""
 
     headers = build_omni_headers(access_token)
 
@@ -958,12 +906,12 @@ async def fetch_quota_info(access_token: str) -> Dict[str, Any]:
                         remaining = quota.get('remainingFraction', 0)
                         reset_time_raw = quota.get('resetTime', '')
 
-                        # è½¬æ¢ä¸ºåŒ—äº¬æ—¶é—´
+
                         reset_time_beijing = 'N/A'
                         if reset_time_raw:
                             try:
                                 utc_date = datetime.fromisoformat(reset_time_raw.replace('Z', '+00:00'))
-                                # è½¬æ¢ä¸ºåŒ—äº¬æ—¶é—´ (UTC+8)
+
                                 from datetime import timedelta
                                 beijing_date = utc_date + timedelta(hours=8)
                                 reset_time_beijing = beijing_date.strftime('%m-%d %H:%M')
@@ -984,7 +932,7 @@ async def fetch_quota_info(access_token: str) -> Dict[str, Any]:
             log.error(f"[OMNI QUOTA] Failed to fetch quota ({response.status_code}): {response.text[:500]}")
             return {
                 "success": False,
-                "error": f"APIè¿”å›é”™è¯¯: {response.status_code}"
+                "error": f"API returned an error: {response.status_code}"
             }
 
     except Exception as e:

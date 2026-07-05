@@ -1,7 +1,4 @@
-﻿"""
-Vertex AI Router - Handles native Gemini format API requests via anonymous Vertex AI endpoint
-é€è¿‡åŒ¿å Vertex AI ç«¯ç‚¹å¤„ç† Gemini æ ¼å¼è¯·æ±‚
-"""
+"""Internal implementation detail."""
 
 from fastapi import APIRouter, Depends, HTTPException, Path, Request
 from fastapi.responses import JSONResponse
@@ -23,7 +20,7 @@ async def generate_content(
     model: str = Path(..., description="Model name"),
     api_key: str = Depends(authenticate_gemini_flexible),
 ):
-    """å¤„ç† Vertex åŒ¿åé€é“ç„éæµå¼å†…å®¹ç”Ÿæˆè¯·æ±‚ă€‚"""
+    """Internal implementation detail."""
     log.debug(f"[VERTEX ROUTER] Non-streaming request for model: {model}")
 
     normalized_dict = model_to_dict(gemini_request)
@@ -54,7 +51,7 @@ async def stream_generate_content(
     model: str = Path(..., description="Model name"),
     api_key: str = Depends(authenticate_gemini_flexible),
 ):
-    """å¤„ç† Vertex åŒ¿åé€é“ç„æµå¼å†…å®¹ç”Ÿæˆè¯·æ±‚ă€‚"""
+    """Internal implementation detail."""
     log.debug(f"[VERTEX ROUTER] Streaming request for model: {model}")
 
     normalized_dict = model_to_dict(gemini_request)
@@ -88,7 +85,7 @@ async def count_tokens(
     request: Request = None,
     api_key: str = Depends(authenticate_gemini_flexible),
 ):
-    """æ¨¡æ‹Ÿ token è®¡æ•°ï¼ˆå¯å‘å¼ä¼°ç®—ï¼‰ă€‚"""
+    """Internal implementation detail."""
     try:
         request_data = await request.json()
     except Exception as e:

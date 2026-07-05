@@ -1,4 +1,4 @@
-﻿"""Shared filesystem paths for the Omni Gateway backend."""
+"""Shared filesystem paths for the Omni Gateway backend."""
 
 from pathlib import Path
 

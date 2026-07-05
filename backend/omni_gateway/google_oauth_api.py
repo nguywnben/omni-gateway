@@ -1,852 +1,496 @@
-﻿"""
-Google OAuth2 è®¤è¯æ¨¡å—
-"""
-
+"""Internal implementation detail."""
 import time
 import asyncio
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional, Tuple
 from urllib.parse import urlencode
-
 import jwt
-
-from config import (
-    get_googleapis_proxy_url,
-    get_oauth_proxy_url,
-    get_resource_manager_api_url,
-    get_service_usage_api_url,
-)
+from config import get_googleapis_proxy_url, get_oauth_proxy_url, get_resource_manager_api_url, get_service_usage_api_url
 from log import log
-
 from omni_gateway.httpx_client import get_async, post_async
 
-
 class TokenError(Exception):
-    """Tokenç›¸å…³é”™è¯¯"""
-
+    """Internal implementation detail."""
     pass
 
-
 class Credentials:
-    """å‡­è¯ç±»"""
+    """Internal implementation detail."""
 
-    def __init__(
-        self,
-        access_token: str,
-        refresh_token: str = None,
-        client_id: str = None,
-        client_secret: str = None,
-        expires_at: datetime = None,
-        project_id: str = None,
-    ):
+    def __init__(self, access_token: str, refresh_token: str=None, client_id: str=None, client_secret: str=None, expires_at: datetime=None, project_id: str=None):
         self.access_token = access_token
         self.refresh_token = refresh_token
         self.client_id = client_id
         self.client_secret = client_secret
         self.expires_at = expires_at
         self.project_id = project_id
-
-        # åä»£é…ç½®å°†åœ¨ä½¿ç”¨æ—¶å¼‚æ­¥è·å–
         self.oauth_base_url = None
         self.token_endpoint = None
 
     def is_expired(self) -> bool:
-        """æ£€æŸ¥tokenæ˜¯å¦è¿‡æœŸ"""
+        """Internal implementation detail."""
         if not self.expires_at:
             return True
-
-        # æå‰3åˆ†é’Ÿè®¤ä¸ºè¿‡æœŸ
         buffer = timedelta(minutes=3)
-        return (self.expires_at - buffer) <= datetime.now(timezone.utc)
+        return self.expires_at - buffer <= datetime.now(timezone.utc)
 
     async def refresh_if_needed(self) -> bool:
-        """å¦‚æœéœ€è¦åˆ™åˆ·æ–°token"""
+        """Internal implementation detail."""
         if not self.is_expired():
             return False
-
         if not self.refresh_token:
-            raise TokenError("Refresh token is required but not provided")
-
+            raise TokenError('Refresh token is required but not provided')
         await self.refresh()
         return True
 
     async def refresh(self):
-        """åˆ·æ–°è®¿é—®ä»¤ç‰Œ"""
+        """Internal implementation detail."""
         if not self.refresh_token:
-            raise TokenError("No refresh token available")
-
-        data = {
-            "client_id": self.client_id,
-            "client_secret": self.client_secret,
-            "refresh_token": self.refresh_token,
-            "grant_type": "refresh_token",
-        }
-
+            raise TokenError('No refresh token available')
+        data = {'client_id': self.client_id, 'client_secret': self.client_secret, 'refresh_token': self.refresh_token, 'grant_type': 'refresh_token'}
         try:
             oauth_base_url = await get_oauth_proxy_url()
             token_url = f"{oauth_base_url.rstrip('/')}/token"
-            response = await post_async(
-                token_url,
-                data=data,
-                headers={"Content-Type": "application/x-www-form-urlencoded"},
-            )
+            response = await post_async(token_url, data=data, headers={'Content-Type': 'application/x-www-form-urlencoded'})
             response.raise_for_status()
-
             token_data = response.json()
-            self.access_token = token_data["access_token"]
-
-            if "expires_in" in token_data:
-                expires_in = int(token_data["expires_in"])
+            self.access_token = token_data['access_token']
+            if 'expires_in' in token_data:
+                expires_in = int(token_data['expires_in'])
                 current_utc = datetime.now(timezone.utc)
                 self.expires_at = current_utc + timedelta(seconds=expires_in)
-                log.debug(
-                    f"Token refresh: current UTC time={current_utc.isoformat()}, "
-                    f"expires_in={expires_in}s, "
-                    f"expiry={self.expires_at.isoformat()}"
-                )
-
-            if "refresh_token" in token_data:
-                self.refresh_token = token_data["refresh_token"]
-
-            log.debug(f"Token refreshed successfully, expires {self.expires_at}")
-
+                log.debug(f'Token refresh: current UTC time={current_utc.isoformat()}, expires_in={expires_in}s, expiry={self.expires_at.isoformat()}')
+            if 'refresh_token' in token_data:
+                self.refresh_token = token_data['refresh_token']
+            log.debug(f'Token refreshed successfully, expires {self.expires_at}')
         except Exception as e:
             error_msg = str(e)
             status_code = None
             if hasattr(e, 'response') and hasattr(e.response, 'status_code'):
                 status_code = e.response.status_code
-                error_msg = f"Token refresh failed (HTTP {status_code}): {error_msg}"
+                error_msg = f'Token refresh failed (HTTP {status_code}): {error_msg}'
             else:
-                error_msg = f"Token refresh failed: {error_msg}"
-
+                error_msg = f'Token refresh failed: {error_msg}'
             log.error(error_msg)
             token_error = TokenError(error_msg)
             token_error.status_code = status_code
             raise token_error
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "Credentials":
-        """ä»å­—å…¸åˆ›å»ºå‡­è¯"""
-        # å¤„ç†è¿‡æœŸæ—¶é—´
+    def from_dict(cls, data: Dict[str, Any]) -> 'Credentials':
+        """Internal implementation detail."""
         expires_at = None
-        if "expiry" in data and data["expiry"]:
+        if 'expiry' in data and data['expiry']:
             try:
-                expiry_str = data["expiry"]
+                expiry_str = data['expiry']
                 if isinstance(expiry_str, str):
-                    if expiry_str.endswith("Z"):
-                        expires_at = datetime.fromisoformat(expiry_str.replace("Z", "+00:00"))
-                    elif "+" in expiry_str:
+                    if expiry_str.endswith('Z'):
+                        expires_at = datetime.fromisoformat(expiry_str.replace('Z', '+00:00'))
+                    elif '+' in expiry_str:
                         expires_at = datetime.fromisoformat(expiry_str)
                     else:
                         expires_at = datetime.fromisoformat(expiry_str).replace(tzinfo=timezone.utc)
             except ValueError:
-                log.warning(f"Unable to parse expiration time: {expiry_str}")
-
-        return cls(
-            access_token=data.get("token") or data.get("access_token", ""),
-            refresh_token=data.get("refresh_token"),
-            client_id=data.get("client_id"),
-            client_secret=data.get("client_secret"),
-            expires_at=expires_at,
-            project_id=data.get("project_id"),
-        )
+                log.warning(f'Unable to parse expiration time: {expiry_str}')
+        return cls(access_token=data.get('token') or data.get('access_token', ''), refresh_token=data.get('refresh_token'), client_id=data.get('client_id'), client_secret=data.get('client_secret'), expires_at=expires_at, project_id=data.get('project_id'))
 
     def to_dict(self) -> Dict[str, Any]:
-        """è½¬ä¸ºå­—å…¸"""
-        result = {
-            "access_token": self.access_token,
-            "refresh_token": self.refresh_token,
-            "client_id": self.client_id,
-            "client_secret": self.client_secret,
-            "project_id": self.project_id,
-        }
-
+        """Internal implementation detail."""
+        result = {'access_token': self.access_token, 'refresh_token': self.refresh_token, 'client_id': self.client_id, 'client_secret': self.client_secret, 'project_id': self.project_id}
         if self.expires_at:
-            result["expiry"] = self.expires_at.isoformat()
-
+            result['expiry'] = self.expires_at.isoformat()
         return result
 
-
 class Flow:
-    """OAuthæµç¨‹ç±»"""
+    """Internal implementation detail."""
 
-    def __init__(
-        self, client_id: str, client_secret: str, scopes: List[str], redirect_uri: str = None
-    ):
+    def __init__(self, client_id: str, client_secret: str, scopes: List[str], redirect_uri: str=None):
         self.client_id = client_id
         self.client_secret = client_secret
         self.scopes = scopes
         self.redirect_uri = redirect_uri
-
-        # åä»£é…ç½®å°†åœ¨ä½¿ç”¨æ—¶å¼‚æ­¥è·å–
         self.oauth_base_url = None
         self.token_endpoint = None
-        self.auth_endpoint = "https://accounts.google.com/o/oauth2/auth"
-
+        self.auth_endpoint = 'https://accounts.google.com/o/oauth2/auth'
         self.credentials: Optional[Credentials] = None
 
-    def get_auth_url(self, state: str = None, **kwargs) -> str:
-        """ç”ŸæˆæˆæƒURL"""
-        params = {
-            "client_id": self.client_id,
-            "redirect_uri": self.redirect_uri,
-            "scope": " ".join(self.scopes),
-            "response_type": "code",
-            "access_type": "offline",
-            "prompt": "consent",
-            "include_granted_scopes": "true",
-        }
-
+    def get_auth_url(self, state: str=None, **kwargs) -> str:
+        """Internal implementation detail."""
+        params = {'client_id': self.client_id, 'redirect_uri': self.redirect_uri, 'scope': ' '.join(self.scopes), 'response_type': 'code', 'access_type': 'offline', 'prompt': 'consent', 'include_granted_scopes': 'true'}
         if state:
-            params["state"] = state
-
+            params['state'] = state
         params.update(kwargs)
-        return f"{self.auth_endpoint}?{urlencode(params)}"
+        return f'{self.auth_endpoint}?{urlencode(params)}'
 
     async def exchange_code(self, code: str) -> Credentials:
-        """ç”¨æˆæƒç æ¢å–token"""
-        data = {
-            "client_id": self.client_id,
-            "client_secret": self.client_secret,
-            "redirect_uri": self.redirect_uri,
-            "code": code,
-            "grant_type": "authorization_code",
-        }
-
+        """Internal implementation detail."""
+        data = {'client_id': self.client_id, 'client_secret': self.client_secret, 'redirect_uri': self.redirect_uri, 'code': code, 'grant_type': 'authorization_code'}
         try:
             oauth_base_url = await get_oauth_proxy_url()
             token_url = f"{oauth_base_url.rstrip('/')}/token"
-            response = await post_async(
-                token_url, data=data, headers={"Content-Type": "application/x-www-form-urlencoded"}
-            )
+            response = await post_async(token_url, data=data, headers={'Content-Type': 'application/x-www-form-urlencoded'})
             response.raise_for_status()
-
             token_data = response.json()
-
-            # è®¡ç®—è¿‡æœŸæ—¶é—´
             expires_at = None
-            if "expires_in" in token_data:
-                expires_in = int(token_data["expires_in"])
+            if 'expires_in' in token_data:
+                expires_in = int(token_data['expires_in'])
                 expires_at = datetime.now(timezone.utc) + timedelta(seconds=expires_in)
-
-            # åˆ›å»ºå‡­è¯å¯¹è±¡
-            self.credentials = Credentials(
-                access_token=token_data["access_token"],
-                refresh_token=token_data.get("refresh_token"),
-                client_id=self.client_id,
-                client_secret=self.client_secret,
-                expires_at=expires_at,
-            )
-
+            self.credentials = Credentials(access_token=token_data['access_token'], refresh_token=token_data.get('refresh_token'), client_id=self.client_id, client_secret=self.client_secret, expires_at=expires_at)
             return self.credentials
-
         except Exception as e:
-            error_msg = f"Failed to retrieve token: {str(e)}"
+            error_msg = f'Failed to retrieve token: {str(e)}'
             log.error(error_msg)
             raise TokenError(error_msg)
 
-
 class ServiceAccount:
-    """Service Accountç±»"""
+    """Internal implementation detail."""
 
-    def __init__(
-        self, email: str, private_key: str, project_id: str = None, scopes: List[str] = None
-    ):
+    def __init__(self, email: str, private_key: str, project_id: str=None, scopes: List[str]=None):
         self.email = email
         self.private_key = private_key
         self.project_id = project_id
         self.scopes = scopes or []
-
-        # åä»£é…ç½®å°†åœ¨ä½¿ç”¨æ—¶å¼‚æ­¥è·å–
         self.oauth_base_url = None
         self.token_endpoint = None
-
         self.access_token: Optional[str] = None
         self.expires_at: Optional[datetime] = None
 
     def is_expired(self) -> bool:
-        """æ£€æŸ¥tokenæ˜¯å¦è¿‡æœŸ"""
+        """Internal implementation detail."""
         if not self.expires_at:
             return True
-
         buffer = timedelta(minutes=3)
-        return (self.expires_at - buffer) <= datetime.now(timezone.utc)
+        return self.expires_at - buffer <= datetime.now(timezone.utc)
 
     def create_jwt(self) -> str:
-        """åˆ›å»ºJWTä»¤ç‰Œ"""
+        """Internal implementation detail."""
         now = int(time.time())
-
-        payload = {
-            "iss": self.email,
-            "scope": " ".join(self.scopes) if self.scopes else "",
-            "aud": self.token_endpoint,
-            "exp": now + 3600,
-            "iat": now,
-        }
-
-        return jwt.encode(payload, self.private_key, algorithm="RS256")
+        payload = {'iss': self.email, 'scope': ' '.join(self.scopes) if self.scopes else '', 'aud': self.token_endpoint, 'exp': now + 3600, 'iat': now}
+        return jwt.encode(payload, self.private_key, algorithm='RS256')
 
     async def get_access_token(self) -> str:
-        """è·å–è®¿é—®ä»¤ç‰Œ"""
+        """Internal implementation detail."""
         if not self.is_expired() and self.access_token:
             return self.access_token
-
         assertion = self.create_jwt()
-
-        data = {"grant_type": "urn:ietf:params:oauth:grant-type:jwt-bearer", "assertion": assertion}
-
+        data = {'grant_type': 'urn:ietf:params:oauth:grant-type:jwt-bearer', 'assertion': assertion}
         try:
             oauth_base_url = await get_oauth_proxy_url()
             token_url = f"{oauth_base_url.rstrip('/')}/token"
-            response = await post_async(
-                token_url, data=data, headers={"Content-Type": "application/x-www-form-urlencoded"}
-            )
+            response = await post_async(token_url, data=data, headers={'Content-Type': 'application/x-www-form-urlencoded'})
             response.raise_for_status()
-
             token_data = response.json()
-            self.access_token = token_data["access_token"]
-
-            if "expires_in" in token_data:
-                expires_in = int(token_data["expires_in"])
+            self.access_token = token_data['access_token']
+            if 'expires_in' in token_data:
+                expires_in = int(token_data['expires_in'])
                 self.expires_at = datetime.now(timezone.utc) + timedelta(seconds=expires_in)
-
             return self.access_token
-
         except Exception as e:
-            error_msg = f"Service Account failed to retrieve token: {str(e)}"
+            error_msg = f'Service Account failed to retrieve token: {str(e)}'
             log.error(error_msg)
             raise TokenError(error_msg)
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any], scopes: List[str] = None) -> "ServiceAccount":
-        """ä»å­—å…¸åˆ›å»ºService Accountå‡­è¯"""
-        return cls(
-            email=data["client_email"],
-            private_key=data["private_key"],
-            project_id=data.get("project_id"),
-            scopes=scopes,
-        )
+    def from_dict(cls, data: Dict[str, Any], scopes: List[str]=None) -> 'ServiceAccount':
+        """Internal implementation detail."""
+        return cls(email=data['client_email'], private_key=data['private_key'], project_id=data.get('project_id'), scopes=scopes)
 
-
-# å·¥å…·å‡½æ•°
 async def get_user_info(credentials: Credentials) -> Optional[Dict[str, Any]]:
-    """è·å–ç”¨æˆ·ä¿¡æ¯"""
+    """Internal implementation detail."""
     await credentials.refresh_if_needed()
-
     try:
         googleapis_base_url = await get_googleapis_proxy_url()
         userinfo_url = f"{googleapis_base_url.rstrip('/')}/oauth2/v2/userinfo"
-        response = await get_async(
-            userinfo_url, headers={"Authorization": f"Bearer {credentials.access_token}"}
-        )
+        response = await get_async(userinfo_url, headers={'Authorization': f'Bearer {credentials.access_token}'})
         response.raise_for_status()
         return response.json()
     except Exception as e:
-        log.error(f"Failed to retrieve user information: {e}")
+        log.error(f'Failed to retrieve user information: {e}')
         return None
-
 
 async def get_user_email(credentials: Credentials) -> Optional[str]:
-    """è·å–ç”¨æˆ·é‚®ç®±åœ°å€"""
+    """Internal implementation detail."""
     try:
-        # ç¡®ä¿å‡­è¯æœ‰æ•ˆ
         await credentials.refresh_if_needed()
-
-        # è°ƒç”¨Google userinfo APIè·å–é‚®ç®±
         user_info = await get_user_info(credentials)
         if user_info:
-            email = user_info.get("email")
+            email = user_info.get('email')
             if email:
-                log.info(f"Successfully retrieved email address: {email}")
+                log.info(f'Successfully retrieved email address: {email}')
                 return email
             else:
-                log.warning(f"No email information found in userinfo response: {user_info}")
+                log.warning(f'No email information found in userinfo response: {user_info}')
                 return None
         else:
-            log.warning("Failed to retrieve user information")
+            log.warning('Failed to retrieve user information')
             return None
-
     except Exception as e:
-        log.error(f"Failed to retrieve user email: {e}")
+        log.error(f'Failed to retrieve user email: {e}')
         return None
-
 
 async def fetch_user_email_from_file(cred_data: Dict[str, Any]) -> Optional[str]:
-    """ä»å‡­è¯æ•°æ®è·å–ç”¨æˆ·é‚®ç®±åœ°å€ï¼ˆæ”¯æŒç»Ÿä¸€å­˜å‚¨ï¼‰"""
+    """Internal implementation detail."""
     try:
-        # ç›´æ¥ä»å‡­è¯æ•°æ®åˆ›å»ºå‡­è¯å¯¹è±¡
         credentials = Credentials.from_dict(cred_data)
         if not credentials or not credentials.access_token:
-            log.warning("Unable to create credential object or retrieve access token from credential data")
+            log.warning('Unable to create credential object or retrieve access token from credential data')
             return None
-
-        # è·å–é‚®ç®±
         return await get_user_email(credentials)
-
     except Exception as e:
-        log.error(f"Failed to get user email from credential data: {e}")
+        log.error(f'Failed to get user email from credential data: {e}')
         return None
 
-
 async def validate_token(token: str) -> Optional[Dict[str, Any]]:
-    """éªŒè¯è®¿é—®ä»¤ç‰Œ"""
+    """Internal implementation detail."""
     try:
         oauth_base_url = await get_oauth_proxy_url()
         tokeninfo_url = f"{oauth_base_url.rstrip('/')}/tokeninfo?access_token={token}"
-
         response = await get_async(tokeninfo_url)
         response.raise_for_status()
         return response.json()
     except Exception as e:
-        log.error(f"Token verification failed: {e}")
+        log.error(f'Token verification failed: {e}')
         return None
 
-
 async def enable_required_apis(credentials: Credentials, project_id: str) -> bool:
-    """è‡ªå¨å¯ç”¨å¿…éœ€ç„APIæœå¡"""
+    """Internal implementation detail."""
     try:
-        # ç¡®ä¿å‡­è¯æœ‰æ•ˆ
         if credentials.is_expired() and credentials.refresh_token:
             await credentials.refresh()
-
-        headers = {
-            "Authorization": f"Bearer {credentials.access_token}",
-            "Content-Type": "application/json",
-            "User-Agent": "code_assist-oauth/1.0",
-        }
-
-        # éœ€è¦å¯ç”¨ç„æœå¡åˆ—è¡¨
-        required_services = [
-            "geminicloudassist.googleapis.com",  # Gemini Cloud Assist API
-            "cloudaicompanion.googleapis.com",  # Gemini for Google Cloud API
-        ]
-
+        headers = {'Authorization': f'Bearer {credentials.access_token}', 'Content-Type': 'application/json', 'User-Agent': 'code_assist-oauth/1.0'}
+        required_services = ['geminicloudassist.googleapis.com', 'cloudaicompanion.googleapis.com']
         for service in required_services:
-            log.info(f"Checking and enabling service: {service}")
-
-            # æ£€æŸ¥æœå¡æ˜¯å¦å·²å¯ç”¨
+            log.info(f'Checking and enabling service: {service}')
             service_usage_base_url = await get_service_usage_api_url()
-            check_url = (
-                f"{service_usage_base_url.rstrip('/')}/v1/projects/{project_id}/services/{service}"
-            )
+            check_url = f"{service_usage_base_url.rstrip('/')}/v1/projects/{project_id}/services/{service}"
             try:
                 check_response = await get_async(check_url, headers=headers)
                 if check_response.status_code == 200:
                     service_data = check_response.json()
-                    if service_data.get("state") == "ENABLED":
-                        log.info(f"Service {service} enabled")
+                    if service_data.get('state') == 'ENABLED':
+                        log.info(f'Service {service} enabled')
                         continue
             except Exception as e:
-                log.debug(f"Failed to check service status, attempting to enable: {e}")
-
-            # å¯ç”¨æœå¡
+                log.debug(f'Failed to check service status, attempting to enable: {e}')
             enable_url = f"{service_usage_base_url.rstrip('/')}/v1/projects/{project_id}/services/{service}:enable"
             try:
                 enable_response = await post_async(enable_url, headers=headers, json={})
-
                 if enable_response.status_code in [200, 201]:
-                    log.info(f"âœ… Service enabled successfully: {service}")
+                    log.info('OAuth flow event')
                 elif enable_response.status_code == 400:
                     error_data = enable_response.json()
-                    if "already enabled" in error_data.get("error", {}).get("message", "").lower():
-                        log.info(f"âœ… Service {service} is already enabled")
+                    if 'already enabled' in error_data.get('error', {}).get('message', '').lower():
+                        log.info('OAuth flow event')
                     else:
-                        log.warning(f"â ï¸ Warning while enabling service {service}: {error_data}")
+                        log.warning('OAuth flow warning')
                 else:
-                    log.warning(
-                        f"â ï¸ Failed to enable service {service}: {enable_response.status_code} - {enable_response.text}"
-                    )
-
+                    log.warning('OAuth flow warning')
             except Exception as e:
-                log.warning(f"â ï¸ Exception occurred while enabling service {service}: {e}")
-
+                log.warning('OAuth flow warning')
         return True
-
     except Exception as e:
-        log.error(f"Error while enabling API service: {e}")
+        log.error(f'Error while enabling API service: {e}')
         return False
 
-
 async def get_user_projects(credentials: Credentials) -> List[Dict[str, Any]]:
-    """è·å–ç”¨æˆ·å¯è®¿é—®ç„Google Cloudé¡¹ç›®åˆ—è¡¨"""
+    """Internal implementation detail."""
     try:
-        # ç¡®ä¿å‡­è¯æœ‰æ•ˆ
         if credentials.is_expired() and credentials.refresh_token:
             await credentials.refresh()
-
-        headers = {
-            "Authorization": f"Bearer {credentials.access_token}",
-            "User-Agent": "code_assist-oauth/1.0",
-        }
-
-        # ä½¿ç”¨Resource Manager APIç„æ­£ç¡®åŸŸåå’Œç«¯ç‚¹
+        headers = {'Authorization': f'Bearer {credentials.access_token}', 'User-Agent': 'code_assist-oauth/1.0'}
         resource_manager_base_url = await get_resource_manager_api_url()
         url = f"{resource_manager_base_url.rstrip('/')}/v1/projects"
-        log.info(f"Calling API: {url}")
+        log.info(f'Calling API: {url}')
         response = await get_async(url, headers=headers)
-
-        log.info(f"API Response Status Code: {response.status_code}")
+        log.info(f'API Response Status Code: {response.status_code}')
         if response.status_code != 200:
-            log.error(f"API response content: {response.text}")
-
+            log.error(f'API response content: {response.text}')
         if response.status_code == 200:
             data = response.json()
-            projects = data.get("projects", [])
-            # åªè¿”å›æ´»è·ƒç„é¡¹ç›®
-            active_projects = [
-                project for project in projects if project.get("lifecycleState") == "ACTIVE"
-            ]
-            log.info(f"Retrieved {len(active_projects)} active projects")
+            projects = data.get('projects', [])
+            active_projects = [project for project in projects if project.get('lifecycleState') == 'ACTIVE']
+            log.info(f'Retrieved {len(active_projects)} active projects')
             return active_projects
         else:
-            log.warning(f"Failed to retrieve project list: {response.status_code} - {response.text}")
+            log.warning(f'Failed to retrieve project list: {response.status_code} - {response.text}')
             return []
-
     except Exception as e:
-        log.error(f"Failed to retrieve user project list: {e}")
+        log.error(f'Failed to retrieve user project list: {e}')
         return []
 
-
 async def select_default_project(projects: List[Dict[str, Any]]) -> Optional[str]:
-    """ä»é¡¹ç›®åˆ—è¡¨ä¸­é€‰æ‹©é»˜è®¤é¡¹ç›®"""
+    """Internal implementation detail."""
     if not projects:
         return None
-
-    # ç­–ç•¥1ï¼æŸ¥æ‰¾æ˜¾ç¤ºåç§°æˆ–é¡¹ç›®IDåŒ…å«"default"ç„é¡¹ç›®
     for project in projects:
-        display_name = project.get("displayName", "").lower()
-        # Google API returns projectId in camelCase
-        project_id = project.get("projectId", "")
-        if "default" in display_name or "default" in project_id.lower():
+        display_name = project.get('displayName', '').lower()
+        project_id = project.get('projectId', '')
+        if 'default' in display_name or 'default' in project_id.lower():
             log.info(f"Selecting default project: {project_id} ({project.get('displayName', project_id)})")
             return project_id
-
-    # ç­–ç•¥2ï¼é€‰æ‹©ç¬¬ä¸€ä¸ªé¡¹ç›®
     first_project = projects[0]
-    # Google API returns projectId in camelCase
-    project_id = first_project.get("projectId", "")
-    log.info(
-        f"Selecting first project as default: {project_id} ({first_project.get('displayName', project_id)})"
-    )
+    project_id = first_project.get('projectId', '')
+    log.info(f"Selecting first project as default: {project_id} ({first_project.get('displayName', project_id)})")
     return project_id
 
-
-async def fetch_project_id_and_tier(
-    access_token: str,
-    user_agent: str,
-    api_base_url: str,
-    include_credits: bool = False,
-) -> Tuple[Optional[str], Optional[str]] | Tuple[Optional[str], Optional[str], Optional[int]]:
-    """
-    ä» API è·å– project_id å’Œè®¢é˜…ç­‰çº§
-
-    Args:
-        access_token: Google OAuth access token
-        user_agent: User-Agent header
-        api_base_url: API base URL (e.g., omni or code assist endpoint)
-
-    Returns:
-        é»˜è®¤è¿”å› (project_id, subscription_tier)
-        å½“ include_credits=True æ—¶è¿”å› (project_id, subscription_tier, credit_amount)
-        subscription_tier å¯èƒ½æ˜¯ "FREE", "PRO", "ULTRA" æˆ– None
-        credit_amount ä¸ºç§¯åˆ†æ•°é‡ï¼ˆæ•´æ•°ï¼‰æˆ– None
-    """
-    headers = {
-        'User-Agent': user_agent,
-        'Authorization': f'Bearer {access_token}',
-        'Content-Type': 'application/json',
-        'Accept-Encoding': 'gzip'
-    }
+async def fetch_project_id_and_tier(access_token: str, user_agent: str, api_base_url: str, include_credits: bool=False) -> Tuple[Optional[str], Optional[str]] | Tuple[Optional[str], Optional[str], Optional[int]]:
+    """Internal implementation detail."""
+    headers = {'User-Agent': user_agent, 'Authorization': f'Bearer {access_token}', 'Content-Type': 'application/json', 'Accept-Encoding': 'gzip'}
 
     def _map_raw_tier(raw_tier: Optional[str]) -> Optional[str]:
-        """å°† loadCodeAssist è¿”å›ç„ raw tier æ˜ å°„ä¸ºç»Ÿä¸€ tieră€‚"""
+        """Internal implementation detail."""
         if not raw_tier:
             return None
-
-        tier_mapping = {
-            "g1-ultra-tier": "ultra",
-            "ws-ai-ultra-business-tier": "ultra",
-            "g1-pro-tier": "pro",
-            "helium-tier": "pro",
-            "standard-tier": "pro",
-            "free-tier": "free",
-        }
-
-        return tier_mapping.get(raw_tier.lower(), "pro")
-
+        tier_mapping = {'g1-ultra-tier': 'ultra', 'ws-ai-ultra-business-tier': 'ultra', 'g1-pro-tier': 'pro', 'helium-tier': 'pro', 'standard-tier': 'pro', 'free-tier': 'free'}
+        return tier_mapping.get(raw_tier.lower(), 'pro')
     subscription_tier = None
     credit_amount: Optional[int] = None
-
-    # æ­¥éª¤ 1: å°è¯• loadCodeAssist
     try:
         project_id, raw_tier, raw_credit_amount = await _try_load_code_assist(api_base_url, headers)
         subscription_tier = _map_raw_tier(raw_tier)
-
         if raw_credit_amount is not None:
             try:
                 credit_amount = int(raw_credit_amount)
-                log.info(
-                    f"[fetch_project_id_and_tier] Found credit_amount: {credit_amount}"
-                )
+                log.info(f'[fetch_project_id_and_tier] Found credit_amount: {credit_amount}')
             except (TypeError, ValueError):
-                log.warning(
-                    f"[fetch_project_id_and_tier] Invalid credit_amount: {raw_credit_amount}"
-                )
-
+                log.warning(f'[fetch_project_id_and_tier] Invalid credit_amount: {raw_credit_amount}')
         if raw_tier:
-            log.info(
-                f"[fetch_project_id_and_tier] Raw tier '{raw_tier}' mapped to '{subscription_tier}'"
-            )
-
+            log.info(f"[fetch_project_id_and_tier] Raw tier '{raw_tier}' mapped to '{subscription_tier}'")
         if project_id:
             if include_credits:
-                return project_id, subscription_tier, credit_amount
-            return project_id, subscription_tier
-
-        log.warning("[fetch_project_id_and_tier] loadCodeAssist did not return project_id, falling back to onboardUser")
-
+                return (project_id, subscription_tier, credit_amount)
+            return (project_id, subscription_tier)
+        log.warning('[fetch_project_id_and_tier] loadCodeAssist did not return project_id, falling back to onboardUser')
     except Exception as e:
-        log.warning(f"[fetch_project_id_and_tier] loadCodeAssist failed: {type(e).__name__}: {e}")
-        log.warning("[fetch_project_id_and_tier] Falling back to onboardUser")
-
-    # æ­¥éª¤ 2: å›é€€åˆ° onboardUser
+        log.warning(f'[fetch_project_id_and_tier] loadCodeAssist failed: {type(e).__name__}: {e}')
+        log.warning('[fetch_project_id_and_tier] Falling back to onboardUser')
     try:
         project_id = await _try_onboard_user(api_base_url, headers)
         if project_id:
             if include_credits:
-                return project_id, subscription_tier, credit_amount
-            return project_id, subscription_tier
-
-        log.error("[fetch_project_id_and_tier] Failed to get project_id from both loadCodeAssist and onboardUser")
+                return (project_id, subscription_tier, credit_amount)
+            return (project_id, subscription_tier)
+        log.error('[fetch_project_id_and_tier] Failed to get project_id from both loadCodeAssist and onboardUser')
         if include_credits:
-            return None, subscription_tier, credit_amount
-        return None, subscription_tier
-
+            return (None, subscription_tier, credit_amount)
+        return (None, subscription_tier)
     except Exception as e:
-        log.error(f"[fetch_project_id_and_tier] onboardUser failed: {type(e).__name__}: {e}")
+        log.error(f'[fetch_project_id_and_tier] onboardUser failed: {type(e).__name__}: {e}')
         import traceback
-        log.debug(f"[fetch_project_id_and_tier] Traceback: {traceback.format_exc()}")
+        log.debug(f'[fetch_project_id_and_tier] Traceback: {traceback.format_exc()}')
         if include_credits:
-            return None, subscription_tier, credit_amount
-        return None, subscription_tier
+            return (None, subscription_tier, credit_amount)
+        return (None, subscription_tier)
 
-
-async def _try_load_code_assist(
-    api_base_url: str,
-    headers: dict
-) -> Tuple[Optional[str], Optional[str], Optional[str]]:
-    """
-    å°è¯•é€è¿‡ loadCodeAssist è·å– project_id å’Œè®¢é˜…ç­‰çº§
-
-    Returns:
-        (project_id, subscription_tier, credit_amount) å…ƒç»„
-        subscription_tier å¯èƒ½æ˜¯ "FREE", "PRO", "ULTRA" æˆ– None
-        credit_amount ä¸ºå­—ç¬¦ä¸²æ ¼å¼ç§¯åˆ†æˆ– None
-    """
+async def _try_load_code_assist(api_base_url: str, headers: dict) -> Tuple[Optional[str], Optional[str], Optional[str]]:
+    """Internal implementation detail."""
     request_url = f"{api_base_url.rstrip('/')}/v1internal:loadCodeAssist"
-    request_body = {
-        "metadata": {
-            "ideType": "OMNI"
-        }
-    }
-
-    log.debug(f"[loadCodeAssist] Fetching project_id from: {request_url}")
-    log.debug(f"[loadCodeAssist] Request body: {request_body}")
-
-    response = await post_async(
-        request_url,
-        json=request_body,
-        headers=headers,
-        timeout=30.0,
-    )
-
-    log.debug(f"[loadCodeAssist] Response status: {response.status_code}")
-
+    request_body = {'metadata': {'ideType': 'OMNI'}}
+    log.debug(f'[loadCodeAssist] Fetching project_id from: {request_url}')
+    log.debug(f'[loadCodeAssist] Request body: {request_body}')
+    response = await post_async(request_url, json=request_body, headers=headers, timeout=30.0)
+    log.debug(f'[loadCodeAssist] Response status: {response.status_code}')
     if response.status_code == 200:
         response_text = response.text
-        log.debug(f"[loadCodeAssist] Response body: {response_text}")
-
+        log.debug(f'[loadCodeAssist] Response body: {response_text}')
         data = response.json()
-        log.debug(f"[loadCodeAssist] Response JSON keys: {list(data.keys())}")
-
-        # æå–è®¢é˜…ç­‰çº§ - ä¼˜å…ˆä½¿ç”¨ paidTierï¼ˆæ›´å‡†ç¡®åæ˜ å®é™…æƒç›ï¼‰
-        paid_tier = data.get("paidTier", {})
-        current_tier = data.get("currentTier", {})
-        available_credits = paid_tier.get("availableCredits", []) if isinstance(paid_tier, dict) else []
-
-        # paidTier.id ä¼˜å…ˆï¼Œç„¶åæ˜¯ currentTier.id
+        log.debug(f'[loadCodeAssist] Response JSON keys: {list(data.keys())}')
+        paid_tier = data.get('paidTier', {})
+        current_tier = data.get('currentTier', {})
+        available_credits = paid_tier.get('availableCredits', []) if isinstance(paid_tier, dict) else []
         subscription_tier = None
-        if isinstance(paid_tier, dict) and paid_tier.get("id"):
-            subscription_tier = paid_tier.get("id")
-            log.info(f"[loadCodeAssist] Found paidTier: {subscription_tier}")
-        elif isinstance(current_tier, dict) and current_tier.get("id"):
-            subscription_tier = current_tier.get("id")
-            log.info(f"[loadCodeAssist] Found currentTier: {subscription_tier}")
-
-        # æå–ç§¯åˆ†æ•°é‡ï¼ˆå¦‚æœè¿”å›äº† availableCreditsï¼‰
+        if isinstance(paid_tier, dict) and paid_tier.get('id'):
+            subscription_tier = paid_tier.get('id')
+            log.info(f'[loadCodeAssist] Found paidTier: {subscription_tier}')
+        elif isinstance(current_tier, dict) and current_tier.get('id'):
+            subscription_tier = current_tier.get('id')
+            log.info(f'[loadCodeAssist] Found currentTier: {subscription_tier}')
         credit_amount = None
         if isinstance(available_credits, list) and available_credits:
             first_credit = available_credits[0]
             if isinstance(first_credit, dict):
-                credit_amount = first_credit.get("creditAmount")
+                credit_amount = first_credit.get('creditAmount')
                 if credit_amount is not None:
-                    log.info(f"[loadCodeAssist] Found creditAmount: {credit_amount}")
-
-        # æ£€æŸ¥æ˜¯å¦æœ‰ currentTierï¼ˆè¡¨ç¤ºç”¨æˆ·å·²æ¿€æ´»ï¼‰
+                    log.info(f'[loadCodeAssist] Found creditAmount: {credit_amount}')
         if current_tier:
-            log.info("[loadCodeAssist] User is already activated")
-
-            # ä½¿ç”¨æœå¡å™¨è¿”å›ç„ project_id
-            project_id = data.get("cloudaicompanionProject")
+            log.info('[loadCodeAssist] User is already activated')
+            project_id = data.get('cloudaicompanionProject')
             if project_id:
-                log.info(f"[loadCodeAssist] Successfully fetched project_id: {project_id}, tier: {subscription_tier}")
-                return project_id, subscription_tier, credit_amount
-
-            log.warning("[loadCodeAssist] No project_id in response")
-            return None, subscription_tier, credit_amount
+                log.info(f'[loadCodeAssist] Successfully fetched project_id: {project_id}, tier: {subscription_tier}')
+                return (project_id, subscription_tier, credit_amount)
+            log.warning('[loadCodeAssist] No project_id in response')
+            return (None, subscription_tier, credit_amount)
         else:
-            log.info("[loadCodeAssist] User not activated yet (no currentTier)")
-            return None, None, credit_amount
+            log.info('[loadCodeAssist] User not activated yet (no currentTier)')
+            return (None, None, credit_amount)
     else:
-        log.warning(f"[loadCodeAssist] Failed: HTTP {response.status_code}")
-        log.warning(f"[loadCodeAssist] Response body: {response.text[:500]}")
-        raise Exception(f"HTTP {response.status_code}: {response.text[:200]}")
+        log.warning(f'[loadCodeAssist] Failed: HTTP {response.status_code}')
+        log.warning(f'[loadCodeAssist] Response body: {response.text[:500]}')
+        raise Exception(f'HTTP {response.status_code}: {response.text[:200]}')
 
-
-async def _try_onboard_user(
-    api_base_url: str,
-    headers: dict
-) -> Optional[str]:
-    """
-    å°è¯•é€è¿‡ onboardUser è·å– project_idï¼ˆé•¿æ—¶é—´è¿è¡Œæ“ä½œï¼Œéœ€è¦è½®è¯¢ï¼‰
-
-    Returns:
-        project_id æˆ– None
-    """
+async def _try_onboard_user(api_base_url: str, headers: dict) -> Optional[str]:
+    """Internal implementation detail."""
     request_url = f"{api_base_url.rstrip('/')}/v1internal:onboardUser"
-
-    # é¦–å…ˆéœ€è¦è·å–ç”¨æˆ·ç„ tier ä¿¡æ¯
     tier_id = await _get_onboard_tier(api_base_url, headers)
     if not tier_id:
-        log.error("[onboardUser] Failed to determine user tier")
+        log.error('[onboardUser] Failed to determine user tier')
         return None
-
-    log.info(f"[onboardUser] User tier: {tier_id}")
-
-    # æ„é€  onboardUser è¯·æ±‚
-    # æ³¨æ„ï¼FREE tier ä¸åº”è¯¥åŒ…å« cloudaicompanionProject
-    request_body = {
-        "tierId": tier_id,
-        "metadata": {
-            "ideType": "OMNI",
-            "platform": "PLATFORM_UNSPECIFIED",
-            "pluginType": "GEMINI"
-        }
-    }
-
-    log.debug(f"[onboardUser] Request URL: {request_url}")
-    log.debug(f"[onboardUser] Request body: {request_body}")
-
-    # onboardUser æ˜¯é•¿æ—¶é—´è¿è¡Œæ“ä½œï¼Œéœ€è¦è½®è¯¢
-    # æœ€å¤ç­‰å¾… 10 ç§’ï¼ˆ5 æ¬¡ * 2 ç§’ï¼‰
+    log.info(f'[onboardUser] User tier: {tier_id}')
+    request_body = {'tierId': tier_id, 'metadata': {'ideType': 'OMNI', 'platform': 'PLATFORM_UNSPECIFIED', 'pluginType': 'GEMINI'}}
+    log.debug(f'[onboardUser] Request URL: {request_url}')
+    log.debug(f'[onboardUser] Request body: {request_body}')
     max_attempts = 5
     attempt = 0
-
     while attempt < max_attempts:
         attempt += 1
-        log.debug(f"[onboardUser] Polling attempt {attempt}/{max_attempts}")
-
-        response = await post_async(
-            request_url,
-            json=request_body,
-            headers=headers,
-            timeout=30.0,
-        )
-
-        log.debug(f"[onboardUser] Response status: {response.status_code}")
-
+        log.debug(f'[onboardUser] Polling attempt {attempt}/{max_attempts}')
+        response = await post_async(request_url, json=request_body, headers=headers, timeout=30.0)
+        log.debug(f'[onboardUser] Response status: {response.status_code}')
         if response.status_code == 200:
             data = response.json()
-            log.debug(f"[onboardUser] Response data: {data}")
-
-            # æ£€æŸ¥é•¿æ—¶é—´è¿è¡Œæ“ä½œæ˜¯å¦å®Œæˆ
-            if data.get("done"):
-                log.info("[onboardUser] Operation completed")
-
-                # ä»å“åº”ä¸­æå– project_id
-                response_data = data.get("response", {})
-                project_obj = response_data.get("cloudaicompanionProject", {})
-
+            log.debug(f'[onboardUser] Response data: {data}')
+            if data.get('done'):
+                log.info('[onboardUser] Operation completed')
+                response_data = data.get('response', {})
+                project_obj = response_data.get('cloudaicompanionProject', {})
                 if isinstance(project_obj, dict):
-                    project_id = project_obj.get("id")
+                    project_id = project_obj.get('id')
                 elif isinstance(project_obj, str):
                     project_id = project_obj
                 else:
                     project_id = None
-
                 if project_id:
-                    log.info(f"[onboardUser] Successfully fetched project_id: {project_id}")
+                    log.info(f'[onboardUser] Successfully fetched project_id: {project_id}')
                     return project_id
                 else:
-                    log.warning("[onboardUser] Operation completed but no project_id in response")
+                    log.warning('[onboardUser] Operation completed but no project_id in response')
                     return None
             else:
-                log.debug("[onboardUser] Operation still in progress, waiting 2 seconds...")
+                log.debug('[onboardUser] Operation still in progress, waiting 2 seconds...')
                 await asyncio.sleep(2)
         else:
-            log.warning(f"[onboardUser] Failed: HTTP {response.status_code}")
-            log.warning(f"[onboardUser] Response body: {response.text[:500]}")
-            raise Exception(f"HTTP {response.status_code}: {response.text[:200]}")
-
-    log.error("[onboardUser] Timeout: Operation did not complete within 10 seconds")
+            log.warning(f'[onboardUser] Failed: HTTP {response.status_code}')
+            log.warning(f'[onboardUser] Response body: {response.text[:500]}')
+            raise Exception(f'HTTP {response.status_code}: {response.text[:200]}')
+    log.error('[onboardUser] Timeout: Operation did not complete within 10 seconds')
     return None
 
-
-async def _get_onboard_tier(
-    api_base_url: str,
-    headers: dict
-) -> Optional[str]:
-    """
-    ä» loadCodeAssist å“åº”ä¸­è·å–ç”¨æˆ·åº”è¯¥æ³¨å†Œç„ tier
-
-    Returns:
-        tier_id (å¦‚ "FREE", "STANDARD", "LEGACY") æˆ– None
-    """
+async def _get_onboard_tier(api_base_url: str, headers: dict) -> Optional[str]:
+    """Internal implementation detail."""
     request_url = f"{api_base_url.rstrip('/')}/v1internal:loadCodeAssist"
-    request_body = {
-        "metadata": {
-            "ideType": "OMNI",
-            "platform": "PLATFORM_UNSPECIFIED",
-            "pluginType": "GEMINI"
-        }
-    }
-
-    log.debug(f"[_get_onboard_tier] Fetching tier info from: {request_url}")
-
-    response = await post_async(
-        request_url,
-        json=request_body,
-        headers=headers,
-        timeout=30.0,
-    )
-
+    request_body = {'metadata': {'ideType': 'OMNI', 'platform': 'PLATFORM_UNSPECIFIED', 'pluginType': 'GEMINI'}}
+    log.debug(f'[_get_onboard_tier] Fetching tier info from: {request_url}')
+    response = await post_async(request_url, json=request_body, headers=headers, timeout=30.0)
     if response.status_code == 200:
         data = response.json()
-        log.debug(f"[_get_onboard_tier] Response data: {data}")
-
-        # æŸ¥æ‰¾é»˜è®¤ç„ tier
-        allowed_tiers = data.get("allowedTiers", [])
+        log.debug(f'[_get_onboard_tier] Response data: {data}')
+        allowed_tiers = data.get('allowedTiers', [])
         for tier in allowed_tiers:
-            if tier.get("isDefault"):
-                tier_id = tier.get("id")
-                log.info(f"[_get_onboard_tier] Found default tier: {tier_id}")
+            if tier.get('isDefault'):
+                tier_id = tier.get('id')
+                log.info(f'[_get_onboard_tier] Found default tier: {tier_id}')
                 return tier_id
-
-        # å¦‚æœæ²¡æœ‰é»˜è®¤ tierï¼Œä½¿ç”¨ LEGACY ä½œä¸ºå›é€€
-        log.warning("[_get_onboard_tier] No default tier found, using LEGACY")
-        return "LEGACY"
+        log.warning('[_get_onboard_tier] No default tier found, using LEGACY')
+        return 'LEGACY'
     else:
-        log.error(f"[_get_onboard_tier] Failed to fetch tier info: HTTP {response.status_code}")
+        log.error(f'[_get_onboard_tier] Failed to fetch tier info: HTTP {response.status_code}')
         return None
-
-

@@ -1,6 +1,22 @@
-echo "强制同步项目代码，忽略本地修改..."
-git fetch --all
-git reset --hard origin/$(git rev-parse --abbrev-ref HEAD)
+#!/usr/bin/env bash
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+cd "$REPO_ROOT"
+
+if ! command -v uv >/dev/null 2>&1; then
+    echo "[ERROR] uv is required. Install it from https://docs.astral.sh/uv/ and run this script again." >&2
+    exit 1
+fi
+
+if [ ! -d ".venv" ]; then
+    echo "[INFO] Creating virtual environment..."
+    uv venv
+fi
+
+echo "[INFO] Installing Python dependencies..."
 uv pip install -r requirements.txt
-source .venv/bin/activate
-python backend/main.py
+
+echo "[INFO] Starting Omni Gateway..."
+exec .venv/bin/python backend/main.py

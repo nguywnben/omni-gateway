@@ -1,7 +1,4 @@
-﻿"""
-Global task lifecycle management module
-ç®¡ç†åº”ç”¨ç¨‹åºä¸­æ‰€æœ‰å¼‚æ­¥ä»»å¡ç„ç”Ÿå‘½å‘¨æœŸï¼Œç¡®ä¿æ­£ç¡®æ¸…ç†
-"""
+"""Internal implementation detail."""
 
 import asyncio
 import weakref
@@ -11,8 +8,7 @@ from log import log
 
 
 class TaskManager:
-    """å…¨å±€å¼‚æ­¥ä»»å¡ç®¡ç†å™¨ - å•ä¾‹æ¨¡å¼"""
-
+    """Internal implementation detail."""
     _instance = None
     _lock = asyncio.Lock()
 
@@ -27,13 +23,13 @@ class TaskManager:
             return
 
         self._tasks: Set[asyncio.Task] = set()
-        self._resources: Set[Any] = set()  # éœ€è¦å…³é—­ç„èµ„æº
+        self._resources: Set[Any] = set()
         self._shutdown_event = asyncio.Event()
         self._initialized = True
         log.debug("TaskManager initialized")
 
     def register_task(self, task: asyncio.Task, description: str = None) -> asyncio.Task:
-        """æ³¨å†Œä¸€ä¸ªä»»å¡ä¾›ç”Ÿå‘½å‘¨æœŸç®¡ç†"""
+        """Internal implementation detail."""
         self._tasks.add(task)
         task.add_done_callback(lambda t: self._tasks.discard(t))
 
@@ -44,25 +40,24 @@ class TaskManager:
         return task
 
     def create_task(self, coro, *, name: str = None) -> asyncio.Task:
-        """åˆ›å»ºå¹¶æ³¨å†Œä¸€ä¸ªä»»å¡"""
+        """Internal implementation detail."""
         task = asyncio.create_task(coro, name=name)
         return self.register_task(task, name)
 
     def register_resource(self, resource: Any) -> Any:
-        """æ³¨å†Œä¸€ä¸ªéœ€è¦æ¸…ç†ç„èµ„æºï¼ˆå¦‚HTTPå®¢æˆ·ç«¯ă€æ–‡ä»¶å¥æŸ„ç­‰ï¼‰"""
-        # ä½¿ç”¨å¼±å¼•ç”¨é¿å…å¾ªç¯å¼•ç”¨
+        """Internal implementation detail."""
         self._resources.add(weakref.ref(resource))
         log.debug(f"Registered resource: {type(resource).__name__}")
         return resource
 
     async def shutdown(self, timeout: float = 30.0):
-        """å…³é—­æ‰€æœ‰ä»»å¡å’Œèµ„æº"""
+        """Internal implementation detail."""
         log.info("TaskManager shutdown initiated")
 
-        # è®¾ç½®å…³é—­æ ‡å¿—
+
         self._shutdown_event.set()
 
-        # å–æ¶ˆæ‰€æœ‰æœªå®Œæˆç„ä»»å¡
+
         cancelled_count = 0
         for task in list(self._tasks):
             if not task.done():
@@ -72,7 +67,7 @@ class TaskManager:
         if cancelled_count > 0:
             log.info(f"Cancelled {cancelled_count} pending tasks")
 
-        # ç­‰å¾…æ‰€æœ‰ä»»å¡å®Œæˆï¼ˆåŒ…æ‹¬å–æ¶ˆï¼‰
+
         if self._tasks:
             try:
                 await asyncio.wait_for(
@@ -81,7 +76,7 @@ class TaskManager:
             except asyncio.TimeoutError:
                 log.warning(f"Some tasks did not complete within {timeout}s timeout")
 
-        # æ¸…ç†èµ„æº - æ”¹è¿›å¼±å¼•ç”¨å¤„ç†
+
         cleaned_resources = 0
         failed_resources = 0
         for resource_ref in list(self._resources):
@@ -99,7 +94,7 @@ class TaskManager:
                 except Exception as e:
                     log.warning(f"Failed to close resource {type(resource).__name__}: {e}")
                     failed_resources += 1
-            # å¦‚æœå¼±å¼•ç”¨å·²å¤±æ•ˆï¼Œèµ„æºå·²ç»è¢«è‡ªå¨å›æ”¶ï¼Œæ— éœ€æ“ä½œ
+
 
         if cleaned_resources > 0:
             log.info(f"Cleaned up {cleaned_resources} resources")
@@ -112,11 +107,11 @@ class TaskManager:
 
     @property
     def is_shutdown(self) -> bool:
-        """æ£€æŸ¥æ˜¯å¦å·²ç»å¼€å§‹å…³é—­"""
+        """Internal implementation detail."""
         return self._shutdown_event.is_set()
 
     def get_stats(self) -> Dict[str, int]:
-        """è·å–ä»»å¡ç®¡ç†ç»Ÿè®¡ä¿¡æ¯"""
+        """Internal implementation detail."""
         return {
             "active_tasks": len(self._tasks),
             "registered_resources": len(self._resources),
@@ -124,20 +119,20 @@ class TaskManager:
         }
 
 
-# å…¨å±€ä»»å¡ç®¡ç†å™¨å®ä¾‹
+
 task_manager = TaskManager()
 
 
 def create_managed_task(coro, *, name: str = None) -> asyncio.Task:
-    """åˆ›å»ºä¸€ä¸ªè¢«ç®¡ç†ç„å¼‚æ­¥ä»»å¡ç„ä¾¿æ·å‡½æ•°"""
+    """Internal implementation detail."""
     return task_manager.create_task(coro, name=name)
 
 
 def register_resource(resource: Any) -> Any:
-    """æ³¨å†Œèµ„æºç„ä¾¿æ·å‡½æ•°"""
+    """Internal implementation detail."""
     return task_manager.register_resource(resource)
 
 
 async def shutdown_all_tasks(timeout: float = 30.0):
-    """å…³é—­æ‰€æœ‰ä»»å¡ç„ä¾¿æ·å‡½æ•°"""
+    """Internal implementation detail."""
     await task_manager.shutdown(timeout)

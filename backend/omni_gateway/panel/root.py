@@ -1,4 +1,4 @@
-﻿"""Root routes for the Omni Gateway management console."""
+"""Root routes for the Omni Gateway management console."""
 
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import HTMLResponse

@@ -1,12 +1,9 @@
-﻿"""
-Vertex AI Anonymous API Client
-é€è¿‡ reCAPTCHA Enterprise åŒ¿åè®¿é—® Google Vertex AI API
-ä½¿ç”¨ wreq åº“è¿›è¡Œ TLS æŒ‡çº¹ä¼ªè£…
-"""
+"""Internal implementation detail."""
 
 import asyncio
 import base64
 import json
+import os
 import re
 import random
 import string
@@ -26,7 +23,7 @@ except ImportError:
     WREQ_AVAILABLE = False
 
 
-# ==================== å¸¸é‡ ====================
+
 
 RECAPTCHA_BASE = "https://www.google.com"
 SITE_KEY = "6LdCjtspAAAAAMcV4TGdWLJqRTEk1TfpdLqEnKdj"
@@ -35,12 +32,17 @@ RECAPTCHA_HL = "zh-CN"
 RECAPTCHA_V = "jdMmXeCQEkPbnFDy9T04NbgJ"
 RECAPTCHA_VH = "6581054572"
 
-ANON_API_KEY = "AIzaSyCI-zsRP85UVOi0DjtiCwWBwQ1djDy741g"
-BATCH_GRAPHQL_URL = (
+BATCH_GRAPHQL_ENDPOINT = (
     "https://cloudconsole-pa.clients6.google.com"
     "/v3/entityServices/AiplatformEntityService/schemas/AIPLATFORM_GRAPHQL:batchGraphql"
-    f"?key={ANON_API_KEY}&prettyPrint=false"
 )
+
+
+def _get_batch_graphql_url() -> str:
+    api_key = os.getenv("OGW_VERTEX_ANON_API_KEY", "").strip()
+    if not api_key:
+        raise RuntimeError("OGW_VERTEX_ANON_API_KEY is required for Vertex anonymous routing")
+    return f"{BATCH_GRAPHQL_ENDPOINT}?key={api_key}&prettyPrint=false"
 
 QUERY_SIGNATURE = "2/l8eCsMMY49imcDQ/lwwXyL8cYtTjxZBF2dNqy69LodY="
 OPERATION_NAME = "StreamGenerateContentAnonymous"
@@ -55,18 +57,18 @@ SEC_CH_UA_FULL_VERSION_LIST = (
     '"Not;A=Brand";v="8.0.0.0", "Chromium";v="150.0.7871.13", "Google Chrome";v="150.0.7871.13"'
 )
 
-# æ­£åˆ™ï¼ä» anchor HTML æå– base token
+
 _TOKEN_RE = re.compile(r'id="recaptcha-token"[^>]*value="([^"]+)"')
-# æ­£åˆ™ï¼ä» reload å“åº”æå–æœ€ç»ˆ token
+
 _RRESP_RE = re.compile(r'rresp","(.*?)"')
 
-# finishReason ä¸ºæ­¤å€¼æ—¶ä¸ç»“æŸæµï¼ˆprotobuf é»˜è®¤æ— æ„ä¹‰å€¼ï¼‰
+
 _FINISH_REASON_UNSPECIFIED = "FINISH_REASON_UNSPECIFIED"
 
-# upstream errors ä¸­è¡¨ç¤º 429 é™æµç„å…³é”®è¯
+
 _QUOTA_KEYWORDS = ("Resource has been exhausted", "quota", "RESOURCE_EXHAUSTED", "429")
 
-# æ”¯æŒé€ä¼ è¿› variables ç„å­—æ®µ
+
 _SUPPORTED_VAR_FIELDS = [
     "contents", "tools", "toolConfig", "systemInstruction",
     "safetySettings", "generationConfig",
@@ -77,7 +79,7 @@ def _random_string(n: int) -> str:
     return "".join(random.choices(string.ascii_lowercase + string.digits, k=n))
 
 
-# ==================== è¯·æ±‚å¤´ ====================
+
 
 def _anchor_headers() -> Dict[str, str]:
     return {
@@ -151,7 +153,7 @@ def _batch_graphql_headers() -> Dict[str, str]:
 # ==================== reCAPTCHA ====================
 
 async def _fetch_recaptcha_token_once() -> Optional[str]:
-    """å•æ¬¡å°è¯•è·å– reCAPTCHA tokenï¼Œå¤±è´¥è¿”å› Noneă€‚"""
+    """Internal implementation detail."""
     if not WREQ_AVAILABLE:
         return None
     try:
@@ -239,7 +241,7 @@ async def _fetch_recaptcha_token_once() -> Optional[str]:
 
 
 async def fetch_recaptcha_token() -> Optional[str]:
-    """è·å– reCAPTCHA tokenï¼Œæœ€å¤é‡è¯• 3 æ¬¡ă€‚"""
+    """Internal implementation detail."""
     for attempt in range(3):
         log.debug(f"[VERTEX RECAPTCHA] attempt {attempt + 1}/3")
         token = await _fetch_recaptcha_token_once()
@@ -251,18 +253,15 @@ async def fetch_recaptcha_token() -> Optional[str]:
     return None
 
 
-# ==================== Payload æ„å»º ====================
+
 
 _SKIP_THOUGHT_SENTINEL = "skip_thought_signature_validator"
 _SKIP_THOUGHT_SENTINEL_B64 = base64.b64encode(_SKIP_THOUGHT_SENTINEL.encode()).decode()
 
 
 def _drop_invalid_tool_turns(contents: list) -> list:
-    """
-    åˆ é™¤ name ä¸ºç©ºç„ functionCall æ‰€åœ¨ç„æ•´è½®å·¥å…·è°ƒç”¨ï¼ˆmodel + user functionResponse ä¸€èµ·åˆ ï¼‰ă€‚
-    Gemini ä¸æ¥å— name ä¸ºç©ºç„ functionCallï¼Œè¿™ç±» part æ˜¯ä¸æ¸¸å®¢æˆ·ç«¯äº§ç”Ÿç„æ— æ•ˆå†å²è®°å½•ă€‚
-    """
-    # å…ˆæ‰¾å‡ºå“ªäº› model æ¶ˆæ¯ç„æ‰€æœ‰ functionCall éƒ½æ˜¯ç©º name
+    """Internal implementation detail."""
+
     invalid_indices = set()
     for i, msg in enumerate(contents):
         if not isinstance(msg, dict) or msg.get("role") != "model":
@@ -279,7 +278,7 @@ def _drop_invalid_tool_turns(contents: list) -> list:
         )
         if all_empty:
             invalid_indices.add(i)
-            # ç´§éå…¶åç„ user functionResponse æ¶ˆæ¯ä¹Ÿä¸€èµ·åˆ 
+
             if i + 1 < len(contents):
                 next_msg = contents[i + 1]
                 if isinstance(next_msg, dict) and next_msg.get("role") == "user":
@@ -298,12 +297,7 @@ def _drop_invalid_tool_turns(contents: list) -> list:
 
 
 def _fix_thought_signatures(contents: list) -> list:
-    """
-    è¡¥å…¨æ‰€æœ‰ functionCall/thought part ç¼ºå¤±ç„ thoughtSignatureă€‚
-    åªè¦ part å« functionCallă€thought æˆ– thoughtSignature å­—æ®µï¼Œå°±ç¡®ä¿ thoughtSignature å­˜åœ¨ă€‚
-    æ²¡æœ‰çœŸå®ç­¾åæ—¶æ³¨å…¥ base64(sentinel)
-    name ä¸ºç©ºç„ functionCall åŒæ ·å¤„ç†ï¼ˆå†å²æ¶ˆæ¯é‡Œå¯èƒ½å‡ºç°ï¼‰ă€‚
-    """
+    """Internal implementation detail."""
     for msg in contents:
         if not isinstance(msg, dict):
             continue
@@ -311,7 +305,7 @@ def _fix_thought_signatures(contents: list) -> list:
             if not isinstance(part, dict):
                 continue
 
-            # functionResponse ä¸å¾—æœ‰ thoughtSignature
+
             if "functionResponse" in part or "function_response" in part:
                 part.pop("thoughtSignature", None)
                 part.pop("thought_signature", None)
@@ -325,7 +319,7 @@ def _fix_thought_signatures(contents: list) -> list:
             if not (has_fc or has_thought or has_sig):
                 continue
 
-            # ä» id é‡Œå°è¯•è§£å‡ºçœŸå®ç­¾å
+
             signature = None
             if has_fc:
                 raw_id = fc.get("id") or ""
@@ -340,11 +334,8 @@ def _fix_thought_signatures(contents: list) -> list:
 
 
 def _fix_function_response_names(contents: list) -> list:
-    """
-    è¡¥å…¨ function_response ä¸­ç¼ºå¤±ç„ name å­—æ®µă€‚
-    æŒ‰é¡ºåºæ”¶é›†æ‰€æœ‰ function_call ç„ nameï¼Œå†æŒ‰é¡ºåºå¡«ç»™ç¼º name ç„ function_responseă€‚
-    """
-    # ç¬¬ä¸€éï¼æ”¶é›†æ‰€æœ‰ function_call nameï¼ˆæŒ‰å‡ºç°é¡ºåºï¼‰
+    """Internal implementation detail."""
+
     fc_names = []
     for msg in contents:
         if not isinstance(msg, dict):
@@ -356,7 +347,7 @@ def _fix_function_response_names(contents: list) -> list:
             if isinstance(fc, dict) and fc.get("name"):
                 fc_names.append(fc["name"])
 
-    # ç¬¬äºŒéï¼ç»™ç¼º name ç„ function_response æŒ‰é¡ºåºè¡¥å
+
     name_iter = iter(fc_names)
     for msg in contents:
         if not isinstance(msg, dict):
@@ -371,7 +362,7 @@ def _fix_function_response_names(contents: list) -> list:
 
 
 def _build_variables(model: str, gemini_payload: Dict[str, Any]) -> Dict[str, Any]:
-    """ä» gemini_payload æå– variablesï¼ˆä¸å« region/recaptchaTokenï¼‰ă€‚"""
+    """Internal implementation detail."""
     if "contents" in gemini_payload and isinstance(gemini_payload["contents"], list):
         gemini_payload["contents"] = _drop_invalid_tool_turns(gemini_payload["contents"])
         gemini_payload["contents"] = _fix_thought_signatures(gemini_payload["contents"])
@@ -385,7 +376,7 @@ def _build_variables(model: str, gemini_payload: Dict[str, Any]) -> Dict[str, An
 
 
 def _build_request_payload(model: str, gemini_payload: Dict[str, Any], recaptcha_token: str) -> Dict[str, Any]:
-    """æ„å»ºå‘å¾€ä¸æ¸¸ç„å®Œæ•´ batchGraphql è¯·æ±‚ä½“ă€‚"""
+    """Internal implementation detail."""
     vars_ = _build_variables(model, gemini_payload)
     vars_["region"] = "global"
     vars_["recaptchaToken"] = recaptcha_token
@@ -405,7 +396,7 @@ def _build_request_payload(model: str, gemini_payload: Dict[str, Any], recaptcha
     }
 
 
-# ==================== å“åº”è§£æ ====================
+
 
 def _is_auth_error(text: str) -> bool:
     return "Failed to verify action" in text or "The caller does not have permission" in text
@@ -416,10 +407,7 @@ def _is_quota_error(text: str) -> bool:
 
 
 def _parse_json_objects(raw_text: str):
-    """
-    ä»ä¸æ¸¸å“åº”æ–‡æœ¬ä¸­è±æ‹¬å·é…å¯¹æ‰«ææå–æ‰€æœ‰ JSON å¯¹è±¡ă€‚
-    yield (dict, end_pos) â€” end_pos æ˜¯è¯¥å¯¹è±¡åœ¨ raw_text ä¸­ç»“æŸåç„ä½ç½®ă€‚
-    """
+    """Internal implementation detail."""
     i = 0
     while i < len(raw_text):
         start = raw_text.find("{", i)
@@ -461,10 +449,7 @@ def _parse_json_objects(raw_text: str):
 
 
 def _process_object(obj: Dict[str, Any]) -> Tuple[Optional[Dict[str, Any]], Optional[str], bool]:
-    """
-    å¤„ç†å•ä¸ªä¸æ¸¸ JSON å¯¹è±¡ï¼Œæå– Gemini chunkă€‚
-    è¿”å› (chunk, auth_error_msg, is_quota_error)ă€‚
-    """
+    """Internal implementation detail."""
     results = obj.get("results", [])
     if not isinstance(results, list):
         return None, None, False
@@ -473,7 +458,7 @@ def _process_object(obj: Dict[str, Any]) -> Tuple[Optional[Dict[str, Any]], Opti
         if not isinstance(result, dict):
             continue
 
-        # æ£€æŸ¥ errors å­—æ®µ
+
         errors = result.get("errors", [])
         if errors and isinstance(errors, list):
             first = errors[0]
@@ -511,10 +496,10 @@ def _process_object(obj: Dict[str, Any]) -> Tuple[Optional[Dict[str, Any]], Opti
 
 
 def _clean_part(part: Dict[str, Any]) -> Optional[Dict[str, Any]]:
-    """æ¸…æ´—å•ä¸ª partï¼Œå»é™¤ç©ºåƒåœ¾å­—æ®µï¼Œè¿”å› None è¡¨ç¤ºæ•´ä¸ª part æ— æ•ˆă€‚"""
+    """Internal implementation detail."""
     out: Dict[str, Any] = {}
 
-    # thought æ ‡è®°
+
     thought = part.get("thought")
     if thought is True:
         out["thought"] = True
@@ -523,27 +508,27 @@ def _clean_part(part: Dict[str, Any]) -> Optional[Dict[str, Any]]:
     if part.get("thoughtSignature"):
         out["thoughtSignature"] = part["thoughtSignature"]
 
-    # æ–‡æœ¬å†…å®¹
+
     text = part.get("text")
     if isinstance(text, str) and text:
         out["text"] = text
 
-    # functionCallï¼name éç©ºæ‰ä¿ç•™
+
     fc = part.get("functionCall")
     if isinstance(fc, dict) and fc.get("name", "").strip():
         out["functionCall"] = fc
 
-    # functionResponseï¼name éç©ºæ‰ä¿ç•™
+
     fr = part.get("functionResponse")
     if isinstance(fr, dict) and fr.get("name", "").strip():
         out["functionResponse"] = fr
 
-    # inlineDataï¼mimeType å’Œ data éƒ½éç©ºæ‰ä¿ç•™
+
     inline = part.get("inlineData")
     if isinstance(inline, dict) and inline.get("mimeType") and inline.get("data"):
         out["inlineData"] = inline
 
-    # fileDataï¼fileUri éç©ºæ‰ä¿ç•™
+
     fd = part.get("fileData")
     if isinstance(fd, dict) and fd.get("fileUri"):
         out["fileData"] = fd
@@ -552,7 +537,7 @@ def _clean_part(part: Dict[str, Any]) -> Optional[Dict[str, Any]]:
 
 
 def _extract_chunk(data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
-    """ä»å•ä¸ªæ•°æ®å¯¹è±¡æå–æ ‡å‡†åŒ– Gemini chunkă€‚"""
+    """Internal implementation detail."""
     chunk: Dict[str, Any] = {}
 
     if "candidates" in data and data["candidates"] is not None:
@@ -590,20 +575,13 @@ def _get_finish_reason(chunk: Dict[str, Any]) -> str:
     return ""
 
 
-# ==================== æ ¸å¿ƒè¯·æ±‚å‡½æ•° ====================
+
 
 async def stream_request(
     body: Dict[str, Any],
     native: bool = False,
 ):
-    """
-    æµå¼è¯·æ±‚å…¥å£ă€‚
-
-    body æ ¼å¼: {"model": str, "request": {...gemini payload...}}
-
-    Yields:
-        Response å¯¹è±¡ï¼ˆé”™è¯¯æ—¶ï¼‰æˆ– str/bytesï¼ˆSSE æ ¼å¼æ•°æ®ï¼‰
-    """
+    """Internal implementation detail."""
     if not WREQ_AVAILABLE:
         yield Response(
             content='{"error":{"code":503,"message":"wreq not installed, vertex channel unavailable","status":"UNAVAILABLE"}}',
@@ -647,7 +625,7 @@ async def stream_request(
 
         try:
             resp = await wreq.post(
-                BATCH_GRAPHQL_URL,
+                _get_batch_graphql_url(),
                 json=payload,
                 headers=headers,
                 emulation=Emulation.Chrome131,
@@ -681,7 +659,7 @@ async def stream_request(
                     need_retry = True
             elif resp.status == 429 and attempt < max_retries:
                 quota_retry = True
-                recaptcha_token = None  # æ¢æ–° token é‡è¯•
+                recaptcha_token = None
             elif resp.status in (500, 503) and attempt < max_retries:
                 need_retry = True
             else:
@@ -710,7 +688,7 @@ async def stream_request(
             )
             return
 
-        # è¯»å–æµå¼å“åº”
+
         try:
             async with resp:
                 async with resp.stream() as streamer:
@@ -748,7 +726,7 @@ async def stream_request(
 
                             if auth_retry or need_retry or quota_retry:
                                 break
-                            # åªä¿ç•™æœªè¢«æˆåŸè§£æç„å°¾éƒ¨
+
                             buffer = text[last_end:].encode("utf-8") if last_end < len(text) else b""
         except Exception as e:
             log.error(f"[VERTEX STREAM] stream read error: {e}")
@@ -771,7 +749,7 @@ async def stream_request(
             continue
 
         if not content_yielded and not need_retry:
-            # æµç»“æŸä½†æ²¡å†…å®¹ï¼Œæ¢ token é‡è¯•
+
             if attempt < max_retries:
                 recaptcha_token = None
                 await asyncio.sleep(1)
@@ -779,7 +757,7 @@ async def stream_request(
 
         break
 
-    # æ‰€æœ‰é‡è¯•è€—å°½
+
     yield Response(
         content=json.dumps({"error": {"code": 500, "message": "All retries exhausted", "status": "INTERNAL"}}),
         status_code=500,
@@ -790,11 +768,7 @@ async def stream_request(
 async def non_stream_request(
     body: Dict[str, Any],
 ) -> Response:
-    """
-    éæµå¼è¯·æ±‚å…¥å£ă€‚è¯»å–å®Œæ•´å“åº”åè§£æä¸º Gemini generateContent æ ¼å¼ă€‚
-
-    body æ ¼å¼: {"model": str, "request": {...gemini payload...}}
-    """
+    """Internal implementation detail."""
     if not WREQ_AVAILABLE:
         return Response(
             content='{"error":{"code":503,"message":"wreq not installed, vertex channel unavailable","status":"UNAVAILABLE"}}',
@@ -826,7 +800,7 @@ async def non_stream_request(
 
         try:
             resp = await wreq.post(
-                BATCH_GRAPHQL_URL,
+                _get_batch_graphql_url(),
                 json=payload,
                 headers=headers,
                 emulation=Emulation.Chrome131,
@@ -866,7 +840,7 @@ async def non_stream_request(
                 media_type="application/json",
             )
 
-        # è§£æå“åº”
+
         result = _build_non_stream_response(raw_text)
         if result is None:
             log.error(f"[VERTEX NON-STREAM] parse failed: {raw_text[:300]}")
@@ -892,7 +866,7 @@ async def non_stream_request(
         if isinstance(result, dict) and "quota_error" in result:
             if attempt < max_retries:
                 log.warning(f"[VERTEX NON-STREAM] upstream 429, retry {attempt + 1}/{max_retries}")
-                continue  # ä¸‹ä¸€è½®å¾ªç¯ä¼é‡æ–° fetch_recaptcha_token
+                continue
             return Response(
                 content=json.dumps({"error": {"code": 429, "message": result["quota_error"], "status": "RESOURCE_EXHAUSTED"}}),
                 status_code=429,
@@ -913,10 +887,7 @@ async def non_stream_request(
 
 
 def _build_non_stream_response(raw_text: str) -> Optional[Dict[str, Any]]:
-    """
-    ä» batchGraphql å“åº”ä¸­æå–å¹¶ç»„è£…æ ‡å‡† Gemini generateContent å“åº”ä½“ă€‚
-    è¿”å› Gemini æ ¼å¼ dictï¼ŒNoneï¼ˆè§£æå¤±è´¥ï¼‰ï¼Œæˆ– {"auth_error": msg}ă€‚
-    """
+    """Internal implementation detail."""
     all_parts: list = []
     finish_reason = ""
     usage_metadata: Dict[str, Any] = {}
@@ -1009,7 +980,7 @@ def _build_non_stream_response(raw_text: str) -> Optional[Dict[str, Any]]:
 
 
 def _accumulate_parts(data: Dict[str, Any], all_parts: list) -> None:
-    """ä»å•ä¸ªæ•°æ®å¯¹è±¡ä¸­æå– parts å¹¶è¿½å åˆ° all_partsă€‚"""
+    """Internal implementation detail."""
     candidates = data.get("candidates", [])
     if not isinstance(candidates, list):
         return

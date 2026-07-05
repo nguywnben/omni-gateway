@@ -1,6 +1,4 @@
-﻿"""
-ç‰ˆæœ¬ä¿¡æ¯è·¯ç”±æ¨¡å— - å¤„ç† /ogw/version/* ç›¸å…³ç„HTTPè¯·æ±‚
-"""
+"""Internal implementation detail."""
 
 import os
 
@@ -11,18 +9,15 @@ from log import log
 from paths import VERSION_FILE
 
 
-# åˆ›å»ºè·¯ç”±å™¨
+
 router = APIRouter(prefix="/ogw/version", tags=["version"])
 
 
 @router.get("/info")
 async def get_version_info(check_update: bool = False):
-    """
-    è·å–å½“å‰ç‰ˆæœ¬ä¿¡æ¯ - ä»version.txtè¯»å–
-    å¯é€‰å‚æ•° check_update: æ˜¯å¦æ£€æŸ¥GitHubä¸ç„æœ€æ–°ç‰ˆæœ¬
-    """
+    """Internal implementation detail."""
     try:
-        # è·å–é¡¹ç›®æ ¹ç›®å½•
+
         version_file = VERSION_FILE
 
         # Read version.txt
@@ -55,19 +50,19 @@ async def get_version_info(check_update: bool = False):
             "date": version_data.get('date', '')
         }
 
-        # å¦‚æœéœ€è¦æ£€æŸ¥æ›´æ–°
+
         if check_update:
             try:
                 from omni_gateway.httpx_client import get_async
 
-                # ç›´æ¥è·å–GitHubä¸ç„version.txtæ–‡ä»¶
+
                 github_version_url = "https://raw.githubusercontent.com/nguywnben/omni-gateway/refs/heads/master/backend/version.txt"
 
-                # ä½¿ç”¨ç»Ÿä¸€ç„httpxå®¢æˆ·ç«¯
+
                 resp = await get_async(github_version_url, timeout=10.0)
 
                 if resp.status_code == 200:
-                    # è§£æè¿œç¨‹version.txt
+
                     remote_version_data = {}
                     for line in resp.text.strip().split('\n'):
                         line = line.strip()

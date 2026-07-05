@@ -1,7 +1,4 @@
-﻿"""
-Vertex AI OpenAI-compatible Router - Handles OpenAI format requests via anonymous Vertex AI endpoint
-é€è¿‡åŒ¿å Vertex AI ç«¯ç‚¹å¤„ç† OpenAI æ ¼å¼è¯·æ±‚
-"""
+"""Internal implementation detail."""
 
 import json
 import uuid
@@ -27,7 +24,7 @@ async def chat_completions(
     openai_request: OpenAIChatCompletionRequest,
     token: str = Depends(authenticate_bearer),
 ):
-    """å¤„ç† OpenAI æ ¼å¼ç„èå¤©å®Œæˆè¯·æ±‚ï¼ˆæµå¼å’Œéæµå¼ï¼‰ï¼Œåº•å±‚é€è¿‡åŒ¿å Vertex AI ç«¯ç‚¹ă€‚"""
+    """Internal implementation detail."""
     log.debug(f"[VERTEX-OPENAI] Request for model: {openai_request.model}")
 
     normalized_dict = model_to_dict(openai_request)
@@ -52,7 +49,7 @@ async def chat_completions(
         "request": gemini_dict,
     }
 
-    # ========== éæµå¼è¯·æ±‚ ==========
+
     if not is_streaming:
         from omni_gateway.api.vertex import non_stream_request
         response = await non_stream_request(body=api_request)
@@ -76,7 +73,7 @@ async def chat_completions(
         openai_response = convert_gemini_to_openai_response(gemini_response, real_model, status_code)
         return JSONResponse(content=openai_response, status_code=status_code)
 
-    # ========== æµå¼è¯·æ±‚ ==========
+
     async def stream_generator():
         from omni_gateway.api.vertex import stream_request
         from fastapi import Response

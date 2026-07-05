@@ -1,35 +1,48 @@
-# 检测是否为管理员
-$IsElevated = ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()).
-    IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+$ErrorActionPreference = "Stop"
 
-# Skip Scoop install if already present to avoid stopping the script
-if (Get-Command scoop -ErrorAction SilentlyContinue) {
-    Write-Host "Scoop is already installed. Skipping installation."
-} else {
+function Write-Info {
+    param([string]$Message)
+    Write-Host "[INFO] $Message"
+}
+
+function Write-Fail {
+    param([string]$Message)
+    Write-Error "[ERROR] $Message"
+    exit 1
+}
+
+if (-not (Get-Command scoop -ErrorAction SilentlyContinue)) {
+    Write-Info "Installing Scoop for the current user..."
     Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser -Force
-    if ($IsElevated) {
-        # 管理员：使用官方一行命令并传入 -RunAsAdmin
-        Invoke-Expression "& {$(Invoke-RestMethod get.scoop.sh)} -RunAsAdmin"
-    } else {
-        # 普通用户安装
-        Invoke-WebRequest -useb get.scoop.sh | Invoke-Expression
+    Invoke-RestMethod get.scoop.sh | Invoke-Expression
+}
+
+foreach ($tool in @("git", "uv")) {
+    if (-not (Get-Command $tool -ErrorAction SilentlyContinue)) {
+        Write-Info "Installing $tool..."
+        scoop install $tool
     }
 }
 
-scoop install git uv
 if (Test-Path -LiteralPath "./backend/main.py") {
-    # Already in target directory; skip clone and cd
+    Write-Info "Using current Omni Gateway checkout."
 }
 elseif (Test-Path -LiteralPath "./omni-gateway/backend/main.py") {
     Set-Location ./omni-gateway
 }
 else {
+    Write-Info "Cloning Omni Gateway..."
     git clone https://github.com/nguywnben/omni-gateway.git
     Set-Location ./omni-gateway
 }
-# Create relocatable virtual environment to ensure portability
-$env:UV_VENV_CLEAR = "1"
-uv venv --relocatable
+
+if (-not (Test-Path -LiteralPath ".venv/Scripts/python.exe")) {
+    Write-Info "Creating virtual environment..."
+    uv venv
+}
+
+Write-Info "Installing Python dependencies..."
 uv pip install -r requirements.txt
-.venv/Scripts/activate.ps1
-python backend/main.py
+
+Write-Info "Starting Omni Gateway..."
+& ".venv/Scripts/python.exe" "backend/main.py"

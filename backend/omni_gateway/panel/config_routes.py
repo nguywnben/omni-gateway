@@ -1,6 +1,4 @@
-﻿"""
-é…ç½®è·¯ç”±æ¨¡å— - å¤„ç† /ogw/config/* ç›¸å…³ç„HTTPè¯·æ±‚
-"""
+"""Internal implementation detail."""
 
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import JSONResponse
@@ -14,71 +12,71 @@ from omni_gateway.utils import verify_panel_token
 from .utils import get_env_locked_keys
 
 
-# åˆ›å»ºè·¯ç”±å™¨
+
 router = APIRouter(prefix="/ogw/config", tags=["config"])
 
 
 @router.get("/get")
 async def get_config(token: str = Depends(verify_panel_token)):
-    """è·å–å½“å‰é…ç½®"""
+    """Internal implementation detail."""
     try:
 
 
-        # è¯»å–å½“å‰é…ç½®ï¼ˆåŒ…æ‹¬ç¯å¢ƒå˜é‡å’ŒTOMLæ–‡ä»¶ä¸­ç„é…ç½®ï¼‰
+
         current_config = {}
 
-        # åŸºç¡€é…ç½®
+
         current_config["ogw_code_assist_endpoint"] = await config.get_code_assist_endpoint()
         current_config["ogw_credentials_dir"] = await config.get_credentials_dir()
         current_config["ogw_proxy"] = await config.get_proxy_config() or ""
 
-        # ä»£ç†ç«¯ç‚¹é…ç½®
+
         current_config["ogw_oauth_url"] = await config.get_oauth_proxy_url()
         current_config["ogw_google_apis_url"] = await config.get_googleapis_proxy_url()
         current_config["ogw_resource_manager_url"] = await config.get_resource_manager_api_url()
         current_config["ogw_service_usage_url"] = await config.get_service_usage_api_url()
         current_config["ogw_api_url"] = await config.get_ogw_api_url()
 
-        # è‡ªå¨å°ç¦é…ç½®
+
         current_config["ogw_auto_disable_enabled"] = await config.get_auto_disable_enabled()
         current_config["ogw_auto_disable_error_codes"] = await config.get_auto_disable_error_codes()
 
-        # 429é‡è¯•é…ç½®
+
         current_config["ogw_retry_429_max_retries"] = await config.get_retry_429_max_retries()
         current_config["ogw_retry_429_enabled"] = await config.get_retry_429_enabled()
         current_config["ogw_retry_429_interval"] = await config.get_retry_429_interval()
-        # æ—æˆªæ–­é…ç½®
+
         current_config["ogw_anti_truncation_max_attempts"] = await config.get_anti_truncation_max_attempts()
 
-        # å…¼å®¹æ€§é…ç½®
+
         current_config["ogw_compatibility_mode_enabled"] = await config.get_compatibility_mode_enabled()
 
-        # æ€ç»´é“¾è¿”å›é…ç½®
+
         current_config["ogw_return_thoughts_to_frontend"] = await config.get_return_thoughts_to_frontend()
 
-        # Omniæµå¼è½¬éæµå¼é…ç½®
+
         current_config["ogw_stream_to_nonstream"] = await config.get_ogw_stream_to_nonstream()
         current_config["ogw_switch_credential_enabled"] = await config.get_ogw_switch_credential_enabled()
 
-        # ä¿æ´»é…ç½®
+
         current_config["ogw_keepalive_url"] = await config.get_keepalive_url()
         current_config["ogw_keepalive_interval"] = await config.get_keepalive_interval()
 
-        # æœå¡å™¨é…ç½®
+
         current_config["ogw_host"] = await config.get_server_host()
         current_config["ogw_port"] = await config.get_server_port()
         current_config["ogw_api_password"] = await config.get_api_password()
         current_config["ogw_panel_password"] = await config.get_panel_password()
         current_config["ogw_password"] = await config.get_server_password()
 
-        # ä»å­˜å‚¨ç³»ç»Ÿè¯»å–é…ç½®
+
         storage_adapter = await get_storage_adapter()
         storage_config = await storage_adapter.get_all_config()
 
-        # è·å–ç¯å¢ƒå˜é‡é”å®ç„é…ç½®é”®
+
         env_locked_keys = get_env_locked_keys()
 
-        # åˆå¹¶å­˜å‚¨ç³»ç»Ÿé…ç½®ï¼ˆä¸è¦†ç›–ç¯å¢ƒå˜é‡ï¼‰
+
         for key, value in storage_config.items():
             if key.startswith("ogw_") and key not in env_locked_keys:
                 current_config[key] = value
@@ -92,7 +90,7 @@ async def get_config(token: str = Depends(verify_panel_token)):
 
 @router.post("/save")
 async def save_config(request: ConfigSaveRequest, token: str = Depends(verify_panel_token)):
-    """ä¿å­˜é…ç½®"""
+    """Internal implementation detail."""
     try:
 
         new_config = request.config
@@ -107,7 +105,7 @@ async def save_config(request: ConfigSaveRequest, token: str = Depends(verify_pa
                 detail=f"Configuration keys must start with ogw_: {', '.join(invalid_keys)}",
             )
 
-        # éªŒè¯é…ç½®é¡¹
+
         if "ogw_retry_429_max_retries" in new_config:
             if (
                 not isinstance(new_config["ogw_retry_429_max_retries"], int)
@@ -119,7 +117,7 @@ async def save_config(request: ConfigSaveRequest, token: str = Depends(verify_pa
             if not isinstance(new_config["ogw_retry_429_enabled"], bool):
                 raise HTTPException(status_code=400, detail="429 Retry switch must be a boolean")
 
-        # éªŒè¯æ–°ç„é…ç½®é¡¹
+
         if "ogw_retry_429_interval" in new_config:
             try:
                 interval = float(new_config["ogw_retry_429_interval"])
@@ -154,7 +152,7 @@ async def save_config(request: ConfigSaveRequest, token: str = Depends(verify_pa
             if not isinstance(new_config["ogw_switch_credential_enabled"], bool):
                 raise HTTPException(status_code=400, detail="Omni toggle voucher switch must be a boolean")
 
-        # éªŒè¯ä¿æ´»é…ç½®
+
         if "ogw_keepalive_url" in new_config:
             if not isinstance(new_config["ogw_keepalive_url"], str):
                 raise HTTPException(status_code=400, detail="Keep-alive URL must be a string")
@@ -167,7 +165,7 @@ async def save_config(request: ConfigSaveRequest, token: str = Depends(verify_pa
                 new_config["ogw_keepalive_interval"] = interval
             except (ValueError, TypeError):
                 raise HTTPException(status_code=400, detail="Keep-alive interval must be a valid integer")
-        # éªŒè¯æœå¡å™¨é…ç½®
+
         if "ogw_host" in new_config:
             if not isinstance(new_config["ogw_host"], str) or not new_config["ogw_host"].strip():
                 raise HTTPException(status_code=400, detail="Server host address cannot be empty")
@@ -192,10 +190,10 @@ async def save_config(request: ConfigSaveRequest, token: str = Depends(verify_pa
             if not isinstance(new_config["ogw_password"], str):
                 raise HTTPException(status_code=400, detail="Access password must be a string")
 
-        # è·å–ç¯å¢ƒå˜é‡é”å®ç„é…ç½®é”®
+
         env_locked_keys = get_env_locked_keys()
 
-        # ç›´æ¥ä½¿ç”¨å­˜å‚¨é€‚é…å™¨ä¿å­˜é…ç½®
+
         storage_adapter = await get_storage_adapter()
         for key, value in new_config.items():
             if key not in env_locked_keys:
@@ -203,10 +201,10 @@ async def save_config(request: ConfigSaveRequest, token: str = Depends(verify_pa
                 if key in ("ogw_password", "ogw_api_password", "ogw_panel_password"):
                     log.debug(f"Setting field {key} to: {value}")
 
-        # é‡æ–°å è½½é…ç½®ç¼“å­˜ï¼ˆå…³é”®ï¼ï¼‰
+
         await config.reload_config()
 
-        # å¦‚æœä¿æ´»ç›¸å…³é…ç½®å‘ç”Ÿå˜åŒ–ï¼Œç«‹å³é‡å¯ä¿æ´»æœå¡
+
         keepalive_keys = {"ogw_keepalive_url", "ogw_keepalive_interval"}
         if keepalive_keys & set(new_config.keys()):
             try:
@@ -214,7 +212,7 @@ async def save_config(request: ConfigSaveRequest, token: str = Depends(verify_pa
             except Exception as e:
                 log.warning(f"Failed to restart keep-alive service: {e}")
 
-        # éªŒè¯ä¿å­˜åç„ç»“æœ
+
         test_api_password = await config.get_api_password()
         test_panel_password = await config.get_panel_password()
         test_password = await config.get_server_password()

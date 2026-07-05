@@ -1,4 +1,4 @@
-﻿import sqlite3
+import sqlite3
 import os
 import time
 import threading
@@ -50,11 +50,11 @@ async def get_total_files_count() -> int:
         from omni_gateway.storage_adapter import get_storage_adapter
         storage_adapter = await get_storage_adapter()
         ag_summary = await storage_adapter._backend.get_credentials_summary(limit=10000, mode="omni")
-        
+
         filenames = set()
         for item in ag_summary.get("items", []):
             filenames.add(os.path.basename(item["filename"]))
-            
+
         return len(filenames)
     except Exception as e:
         log.error(f"Error counting credentials for usage aggregation: {e}")
@@ -65,11 +65,11 @@ async def get_all_credential_filenames() -> List[str]:
         from omni_gateway.storage_adapter import get_storage_adapter
         storage_adapter = await get_storage_adapter()
         ag_summary = await storage_adapter._backend.get_credentials_summary(limit=10000, mode="omni")
-        
+
         filenames = set()
         for item in ag_summary.get("items", []):
             filenames.add(os.path.basename(item["filename"]))
-            
+
         return sorted(list(filenames))
     except Exception as e:
         log.error(f"Error getting credential filenames for usage: {e}")
@@ -79,12 +79,12 @@ async def get_stats_24h() -> Dict[str, Dict[str, int]]:
     init_db()
     since = time.time() - 86400
     res = {}
-    
+
     # Pre-populate all existing filenames with 0 calls
     filenames = await get_all_credential_filenames()
     for name in filenames:
         res[name] = {"calls_24h": 0}
-        
+
     with db_lock:
         conn = sqlite3.connect(db_path)
         try:
@@ -98,7 +98,7 @@ async def get_stats_24h() -> Dict[str, Dict[str, int]]:
             log.error(f"Failed to fetch 24h stats: {e}")
         finally:
             conn.close()
-            
+
     return res
 
 def reset_stats(filename: str):

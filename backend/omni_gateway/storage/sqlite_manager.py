@@ -1,6 +1,4 @@
-﻿"""
-SQLite å­˜å‚¨ç®¡ç†å™¨
-"""
+"""Internal implementation detail."""
 
 import asyncio
 import json
@@ -15,9 +13,8 @@ from paths import DEFAULT_CREDENTIALS_DIR
 
 
 class SQLiteManager:
-    """SQLite æ•°æ®åº“ç®¡ç†å™¨"""
+    """Internal implementation detail."""
 
-    # ç¶æ€å­—æ®µå¸¸é‡
     STATE_FIELDS = {
         "error_codes",
         "error_messages",
@@ -30,7 +27,7 @@ class SQLiteManager:
         "enable_credit",
     }
 
-    # æ‰€æœ‰å¿…éœ€ç„åˆ—å®ä¹‰ï¼ˆç”¨äºè‡ªå¨æ ¡éªŒå’Œä¿®å¤ï¼‰
+
     REQUIRED_COLUMNS = {
         "credentials": [
             ("disabled", "INTEGER DEFAULT 0"),
@@ -68,12 +65,12 @@ class SQLiteManager:
         self._initialized = False
         self._lock = asyncio.Lock()
 
-        # å†…å­˜é…ç½®ç¼“å­˜ - åˆå§‹åŒ–æ—¶å è½½ä¸€æ¬¡
+
         self._config_cache: Dict[str, Any] = {}
         self._config_loaded = False
 
     async def initialize(self) -> None:
-        """åˆå§‹åŒ– SQLite æ•°æ®åº“"""
+        """Internal implementation detail."""
         if self._initialized:
             return
 
@@ -82,31 +79,31 @@ class SQLiteManager:
                 return
 
             try:
-                # è·å–å‡­è¯ç›®å½•
+
                 self._credentials_dir = os.getenv("OGW_CREDENTIALS_DIR", str(DEFAULT_CREDENTIALS_DIR))
                 self._db_path = os.path.join(self._credentials_dir, "credentials.db")
 
-                # ç¡®ä¿ç›®å½•å­˜åœ¨
+
                 os.makedirs(self._credentials_dir, exist_ok=True)
 
-                # åˆ›å»ºæ•°æ®åº“å’Œè¡¨
+
                 async with aiosqlite.connect(self._db_path) as db:
-                    # å¯ç”¨ WAL æ¨¡å¼ï¼ˆæå‡å¹¶å‘æ€§èƒ½ï¼‰
+
                     await db.execute("PRAGMA journal_mode=WAL")
                     await db.execute("PRAGMA foreign_keys=ON")
 
-                    # æ£€æŸ¥å¹¶è‡ªå¨ä¿®å¤æ•°æ®åº“ç»“æ„
+
                     await self._ensure_schema_compatibility(db)
 
-                    # åˆ›å»ºè¡¨
+
                     await self._create_tables(db)
 
-                    # ä¿®å¤å¯èƒ½åŒ…å«è·¯å¾„ç„å‡­è¯æ–‡ä»¶å
+
                     await self._repair_credential_filenames(db)
 
                     await db.commit()
 
-                # å è½½é…ç½®åˆ°å†…å­˜
+
                 await self._load_config_cache()
 
                 self._initialized = True
@@ -117,13 +114,11 @@ class SQLiteManager:
                 raise
 
     async def _ensure_schema_compatibility(self, db: aiosqlite.Connection) -> None:
-        """
-        ç¡®ä¿æ•°æ®åº“ç»“æ„å…¼å®¹ï¼Œè‡ªå¨ä¿®å¤ç¼ºå¤±ç„åˆ—
-        """
+        """Internal implementation detail."""
         try:
-            # æ£€æŸ¥æ¯ä¸ªè¡¨
+
             for table_name, columns in self.REQUIRED_COLUMNS.items():
-                # æ£€æŸ¥è¡¨æ˜¯å¦å­˜åœ¨
+
                 async with db.execute(
                     "SELECT name FROM sqlite_master WHERE type='table' AND name=?",
                     (table_name,)
@@ -132,11 +127,11 @@ class SQLiteManager:
                         log.debug(f"Table {table_name} does not exist, will be created")
                         continue
 
-                # è·å–ç°æœ‰åˆ—
+
                 async with db.execute(f"PRAGMA table_info({table_name})") as cursor:
                     existing_columns = {row[1] for row in await cursor.fetchall()}
 
-                # æ·»å ç¼ºå¤±ç„åˆ—
+
                 added_count = 0
                 for col_name, col_def in columns:
                     if col_name not in existing_columns:
@@ -152,77 +147,76 @@ class SQLiteManager:
 
         except Exception as e:
             log.error(f"Error ensuring schema compatibility: {e}")
-            # ä¸æ›å‡ºå¼‚å¸¸ï¼Œå…è®¸ç»§ç»­åˆå§‹åŒ–
+
 
     async def _create_tables(self, db: aiosqlite.Connection):
-        """åˆ›å»ºæ•°æ®åº“è¡¨å’Œç´¢å¼•"""
-        # å‡­è¯è¡¨
+        """Internal implementation detail."""
         await db.execute("""
             CREATE TABLE IF NOT EXISTS credentials (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 filename TEXT UNIQUE NOT NULL,
                 credential_data TEXT NOT NULL,
 
-                -- ç¶æ€å­—æ®µ
+                --
                 disabled INTEGER DEFAULT 0,
                 error_codes TEXT DEFAULT '[]',
                 error_messages TEXT DEFAULT '[]',
                 last_success REAL,
                 user_email TEXT,
 
-                -- æ¨¡å‹çº§ CD æ”¯æŒ (JSON: {model_name: cooldown_timestamp})
+                --  CD  (JSON: {model_name: cooldown_timestamp})
                 model_cooldowns TEXT DEFAULT '{}',
 
-                -- preview ç¶æ€ (åªå¯¹ code_assist æœ‰æ•ˆï¼Œé»˜è®¤ä¸º true)
+                -- preview  ( code_assist  true)
                 preview INTEGER DEFAULT 1,
 
-                -- tier ç¶æ€ (åªå¯¹ code_assist æœ‰æ•ˆï¼Œé»˜è®¤ä¸º pro)
+                -- tier  ( code_assist  pro)
                 tier TEXT DEFAULT 'pro',
 
-                -- è½®æ¢ç›¸å…³
+                --
                 rotation_order INTEGER DEFAULT 0,
                 call_count INTEGER DEFAULT 0,
 
-                -- æ—¶é—´æˆ³
+                --
                 created_at REAL DEFAULT (unixepoch()),
                 updated_at REAL DEFAULT (unixepoch())
             )
         """)
 
-        # Omni å‡­è¯è¡¨ï¼ˆç»“æ„ç›¸åŒä½†ç‹¬ç«‹å­˜å‚¨ï¼‰
+
         await db.execute("""
             CREATE TABLE IF NOT EXISTS omni_credentials (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 filename TEXT UNIQUE NOT NULL,
                 credential_data TEXT NOT NULL,
 
-                -- ç¶æ€å­—æ®µ
+                --
                 disabled INTEGER DEFAULT 0,
                 error_codes TEXT DEFAULT '[]',
                 error_messages TEXT DEFAULT '[]',
                 last_success REAL,
                 user_email TEXT,
 
-                -- æ¨¡å‹çº§ CD æ”¯æŒ (JSON: {model_name: cooldown_timestamp})
+                --  CD  (JSON: {model_name: cooldown_timestamp})
                 model_cooldowns TEXT DEFAULT '{}',
 
-                -- tier ç¶æ€ (é»˜è®¤ä¸º pro)
+                -- tier  ( pro)
                 tier TEXT DEFAULT 'pro',
 
-                -- æ˜¯å¦å¯ç”¨ä¿¡ç”¨é¢åº¦æ¨¡å¼ï¼ˆä»… omniï¼Œæœ‰æ•ˆå€¼ 0/1ï¼‰
+                --  omni 0/1
                 enable_credit INTEGER DEFAULT 0,
 
-                -- è½®æ¢ç›¸å…³
+                --
                 rotation_order INTEGER DEFAULT 0,
                 call_count INTEGER DEFAULT 0,
 
-                -- æ—¶é—´æˆ³
+                --
                 created_at REAL DEFAULT (unixepoch()),
                 updated_at REAL DEFAULT (unixepoch())
             )
         """)
 
-        # åˆ›å»ºç´¢å¼• - æ™®é€å‡­è¯è¡¨
+
         await db.execute("""
             CREATE INDEX IF NOT EXISTS idx_disabled
             ON credentials(disabled)
@@ -232,7 +226,7 @@ class SQLiteManager:
             ON credentials(rotation_order)
         """)
 
-        # åˆ›å»ºç´¢å¼• - Omni å‡­è¯è¡¨
+
         await db.execute("""
             CREATE INDEX IF NOT EXISTS idx_ag_disabled
             ON omni_credentials(disabled)
@@ -242,7 +236,7 @@ class SQLiteManager:
             ON omni_credentials(rotation_order)
         """)
 
-        # é…ç½®è¡¨
+
         await db.execute("""
             CREATE TABLE IF NOT EXISTS config (
                 key TEXT PRIMARY KEY,
@@ -254,19 +248,17 @@ class SQLiteManager:
         log.debug("SQLite tables and indexes created")
 
     async def _repair_credential_filenames(self, db: aiosqlite.Connection):
-        """
-        ä¿®å¤å‡­è¯æ•°æ®åº“ä¸­å¯èƒ½åŒ…å«è·¯å¾„ç„æ–‡ä»¶åï¼Œç¡®ä¿æ‰€æœ‰æ–‡ä»¶åéƒ½æ˜¯ basename
-        """
+        """Internal implementation detail."""
         try:
             repaired_count = 0
 
-            # ä¿®å¤ credentials è¡¨
+
             async with db.execute("SELECT filename FROM credentials") as cursor:
                 rows = await cursor.fetchall()
                 for (filename,) in rows:
                     basename = os.path.basename(filename)
                     if basename != filename:
-                        # æ£€æŸ¥æ˜¯å¦ä¼äº§ç”Ÿå†²çª
+
                         async with db.execute(
                             "SELECT COUNT(*) FROM credentials WHERE filename = ?",
                             (basename,)
@@ -274,7 +266,7 @@ class SQLiteManager:
                             count = (await check_cursor.fetchone())[0]
 
                         if count == 0:
-                            # æ— å†²çªï¼Œç›´æ¥æ›´æ–°
+
                             await db.execute(
                                 "UPDATE credentials SET filename = ? WHERE filename = ?",
                                 (basename, filename)
@@ -282,7 +274,7 @@ class SQLiteManager:
                             repaired_count += 1
                             log.info(f"Repaired credential filename: {filename} -> {basename}")
                         else:
-                            # æœ‰å†²çªï¼Œåˆ é™¤å¸¦è·¯å¾„ç„æ—§è®°å½•ï¼ˆä¿ç•™ basename ç„è®°å½•ï¼‰
+
                             await db.execute(
                                 "DELETE FROM credentials WHERE filename = ?",
                                 (filename,)
@@ -290,13 +282,13 @@ class SQLiteManager:
                             repaired_count += 1
                             log.warning(f"Removed duplicate credential with path: {filename} (kept {basename})")
 
-            # ä¿®å¤ omni_credentials è¡¨
+
             async with db.execute("SELECT filename FROM omni_credentials") as cursor:
                 rows = await cursor.fetchall()
                 for (filename,) in rows:
                     basename = os.path.basename(filename)
                     if basename != filename:
-                        # æ£€æŸ¥æ˜¯å¦ä¼äº§ç”Ÿå†²çª
+
                         async with db.execute(
                             "SELECT COUNT(*) FROM omni_credentials WHERE filename = ?",
                             (basename,)
@@ -304,7 +296,7 @@ class SQLiteManager:
                             count = (await check_cursor.fetchone())[0]
 
                         if count == 0:
-                            # æ— å†²çªï¼Œç›´æ¥æ›´æ–°
+
                             await db.execute(
                                 "UPDATE omni_credentials SET filename = ? WHERE filename = ?",
                                 (basename, filename)
@@ -312,7 +304,7 @@ class SQLiteManager:
                             repaired_count += 1
                             log.info(f"Repaired omni credential filename: {filename} -> {basename}")
                         else:
-                            # æœ‰å†²çªï¼Œåˆ é™¤å¸¦è·¯å¾„ç„æ—§è®°å½•ï¼ˆä¿ç•™ basename ç„è®°å½•ï¼‰
+
                             await db.execute(
                                 "DELETE FROM omni_credentials WHERE filename = ?",
                                 (filename,)
@@ -327,10 +319,10 @@ class SQLiteManager:
 
         except Exception as e:
             log.error(f"Error repairing credential filenames: {e}")
-            # ä¸æ›å‡ºå¼‚å¸¸ï¼Œå…è®¸ç»§ç»­åˆå§‹åŒ–
+
 
     async def _load_config_cache(self):
-        """å è½½é…ç½®åˆ°å†…å­˜ç¼“å­˜ï¼ˆä»…åœ¨åˆå§‹åŒ–æ—¶è°ƒç”¨ä¸€æ¬¡ï¼‰"""
+        """Internal implementation detail."""
         if self._config_loaded:
             return
 
@@ -353,17 +345,17 @@ class SQLiteManager:
             self._config_cache = {}
 
     async def close(self) -> None:
-        """å…³é—­æ•°æ®åº“è¿æ¥"""
+        """Internal implementation detail."""
         self._initialized = False
         log.debug("SQLite storage closed")
 
     def _ensure_initialized(self):
-        """ç¡®ä¿å·²åˆå§‹åŒ–"""
+        """Internal implementation detail."""
         if not self._initialized:
             raise RuntimeError("SQLite manager not initialized")
 
     def _get_table_name(self, mode: str) -> str:
-        """æ ¹æ® mode è·å–å¯¹åº”ç„è¡¨å"""
+        """Internal implementation detail."""
         if mode == "omni":
             return "omni_credentials"
         elif mode == "code_assist":
@@ -371,21 +363,12 @@ class SQLiteManager:
         else:
             raise ValueError(f"Invalid mode: {mode}. Must be 'code_assist' or 'omni'")
 
-    # ============ SQL æ–¹æ³• ============
+
 
     async def get_next_available_credential(
         self, mode: str = "code_assist", model_name: Optional[str] = None
     ) -> Optional[Tuple[str, Dict[str, Any]]]:
-        """
-        éæœºè·å–ä¸€ä¸ªå¯ç”¨å‡­è¯ï¼ˆè´Ÿè½½å‡è¡¡ï¼‰
-        - æœªç¦ç”¨
-        - å¦‚æœæä¾›äº† model_nameï¼Œè¿˜ä¼æ£€æŸ¥æ¨¡å‹çº§å†·å´å’Œpreviewç¶æ€
-        - éæœºé€‰æ‹©
-
-        Args:
-            mode: å‡­è¯æ¨¡å¼ ("code_assist" æˆ– "omni")
-            model_name: å®Œæ•´æ¨¡å‹åï¼ˆå¦‚ "gemini-2.0-flash-exp", "gemini-3-flash-preview"ï¼‰
-        """
+        """Internal implementation detail."""
         self._ensure_initialized()
 
         try:
@@ -470,11 +453,7 @@ class SQLiteManager:
             return None
 
     async def get_available_credentials_list(self) -> List[str]:
-        """
-        è·å–æ‰€æœ‰å¯ç”¨å‡­è¯åˆ—è¡¨
-        - æœªç¦ç”¨
-        - æŒ‰è½®æ¢é¡ºåºæ’åº
-        """
+        """Internal implementation detail."""
         self._ensure_initialized()
 
         try:
@@ -492,19 +471,19 @@ class SQLiteManager:
             log.error(f"Error getting available credentials list: {e}")
             return []
 
-    # ============ StorageBackend åè®®æ–¹æ³• ============
+
 
     async def store_credential(self, filename: str, credential_data: Dict[str, Any], mode: str = "code_assist") -> bool:
-        """å­˜å‚¨æˆ–æ›´æ–°å‡­è¯"""
+        """Internal implementation detail."""
         self._ensure_initialized()
 
-        # ç»Ÿä¸€ä½¿ç”¨ basename å¤„ç†æ–‡ä»¶å
+
         filename = os.path.basename(filename)
 
         try:
             table_name = self._get_table_name(mode)
             async with aiosqlite.connect(self._db_path) as db:
-                # æ£€æŸ¥å‡­è¯æ˜¯å¦å­˜åœ¨
+
                 async with db.execute(f"""
                     SELECT disabled, error_codes, last_success, user_email,
                            rotation_order, call_count
@@ -513,7 +492,7 @@ class SQLiteManager:
                     existing = await cursor.fetchone()
 
                 if existing:
-                    # æ›´æ–°ç°æœ‰å‡­è¯ï¼ˆä¿ç•™ç¶æ€ï¼‰
+
                     await db.execute(f"""
                         UPDATE {table_name}
                         SET credential_data = ?,
@@ -521,7 +500,7 @@ class SQLiteManager:
                         WHERE filename = ?
                     """, (json.dumps(credential_data), filename))
                 else:
-                    # æ’å…¥æ–°å‡­è¯
+
                     async with db.execute(f"""
                         SELECT COALESCE(MAX(rotation_order), -1) + 1 FROM {table_name}
                     """) as cursor:
@@ -543,16 +522,16 @@ class SQLiteManager:
             return False
 
     async def get_credential(self, filename: str, mode: str = "code_assist") -> Optional[Dict[str, Any]]:
-        """è·å–å‡­è¯æ•°æ®"""
+        """Internal implementation detail."""
         self._ensure_initialized()
 
-        # ç»Ÿä¸€ä½¿ç”¨ basename å¤„ç†æ–‡ä»¶å
+
         filename = os.path.basename(filename)
 
         try:
             table_name = self._get_table_name(mode)
             async with aiosqlite.connect(self._db_path) as db:
-                # ç²¾ç¡®åŒ¹é…
+
                 async with db.execute(f"""
                     SELECT credential_data FROM {table_name} WHERE filename = ?
                 """, (filename,)) as cursor:
@@ -567,7 +546,7 @@ class SQLiteManager:
             return None
 
     async def list_credentials(self, mode: str = "code_assist") -> List[str]:
-        """åˆ—å‡ºæ‰€æœ‰å‡­è¯æ–‡ä»¶åï¼ˆåŒ…æ‹¬ç¦ç”¨ç„ï¼‰"""
+        """Internal implementation detail."""
         self._ensure_initialized()
 
         try:
@@ -584,16 +563,16 @@ class SQLiteManager:
             return []
 
     async def delete_credential(self, filename: str, mode: str = "code_assist") -> bool:
-        """åˆ é™¤å‡­è¯"""
+        """Internal implementation detail."""
         self._ensure_initialized()
 
-        # ç»Ÿä¸€ä½¿ç”¨ basename å¤„ç†æ–‡ä»¶å
+
         filename = os.path.basename(filename)
 
         try:
             table_name = self._get_table_name(mode)
             async with aiosqlite.connect(self._db_path) as db:
-                # ç²¾ç¡®åŒ¹é…åˆ é™¤
+
                 result = await db.execute(f"""
                     DELETE FROM {table_name} WHERE filename = ?
                 """, (filename,))
@@ -613,17 +592,17 @@ class SQLiteManager:
             return False
 
     async def update_credential_state(self, filename: str, state_updates: Dict[str, Any], mode: str = "code_assist") -> bool:
-        """æ›´æ–°å‡­è¯ç¶æ€"""
+        """Internal implementation detail."""
         self._ensure_initialized()
 
-        # ç»Ÿä¸€ä½¿ç”¨ basename å¤„ç†æ–‡ä»¶å
+
         filename = os.path.basename(filename)
 
         try:
             table_name = self._get_table_name(mode)
             log.debug(f"[DB] update_credential_state start: filename = {filename}, state_updates = {state_updates}, mode = {mode}, table = {table_name}")
 
-            # æ„å»ºå¨æ€ SQL
+
             set_clauses = []
             values = []
 
@@ -632,7 +611,7 @@ class SQLiteManager:
                     if key == "enable_credit" and mode != "omni":
                         continue
                     if key in ("error_codes", "error_messages", "model_cooldowns"):
-                        # JSON å­—æ®µéœ€è¦åºåˆ—åŒ–
+
                         set_clauses.append(f"{key} = ?")
                         values.append(json.dumps(value))
                     else:
@@ -649,7 +628,7 @@ class SQLiteManager:
             log.debug(f"[DB] SQL parameters: set_clauses = {set_clauses}, values = {values}")
 
             async with aiosqlite.connect(self._db_path) as db:
-                # ç²¾ç¡®åŒ¹é…æ›´æ–°
+
                 sql_exact = f"""
                     UPDATE {table_name}
                     SET {', '.join(set_clauses)}
@@ -662,7 +641,7 @@ class SQLiteManager:
                 updated_count = result.rowcount
                 log.debug(f"[DB] Exact match rowcount = {updated_count}")
 
-                # æäº¤å‰æ£€æŸ¥
+
                 log.debug(f"[DB] Ready to commit, total update lines = {updated_count}")
                 await db.commit()
                 log.debug(f"[DB] commit complete")
@@ -676,16 +655,16 @@ class SQLiteManager:
             return False
 
     async def get_credential_state(self, filename: str, mode: str = "code_assist") -> Dict[str, Any]:
-        """è·å–å‡­è¯ç¶æ€ï¼ˆä¸åŒ…å«error_messagesï¼‰"""
+        """Internal implementation detail."""
         self._ensure_initialized()
 
-        # ç»Ÿä¸€ä½¿ç”¨ basename å¤„ç†æ–‡ä»¶å
+
         filename = os.path.basename(filename)
 
         try:
             table_name = self._get_table_name(mode)
             async with aiosqlite.connect(self._db_path) as db:
-                # ç²¾ç¡®åŒ¹é…
+
                 if mode == "code_assist":
                     async with db.execute(f"""
                         SELECT disabled, error_codes, last_success, user_email, model_cooldowns, preview, tier
@@ -706,7 +685,7 @@ class SQLiteManager:
                                 "tier": row[6] if row[6] is not None else "pro",
                             }
 
-                    # è¿”å›é»˜è®¤ç¶æ€
+
                     return {
                         "disabled": False,
                         "error_codes": [],
@@ -717,7 +696,7 @@ class SQLiteManager:
                         "tier": "pro",
                     }
                 else:
-                    # omni æ¨¡å¼
+
                     async with db.execute(f"""
                         SELECT disabled, error_codes, last_success, user_email, model_cooldowns, tier, enable_credit
                         FROM {table_name} WHERE filename = ?
@@ -737,7 +716,7 @@ class SQLiteManager:
                                 "enable_credit": bool(row[6]) if row[6] is not None else False,
                             }
 
-                    # è¿”å›é»˜è®¤ç¶æ€
+
                     return {
                         "disabled": False,
                         "error_codes": [],
@@ -753,7 +732,7 @@ class SQLiteManager:
             return {}
 
     async def get_all_credential_states(self, mode: str = "code_assist") -> Dict[str, Dict[str, Any]]:
-        """è·å–æ‰€æœ‰å‡­è¯ç¶æ€ï¼ˆä¸åŒ…å«error_messagesï¼‰"""
+        """Internal implementation detail."""
         self._ensure_initialized()
 
         try:
@@ -776,7 +755,7 @@ class SQLiteManager:
                             model_cooldowns_json = row[5] or '{}'
                             model_cooldowns = json.loads(model_cooldowns_json)
 
-                            # è‡ªå¨è¿‡æ»¤æ‰å·²è¿‡æœŸç„æ¨¡å‹CD
+
                             if model_cooldowns:
                                 model_cooldowns = {
                                     k: v for k, v in model_cooldowns.items()
@@ -795,7 +774,7 @@ class SQLiteManager:
 
                         return states
                 else:
-                    # omni æ¨¡å¼
+
                     async with db.execute(f"""
                         SELECT filename, disabled, error_codes, last_success,
                                user_email, model_cooldowns, tier, enable_credit
@@ -812,7 +791,7 @@ class SQLiteManager:
                             model_cooldowns_json = row[5] or '{}'
                             model_cooldowns = json.loads(model_cooldowns_json)
 
-                            # è‡ªå¨è¿‡æ»¤æ‰å·²è¿‡æœŸç„æ¨¡å‹CD
+
                             if model_cooldowns:
                                 model_cooldowns = {
                                     k: v for k, v in model_cooldowns.items()
@@ -846,30 +825,15 @@ class SQLiteManager:
         preview_filter: Optional[str] = None,
         tier_filter: Optional[str] = None
     ) -> Dict[str, Any]:
-        """
-        è·å–å‡­è¯ç„æ‘˜è¦ä¿¡æ¯ï¼ˆä¸åŒ…å«å®Œæ•´å‡­è¯æ•°æ®ï¼‰- æ”¯æŒåˆ†é¡µå’Œç¶æ€ç­›é€‰
-
-        Args:
-            offset: è·³è¿‡ç„è®°å½•æ•°ï¼ˆé»˜è®¤0ï¼‰
-            limit: è¿”å›ç„æœ€å¤§è®°å½•æ•°ï¼ˆNoneè¡¨ç¤ºè¿”å›æ‰€æœ‰ï¼‰
-            status_filter: ç¶æ€ç­›é€‰ï¼ˆall=å…¨éƒ¨, enabled=ä»…å¯ç”¨, disabled=ä»…ç¦ç”¨ï¼‰
-            mode: å‡­è¯æ¨¡å¼ ("code_assist" æˆ– "omni")
-            error_code_filter: é”™è¯¯ç ç­›é€‰ï¼ˆæ ¼å¼å¦‚"400"æˆ–"403"ï¼Œç­›é€‰åŒ…å«è¯¥é”™è¯¯ç ç„å‡­è¯ï¼‰
-            cooldown_filter: å†·å´ç¶æ€ç­›é€‰ï¼ˆ"in_cooldown"=å†·å´ä¸­, "no_cooldown"=æœªå†·å´ï¼‰
-            preview_filter: Previewç­›é€‰ï¼ˆ"preview"=æ”¯æŒpreview, "no_preview"=ä¸æ”¯æŒpreviewï¼Œä»…code_assistæ¨¡å¼æœ‰æ•ˆï¼‰
-            tier_filter: tierç­›é€‰ï¼ˆ"free", "pro", "ultra"ï¼‰
-
-        Returns:
-            åŒ…å« itemsï¼ˆå‡­è¯åˆ—è¡¨ï¼‰ă€totalï¼ˆæ€»æ•°ï¼‰ă€offsetă€limit ç„å­—å…¸
-        """
+        """Internal implementation detail."""
         self._ensure_initialized()
 
         try:
-            # æ ¹æ® mode é€‰æ‹©è¡¨å
+
             table_name = self._get_table_name(mode)
 
             async with aiosqlite.connect(self._db_path) as db:
-                # å…ˆè®¡ç®—å…¨å±€ç»Ÿè®¡æ•°æ®ï¼ˆä¸å—ç­›é€‰æ¡ä»¶å½±å“ï¼‰
+
                 global_stats = {"total": 0, "normal": 0, "disabled": 0}
                 async with db.execute(f"""
                     SELECT disabled, COUNT(*) FROM {table_name} GROUP BY disabled
@@ -882,7 +846,7 @@ class SQLiteManager:
                         else:
                             global_stats["normal"] = count
 
-                # æ„å»ºWHEREå­å¥
+
                 where_clauses = []
                 count_params = []
 
@@ -904,12 +868,12 @@ class SQLiteManager:
                         except ValueError:
                             filter_int = None
 
-                # æ„å»ºWHEREå­å¥
+
                 where_clause = ""
                 if where_clauses:
                     where_clause = "WHERE " + " AND ".join(where_clauses)
 
-                # å…ˆè·å–æ‰€æœ‰æ•°æ®ï¼ˆç”¨äºå†·å´ç­›é€‰ï¼Œå› ä¸ºéœ€è¦åœ¨Pythonä¸­åˆ¤æ–­ï¼‰
+
                 if mode == "code_assist":
                     all_query = f"""
                         SELECT filename, disabled, error_codes, last_success,
@@ -939,7 +903,7 @@ class SQLiteManager:
                         model_cooldowns_json = row[6] or '{}'
                         model_cooldowns = json.loads(model_cooldowns_json)
 
-                        # è‡ªå¨è¿‡æ»¤æ‰å·²è¿‡æœŸç„æ¨¡å‹CD
+
                         active_cooldowns = {}
                         if model_cooldowns:
                             active_cooldowns = {
@@ -949,7 +913,7 @@ class SQLiteManager:
 
                         error_codes = json.loads(error_codes_json)
 
-                        # ç­›é€‰æ— é”™è¯¯ç„å‡­è¯
+
                         if filter_none:
                             if error_codes:
                                 continue
@@ -996,25 +960,25 @@ class SQLiteManager:
                                 elif preview_filter == "no_preview" and preview_value:
                                     continue
 
-                        # åº”ç”¨tierç­›é€‰
+
                         if tier_filter and tier_filter in ("free", "pro", "ultra"):
                             if summary["tier"] != tier_filter:
                                 continue
 
-                        # åº”ç”¨å†·å´ç­›é€‰
+
                         if cooldown_filter == "in_cooldown":
-                            # åªä¿ç•™æœ‰å†·å´ç„å‡­è¯
+
                             if active_cooldowns:
                                 all_summaries.append(summary)
                         elif cooldown_filter == "no_cooldown":
-                            # åªä¿ç•™æ²¡æœ‰å†·å´ç„å‡­è¯
+
                             if not active_cooldowns:
                                 all_summaries.append(summary)
                         else:
-                            # ä¸ç­›é€‰å†·å´ç¶æ€
+
                             all_summaries.append(summary)
 
-                    # åº”ç”¨åˆ†é¡µ
+
                     total_count = len(all_summaries)
                     if limit is not None:
                         summaries = all_summaries[offset:offset + limit]
@@ -1040,24 +1004,15 @@ class SQLiteManager:
             }
 
     async def get_duplicate_credentials_by_email(self, mode: str = "code_assist") -> Dict[str, Any]:
-        """
-        è·å–æŒ‰é‚®ç®±åˆ†ç»„ç„é‡å¤å‡­è¯ä¿¡æ¯ï¼ˆåªæŸ¥è¯¢é‚®ç®±å’Œæ–‡ä»¶åï¼Œä¸å è½½å®Œæ•´å‡­è¯æ•°æ®ï¼‰
-        ç”¨äºå»é‡æ“ä½œ
-
-        Args:
-            mode: å‡­è¯æ¨¡å¼ ("code_assist" æˆ– "omni")
-
-        Returns:
-            åŒ…å« email_groupsï¼ˆé‚®ç®±åˆ†ç»„ï¼‰ă€duplicate_countï¼ˆé‡å¤æ•°é‡ï¼‰ă€no_email_countï¼ˆæ— é‚®ç®±æ•°é‡ï¼‰ç„å­—å…¸
-        """
+        """Internal implementation detail."""
         self._ensure_initialized()
 
         try:
-            # æ ¹æ® mode é€‰æ‹©è¡¨å
+
             table_name = self._get_table_name(mode)
 
             async with aiosqlite.connect(self._db_path) as db:
-                # æŸ¥è¯¢æ‰€æœ‰å‡­è¯ç„æ–‡ä»¶åå’Œé‚®ç®±ï¼ˆä¸å è½½å®Œæ•´å‡­è¯æ•°æ®ï¼‰
+
                 query = f"""
                     SELECT filename, user_email
                     FROM {table_name}
@@ -1067,7 +1022,7 @@ class SQLiteManager:
                 async with db.execute(query) as cursor:
                     rows = await cursor.fetchall()
 
-                    # æŒ‰é‚®ç®±åˆ†ç»„
+
                     email_to_files = {}
                     no_email_files = []
 
@@ -1079,13 +1034,13 @@ class SQLiteManager:
                         else:
                             no_email_files.append(filename)
 
-                    # æ‰¾å‡ºé‡å¤ç„é‚®ç®±ç»„
+
                     duplicate_groups = []
                     total_duplicate_count = 0
 
                     for email, files in email_to_files.items():
                         if len(files) > 1:
-                            # ä¿ç•™ç¬¬ä¸€ä¸ªæ–‡ä»¶ï¼Œå…¶ä»–ä¸ºé‡å¤
+
                             duplicate_groups.append({
                                 "email": email,
                                 "kept_file": files[0],
@@ -1116,10 +1071,10 @@ class SQLiteManager:
                 "total_count": 0,
             }
 
-    # ============ é…ç½®ç®¡ç†ï¼ˆå†…å­˜ç¼“å­˜ï¼‰============
+
 
     async def set_config(self, key: str, value: Any) -> bool:
-        """è®¾ç½®é…ç½®ï¼ˆå†™å…¥æ•°æ®åº“ + æ›´æ–°å†…å­˜ç¼“å­˜ï¼‰"""
+        """Internal implementation detail."""
         self._ensure_initialized()
 
         try:
@@ -1133,7 +1088,7 @@ class SQLiteManager:
                 """, (key, json.dumps(value)))
                 await db.commit()
 
-            # æ›´æ–°å†…å­˜ç¼“å­˜
+
             self._config_cache[key] = value
             return True
 
@@ -1142,24 +1097,24 @@ class SQLiteManager:
             return False
 
     async def reload_config_cache(self):
-        """é‡æ–°å è½½é…ç½®ç¼“å­˜ï¼ˆåœ¨æ‰¹é‡ä¿®æ”¹é…ç½®åè°ƒç”¨ï¼‰"""
+        """Internal implementation detail."""
         self._ensure_initialized()
         self._config_loaded = False
         await self._load_config_cache()
         log.info("Config cache reloaded from database")
 
     async def get_config(self, key: str, default: Any = None) -> Any:
-        """è·å–é…ç½®ï¼ˆä»å†…å­˜ç¼“å­˜ï¼‰"""
+        """Internal implementation detail."""
         self._ensure_initialized()
         return self._config_cache.get(key, default)
 
     async def get_all_config(self) -> Dict[str, Any]:
-        """è·å–æ‰€æœ‰é…ç½®ï¼ˆä»å†…å­˜ç¼“å­˜ï¼‰"""
+        """Internal implementation detail."""
         self._ensure_initialized()
         return self._config_cache.copy()
 
     async def delete_config(self, key: str) -> bool:
-        """åˆ é™¤é…ç½®"""
+        """Internal implementation detail."""
         self._ensure_initialized()
 
         try:
@@ -1167,7 +1122,7 @@ class SQLiteManager:
                 await db.execute("DELETE FROM config WHERE key = ?", (key,))
                 await db.commit()
 
-            # ä»å†…å­˜ç¼“å­˜ç§»é™¤
+
             self._config_cache.pop(key, None)
             return True
 
@@ -1176,25 +1131,16 @@ class SQLiteManager:
             return False
 
     async def get_credential_errors(self, filename: str, mode: str = "code_assist") -> Dict[str, Any]:
-        """
-        ä¸“é—¨è·å–å‡­è¯ç„é”™è¯¯ä¿¡æ¯ï¼ˆåŒ…å« error_codes å’Œ error_messagesï¼‰
-
-        Args:
-            filename: å‡­è¯æ–‡ä»¶å
-            mode: å‡­è¯æ¨¡å¼ ("code_assist" æˆ– "omni")
-
-        Returns:
-            åŒ…å« error_codes å’Œ error_messages ç„å­—å…¸
-        """
+        """Internal implementation detail."""
         self._ensure_initialized()
 
-        # ç»Ÿä¸€ä½¿ç”¨ basename å¤„ç†æ–‡ä»¶å
+
         filename = os.path.basename(filename)
 
         try:
             table_name = self._get_table_name(mode)
             async with aiosqlite.connect(self._db_path) as db:
-                # ç²¾ç¡®åŒ¹é…
+
                 async with db.execute(f"""
                     SELECT error_codes, error_messages FROM {table_name} WHERE filename = ?
                 """, (filename,)) as cursor:
@@ -1209,7 +1155,7 @@ class SQLiteManager:
                             "error_messages": json.loads(error_messages_json),
                         }
 
-                # Credential does not existï¼Œè¿”å›ç©ºé”™è¯¯ä¿¡æ¯
+
                 return {
                     "filename": filename,
                     "error_codes": [],
@@ -1225,7 +1171,7 @@ class SQLiteManager:
                 "error": str(e)
             }
 
-    # ============ æ¨¡å‹çº§å†·å´ç®¡ç† ============
+
 
     async def set_model_cooldown(
         self,
@@ -1234,27 +1180,16 @@ class SQLiteManager:
         cooldown_until: Optional[float],
         mode: str = "code_assist"
     ) -> bool:
-        """
-        è®¾ç½®ç‰¹å®æ¨¡å‹ç„å†·å´æ—¶é—´
-
-        Args:
-            filename: å‡­è¯æ–‡ä»¶å
-            model_name: æ¨¡å‹åï¼ˆå®Œæ•´æ¨¡å‹åï¼Œå¦‚ "gemini-2.0-flash-exp"ï¼‰
-            cooldown_until: å†·å´æˆªæ­¢æ—¶é—´æˆ³ï¼ˆNone è¡¨ç¤ºæ¸…é™¤å†·å´ï¼‰
-            mode: å‡­è¯æ¨¡å¼ ("code_assist" æˆ– "omni")
-
-        Returns:
-            æ˜¯å¦æˆåŸ
-        """
+        """Internal implementation detail."""
         self._ensure_initialized()
 
-        # ç»Ÿä¸€ä½¿ç”¨ basename å¤„ç†æ–‡ä»¶å
+
         filename = os.path.basename(filename)
 
         try:
             table_name = self._get_table_name(mode)
             async with aiosqlite.connect(self._db_path) as db:
-                # è·å–å½“å‰ç„ model_cooldowns
+
                 async with db.execute(f"""
                     SELECT model_cooldowns FROM {table_name} WHERE filename = ?
                 """, (filename,)) as cursor:
@@ -1266,13 +1201,13 @@ class SQLiteManager:
 
                     model_cooldowns = json.loads(row[0] or '{}')
 
-                    # æ›´æ–°æˆ–åˆ é™¤æŒ‡å®æ¨¡å‹ç„å†·å´æ—¶é—´
+
                     if cooldown_until is None:
                         model_cooldowns.pop(model_name, None)
                     else:
                         model_cooldowns[model_name] = cooldown_until
 
-                    # å†™å›æ•°æ®åº“
+
                     await db.execute(f"""
                         UPDATE {table_name}
                         SET model_cooldowns = ?,
@@ -1293,7 +1228,7 @@ class SQLiteManager:
         filename: str,
         mode: str = "code_assist"
     ) -> bool:
-        """æ¸…é™¤æŸä¸ªå‡­è¯ç„æ‰€æœ‰æ¨¡å‹å†·å´æ—¶é—´"""
+        """Internal implementation detail."""
         self._ensure_initialized()
 
         filename = os.path.basename(filename)
@@ -1327,19 +1262,14 @@ class SQLiteManager:
         model_name: Optional[str] = None,
         mode: str = "code_assist"
     ) -> None:
-        """
-        æˆåŸè°ƒç”¨åç„æ¡ä»¶å†™å…¥ï¼
-        - åªæœ‰å½“å‰ error_codes éç©ºæ—¶æ‰æ¸…é™¤é”™è¯¯å¹¶å†™ last_success
-        - åªæœ‰å½“å‰å­˜åœ¨è¯¥æ¨¡å‹ç„å†·å´é”®æ—¶æ‰æ¸…é™¤
-        é€è¿‡ SQL WHERE æ¡ä»¶åŒ¹é…å®ç°
-        """
+        """Internal implementation detail."""
         self._ensure_initialized()
         filename = os.path.basename(filename)
 
         try:
             table_name = self._get_table_name(mode)
             async with aiosqlite.connect(self._db_path) as db:
-                # æ¡ä»¶å†™å…¥ï¼åªæœ‰ error_codes éç©ºæ—¶æ‰è§¦å‘
+
                 await db.execute(f"""
                     UPDATE {table_name}
                     SET last_success = unixepoch(),
@@ -1350,7 +1280,7 @@ class SQLiteManager:
                       AND (error_codes IS NOT NULL AND error_codes != '[]' AND error_codes != '')
                 """, (filename,))
 
-                # æ¡ä»¶åˆ é™¤æ¨¡å‹å†·å´ï¼åªæœ‰æ¨¡å‹é”®å­˜åœ¨æ—¶æ‰å†™å…¥
+
                 if model_name:
                     async with db.execute(f"""
                         SELECT model_cooldowns FROM {table_name} WHERE filename = ?

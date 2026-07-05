@@ -1,6 +1,4 @@
-﻿"""
-PostgreSQL å­˜å‚¨ç®¡ç†å™¨
-"""
+"""Internal implementation detail."""
 
 import asyncio
 import json
@@ -14,9 +12,8 @@ from log import log
 
 
 class PSQLManager:
-    """PostgreSQL æ•°æ®åº“ç®¡ç†å™¨"""
+    """Internal implementation detail."""
 
-    # ç¶æ€å­—æ®µå¸¸é‡
     STATE_FIELDS = {
         "error_codes",
         "error_messages",
@@ -35,12 +32,12 @@ class PSQLManager:
         self._initialized = False
         self._lock = asyncio.Lock()
 
-        # å†…å­˜é…ç½®ç¼“å­˜
+
         self._config_cache: Dict[str, Any] = {}
         self._config_loaded = False
 
     async def initialize(self) -> None:
-        """åˆå§‹åŒ– PostgreSQL æ•°æ®åº“"""
+        """Internal implementation detail."""
         if self._initialized:
             return
 
@@ -72,7 +69,7 @@ class PSQLManager:
                 raise
 
     async def _create_tables(self, conn: asyncpg.Connection) -> None:
-        """åˆ›å»ºæ•°æ®åº“è¡¨å’Œç´¢å¼•"""
+        """Internal implementation detail."""
         await conn.execute("""
             CREATE TABLE IF NOT EXISTS credentials (
                 id SERIAL PRIMARY KEY,
@@ -129,7 +126,7 @@ class PSQLManager:
             )
         """)
 
-        # ç´¢å¼•
+
         await conn.execute("""
             CREATE INDEX IF NOT EXISTS idx_disabled ON credentials(disabled)
         """)
@@ -146,7 +143,7 @@ class PSQLManager:
         log.debug("PostgreSQL tables and indexes created")
 
     async def _ensure_schema_compatibility(self, conn: asyncpg.Connection) -> None:
-        """ç¡®ä¿æ•°æ®åº“ç»“æ„å…¼å®¹ï¼Œè‡ªå¨ä¿®å¤ç¼ºå¤±ç„åˆ—"""
+        """Internal implementation detail."""
         required_columns = {
             "credentials": [
                 ("disabled", "INTEGER DEFAULT 0"),
@@ -199,7 +196,7 @@ class PSQLManager:
             log.error(f"Error ensuring schema compatibility: {e}")
 
     async def _load_config_cache(self) -> None:
-        """å è½½é…ç½®åˆ°å†…å­˜ç¼“å­˜"""
+        """Internal implementation detail."""
         if self._config_loaded:
             return
 
@@ -221,7 +218,7 @@ class PSQLManager:
             self._config_cache = {}
 
     async def close(self) -> None:
-        """å…³é—­æ•°æ®åº“è¿æ¥æ± """
+        """Internal implementation detail."""
         if self._pool:
             await self._pool.close()
             self._pool = None
@@ -240,12 +237,12 @@ class PSQLManager:
         else:
             raise ValueError(f"Invalid mode: {mode}. Must be 'code_assist' or 'omni'")
 
-    # ============ å‡­è¯æŸ¥è¯¢æ–¹æ³• ============
+
 
     async def get_next_available_credential(
         self, mode: str = "code_assist", model_name: Optional[str] = None
     ) -> Optional[Tuple[str, Dict[str, Any]]]:
-        """éæœºè·å–ä¸€ä¸ªå¯ç”¨å‡­è¯ï¼ˆè´Ÿè½½å‡è¡¡ï¼‰"""
+        """Internal implementation detail."""
         self._ensure_initialized()
 
         try:
@@ -319,7 +316,7 @@ class PSQLManager:
             return None
 
     async def get_available_credentials_list(self) -> List[str]:
-        """è·å–æ‰€æœ‰å¯ç”¨å‡­è¯åˆ—è¡¨"""
+        """Internal implementation detail."""
         self._ensure_initialized()
 
         try:
@@ -334,10 +331,10 @@ class PSQLManager:
             log.error(f"Error getting available credentials list: {e}")
             return []
 
-    # ============ StorageBackend åè®®æ–¹æ³• ============
+
 
     async def store_credential(self, filename: str, credential_data: Dict[str, Any], mode: str = "code_assist") -> bool:
-        """å­˜å‚¨æˆ–æ›´æ–°å‡­è¯"""
+        """Internal implementation detail."""
         self._ensure_initialized()
         filename = os.path.basename(filename)
 
@@ -380,7 +377,7 @@ class PSQLManager:
             return False
 
     async def get_credential(self, filename: str, mode: str = "code_assist") -> Optional[Dict[str, Any]]:
-        """è·å–å‡­è¯æ•°æ®"""
+        """Internal implementation detail."""
         self._ensure_initialized()
         filename = os.path.basename(filename)
 
@@ -398,7 +395,7 @@ class PSQLManager:
             return None
 
     async def list_credentials(self, mode: str = "code_assist") -> List[str]:
-        """åˆ—å‡ºæ‰€æœ‰å‡­è¯æ–‡ä»¶åï¼ˆåŒ…æ‹¬ç¦ç”¨ç„ï¼‰"""
+        """Internal implementation detail."""
         self._ensure_initialized()
 
         try:
@@ -413,7 +410,7 @@ class PSQLManager:
             return []
 
     async def delete_credential(self, filename: str, mode: str = "code_assist") -> bool:
-        """åˆ é™¤å‡­è¯"""
+        """Internal implementation detail."""
         self._ensure_initialized()
         filename = os.path.basename(filename)
 
@@ -438,7 +435,7 @@ class PSQLManager:
             return False
 
     async def update_credential_state(self, filename: str, state_updates: Dict[str, Any], mode: str = "code_assist") -> bool:
-        """æ›´æ–°å‡­è¯ç¶æ€"""
+        """Internal implementation detail."""
         self._ensure_initialized()
         filename = os.path.basename(filename)
 
@@ -485,7 +482,7 @@ class PSQLManager:
             return False
 
     async def get_credential_state(self, filename: str, mode: str = "code_assist") -> Dict[str, Any]:
-        """è·å–å‡­è¯ç¶æ€"""
+        """Internal implementation detail."""
         self._ensure_initialized()
         filename = os.path.basename(filename)
 
@@ -550,7 +547,7 @@ class PSQLManager:
             return {}
 
     async def get_all_credential_states(self, mode: str = "code_assist") -> Dict[str, Dict[str, Any]]:
-        """è·å–æ‰€æœ‰å‡­è¯ç¶æ€"""
+        """Internal implementation detail."""
         self._ensure_initialized()
 
         try:
@@ -620,7 +617,7 @@ class PSQLManager:
         preview_filter: Optional[str] = None,
         tier_filter: Optional[str] = None
     ) -> Dict[str, Any]:
-        """è·å–å‡­è¯ç„æ‘˜è¦ä¿¡æ¯ï¼Œæ”¯æŒåˆ†é¡µå’Œç¶æ€ç­›é€‰"""
+        """Internal implementation detail."""
         self._ensure_initialized()
 
         try:
@@ -628,7 +625,7 @@ class PSQLManager:
             current_time = time.time()
 
             async with self._pool.acquire() as conn:
-                # å…¨å±€ç»Ÿè®¡
+
                 stats_rows = await conn.fetch(
                     f"SELECT disabled, COUNT(*) AS cnt FROM {table_name} GROUP BY disabled"
                 )
@@ -640,7 +637,7 @@ class PSQLManager:
                     else:
                         global_stats["normal"] = r["cnt"]
 
-                # WHERE å­å¥
+
                 where_clauses = []
                 if status_filter == "enabled":
                     where_clauses.append("disabled = 0")
@@ -649,7 +646,7 @@ class PSQLManager:
 
                 where_clause = ("WHERE " + " AND ".join(where_clauses)) if where_clauses else ""
 
-                # æŸ¥è¯¢
+
                 if mode == "code_assist":
                     all_rows = await conn.fetch(f"""
                         SELECT filename, disabled, error_codes, last_success,
@@ -667,7 +664,7 @@ class PSQLManager:
                         ORDER BY rotation_order
                     """)
 
-                # é”™è¯¯ç ç­›é€‰
+
                 filter_value = None
                 filter_int = None
                 filter_none = False
@@ -688,7 +685,7 @@ class PSQLManager:
                     active_cooldowns = {k: v for k, v in model_cooldowns.items() if v > current_time}
                     error_codes = json.loads(error_codes_json)
 
-                    # ç­›é€‰æ— é”™è¯¯ç„å‡­è¯
+
                     if filter_none:
                         if error_codes:
                             continue
@@ -770,7 +767,7 @@ class PSQLManager:
             }
 
     async def get_duplicate_credentials_by_email(self, mode: str = "code_assist") -> Dict[str, Any]:
-        """è·å–æŒ‰é‚®ç®±åˆ†ç»„ç„é‡å¤å‡­è¯ä¿¡æ¯"""
+        """Internal implementation detail."""
         self._ensure_initialized()
 
         try:
@@ -823,10 +820,10 @@ class PSQLManager:
                 "total_count": 0,
             }
 
-    # ============ é…ç½®ç®¡ç†ï¼ˆå†…å­˜ç¼“å­˜ï¼‰============
+
 
     async def set_config(self, key: str, value: Any) -> bool:
-        """è®¾ç½®é…ç½®ï¼ˆå†™å…¥æ•°æ®åº“ + æ›´æ–°å†…å­˜ç¼“å­˜ï¼‰"""
+        """Internal implementation detail."""
         self._ensure_initialized()
 
         try:
@@ -847,24 +844,24 @@ class PSQLManager:
             return False
 
     async def reload_config_cache(self) -> None:
-        """é‡æ–°å è½½é…ç½®ç¼“å­˜"""
+        """Internal implementation detail."""
         self._ensure_initialized()
         self._config_loaded = False
         await self._load_config_cache()
         log.info("Config cache reloaded from database")
 
     async def get_config(self, key: str, default: Any = None) -> Any:
-        """è·å–é…ç½®ï¼ˆä»å†…å­˜ç¼“å­˜ï¼‰"""
+        """Internal implementation detail."""
         self._ensure_initialized()
         return self._config_cache.get(key, default)
 
     async def get_all_config(self) -> Dict[str, Any]:
-        """è·å–æ‰€æœ‰é…ç½®ï¼ˆä»å†…å­˜ç¼“å­˜ï¼‰"""
+        """Internal implementation detail."""
         self._ensure_initialized()
         return self._config_cache.copy()
 
     async def delete_config(self, key: str) -> bool:
-        """åˆ é™¤é…ç½®"""
+        """Internal implementation detail."""
         self._ensure_initialized()
 
         try:
@@ -879,7 +876,7 @@ class PSQLManager:
             return False
 
     async def get_credential_errors(self, filename: str, mode: str = "code_assist") -> Dict[str, Any]:
-        """è·å–å‡­è¯ç„é”™è¯¯ä¿¡æ¯"""
+        """Internal implementation detail."""
         self._ensure_initialized()
         filename = os.path.basename(filename)
 
@@ -904,7 +901,7 @@ class PSQLManager:
             log.error(f"Error getting credential errors {filename}: {e}")
             return {"filename": filename, "error_codes": [], "error_messages": [], "error": str(e)}
 
-    # ============ æ¨¡å‹çº§å†·å´ç®¡ç† ============
+
 
     async def set_model_cooldown(
         self,
@@ -913,7 +910,7 @@ class PSQLManager:
         cooldown_until: Optional[float],
         mode: str = "code_assist"
     ) -> bool:
-        """è®¾ç½®ç‰¹å®æ¨¡å‹ç„å†·å´æ—¶é—´"""
+        """Internal implementation detail."""
         self._ensure_initialized()
         filename = os.path.basename(filename)
 
@@ -957,7 +954,7 @@ class PSQLManager:
         filename: str,
         mode: str = "code_assist"
     ) -> bool:
-        """æ¸…é™¤æŸä¸ªå‡­è¯ç„æ‰€æœ‰æ¨¡å‹å†·å´æ—¶é—´"""
+        """Internal implementation detail."""
         self._ensure_initialized()
         filename = os.path.basename(filename)
 
@@ -992,7 +989,7 @@ class PSQLManager:
         model_name: Optional[str] = None,
         mode: str = "code_assist"
     ) -> None:
-        """æˆåŸè°ƒç”¨åç„æ¡ä»¶å†™å…¥"""
+        """Internal implementation detail."""
         self._ensure_initialized()
         filename = os.path.basename(filename)
 

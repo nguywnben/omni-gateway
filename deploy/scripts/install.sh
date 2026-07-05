@@ -41,7 +41,7 @@ trap cleanup EXIT
 # Detect OS and distribution
 detect_os() {
     log_info "Detecting operating system..."
-    
+
     if [[ "$OSTYPE" == "linux-gnu"* ]]; then
         if [ -f /etc/os-release ]; then
             . /etc/os-release
@@ -95,7 +95,7 @@ check_root_if_needed() {
 # Update package manager
 update_packages() {
     log_info "Updating package manager..."
-    
+
     case "$OS_NAME" in
         ubuntu|debian|linuxmint|kali|pop)
             if ! apt update; then
@@ -143,7 +143,7 @@ update_packages() {
 install_git() {
     if ! command -v git &> /dev/null; then
         log_info "Installing git..."
-        
+
         case "$OS_NAME" in
             ubuntu|debian|linuxmint|kali|pop)
                 if ! apt install git -y; then
@@ -212,14 +212,14 @@ if ! command -v uv &> /dev/null; then
         log_error "Failed to install uv"
         exit 1
     fi
-    
+
     # Source environment
     if [ -f "$HOME/.local/bin/env" ]; then
         source "$HOME/.local/bin/env"
     elif [ -f "$HOME/.cargo/env" ]; then
         source "$HOME/.cargo/env"
     fi
-    
+
     # Verify uv installation
     if ! command -v uv &> /dev/null; then
         log_error "uv installation failed - command not found after install"
@@ -239,15 +239,15 @@ elif [ -f "./omni-gateway/backend/main.py" ]; then
 else
     log_info "Cloning repository..."
     if [ -d "./omni-gateway" ]; then
-        log_warn "omni-gateway directory exists but backend/main.py not found. Removing and re-cloning..."
-        rm -rf ./omni-gateway
+        log_error "omni-gateway directory exists but backend/main.py was not found. Move or fix that directory before retrying."
+        exit 1
     fi
-    
+
     if ! git clone https://github.com/nguywnben/omni-gateway.git; then
         log_error "Failed to clone repository"
         exit 1
     fi
-    
+
     cd ./omni-gateway || exit 1
 fi
 

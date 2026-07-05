@@ -1,1 +1,1 @@
-﻿"""Omni Gateway backend package."""
+"""Omni Gateway backend package."""

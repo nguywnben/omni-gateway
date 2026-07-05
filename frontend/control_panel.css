@@ -19,7 +19,7 @@
     --warning-bg: #fff7df;
     --info: #1a73e8;
     --info-bg: #eef4ff;
-    --sidebar-width: 264px;
+    --sidebar-width: 248px;
     --radius: 8px;
     --shadow-pop: 0 18px 50px rgba(0, 0, 0, 0.08);
 }
@@ -96,17 +96,17 @@ code {
 .app-mark {
     width: 28px;
     height: 28px;
-    border: 1px solid var(--border-strong);
+    overflow: hidden;
     border-radius: var(--radius);
     display: inline-grid;
     place-items: center;
-    background: var(--surface);
-    color: var(--text);
 }
 
-.app-mark svg {
-    width: 17px;
-    height: 17px;
+.app-mark-image {
+    width: 80%;
+    height: 80%;
+    display: block;
+    object-fit: contain;
 }
 
 .login-wrapper {
@@ -135,8 +135,9 @@ code {
 }
 
 .login-brand-title {
-    font-size: 15px;
-    font-weight: 650;
+    font-size: 18px;
+    font-weight: 700;
+    line-height: 1.2;
     letter-spacing: 0;
 }
 
@@ -161,6 +162,7 @@ code {
 
 .dashboard-wrapper {
     min-height: 100vh;
+    width: 100%;
     background: var(--bg);
 }
 
@@ -180,14 +182,16 @@ code {
 .sidebar-brand {
     display: flex;
     align-items: center;
-    gap: 10px;
+    justify-content: center;
+    gap: 8px;
     min-height: 36px;
     padding: 0 8px;
 }
 
 .sidebar-brand h2 {
-    font-size: 15px;
+    font-size: 18px;
     font-weight: 700;
+    line-height: 1.2;
     letter-spacing: 0;
 }
 
@@ -247,6 +251,8 @@ code {
 }
 
 .dashboard-main {
+    flex: 1 1 auto;
+    width: calc(100% - var(--sidebar-width));
     min-width: 0;
     min-height: 100vh;
     margin-left: var(--sidebar-width);
@@ -276,7 +282,9 @@ code {
     display: flex;
     align-items: center;
     gap: 10px;
+    font-size: 18px;
     font-weight: 700;
+    line-height: 1.2;
 }
 
 .mobile-menu-btn {
@@ -1180,6 +1188,7 @@ textarea[readonly] {
     }
 
     .dashboard-main {
+        width: 100%;
         margin-left: 0;
     }
 

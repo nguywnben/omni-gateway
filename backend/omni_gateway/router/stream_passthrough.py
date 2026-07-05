@@ -1,4 +1,4 @@
-﻿from typing import Any, AsyncIterator
+from typing import Any, AsyncIterator
 
 from fastapi import Response
 from fastapi.responses import StreamingResponse

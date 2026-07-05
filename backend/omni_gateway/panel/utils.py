@@ -1,6 +1,4 @@
-﻿"""
-å…±äº«å·¥å…·æ¨¡å— - åŒ…å«WebSocketè¿æ¥ç®¡ç†ă€å·¥å…·å‡½æ•°ç­‰
-"""
+"""Internal implementation detail."""
 
 import os
 import time
@@ -15,23 +13,23 @@ from log import log
 
 
 # =============================================================================
-# WebSocketè¿æ¥ç®¡ç†
+
 # =============================================================================
 
 
 class ConnectionManager:
-    def __init__(self, max_connections: int = 3):  # è¿›ä¸€æ­¥é™ä½æœ€å¤§è¿æ¥æ•°
-        # ä½¿ç”¨åŒç«¯é˜Ÿåˆ—ä¸¥æ ¼é™åˆ¶å†…å­˜ä½¿ç”¨
+    def __init__(self, max_connections: int = 3):
+
         self.active_connections: deque = deque(maxlen=max_connections)
         self.max_connections = max_connections
         self._last_cleanup = 0
-        self._cleanup_interval = 120  # 120ç§’æ¸…ç†ä¸€æ¬¡æ­»è¿æ¥
+        self._cleanup_interval = 120
 
     async def connect(self, websocket: WebSocket):
-        # è‡ªå¨æ¸…ç†æ­»è¿æ¥
+
         self._auto_cleanup()
 
-        # é™åˆ¶æœ€å¤§è¿æ¥æ•°ï¼Œé˜²æ­¢å†…å­˜æ— é™å¢é•¿
+
         if len(self.active_connections) >= self.max_connections:
             await websocket.close(code=1008, reason="Too many connections")
             return False
@@ -42,11 +40,11 @@ class ConnectionManager:
         return True
 
     def disconnect(self, websocket: WebSocket):
-        # ä½¿ç”¨æ›´é«˜æ•ˆç„æ–¹å¼ç§»é™¤è¿æ¥
+
         try:
             self.active_connections.remove(websocket)
         except ValueError:
-            pass  # è¿æ¥å·²ä¸å­˜åœ¨
+            pass
         log.debug(f"WebSocket disconnected, number of current connections: {len(self.active_connections)}")
 
     async def send_personal_message(self, message: str, websocket: WebSocket):
@@ -56,7 +54,7 @@ class ConnectionManager:
             self.disconnect(websocket)
 
     async def broadcast(self, message: str):
-        # ä½¿ç”¨æ›´é«˜æ•ˆç„æ–¹å¼å¤„ç†å¹¿æ’­ï¼Œé¿å…ç´¢å¼•æ“ä½œ
+
         dead_connections = []
         for conn in self.active_connections:
             try:
@@ -64,21 +62,21 @@ class ConnectionManager:
             except Exception:
                 dead_connections.append(conn)
 
-        # æ‰¹é‡ç§»é™¤æ­»è¿æ¥
+
         for dead_conn in dead_connections:
             self.disconnect(dead_conn)
 
     def _auto_cleanup(self):
-        """è‡ªå¨æ¸…ç†æ­»è¿æ¥"""
+        """Internal implementation detail."""
         current_time = time.time()
         if current_time - self._last_cleanup > self._cleanup_interval:
             self.cleanup_dead_connections()
             self._last_cleanup = current_time
 
     def cleanup_dead_connections(self):
-        """æ¸…ç†å·²æ–­å¼€ç„è¿æ¥"""
+        """Internal implementation detail."""
         original_count = len(self.active_connections)
-        # ä½¿ç”¨åˆ—è¡¨æ¨å¯¼å¼è¿‡æ»¤æ´»è·ƒè¿æ¥ï¼Œæ›´é«˜æ•ˆ
+
         alive_connections = deque(
             [
                 conn
@@ -96,12 +94,12 @@ class ConnectionManager:
 
 
 # =============================================================================
-# å·¥å…·å‡½æ•°
+
 # =============================================================================
 
 
 def is_mobile_user_agent(user_agent: str) -> bool:
-    """æ£€æµ‹æ˜¯å¦ä¸ºç§»å¨è®¾å¤‡ç”¨æˆ·ä»£ç†"""
+    """Internal implementation detail."""
     if not user_agent:
         return False
 
@@ -134,18 +132,7 @@ def is_mobile_user_agent(user_agent: str) -> bool:
 
 
 def validate_mode(mode: str = "code_assist") -> str:
-    """
-    éªŒè¯ mode å‚æ•°
-
-    Args:
-        mode: æ¨¡å¼å­—ç¬¦ä¸² ("code_assist" æˆ– "omni")
-
-    Returns:
-        str: éªŒè¯åç„ mode å­—ç¬¦ä¸²
-
-    Raises:
-        HTTPException: å¦‚æœ mode å‚æ•°æ— æ•ˆ
-    """
+    """Internal implementation detail."""
     if mode not in ["code_assist", "omni"]:
         raise HTTPException(
             status_code=400,
@@ -155,10 +142,10 @@ def validate_mode(mode: str = "code_assist") -> str:
 
 
 def get_env_locked_keys() -> Set:
-    """è·å–è¢«ç¯å¢ƒå˜é‡é”å®ç„é…ç½®é”®é›†åˆ"""
+    """Internal implementation detail."""
     env_locked_keys = set()
 
-    # ä½¿ç”¨ config.py ä¸­ç»Ÿä¸€ç»´æ¤ç„æ˜ å°„è¡¨
+
     for env_key, config_key in config.ENV_MAPPINGS.items():
         if os.getenv(env_key):
             env_locked_keys.add(config_key)

@@ -1,6 +1,4 @@
-﻿"""
-Panelæ¨¡å— - æ•´åˆæ‰€æœ‰æ§åˆ¶é¢æ¿è·¯ç”±
-"""
+"""Internal implementation detail."""
 
 from fastapi import APIRouter
 
@@ -8,10 +6,10 @@ from . import auth, creds, config_routes, logs, version, root, usage_routes
 
 
 def create_router() -> APIRouter:
-    """åˆ›å»ºå¹¶è¿”å›æ•´åˆæ‰€æœ‰å­è·¯ç”±ç„ä¸»è·¯ç”±å™¨"""
+    """Internal implementation detail."""
     router = APIRouter()
 
-    # åŒ…å«æ‰€æœ‰å­è·¯ç”±
+
     router.include_router(root.router)
     router.include_router(auth.router)
     router.include_router(creds.router)
@@ -23,10 +21,10 @@ def create_router() -> APIRouter:
     return router
 
 
-# å¯¼å‡ºä¸»è·¯ç”±å™¨
+
 router = create_router()
 
-# å¯¼å‡ºå¸¸ç”¨å·¥å…·
+
 from .utils import ConnectionManager, is_mobile_user_agent, validate_mode, get_env_locked_keys
 
 __all__ = [

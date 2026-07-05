@@ -1,28 +1,22 @@
-﻿"""
-Configuration constants for the Omni Gateway proxy server.
-Centralizes all configuration to avoid duplication across modules.
-
-- å¯å¨æ—¶å è½½ä¸€æ¬¡é…ç½®åˆ°å†…å­˜
-- ä¿®æ”¹é…ç½®æ—¶è°ƒç”¨ reload_config() é‡æ–°ä»æ•°æ®åº“å è½½
-"""
+"""Internal implementation detail."""
 
 import os
 from typing import Any, Optional
 
 from paths import DEFAULT_CREDENTIALS_DIR
 
-# å…¨å±€é…ç½®ç¼“å­˜
+
 _config_cache: dict[str, Any] = {}
 _config_initialized = False
 
 # Client Configuration
 
-# éœ€è¦è‡ªå¨å°ç¦ç„é”™è¯¯ç  (é»˜è®¤å€¼ï¼Œå¯é€è¿‡ç¯å¢ƒå˜é‡æˆ–é…ç½®è¦†ç›–)
+
 OGW_AUTO_DISABLE_ERROR_CODES = [403]
 
-# ====================== ç¯å¢ƒå˜é‡æ˜ å°„è¡¨ ======================
-# ç»Ÿä¸€ç»´æ¤ç¯å¢ƒå˜é‡åå’Œé…ç½®é”®åç„æ˜ å°„å…³ç³»
-# æ ¼å¼: "ç¯å¢ƒå˜é‡å": "é…ç½®é”®å"
+
+
+
 ENV_MAPPINGS = {
     "OGW_CODE_ASSIST_ENDPOINT": "ogw_code_assist_endpoint",
     "OGW_CREDENTIALS_DIR": "ogw_credentials_dir",
@@ -52,10 +46,10 @@ ENV_MAPPINGS = {
 }
 
 
-# ====================== é…ç½®ç³»ç»Ÿ ======================
+
 
 async def init_config():
-    """åˆå§‹åŒ–é…ç½®ç¼“å­˜ï¼ˆå¯å¨æ—¶è°ƒç”¨ä¸€æ¬¡ï¼‰"""
+    """Internal implementation detail."""
     global _config_cache, _config_initialized
 
     if _config_initialized:
@@ -67,24 +61,24 @@ async def init_config():
         _config_cache = await storage_adapter.get_all_config()
         _config_initialized = True
     except Exception:
-        # åˆå§‹åŒ–å¤±è´¥æ—¶ä½¿ç”¨ç©ºç¼“å­˜
+
         _config_cache = {}
         _config_initialized = True
 
 
 async def reload_config():
-    """é‡æ–°å è½½é…ç½®ï¼ˆä¿®æ”¹é…ç½®åè°ƒç”¨ï¼‰"""
+    """Internal implementation detail."""
     global _config_cache, _config_initialized
 
     try:
         from omni_gateway.storage_adapter import get_storage_adapter
         storage_adapter = await get_storage_adapter()
 
-        # å¦‚æœåç«¯æ”¯æŒ reload_config_cacheï¼Œè°ƒç”¨å®ƒ
+
         if hasattr(storage_adapter._backend, 'reload_config_cache'):
             await storage_adapter._backend.reload_config_cache()
 
-        # é‡æ–°å è½½é…ç½®ç¼“å­˜
+
         _config_cache = await storage_adapter.get_all_config()
         _config_initialized = True
     except Exception:
@@ -92,13 +86,13 @@ async def reload_config():
 
 
 def _get_cached_config(key: str, default: Any = None) -> Any:
-    """ä»å†…å­˜ç¼“å­˜è·å–é…ç½®ï¼ˆåŒæ­¥ï¼‰"""
+    """Internal implementation detail."""
     return _config_cache.get(key, default)
 
 
 async def get_config_value(key: str, default: Any = None, env_var: Optional[str] = None) -> Any:
     """Get configuration value with priority: ENV > Storage > default."""
-    # ç¡®ä¿é…ç½®å·²åˆå§‹åŒ–
+
     if not _config_initialized:
         await init_config()
 
@@ -245,7 +239,7 @@ async def get_api_password() -> str:
     if api_password is not None:
         return str(api_password)
 
-    # å…¼å®¹æ€§ï¼ä½¿ç”¨é€ç”¨å¯†ç 
+
     return str(await get_config_value("ogw_password", "pwd", "OGW_PASSWORD"))
 
 
@@ -262,7 +256,7 @@ async def get_panel_password() -> str:
     if panel_password is not None:
         return str(panel_password)
 
-    # å…¼å®¹æ€§ï¼ä½¿ç”¨é€ç”¨å¯†ç 
+
     return str(await get_config_value("ogw_password", "pwd", "OGW_PASSWORD"))
 
 
@@ -311,16 +305,7 @@ async def get_code_assist_endpoint() -> str:
 
 
 async def get_compatibility_mode_enabled() -> bool:
-    """
-    Get compatibility mode setting.
-
-    å…¼å®¹æ€§æ¨¡å¼ï¼å¯ç”¨åæ‰€æœ‰systemæ¶ˆæ¯å…¨éƒ¨è½¬æ¢æˆuserï¼Œåœç”¨system_instructionsă€‚
-    è¯¥é€‰é¡¹å¯èƒ½ä¼é™ä½æ¨¡å‹ç†è§£èƒ½å›ï¼Œä½†æ˜¯èƒ½é¿å…æµå¼ç©ºå›ç„æƒ…å†µă€‚
-
-    Environment variable: OGW_COMPATIBILITY_MODE
-    Database config key: ogw_compatibility_mode_enabled
-    Default: False
-    """
+    """Internal implementation detail."""
     env_value = os.getenv("OGW_COMPATIBILITY_MODE")
     if env_value:
         return env_value.lower() in ("true", "1", "yes", "on")
@@ -329,16 +314,7 @@ async def get_compatibility_mode_enabled() -> bool:
 
 
 async def get_return_thoughts_to_frontend() -> bool:
-    """
-    Get return thoughts to frontend setting.
-
-    æ§åˆ¶æ˜¯å¦å°†æ€ç»´é“¾è¿”å›åˆ°å‰ç«¯ă€‚
-    å¯ç”¨åï¼Œæ€ç»´é“¾ä¼åœ¨å“åº”ä¸­è¿”å›ï¼›ç¦ç”¨åï¼Œæ€ç»´é“¾ä¼åœ¨å“åº”ä¸­è¢«è¿‡æ»¤æ‰ă€‚
-
-    Environment variable: OGW_RETURN_THOUGHTS_TO_FRONTEND
-    Database config key: ogw_return_thoughts_to_frontend
-    Default: True
-    """
+    """Internal implementation detail."""
     env_value = os.getenv("OGW_RETURN_THOUGHTS_TO_FRONTEND")
     if env_value:
         return env_value.lower() in ("true", "1", "yes", "on")
@@ -347,16 +323,7 @@ async def get_return_thoughts_to_frontend() -> bool:
 
 
 async def get_ogw_stream_to_nonstream() -> bool:
-    """
-    Get use stream for non-stream setting.
-
-    æ§åˆ¶omniéæµå¼è¯·æ±‚æ˜¯å¦ä½¿ç”¨æµå¼APIå¹¶æ”¶é›†ä¸ºå®Œæ•´å“åº”ă€‚
-    å¯ç”¨åï¼Œéæµå¼è¯·æ±‚å°†åœ¨åç«¯ä½¿ç”¨æµå¼APIï¼Œç„¶åæ”¶é›†æ‰€æœ‰å—åå†è¿”å›å®Œæ•´å“åº”ă€‚
-
-    Environment variable: OGW_STREAM_TO_NONSTREAM
-    Database config key: ogw_stream_to_nonstream
-    Default: True
-    """
+    """Internal implementation detail."""
     env_value = os.getenv("OGW_STREAM_TO_NONSTREAM")
     if env_value:
         return env_value.lower() in ("true", "1", "yes", "on")
@@ -365,16 +332,7 @@ async def get_ogw_stream_to_nonstream() -> bool:
 
 
 async def get_ogw_switch_credential_enabled() -> bool:
-    """
-    Get omni switch credential setting.
-
-    æ§åˆ¶omniåœ¨é‡è¯•æ—¶æ˜¯å¦åˆ‡æ¢å‡­è¯ă€‚
-    ç¦ç”¨æ—¶ä¼æŒç»­ä½¿ç”¨å½“å‰å‡­è¯ï¼Œç›´åˆ°è¯¥å‡­è¯å¯¹å½“å‰æ¨¡å‹è¿›å…¥CDæˆ–è¢«ç¦ç”¨ă€‚
-
-    Environment variable: OGW_SWITCH_CREDENTIAL_ENABLED
-    Database config key: ogw_switch_credential_enabled
-    Default: False
-    """
+    """Internal implementation detail."""
     env_value = os.getenv("OGW_SWITCH_CREDENTIAL_ENABLED")
     if env_value:
         return env_value.lower() in ("true", "1", "yes", "on")
@@ -383,15 +341,7 @@ async def get_ogw_switch_credential_enabled() -> bool:
 
 
 async def get_oauth_proxy_url() -> str:
-    """
-    Get OAuth proxy URL setting.
-
-    ç”¨äºGoogle OAuth2è®¤è¯ç„ä»£ç†URLă€‚
-
-    Environment variable: OGW_OAUTH_URL
-    Database config key: ogw_oauth_url
-    Default: https://oauth2.googleapis.com
-    """
+    """Internal implementation detail."""
     return str(
         await get_config_value(
             "ogw_oauth_url", "https://oauth2.googleapis.com", "OGW_OAUTH_URL"
@@ -400,15 +350,7 @@ async def get_oauth_proxy_url() -> str:
 
 
 async def get_googleapis_proxy_url() -> str:
-    """
-    Get Google APIs proxy URL setting.
-
-    ç”¨äºGoogle APIsè°ƒç”¨ç„ä»£ç†URLă€‚
-
-    Environment variable: OGW_GOOGLE_APIS_URL
-    Database config key: ogw_google_apis_url
-    Default: https://www.googleapis.com
-    """
+    """Internal implementation detail."""
     return str(
         await get_config_value(
             "ogw_google_apis_url", "https://www.googleapis.com", "OGW_GOOGLE_APIS_URL"
@@ -417,15 +359,7 @@ async def get_googleapis_proxy_url() -> str:
 
 
 async def get_resource_manager_api_url() -> str:
-    """
-    Get Google Cloud Resource Manager API URL setting.
-
-    ç”¨äºGoogle Cloud Resource Manager APIç„URLă€‚
-
-    Environment variable: OGW_RESOURCE_MANAGER_URL
-    Database config key: ogw_resource_manager_url
-    Default: https://cloudresourcemanager.googleapis.com
-    """
+    """Internal implementation detail."""
     return str(
         await get_config_value(
             "ogw_resource_manager_url",
@@ -436,15 +370,7 @@ async def get_resource_manager_api_url() -> str:
 
 
 async def get_service_usage_api_url() -> str:
-    """
-    Get Google Cloud Service Usage API URL setting.
-
-    ç”¨äºGoogle Cloud Service Usage APIç„URLă€‚
-
-    Environment variable: OGW_SERVICE_USAGE_URL
-    Database config key: ogw_service_usage_url
-    Default: https://serviceusage.googleapis.com
-    """
+    """Internal implementation detail."""
     return str(
         await get_config_value(
             "ogw_service_usage_url", "https://serviceusage.googleapis.com", "OGW_SERVICE_USAGE_URL"
@@ -453,15 +379,7 @@ async def get_service_usage_api_url() -> str:
 
 
 async def get_ogw_api_url() -> str:
-    """
-    Get Omni API URL setting.
-
-    ç”¨äºGoogle Omni APIç„URLă€‚
-
-    Environment variable: OGW_API_URL
-    Database config key: ogw_api_url
-    Default: https://daily-cloudcode-pa.googleapis.com
-    """
+    """Internal implementation detail."""
     return str(
         await get_config_value(
             "ogw_api_url",
@@ -472,29 +390,12 @@ async def get_ogw_api_url() -> str:
 
 
 async def get_keepalive_url() -> str:
-    """
-    Get keep-alive URL setting.
-
-    é…ç½®åä¿æ´»æœå¡ä¼å®æœŸå‘è¯¥URLå‘é€GETè¯·æ±‚ă€‚
-    ç•™ç©ºè¡¨ç¤ºç¦ç”¨ä¿æ´»æœå¡ă€‚
-
-    Environment variable: OGW_KEEPALIVE_URL
-    Database config key: ogw_keepalive_url
-    Default: "" (disabled)
-    """
+    """Internal implementation detail."""
     return str(await get_config_value("ogw_keepalive_url", "", "OGW_KEEPALIVE_URL"))
 
 
 async def get_keepalive_interval() -> int:
-    """
-    Get keep-alive interval in seconds.
-
-    ä¿æ´»è¯·æ±‚å‘é€é—´é”ï¼ˆç§’ï¼‰ă€‚
-
-    Environment variable: OGW_KEEPALIVE_INTERVAL
-    Database config key: ogw_keepalive_interval
-    Default: 60
-    """
+    """Internal implementation detail."""
     env_value = os.getenv("OGW_KEEPALIVE_INTERVAL")
     if env_value:
         try:
@@ -506,7 +407,7 @@ async def get_keepalive_interval() -> int:
 
 
 async def get_api_key() -> str:
-    """è·å– API Keyï¼Œå¦‚æœæ•°æ®åº“ä¸­æ²¡æœ‰ï¼Œåˆ™è‡ªå¨ç”Ÿæˆä¸€ä¸ªå¹¶ä¿å­˜"""
+    """Internal implementation detail."""
     from omni_gateway.storage_adapter import get_storage_adapter
     storage_adapter = await get_storage_adapter()
     key = await get_config_value("ogw_api_key")

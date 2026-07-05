@@ -1,21 +1,18 @@
-﻿"""
-Code Assist Model List Router - Handles model list requests
-Code Assist æ¨¡å‹åˆ—è¡¨è·¯ç”± - å¤„ç†æ¨¡å‹åˆ—è¡¨è¯·æ±‚
-"""
+"""Internal implementation detail."""
 
 import sys
 from pathlib import Path
 
-# æ·»å é¡¹ç›®æ ¹ç›®å½•åˆ°Pythonè·¯å¾„
+
 project_root = Path(__file__).resolve().parent.parent.parent.parent
 if str(project_root) not in sys.path:
     sys.path.insert(0, str(project_root))
 
-# ç¬¬ä¸‰æ–¹åº“
+
 from fastapi import APIRouter, Depends
 from fastapi.responses import JSONResponse
 
-# æœ¬åœ°æ¨¡å— - å·¥å…·å’Œè®¤è¯
+
 from omni_gateway.utils import authenticate_flexible
 
 VERTEX_MODELS = [
@@ -27,18 +24,18 @@ VERTEX_MODELS = [
     "gemini-3.5-flash",
 ]
 
-# æœ¬åœ°æ¨¡å— - åŸºç¡€è·¯ç”±å·¥å…·
+
 from omni_gateway.router.base_router import create_gemini_model_list, create_openai_model_list
 from omni_gateway.models import model_to_dict
 from log import log
 
 
-# ==================== è·¯ç”±å™¨åˆå§‹åŒ– ====================
+
 
 router = APIRouter()
 
 
-# ==================== API è·¯ç”± ====================
+
 
 @router.get("/ogw/vertex/v1beta/models")
 async def list_gemini_models(token: str = Depends(authenticate_flexible)):

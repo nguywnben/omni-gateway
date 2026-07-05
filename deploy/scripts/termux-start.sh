@@ -1,12 +1,23 @@
-echo "强制同步项目代码，忽略本地修改..."
-git fetch --all
-git reset --hard origin/$(git rev-parse --abbrev-ref HEAD)
-echo "创建虚拟环境..."
-PYTHON_VERSION=$(python -V 2>&1 | grep -oP '\d+\.\d+' | head -1)
-if [ -n "$PYTHON_VERSION" ]; then
-    echo "检测到 Python $PYTHON_VERSION，固定版本..."
-    uv python pin "$PYTHON_VERSION"
+#!/usr/bin/env bash
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+cd "$REPO_ROOT"
+
+if [ ! -d ".venv" ]; then
+    echo "[INFO] Creating Python virtual environment..."
+    python -m venv .venv
 fi
-uv pip install -r deploy/requirements-termux.txt
-source .venv/bin/activate
-pm2 start .venv/bin/python --name omni-gateway -- backend/main.py
+
+echo "[INFO] Installing Python dependencies..."
+.venv/bin/python -m pip install --upgrade pip
+.venv/bin/python -m pip install -r deploy/requirements-termux.txt
+
+if command -v pm2 >/dev/null 2>&1; then
+    echo "[INFO] Starting Omni Gateway with PM2..."
+    pm2 start .venv/bin/python --name omni-gateway -- backend/main.py
+else
+    echo "[INFO] PM2 is not installed. Starting Omni Gateway in the foreground..."
+    exec .venv/bin/python backend/main.py
+fi
