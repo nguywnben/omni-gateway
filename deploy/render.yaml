@@ -1,0 +1,16 @@
+﻿services:
+  - type: web
+    name: omni-gateway
+    runtime: docker
+    dockerfilePath: ./deploy/Dockerfile
+    dockerContext: .
+    plan: free
+    region: singapore
+    healthCheckPath: /
+    envVars:
+      - key: OGW_PASSWORD
+        sync: false
+      - key: OGW_HOST
+        value: 0.0.0.0
+      - key: OGW_PORT
+        value: "10000"

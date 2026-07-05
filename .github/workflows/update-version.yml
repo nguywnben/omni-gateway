@@ -1,0 +1,51 @@
+name: Update Version File
+
+on:
+  push:
+    branches:
+      - master
+      - main
+
+jobs:
+  update-version:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Update backend/version.txt
+        run: |
+          # 获取最新commit信息
+          FULL_HASH=$(git log -1 --format=%H)
+          SHORT_HASH=$(git log -1 --format=%h)
+          MESSAGE=$(git log -1 --format=%s)
+          DATE=$(git log -1 --format=%ci)
+
+          # 写入 backend/version.txt
+          echo "full_hash=$FULL_HASH" > backend/version.txt
+          echo "short_hash=$SHORT_HASH" >> backend/version.txt
+          echo "message=$MESSAGE" >> backend/version.txt
+          echo "date=$DATE" >> backend/version.txt
+
+          echo "Version file updated:"
+          cat backend/version.txt
+
+      - name: Commit backend/version.txt if changed
+        run: |
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+
+          # 检查是否有变化
+          if git diff --quiet backend/version.txt; then
+            echo "No changes to backend/version.txt"
+          else
+            git add backend/version.txt
+            git commit -m "chore: update backend version metadata [skip ci]"
+            git push
+          fi

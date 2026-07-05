@@ -1,0 +1,530 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Omni Gateway Console</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Google+Sans:ital,opsz,wght@0,17..18,400..700;1,17..18,400..700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/frontend/control_panel.css">
+</head>
+
+<body>
+    <div class="sidebar-overlay" onclick="toggleMobileMenu()"></div>
+
+    <section id="loginSection" class="login-wrapper" aria-label="Login">
+        <div class="login-card">
+            <div class="login-brand">
+                <span class="app-mark" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M4 12h16"></path>
+                        <path d="M12 4v16"></path>
+                        <path d="M7 7l10 10"></path>
+                        <path d="M17 7L7 17"></path>
+                    </svg>
+                </span>
+                <div class="login-brand-title">Omni Gateway</div>
+            </div>
+            <h1 class="login-title">Sign in to console</h1>
+            <p class="login-copy">Manage routing, credentials, fallback behavior, and protocol translation from one focused workspace.</p>
+            <div class="login-form">
+                <label for="loginPassword">Console password</label>
+                <input type="password" id="loginPassword" placeholder="Enter password" autocomplete="current-password" onkeypress="handlePasswordEnter(event)">
+                <button type="button" class="btn" onclick="login()">Continue</button>
+            </div>
+        </div>
+    </section>
+
+    <section id="mainSection" class="dashboard-wrapper hidden" aria-label="Dashboard">
+        <aside class="dashboard-sidebar" aria-label="Primary navigation">
+            <div class="sidebar-brand">
+                <span class="app-mark" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M4 12h16"></path>
+                        <path d="M12 4v16"></path>
+                        <path d="M7 7l10 10"></path>
+                        <path d="M17 7L7 17"></path>
+                    </svg>
+                </span>
+                <h2>Omni Gateway</h2>
+            </div>
+
+            <nav class="sidebar-menu">
+                <button type="button" class="tab active" onclick="switchTab('dashboard')">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 13h6V4H4z"></path><path d="M14 20h6V4h-6z"></path><path d="M4 20h6v-3H4z"></path></svg>
+                    <span>Dashboard</span>
+                </button>
+                <button type="button" class="tab" onclick="switchTab('manage')">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 7h14"></path><path d="M5 12h14"></path><path d="M5 17h14"></path><circle cx="7" cy="7" r="1"></circle><circle cx="7" cy="12" r="1"></circle><circle cx="7" cy="17" r="1"></circle></svg>
+                    <span>Credentials</span>
+                </button>
+                <button type="button" class="tab" onclick="switchTab('oauth')">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M15 7h3a4 4 0 0 1 0 8h-3"></path><path d="M9 17H6a4 4 0 0 1 0-8h3"></path><path d="M8 12h8"></path></svg>
+                    <span>OAuth</span>
+                </button>
+                <button type="button" class="tab" onclick="switchTab('upload')">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V4"></path><path d="M7 9l5-5 5 5"></path><path d="M5 20h14"></path></svg>
+                    <span>Upload</span>
+                </button>
+                <button type="button" class="tab" onclick="switchTab('config')">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19 12a7 7 0 0 0-.1-1.2l2-1.5-2-3.4-2.4 1a7.7 7.7 0 0 0-2-1.2L14 3h-4l-.4 2.7a7.7 7.7 0 0 0-2 1.2l-2.4-1-2 3.4 2 1.5A7 7 0 0 0 5 12c0 .4 0 .8.1 1.2l-2 1.5 2 3.4 2.4-1c.6.5 1.3.9 2 1.2L10 21h4l.4-2.7c.7-.3 1.4-.7 2-1.2l2.4 1 2-3.4-2-1.5c.1-.4.2-.8.2-1.2z"></path></svg>
+                    <span>Settings</span>
+                </button>
+                <button type="button" class="tab" onclick="switchTab('logs')">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h16"></path><path d="M4 12h10"></path><path d="M4 19h16"></path></svg>
+                    <span>Logs</span>
+                </button>
+                <button type="button" class="tab" onclick="switchTab('about')">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="M12 11v5"></path><path d="M12 8h.01"></path></svg>
+                    <span>About</span>
+                </button>
+            </nav>
+
+            <div class="sidebar-footer">
+                <div class="sidebar-meta">
+                    <span>Console</span>
+                    <span id="versionText">...</span>
+                </div>
+                <button type="button" class="btn btn-secondary btn-small" onclick="logout()">Sign out</button>
+            </div>
+        </aside>
+
+        <header class="mobile-topbar">
+            <div class="mobile-topbar-brand">
+                <span class="app-mark" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M4 12h16"></path>
+                        <path d="M12 4v16"></path>
+                        <path d="M7 7l10 10"></path>
+                        <path d="M17 7L7 17"></path>
+                    </svg>
+                </span>
+                <span>Omni Gateway</span>
+            </div>
+            <button type="button" class="mobile-menu-btn" onclick="toggleMobileMenu()" aria-label="Open navigation">
+                <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+                    <path d="M4 7h16"></path>
+                    <path d="M4 12h16"></path>
+                    <path d="M4 17h16"></path>
+                </svg>
+            </button>
+        </header>
+
+        <main class="dashboard-main">
+            <div class="dashboard-content-container">
+                <div id="dashboardTab" class="tab-content active">
+                    <header class="page-header">
+                        <div>
+                            <div class="page-kicker">Overview</div>
+                            <h1 class="page-title">Gateway dashboard</h1>
+                            <p class="page-description">Monitor request flow, active credential capacity, and integration details for your coding-tool router.</p>
+                        </div>
+                    </header>
+
+                    <div class="stats-container">
+                        <div class="stat-item">
+                            <span class="stat-number" id="totalApiCalls">0</span>
+                            <span class="stat-label">Requests in the last 24 hours</span>
+                        </div>
+                        <div class="stat-item">
+                            <span class="stat-number" id="totalFiles">0</span>
+                            <span class="stat-label">Monitored credentials</span>
+                        </div>
+                        <div class="stat-item">
+                            <span class="stat-number" id="avgCallsPerFile">0.0</span>
+                            <span class="stat-label">Average requests per credential</span>
+                        </div>
+                    </div>
+
+                    <div class="dashboard-grid">
+                        <section class="card span-6">
+                            <h2 class="card-title">API integration</h2>
+                            <div class="metric-row">
+                                <div class="copy-field">
+                                    <label for="apiKey">Unified API key</label>
+                                    <div class="secret-field">
+                                        <input type="password" id="apiKey" value="..." readonly onclick="copyInputValue('apiKey')" title="Click to copy">
+                                        <button type="button" class="btn btn-secondary icon-btn" onclick="toggleKeyVisibility('apiKey', this); event.stopPropagation();" title="Toggle visibility">
+                                            <svg class="eye-icon-hidden" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3l18 18"></path><path d="M10.6 10.6A2 2 0 0 0 12 14a2 2 0 0 0 1.4-.6"></path><path d="M9.9 4.2A10.8 10.8 0 0 1 12 4c5 0 8.5 4.2 10 8a13.7 13.7 0 0 1-2.1 3.4"></path><path d="M6.6 6.6A13.6 13.6 0 0 0 2 12c1.5 3.8 5 8 10 8a10.8 10.8 0 0 0 4.4-.9"></path></svg>
+                                            <svg class="eye-icon-visible" style="display: none;" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.5-8 10-8 10 8 10 8-3.5 8-10 8S2 12 2 12z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+                                        </button>
+                                        <button type="button" class="btn btn-secondary icon-btn" onclick="regenerateApiKey()" title="Regenerate key">
+                                            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 11a8 8 0 0 0-14.8-3"></path><path d="M4 5v4h4"></path><path d="M4 13a8 8 0 0 0 14.8 3"></path><path d="M20 19v-4h-4"></path></svg>
+                                        </button>
+                                    </div>
+                                </div>
+                                <div class="copy-field">
+                                    <label>Base URL</label>
+                                    <button type="button" class="endpoint-code-card" id="unifiedEndpointUrl" onclick="cpUrl(this)" title="Click to copy">...</button>
+                                </div>
+                            </div>
+                        </section>
+
+                        <section class="card span-6">
+                            <h2 class="card-title">Client routes</h2>
+                            <div class="integration-list">
+                                <div class="code-block">OpenAI compatible: POST /ogw/v1/chat/completions</div>
+                                <div class="code-block">Anthropic compatible: POST /ogw/v1/messages</div>
+                                <div class="code-block">Gemini compatible: POST /ogw/v1beta/models/{model}:generateContent</div>
+                            </div>
+                        </section>
+
+                        <section class="card span-12">
+                            <h2 class="card-title">24-hour request breakdown</h2>
+                            <div id="usageLoading" class="skeleton-table">
+                                <div class="skeleton-row header"><div class="skeleton-cell"></div><div class="skeleton-cell"></div><div class="skeleton-cell"></div></div>
+                                <div class="skeleton-row"><div class="skeleton-cell"></div><div class="skeleton-cell"></div><div class="skeleton-cell"></div></div>
+                            </div>
+                            <div class="usage-table-wrapper">
+                                <table class="usage-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Credential</th>
+                                            <th>Requests</th>
+                                            <th>Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="usageList"></tbody>
+                                </table>
+                            </div>
+                        </section>
+                    </div>
+                </div>
+
+                <div id="manageTab" class="tab-content">
+                    <header class="page-header">
+                        <div>
+                            <div class="page-kicker">Credentials</div>
+                            <h1 class="page-title">Omni credential pool</h1>
+                            <p class="page-description">Audit account health, cooldowns, quota state, and batch operations for active routing capacity.</p>
+                        </div>
+                        <div class="page-actions">
+                            <button type="button" class="btn" onclick="refreshOmniCredsList()">Refresh</button>
+                            <button type="button" class="btn btn-secondary" onclick="downloadAllOmniCreds()">Download ZIP</button>
+                        </div>
+                    </header>
+
+                    <div class="stats-container">
+                        <div class="stat-item"><span class="stat-number" id="omniStatTotal">0</span><span class="stat-label">Total credentials</span></div>
+                        <div class="stat-item"><span class="stat-number" id="omniStatNormal">0</span><span class="stat-label">Active credentials</span></div>
+                        <div class="stat-item"><span class="stat-number" id="omniStatDisabled">0</span><span class="stat-label">Disabled credentials</span></div>
+                    </div>
+
+                    <div class="batch-controls">
+                        <div class="batch-label">
+                            <input type="checkbox" id="selectAllOmniCheckbox" class="select-all-checkbox" onchange="toggleSelectAllOmni()">
+                            <label for="selectAllOmniCheckbox">Select all visible</label>
+                            <span class="selected-count" id="omniSelectedCount">Selected 0 items</span>
+                        </div>
+                        <div class="batch-actions">
+                            <button type="button" class="batch-btn batch-enable" id="omniBatchEnableBtn" onclick="batchOmniAction('enable')" disabled>Enable</button>
+                            <button type="button" class="batch-btn" id="omniBatchDisableBtn" onclick="batchOmniAction('disable')" disabled>Disable</button>
+                            <button type="button" class="batch-btn batch-delete" id="omniBatchDeleteBtn" onclick="batchOmniAction('delete')" disabled>Delete</button>
+                            <button type="button" class="batch-btn" id="omniBatchEnableCreditBtn" onclick="batchOmniAction('enable_credit')" disabled>Enable credit</button>
+                            <button type="button" class="batch-btn" id="omniBatchDisableCreditBtn" onclick="batchOmniAction('disable_credit')" disabled>Disable credit</button>
+                            <button type="button" class="batch-btn" id="omniBatchVerifyBtn" onclick="batchVerifyOmniProjectIds()" disabled>Verify project</button>
+                            <button type="button" class="batch-btn" onclick="refreshAllOmniEmails()">Refresh emails</button>
+                            <button type="button" class="batch-btn" onclick="deduplicateOmniByEmail()">Deduplicate</button>
+                        </div>
+                    </div>
+
+                    <div class="filter-container">
+                        <div class="filter-group">
+                            <label for="omniStatusFilter">Status</label>
+                            <select id="omniStatusFilter" class="filter-select" onchange="applyOmniStatusFilter()">
+                                <option value="all">All</option>
+                                <option value="enabled">Enabled</option>
+                                <option value="disabled">Disabled</option>
+                            </select>
+                        </div>
+                        <div class="filter-group">
+                            <label for="omniErrorCodeFilter">Error</label>
+                            <select id="omniErrorCodeFilter" class="filter-select" onchange="applyOmniStatusFilter()">
+                                <option value="all">All</option>
+                                <option value="none">None</option>
+                                <option value="400">400</option>
+                                <option value="403">403</option>
+                                <option value="429">429</option>
+                                <option value="500">500</option>
+                            </select>
+                        </div>
+                        <div class="filter-group">
+                            <label for="omniCooldownFilter">Cooldown</label>
+                            <select id="omniCooldownFilter" class="filter-select" onchange="applyOmniStatusFilter()">
+                                <option value="all">All</option>
+                                <option value="in_cooldown">In cooldown</option>
+                                <option value="no_cooldown">No cooldown</option>
+                            </select>
+                        </div>
+                        <div class="filter-group">
+                            <label for="omniTierFilter">Tier</label>
+                            <select id="omniTierFilter" class="filter-select" onchange="applyOmniStatusFilter()">
+                                <option value="all">All</option>
+                                <option value="free">Free</option>
+                                <option value="pro">Pro</option>
+                                <option value="ultra">Ultra</option>
+                            </select>
+                        </div>
+                        <div class="filter-group">
+                            <label for="omniPageSizeSelect">Per page</label>
+                            <select id="omniPageSizeSelect" class="page-size-select" onchange="changeOmniPageSize()">
+                                <option value="20">20</option>
+                                <option value="50">50</option>
+                                <option value="100">100</option>
+                                <option value="200">200</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div id="omniCredsListSection">
+                        <div id="omniCredsLoading" class="skeleton-list">
+                            <div class="skeleton-item"><div class="skeleton-line title"></div><div class="skeleton-line content"></div><div class="skeleton-line buttons"></div></div>
+                            <div class="skeleton-item"><div class="skeleton-line title"></div><div class="skeleton-line content"></div><div class="skeleton-line buttons"></div></div>
+                            <div class="skeleton-item"><div class="skeleton-line title"></div><div class="skeleton-line content"></div><div class="skeleton-line buttons"></div></div>
+                        </div>
+                        <div class="creds-grid" id="omniCredsList"></div>
+                        <div class="pagination-container" id="omniPaginationContainer" style="display: none;">
+                            <button type="button" class="pagination-btn" id="omniPrevPageBtn" onclick="changeOmniPage(-1)">Previous</button>
+                            <div class="pagination-info" id="omniPaginationInfo">Page 1 of 1</div>
+                            <button type="button" class="pagination-btn" id="omniNextPageBtn" onclick="changeOmniPage(1)">Next</button>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="oauthTab" class="tab-content">
+                    <header class="page-header">
+                        <div>
+                            <div class="page-kicker">OAuth</div>
+                            <h1 class="page-title">Connect a Google account</h1>
+                            <p class="page-description">Create and save Omni credentials through the Google authorization flow.</p>
+                        </div>
+                    </header>
+
+                    <section class="tool-panel">
+                        <h2 class="card-title">Omni authentication</h2>
+                        <div class="page-actions">
+                            <button type="button" class="btn" id="getOmniAuthBtn">Generate authorization link</button>
+                        </div>
+
+                        <div id="omniAuthUrlSection" class="hidden" style="margin-top: 18px;">
+                            <label>Authorization link</label>
+                            <div class="endpoint-code-card">
+                                <a id="omniAuthUrl" href="#" target="_blank" rel="noreferrer">Open Google authorization</a>
+                            </div>
+
+                            <div class="tool-panel" style="margin-top: 14px;">
+                                <button type="button" class="btn btn-secondary btn-small" onclick="toggleOmniCallbackUrlSection()">
+                                    Callback URL fallback <span id="omniCallbackUrlToggleIcon">Show</span>
+                                </button>
+                                <div id="omniCallbackUrlSection" style="display: none; margin-top: 12px;">
+                                    <label for="omniCallbackUrlInput">Callback URL</label>
+                                    <input type="url" id="omniCallbackUrlInput" placeholder="http://localhost:11451/?state=...&code=...">
+                                    <button type="button" class="btn btn-secondary btn-small" style="margin-top: 10px;" onclick="processOmniCallbackUrl()">Parse callback URL</button>
+                                </div>
+                            </div>
+
+                            <div class="page-actions" style="margin-top: 14px;">
+                                <button type="button" class="btn" id="getOmniCredsBtn" onclick="getOmniCredentials()">Save credentials</button>
+                            </div>
+
+                            <div id="omniCredsSection" class="hidden" style="margin-top: 14px;">
+                                <label>Saved credential payload</label>
+                                <div class="credentials">
+                                    <pre id="omniCredsContent"></pre>
+                                </div>
+                                <button type="button" class="btn btn-secondary btn-small" style="margin-top: 10px;" onclick="downloadOmniCredentials()">Download credentials</button>
+                            </div>
+                        </div>
+                    </section>
+                </div>
+
+                <div id="uploadTab" class="tab-content">
+                    <header class="page-header">
+                        <div>
+                            <div class="page-kicker">Upload</div>
+                            <h1 class="page-title">Batch upload credentials</h1>
+                            <p class="page-description">Import Omni credential JSON files or ZIP archives into the active credential pool.</p>
+                        </div>
+                    </header>
+
+                    <section class="tool-panel">
+                        <div class="upload-area" id="omniUploadArea" onclick="document.getElementById('omniFileInput').click()" ondrop="handleOmniFileDrop(event)" ondragover="event.preventDefault(); this.classList.add('dragover');" ondragleave="this.classList.remove('dragover');">
+                            <div>
+                                <div class="upload-title">Drop credential files here</div>
+                                <p class="upload-copy">Supports JSON and ZIP archives.</p>
+                            </div>
+                        </div>
+                        <input type="file" id="omniFileInput" multiple accept=".json,.zip" style="display: none;" onchange="handleOmniFileSelect(event)">
+
+                        <div id="omniFileListSection" class="hidden" style="margin-top: 16px;">
+                            <label>Pending files</label>
+                            <div class="file-list" id="omniFileList"></div>
+                            <div class="page-actions">
+                                <button type="button" class="btn btn-small" onclick="uploadOmniFiles()">Upload</button>
+                                <button type="button" class="btn btn-secondary btn-small" onclick="clearOmniFiles()">Clear</button>
+                            </div>
+                        </div>
+
+                        <div id="omniUploadProgressSection" class="hidden" style="margin-top: 16px;">
+                            <div class="progress-bar"><div class="progress-fill" id="omniProgressFill"></div></div>
+                            <p id="omniProgressText" class="page-description" style="margin-top: 8px;">Upload progress: 0%</p>
+                        </div>
+                    </section>
+                </div>
+
+                <div id="configTab" class="tab-content">
+                    <header class="page-header">
+                        <div>
+                            <div class="page-kicker">Settings</div>
+                            <h1 class="page-title">System configuration</h1>
+                            <p class="page-description">Tune authentication, upstream endpoints, retry policy, compatibility mode, and keep-alive behavior.</p>
+                        </div>
+                        <div class="page-actions">
+                            <button type="button" class="btn" onclick="saveConfig()">Save</button>
+                            <button type="button" class="btn btn-secondary" onclick="loadConfig()">Reload</button>
+                        </div>
+                    </header>
+
+                    <div id="configSection">
+                        <div id="configLoading" class="skeleton-config">
+                            <div class="skeleton-config-group"><div class="skeleton-line title"></div><div class="skeleton-line content"></div></div>
+                            <div class="skeleton-config-group"><div class="skeleton-line title"></div><div class="skeleton-line content"></div></div>
+                        </div>
+
+                        <div id="configForm" class="hidden">
+                            <div class="form-grid">
+                                <section class="config-group">
+                                    <h2 class="card-title">Access</h2>
+                                    <div class="form-group"><label for="host">Bind host</label><input type="text" id="host" placeholder="0.0.0.0"></div>
+                                    <div class="form-group"><label for="port">Port</label><input type="number" id="port" min="1" max="65535" placeholder="7861"></div>
+                                    <div class="form-group"><label for="configApiPassword">API password</label><input type="text" id="configApiPassword"></div>
+                                    <div class="form-group"><label for="configPanelPassword">Panel password</label><input type="text" id="configPanelPassword"></div>
+                                    <div class="form-group"><label for="configPassword">Unified password override</label><input type="text" id="configPassword"></div>
+                                </section>
+
+                                <section class="config-group">
+                                    <h2 class="card-title">Storage and network</h2>
+                                    <div class="form-group"><label for="credentialsDir">Credentials directory</label><input type="text" id="credentialsDir"></div>
+                                    <div class="form-group"><label for="proxy">Outbound proxy</label><input type="text" id="proxy" placeholder="http://127.0.0.1:7890"></div>
+                                </section>
+                            </div>
+
+                            <section class="config-group" style="margin-top: 16px;">
+                                <div class="page-header" style="margin-bottom: 16px;">
+                                    <div>
+                                        <h2 class="card-title">Upstream endpoints</h2>
+                                    </div>
+                                    <div class="page-actions">
+                                        <button type="button" class="btn btn-secondary btn-small" onclick="useMirrorUrls()">Use mirror endpoints</button>
+                                        <button type="button" class="btn btn-secondary btn-small" onclick="restoreOfficialUrls()">Use official endpoints</button>
+                                    </div>
+                                </div>
+                                <div class="form-grid">
+                                    <div class="form-group"><label for="codeAssistEndpoint">Code Assist API</label><input type="text" id="codeAssistEndpoint"></div>
+                                    <div class="form-group"><label for="oauthProxyUrl">OAuth API</label><input type="text" id="oauthProxyUrl"></div>
+                                    <div class="form-group"><label for="googleapisProxyUrl">Google APIs</label><input type="text" id="googleapisProxyUrl"></div>
+                                    <div class="form-group"><label for="resourceManagerApiUrl">Resource Manager API</label><input type="text" id="resourceManagerApiUrl"></div>
+                                    <div class="form-group"><label for="serviceUsageApiUrl">Service Usage API</label><input type="text" id="serviceUsageApiUrl"></div>
+                                    <div class="form-group"><label for="omniApiUrl">Omni API</label><input type="text" id="omniApiUrl"></div>
+                                </div>
+                            </section>
+
+                            <div class="form-grid" style="margin-top: 16px;">
+                                <section class="config-group">
+                                    <h2 class="card-title">Fallback policy</h2>
+                                    <label class="switch-row"><input type="checkbox" id="autoBanEnabled" class="config-checkbox"><span>Auto-disable credentials for configured error codes</span></label>
+                                    <div class="form-group" style="margin-top: 14px;"><label for="autoBanErrorCodes">Auto-ban error codes</label><input type="text" id="autoBanErrorCodes" placeholder="400,403"></div>
+                                    <label class="switch-row"><input type="checkbox" id="retry429Enabled" class="config-checkbox"><span>Retry failed requests with alternate credentials</span></label>
+                                    <div class="form-group" style="margin-top: 14px;"><label for="retry429MaxRetries">Maximum retries</label><input type="number" id="retry429MaxRetries" min="1" max="50"></div>
+                                    <div class="form-group"><label for="retry429Interval">Retry interval in seconds</label><input type="number" id="retry429Interval" min="0.01" max="10" step="0.01"></div>
+                                </section>
+
+                                <section class="config-group">
+                                    <h2 class="card-title">Translation and runtime</h2>
+                                    <label class="switch-row"><input type="checkbox" id="compatibilityModeEnabled" class="config-checkbox"><span>Flatten system instructions for compatibility</span></label>
+                                    <label class="switch-row" style="margin-top: 12px;"><input type="checkbox" id="returnThoughtsToFrontend" class="config-checkbox"><span>Return reasoning content when available</span></label>
+                                    <label class="switch-row" style="margin-top: 12px;"><input type="checkbox" id="omniStreamToNonstream" class="config-checkbox"><span>Compile streaming Omni responses for non-stream clients</span></label>
+                                    <label class="switch-row" style="margin-top: 12px;"><input type="checkbox" id="omniSwitchCredentialEnabled" class="config-checkbox"><span>Switch Omni credentials during retries</span></label>
+                                    <div class="form-group" style="margin-top: 14px;"><label for="antiTruncationMaxAttempts">Truncation recovery attempts</label><input type="number" id="antiTruncationMaxAttempts" min="1" max="10"></div>
+                                    <div class="form-group"><label for="keepaliveUrl">Keep-alive URL</label><input type="text" id="keepaliveUrl"><button type="button" class="btn btn-secondary btn-small" style="margin-top: 10px;" onclick="autoSetKeepaliveUrl()">Use current URL</button></div>
+                                    <div class="form-group"><label for="keepaliveInterval">Keep-alive interval in seconds</label><input type="number" id="keepaliveInterval" min="5" max="86400"></div>
+                                </section>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="logsTab" class="tab-content">
+                    <header class="page-header">
+                        <div>
+                            <div class="page-kicker">Logs</div>
+                            <h1 class="page-title">Runtime log stream</h1>
+                            <p class="page-description">Watch routing decisions, upstream responses, credential rotation, and application errors.</p>
+                        </div>
+                        <div class="page-actions">
+                            <button type="button" class="btn" onclick="connectWebSocket()">Connect</button>
+                            <button type="button" class="btn btn-secondary" onclick="disconnectWebSocket()">Disconnect</button>
+                            <button type="button" class="btn btn-secondary" onclick="downloadLogs()">Download</button>
+                            <button type="button" class="btn btn-danger" onclick="clearLogs()">Clear</button>
+                        </div>
+                    </header>
+
+                    <div class="filter-container">
+                        <div class="filter-group">
+                            <label for="logLevelFilter">Level</label>
+                            <select id="logLevelFilter" class="filter-select" onchange="filterLogs()">
+                                <option value="all">All</option>
+                                <option value="ERROR">Error</option>
+                                <option value="WARNING">Warning</option>
+                                <option value="INFO">Info</option>
+                                <option value="DEBUG">Debug</option>
+                            </select>
+                        </div>
+                        <label class="switch-row"><input type="checkbox" id="autoScroll" class="config-checkbox" checked><span>Auto-scroll</span></label>
+                    </div>
+
+                    <div id="logConnectionStatus" class="status info" style="margin-bottom: 14px;">
+                        <strong>Websocket:</strong> <span id="connectionStatusText">Not connected</span>
+                    </div>
+                    <div id="logContainer"><div id="logContent">Waiting for logs...</div></div>
+                </div>
+
+                <div id="aboutTab" class="tab-content">
+                    <header class="page-header">
+                        <div>
+                            <div class="page-kicker">About</div>
+                            <h1 class="page-title">Omni Gateway</h1>
+                            <p class="page-description">A universal AI router for coding tools with smart auto-fallback, token compression, and seamless format translation.</p>
+                        </div>
+                        <div class="page-actions">
+                            <button type="button" class="btn btn-secondary" id="checkUpdateBtn" onclick="checkForUpdates()">Check for updates</button>
+                        </div>
+                    </header>
+
+                    <div class="dashboard-grid">
+                        <section class="card span-7">
+                            <h2 class="card-title">Project</h2>
+                            <p class="card-copy">Omni Gateway provides one management plane for routing coding-tool requests across compatible AI formats, active credential pools, and resilient fallback behavior.</p>
+                            <p class="card-copy" style="margin-top: 14px;">Repository: <a href="https://github.com/nguywnben/omni-gateway" target="_blank" rel="noreferrer">nguywnben/omni-gateway</a></p>
+                        </section>
+                        <section class="card span-5">
+                            <h2 class="card-title">Operating model</h2>
+                            <div class="integration-list">
+                                <div class="code-block">Smart auto-fallback</div>
+                                <div class="code-block">Token compression and response shaping</div>
+                                <div class="code-block">OpenAI, Anthropic, Gemini, and Omni format translation</div>
+                            </div>
+                        </section>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </section>
+
+    <div id="statusSection"></div>
+    <script src="/frontend/common.js"></script>
+</body>
+
+</html>

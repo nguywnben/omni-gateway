@@ -1,0 +1,53 @@
+﻿apiVersion: zeabur.com/v1
+kind: Template
+metadata:
+  name: omni-gateway
+spec:
+  description: "A universal AI router for coding tools with smart fallback, token compression, and format translation."
+  tags:
+    - ai
+    - api
+    - gateway
+    - gemini
+    - openai
+  variables:
+    - key: OGW_PASSWORD
+      type: STRING
+      name: Access password
+      description: Password used for API and control panel access.
+    - key: OGW_DOMAIN
+      type: DOMAIN
+      name: Domain
+      description: Public domain for the Omni Gateway service.
+  readme: |
+    # Omni Gateway
+
+    Omni Gateway routes coding-tool traffic across OpenAI-compatible, Gemini-compatible,
+    Anthropic-compatible, and native backend formats.
+
+    After deployment, open your assigned domain, sign in with the configured
+    password, and add credentials from the control panel.
+  services:
+    - name: omni-gateway
+      template: PREBUILT
+      spec:
+        id: omni-gateway
+        name: omni-gateway
+        source:
+          image: nguywnben/omni-gateway:latest
+        ports:
+          - id: web
+            port: 7861
+            type: HTTP
+        env:
+          OGW_PASSWORD:
+            default: ${OGW_PASSWORD}
+          OGW_PORT:
+            default: "7861"
+          OGW_HOST:
+            default: "0.0.0.0"
+          OGW_DOMAIN:
+            default: ${OGW_DOMAIN}
+        volumes:
+          - id: creds
+            dir: /app/backend/data/creds

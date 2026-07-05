@@ -1,0 +1,80 @@
+name: Bug report
+description: Report a reproducible Omni Gateway issue.
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for helping improve Omni Gateway. Please include enough detail to reproduce the behavior.
+
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: Before submitting
+      options:
+        - label: I searched existing issues for a duplicate.
+          required: true
+        - label: I tested with the latest available commit or image.
+          required: true
+
+  - type: input
+    id: channel
+    attributes:
+      label: Route or provider mode
+      description: For example, OpenAI-compatible, Gemini native, Anthropic Messages, Code Assist, or Omni.
+      placeholder: "OpenAI-compatible via Omni"
+    validations:
+      required: true
+
+  - type: input
+    id: model
+    attributes:
+      label: Model
+      description: The requested model name.
+      placeholder: "gemini-2.5-flash"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: format
+    attributes:
+      label: Client format
+      description: Select the request/response format you used.
+      options:
+        - OpenAI-compatible
+        - Gemini native
+        - Anthropic Messages
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: error-content
+    attributes:
+      label: Error output
+      description: Paste complete logs, status codes, stack traces, or response bodies.
+      placeholder: |
+        Paste the full error output here.
+      render: shell
+    validations:
+      required: true
+
+  - type: textarea
+    id: error-description
+    attributes:
+      label: What happened?
+      description: Describe the scenario, expected behavior, and actual behavior.
+      placeholder: |
+        1. I sent this request...
+        2. I expected...
+        3. Omni Gateway returned...
+    validations:
+      required: true
+
+  - type: textarea
+    id: additional-context
+    attributes:
+      label: Environment
+      description: Include OS, Python version, deployment target, storage backend, and relevant environment variables.
+      placeholder: "Windows, Python 3.12, Docker, SQLite, etc."
