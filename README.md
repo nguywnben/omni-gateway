@@ -258,4 +258,4 @@ git status --short
 
 ## License
 
-This repository uses the license declared in [LICENSE](LICENSE). Review it before using Omni Gateway in any environment beyond personal development.
+Omni Gateway is released under the [MIT License](LICENSE).
