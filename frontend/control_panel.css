@@ -9,11 +9,12 @@
     --text-soft: #8a8a8a;
     --border: #e7e7e7;
     --border-strong: #d8d8d8;
-    --field-hover-border: #bdbdbd;
+    --control-hover: #f4f4f4;
+    --control-hover-border: #d8d8d8;
+    --field-hover-border: var(--control-hover-border);
     --accent: #111111;
     --accent-hover: #2f2f2f;
     --accent-contrast: #ffffff;
-    --control-hover: #f3f3f3;
     --success: #137333;
     --success-bg: #eef7f0;
     --danger: #b3261e;
@@ -228,9 +229,9 @@ code {
 }
 
 .tab:hover {
-    background: var(--surface);
+    background: var(--control-hover);
     color: var(--text);
-    border-color: var(--border);
+    border-color: var(--control-hover-border);
 }
 
 .tab.active {
@@ -311,7 +312,7 @@ code {
 
 .mobile-menu-btn:hover {
     background: var(--control-hover);
-    border-color: var(--border-strong);
+    border-color: var(--control-hover-border);
 }
 
 .sidebar-overlay {
@@ -487,7 +488,7 @@ button.endpoint-code-card {
 
 button.endpoint-code-card:hover {
     background: var(--control-hover);
-    border-color: var(--border-strong);
+    border-color: var(--control-hover-border);
 }
 
 .credentials {
@@ -587,7 +588,7 @@ input[type="url"]:not(:disabled):not(.disabled):not(:focus):hover,
 select:not(:disabled):not(.disabled):not(:focus):hover,
 textarea:not(:disabled):not(.disabled):not(:focus):hover {
     border-color: var(--field-hover-border);
-    background: var(--bg-subtle);
+    background: var(--control-hover);
 }
 
 textarea {
@@ -640,13 +641,13 @@ textarea[readonly] {
 
 .secret-field input[readonly]:focus:not(:focus-visible) {
     background: var(--control-hover);
-    border-color: var(--border-strong);
+    border-color: var(--control-hover-border);
     box-shadow: none;
 }
 
 .secret-field input[readonly]:not(:disabled):not(.disabled):not(:focus):hover {
     background: var(--control-hover);
-    border-color: var(--border-strong);
+    border-color: var(--control-hover-border);
 }
 
 .form-grid,
@@ -736,7 +737,7 @@ textarea[readonly] {
 .cred-btn:not(:disabled):hover,
 .message-modal-btn:hover {
     background: var(--control-hover);
-    border-color: var(--border-strong);
+    border-color: var(--control-hover-border);
     color: var(--text);
 }
 
@@ -768,6 +769,12 @@ textarea[readonly] {
     width: 38px;
     min-width: 38px;
     padding: 0;
+}
+
+.secret-field .icon-btn:not(:disabled):hover {
+    background: var(--control-hover);
+    border-color: var(--control-hover-border);
+    color: var(--text);
 }
 
 .btn:disabled,
@@ -1247,7 +1254,7 @@ textarea[readonly] {
 
 .message-modal-close:hover {
     background: var(--control-hover);
-    border-color: var(--border-strong);
+    border-color: var(--control-hover-border);
 }
 
 .message-modal-body {
