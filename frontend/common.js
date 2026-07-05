@@ -2049,7 +2049,8 @@ async function updateEndpointUrls() {
             const data = await response.json();
             if (data.success) {
                 const apiKeyEl = document.getElementById('apiKey');
-                if (apiKeyEl) apiKeyEl.value = data.api_key;
+                const apiKey = data.ogw_api_key || data.api_key || '';
+                if (apiKeyEl) apiKeyEl.value = apiKey;
             }
         }
     } catch (e) {
@@ -2114,7 +2115,8 @@ async function regenerateApiKey() {
             const data = await response.json();
             if (data.success) {
                 const el = document.getElementById('apiKey');
-                if (el) el.value = data.api_key;
+                const apiKey = data.ogw_api_key || data.api_key || '';
+                if (el) el.value = apiKey;
                 showStatus(t('regenerate_success', 'API Key regenerated successfully'), 'success');
             } else {
                 showStatus(data.error || 'Failed to regenerate key', 'error');
