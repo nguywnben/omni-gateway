@@ -11,7 +11,7 @@
     --border-strong: #d8d8d8;
     --field-hover-border: #bdbdbd;
     --accent: #111111;
-    --accent-hover: #000000;
+    --accent-hover: #2f2f2f;
     --accent-contrast: #ffffff;
     --control-hover: #f3f3f3;
     --success: #137333;
@@ -136,7 +136,7 @@ code {
     display: flex;
     align-items: center;
     gap: 8px;
-    margin-bottom: 28px;
+    margin-bottom: 18px;
 }
 
 .login-brand-title {
@@ -157,12 +157,17 @@ code {
 .login-copy {
     color: var(--text-muted);
     line-height: 1.55;
-    margin-bottom: 24px;
+    margin-bottom: 18px;
 }
 
 .login-form {
     display: grid;
     gap: 12px;
+}
+
+.login-form label {
+    margin-bottom: 0;
+    pointer-events: none;
 }
 
 .dashboard-wrapper {
@@ -472,12 +477,12 @@ code {
 
 .endpoint-code-card,
 .code-block {
-    padding: 12px;
+    padding: 8px;
     word-break: break-word;
 }
 
 button.endpoint-code-card {
-    cursor: copy;
+    cursor: pointer;
 }
 
 button.endpoint-code-card:hover {
@@ -494,6 +499,11 @@ button.endpoint-code-card:hover {
 .copy-field {
     display: grid;
     gap: 8px;
+}
+
+.copy-field label {
+    margin-bottom: 0;
+    pointer-events: none;
 }
 
 .secret-field {
@@ -550,6 +560,10 @@ label {
     margin-bottom: 7px;
 }
 
+.form-group > label {
+    pointer-events: none;
+}
+
 input[type="text"],
 input[type="password"],
 input[type="number"],
@@ -566,12 +580,12 @@ textarea {
     outline: 0;
 }
 
-input[type="text"]:not(:disabled):not([readonly]):not(.disabled):not(:focus):hover,
-input[type="password"]:not(:disabled):not([readonly]):not(.disabled):not(:focus):hover,
-input[type="number"]:not(:disabled):not([readonly]):not(.disabled):not(:focus):hover,
-input[type="url"]:not(:disabled):not([readonly]):not(.disabled):not(:focus):hover,
-select:not(:disabled):not([readonly]):not(.disabled):not(:focus):hover,
-textarea:not(:disabled):not([readonly]):not(.disabled):not(:focus):hover {
+input[type="text"]:not(:disabled):not(.disabled):not(:focus):hover,
+input[type="password"]:not(:disabled):not(.disabled):not(:focus):hover,
+input[type="number"]:not(:disabled):not(.disabled):not(:focus):hover,
+input[type="url"]:not(:disabled):not(.disabled):not(:focus):hover,
+select:not(:disabled):not(.disabled):not(:focus):hover,
+textarea:not(:disabled):not(.disabled):not(:focus):hover {
     border-color: var(--field-hover-border);
     background: var(--bg-subtle);
 }
@@ -619,6 +633,22 @@ textarea[readonly] {
     cursor: copy;
 }
 
+.secret-field input[readonly] {
+    border-color: var(--border);
+    cursor: pointer;
+}
+
+.secret-field input[readonly]:focus:not(:focus-visible) {
+    background: var(--control-hover);
+    border-color: var(--border-strong);
+    box-shadow: none;
+}
+
+.secret-field input[readonly]:not(:disabled):not(.disabled):not(:focus):hover {
+    background: var(--control-hover);
+    border-color: var(--border-strong);
+}
+
 .form-grid,
 .grid-split-2 {
     display: grid;
@@ -641,6 +671,7 @@ textarea[readonly] {
     gap: 10px;
     color: var(--text);
     line-height: 1.45;
+    margin-bottom: 0;
 }
 
 .config-checkbox,
@@ -773,6 +804,10 @@ textarea[readonly] {
     gap: 8px;
 }
 
+.batch-label label {
+    margin-bottom: 0;
+}
+
 .selected-count,
 .pagination-info {
     color: var(--text-muted);
@@ -793,6 +828,7 @@ textarea[readonly] {
 .filter-group label {
     margin: 0;
     white-space: nowrap;
+    pointer-events: none;
 }
 
 .filter-select,
@@ -1221,6 +1257,26 @@ textarea[readonly] {
     color: var(--text-muted);
     line-height: 1.6;
     white-space: pre-wrap;
+}
+
+.message-modal-btn-primary {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: var(--accent-contrast);
+}
+
+.message-modal-btn-primary:hover {
+    background: var(--accent-hover);
+    border-color: var(--accent-hover);
+    color: var(--accent-contrast);
+}
+
+.message-modal-prompt-copy {
+    margin-bottom: 12px;
+}
+
+.message-modal-input {
+    margin-top: 2px;
 }
 
 @media (max-width: 1080px) {

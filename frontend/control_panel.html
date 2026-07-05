@@ -153,7 +153,7 @@
                                 <div class="copy-field">
                                     <label for="apiKey">Unified API key</label>
                                     <div class="secret-field">
-                                        <input type="password" id="apiKey" value="..." readonly onclick="copyInputValue('apiKey')" title="Click to copy">
+                                        <input type="password" id="apiKey" value="..." readonly onmousedown="event.preventDefault()" onclick="copyInputValue('apiKey')">
                                         <button type="button" class="btn btn-secondary icon-btn" onclick="toggleKeyVisibility('apiKey', this); event.stopPropagation();" title="Toggle visibility">
                                             <svg class="eye-icon-hidden" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3l18 18"></path><path d="M10.6 10.6A2 2 0 0 0 12 14a2 2 0 0 0 1.4-.6"></path><path d="M9.9 4.2A10.8 10.8 0 0 1 12 4c5 0 8.5 4.2 10 8a13.7 13.7 0 0 1-2.1 3.4"></path><path d="M6.6 6.6A13.6 13.6 0 0 0 2 12c1.5 3.8 5 8 10 8a10.8 10.8 0 0 0 4.4-.9"></path></svg>
                                             <svg class="eye-icon-visible" style="display: none;" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.5-8 10-8 10 8 10 8-3.5 8-10 8S2 12 2 12z"></path><circle cx="12" cy="12" r="3"></circle></svg>
@@ -165,7 +165,7 @@
                                 </div>
                                 <div class="copy-field">
                                     <label>Base URL</label>
-                                    <button type="button" class="endpoint-code-card" id="unifiedEndpointUrl" onclick="cpUrl(this)" title="Click to copy">Loading</button>
+                                    <button type="button" class="endpoint-code-card" id="unifiedEndpointUrl" onclick="cpUrl(this)">Loading</button>
                                 </div>
                             </div>
                         </section>

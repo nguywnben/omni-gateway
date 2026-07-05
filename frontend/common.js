@@ -13,6 +13,11 @@ const TRANSLATIONS = {
     "copy_success": "Copied to clipboard.",
     "copy_fail": "Copy failed.",
     "btn_close": "Close",
+    "btn_cancel": "Cancel",
+    "btn_confirm": "Confirm",
+    "btn_continue": "Continue",
+    "confirm_action_title": "Confirm action",
+    "input_required_title": "Input required",
     "dialog_tip": "Tip",
     "error_prefix": "Error: ",
     "tab_oauth": "OAuth Auth",
@@ -1682,7 +1687,7 @@ function createCredsManager(type) {
 
                 : t('confirm_batch_action', {action: actionLabel, count: selectedFiles.length});
 
-            if (!confirm(confirmMsg)) return;
+            if (!(await showConfirmModal(confirmMsg))) return;
 
             try {
 
@@ -2085,7 +2090,11 @@ function toggleKeyVisibility(inputId, btn) {
 function copyInputValue(inputId) {
     const input = document.getElementById(inputId);
     if (!input || !input.value || input.value === '...') return;
-    navigator.clipboard.writeText(input.value).then(() => {
+    const copyPromise = navigator.clipboard.writeText(input.value);
+    if (document.activeElement === input) {
+        input.blur();
+    }
+    copyPromise.then(() => {
         showStatus(t('copy_success'), 'success');
     }).catch(err => {
         showStatus(t('copy_fail'), 'error');
@@ -2093,7 +2102,7 @@ function copyInputValue(inputId) {
 }
 
 async function regenerateApiKey() {
-    if (!confirm(t('confirm_regenerate_key', 'Are you sure you want to regenerate this API key? Previous key will become invalid immediately.'))) {
+    if (!(await showConfirmModal(t('confirm_regenerate_key', 'Are you sure you want to regenerate this API key? Previous key will become invalid immediately.')))) {
         return;
     }
     try {
@@ -2200,6 +2209,204 @@ function showMessageModal(title, message, type = 'info') {
     };
 
     document.addEventListener('keydown', escHandler);
+
+}
+
+function renderDialogMessage(message) {
+
+    return escapeHtml(String(message || '')).replace(/\n/g, '<br>');
+
+}
+
+function showConfirmModal(message, options = {}) {
+
+    return new Promise((resolve) => {
+
+        const modal = document.createElement('div');
+
+        modal.className = 'message-modal-overlay';
+
+        const title = options.title || t('confirm_action_title');
+
+        const confirmLabel = options.confirmLabel || t('btn_confirm');
+
+        const cancelLabel = options.cancelLabel || t('btn_cancel');
+
+        modal.innerHTML = `
+
+            <div class="message-modal confirm">
+
+                <div class="message-modal-header">
+
+                    <h3>${escapeHtml(title)}</h3>
+
+                    <button type="button" class="message-modal-close" data-dialog-cancel>&times;</button>
+
+                </div>
+
+                <div class="message-modal-body">
+
+                    ${renderDialogMessage(message)}
+
+                </div>
+
+                <div class="message-modal-footer">
+
+                    <button type="button" class="message-modal-btn" data-dialog-cancel>${escapeHtml(cancelLabel)}</button>
+
+                    <button type="button" class="message-modal-btn message-modal-btn-primary" data-dialog-confirm>${escapeHtml(confirmLabel)}</button>
+
+                </div>
+
+            </div>
+
+        `;
+
+        let settled = false;
+
+        const close = (value) => {
+
+            if (settled) return;
+
+            settled = true;
+
+            document.removeEventListener('keydown', escHandler);
+
+            modal.remove();
+
+            resolve(value);
+
+        };
+
+        const escHandler = (event) => {
+
+            if (event.key === 'Escape') close(false);
+
+        };
+
+        modal.addEventListener('click', (event) => {
+
+            if (event.target === modal || event.target.closest('[data-dialog-cancel]')) close(false);
+
+            if (event.target.closest('[data-dialog-confirm]')) close(true);
+
+        });
+
+        document.addEventListener('keydown', escHandler);
+
+        document.body.appendChild(modal);
+
+        modal.querySelector('[data-dialog-confirm]')?.focus();
+
+    });
+
+}
+
+function showPromptModal(message, options = {}) {
+
+    return new Promise((resolve) => {
+
+        const modal = document.createElement('div');
+
+        modal.className = 'message-modal-overlay';
+
+        const title = options.title || t('input_required_title');
+
+        const confirmLabel = options.confirmLabel || t('btn_continue');
+
+        const cancelLabel = options.cancelLabel || t('btn_cancel');
+
+        const initialValue = options.value || '';
+
+        const placeholder = options.placeholder || '';
+
+        modal.innerHTML = `
+
+            <div class="message-modal prompt">
+
+                <div class="message-modal-header">
+
+                    <h3>${escapeHtml(title)}</h3>
+
+                    <button type="button" class="message-modal-close" data-dialog-cancel>&times;</button>
+
+                </div>
+
+                <div class="message-modal-body">
+
+                    <div class="message-modal-prompt-copy">${renderDialogMessage(message)}</div>
+
+                    <input type="text" class="message-modal-input">
+
+                </div>
+
+                <div class="message-modal-footer">
+
+                    <button type="button" class="message-modal-btn" data-dialog-cancel>${escapeHtml(cancelLabel)}</button>
+
+                    <button type="button" class="message-modal-btn message-modal-btn-primary" data-dialog-confirm>${escapeHtml(confirmLabel)}</button>
+
+                </div>
+
+            </div>
+
+        `;
+
+        let settled = false;
+
+        const input = () => modal.querySelector('.message-modal-input');
+
+        const close = (value) => {
+
+            if (settled) return;
+
+            settled = true;
+
+            document.removeEventListener('keydown', escHandler);
+
+            modal.remove();
+
+            resolve(value);
+
+        };
+
+        const escHandler = (event) => {
+
+            if (event.key === 'Escape') close(null);
+
+        };
+
+        modal.addEventListener('click', (event) => {
+
+            if (event.target === modal || event.target.closest('[data-dialog-cancel]')) close(null);
+
+            if (event.target.closest('[data-dialog-confirm]')) close(input()?.value || '');
+
+        });
+
+        modal.addEventListener('keydown', (event) => {
+
+            if (event.key === 'Enter' && event.target === input()) close(input()?.value || '');
+
+        });
+
+        document.addEventListener('keydown', escHandler);
+
+        document.body.appendChild(modal);
+
+        const inputEl = input();
+
+        if (inputEl) {
+
+            inputEl.value = initialValue;
+
+            inputEl.placeholder = placeholder;
+
+            inputEl.focus();
+
+        }
+
+    });
 
 }
 
@@ -2469,7 +2676,7 @@ function createCredCard(credInfo, manager) {
 
     div.querySelectorAll('[data-filename][data-action]').forEach(button => {
 
-        button.addEventListener('click', function () {
+        button.addEventListener('click', async function () {
 
             const fn = this.getAttribute('data-filename');
 
@@ -2477,17 +2684,12 @@ function createCredCard(credInfo, manager) {
 
             if (action === 'delete') {
 
-                if (confirm(t('confirm_delete_cred', {filename: fn}))) {
-
-                    manager.action(fn, action);
-
-                }
-
-            } else {
-
-                manager.action(fn, action);
+                if (!(await showConfirmModal(t('confirm_delete_cred', {filename: fn})))) return;
 
             }
+
+            manager.action(fn, action);
+
 
         });
 
@@ -3057,7 +3259,7 @@ async function getCredentials() {
 
             projectOptions += t('nplease_enter_index_1dataavailable', {data_available_projects_length: data.available_projects.length});
 
-            const selection = prompt(projectOptions);
+            const selection = await showPromptModal(projectOptions);
 
             const projectIndex = parseInt(selection) - 1;
 
@@ -3081,7 +3283,7 @@ async function getCredentials() {
 
         } else if (data.requires_manual_project_id) {
 
-            const userProjectId = prompt(t('unable_to_autodetect_project_id_ple'));
+            const userProjectId = await showPromptModal(t('unable_to_autodetect_project_id_ple'));
 
             if (userProjectId && userProjectId.trim()) {
 
@@ -3697,9 +3899,9 @@ function downloadOmniCred(filename) {
 
 }
 
-function deleteOmniCred(filename) {
+async function deleteOmniCred(filename) {
 
-    if (confirm(t('are_you_sure_you_want_to_delete_fil_dup', {filename: filename}))) {
+    if (await showConfirmModal(t('are_you_sure_you_want_to_delete_fil_dup', {filename: filename}))) {
 
         AppState.omniCreds.action(filename, 'delete');
 
@@ -4651,7 +4853,7 @@ async function batchVerifyProjectIds() {
 
     }
 
-    if (!confirm(t('are_you_sure_you_want_to_batch_veri_dup', {selectedFiles_length: selectedFiles.length}))) {
+    if (!(await showConfirmModal(t('are_you_sure_you_want_to_batch_veri_dup', {selectedFiles_length: selectedFiles.length})))) {
 
         return;
 
@@ -4777,7 +4979,7 @@ async function batchVerifyOmniProjectIds() {
 
     }
 
-    if (!confirm(t('are_you_sure_you_want_to_batch_veri', {selectedFiles_length: selectedFiles.length}))) {
+    if (!(await showConfirmModal(t('are_you_sure_you_want_to_batch_veri', {selectedFiles_length: selectedFiles.length})))) {
 
         return;
 
@@ -4903,7 +5105,7 @@ async function batchConfigurePreview() {
 
     }
 
-    if (!confirm(t('are_you_sure_you_want_to_batch_set', {selectedFiles_length: selectedFiles.length}))) {
+    if (!(await showConfirmModal(t('are_you_sure_you_want_to_batch_set', {selectedFiles_length: selectedFiles.length})))) {
 
         return;
 
@@ -5025,7 +5227,7 @@ async function batchConfigurePreview() {
 
 async function refreshAllEmails() {
 
-    if (!confirm(t('are_you_sure_you_want_to_refresh_us'))) return;
+    if (!(await showConfirmModal(t('are_you_sure_you_want_to_refresh_us')))) return;
 
     try {
 
@@ -5063,7 +5265,7 @@ async function refreshAllEmails() {
 
 async function refreshAllOmniEmails() {
 
-    if (!confirm(t('are_you_sure_you_want_to_refresh_us_dup'))) return;
+    if (!(await showConfirmModal(t('are_you_sure_you_want_to_refresh_us_dup')))) return;
 
     try {
 
@@ -5101,7 +5303,7 @@ async function refreshAllOmniEmails() {
 
 async function deduplicateByEmail() {
 
-    if (!confirm(t('are_you_sure_you_want_to_perform_on'))) return;
+    if (!(await showConfirmModal(t('are_you_sure_you_want_to_perform_on')))) return;
 
     try {
 
@@ -5155,7 +5357,7 @@ async function deduplicateByEmail() {
 
 async function deduplicateOmniByEmail() {
 
-    if (!confirm(t('are_you_sure_you_want_to_deduplicat'))) return;
+    if (!(await showConfirmModal(t('are_you_sure_you_want_to_deduplicat')))) return;
 
     try {
 
@@ -5575,7 +5777,7 @@ async function loadEnvCredentials() {
 
 async function clearEnvCredentials() {
 
-    if (!confirm(t('are_you_sure_you_want_to_clear_all'))) {
+    if (!(await showConfirmModal(t('are_you_sure_you_want_to_clear_all')))) {
 
         return;
 
@@ -5950,9 +6152,9 @@ const officialUrls = {
 
 };
 
-function useMirrorUrls() {
+async function useMirrorUrls() {
 
-    if (confirm(t('are_you_sure_you_want_to_configure_dup'))) {
+    if (await showConfirmModal(t('are_you_sure_you_want_to_configure_dup'))) {
 
         for (const [fieldId, url] of Object.entries(mirrorUrls)) {
 
@@ -5968,9 +6170,9 @@ function useMirrorUrls() {
 
 }
 
-function restoreOfficialUrls() {
+async function restoreOfficialUrls() {
 
-    if (confirm(t('are_you_sure_you_want_to_configure'))) {
+    if (await showConfirmModal(t('are_you_sure_you_want_to_configure'))) {
 
         for (const [fieldId, url] of Object.entries(officialUrls)) {
 
@@ -6072,7 +6274,7 @@ function renderUsageList() {
 
         const tr = document.createElement('tr');
 
-        tr.innerHTML = `<td colspan="3" style="text-align: center; color: var(--color-mute); padding: var(--spacing-lg) 0;">${t('status_no_filter_data')}</td>`;
+        tr.innerHTML = `<td colspan="3" style="text-align: center; color: var(--text-muted); padding: 18px 12px;">${t('status_no_filter_data')}</td>`;
 
         list.appendChild(tr);
 
@@ -6108,7 +6310,7 @@ function renderUsageList() {
 
 async function resetSingleUsageStats(filename) {
 
-    if (!confirm(t('confirm_reset_stats', {filename: filename}))) return;
+    if (!(await showConfirmModal(t('confirm_reset_stats', {filename: filename})))) return;
 
     try {
 
@@ -6146,7 +6348,7 @@ async function resetSingleUsageStats(filename) {
 
 async function resetAllUsageStats() {
 
-    if (!confirm(t('are_you_sure_you_want_to_reset_usag_dup'))) return;
+    if (!(await showConfirmModal(t('are_you_sure_you_want_to_reset_usag_dup')))) return;
 
     try {
 
