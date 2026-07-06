@@ -31,14 +31,20 @@ if ! command -v pm2 >/dev/null 2>&1; then
     npm install -g pm2
 fi
 
+PROJECT_DIR="${PROJECT_DIR:-router}"
+REPOSITORY_URL="${REPOSITORY_URL:-}"
+
 if [ -f "./backend/main.py" ]; then
-    log "Using current Omni Gateway checkout."
-elif [ -f "./omni-gateway/backend/main.py" ]; then
-    cd ./omni-gateway
+    log "Using current project checkout."
+elif [ -f "./${PROJECT_DIR}/backend/main.py" ]; then
+    cd "./${PROJECT_DIR}"
 else
-    log "Cloning Omni Gateway..."
-    git clone https://github.com/nguywnben/omni-gateway.git
-    cd ./omni-gateway
+    if [ -z "$REPOSITORY_URL" ]; then
+        fail "Set REPOSITORY_URL or run this script from the project root."
+    fi
+    log "Cloning repository..."
+    git clone "$REPOSITORY_URL" "$PROJECT_DIR"
+    cd "./${PROJECT_DIR}"
 fi
 
 if [ ! -d ".venv" ]; then
@@ -51,5 +57,5 @@ log "Installing Python dependencies..."
 .venv/bin/python -m pip install -r deploy/requirements-termux.txt
 
 log "Starting Omni Gateway with PM2..."
-pm2 start .venv/bin/python --name omni-gateway -- backend/main.py
+pm2 start .venv/bin/python --name router -- backend/main.py
 pm2 save

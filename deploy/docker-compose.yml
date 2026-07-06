@@ -1,36 +1,44 @@
-﻿version: '3.8'
+version: '3.8'
 
 services:
-  omni-gateway:
-    image: nguywnben/omni-gateway:latest
+  app:
+    image: ${IMAGE:-nguywnben/omni-gateway:latest}
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
     container_name: omni-gateway
     restart: unless-stopped
-    network_mode: host
+    ports:
+      - "${PORT:-7861}:${PORT:-7861}"
     environment:
       # Password configuration. Leave unset for the first-run web setup screen.
-      # - OGW_PASSWORD=${OGW_PASSWORD}
-      # - OGW_API_PASSWORD=${OGW_API_PASSWORD:-your_api_password}
-      # - OGW_PANEL_PASSWORD=${OGW_PANEL_PASSWORD:-your_panel_password}
+      # - PASSWORD=${PASSWORD}
+      # - API_PASSWORD=${API_PASSWORD:-your_api_password}
+      # - PANEL_PASSWORD=${PANEL_PASSWORD:-your_panel_password}
 
       # Server configuration
-      - OGW_PORT=${OGW_PORT:-7861}
-      - OGW_HOST=${OGW_HOST:-0.0.0.0}
+      - PORT=${PORT:-7861}
+      - HOST=${HOST:-0.0.0.0}
+      - CORS_ORIGINS=${CORS_ORIGINS:-}
+      - PANEL_SESSION_TTL_SECONDS=${PANEL_SESSION_TTL_SECONDS:-86400}
+      - PANEL_LOGIN_WINDOW_SECONDS=${PANEL_LOGIN_WINDOW_SECONDS:-300}
+      - PANEL_LOGIN_MAX_ATTEMPTS=${PANEL_LOGIN_MAX_ATTEMPTS:-10}
 
       # Optional: Logging configuration
-      # - OGW_LOG_LEVEL=${OGW_LOG_LEVEL:-info}
+      # - LOG_LEVEL=${LOG_LEVEL:-info}
 
       # Optional: Redis configuration (for distributed storage)
-      # - OGW_REDIS_URL=${OGW_REDIS_URL}
+      # - REDIS_URL=${REDIS_URL}
 
       # Optional: MongoDB configuration (for distributed storage)
-      # - OGW_MONGODB_URI=${OGW_MONGODB_URI}
-      # - OGW_MONGODB_DATABASE=${OGW_MONGODB_DATABASE:-omni_gateway}
+      # - MONGODB_URI=${MONGODB_URI}
+      # - MONGODB_DATABASE=${MONGODB_DATABASE:-core}
 
       # Optional: PostgreSQL configuration (for distributed storage)
-      # - OGW_POSTGRESQL_URI=${OGW_POSTGRESQL_URI}
+      # - POSTGRESQL_URI=${POSTGRESQL_URI}
 
       # Optional: Proxy configuration
-      # - OGW_PROXY=${OGW_PROXY}
+      # - PROXY=${PROXY}
     volumes:
       - ../backend/data/creds:/app/backend/data/creds
 

@@ -24,16 +24,22 @@ foreach ($tool in @("git", "uv")) {
     }
 }
 
+$ProjectDir = if ($env:PROJECT_DIR) { $env:PROJECT_DIR } else { "router" }
+$RepositoryUrl = $env:REPOSITORY_URL
+
 if (Test-Path -LiteralPath "./backend/main.py") {
-    Write-Info "Using current Omni Gateway checkout."
+    Write-Info "Using current project checkout."
 }
-elseif (Test-Path -LiteralPath "./omni-gateway/backend/main.py") {
-    Set-Location ./omni-gateway
+elseif (Test-Path -LiteralPath (Join-Path $ProjectDir "backend/main.py")) {
+    Set-Location $ProjectDir
 }
 else {
-    Write-Info "Cloning Omni Gateway..."
-    git clone https://github.com/nguywnben/omni-gateway.git
-    Set-Location ./omni-gateway
+    if (-not $RepositoryUrl) {
+        Write-Fail "Set REPOSITORY_URL or run this script from the project root."
+    }
+    Write-Info "Cloning repository..."
+    git clone $RepositoryUrl $ProjectDir
+    Set-Location $ProjectDir
 }
 
 if (-not (Test-Path -LiteralPath ".venv/Scripts/python.exe")) {

@@ -22,8 +22,8 @@ body:
     id: channel
     attributes:
       label: Route or provider mode
-      description: For example, OpenAI-compatible, Gemini native, Anthropic Messages, Code Assist, or Omni.
-      placeholder: "OpenAI-compatible via Omni"
+      description: For example, OpenAI-compatible, Gemini native, Anthropic Messages, Code Assist, or the management console.
+      placeholder: "OpenAI-compatible client"
     validations:
       required: true
 

@@ -7,7 +7,7 @@ const TRANSLATIONS = {
     "login_btn": "Sign in",
     "logout_btn": "Logout",
     "version_label": "Version",
-    "check_update_btn": "Check for Updates",
+    "check_update_btn": "Check for updates",
     "loading_text": "Loading...",
     "mirror_switch_warning": "Mirror reverse proxy setup switches API domains to proxy servers.",
     "copy_success": "Copied to clipboard.",
@@ -20,26 +20,26 @@ const TRANSLATIONS = {
     "input_required_title": "Input required",
     "dialog_tip": "Tip",
     "error_prefix": "Error: ",
-    "tab_oauth": "OAuth Auth",
-    "tab_omni": "Omni Auth",
-    "tab_upload": "Batch Upload",
+    "tab_oauth": "OAuth auth",
+    "tab_primary": "Provider auth",
+    "tab_upload": "Batch upload",
     "tab_manage_creds": "Credentials",
-    "manage_creds_title": "Credentials Management",
+    "manage_creds_title": "Credential management",
     "manage_creds_desc": "Select a credential provider to view and manage active API channels.",
-    "tab_manage_code_assist": "Code Assist Credentials",
-    "tab_manage_code_assist_short": "Code Assist Creds",
-    "tab_manage_ag": "Omni Credentials",
-    "tab_manage_ag_short": "Omni credentials",
-    "tab_config": "System Config",
-    "tab_logs": "Real-time Logs",
-    "tab_about": "About Project",
+    "tab_manage_code_assist": "Code Assist credentials",
+    "tab_manage_code_assist_short": "Code Assist creds",
+    "tab_manage_provider": "Provider credentials",
+    "tab_manage_provider_short": "Provider credentials",
+    "tab_config": "System config",
+    "tab_logs": "Real-time logs",
+    "tab_about": "About project",
     "oauth_banner_title": "Automation enabled:",
     "oauth_banner_text": "The system will detect and enable the required API services after authorization.",
-    "oauth_advanced_title": "Advanced: Specify Google Cloud Project ID (Optional)",
+    "oauth_advanced_title": "Advanced: specify Google Cloud Project ID (optional)",
     "oauth_advanced_note": "Leave blank to auto-detect and create project.",
     "oauth_link_btn": "Generate Google OAuth link",
     "oauth_auth_title": "Authorization link:",
-    "oauth_auth_instruction": "Click this link to authorize your Google account.",
+    "oauth_auth_instruction": "Open this link to authorize your Google account.",
     "oauth_guide_title": "OAuth Interactive Guide:",
     "oauth_guide_1": "Click the link above, sign in, and grant access in the new tab.",
     "oauth_guide_2": "After the redirect, you may see a connection error at localhost:11451. This is expected.",
@@ -48,62 +48,62 @@ const TRANSLATIONS = {
     "oauth_callback_title": "No automatic redirect? Use the callback tunnel.",
     "oauth_callback_note": "Suitable for VPS, Docker, or port 11451 blocks.",
     "oauth_callback_instructions": "Copy the full URL from the address bar after redirection, even if the page shows an error, and paste it below.",
-    "oauth_callback_btn": "Parse Credentials from Callback URL",
+    "oauth_callback_btn": "Parse credentials from callback URL",
     "oauth_save_btn": "Get and save credentials",
     "oauth_success_title": "Authentication successful. Saved credentials:",
-    "ag_banner_title": "Google Omni authentication mode",
-    "ag_banner_text": "Obtain Google Cloud SDK native authentication credentials.",
-    "ag_link_btn": "Generate Omni authorization link",
-    "ag_link_title": "Omni authorization link:",
-    "ag_link_instruction": "Click this link to authorize Omni mode.",
-    "ag_guide_title": "Steps:",
-    "ag_guide_1": "Click the link above to start Google OAuth authorization.",
-    "ag_guide_2": "When the browser redirects to localhost:11451 and shows an error, return to this panel.",
-    "ag_guide_3": "Click the button below to retrieve and save credentials directly.",
-    "ag_guide_4": "If unable to auto-redirect, copy the final URL and parse it below.",
-    "ag_save_btn": "Get and save Omni credentials",
-    "ag_success_title": "Saved Omni Credentials:",
-    "ag_download_btn": "Download Credentials File",
-    "upload_title": "Batch Upload Credentials",
+    "provider_banner_title": "Google provider authentication mode",
+    "provider_banner_text": "Obtain Google Cloud SDK native authentication credentials.",
+    "provider_link_btn": "Generate provider authorization link",
+    "provider_link_title": "Provider authorization link:",
+    "provider_link_instruction": "Open this link to authorize the provider credential flow.",
+    "provider_guide_title": "Steps:",
+    "provider_guide_1": "Click the link above to start Google OAuth authorization.",
+    "provider_guide_2": "When the browser redirects to localhost:11451 and shows an error, return to this panel.",
+    "provider_guide_3": "Click the button below to retrieve and save credentials directly.",
+    "provider_guide_4": "If unable to auto-redirect, copy the final URL and parse it below.",
+    "provider_save_btn": "Get and save provider credentials",
+    "provider_success_title": "Saved provider credentials:",
+    "provider_download_btn": "Download credentials file",
+    "upload_title": "Batch upload credentials",
     "upload_desc": "Drag & drop or select JSON/ZIP credentials to upload.",
-    "upload_code_assist_title": "Code Assist Credentials Upload",
+    "upload_code_assist_title": "Code Assist credential upload",
     "upload_code_assist_area_title": "Click to select or drag files here",
     "upload_code_assist_area_subtitle": "Supports .json or .zip format",
     "upload_code_assist_area_note": "ZIP archives will be automatically extracted to parse JSON credentials.",
     "upload_pending_code_assist": "Pending Code Assist files to upload:",
-    "upload_start_btn": "Start Upload",
+    "upload_start_btn": "Start upload",
     "upload_clear_btn": "Clear List",
     "upload_progress": "Upload Progress",
-    "upload_ag_title": "Omni Credentials Upload",
-    "upload_ag_area_title": "Click to select or drag files here",
-    "upload_ag_area_subtitle": "Supports .json or .zip format",
-    "upload_ag_area_note": "ZIP archives will be extracted to parse Omni credentials.",
-    "upload_pending_ag": "Pending Omni files to upload:",
-    "code_assist_manage_title": "Code Assist Credentials Management",
+    "upload_provider_title": "Provider credential upload",
+    "upload_provider_area_title": "Click to select or drag files here",
+    "upload_provider_area_subtitle": "Supports .json or .zip format",
+    "upload_provider_area_note": "ZIP archives will be extracted to parse provider credentials.",
+    "upload_pending_provider": "Pending provider files to upload:",
+    "code_assist_manage_title": "Code Assist credential management",
     "code_assist_manage_desc": "View and manage Code Assist API channels (batch verify, toggle, download, delete).",
-    "ag_manage_title": "Omni Credentials Management",
-    "ag_manage_desc": "View and manage Omni accounts and request quotas.",
-    "endpoint_banner_title": "API Endpoint Addresses",
+    "provider_manage_title": "Provider credential management",
+    "provider_manage_desc": "View and manage provider accounts and request quotas.",
+    "endpoint_banner_title": "API endpoint addresses",
     "endpoint_openai": "OpenAI format:",
     "endpoint_claude": "Claude format:",
-    "endpoint_gemini": "Gemini Native:",
-    "stat_total": "Total Credentials",
+    "endpoint_gemini": "Gemini native:",
+    "stat_total": "Total credentials",
     "stat_active": "Active",
     "stat_disabled": "Disabled",
-    "btn_refresh": "Refresh List",
-    "btn_download_all": "Download All (ZIP)",
-    "batch_panel_title": "Batch Operations",
-    "batch_select_all": "Select All",
+    "btn_refresh": "Refresh list",
+    "btn_download_all": "Download all (ZIP)",
+    "batch_panel_title": "Batch operations",
+    "batch_select_all": "Select all",
     "batch_selected_count": "Selected {count} items",
     "batch_enable": "Batch Enable",
     "batch_disable": "Batch Disable",
     "batch_delete": "Batch Delete",
-    "batch_verify_id": "Batch Verify Project ID",
-    "batch_preview_toggle": "Batch Toggle Preview Mode",
-    "batch_refresh_emails": "Refresh Emails",
-    "batch_deduplicate": "Deduplicate by Email",
-    "batch_enable_credit": "Enable Credit Mode",
-    "batch_disable_credit": "Disable Credit Mode",
+    "batch_verify_id": "Batch verify Project ID",
+    "batch_preview_toggle": "Batch toggle preview mode",
+    "batch_refresh_emails": "Refresh emails",
+    "batch_deduplicate": "Deduplicate by email",
+    "batch_enable_credit": "Enable credit mode",
+    "batch_disable_credit": "Disable credit mode",
     "filter_status": "Status:",
     "filter_all": "All",
     "filter_status_enabled": "Enabled",
@@ -120,7 +120,7 @@ const TRANSLATIONS = {
     "filter_per_page": "Per page:",
     "card_enabled": "Enabled",
     "card_disabled": "Disabled",
-    "card_no_error": "No Error",
+    "card_no_error": "No error",
     "card_error_code": "Error: {code}",
     "card_no_email": "Email not loaded",
     "card_loading_details": "Loading file content...",
@@ -128,24 +128,24 @@ const TRANSLATIONS = {
     "card_loading_quota": "Loading quota details...",
     "btn_card_enable": "Enable",
     "btn_card_disable": "Disable",
-    "btn_card_view": "View Content",
+    "btn_card_view": "View content",
     "btn_card_download": "Download",
-    "btn_card_email": "Email Info",
-    "btn_card_quota": "Quota Details",
-    "btn_card_close_credit": "Disable Credit",
-    "btn_card_open_credit": "Enable Credit",
-    "btn_card_set_preview": "Set Preview",
+    "btn_card_email": "Email info",
+    "btn_card_quota": "Quota details",
+    "btn_card_close_credit": "Disable credit",
+    "btn_card_open_credit": "Enable credit",
+    "btn_card_set_preview": "Set preview",
     "btn_card_verify": "Verify",
-    "btn_card_test": "Message Test",
-    "btn_card_error_details": "View Errors",
+    "btn_card_test": "Message test",
+    "btn_card_error_details": "View errors",
     "btn_card_delete": "Delete",
-    "config_title": "Global System Settings",
+    "config_title": "Global system settings",
     "config_desc": "Adjust network proxies, API endpoints, error limits, and retry configurations. Settings take effect immediately upon saving.",
-    "btn_save_config": "Save Global Config",
-    "btn_reload_config": "Reload Configuration",
+    "btn_save_config": "Save global config",
+    "btn_reload_config": "Reload configuration",
     "config_loading": "Syncing configuration settings with the server...",
     "group_network": "Listen and security settings",
-    "config_host_label": "Server Bind Host IP Address:",
+    "config_host_label": "Server bind host IP address:",
     "config_host_note": "IP address to listen on (0.0.0.0 listens globally, requires restart).",
     "config_port_label": "Listen Port:",
     "config_port_note": "TCP Port to bind on (requires restart).",
@@ -158,17 +158,17 @@ const TRANSLATIONS = {
     "group_storage": "Storage and proxy settings",
     "config_storage_label": "Credentials storage path:",
     "config_storage_note": "Absolute path where JSON credentials are saved.",
-    "config_proxy_label": "Global Outbound Proxy URL:",
+    "config_proxy_label": "Global outbound proxy URL:",
     "config_proxy_note": "SOCKS5 or HTTP proxy URL for Google endpoints (leave blank for direct connection).",
     "group_endpoints": "API endpoint settings",
     "config_mirror_btn": "Use mirror proxies",
     "config_official_btn": "Restore official Google domains",
-    "config_endpoint_code": "Code Assist API Endpoint:",
-    "config_endpoint_oauth": "OAuth Auth Endpoint:",
-    "config_endpoint_apis": "Google APIs Core Endpoint:",
-    "config_endpoint_resource": "Resource Manager Endpoint:",
-    "config_endpoint_service": "Service Usage Endpoint:",
-    "config_endpoint_ag": "Omni API Endpoint:",
+    "config_endpoint_code": "Code Assist API endpoint:",
+    "config_endpoint_oauth": "OAuth auth endpoint:",
+    "config_endpoint_apis": "Google APIs core endpoint:",
+    "config_endpoint_resource": "Resource Manager endpoint:",
+    "config_endpoint_service": "Service Usage endpoint:",
+    "config_endpoint_provider": "Provider API endpoint:",
     "group_ban": "Auto-ban and fuse settings",
     "config_ban_checkbox": "Enable automatic ban/fuse for specified error codes",
     "config_ban_codes_label": "HTTP Error Codes to trigger ban (comma-separated):",
@@ -182,22 +182,22 @@ const TRANSLATIONS = {
     "config_compat_note": "Solves empty response errors in older client libraries by avoiding system_instructions, with slight prompt quality trade-offs.",
     "config_thinking_checkbox": "Pass-through Gemini 2.0 Reasoning/Thinking process chain in responses",
     "config_thinking_note": "Outputs reasoning block contents for reasoning models. If disabled, trims thinking outputs.",
-    "config_ag_stream_checkbox": "Compile Omni streaming responses for non-stream clients.",
-    "config_ag_retry_checkbox": "Auto-switch alternative credentials on Omni request failure",
+    "config_provider_stream_checkbox": "Compile provider streaming responses for non-stream clients.",
+    "config_provider_retry_checkbox": "Auto-switch alternative credentials on provider request failure",
     "group_trunc": "Truncation recovery options",
     "config_trunc_count": "Max recovery attempts for truncated streams:",
     "config_trunc_note": "Maximum attempts to resume generation if a stream gets cut off (applicable to models suffixed with '-streaming anti-truncation').",
     "group_keepalive": "Application keep-alive settings",
-    "config_keepalive_label": "Keep-Alive Heartbeat URL:",
+    "config_keepalive_label": "Keep-alive heartbeat URL:",
     "config_keepalive_btn": "Detect and autofill the current keep-alive URL",
     "config_keepalive_interval": "Heartbeat interval (seconds):",
-    "logs_title": "System Logs Console",
+    "logs_title": "System logs console",
     "logs_desc": "Monitor request cycles, rotation decisions, and errors dispatched to Google Cloud APIs.",
     "btn_log_connect": "Connect Log Stream",
     "btn_log_disconnect": "Disconnect Stream",
     "btn_log_save": "Save Logs to File",
-    "btn_log_clear": "Clear Log Window",
-    "log_filter_level": "Filter Level:",
+    "btn_log_clear": "Clear log window",
+    "log_filter_level": "Filter level:",
     "log_scroll_lock": "Auto-scroll to bottom",
     "log_status_label": "WebSocket status:",
     "log_status_text": "Not connected",
@@ -209,7 +209,7 @@ const TRANSLATIONS = {
     "confirm_regenerate_key": "Are you sure you want to regenerate this API key? Previous key will become invalid immediately.",
     "regenerate_success": "API keys regenerated successfully.",
     "tooltip_total_calls": "Total number of API requests routed through this gateway in the last 24 hours.",
-    "tooltip_total_files": "The number of active Google/Omni credentials currently configured and monitored.",
+    "tooltip_total_files": "The number of active Google provider credentials currently configured and monitored.",
     "tooltip_avg_calls": "Average number of API requests processed per credential in the past 24 hours.",
     "api_keys_title": "API Key",
     "api_integration_title": "API Integration",
@@ -237,16 +237,16 @@ const TRANSLATIONS = {
     "endpoint_base_label": "Base URL:",
     "dashboard_total_calls": "Total Requests (24h)",
     "dashboard_total_calls_desc": "Total number of API requests processed by the gateway in the last 24 hours.",
-    "dashboard_total_files_desc": "Total number of active Code Assist and Omni credential accounts currently loaded in the database.",
+    "dashboard_total_files_desc": "Total number of active Code Assist and provider credential accounts currently loaded in the database.",
     "dashboard_avg_calls_desc": "Average number of API requests handled per active credential.",
     "dashboard_total_files": "Monitored Credentials",
     "dashboard_avg_calls": "Avg Requests / Credential",
     "dashboard_welcome": "Welcome to the Omni Gateway console. Use the sidebar to switch between management tasks. The system rotates active credentials for load balancing, failover, and retries when upstream rate limits or authorization errors occur.",
     "dashboard_breakdown": "24-Hour Request Breakdown",
-    "oauth_desc": "Generate Google Cloud authorization credentials. Supports standard Code Assist OAuth and Omni credentials export.",
+    "oauth_desc": "Generate Google Cloud authorization credentials. Supports standard Code Assist OAuth and provider credential export.",
     "about_desc": "Omni Gateway is a universal AI router for coding tools. Features smart auto-fallback, token compression, and seamless format translation to maximize free and premium LLMs.",
     "about_github": "GitHub repository:",
-    "about_notice": "Disclaimer: This software is open-source. Commercial reselling or distribution is strictly prohibited. For educational and research purposes only.",
+    "about_notice": "Open-source notice: Omni Gateway is released under the MIT License. Review the license terms and attribution requirements before redistribution.",
     "about_features_title": "Key Features",
     "feat_1_title": "Quota Failover Rotation",
     "feat_1_desc": "Seamless failover between accounts prevents 429 quota exhaustion errors.",
@@ -292,8 +292,8 @@ const TRANSLATIONS = {
     "code_assist_oauth_auth_title": "Code Assist OAuth Authentication",
     "oauth_guide_2_fail_suffix": ", which is expected.",
     "oauth_paste_url": "Paste the full URL below:",
-    "ag_auth_title": "Omni Authentication",
-    "ag_guide_2_fail_suffix": ", then return to this panel.",
+    "provider_auth_title": "Provider authentication",
+    "provider_guide_2_fail_suffix": ", then return to this panel.",
     "upload_file_or_zip": "file or ZIP archive",
     "click_to_copy": "Click to copy",
     "support_link_label": "GitHub Issues",
@@ -305,88 +305,88 @@ const TRANSLATIONS = {
     "status_enabled": "Enabled",
     "preview_supported_title": "This credential supports Preview models",
     "preview_not_supported_title": "This credential does not support Preview models",
-    "tier_badge_title": "Credential Tier",
+    "tier_badge_title": "Credential tier",
     "credit_enabled_title": "Credit mode is currently enabled",
     "credit_disabled_title": "Credit mode is currently disabled",
     "other_models_title": "Other models",
-    "btn_view_content": "View Content",
-    "btn_view_email": "View Email",
-    "btn_view_quota": "View Quota",
+    "btn_view_content": "View content",
+    "btn_view_email": "View email",
+    "btn_view_quota": "View quota",
     "btn_view_quota_title": "View quota usage info for this credential",
-    "btn_disable_credit": "Disable Credit",
+    "btn_disable_credit": "Disable credit",
     "btn_disable_credit_title": "Disable credit mode for this credential",
-    "btn_enable_credit": "Enable Credit",
+    "btn_enable_credit": "Enable credit",
     "btn_enable_credit_title": "Enable credit mode for this credential",
-    "btn_setup_preview": "Setup Preview",
-    "btn_setup_preview_title": "Configure Preview channel, enable experimental features",
+    "btn_setup_preview": "Set up Preview",
+    "btn_setup_preview_title": "Configure the Preview channel and enable experimental features.",
     "btn_verify_id": "Verify",
-    "btn_verify_id_title": "Retrieve Project ID, can recover from 403 errors",
-    "btn_message_test": "Message Test",
-    "btn_message_test_title": "Test if the credential is functional",
-    "btn_view_errors": "View Errors",
-    "btn_view_errors_title": "View detailed error messages for this credential",
+    "btn_verify_id_title": "Retrieve the Project ID and recover from some 403 errors.",
+    "btn_message_test": "Message test",
+    "btn_message_test_title": "Test whether this credential is working.",
+    "btn_view_errors": "View errors",
+    "btn_view_errors_title": "View detailed error messages for this credential.",
     "email_not_fetched": "Email not fetched",
-    "click_view_content_to_load": "Click 'View Content' to load file details.",
-    "click_view_errors_to_load": "Click 'View Errors' to load error messages.",
-    "click_view_quota_to_load": "Click 'View Quota' to load quota usage details.",
+    "click_view_content_to_load": "Click 'View content' to load file details.",
+    "click_view_errors_to_load": "Click 'View errors' to load error messages.",
+    "click_view_quota_to_load": "Click 'View quota' to load quota usage details.",
     "status_loading_file_content": "Loading file content...",
     "status_test_failed": "Test failed: {error}",
     "remaining_label": "Remaining",
     "credits_label": "Credits",
     "all": "All",
-    "omni_mode_enabled_streamtono": "Omni mode enabled stream-to-non-stream response transformation",
+    "provider_stream_transform_enabled": "Provider stream-to-non-stream response transformation is enabled.",
     "test_successful": "Test completed successfully.",
-    "oauth_interaction_guide": "OAuth Interaction Guide:",
-    "error_code": "Error Code:",
+    "oauth_interaction_guide": "OAuth interaction guide:",
+    "error_code": "Error code:",
     "no_logs_at_appstatecurrentlogfilter": "No logs are currently available at the {AppState_currentLogFilter} level.",
-    "credential_file_name": "Credential File Name",
+    "credential_file_name": "Credential file name",
     "nfailed_step_step": "\\nFailed Step: {step}",
     "batch_verification_completed_succes": "Batch verification completed: {successCount}/{selectedFiles_length} succeeded, {failCount} failed.",
-    "currently_disabled": "Currently Disabled",
-    "omni_authentication_successf": "Omni authentication completed successfully. File saved to: {path}.",
+    "currently_disabled": "Currently disabled",
+    "primary_authentication_successf": "Provider authentication completed successfully. File saved to: {path}.",
     "loaded_usage_statistics_for_aggdata": "Loaded usage statistics for {aggData_total_files____Object_keys_AppState_usageStatsData__length} files",
-    "upload_failed_connection_interrupte": "Upload failed: Connection interrupted - Likely cause: Too many files ({this_selectedFiles_length}) or network instability. Please upload in batches.",
-    "please_select_the_omni_crede": "Please select Omni credentials to verify first.",
+    "upload_failed_connection_interrupte": "Upload failed: the connection was interrupted. Too many files ({this_selectedFiles_length}) or network instability may be the cause. Please upload in batches.",
+    "please_select_the_primary_crede": "Please select provider credentials to verify first.",
     "downloaded_file_filename": "Downloaded file: {filename}",
-    "oneclick_credential_deduplication": "One-click Credential Deduplication",
-    "message_test": "Message Test",
+    "oneclick_credential_deduplication": "One-click credential deduplication",
+    "message_test": "Message test",
     "div_styletextalign_center_padding_2": "<div style=\"text-align: center; padding: 20px; color: #999;\">\n\n                                <div style=\"font-size: 48px; margin-bottom: 10px;\"></div>\n\n                                <div>No Quota Information Available</div>\n\n                            </div>",
-    "omni_authentication_link": "Omni Authentication Link:",
-    "authentication_steps": "Authentication Steps:",
+    "primary_authentication_link": "Provider authentication link:",
+    "authentication_steps": "Authentication steps:",
     "fetching_authentication_link": "Fetching authentication link...",
-    "upload_failed_request_timeout_proce": "Upload failed: Request timeout - Processing time is too long, please reduce the number of files or check your network connection.",
+    "upload_failed_request_timeout_proce": "Upload failed: the request timed out. Processing took too long. Reduce the number of files or check your network connection.",
     "manual_project_id_specification_req": "A Google Cloud Project ID is required. Enter it in advanced options and try again.",
-    "resource_manager_api_endpoint": "Resource Manager API Endpoint:",
+    "resource_manager_api_endpoint": "Resource Manager API endpoint:",
     "intelligently_capture_and_automatic": "Intelligently capture and automatically write current keep-alive heartbeat URL",
     "a_hrefhref_target_blank_relnoopener": "<a href=\"{href}\" target=\"_blank\" rel=\"noopener noreferrer\" class=\"message-link\" onclick=\"event.stopPropagation()\" title=\"Click to open link\\nRight-click to copy link\">{url}</a>",
     "this_is_not_a_valid_callback_url_pl": "This is not a valid callback URL. Please ensure:\\n1. Google OAuth authorization is complete.\\n2. You copied the full URL from the browser address bar.\\n3. The URL contains code and state parameters.",
     "file_filename_format_is_not_support": "File {file_name} format is not supported; only JSON and ZIP files are allowed.",
     "the_following_configurations_have_t": ", the following configurations have taken effect immediately: {list}",
-    "click_the_link_above_to_proceed_wit": "Click the link above to proceed with Google OAuth authorization.",
+    "click_the_link_above_to_proceed_wit": "Open the link above to proceed with Google OAuth authorization.",
     "unable_to_determine_if_updates_are": "Unable to determine if updates are available.",
     "please_select_the_credentials_to_ve": "Please select credentials to verify first.",
     "downloaded_file_name": "Downloaded file: {name}",
-    "please_obtain_the_omni_authe": "Please obtain the Omni authentication link and complete authorization first.",
-    "refresh_credential_list": "Refresh Credential List",
-    "all_credential_files_have_been_down": "All credential files have been downloaded",
+    "please_obtain_the_primary_authe": "Please obtain the provider authentication link and complete authorization first.",
+    "refresh_credential_list": "Refresh credential list",
+    "all_credential_files_have_been_down": "All credential files have been downloaded.",
     "preview_channel_configuration_succe": "Preview channel configured successfully.\\n\\nFile: {filename}\\n\\n{data_message}\\n\\nSetting ID: {data_setting_id_____N_A}\\nBinding ID: {data_binding_id_____N_A}",
-    "all_verifications_successful_verifi": "All verifications passed. Verified {successCount}/{selectedFiles_length} Omni credentials.",
-    "are_you_sure_you_want_to_batch_veri": "Are you sure you want to batch verify Project IDs for {selectedFiles_length} Omni credentials?\\n\\nThey will be verified in parallel to speed up the process.",
+    "all_verifications_successful_verifi": "All verifications passed. Verified {successCount}/{selectedFiles_length} provider credentials.",
+    "are_you_sure_you_want_to_batch_veri": "Are you sure you want to batch verify project IDs for {selectedFiles_length} provider credentials?\\n\\nThey will be verified in parallel to speed up the process.",
     "failed_to_load_usage_statistics": "Failed to load usage statistics",
     "failed_to_download_logs_datadetail": "Failed to download logs: {data_detail____data_error}",
     "generating_authentication_link_usin": "Generating authentication link using the specified Project ID...",
     "not_enabled": "Not enabled",
     "download_credential_files_locally": "Download credential files locally",
-    "average_calls_per_volume": "Average Requests per Credential",
+    "average_calls_per_volume": "Average requests per credential",
     "failed_to_get_authentication_link_e": "Failed to get authentication link: {error}",
     "successfully_retrieved_email_dataus": "Successfully retrieved email: {data_user_email}",
-    "code_assist_oauth_authentication": "Code Assist OAuth Authentication",
+    "code_assist_oauth_authentication": "Code Assist OAuth authentication",
     "failed_to_create_websocket_connecti": "Failed to create WebSocket connection:",
-    "omni_batch_verification_comp": "Omni Batch Verification Completed",
+    "primary_batch_verification_comp": "Provider batch verification complete",
     "healthy_no_errors": "Healthy, no errors",
     "no_data_under_current_filter_condit": "No data under current filter conditions",
     "successfully_retrieved_email_email": "Successfully retrieved email: {email}",
-    "get_google_oauth_authentication_lin": "Get Google OAuth Authentication Link",
+    "get_google_oauth_authentication_lin": "Get Google OAuth authentication link",
     "failed_to_fetch_version_information": "Failed to fetch version information",
     "switch_to_mirror_proxy_address_with": "Switch to mirror proxy addresses with one click.",
     "enable_automatic_retry_of_failed_re": "Enable automatic retry of failed requests using other rotated credentials",
@@ -394,10 +394,10 @@ const TRANSLATIONS = {
     "please_enter_password_to_login": "Please enter your password to sign in.",
     "failed_to_retrieve_credentials_from": "Failed to retrieve credentials from callback URL: {error}",
     "please_select_the_credentials_to_ve_dup": "Please select credentials to verify first.",
-    "retrieved_authentication_link": "Retrieved Authentication Link:",
+    "retrieved_authentication_link": "Retrieved authentication link:",
     "upload_failed_errordetail_errorerro": "Upload failed: {error_detail____error_error}",
     "are_you_sure_you_want_to_perform_on": "Are you sure you want to perform one-click credential deduplication?\\n\\nOnly one credential per email will be kept, and all others will be deleted.\\nThis action cannot be undone.",
-    "omni_file_list_pending_uploa": "Omni file list pending upload:",
+    "primary_file_list_pending_uploa": "Provider files pending upload:",
     "successfully_imported_loadedtotal_c": "Successfully imported {loaded}/{total} credential files.",
     "keepalive_request_interval_seconds": "Keep-alive request interval (seconds):",
     "healthy_no_errors_dup": "Healthy, no errors",
@@ -412,50 +412,50 @@ const TRANSLATIONS = {
     "account_risk_control_and_circuit_br": "Account risk control and circuit-breaking strategy",
     "determine_account_downgrade_or_disa": "Determine account downgrade or disabling within seconds based on API errors.",
     "reset_statistics": "Reset Statistics",
-    "google_omni_authentication": "Google Omni Authentication",
+    "google_primary_authentication": "Google provider authentication",
     "failed_to_download_package_error": "Failed to download package: {error}",
     "div_stylecolor_dc3545reason_escapeh": "<div style=\"color: #dc3545;\">Reason: {escapeHtml_detail_reason}</div>",
     "test_successful_dup": "Test completed successfully.",
     "are_you_sure_you_want_to_refresh_us": "Are you sure you want to refresh user emails for all credentials? This may take some time.",
     "filter_filter": "(Filter: {filter})",
-    "view_content": "View Content",
-    "open_source_disclaimer_commercial_r": "Open-source disclaimer: commercial resale or redistribution of Omni Gateway is not permitted without authorization. Use it for testing, personal research, and educational workflows.",
+    "view_content": "View content",
+    "open_source_disclaimer_commercial_r": "Open-source notice: Omni Gateway is released under the MIT License. Include the required copyright and license notice when redistributing it.",
     "failed_to_save_configuration_error": "Failed to save configuration: {error}",
-    "total_credentials": "Total Credentials",
-    "contact_and_feedback_channels": "Contact and Feedback Channels",
+    "total_credentials": "Total credentials",
+    "contact_and_feedback_channels": "Contact and feedback channels",
     "supports_json_credentials_or_zip_ar": "Supports .json credentials or .zip archives",
     "revert_to_google_official_address": "Revert to the official Google endpoint.",
-    "failed_to_retrieve_omni_cred": "Failed to retrieve Omni credentials from callback URL",
+    "failed_to_retrieve_primary_cred": "Failed to retrieve provider credentials from callback URL",
     "import_failed_datadetail_dataerror": "Import failed: {data_detail____data_error}",
     "new_version_foundncurrent_vversionn": "New version available.\\nCurrent: v{version}\\nLatest: v{latest}\\n\\nUpdate details: {log}",
     "network_error_msg": "Network error: {msg}",
     "unable_to_retrieve_user_email_error": "Unable to retrieve user email: {error}",
     "batch_action_operation_completed_su": "Batch {action} operation completed successfully.",
-    "api_integration_endpoint_addresses": "API Integration Endpoint Addresses",
-    "system_runtime_log_stream": "System Runtime Log Stream",
+    "api_integration_endpoint_addresses": "API integration endpoint addresses",
+    "system_runtime_log_stream": "System runtime log stream",
     "import_failed_error": "Import failed: {error}",
-    "google_apis_core_endpoints": "Google APIs Core Endpoints:",
+    "google_apis_core_endpoints": "Google APIs core endpoints:",
     "authentication_successful_saved_fil": "Authentication successful. Saved file content:",
     "click_the_view_quota_button_to_load": "Click \"View Quota\" to load quota information.",
     "waiting_to_fetch_the_latest_system": "Waiting for the latest system console log output...",
     "control_panel_login_password": "Control Panel Login Password:",
     "unable_to_autodetect_project_id_ple": "Unable to auto-detect Project ID. Please manually enter your Google Cloud Project ID:",
-    "click_this_link_to_authorize_your_g": "Click this link to authorize your Google account",
+    "click_this_link_to_authorize_your_g": "Open this link to authorize your Google account.",
     "email_groupemailnkeep_groupkept_fil": "Email: {group_email}\\nKeep: {group_kept_file}\\nDelete: {group_deleted_files_join}\\n\\n",
-    "omni_authentication_link_gen": "Omni authentication link generated. Click the link to complete authorization.",
+    "primary_authentication_link_gen": "Provider authentication link generated. Open the link to complete authorization.",
     "check_successful_already_running_th": "Update check completed. You are already running the latest version.",
-    "switched_to_official_endpoint_confi": "Switched to the official endpoint configuration. Click \"Save Config\" to save the settings.",
+    "switched_to_official_endpoint_confi": "Switched to the official endpoint configuration. Click \"Save config\" to save the settings.",
     "nplease_enter_index_1dataavailable": "\\nPlease enter an index (1-{data_available_projects_length}):",
-    "fetch_and_save_authentication_file": "Fetch and Save Authentication File",
+    "fetch_and_save_authentication_file": "Fetch and save authentication file",
     "failed_to_generate_authentication_l": "Failed to generate authentication link: {error}",
     "action": "Action",
-    "save_config": "Save Config",
-    "fetch_omni_credentials": "Fetch Omni Credentials",
+    "save_config": "Save config",
+    "fetch_primary_credentials": "Fetch provider credentials",
     "failed_to_generate_authentication_l_dup": "Failed to generate authentication link",
     "retry_using_the_selected_project": "Retrying with the selected project...",
     "div_styletextalign_center_padding_2_dup": "<div style=\"text-align: center; padding: 20px; color: #dc3545;\">\n\n                        <div style=\"font-size: 48px; margin-bottom: 10px;\"></div>\n\n                        <div style=\"font-weight: bold; margin-bottom: 5px;\">Network Error</div>\n\n                        <div style=\"font-size: 13px; color: #666;\">{error_message}</div>\n\n                    </div>",
     "credential_available": "Credential available",
-    "google_omni_authentication_m": "Google Omni Authentication Mode",
+    "google_primary_authentication_m": "Google provider authentication mode",
     "zip_archive": "(ZIP Archive)",
     "are_you_sure_you_want_to_delete_fil": "Are you sure you want to delete {filename}?",
     "page_thiscurrentpage_of_totalpages": "Page {this_currentPage} of {totalPages} (Showing {startItem}-{endItem}, Total {this_totalCount})",
@@ -470,7 +470,7 @@ const TRANSLATIONS = {
     "bidirectional_native_format_convers": "Bidirectional native format conversion",
     "oneclick_deduplication_failed_error": "One-click deduplication failed: {error}",
     "disable": "Disable",
-    "click_this_link_to_authorize_antigr": "Click this link to authorize Omni mode.",
+    "provider_authorization_instruction": "Open this link to authorize the provider credential flow.",
     "deduplication_network_error_errorme": "Deduplication network error: {error_message}",
     "after_successful_authorization_the": "After successful authorization, the browser will redirect and may display a connection error for localhost:11451. This is expected.",
     "failed_to_get_environment_variable": "Failed to get environment variable status: {error}",
@@ -480,7 +480,7 @@ const TRANSLATIONS = {
     "global_configuration_saved_successf": "Global configuration saved successfully.",
     "executing_batch_actionlabel_operati": "Executing batch {actionLabel} operation...",
     "monitor_credential_count": "Monitor credential count",
-    "switched_to_official_endpoint_confi_dup": "Switched to official endpoint configuration. Remember to click the 'Save Config' button to save settings.",
+    "switched_to_official_endpoint_confi_dup": "Switched to the official endpoint configuration. Remember to click the 'Save config' button to save the settings.",
     "local_credential_storage_absolute_p": "Local credential storage absolute path:",
     "click_to_open_linknrightclick_to_co": "Click to open link\\nRight-click to copy link",
     "upload_failed_http_xhrstatus": "Upload failed: HTTP {xhr_status}",
@@ -497,14 +497,14 @@ const TRANSLATIONS = {
     "tip_leave_blank_for_firsttime_use_t": "Tip: Leave blank for first-time use; the system will automatically allocate and detect.",
     "configuration_failed": "Configuration failed",
     "successfully_imported_dataloaded_co": "Successfully imported {data_loaded_count}/{data_total_count} credential files.",
-    "switched_to_mirror_url_configuratio": "Switched to the mirror URL configuration. Click \"Save Config\" to save the settings.",
+    "switched_to_mirror_url_configuratio": "Switched to the mirror URL configuration. Click \"Save config\" to save the settings.",
     "zip_files_will_automatically_extrac": "ZIP files will automatically extract all JSON credential files.",
     "adjust_system_proxy_endpoint_addres": "Adjust system proxy, endpoint addresses, security policies, and high-frequency retry parameters. Most items take effect immediately after saving.",
     "loaded_count_type_credential_files": "Loaded {count} {type} credential files",
     "log_stream_connection_error": "Log stream connection error:",
     "quota_information_loaded_successful": "Quota information loaded successfully.",
     "failed_to_fetch_authentication_link": "Failed to fetch authentication link",
-    "return_directly_to_the_current_cont": "Return to the current control panel page and click \"Fetch and Save Authentication File\" to complete integration.",
+    "return_directly_to_the_current_cont": "Return to the current control panel page and click \"Fetch and save authentication file\" to complete integration.",
     "retry_interval_seconds": "Retry interval (seconds):",
     "autoban_circuit_breaker": "Auto-Ban Circuit Breaker",
     "usage_statistics_loaded_for_count_f": "Usage statistics loaded for {count} files",
@@ -531,7 +531,7 @@ const TRANSLATIONS = {
     "connecting": "Connecting...",
     "credentials_fetched_successfully_fr": "Credentials fetched successfully from the callback URL.",
     "click_the_link_above_sign_in_to_you": "Click the link above, sign in to your Google account in a new browser tab, and grant authorization.",
-    "omni_credential_file_managem": "Omni Credential File Management",
+    "primary_credential_file_managem": "Provider credential file management",
     "failed_to_configure_preview_channel": "Failed to configure Preview channel: {error_message}",
     "authentication_successful_project_i": "Authentication successful. Project ID automatically detected as {id}. File saved to: {path}.",
     "please_enter_a_valid_url_starting_w": "Please enter a valid URL starting with http:// or https://.",
@@ -539,15 +539,15 @@ const TRANSLATIONS = {
     "pending_code_assist_file_upload_list": "Pending Code Assist file upload list:",
     "exclusive_industrywide_support_for": "Exclusive industry-wide support for streaming resumable uploads.",
     "configuration_failed_for_all_failed": "Configuration failed for all credentials. Failed {failCount}/{selectedFiles_length} credentials.",
-    "omni_batch_verification_comp_dup": "Omni batch verification complete.\\n\\nSuccess: {successCount}\\nFailed: {failCount}\\nTotal: {selectedFiles_length}\\n\\nDetailed results:\\n{resultMessages_join___n}",
+    "primary_batch_verification_comp_dup": "Provider batch verification complete.\\n\\nSuccess: {successCount}\\nFailed: {failCount}\\nTotal: {selectedFiles_length}\\n\\nDetailed results:\\n{resultMessages_join___n}",
     "enabled": "Enabled",
     "display_and_maintain_your_code_assist_prox": "Display and maintain your Code Assist proxy channels, supporting individual or batch verification, download, status toggling, and deletion.",
     "batch_operation_network_error_error": "Batch operation network error: {error}",
     "retrying_with_manually_entered_proj": "Retrying with manually entered Project ID...",
-    "get_omni_authentication_link": "Get Omni authentication link",
+    "get_primary_authentication_link": "Get provider authentication link",
     "json_file": "(JSON file)",
-    "are_you_sure_you_want_to_deduplicat": "Are you sure you want to deduplicate Omni credentials?\\n\\nOnly one credential per email will be kept, and all others will be deleted.\\nThis action cannot be undone.",
-    "display_and_maintain_your_antigravi": "Display and maintain your Omni proxy accounts and associated usage quotas.",
+    "are_you_sure_you_want_to_deduplicat": "Are you sure you want to deduplicate provider credentials?\\n\\nOnly one credential per email will be kept, and all others will be deleted.\\nThis action cannot be undone.",
+    "display_and_maintain_provider_accounts": "Display and maintain your provider accounts and associated usage quotas.",
     "supports_json_files_or_zip_archives": "Supports .json files or .zip archives",
     "code_assist_api_endpoint": "Code Assist API Endpoint:",
     "failed_to_fetch_error_message_error": "Failed to fetch error message: {errorMsg}",
@@ -564,7 +564,7 @@ const TRANSLATIONS = {
     "full_version_datafull_hashncommit_m": "Full version: {data_full_hash}\\nCommit message: {data_message}\\nCommit time: {data_date}",
     "importing_credentials_from_environm": "Importing credentials from environment variables...",
     "server_bound_host_ip_address": "Server bound Host IP Address:",
-    "verification_failed_for_all_failed": "Verification failed for all credentials. Failed {failCount}/{selectedFiles_length} Omni credentials.",
+    "verification_failed_for_all_failed": "Verification failed for all credentials. Failed {failCount}/{selectedFiles_length} provider credentials.",
     "github_issues_support": "GitHub Issues",
     "download_failed_name": "Download failed: {name}",
     "login_successful": "Signed in successfully.",
@@ -583,10 +583,10 @@ const TRANSLATIONS = {
     "access_password_to_protect_this_con": "Access password to protect this console page from malicious tampering.",
     "if_running_on_a_remote_vps_or_a_hea": "If running on a remote VPS or a headless environment: please expand \"Unable to access origin shortcut channel\" below for instructions.",
     "log_file_download_successful_filena": "Log file download successful: {filename}",
-    "automatically_switch_to_another_rot": "Automatically switch to another rotated credential on Omni errors",
+    "automatically_switch_to_another_rot": "Automatically switch to another rotated credential on provider errors",
     "connected": "Connected",
     "brstrongavailable_projectsstrongbr": "<br><strong>Available projects:</strong><br>",
-    "div_span_classfilenamefileicon_file": "<div>\n\n                        <span class=\"file-name\">{fileIcon} {file_name}</span>\n\n                        <span class=\"file-size\">({formatFileSize_file_size}{fileType})</span>\n\n                    </div>\n\n                    <button class=\"remove-btn\" onclick=\"{type______omni_____removeOmniFile_____removeFile}({index})\">Delete</button>",
+    "div_span_classfilenamefileicon_file": "<div>\n\n                        <span class=\"file-name\">{fileIcon} {file_name}</span>\n\n                        <span class=\"file-size\">({formatFileSize_file_size}{fileType})</span>\n\n                    </div>\n\n                    <button class=\"remove-btn\" onclick=\"{type______primary_____removePrimaryFile_____removeFile}({index})\">Delete</button>",
     "passthrough_model_thinking_process": "Pass-through model thinking process to frontend response",
     "log_connection_channel_disconnected": "Log connection channel disconnected.",
     "parallel_verifying_selectedfileslen": "Verifying {selectedFiles_length} credentials in parallel. Please wait...",
@@ -596,11 +596,11 @@ const TRANSLATIONS = {
     "environment_variable_status_check_c": "Environment variable status check complete",
     "project_description": "Omni Gateway is a universal AI router for coding tools. Features smart auto-fallback, token compression, and seamless format translation to maximize free and premium LLMs.",
     "click_the_view_error_button_to_load": "Click \"View Error\" to load error information.",
-    "loaded_datatotal_type_omni_a": "Loaded {data_total} {type______omni_____Omni} credential files",
+    "loaded_datatotal_type_primary_a": "Loaded {data_total} {type______primary_____provider} credential files",
     "email_not_retrieved": "Email not retrieved",
     "tip": "Tip",
     "load_failed_error": "Load failed: {error}",
-    "omni_credential_valid": "Omni credential valid",
+    "primary_credential_valid": "Provider credential is valid.",
     "in_cooldown": "In cooldown",
     "verification_failed": "Verification failed",
     "gemini_native": "Gemini Native:",
@@ -612,7 +612,7 @@ const TRANSLATIONS = {
     "failed_to_download_package_errormes": "Failed to download package: {error_message}",
     "batch_configuration_complete_succes": "Batch configuration complete: {successCount}/{selectedFiles_length} succeeded, {failCount} failed.",
     "claude_compatible": "Claude Compatible:",
-    "verifying_omni_project_id_pl": "Verifying Omni Project ID. Please wait...",
+    "verifying_primary_project_id_pl": "Verifying provider project ID. Please wait...",
     "invalid_selection_please_restart_th": "Invalid selection. Please restart the authentication process.",
     "error_code_dup": "Error code:",
     "configuration_data_loaded_successfu": "Configuration data loaded successfully.",
@@ -647,7 +647,7 @@ const TRANSLATIONS = {
     "div_stylecolor_007bfftype_highlight": "<div style=\"color: #007bff;\">Type: {highlightedType}</div>",
     "failed_to_check_for_updates_errorme": "Failed to check for updates: {error_message}",
     "nerror_detailsndataerror": "\\nError details:\\n{data_error}",
-    "omni_authentication_successf_dup": "Omni authentication completed successfully. File saved to: {data_file_path}.",
+    "primary_authentication_successf_dup": "Provider authentication completed successfully. File saved to: {data_file_path}.",
     "batch_verify_project_id": "Batch verify Project ID",
     "filter_thiscurrentstatusfilter_enab": "(Filter: {filter})",
     "are_you_sure_you_want_to_configure": "Are you sure you want to configure all endpoints to official addresses?",
@@ -657,7 +657,7 @@ const TRANSLATIONS = {
     "monitor_realtime_request_details_an": "Monitor real-time request details and rotation logic sent to the Google Cloud API to quickly troubleshoot network proxy or rate limiting issues.",
     "error_errormsg": "Error: {errorMsg}",
     "unlimited": "Unlimited",
-    "drag_and_drop_or_select_your_existi": "Drag and drop or select your existing Code Assist or Omni authentication JSON/ZIP file to upload to the server.",
+    "drag_and_drop_or_select_your_existi": "Drag and drop or select your existing Code Assist or provider authentication JSON/ZIP file to upload to the server.",
     "authentication_successful_file_save": "Authentication successful. File saved to: {data_file_path}.",
     "connection_lost": "Connection lost",
     "batch_preview_channel_configuration": "Batch Preview channel configuration complete.\\n\\nSuccess: {successCount}\\nFailed: {failCount}\\nTotal: {selectedFiles_length}\\n\\nDetailed results:\\n{resultMessages_join___n}",
@@ -675,13 +675,13 @@ const TRANSLATIONS = {
     "are_you_sure_you_want_to_reset_usag": "Are you sure you want to reset usage statistics for {filename}?",
     "please_select_at_least_one_credenti": "Please select at least one credential to proceed.",
     "authentication_successful_file_save_dup": "Authentication successful. File saved to: {path}.",
-    "retrieving_omni_credentials": "Retrieving Omni credentials from callback URL...",
+    "retrieving_primary_credentials": "Retrieving provider credentials from callback URL...",
     "configuring_preview_channel_please": "Configuring Preview channel. Please wait...",
     "verification_failed_error": "Verification failed: {error}",
-    "please_select_the_omni_crede_dup": "Please select an Omni credential to verify first.",
-    "successfully_uploaded_datauploaded": "Uploaded {data_uploaded_count} {type______omni_____Omni} file(s) successfully.",
+    "please_select_the_primary_crede_dup": "Please select a provider credential to verify first.",
+    "successfully_uploaded_datauploaded": "Uploaded {data_uploaded_count} {type______primary_____provider} file(s) successfully.",
     "dataexisting_env_files_count_files": "{data_existing_env_files_count} file(s)",
-    "waiting_for_omni_oauth_callb": "Waiting for Omni OAuth callback...",
+    "waiting_for_primary_oauth_callb": "Waiting for provider OAuth callback...",
     "model_protocol_compatibility_overri": "Model protocol compatibility override",
     "maximum_retries_for_resuming_stream": "Maximum retries for resuming stream data from the break point when calling models with the '-stream-truncation-prevention' suffix.",
     "successfully_uploaded_count_type_fi": "Uploaded {count} {type} file(s) successfully.",
@@ -693,17 +693,17 @@ const TRANSLATIONS = {
     "please_select_the_file_to_upload_fi": "Please select a file to upload first.",
     "failed_to_check_for_updates": "Failed to check for updates:",
     "enabled_dup": "Enabled",
-    "retrieve_the_latest_google_cloud_sd": "Retrieve the latest Google Cloud SDK Omni native authentication credentials.",
+    "retrieve_the_latest_google_cloud_sd": "Retrieve the latest Google Cloud SDK provider-native authentication credentials.",
     "global_upstream_proxy_url": "Global upstream proxy URL:",
     "processing_credential_deduplication": "Processing credential deduplication...",
     "24h_total_calls": "24h Total Requests",
     "status": "Status:",
     "maximum_retry_limit_for_resuming_st": "Maximum retry limit for resuming stream output if it gets truncated while using models with the '-stream-truncation-prevention' suffix.",
-    "omni_verification_successful": "Omni verification successful.\\n\\nFile: {filename}\\nProject ID: {data_project_id}{tierLine}{creditLine}\\n\\n{data_message}",
+    "primary_verification_successful": "Provider verification successful.\\n\\nFile: {filename}\\nProject ID: {data_project_id}{tierLine}{creditLine}\\n\\n{data_message}",
     "all_configured_successfully_preview": "All credentials configured successfully. Preview channel configured for {successCount}/{selectedFiles_length} credentials.",
     "enable_credit": "Enable Credit",
     "24hour_call_breakdown_statistics": "24-hour request breakdown statistics",
-    "are_you_sure_you_want_to_refresh_us_dup": "Are you sure you want to refresh user emails for all Omni credentials? This may take some time.",
+    "are_you_sure_you_want_to_refresh_us_dup": "Are you sure you want to refresh user emails for all provider credentials? This may take some time.",
     "unable_to_retrieve_version_informat": "Unable to retrieve version information",
     "batch_disable_dup": "Batch disable",
     "div_styletextalign_center_padding_2_dup_dup_dup_dup": "<div style=\"text-align: center; padding: 20px; color: #dc3545;\">\n\n                        <div style=\"font-size: 48px; margin-bottom: 10px;\"></div>\n\n                        <div style=\"font-weight: bold;\">Network Error</div>\n\n                        <div style=\"font-size: 12px; margin-top: 8px;\">{error_message}</div>\n\n                    </div>",
@@ -711,18 +711,18 @@ const TRANSLATIONS = {
     "if_you_find_any_bugs_or_have_design": "If you find a bug or have a design suggestion, open an issue on GitHub. Pull requests are welcome.",
     "view_error": "View error",
     "verification_failednnerrormsg": "Verification failed.\\n\\n{errorMsg}",
-    "failed_to_retrieve_omni_cred_dup": "Failed to retrieve Omni credentials from callback URL: {error_message}",
+    "failed_to_retrieve_primary_cred_dup": "Failed to retrieve provider credentials from callback URL: {error_message}",
     "code_assist_credential_batch_upload": "Code Assist Credential Batch Upload",
     "checking_for_updates": "Checking for updates...",
     "unknown_version": "Unknown version",
     "oneclick_credential_deduplication_i": "One-click credential deduplication in progress...",
     "operation_successful_action": "Operation successful: {action}",
     "download_failed_filename": "Download failed: {filename}",
-    "retrieve_and_save_omni_crede": "Retrieve and save Omni credentials",
-    "ag_credentials": "Omni credentials",
+    "retrieve_and_save_primary_crede": "Retrieve and save provider credentials",
+    "provider_credentials": "Provider credentials",
     "view_quota": "View quota",
     "logged_out": "Logged out",
-    "are_you_sure_you_want_to_reset_usag_dup": "Are you sure you want to reset all usage statistics?",
+    "confirm_reset_usage_statistics": "Are you sure you want to reset all usage statistics?",
     "configuration_successfulnfile_filen": "Configuration successful.\\nFile: {filename}\\nStatus: {data_message}",
     "batch_delete_dup": "Batch delete",
     "modelname_remainingpercentage_remai": "{modelName} - {remainingPercentage}% remaining - {resetTime}",
@@ -734,7 +734,7 @@ const TRANSLATIONS = {
     "reload_configuration_data": "Reload Configuration Data",
     "key_technical_highlights": "Key Technical Highlights",
     "clear_failed_error": "Clear failed: {error}",
-    "generating_omni_authenticati": "Generating Omni authentication link...",
+    "generating_primary_authenticati": "Generating provider authentication link...",
     "upload_failed_errormessage": "Upload failed: {error_message}",
     "failed_to_update_preview_status_in": "Failed to update Preview status in bulk: {error}",
     "downloaded_filename": "Downloaded: {filename}",
@@ -760,7 +760,7 @@ const TRANSLATIONS = {
     "failed_to_get_email_errormessage": "Failed to get email: {error_message}",
     "suitable_for_cloud_servervps_deploy": "Suitable for cloud server/VPS deployment, Docker container environments, or scenarios where port 11451 is blocked by a firewall.",
     "connection_error": "Connection error",
-    "omni_credentials_successfull": "Omni credentials retrieved successfully from the callback URL.",
+    "primary_credentials_successfull": "Provider credentials retrieved successfully from the callback URL.",
     "are_you_sure_you_want_to_configure_dup": "Are you sure you want to configure all endpoints as mirror URLs?",
     "sever_log_channel": "Server log channel",
     "configuration_loaded_successfully": "Configuration loaded successfully.",
@@ -794,7 +794,7 @@ const TRANSLATIONS = {
     "automation_enabled": "Automation enabled:",
     "div_stylepadding_12px_marginbottom": "<div style=\"padding: 12px; margin-bottom: 10px; border-left: 3px solid #dc3545; background-color: #f8f9fa;\">\n\n                                    <div style=\"font-weight: bold; color: #dc3545; margin-bottom: 8px;\">Error code: {errorCode}</div>\n\n                                    <div style=\"line-height: 1.6; color: #333; white-space: pre-wrap; word-break: break-word;\">\n\n                                        {highlightedMsg}\n\n                                    </div>\n\n                                    {detailsHtml}\n\n                                </div>",
     "refresh_all_account_emails": "Refresh all account emails",
-    "about_omni-gateway": "About Omni Gateway",
+    "about_project_page": "About Omni Gateway",
     "get_authentication_file": "Get authentication file",
     "n_restart_reminder_notice": "\\n Restart Reminder: {notice}",
     "test_failed_datamessage_error_code": "Test failed: {data_message}",
@@ -805,7 +805,7 @@ const TRANSLATIONS = {
     "disconnected": "Disconnected",
     "if_the_redirect_fails_and_shows_an": "If the redirect fails and shows an error about being unable to connect to localhost:11451, return to this control panel.",
     "unknown_error": "Unknown error",
-    "testing_omni_credentials_ple": "Testing Omni credentials. Please wait...",
+    "testing_primary_credentials_ple": "Testing provider credentials. Please wait...",
     "if_you_cannot_return_to_the_source": "If you cannot return to the source, you can copy the full URL after the redirect and expand the quick channel below to parse it.",
     "verification_failed_errormessage": "Verification failed: {error_message}",
     "nerror_detailsnjsonstringifyerrorob": "\\nError details:\\n{JSON_stringify_errorObj__null__2}",
@@ -849,15 +849,15 @@ const TRANSLATIONS = {
     "system_configuration_saved_successf": "System configuration saved successfully.",
     "div_stylefontsize_12px_color_666sta": "<div style=\"font-size: 12px; color: #666;\">Status: {escapeHtml_parsedMsg_error_status}</div>",
     "api_access_authentication_password": "API access authentication password (API Key):",
-    "parallel_testing_selectedfileslengt": "Testing {selectedFiles_length} Omni credentials in parallel. Please wait...",
+    "parallel_testing_selectedfileslengt": "Testing {selectedFiles_length} provider credentials in parallel. Please wait...",
     "operation_failed": "Operation failed:",
-    "all_omni_credentials_packed": "All Omni credentials have been packed and downloaded.",
+    "all_primary_credentials_packed": "All provider credentials have been packed and downloaded.",
     "operation_successful_action_dup": "Operation successful: {action}",
-    "omni_api_endpoint": "Omni API endpoint:",
+    "primary_api_endpoint": "Provider API endpoint:",
     "authentication_link_generated_proje": "Authentication link generated for Project ID {data_detected_project_id}. Click the link to complete authorization.",
     "configuring_preview_channel_status": "Configuring Preview channel status in batch...",
     "after_successful_authorization_the_dup": "After successful authorization, the system will automatically detect and activate the required Gemini Cloud Assist API and Gemini for Google Cloud API services for your Google Cloud project. No manual configuration is required.",
-    "batch_upload_omni_credential": "Batch upload Omni credentials",
+    "batch_upload_primary_credential": "Batch upload provider credentials",
     "checking": "Checking...",
     "please_enter_the_callback_url": "Please enter the callback URL.",
     "extract_credentials_from_callback_l": "Extract credentials from callback link",
@@ -872,7 +872,7 @@ const TRANSLATIONS = {
     "no_credential_files_available": "No credential files available",
     "validation_successfulnnfile_filenam": "Validation successful.\\n\\nFile: {filename}\\nProject ID: {data_project_id}{tierLine}{creditLine}\\n\\n{data_message}",
     "selectedcount_items_selected": "{selectedCount} items selected",
-    "click_the_view_content_button_to_lo": "Click the \"View Content\" button to load file details...",
+    "click_the_view_content_button_to_lo": "Click the \"View content\" button to load file details...",
     "please_enter_the_password": "Please enter your password.",
     "upload_progress_dup": "Upload progress",
     "error_dataerror_failed_to_fetch_aut": "Error: {data_error}",
@@ -898,7 +898,7 @@ const TRANSLATIONS = {
     "table_calls": "Requests",
     "btn_reset_stats": "Reset Stats",
     "confirm_reset_stats": "Are you sure you want to reset statistics for {filename}?",
-    "table_filename": "Credential File Name",
+    "table_filename": "Credential file name",
     "table_actions": "Actions"
 }
 };
@@ -945,7 +945,7 @@ function setLanguage(lang) {
 
     AppState.lang = lang;
 
-    localStorage.setItem('ogw_lang', lang);
+    localStorage.setItem('lang', lang);
 
     document.querySelectorAll('.lang-switcher').forEach(sw => {
 
@@ -1013,7 +1013,7 @@ const ROUTE_MAP = {
 
     '/dashboard': 'dashboard',
 
-    '/omni': 'manage',
+    '/provider': 'manage',
 
     '/oauth': 'oauth',
 
@@ -1071,7 +1071,7 @@ function navigate(path, pushState = true) {
 
     }
 
-    const savedToken = localStorage.getItem('ogw_auth_token') || AppState.authToken;
+    const savedToken = localStorage.getItem('auth_token') || AppState.authToken;
 
     const isAuthenticated = !!savedToken;
 
@@ -1193,17 +1193,17 @@ const AppState = {
 
     currentProjectId: '',
 
-    omniAuthState: null,
+    primaryAuthState: null,
 
-    omniAuthInProgress: false,
+    primaryAuthInProgress: false,
 
     creds: createCredsManager('normal'),
 
-    omniCreds: createCredsManager('omni'),
+    primaryCreds: createCredsManager('primary'),
 
     uploadFiles: createUploadManager('normal'),
 
-    omniUploadFiles: createUploadManager('omni'),
+    primaryUploadFiles: createUploadManager('primary'),
 
     currentConfig: {},
 
@@ -1229,7 +1229,7 @@ const AppState = {
 
 function createCredsManager(type) {
 
-    const modeParam = type === 'omni' ? 'mode=omni' : 'mode=code_assist';
+    const modeParam = type === 'primary' ? 'mode=provider' : 'mode=code_assist';
 
     return {
 
@@ -1263,27 +1263,27 @@ function createCredsManager(type) {
 
             const endpoints = {
 
-                status: `./ogw/creds/status`,
+                status: `./api/creds/status`,
 
-                action: `./ogw/creds/action`,
+                action: `./api/creds/action`,
 
-                batchAction: `./ogw/creds/batch-action`,
+                batchAction: `./api/creds/batch-action`,
 
-                download: `./ogw/creds/download`,
+                download: `./api/creds/download`,
 
-                downloadAll: `./ogw/creds/download-all`,
+                downloadAll: `./api/creds/download-all`,
 
-                detail: `./ogw/creds/detail`,
+                detail: `./api/creds/detail`,
 
-                fetchEmail: `./ogw/creds/fetch-email`,
+                fetchEmail: `./api/creds/fetch-email`,
 
-                refreshAllEmails: `./ogw/creds/refresh-all-emails`,
+                refreshAllEmails: `./api/creds/refresh-all-emails`,
 
-                deduplicate: `./ogw/creds/deduplicate-by-email`,
+                deduplicate: `./api/creds/deduplicate-by-email`,
 
-                verifyProject: `./ogw/creds/verify-project`,
+                verifyProject: `./api/creds/verify-project`,
 
-                quota: `./ogw/creds/quota`
+                quota: `./api/creds/quota`
 
             };
 
@@ -1295,9 +1295,9 @@ function createCredsManager(type) {
 
         getElementId: (suffix) => {
 
-            if (type === 'omni') {
+            if (type === 'primary') {
 
-                return 'omni' + suffix.charAt(0).toUpperCase() + suffix.slice(1);
+                return 'primary' + suffix.charAt(0).toUpperCase() + suffix.slice(1);
 
             }
 
@@ -1391,7 +1391,7 @@ function createCredsManager(type) {
 
                     this.updatePagination();
 
-                    let msg = t('status_loaded_creds', {count: data.total, type: type === 'omni' ? 'Omni' : ''});
+                    let msg = t('status_loaded_creds', {count: data.total, type: type === 'primary' ? 'provider' : ''});
 
                     if (this.currentStatusFilter !== 'all') {
 
@@ -1565,7 +1565,7 @@ function createCredsManager(type) {
 
             const batchBtnNames = ['Enable', 'Disable', 'Delete', 'Verify', 'Preview'];
 
-            if (this.type === 'omni') {
+            if (this.type === 'primary') {
 
                 batchBtnNames.push('EnableCredit');
 
@@ -1741,9 +1741,9 @@ function createCredsManager(type) {
 
 function createUploadManager(type) {
 
-    const modeParam = type === 'omni' ? 'mode=omni' : 'mode=code_assist';
+    const modeParam = type === 'primary' ? 'mode=provider' : 'mode=code_assist';
 
-    const endpoint = `./ogw/creds/upload?${modeParam}`;
+    const endpoint = `./api/creds/upload?${modeParam}`;
 
     return {
 
@@ -1753,9 +1753,9 @@ function createUploadManager(type) {
 
         getElementId: (suffix) => {
 
-            if (type === 'omni') {
+            if (type === 'primary') {
 
-                return 'omni' + suffix.charAt(0).toUpperCase() + suffix.slice(1);
+                return 'primary' + suffix.charAt(0).toUpperCase() + suffix.slice(1);
 
             }
 
@@ -1845,7 +1845,7 @@ function createUploadManager(type) {
 
                     </div>
 
-                    <button class="remove-btn" onclick="${type === 'omni' ? 'removeOmniFile' : 'removeFile'}(${index})">${t('action_delete')}</button>
+                    <button class="remove-btn" onclick="${type === 'primary' ? 'removePrimaryFile' : 'removeFile'}(${index})">${t('action_delete')}</button>
 
                 `;
 
@@ -1927,7 +1927,7 @@ function createUploadManager(type) {
 
                             const data = JSON.parse(xhr.responseText);
 
-                            showStatus(t('status_upload_success', {count: data.uploaded_count, type: type === 'omni' ? 'Omni' : ''}), 'success');
+                            showStatus(t('status_upload_success', {count: data.uploaded_count, type: type === 'primary' ? 'provider' : ''}), 'success');
 
                             this.clearFiles();
 
@@ -2041,23 +2041,30 @@ async function updateEndpointUrls() {
     const origin = window.location.origin;
 
     const unifiedEl = document.getElementById('unifiedEndpointUrl');
-    if (unifiedEl) unifiedEl.textContent = `${origin}/ogw/v1`;
+    if (unifiedEl) unifiedEl.textContent = `${origin}/v1`;
 
     try {
-        const response = await fetch('./ogw/auth/keys', { headers: getAuthHeaders() });
+        const response = await fetch('./api/auth/keys', { headers: getAuthHeaders() });
         if (response.ok) {
             const data = await response.json();
             if (data.success) {
                 const apiKeyEl = document.getElementById('apiKey');
-                const apiKey = data.ogw_api_key || data.api_key || '';
+                const apiKey = data.api_key || '';
                 if (apiKeyEl) apiKeyEl.value = apiKey;
+                const regenerateBtn = document.getElementById('regenerateApiKeyBtn');
+                if (regenerateBtn) {
+                    const managedByEnv = Boolean(data.managed_by_env);
+                    regenerateBtn.disabled = managedByEnv;
+                    regenerateBtn.title = managedByEnv
+                        ? 'API key is managed by the API_KEY environment variable'
+                        : 'Regenerate API key';
+                }
             }
         }
     } catch (e) {
         console.error("Failed to fetch API key", e);
     }
 }
-
 function cpUrl(element) {
     const text = element.textContent || element.innerText;
     if (!text) return;
@@ -2107,22 +2114,22 @@ async function regenerateApiKey() {
         return;
     }
     try {
-        const response = await fetch('./ogw/auth/keys/reset', {
+        const response = await fetch('./api/auth/keys/reset', {
             method: 'POST',
             headers: getAuthHeaders()
         });
+        const data = await response.json().catch(() => ({}));
         if (response.ok) {
-            const data = await response.json();
             if (data.success) {
                 const el = document.getElementById('apiKey');
-                const apiKey = data.ogw_api_key || data.api_key || '';
+                const apiKey = data.api_key || '';
                 if (el) el.value = apiKey;
                 showStatus(t('regenerate_success', 'API Key regenerated successfully'), 'success');
             } else {
                 showStatus(data.error || 'Failed to regenerate key', 'error');
             }
         } else {
-            showStatus('Failed to regenerate key', 'error');
+            showStatus(data.detail || data.message || 'Failed to regenerate key', 'error');
         }
     } catch (e) {
         console.error("Failed to regenerate key", e);
@@ -2490,7 +2497,7 @@ function createCredCard(credInfo, manager) {
 
     }
 
-    if (managerType !== 'omni' && credInfo.preview !== undefined) {
+    if (managerType !== 'primary' && credInfo.preview !== undefined) {
 
         if (credInfo.preview) {
 
@@ -2512,7 +2519,7 @@ function createCredCard(credInfo, manager) {
 
     statusBadges += `<span class="status-badge ${tierClass}" title="${t('tier_badge_title')}: ${tierLabel}">Tier: ${tierLabel}</span>`;
 
-    if (managerType === 'omni') {
+    if (managerType === 'primary') {
 
         if (credInfo.enable_credit) {
 
@@ -2576,7 +2583,7 @@ function createCredCard(credInfo, manager) {
 
     }
 
-    const pathId = (managerType === 'omni' ? 'omni_' : '') + btoa(encodeURIComponent(filename)).replace(/[+/=]/g, '_');
+    const pathId = (managerType === 'primary' ? 'primary_' : '') + btoa(encodeURIComponent(filename)).replace(/[+/=]/g, '_');
 
     const actionButtons = `
 
@@ -2588,15 +2595,15 @@ function createCredCard(credInfo, manager) {
 
         }
 
-        <button class="cred-btn view" onclick="toggle${managerType === 'omni' ? 'Omni' : ''}CredDetails('${pathId}')">${t('btn_view_content')}</button>
+        <button class="cred-btn view" onclick="toggle${managerType === 'primary' ? 'Primary' : ''}CredDetails('${pathId}')">${t('btn_view_content')}</button>
 
-        <button class="cred-btn download" onclick="download${managerType === 'omni' ? 'Omni' : ''}Cred('${filename}')">${t('btn_download')}</button>
+        <button class="cred-btn download" onclick="download${managerType === 'primary' ? 'Primary' : ''}Cred('${filename}')">${t('btn_download')}</button>
 
-        <button class="cred-btn email" onclick="fetch${managerType === 'omni' ? 'Omni' : ''}UserEmail('${filename}')">${t('btn_view_email')}</button>
+        <button class="cred-btn email" onclick="fetch${managerType === 'primary' ? 'Primary' : ''}UserEmail('${filename}')">${t('btn_view_email')}</button>
 
-        ${managerType === 'omni' ? `<button class="cred-btn" onclick="toggleOmniQuotaDetails('${pathId}')" title="${t('btn_view_quota_title')}">${t('btn_view_quota')}</button>` : ''}
+        ${managerType === 'primary' ? `<button class="cred-btn" onclick="togglePrimaryQuotaDetails('${pathId}')" title="${t('btn_view_quota_title')}">${t('btn_view_quota')}</button>` : ''}
 
-        ${managerType === 'omni' ? (credInfo.enable_credit
+        ${managerType === 'primary' ? (credInfo.enable_credit
 
             ? `<button class="cred-btn" data-filename="${filename}" data-action="disable_credit" title="${t('btn_disable_credit_title')}">${t('btn_disable_credit')}</button>`
 
@@ -2604,13 +2611,13 @@ function createCredCard(credInfo, manager) {
 
         ) : ''}
 
-        ${managerType !== 'omni' ? `<button class="cred-btn" onclick="configurePreviewChannel('${filename}')" title="${t('btn_setup_preview_title')}">${t('btn_setup_preview')}</button>` : ''}
+        ${managerType !== 'primary' ? `<button class="cred-btn" onclick="configurePreviewChannel('${filename}')" title="${t('btn_setup_preview_title')}">${t('btn_setup_preview')}</button>` : ''}
 
-        <button class="cred-btn" onclick="verify${managerType === 'omni' ? 'Omni' : ''}ProjectId('${filename}')" title="${t('btn_verify_id_title')}">${t('btn_verify_id')}</button>
+        <button class="cred-btn" onclick="verify${managerType === 'primary' ? 'Primary' : ''}ProjectId('${filename}')" title="${t('btn_verify_id_title')}">${t('btn_verify_id')}</button>
 
-        <button class="cred-btn" onclick="test${managerType === 'omni' ? 'Omni' : ''}Credential('${filename}')" title="${t('btn_message_test_title')}">${t('btn_message_test')}</button>
+        <button class="cred-btn" onclick="test${managerType === 'primary' ? 'Primary' : ''}Credential('${filename}')" title="${t('btn_message_test_title')}">${t('btn_message_test')}</button>
 
-        <button class="cred-btn" onclick="toggle${managerType === 'omni' ? 'Omni' : ''}ErrorDetails('${pathId}')" title="${t('btn_view_errors_title')}">${t('btn_view_errors')}</button>
+        <button class="cred-btn" onclick="toggle${managerType === 'primary' ? 'Primary' : ''}ErrorDetails('${pathId}')" title="${t('btn_view_errors_title')}">${t('btn_view_errors')}</button>
 
         <button class="cred-btn delete" data-filename="${filename}" data-action="delete">${t('action_delete')}</button>
 
@@ -2630,7 +2637,7 @@ function createCredCard(credInfo, manager) {
 
             <div class="cred-title-row">
 
-                <input type="checkbox" class="${checkboxClass}" data-filename="${filename}" onchange="toggle${managerType === 'omni' ? 'Omni' : ''}FileSelection('${filename}')">
+                <input type="checkbox" class="${checkboxClass}" data-filename="${filename}" onchange="toggle${managerType === 'primary' ? 'Primary' : ''}FileSelection('${filename}')">
 
                 <div>
 
@@ -2660,7 +2667,7 @@ function createCredCard(credInfo, manager) {
 
         </div>
 
-        ${managerType === 'omni' ? `
+        ${managerType === 'primary' ? `
 
         <div class="cred-quota-details" id="quota-${pathId}">
 
@@ -2711,9 +2718,9 @@ async function toggleCredDetails(pathId) {
 
 }
 
-async function toggleOmniCredDetails(pathId) {
+async function togglePrimaryCredDetails(pathId) {
 
-    await toggleCredDetailsCommon(pathId, AppState.omniCreds);
+    await toggleCredDetailsCommon(pathId, AppState.primaryCreds);
 
 }
 
@@ -2739,9 +2746,9 @@ async function toggleCredDetailsCommon(pathId, manager) {
 
             try {
 
-                const modeParam = manager.type === 'omni' ? 'mode=omni' : 'mode=code_assist';
+                const modeParam = manager.type === 'primary' ? 'mode=provider' : 'mode=code_assist';
 
-                const endpoint = `./ogw/creds/detail/${encodeURIComponent(filename)}?${modeParam}`;
+                const endpoint = `./api/creds/detail/${encodeURIComponent(filename)}?${modeParam}`;
 
                 const response = await fetch(endpoint, { headers: getAuthHeaders() });
 
@@ -2779,7 +2786,7 @@ async function refreshSetupStatus() {
 
     try {
 
-        const response = await fetch('./ogw/auth/setup/status');
+        const response = await fetch('./api/auth/setup/status');
 
         const data = await response.json();
 
@@ -2787,7 +2794,7 @@ async function refreshSetupStatus() {
 
         if (AppState.setupRequired) {
 
-            localStorage.removeItem('ogw_auth_token');
+            localStorage.removeItem('auth_token');
 
             AppState.authToken = '';
 
@@ -2829,7 +2836,7 @@ async function completeInitialSetup() {
 
     try {
 
-        const response = await fetch('./ogw/auth/setup', {
+        const response = await fetch('./api/auth/setup', {
 
             method: 'POST',
 
@@ -2847,7 +2854,7 @@ async function completeInitialSetup() {
 
             AppState.authToken = data.token;
 
-            localStorage.setItem('ogw_auth_token', AppState.authToken);
+            localStorage.setItem('auth_token', AppState.authToken);
 
             showStatus('Initial setup completed.', 'success');
 
@@ -2889,7 +2896,7 @@ async function login() {
 
     try {
 
-        const response = await fetch('./ogw/auth/login', {
+        const response = await fetch('./api/auth/login', {
 
             method: 'POST',
 
@@ -2905,7 +2912,7 @@ async function login() {
 
             AppState.authToken = data.token;
 
-            localStorage.setItem('ogw_auth_token', AppState.authToken);
+            localStorage.setItem('auth_token', AppState.authToken);
 
             showStatus(t('login_successful_dup'), 'success');
 
@@ -2933,7 +2940,7 @@ async function login() {
 
             }
 
-            showStatus(t('login_failed'), 'error');
+            showStatus(data.detail || data.error || t('login_failed'), 'error');
 
         }
 
@@ -2955,7 +2962,7 @@ async function autoLogin() {
 
     }
 
-    const savedToken = localStorage.getItem('ogw_auth_token');
+    const savedToken = localStorage.getItem('auth_token');
 
     if (!savedToken) {
 
@@ -2969,7 +2976,7 @@ async function autoLogin() {
 
     try {
 
-        const response = await fetch('./ogw/config/get', {
+        const response = await fetch('./api/config/get', {
 
             headers: {
 
@@ -2991,7 +2998,7 @@ async function autoLogin() {
 
         } else {
 
-            localStorage.removeItem('ogw_auth_token');
+            localStorage.removeItem('auth_token');
 
             AppState.authToken = '';
 
@@ -3003,7 +3010,7 @@ async function autoLogin() {
 
     } catch (error) {
 
-        localStorage.removeItem('ogw_auth_token');
+        localStorage.removeItem('auth_token');
 
         AppState.authToken = '';
 
@@ -3017,7 +3024,7 @@ async function autoLogin() {
 
 function logout() {
 
-    localStorage.removeItem('ogw_auth_token');
+    localStorage.removeItem('auth_token');
 
     AppState.authToken = '';
 
@@ -3120,7 +3127,7 @@ function triggerTabDataLoad(tabName) {
     }
 
     if (tabName === 'manage') {
-        AppState.omniCreds.refresh();
+        AppState.primaryCreds.refresh();
     }
 
     if (tabName === 'config') loadConfig();
@@ -3151,7 +3158,7 @@ async function startAuth() {
 
         showStatus(projectId ? t('generating_authentication_link_usin') : t('attempting_to_autodetect_project_id'), 'info');
 
-        const response = await fetch('./ogw/auth/start', {
+        const response = await fetch('./api/auth/start', {
 
             method: 'POST',
 
@@ -3223,7 +3230,7 @@ async function getCredentials() {
 
         const requestBody = AppState.currentProjectId ? { project_id: AppState.currentProjectId } : {};
 
-        const response = await fetch('./ogw/auth/callback', {
+        const response = await fetch('./api/auth/callback', {
 
             method: 'POST',
 
@@ -3331,9 +3338,9 @@ async function getCredentials() {
 
 // =====================================================================
 
-async function startOmniAuth() {
+async function startPrimaryAuth() {
 
-    const btn = document.getElementById('getOmniAuthBtn');
+    const btn = document.getElementById('getPrimaryAuthBtn');
 
     btn.disabled = true;
 
@@ -3341,15 +3348,15 @@ async function startOmniAuth() {
 
     try {
 
-        showStatus(t('generating_omni_authenticati'), 'info');
+        showStatus(t('generating_primary_authenticati'), 'info');
 
-        const response = await fetch('./ogw/auth/start', {
+        const response = await fetch('./api/auth/start', {
 
             method: 'POST',
 
             headers: getAuthHeaders(),
 
-            body: JSON.stringify({ mode: 'omni' })
+            body: JSON.stringify({ mode: 'provider' })
 
         });
 
@@ -3357,19 +3364,19 @@ async function startOmniAuth() {
 
         if (response.ok) {
 
-            AppState.omniAuthState = data.state;
+            AppState.primaryAuthState = data.state;
 
-            AppState.omniAuthInProgress = true;
+            AppState.primaryAuthInProgress = true;
 
-            const authUrlLink = document.getElementById('omniAuthUrl');
+            const authUrlLink = document.getElementById('primaryAuthUrl');
 
             authUrlLink.href = data.auth_url;
 
             authUrlLink.textContent = data.auth_url;
 
-            document.getElementById('omniAuthUrlSection').classList.remove('hidden');
+            document.getElementById('primaryAuthUrlSection').classList.remove('hidden');
 
-            showStatus(t('omni_authentication_link_gen'), 'success');
+            showStatus(t('primary_authentication_link_gen'), 'success');
 
         } else {
 
@@ -3385,23 +3392,23 @@ async function startOmniAuth() {
 
         btn.disabled = false;
 
-        btn.textContent = t('get_omni_authentication_link');
+        btn.textContent = t('get_primary_authentication_link');
 
     }
 
 }
 
-async function getOmniCredentials() {
+async function getPrimaryCredentials() {
 
-    if (!AppState.omniAuthInProgress) {
+    if (!AppState.primaryAuthInProgress) {
 
-        showStatus(t('please_obtain_the_omni_authe'), 'error');
+        showStatus(t('please_obtain_the_primary_authe'), 'error');
 
         return;
 
     }
 
-    const btn = document.getElementById('getOmniCredsBtn');
+    const btn = document.getElementById('getPrimaryCredsBtn');
 
     btn.disabled = true;
 
@@ -3409,15 +3416,15 @@ async function getOmniCredentials() {
 
     try {
 
-        showStatus(t('waiting_for_omni_oauth_callb'), 'info');
+        showStatus(t('waiting_for_primary_oauth_callb'), 'info');
 
-        const response = await fetch('./ogw/auth/callback', {
+        const response = await fetch('./api/auth/callback', {
 
             method: 'POST',
 
             headers: getAuthHeaders(),
 
-            body: JSON.stringify({ mode: 'omni' })
+            body: JSON.stringify({ mode: 'provider' })
 
         });
 
@@ -3425,13 +3432,13 @@ async function getOmniCredentials() {
 
         if (response.ok) {
 
-            document.getElementById('omniCredsContent').textContent = JSON.stringify(data.credentials, null, 2);
+            document.getElementById('primaryCredsContent').textContent = JSON.stringify(data.credentials, null, 2);
 
-            document.getElementById('omniCredsSection').classList.remove('hidden');
+            document.getElementById('primaryCredsSection').classList.remove('hidden');
 
-            AppState.omniAuthInProgress = false;
+            AppState.primaryAuthInProgress = false;
 
-            showStatus(t('omni_authentication_successf_dup', {data_file_path: data.file_path}), 'success');
+            showStatus(t('primary_authentication_successf_dup', {data_file_path: data.file_path}), 'success');
 
         } else {
 
@@ -3447,15 +3454,15 @@ async function getOmniCredentials() {
 
         btn.disabled = false;
 
-        btn.textContent = t('fetch_omni_credentials');
+        btn.textContent = t('fetch_primary_credentials');
 
     }
 
 }
 
-function downloadOmniCredentials() {
+function downloadPrimaryCredentials() {
 
-    const content = document.getElementById('omniCredsContent').textContent;
+    const content = document.getElementById('primaryCredsContent').textContent;
 
     const blob = new Blob([content], { type: 'application/json' });
 
@@ -3465,7 +3472,7 @@ function downloadOmniCredentials() {
 
     a.href = url;
 
-    a.download = `omni-credential-${Date.now()}.json`;
+    a.download = `primary-credential-${Date.now()}.json`;
 
     a.click();
 
@@ -3529,11 +3536,11 @@ function toggleCallbackUrlSection() {
 
 }
 
-function toggleOmniCallbackUrlSection() {
+function togglePrimaryCallbackUrlSection() {
 
-    const section = document.getElementById('omniCallbackUrlSection');
+    const section = document.getElementById('primaryCallbackUrlSection');
 
-    const icon = document.getElementById('omniCallbackUrlToggleIcon');
+    const icon = document.getElementById('primaryCallbackUrlToggleIcon');
 
     if (section.style.display === 'none') {
 
@@ -3589,7 +3596,7 @@ async function processCallbackUrl() {
 
         const projectId = document.getElementById('projectId')?.value.trim() || null;
 
-        const response = await fetch('./ogw/auth/callback-url', {
+        const response = await fetch('./api/auth/callback-url', {
 
             method: 'POST',
 
@@ -3641,9 +3648,9 @@ async function processCallbackUrl() {
 
 }
 
-async function processOmniCallbackUrl() {
+async function processPrimaryCallbackUrl() {
 
-    const callbackUrl = document.getElementById('omniCallbackUrlInput').value.trim();
+    const callbackUrl = document.getElementById('primaryCallbackUrlInput').value.trim();
 
     if (!callbackUrl) {
 
@@ -3669,17 +3676,17 @@ async function processOmniCallbackUrl() {
 
     }
 
-    showStatus(t('retrieving_omni_credentials'), 'info');
+    showStatus(t('retrieving_primary_credentials'), 'info');
 
     try {
 
-        const response = await fetch('./ogw/auth/callback-url', {
+        const response = await fetch('./api/auth/callback-url', {
 
             method: 'POST',
 
             headers: getAuthHeaders(),
 
-            body: JSON.stringify({ callback_url: callbackUrl, mode: 'omni' })
+            body: JSON.stringify({ callback_url: callbackUrl, mode: 'provider' })
 
         });
 
@@ -3687,23 +3694,23 @@ async function processOmniCallbackUrl() {
 
         if (result.credentials) {
 
-            showStatus(result.message || t('omni_credentials_successfull'), 'success');
+            showStatus(result.message || t('primary_credentials_successfull'), 'success');
 
-            document.getElementById('omniCredsContent').textContent = JSON.stringify(result.credentials, null, 2);
+            document.getElementById('primaryCredsContent').textContent = JSON.stringify(result.credentials, null, 2);
 
-            document.getElementById('omniCredsSection').classList.remove('hidden');
+            document.getElementById('primaryCredsSection').classList.remove('hidden');
 
         } else {
 
-            showStatus(result.error || t('failed_to_retrieve_omni_cred'), 'error');
+            showStatus(result.error || t('failed_to_retrieve_primary_cred'), 'error');
 
         }
 
-        document.getElementById('omniCallbackUrlInput').value = '';
+        document.getElementById('primaryCallbackUrlInput').value = '';
 
     } catch (error) {
 
-        showStatus(t('failed_to_retrieve_omni_cred_dup', {error_message: error.message}), 'error');
+        showStatus(t('failed_to_retrieve_primary_cred_dup', {error_message: error.message}), 'error');
 
     }
 
@@ -3763,7 +3770,7 @@ function batchAction(action) { AppState.creds.batchAction(action); }
 
 function downloadCred(filename) {
 
-    fetch(`./ogw/creds/download/${filename}`, { headers: { 'Authorization': `Bearer ${AppState.authToken}` } })
+    fetch(`./api/creds/download/${filename}`, { headers: { 'Authorization': `Bearer ${AppState.authToken}` } })
 
         .then(r => r.ok ? r.blob() : Promise.reject())
 
@@ -3793,7 +3800,7 @@ async function downloadAllCreds() {
 
     try {
 
-        const response = await fetch('./ogw/creds/download-all', {
+        const response = await fetch('./api/creds/download-all', {
 
             headers: { 'Authorization': `Bearer ${AppState.authToken}` }
 
@@ -3827,57 +3834,57 @@ async function downloadAllCreds() {
 
 }
 
-function refreshOmniCredsList() { AppState.omniCreds.refresh(); }
+function refreshPrimaryCredsList() { AppState.primaryCreds.refresh(); }
 
-function applyOmniStatusFilter() { AppState.omniCreds.applyStatusFilter(); }
+function applyPrimaryStatusFilter() { AppState.primaryCreds.applyStatusFilter(); }
 
-function changeOmniPage(direction) { AppState.omniCreds.changePage(direction); }
+function changePrimaryPage(direction) { AppState.primaryCreds.changePage(direction); }
 
-function changeOmniPageSize() { AppState.omniCreds.changePageSize(); }
+function changePrimaryPageSize() { AppState.primaryCreds.changePageSize(); }
 
-function toggleOmniFileSelection(filename) {
+function togglePrimaryFileSelection(filename) {
 
-    if (AppState.omniCreds.selectedFiles.has(filename)) {
+    if (AppState.primaryCreds.selectedFiles.has(filename)) {
 
-        AppState.omniCreds.selectedFiles.delete(filename);
+        AppState.primaryCreds.selectedFiles.delete(filename);
 
     } else {
 
-        AppState.omniCreds.selectedFiles.add(filename);
+        AppState.primaryCreds.selectedFiles.add(filename);
 
     }
 
-    AppState.omniCreds.updateBatchControls();
+    AppState.primaryCreds.updateBatchControls();
 
 }
 
-function toggleSelectAllOmni() {
+function toggleSelectAllPrimary() {
 
-    const checkbox = document.getElementById('selectAllOmniCheckbox');
+    const checkbox = document.getElementById('selectAllPrimaryCheckbox');
 
-    const checkboxes = document.querySelectorAll('.omniFile-checkbox');
+    const checkboxes = document.querySelectorAll('.primaryFile-checkbox');
 
     if (checkbox.checked) {
 
-        checkboxes.forEach(cb => AppState.omniCreds.selectedFiles.add(cb.getAttribute('data-filename')));
+        checkboxes.forEach(cb => AppState.primaryCreds.selectedFiles.add(cb.getAttribute('data-filename')));
 
     } else {
 
-        AppState.omniCreds.selectedFiles.clear();
+        AppState.primaryCreds.selectedFiles.clear();
 
     }
 
     checkboxes.forEach(cb => cb.checked = checkbox.checked);
 
-    AppState.omniCreds.updateBatchControls();
+    AppState.primaryCreds.updateBatchControls();
 
 }
 
-function batchOmniAction(action) { AppState.omniCreds.batchAction(action); }
+function batchPrimaryAction(action) { AppState.primaryCreds.batchAction(action); }
 
-function downloadOmniCred(filename) {
+function downloadPrimaryCred(filename) {
 
-    fetch(`./ogw/creds/download/${filename}?mode=omni`, { headers: getAuthHeaders() })
+    fetch(`./api/creds/download/${filename}?mode=provider`, { headers: getAuthHeaders() })
 
         .then(r => r.ok ? r.blob() : Promise.reject())
 
@@ -3903,21 +3910,21 @@ function downloadOmniCred(filename) {
 
 }
 
-async function deleteOmniCred(filename) {
+async function deletePrimaryCred(filename) {
 
     if (await showConfirmModal(t('are_you_sure_you_want_to_delete_fil_dup', {filename: filename}))) {
 
-        AppState.omniCreds.action(filename, 'delete');
+        AppState.primaryCreds.action(filename, 'delete');
 
     }
 
 }
 
-async function downloadAllOmniCreds() {
+async function downloadAllPrimaryCreds() {
 
     try {
 
-        const response = await fetch('./ogw/creds/download-all?mode=omni', { headers: getAuthHeaders() });
+        const response = await fetch('./api/creds/download-all?mode=provider', { headers: getAuthHeaders() });
 
         if (response.ok) {
 
@@ -3929,13 +3936,13 @@ async function downloadAllOmniCreds() {
 
             a.href = url;
 
-            a.download = `omni_credentials_${Date.now()}.zip`;
+            a.download = `primary_credentials_${Date.now()}.zip`;
 
             a.click();
 
             window.URL.revokeObjectURL(url);
 
-            showStatus(t('all_omni_credentials_packed'), 'success');
+            showStatus(t('all_primary_credentials_packed'), 'success');
 
         }
 
@@ -3955,9 +3962,9 @@ function clearFiles() { AppState.uploadFiles.clearFiles(); }
 
 function uploadFiles() { AppState.uploadFiles.upload(); }
 
-function handleOmniFileSelect(event) { AppState.omniUploadFiles.handleFileSelect(event); }
+function handlePrimaryFileSelect(event) { AppState.primaryUploadFiles.handleFileSelect(event); }
 
-function handleOmniFileDrop(event) {
+function handlePrimaryFileDrop(event) {
 
     event.preventDefault();
 
@@ -3965,19 +3972,19 @@ function handleOmniFileDrop(event) {
 
     event.currentTarget.style.backgroundColor = '#f8f9fa';
 
-    AppState.omniUploadFiles.addFiles(Array.from(event.dataTransfer.files));
+    AppState.primaryUploadFiles.addFiles(Array.from(event.dataTransfer.files));
 
 }
 
-function removeOmniFile(index) { AppState.omniUploadFiles.removeFile(index); }
+function removePrimaryFile(index) { AppState.primaryUploadFiles.removeFile(index); }
 
-function clearOmniFiles() { AppState.omniUploadFiles.clearFiles(); }
+function clearPrimaryFiles() { AppState.primaryUploadFiles.clearFiles(); }
 
-function uploadOmniFiles() { AppState.omniUploadFiles.upload(); }
+function uploadPrimaryFiles() { AppState.primaryUploadFiles.upload(); }
 
 function updateEmailDisplay(filename, email, managerType = 'normal') {
 
-    const containerId = managerType === 'omni' ? 'omniCredsList' : 'credsList';
+    const containerId = managerType === 'primary' ? 'primaryCredsList' : 'credsList';
 
     const container = document.getElementById(containerId);
 
@@ -4015,7 +4022,7 @@ async function fetchUserEmail(filename) {
 
         showStatus(t('retrieving_user_emails'), 'info');
 
-        const response = await fetch(`./ogw/creds/fetch-email/${encodeURIComponent(filename)}`, {
+        const response = await fetch(`./api/creds/fetch-email/${encodeURIComponent(filename)}`, {
 
             method: 'POST',
 
@@ -4045,13 +4052,13 @@ async function fetchUserEmail(filename) {
 
 }
 
-async function fetchOmniUserEmail(filename) {
+async function fetchPrimaryUserEmail(filename) {
 
     try {
 
         showStatus(t('retrieving_user_emails'), 'info');
 
-        const response = await fetch(`./ogw/creds/fetch-email/${encodeURIComponent(filename)}?mode=omni`, {
+        const response = await fetch(`./api/creds/fetch-email/${encodeURIComponent(filename)}?mode=provider`, {
 
             method: 'POST',
 
@@ -4065,7 +4072,7 @@ async function fetchOmniUserEmail(filename) {
 
             showStatus(t('successfully_retrieved_email_dataus', {data_user_email: data.user_email}), 'success');
 
-            updateEmailDisplay(filename, data.user_email, 'omni');
+            updateEmailDisplay(filename, data.user_email, 'primary');
 
         } else {
 
@@ -4087,7 +4094,7 @@ async function verifyProjectId(filename) {
 
         showStatus(t('verifying_project_id_please_wait'), 'info');
 
-        const response = await fetch(`./ogw/creds/verify-project/${encodeURIComponent(filename)}`, {
+        const response = await fetch(`./api/creds/verify-project/${encodeURIComponent(filename)}`, {
 
             method: 'POST',
 
@@ -4137,13 +4144,13 @@ async function verifyProjectId(filename) {
 
 }
 
-async function verifyOmniProjectId(filename) {
+async function verifyPrimaryProjectId(filename) {
 
     try {
 
-        showStatus(t('verifying_omni_project_id_pl'), 'info');
+        showStatus(t('verifying_primary_project_id_pl'), 'info');
 
-        const response = await fetch(`./ogw/creds/verify-project/${encodeURIComponent(filename)}?mode=omni`, {
+        const response = await fetch(`./api/creds/verify-project/${encodeURIComponent(filename)}?mode=provider`, {
 
             method: 'POST',
 
@@ -4169,7 +4176,7 @@ async function verifyOmniProjectId(filename) {
 
             showMessageModal(t('verification_successful'), t('validation_successfulnnfile_filenam', {filename: filename, data_project_id: data.project_id, tierLine: tierLine, creditLine: creditLine, data_message: data.message}), 'success');
 
-            await AppState.omniCreds.refresh();
+            await AppState.primaryCreds.refresh();
 
         } else {
 
@@ -4199,7 +4206,7 @@ async function testCredential(filename) {
 
         showStatus(t('testing_credentials_please_wait'), 'info');
 
-        const response = await fetch(`./ogw/creds/test/${encodeURIComponent(filename)}`, {
+        const response = await fetch(`./api/creds/test/${encodeURIComponent(filename)}`, {
 
             method: 'POST',
 
@@ -4263,13 +4270,13 @@ async function testCredential(filename) {
 
 }
 
-async function testOmniCredential(filename) {
+async function testPrimaryCredential(filename) {
 
     try {
 
-        showStatus(t('testing_omni_credentials_ple'), 'info');
+        showStatus(t('testing_primary_credentials_ple'), 'info');
 
-        const response = await fetch(`./ogw/creds/test/${encodeURIComponent(filename)}?mode=omni`, {
+        const response = await fetch(`./api/creds/test/${encodeURIComponent(filename)}?mode=provider`, {
 
             method: 'POST',
 
@@ -4281,13 +4288,13 @@ async function testOmniCredential(filename) {
 
         if (response.status === 200) {
 
-            const successMsg = `${t('status_action_success', {action: t('btn_message_test')})}\n${t('table_filename')}: ${filename}\n${t('log_status_label')} ${data.message || t('omni_credential_valid')} (${data.status_code || 200})`;
+            const successMsg = `${t('status_action_success', {action: t('btn_message_test')})}\n${t('table_filename')}: ${filename}\n${t('log_status_label')} ${data.message || t('primary_credential_valid')} (${data.status_code || 200})`;
 
             showStatus(t('test_successful'), 'success');
 
             showMessageModal(t('test_successful_dup'), successMsg, 'success');
 
-            await AppState.omniCreds.refresh();
+            await AppState.primaryCreds.refresh();
 
         }
 
@@ -4339,7 +4346,7 @@ async function configurePreviewChannel(filename) {
 
         showStatus(t('configuring_preview_channel_please'), 'info');
 
-        const response = await fetch(`./ogw/creds/configure-preview/${encodeURIComponent(filename)}`, {
+        const response = await fetch(`./api/creds/configure-preview/${encodeURIComponent(filename)}`, {
 
             method: 'POST',
 
@@ -4399,7 +4406,7 @@ async function configurePreviewChannel(filename) {
 
 }
 
-async function toggleOmniQuotaDetails(pathId) {
+async function togglePrimaryQuotaDetails(pathId) {
 
     const quotaDetails = document.getElementById('quota-' + pathId);
 
@@ -4425,7 +4432,7 @@ async function toggleOmniQuotaDetails(pathId) {
 
             try {
 
-                const response = await fetch(`./ogw/creds/quota/${encodeURIComponent(filename)}?mode=omni`, {
+                const response = await fetch(`./api/creds/quota/${encodeURIComponent(filename)}?mode=provider`, {
 
                     method: 'GET',
 
@@ -4591,9 +4598,9 @@ async function toggleErrorDetails(pathId) {
 
 }
 
-async function toggleOmniErrorDetails(pathId) {
+async function togglePrimaryErrorDetails(pathId) {
 
-    await toggleErrorDetailsCommon(pathId, AppState.omniCreds);
+    await toggleErrorDetailsCommon(pathId, AppState.primaryCreds);
 
 }
 
@@ -4617,9 +4624,9 @@ async function toggleErrorDetailsCommon(pathId, manager) {
 
             try {
 
-                const modeParam = manager.type === 'omni' ? 'mode=omni' : 'mode=code_assist';
+                const modeParam = manager.type === 'primary' ? 'mode=provider' : 'mode=code_assist';
 
-                const response = await fetch(`./ogw/creds/errors/${encodeURIComponent(filename)}?${modeParam}`, {
+                const response = await fetch(`./api/creds/errors/${encodeURIComponent(filename)}?${modeParam}`, {
 
                     method: 'GET',
 
@@ -4869,7 +4876,7 @@ async function batchVerifyProjectIds() {
 
         try {
 
-            const response = await fetch(`./ogw/creds/verify-project/${encodeURIComponent(filename)}`, {
+            const response = await fetch(`./api/creds/verify-project/${encodeURIComponent(filename)}`, {
 
                 method: 'POST',
 
@@ -4969,15 +4976,15 @@ async function batchVerifyProjectIds() {
 
 }
 
-async function batchVerifyOmniProjectIds() {
+async function batchVerifyPrimaryProjectIds() {
 
-    const selectedFiles = Array.from(AppState.omniCreds.selectedFiles);
+    const selectedFiles = Array.from(AppState.primaryCreds.selectedFiles);
 
     if (selectedFiles.length === 0) {
 
-        showStatus(t('please_select_the_omni_crede_dup'), 'error');
+        showStatus(t('please_select_the_primary_crede_dup'), 'error');
 
-        showMessageModal(t('tip'), t('please_select_the_omni_crede'), 'error');
+        showMessageModal(t('tip'), t('please_select_the_primary_crede'), 'error');
 
         return;
 
@@ -4995,7 +5002,7 @@ async function batchVerifyOmniProjectIds() {
 
         try {
 
-            const response = await fetch(`./ogw/creds/verify-project/${encodeURIComponent(filename)}?mode=omni`, {
+            const response = await fetch(`./api/creds/verify-project/${encodeURIComponent(filename)}?mode=provider`, {
 
                 method: 'POST',
 
@@ -5067,27 +5074,27 @@ async function batchVerifyOmniProjectIds() {
 
     });
 
-    await AppState.omniCreds.refresh();
+    await AppState.primaryCreds.refresh();
 
-    const summary = t('omni_batch_verification_comp_dup', {successCount: successCount, failCount: failCount, selectedFiles_length: selectedFiles.length, resultMessages_join___n: resultMessages.join('\n')});
+    const summary = t('primary_batch_verification_comp_dup', {successCount: successCount, failCount: failCount, selectedFiles_length: selectedFiles.length, resultMessages_join___n: resultMessages.join('\n')});
 
     if (failCount === 0) {
 
         showStatus(t('all_verifications_successful_verifi', {successCount: successCount, selectedFiles_length: selectedFiles.length}), 'success');
 
-        showMessageModal(t('omni_batch_verification_comp'), summary, 'success');
+        showMessageModal(t('primary_batch_verification_comp'), summary, 'success');
 
     } else if (successCount === 0) {
 
         showStatus(t('verification_failed_for_all_failed', {failCount: failCount, selectedFiles_length: selectedFiles.length}), 'error');
 
-        showMessageModal(t('omni_batch_verification_comp'), summary, 'error');
+        showMessageModal(t('primary_batch_verification_comp'), summary, 'error');
 
     } else {
 
         showStatus(t('batch_verification_completed_succes', {successCount: successCount, selectedFiles_length: selectedFiles.length, failCount: failCount}), 'info');
 
-        showMessageModal(t('omni_batch_verification_comp'), summary, 'info');
+        showMessageModal(t('primary_batch_verification_comp'), summary, 'info');
 
     }
 
@@ -5121,7 +5128,7 @@ async function batchConfigurePreview() {
 
         try {
 
-            const response = await fetch(`./ogw/creds/configure-preview/${encodeURIComponent(filename)}`, {
+            const response = await fetch(`./api/creds/configure-preview/${encodeURIComponent(filename)}`, {
 
                 method: 'POST',
 
@@ -5237,7 +5244,7 @@ async function refreshAllEmails() {
 
         showStatus(t('refreshing_all_user_emails'), 'info');
 
-        const response = await fetch('./ogw/creds/refresh-all-emails', {
+        const response = await fetch('./api/creds/refresh-all-emails', {
 
             method: 'POST',
 
@@ -5267,7 +5274,7 @@ async function refreshAllEmails() {
 
 }
 
-async function refreshAllOmniEmails() {
+async function refreshAllPrimaryEmails() {
 
     if (!(await showConfirmModal(t('are_you_sure_you_want_to_refresh_us_dup')))) return;
 
@@ -5275,7 +5282,7 @@ async function refreshAllOmniEmails() {
 
         showStatus(t('refreshing_all_user_emails'), 'info');
 
-        const response = await fetch('./ogw/creds/refresh-all-emails?mode=omni', {
+        const response = await fetch('./api/creds/refresh-all-emails?mode=provider', {
 
             method: 'POST',
 
@@ -5289,7 +5296,7 @@ async function refreshAllOmniEmails() {
 
             showStatus(t('email_refresh_complete_successfully', {data_success_count: data.success_count, data_total_count: data.total_count}), 'success');
 
-            await AppState.omniCreds.refresh();
+            await AppState.primaryCreds.refresh();
 
         } else {
 
@@ -5313,7 +5320,7 @@ async function deduplicateByEmail() {
 
         showStatus(t('oneclick_credential_deduplication_i'), 'info');
 
-        const response = await fetch('./ogw/creds/deduplicate-by-email', {
+        const response = await fetch('./api/creds/deduplicate-by-email', {
 
             method: 'POST',
 
@@ -5359,7 +5366,7 @@ async function deduplicateByEmail() {
 
 }
 
-async function deduplicateOmniByEmail() {
+async function deduplicatePrimaryByEmail() {
 
     if (!(await showConfirmModal(t('are_you_sure_you_want_to_deduplicat')))) return;
 
@@ -5367,7 +5374,7 @@ async function deduplicateOmniByEmail() {
 
         showStatus(t('oneclick_credential_deduplication_i'), 'info');
 
-        const response = await fetch('./ogw/creds/deduplicate-by-email?mode=omni', {
+        const response = await fetch('./api/creds/deduplicate-by-email?mode=provider', {
 
             method: 'POST',
 
@@ -5383,7 +5390,7 @@ async function deduplicateOmniByEmail() {
 
             showStatus(msg, 'success');
 
-            await AppState.omniCreds.refresh();
+            await AppState.primaryCreds.refresh();
 
             if (data.duplicate_groups && data.duplicate_groups.length > 0) {
 
@@ -5429,7 +5436,7 @@ function connectWebSocket() {
 
     try {
 
-        const wsPath = new URL('./ogw/logs/stream', window.location.href).href;
+        const wsPath = new URL('./api/logs/stream', window.location.href).href;
 
         const wsUrl = wsPath.replace(/^http/, 'ws');
 
@@ -5545,13 +5552,13 @@ async function downloadLogs() {
 
     try {
 
-        const response = await fetch('./ogw/logs/download', { headers: getAuthHeaders() });
+        const response = await fetch('./api/logs/download', { headers: getAuthHeaders() });
 
         if (response.ok) {
 
             const contentDisposition = response.headers.get('Content-Disposition');
 
-            let filename = 'ogw_logs.txt';
+            let filename = 'logs.txt';
 
             if (contentDisposition) {
 
@@ -5597,7 +5604,7 @@ async function clearLogs() {
 
     try {
 
-        const response = await fetch('./ogw/logs/clear', {
+        const response = await fetch('./api/logs/clear', {
 
             method: 'POST',
 
@@ -5683,7 +5690,7 @@ async function checkEnvCredsStatus() {
 
         content.classList.add('hidden');
 
-        const response = await fetch('./ogw/auth/env-creds-status', { headers: getAuthHeaders() });
+        const response = await fetch('./api/auth/env-creds-status', { headers: getAuthHeaders() });
 
         const data = await response.json();
 
@@ -5741,7 +5748,7 @@ async function loadEnvCredentials() {
 
         showStatus(t('importing_credentials_from_environm'), 'info');
 
-        const response = await fetch('./ogw/auth/load-env-creds', {
+        const response = await fetch('./api/auth/load-env-creds', {
 
             method: 'POST',
 
@@ -5791,7 +5798,7 @@ async function clearEnvCredentials() {
 
         showStatus(t('clearing_environment_variable_crede'), 'info');
 
-        const response = await fetch('./ogw/auth/env-creds', {
+        const response = await fetch('./api/auth/env-creds', {
 
             method: 'DELETE',
 
@@ -5826,31 +5833,31 @@ async function clearEnvCredentials() {
 // =====================================================================
 
 const CONFIG_FIELD_KEYS = {
-    host: 'ogw_host',
-    port: 'ogw_port',
-    configApiPassword: 'ogw_api_password',
-    configPanelPassword: 'ogw_panel_password',
-    configPassword: 'ogw_password',
-    credentialsDir: 'ogw_credentials_dir',
-    proxy: 'ogw_proxy',
-    codeAssistEndpoint: 'ogw_code_assist_endpoint',
-    oauthProxyUrl: 'ogw_oauth_url',
-    googleapisProxyUrl: 'ogw_google_apis_url',
-    resourceManagerApiUrl: 'ogw_resource_manager_url',
-    serviceUsageApiUrl: 'ogw_service_usage_url',
-    omniApiUrl: 'ogw_api_url',
-    autoBanEnabled: 'ogw_auto_disable_enabled',
-    autoBanErrorCodes: 'ogw_auto_disable_error_codes',
-    retry429Enabled: 'ogw_retry_429_enabled',
-    retry429MaxRetries: 'ogw_retry_429_max_retries',
-    retry429Interval: 'ogw_retry_429_interval',
-    compatibilityModeEnabled: 'ogw_compatibility_mode_enabled',
-    returnThoughtsToFrontend: 'ogw_return_thoughts_to_frontend',
-    omniStreamToNonstream: 'ogw_stream_to_nonstream',
-    omniSwitchCredentialEnabled: 'ogw_switch_credential_enabled',
-    antiTruncationMaxAttempts: 'ogw_anti_truncation_max_attempts',
-    keepaliveUrl: 'ogw_keepalive_url',
-    keepaliveInterval: 'ogw_keepalive_interval'
+    host: 'host',
+    port: 'port',
+    configApiPassword: 'api_password',
+    configPanelPassword: 'panel_password',
+    configPassword: 'password',
+    credentialsDir: 'credentials_dir',
+    proxy: 'proxy',
+    codeAssistEndpoint: 'code_assist_endpoint',
+    oauthProxyUrl: 'oauth_url',
+    googleapisProxyUrl: 'google_apis_url',
+    resourceManagerApiUrl: 'resource_manager_url',
+    serviceUsageApiUrl: 'service_usage_url',
+    primaryApiUrl: 'api_url',
+    autoBanEnabled: 'auto_disable_enabled',
+    autoBanErrorCodes: 'auto_disable_error_codes',
+    retry429Enabled: 'retry_429_enabled',
+    retry429MaxRetries: 'retry_429_max_retries',
+    retry429Interval: 'retry_429_interval',
+    compatibilityModeEnabled: 'compatibility_mode_enabled',
+    returnThoughtsToFrontend: 'return_thoughts_to_frontend',
+    primaryStreamToNonstream: 'stream_to_nonstream',
+    primarySwitchCredentialEnabled: 'switch_credential_enabled',
+    antiTruncationMaxAttempts: 'anti_truncation_max_attempts',
+    keepaliveUrl: 'keepalive_url',
+    keepaliveInterval: 'keepalive_interval'
 };
 
 async function loadConfig() {
@@ -5865,7 +5872,7 @@ async function loadConfig() {
 
         form.classList.add('hidden');
 
-        const response = await fetch('./ogw/config/get', { headers: getAuthHeaders() });
+        const response = await fetch('./api/config/get', { headers: getAuthHeaders() });
 
         const data = await response.json();
 
@@ -5903,55 +5910,55 @@ function populateConfigForm() {
 
     const c = AppState.currentConfig;
 
-    setConfigField('host', c.ogw_host || '0.0.0.0');
+    setConfigField('host', c.host || '0.0.0.0');
 
-    setConfigField('port', c.ogw_port || 7861);
+    setConfigField('port', c.port || 7861);
 
-    setConfigField('configApiPassword', c.ogw_api_password || '');
+    setConfigField('configApiPassword', c.api_password || '');
 
-    setConfigField('configPanelPassword', c.ogw_panel_password || '');
+    setConfigField('configPanelPassword', c.panel_password || '');
 
-    setConfigField('configPassword', c.ogw_password || '');
+    setConfigField('configPassword', c.password || '');
 
-    setConfigField('credentialsDir', c.ogw_credentials_dir || '');
+    setConfigField('credentialsDir', c.credentials_dir || '');
 
-    setConfigField('proxy', c.ogw_proxy || '');
+    setConfigField('proxy', c.proxy || '');
 
-    setConfigField('codeAssistEndpoint', c.ogw_code_assist_endpoint || '');
+    setConfigField('codeAssistEndpoint', c.code_assist_endpoint || '');
 
-    setConfigField('oauthProxyUrl', c.ogw_oauth_url || '');
+    setConfigField('oauthProxyUrl', c.oauth_url || '');
 
-    setConfigField('googleapisProxyUrl', c.ogw_google_apis_url || '');
+    setConfigField('googleapisProxyUrl', c.google_apis_url || '');
 
-    setConfigField('resourceManagerApiUrl', c.ogw_resource_manager_url || '');
+    setConfigField('resourceManagerApiUrl', c.resource_manager_url || '');
 
-    setConfigField('serviceUsageApiUrl', c.ogw_service_usage_url || '');
+    setConfigField('serviceUsageApiUrl', c.service_usage_url || '');
 
-    setConfigField('omniApiUrl', c.ogw_api_url || '');
+    setConfigField('primaryApiUrl', c.api_url || '');
 
-    setConfigCheckbox('autoBanEnabled', Boolean(c.ogw_auto_disable_enabled));
+    setConfigCheckbox('autoBanEnabled', Boolean(c.auto_disable_enabled));
 
-    setConfigField('autoBanErrorCodes', (c.ogw_auto_disable_error_codes || []).join(','));
+    setConfigField('autoBanErrorCodes', (c.auto_disable_error_codes || []).join(','));
 
-    setConfigCheckbox('retry429Enabled', Boolean(c.ogw_retry_429_enabled));
+    setConfigCheckbox('retry429Enabled', Boolean(c.retry_429_enabled));
 
-    setConfigField('retry429MaxRetries', c.ogw_retry_429_max_retries || 20);
+    setConfigField('retry429MaxRetries', c.retry_429_max_retries || 20);
 
-    setConfigField('retry429Interval', c.ogw_retry_429_interval || 0.1);
+    setConfigField('retry429Interval', c.retry_429_interval || 0.1);
 
-    setConfigCheckbox('compatibilityModeEnabled', Boolean(c.ogw_compatibility_mode_enabled));
+    setConfigCheckbox('compatibilityModeEnabled', Boolean(c.compatibility_mode_enabled));
 
-    setConfigCheckbox('returnThoughtsToFrontend', Boolean(c.ogw_return_thoughts_to_frontend !== false));
+    setConfigCheckbox('returnThoughtsToFrontend', Boolean(c.return_thoughts_to_frontend !== false));
 
-    setConfigCheckbox('omniStreamToNonstream', Boolean(c.ogw_stream_to_nonstream !== false));
+    setConfigCheckbox('primaryStreamToNonstream', Boolean(c.stream_to_nonstream !== false));
 
-    setConfigCheckbox('omniSwitchCredentialEnabled', Boolean(c.ogw_switch_credential_enabled));
+    setConfigCheckbox('primarySwitchCredentialEnabled', Boolean(c.switch_credential_enabled));
 
-    setConfigField('antiTruncationMaxAttempts', c.ogw_anti_truncation_max_attempts || 3);
+    setConfigField('antiTruncationMaxAttempts', c.anti_truncation_max_attempts || 3);
 
-    setConfigField('keepaliveUrl', c.ogw_keepalive_url || '');
+    setConfigField('keepaliveUrl', c.keepalive_url || '');
 
-    setConfigField('keepaliveInterval', c.ogw_keepalive_interval || 60);
+    setConfigField('keepaliveInterval', c.keepalive_interval || 60);
 
 }
 
@@ -6020,61 +6027,61 @@ async function saveConfig() {
 
         const config = {
 
-            ogw_host: getValue('host', '0.0.0.0'),
+            host: getValue('host', '0.0.0.0'),
 
-            ogw_port: getInt('port', 7861),
+            port: getInt('port', 7861),
 
-            ogw_api_password: getValue('configApiPassword'),
+            api_password: getValue('configApiPassword'),
 
-            ogw_panel_password: getValue('configPanelPassword'),
+            panel_password: getValue('configPanelPassword'),
 
-            ogw_password: getValue('configPassword'),
+            password: getValue('configPassword'),
 
-            ogw_code_assist_endpoint: getValue('codeAssistEndpoint'),
+            code_assist_endpoint: getValue('codeAssistEndpoint'),
 
-            ogw_credentials_dir: getValue('credentialsDir'),
+            credentials_dir: getValue('credentialsDir'),
 
-            ogw_proxy: getValue('proxy'),
+            proxy: getValue('proxy'),
 
-            ogw_oauth_url: getValue('oauthProxyUrl'),
+            oauth_url: getValue('oauthProxyUrl'),
 
-            ogw_google_apis_url: getValue('googleapisProxyUrl'),
+            google_apis_url: getValue('googleapisProxyUrl'),
 
-            ogw_resource_manager_url: getValue('resourceManagerApiUrl'),
+            resource_manager_url: getValue('resourceManagerApiUrl'),
 
-            ogw_service_usage_url: getValue('serviceUsageApiUrl'),
+            service_usage_url: getValue('serviceUsageApiUrl'),
 
-            ogw_api_url: getValue('omniApiUrl'),
+            api_url: getValue('primaryApiUrl'),
 
-            ogw_auto_disable_enabled: getChecked('autoBanEnabled'),
+            auto_disable_enabled: getChecked('autoBanEnabled'),
 
-            ogw_auto_disable_error_codes: getValue('autoBanErrorCodes').split(',')
+            auto_disable_error_codes: getValue('autoBanErrorCodes').split(',')
 
                 .map(c => parseInt(c.trim())).filter(c => !isNaN(c)),
 
-            ogw_retry_429_enabled: getChecked('retry429Enabled'),
+            retry_429_enabled: getChecked('retry429Enabled'),
 
-            ogw_retry_429_max_retries: getInt('retry429MaxRetries', 20),
+            retry_429_max_retries: getInt('retry429MaxRetries', 20),
 
-            ogw_retry_429_interval: getFloat('retry429Interval', 0.1),
+            retry_429_interval: getFloat('retry429Interval', 0.1),
 
-            ogw_compatibility_mode_enabled: getChecked('compatibilityModeEnabled'),
+            compatibility_mode_enabled: getChecked('compatibilityModeEnabled'),
 
-            ogw_return_thoughts_to_frontend: getChecked('returnThoughtsToFrontend'),
+            return_thoughts_to_frontend: getChecked('returnThoughtsToFrontend'),
 
-            ogw_stream_to_nonstream: getChecked('omniStreamToNonstream'),
+            stream_to_nonstream: getChecked('primaryStreamToNonstream'),
 
-            ogw_switch_credential_enabled: getChecked('omniSwitchCredentialEnabled'),
+            switch_credential_enabled: getChecked('primarySwitchCredentialEnabled'),
 
-            ogw_anti_truncation_max_attempts: getInt('antiTruncationMaxAttempts', 3),
+            anti_truncation_max_attempts: getInt('antiTruncationMaxAttempts', 3),
 
-            ogw_keepalive_url: getValue('keepaliveUrl'),
+            keepalive_url: getValue('keepaliveUrl'),
 
-            ogw_keepalive_interval: getInt('keepaliveInterval', 60)
+            keepalive_interval: getInt('keepaliveInterval', 60)
 
         };
 
-        const response = await fetch('./ogw/config/save', {
+        const response = await fetch('./api/config/save', {
 
             method: 'POST',
 
@@ -6136,7 +6143,7 @@ const mirrorUrls = {
 
     serviceUsageApiUrl: 'https://serviceusage.googleapis.com',
 
-    omniApiUrl: 'https://daily-cloudcode-pa.googleapis.com'
+    primaryApiUrl: 'https://daily-cloudcode-pa.googleapis.com'
 
 };
 
@@ -6152,7 +6159,7 @@ const officialUrls = {
 
     serviceUsageApiUrl: 'https://serviceusage.googleapis.com',
 
-    omniApiUrl: 'https://daily-cloudcode-pa.googleapis.com'
+    primaryApiUrl: 'https://daily-cloudcode-pa.googleapis.com'
 
 };
 
@@ -6210,9 +6217,9 @@ async function refreshUsageStats() {
 
         const [statsResponse, aggregatedResponse] = await Promise.all([
 
-            fetch('./ogw/usage/stats', { headers: getAuthHeaders() }),
+            fetch('./api/usage/stats', { headers: getAuthHeaders() }),
 
-            fetch('./ogw/usage/aggregated', { headers: getAuthHeaders() })
+            fetch('./api/usage/aggregated', { headers: getAuthHeaders() })
 
         ]);
 
@@ -6318,7 +6325,7 @@ async function resetSingleUsageStats(filename) {
 
     try {
 
-        const response = await fetch('./ogw/usage/reset', {
+        const response = await fetch('./api/usage/reset', {
 
             method: 'POST',
 
@@ -6352,11 +6359,11 @@ async function resetSingleUsageStats(filename) {
 
 async function resetAllUsageStats() {
 
-    if (!(await showConfirmModal(t('are_you_sure_you_want_to_reset_usag_dup')))) return;
+    if (!(await showConfirmModal(t('confirm_reset_usage_statistics')))) return;
 
     try {
 
-        const response = await fetch('./ogw/usage/reset', {
+        const response = await fetch('./api/usage/reset', {
 
             method: 'POST',
 
@@ -6510,7 +6517,7 @@ async function fetchAndDisplayVersion() {
 
     try {
 
-        const response = await fetch('./ogw/version/info');
+        const response = await fetch('./api/version/info');
 
         const data = await response.json();
 
@@ -6562,7 +6569,7 @@ async function checkForUpdates() {
 
         checkBtn.disabled = true;
 
-        const response = await fetch('./ogw/version/info?check_update=true');
+        const response = await fetch('./api/version/info?check_update=true');
 
         const data = await response.json();
 
@@ -6672,11 +6679,11 @@ window.onload = async function () {
 
     startCooldownTimer();
 
-    const omniAuthBtn = document.getElementById('getOmniAuthBtn');
+    const primaryAuthBtn = document.getElementById('getPrimaryAuthBtn');
 
-    if (omniAuthBtn) {
+    if (primaryAuthBtn) {
 
-        omniAuthBtn.addEventListener('click', startOmniAuth);
+        primaryAuthBtn.addEventListener('click', startPrimaryAuth);
 
     }
 

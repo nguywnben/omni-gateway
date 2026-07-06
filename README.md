@@ -1,4 +1,4 @@
-﻿# Omni Gateway
+# Omni Gateway
 
 A universal AI router for coding tools. Omni Gateway provides smart auto-fallback, token compression, and seamless format translation so local agents, IDE assistants, and automation scripts can use free and premium LLM capacity through one stable API surface.
 
@@ -27,7 +27,7 @@ Omni Gateway
         |
         v
 provider adapters
-  Code Assist | Omni backend | Vertex route
+  Code Assist | provider backend | Vertex route
 ```
 
 The public API stays stable while provider-specific adapters can evolve behind the gateway.
@@ -74,7 +74,7 @@ On first run, open the control panel and create the console password on the setu
 
 ```bash
 docker run -d \
-  --name omni-gateway \
+  --name router \
   -p 7861:7861 \
   -v "$(pwd)/backend/data/creds:/app/backend/data/creds" \
   nguywnben/omni-gateway:latest
@@ -94,39 +94,45 @@ Omni Gateway reads configuration from environment variables first, then stored c
 
 | Variable | Default | Purpose |
 | --- | --- | --- |
-| `OGW_HOST` | `0.0.0.0` | Bind address. |
-| `OGW_PORT` | `7861` | HTTP port. |
-| `OGW_API_PASSWORD` | empty until setup | Password for API requests. |
-| `OGW_PANEL_PASSWORD` | empty until setup | Password for the web control panel. |
-| `OGW_PASSWORD` | empty until setup | Shared fallback password for API and panel. |
-| `OGW_CREDENTIALS_DIR` | `./backend/data/creds` | Local credential storage directory. |
-| `OGW_CODE_ASSIST_ENDPOINT` | `https://cloudcode-pa.googleapis.com` | Code Assist backend endpoint. |
-| `OGW_API_URL` | `https://daily-cloudcode-pa.googleapis.com` | Omni backend endpoint. |
-| `OGW_PROXY` | empty | Optional HTTP, HTTPS, or SOCKS proxy. |
-| `OGW_RETRY_429_ENABLED` | `true` | Retry rate-limited requests. |
-| `OGW_RETRY_429_MAX_RETRIES` | `5` | Maximum rate-limit retry attempts. |
-| `OGW_RETRY_429_INTERVAL` | `1` | Delay between retries in seconds. |
-| `OGW_AUTO_DISABLE` | `false` | Disable credentials after configured hard failures. |
-| `OGW_AUTO_DISABLE_ERROR_CODES` | `403` | Comma-separated hard-failure status codes. |
-| `OGW_ANTI_TRUNCATION_MAX_ATTEMPTS` | `3` | Maximum continuation attempts for anti-truncation streaming. |
-| `OGW_COMPATIBILITY_MODE` | `false` | Converts system messages for clients/models that reject them. |
-| `OGW_RETURN_THOUGHTS_TO_FRONTEND` | `true` | Include model reasoning fields when available. |
-| `OGW_MONGODB_URI` | empty | Enables MongoDB storage when set. |
-| `OGW_POSTGRESQL_URI` | empty | Enables PostgreSQL storage when set. |
-| `OGW_REDIS_URL` | empty | Enables Redis-backed caches/session state when set. |
-| `OGW_CODE_ASSIST_CLIENT_ID` | empty | Required for Code Assist OAuth flow. |
-| `OGW_CODE_ASSIST_CLIENT_SECRET` | empty | Required for Code Assist OAuth flow. |
-| `OGW_CLIENT_ID` | empty | Required for Omni OAuth flow. |
-| `OGW_CLIENT_SECRET` | empty | Required for Omni OAuth flow. |
-| `OGW_USER_AGENT` | `omni-gateway/cli/...` | Optional upstream user-agent override. |
+| `HOST` | `0.0.0.0` | Bind address. |
+| `PORT` | `7861` | HTTP port. |
+| `CORS_ORIGINS` | empty | Comma-separated browser origins allowed to call the API cross-origin. Leave empty for same-origin console usage. |
+| `CORS_ORIGIN_REGEX` | empty | Optional regex for managed dynamic browser origins. |
+| `API_KEY` | generated automatically | Preferred key for public client API requests. Must start with `sk-ogw-`. |
+| `API_PASSWORD` | empty until setup | Password for API requests. |
+| `PANEL_PASSWORD` | empty until setup | Password for the web control panel. |
+| `PASSWORD` | empty until setup | Shared fallback password for API and panel. |
+| `PANEL_SESSION_TTL_SECONDS` | `86400` | Web console session lifetime in seconds. |
+| `PANEL_LOGIN_WINDOW_SECONDS` | `300` | Login rate-limit window in seconds. |
+| `PANEL_LOGIN_MAX_ATTEMPTS` | `10` | Failed login attempts allowed per client within the rate-limit window. |
+| `CREDENTIALS_DIR` | `./backend/data/creds` | Local credential storage directory. |
+| `CODE_ASSIST_ENDPOINT` | `https://cloudcode-pa.googleapis.com` | Code Assist backend endpoint. |
+| `API_URL` | `https://daily-cloudcode-pa.googleapis.com` | Provider backend endpoint. |
+| `PROXY` | empty | Optional HTTP, HTTPS, or SOCKS proxy. |
+| `RETRY_429_ENABLED` | `true` | Retry rate-limited requests. |
+| `RETRY_429_MAX_RETRIES` | `5` | Maximum rate-limit retry attempts. |
+| `RETRY_429_INTERVAL` | `1` | Delay between retries in seconds. |
+| `AUTO_DISABLE` | `false` | Disable credentials after configured hard failures. |
+| `AUTO_DISABLE_ERROR_CODES` | `403` | Comma-separated hard-failure status codes. |
+| `ANTI_TRUNCATION_MAX_ATTEMPTS` | `3` | Maximum continuation attempts for anti-truncation streaming. |
+| `COMPATIBILITY_MODE` | `false` | Converts system messages for clients/models that reject them. |
+| `RETURN_THOUGHTS_TO_FRONTEND` | `true` | Include model reasoning fields when available. |
+| `MONGODB_URI` | empty | Enables MongoDB storage when set. |
+| `POSTGRESQL_URI` | empty | Enables PostgreSQL storage when set. |
+| `REDIS_URL` | empty | Enables Redis-backed caches/session state when set. |
+| `CODE_ASSIST_CLIENT_ID` | empty | Required for Code Assist OAuth flow. |
+| `CODE_ASSIST_CLIENT_SECRET` | empty | Required for Code Assist OAuth flow. |
+| `CLIENT_ID` | empty | Required for the provider OAuth flow. |
+| `CLIENT_SECRET` | empty | Required for the provider OAuth flow. |
+| `USER_AGENT` | `router/cli/...` | Optional upstream user-agent override. |
 
 ## API Surfaces
 
 ### OpenAI-Compatible Chat
 
 ```bash
-curl http://127.0.0.1:7861/ogw/v1/chat/completions \
-  -H "Authorization: Bearer $OGW_API_PASSWORD" \
+curl http://127.0.0.1:7861/v1/chat/completions \
+  -H "Authorization: Bearer $API_KEY" \
   -H "Content-Type: application/json" \
   -d '{
     "model": "gemini-2.5-flash",
@@ -140,7 +146,7 @@ curl http://127.0.0.1:7861/ogw/v1/chat/completions \
 ### Gemini Native
 
 ```bash
-curl "http://127.0.0.1:7861/ogw/v1/models/gemini-2.5-flash:generateContent?key=$OGW_API_PASSWORD" \
+curl "http://127.0.0.1:7861/v1/models/gemini-2.5-flash:generateContent?key=$API_KEY" \
   -H "Content-Type: application/json" \
   -d '{
     "contents": [
@@ -152,8 +158,8 @@ curl "http://127.0.0.1:7861/ogw/v1/models/gemini-2.5-flash:generateContent?key=$
 ### Anthropic Messages
 
 ```bash
-curl http://127.0.0.1:7861/ogw/v1/messages \
-  -H "x-api-key: $OGW_API_PASSWORD" \
+curl http://127.0.0.1:7861/v1/messages \
+  -H "x-api-key: $API_KEY" \
   -H "anthropic-version: 2023-06-01" \
   -H "Content-Type: application/json" \
   -d '{
@@ -165,16 +171,22 @@ curl http://127.0.0.1:7861/ogw/v1/messages \
   }'
 ```
 
-### Namespaced Omni Routes
+### Normalized Client Routes
 
-Omni Gateway exposes namespaced routes for explicit Omni backend usage:
+Omni Gateway exposes provider-compatible routes without a product namespace:
 
-- `POST /ogw/v1/chat/completions`
-- `POST /ogw/v1/messages`
-- `GET /ogw/v1/models`
-- `POST /ogw/v1/models/{model}:generateContent`
-- `POST /ogw/v1/models/{model}:streamGenerateContent`
-- `POST /ogw/v1/models/{model}:countTokens`
+- `POST /v1/chat/completions`
+- `POST /v1/messages`
+- `GET /v1/models`
+- `GET /v1beta/models`
+- `POST /v1/models/{model}:generateContent`
+- `POST /v1beta/models/{model}:generateContent`
+- `POST /v1/models/{model}:streamGenerateContent`
+- `POST /v1beta/models/{model}:streamGenerateContent`
+- `POST /v1/models/{model}:countTokens`
+- `POST /v1beta/models/{model}:countTokens`
+- `POST /vertex/v1/chat/completions`
+- `POST /vertex/v1/models/{model}:generateContent`
 
 ## Model Features
 
@@ -191,7 +203,7 @@ Provider adapters normalize these feature names before sending upstream requests
 
 1. Start Omni Gateway.
 2. Open `http://127.0.0.1:7861`.
-3. Create the console password on the first-run setup screen, or sign in with `OGW_PANEL_PASSWORD` when it is preconfigured.
+3. Create the console password on the first-run setup screen, or sign in with `PANEL_PASSWORD` when it is preconfigured.
 4. Add credentials through OAuth or upload existing credential JSON files.
 5. Verify credentials and watch cooldown/error state in the panel.
 6. Point your coding tool to one of the API surfaces above.
@@ -199,32 +211,32 @@ Provider adapters normalize these feature names before sending upstream requests
 Credential mode names:
 
 - `code_assist`: standard Code Assist credential pool.
-- `omni`: Omni backend credential pool.
+- `provider`: provider backend credential pool.
 
 ## Storage
 
 Omni Gateway works out of the box with local SQLite-style storage under the project data directories. For distributed deployments, configure a shared backend:
 
 ```bash
-OGW_MONGODB_URI=mongodb://localhost:27017
-OGW_MONGODB_DATABASE=omni_gateway
+MONGODB_URI=mongodb://localhost:27017
+MONGODB_DATABASE=core
 ```
 
 ```bash
-OGW_POSTGRESQL_URI=postgresql://user:password@localhost:5432/omni_gateway
+POSTGRESQL_URI=postgresql://user:password@localhost:5432/core
 ```
 
 Redis can be added for cache/session acceleration:
 
 ```bash
-OGW_REDIS_URL=redis://127.0.0.1:6379/0
+REDIS_URL=redis://127.0.0.1:6379/0
 ```
 
 Environment credential import is available from the control panel. Set one of the following variables to raw JSON or use the matching `_B64` variant for base64-encoded JSON:
 
 ```bash
-OGW_CODE_ASSIST_CREDENTIALS_JSON='{"token":"...","refresh_token":"...","client_id":"...","client_secret":"...","project_id":"..."}'
-OGW_CREDENTIALS_JSON='{"token":"...","refresh_token":"...","client_id":"...","client_secret":"...","project_id":"..."}'
+CODE_ASSIST_CREDENTIALS_JSON='{"token":"...","refresh_token":"...","client_id":"...","client_secret":"...","project_id":"..."}'
+CREDENTIALS_JSON='{"token":"...","refresh_token":"...","client_id":"...","client_secret":"...","project_id":"..."}'
 ```
 
 The payload can be a single credential object, an array, or `{ "credentials": [...] }`.
@@ -247,10 +259,12 @@ git status --short
 ## Deployment Notes
 
 - Never commit credential JSON files or `.env`.
-- Use separate `OGW_API_PASSWORD` and `OGW_PANEL_PASSWORD` for exposed deployments.
+- Use a dedicated `API_KEY` for client integrations and a separate `PANEL_PASSWORD` for console access.
 - Put Omni Gateway behind TLS when reachable outside localhost.
+- Set `CORS_ORIGINS` to explicit trusted origins when browser clients need cross-origin access.
 - Use MongoDB/PostgreSQL for multi-instance deployments.
 - Keep log retention and credential rotation policies aligned with your usage limits.
+- Rotate credentials immediately if a repository or platform scanner reports a leaked secret.
 
 ## License
 

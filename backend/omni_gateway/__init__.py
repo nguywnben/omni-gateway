@@ -1,1 +1,0 @@
-"""Omni Gateway backend package."""

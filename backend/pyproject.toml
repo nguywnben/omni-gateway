@@ -1,4 +1,4 @@
-﻿[project]
+[project]
 name = "omni-gateway"
 version = "0.1.0"
 description = "A universal AI router for coding tools with smart fallback, token compression, and format translation."
@@ -87,7 +87,7 @@ exclude = [
 ]
 
 [tool.coverage.run]
-source = ["omni_gateway"]
+source = ["core"]
 omit = [
     "*/tests/*",
     "*/test_*.py",

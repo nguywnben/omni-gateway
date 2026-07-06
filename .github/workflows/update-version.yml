@@ -1,4 +1,4 @@
-name: Update Version File
+﻿name: Update Version File
 
 on:
   push:
@@ -21,13 +21,13 @@ jobs:
 
       - name: Update backend/version.txt
         run: |
-          # 获取最新commit信息
+          # Read the latest commit metadata.
           FULL_HASH=$(git log -1 --format=%H)
           SHORT_HASH=$(git log -1 --format=%h)
           MESSAGE=$(git log -1 --format=%s)
           DATE=$(git log -1 --format=%ci)
 
-          # 写入 backend/version.txt
+          # Write backend/version.txt.
           echo "full_hash=$FULL_HASH" > backend/version.txt
           echo "short_hash=$SHORT_HASH" >> backend/version.txt
           echo "message=$MESSAGE" >> backend/version.txt
@@ -41,7 +41,7 @@ jobs:
           git config --local user.email "github-actions[bot]@users.noreply.github.com"
           git config --local user.name "github-actions[bot]"
 
-          # 检查是否有变化
+          # Commit the version file only when it changed.
           if git diff --quiet backend/version.txt; then
             echo "No changes to backend/version.txt"
           else

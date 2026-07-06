@@ -231,24 +231,31 @@ fi
 
 # Determine working directory
 log_info "Checking project directory..."
+PROJECT_DIR="${PROJECT_DIR:-router}"
+REPOSITORY_URL="${REPOSITORY_URL:-}"
+
 if [ -f "./backend/main.py" ]; then
     log_info "Already in target directory"
-elif [ -f "./omni-gateway/backend/main.py" ]; then
-    log_info "Changing to omni-gateway directory"
-    cd ./omni-gateway || exit 1
+elif [ -f "./${PROJECT_DIR}/backend/main.py" ]; then
+    log_info "Changing to project directory"
+    cd "./${PROJECT_DIR}" || exit 1
 else
+    if [ -z "$REPOSITORY_URL" ]; then
+        log_error "Set REPOSITORY_URL or run this script from the project root."
+        exit 1
+    fi
     log_info "Cloning repository..."
-    if [ -d "./omni-gateway" ]; then
-        log_error "omni-gateway directory exists but backend/main.py was not found. Move or fix that directory before retrying."
+    if [ -d "./${PROJECT_DIR}" ]; then
+        log_error "Target directory exists but backend/main.py was not found. Move or fix that directory before retrying."
         exit 1
     fi
 
-    if ! git clone https://github.com/nguywnben/omni-gateway.git; then
+    if ! git clone "$REPOSITORY_URL" "$PROJECT_DIR"; then
         log_error "Failed to clone repository"
         exit 1
     fi
 
-    cd ./omni-gateway || exit 1
+    cd "./${PROJECT_DIR}" || exit 1
 fi
 
 # Update repository if it's a git repo
@@ -298,5 +305,5 @@ if [ ! -f "backend/main.py" ]; then
 fi
 
 # Start the application
-log_info "Starting application..."
+log_info "Starting Omni Gateway..."
 python3 backend/main.py

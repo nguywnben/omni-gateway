@@ -1,6 +1,7 @@
 """Internal implementation detail."""
 
 import os
+import re
 import sys
 import threading
 from datetime import datetime
@@ -11,6 +12,28 @@ from paths import DEFAULT_LOG_FILE
 
 
 LOG_LEVELS = {"debug": 0, "info": 1, "warning": 2, "error": 3, "critical": 4}
+
+
+_REDACTION_PATTERNS = [
+    (re.compile(r"(?i)(Authorization:\s*Bearer\s+)[A-Za-z0-9._~+/=-]+"), r"\1<redacted>"),
+    (re.compile(r"sk-ogw-[A-Za-z0-9._-]+"), "sk-ogw-<redacted>"),
+    (re.compile(r"(?i)(x-api-key['\"]?\s*[:=]\s*['\"]?)[A-Za-z0-9._~+/=-]+"), r"\1<redacted>"),
+    (re.compile(r"(?i)(x-goog-api-key['\"]?\s*[:=]\s*['\"]?)[A-Za-z0-9._~+/=-]+"), r"\1<redacted>"),
+    (
+        re.compile(
+            r"(?i)(['\"](?:access_token|refresh_token|id_token|client_secret|api_key|password|token)['\"]\s*:\s*['\"])[^'\"]+(['\"])",
+        ),
+        r"\1<redacted>\2",
+    ),
+]
+
+
+def redact_text(value: object) -> str:
+    """Redact sensitive tokens before logs reach stdout, files, or streams."""
+    text = str(value)
+    for pattern, replacement in _REDACTION_PATTERNS:
+        text = pattern.sub(replacement, text)
+    return text
 
 
 _file_writing_disabled = False
@@ -41,10 +64,10 @@ _log_enabled: bool = True
 def _refresh_config():
     """Internal implementation detail."""
     global _cached_log_level, _cached_log_file, _log_enabled
-    level = os.getenv("OGW_LOG_LEVEL", "info").lower()
+    level = os.getenv("LOG_LEVEL", "info").lower()
     _cached_log_level = LOG_LEVELS.get(level, LOG_LEVELS["info"])
-    _cached_log_file = os.getenv("OGW_LOG_FILE", str(DEFAULT_LOG_FILE))
-    _log_enabled = os.getenv("OGW_ENABLE_LOG", "1").strip().lower() not in ("0", "false", "no", "off")
+    _cached_log_file = os.getenv("LOG_FILE", str(DEFAULT_LOG_FILE))
+    _log_enabled = os.getenv("ENABLE_LOG", "1").strip().lower() not in ("0", "false", "no", "off")
 
 
 def _get_current_log_level() -> int:
@@ -247,7 +270,7 @@ def _log(level: str, message: str):
         return
 
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    entry = f"[{timestamp}] [{level.upper()}] {message}"
+    entry = f"[{timestamp}] [{level.upper()}] {redact_text(message)}"
 
     if level in ("error", "critical"):
         print(entry, file=sys.stderr)
@@ -310,7 +333,7 @@ class Logger:
 log = Logger()
 
 
-__all__ = ["log", "set_log_level", "LOG_LEVELS"]
+__all__ = ["log", "set_log_level", "LOG_LEVELS", "redact_text"]
 
 
 _refresh_config()

@@ -1,4 +1,4 @@
-name: Docker Build and Publish
+﻿name: Docker Build and Publish
 
 on:
   workflow_run:
@@ -18,12 +18,12 @@ on:
   workflow_dispatch:
 
 env:
-  IMAGE_NAME: nguywnben/omni-gateway
+  IMAGE_NAME: ${{ vars.IMAGE_NAME || github.repository }}
 
 jobs:
   build-and-push:
     runs-on: ubuntu-latest
-    # 只在 workflow_run 成功时运行，或者非 workflow_run 触发时运行
+    # Run after a successful version workflow, or for non-workflow_run triggers.
     if: ${{ github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success' }}
     permissions:
       contents: read
@@ -33,7 +33,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          # workflow_run 触发时需要获取最新的代码（包括 version.txt 的更新）
+          # workflow_run needs the latest branch contents, including version metadata.
           ref: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_branch || github.ref }}
 
       - name: Set up QEMU

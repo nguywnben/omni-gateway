@@ -1,0 +1,88 @@
+name: CI
+
+on:
+  pull_request:
+    branches:
+      - main
+  push:
+    branches:
+      - main
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    env:
+      PYTHONDONTWRITEBYTECODE: "1"
+      ENABLE_LOG: "0"
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install runtime dependencies
+        run: python -m pip install -r requirements.txt
+
+      - name: Parse backend modules
+        run: |
+          python - <<'PY'
+          import ast
+          from pathlib import Path
+
+          files = list(Path("backend").rglob("*.py"))
+          for file in files:
+              ast.parse(file.read_text(encoding="utf-8"), filename=str(file))
+          print(f"Parsed {len(files)} backend Python files.")
+          PY
+
+      - name: Validate frontend JavaScript
+        run: node --check frontend/common.js
+
+      - name: Verify route contracts
+        run: |
+          python - <<'PY'
+          import sys
+
+          sys.path.insert(0, "backend")
+          import main
+
+          paths = set(main.app.openapi()["paths"])
+          required = {
+              "/v1/chat/completions",
+              "/v1/messages",
+              "/v1/models",
+              "/v1beta/models",
+              "/api/auth/login",
+              "/api/auth/keys",
+              "/provider",
+          }
+          missing = sorted(required - paths)
+          forbidden_prefixes = tuple(
+              "/" + name
+              for name in ("og" + "w", "om" + "ni", "gate" + "way", "primary")
+          )
+          forbidden = [path for path in paths if path.startswith(forbidden_prefixes)]
+
+          if missing:
+              raise SystemExit(f"Missing route(s): {missing}")
+          if forbidden:
+              raise SystemExit(f"Forbidden branded route(s): {forbidden}")
+          print("Route contract verified.")
+          PY
+
+      - name: Check whitespace
+        run: git diff --check
+
+      - name: Check generated Python artifacts
+        run: |
+          if find backend frontend deploy -name '__pycache__' -o -name '*.pyc' | grep -q .; then
+            echo "Generated Python cache artifacts found."
+            exit 1
+          fi

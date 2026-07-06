@@ -1,1 +1,1 @@
-"""Backend package marker for Omni Gateway."""
+"""Backend package marker."""

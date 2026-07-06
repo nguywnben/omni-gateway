@@ -1,4 +1,4 @@
-"""Shared filesystem paths for the Omni Gateway backend."""
+"""Shared filesystem paths for the backend service."""
 
 from pathlib import Path
 
@@ -9,5 +9,5 @@ FRONTEND_DIR = PROJECT_ROOT / "frontend"
 DATA_DIR = BACKEND_DIR / "data"
 DEFAULT_CREDENTIALS_DIR = DATA_DIR / "creds"
 DEFAULT_LOGS_DIR = DATA_DIR / "logs"
-DEFAULT_LOG_FILE = DEFAULT_LOGS_DIR / "omni-gateway.log"
+DEFAULT_LOG_FILE = DEFAULT_LOGS_DIR / "router.log"
 VERSION_FILE = BACKEND_DIR / "version.txt"
