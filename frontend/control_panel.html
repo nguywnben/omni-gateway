@@ -149,7 +149,10 @@
                                 <div class="copy-field">
                                     <label for="apiKey">Unified API key</label>
                                     <div class="secret-field">
-                                        <input type="text" id="apiKey" value="..." readonly title="Copy API key" aria-label="Unified API key. Copy API key." onmousedown="event.preventDefault()" onclick="copyInputValue('apiKey')">
+                                        <input type="password" id="apiKey" value="..." readonly title="Copy API key" aria-label="Unified API key. Copy API key." onmousedown="event.preventDefault()" onclick="copyInputValue('apiKey')">
+                                        <button type="button" id="toggleApiKeyVisibilityBtn" class="btn btn-secondary icon-btn" onclick="toggleApiKeyVisibility()" title="Show API key" aria-label="Show API key">
+                                            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+                                        </button>
                                         <button type="button" id="regenerateApiKeyBtn" class="btn btn-secondary icon-btn" onclick="regenerateApiKey()" title="Regenerate API key">
                                             <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 11a8 8 0 0 0-14.8-3"></path><path d="M4 5v4h4"></path><path d="M4 13a8 8 0 0 0 14.8 3"></path><path d="M20 19v-4h-4"></path></svg>
                                         </button>

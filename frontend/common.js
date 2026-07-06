@@ -2231,7 +2231,12 @@ async function updateEndpointUrls() {
             if (data.success) {
                 const apiKeyEl = document.getElementById('apiKey');
                 const apiKey = data.api_key || '';
-                if (apiKeyEl) apiKeyEl.value = apiKey;
+                if (apiKeyEl) {
+                    apiKeyEl.value = apiKey;
+                    if (!apiKeyEl.dataset.visibilityInitialized) {
+                        setApiKeyVisibility(false);
+                    }
+                }
                 const regenerateBtn = document.getElementById('regenerateApiKeyBtn');
                 if (regenerateBtn) {
                     const managedByEnv = Boolean(data.managed_by_env);
@@ -2246,6 +2251,32 @@ async function updateEndpointUrls() {
         console.error("Failed to fetch API key", e);
     }
 }
+
+function setApiKeyVisibility(visible) {
+    const input = document.getElementById('apiKey');
+    const button = document.getElementById('toggleApiKeyVisibilityBtn');
+    if (!input) return;
+
+    input.type = visible ? 'text' : 'password';
+    input.dataset.visibilityInitialized = 'true';
+    input.dataset.visible = visible ? 'true' : 'false';
+
+    if (button) {
+        const label = visible ? 'Hide API key' : 'Show API key';
+        button.title = label;
+        button.setAttribute('aria-label', label);
+        button.innerHTML = visible
+            ? '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3l18 18"></path><path d="M10.6 10.6a2 2 0 0 0 2.8 2.8"></path><path d="M9.9 5.2A9.6 9.6 0 0 1 12 5c6.5 0 10 7 10 7a18.3 18.3 0 0 1-3.1 4.3"></path><path d="M6.5 6.8C3.7 8.6 2 12 2 12s3.5 7 10 7a9.8 9.8 0 0 0 4.1-.9"></path></svg>'
+            : '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z"></path><circle cx="12" cy="12" r="3"></circle></svg>';
+    }
+}
+
+function toggleApiKeyVisibility() {
+    const input = document.getElementById('apiKey');
+    if (!input) return;
+    setApiKeyVisibility(input.type === 'password');
+}
+
 function cpUrl(element) {
     const text = element.textContent || element.innerText;
     if (!text) return;
@@ -2284,7 +2315,12 @@ async function regenerateApiKey() {
             if (data.success) {
                 const el = document.getElementById('apiKey');
                 const apiKey = data.api_key || '';
-                if (el) el.value = apiKey;
+                if (el) {
+                    el.value = apiKey;
+                    if (!el.dataset.visibilityInitialized) {
+                        setApiKeyVisibility(false);
+                    }
+                }
                 showStatus(t('regenerate_success', 'API Key regenerated successfully'), 'success');
             } else {
                 showStatus(data.error || 'Failed to regenerate key', 'error');

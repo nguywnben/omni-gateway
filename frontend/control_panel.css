@@ -230,7 +230,8 @@ code {
 }
 
 .tab:hover:not(.active) {
-    background: var(--surface);
+    background: var(--control-hover);
+    border-color: transparent;
     color: var(--text);
 }
 
@@ -248,7 +249,7 @@ code {
 }
 
 .tab:hover:not(.active) svg {
-    opacity: 0.92;
+    opacity: 1;
 }
 
 .tab.active svg {
@@ -1225,25 +1226,37 @@ textarea[readonly] {
     color: var(--text-soft);
 }
 
-.cred-status,
-.cred-actions {
-    display: flex;
-    align-items: center;
-    flex-wrap: wrap;
-    gap: 6px;
+.cred-status {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(88px, 1fr));
+    gap: 8px;
 }
 
 .cred-actions {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(106px, 1fr));
+    gap: 8px;
     border-top: 1px solid var(--border);
     padding-top: 12px;
+}
+
+.cred-actions .cred-btn {
+    width: 100%;
+    min-width: 0;
+    min-height: 32px;
+    padding: 6px 11px;
+    font-size: 12px;
 }
 
 .status-badge,
 .error-codes,
 .cooldown-badge {
+    width: 100%;
+    min-width: 0;
     min-height: 24px;
     display: inline-flex;
     align-items: center;
+    justify-content: center;
     padding: 4px 9px;
     border-radius: var(--radius);
     border: 1px solid var(--border);
@@ -1252,6 +1265,7 @@ textarea[readonly] {
     font-size: 11px;
     font-weight: 680;
     line-height: 1;
+    text-align: center;
 }
 
 .status-badge.enabled,
