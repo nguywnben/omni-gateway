@@ -1,4 +1,4 @@
-full_hash=bc68cd763f144f9b46da957d4a14aab832c6089c
-short_hash=bc68cd7
-message=fix: refresh sidebar version after login
-date=2026-07-05 22:00:07 +0700
+full_hash=4cc3c72f4a16521c7f8dacb112d32e6616b96067
+short_hash=4cc3c72
+message=fix: standardize docker hub secrets
+date=2026-07-06 11:13:47 +0700
