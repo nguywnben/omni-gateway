@@ -140,6 +140,18 @@
                             <span class="stat-number" id="avgCallsPerFile">0.0</span>
                             <span class="stat-label">Average requests per credential</span>
                         </div>
+                        <div class="stat-item">
+                            <span class="stat-number" id="totalTokens24h">0</span>
+                            <span class="stat-label">Tokens in the last 24 hours</span>
+                        </div>
+                        <div class="stat-item">
+                            <span class="stat-number" id="inputTokens24h">0</span>
+                            <span class="stat-label">Input tokens</span>
+                        </div>
+                        <div class="stat-item">
+                            <span class="stat-number" id="outputTokens24h">0</span>
+                            <span class="stat-label">Output tokens</span>
+                        </div>
                     </div>
 
                     <div class="dashboard-grid">
@@ -177,8 +189,8 @@
                         <section class="card span-12">
                             <h2 class="card-title">24-hour request breakdown</h2>
                             <div id="usageLoading" class="skeleton-table">
-                                <div class="skeleton-row header"><div class="skeleton-cell"></div><div class="skeleton-cell"></div><div class="skeleton-cell"></div></div>
-                                <div class="skeleton-row"><div class="skeleton-cell"></div><div class="skeleton-cell"></div><div class="skeleton-cell"></div></div>
+                                <div class="skeleton-row header"><div class="skeleton-cell"></div><div class="skeleton-cell"></div><div class="skeleton-cell"></div><div class="skeleton-cell"></div><div class="skeleton-cell"></div><div class="skeleton-cell"></div></div>
+                                <div class="skeleton-row"><div class="skeleton-cell"></div><div class="skeleton-cell"></div><div class="skeleton-cell"></div><div class="skeleton-cell"></div><div class="skeleton-cell"></div><div class="skeleton-cell"></div></div>
                             </div>
                             <div class="usage-table-wrapper">
                                 <table class="usage-table">
@@ -186,6 +198,9 @@
                                         <tr>
                                             <th>Credential</th>
                                             <th>Requests</th>
+                                            <th>Input tokens</th>
+                                            <th>Output tokens</th>
+                                            <th>Total tokens</th>
                                             <th>Actions</th>
                                         </tr>
                                     </thead>

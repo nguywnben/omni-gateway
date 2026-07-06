@@ -16,6 +16,7 @@ from config import (
 )
 from log import log
 from core.credential_manager import CredentialManager
+from core.usage_stats import record_call
 
 
 
@@ -102,10 +103,24 @@ async def record_api_call_success(
     credential_manager: CredentialManager,
     credential_name: str,
     mode: str = "code_assist",
-    model_name: Optional[str] = None
+    model_name: Optional[str] = None,
+    token_usage: Optional[Dict[str, Any]] = None,
+    status_code: int = 200,
 ) -> None:
     """Internal implementation detail."""
     if credential_manager and credential_name:
+        try:
+            await asyncio.to_thread(
+                record_call,
+                credential_name,
+                model=model_name or "",
+                provider=mode,
+                status_code=status_code,
+                token_usage=token_usage,
+            )
+        except Exception as e:
+            log.error(f"Failed to record usage for {credential_name}: {e}")
+
         await credential_manager.record_api_call_result(
             credential_name, True, mode=mode, model_name=model_name
         )

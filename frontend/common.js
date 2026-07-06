@@ -6503,6 +6503,19 @@ async function resetConfig() {
 
 // =====================================================================
 
+function formatUsageNumber(value, options = {}) {
+
+    const number = Number(value || 0);
+
+    if (!Number.isFinite(number)) return '0';
+
+    return number.toLocaleString('en-US', {
+        maximumFractionDigits: options.decimals ?? 0,
+        minimumFractionDigits: options.decimals ?? 0,
+    });
+
+}
+
 async function refreshUsageStats() {
 
     const loading = document.getElementById('usageLoading');
@@ -6543,11 +6556,17 @@ async function refreshUsageStats() {
 
             const aggData = aggregatedData.success ? aggregatedData.data : aggregatedData;
 
-            document.getElementById('totalApiCalls').textContent = aggData.total_calls_24h || 0;
+            document.getElementById('totalApiCalls').textContent = formatUsageNumber(aggData.total_calls_24h);
 
-            document.getElementById('totalFiles').textContent = aggData.total_files || 0;
+            document.getElementById('totalFiles').textContent = formatUsageNumber(aggData.total_files);
 
             document.getElementById('avgCallsPerFile').textContent = (aggData.avg_calls_per_file || 0).toFixed(1);
+
+            document.getElementById('totalTokens24h').textContent = formatUsageNumber(aggData.total_tokens_24h);
+
+            document.getElementById('inputTokens24h').textContent = formatUsageNumber(aggData.input_tokens_24h);
+
+            document.getElementById('outputTokens24h').textContent = formatUsageNumber(aggData.output_tokens_24h);
 
             renderUsageList();
 
@@ -6585,7 +6604,7 @@ function renderUsageList() {
 
         const tr = document.createElement('tr');
 
-        tr.innerHTML = `<td colspan="3" style="text-align: center; color: var(--text-muted); padding: 18px 12px;">${t('status_no_filter_data')}</td>`;
+        tr.innerHTML = `<td colspan="6" style="text-align: center; color: var(--text-muted); padding: 18px 12px;">${t('status_no_filter_data')}</td>`;
 
         list.appendChild(tr);
 
@@ -6598,12 +6617,21 @@ function renderUsageList() {
         const tr = document.createElement('tr');
 
         const calls24h = stats.calls_24h || 0;
+        const inputTokens = stats.input_tokens_24h || 0;
+        const outputTokens = stats.output_tokens_24h || 0;
+        const totalTokens = stats.total_tokens_24h || 0;
 
         tr.innerHTML = `
 
-            <td style="font-size: 13px; color: var(--color-ink); word-break: break-all;">${filename}</td>
+            <td style="font-size: 13px; color: var(--color-ink); word-break: break-all;">${escapeHtml(filename)}</td>
 
-            <td style="font-weight: 600; color: var(--color-primary); font-size: 14px;">${calls24h}</td>
+            <td style="font-weight: 600; color: var(--color-primary); font-size: 14px;">${formatUsageNumber(calls24h)}</td>
+
+            <td>${formatUsageNumber(inputTokens)}</td>
+
+            <td>${formatUsageNumber(outputTokens)}</td>
+
+            <td>${formatUsageNumber(totalTokens)}</td>
 
             <td>
 

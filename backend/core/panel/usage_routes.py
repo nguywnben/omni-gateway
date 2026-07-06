@@ -24,15 +24,27 @@ async def get_aggregated_stats(token: str = Depends(verify_panel_token)):
     try:
         data_24h = await get_stats_24h()
         total_calls = sum(item["calls_24h"] for item in data_24h.values())
+        input_tokens = sum(item.get("input_tokens_24h", 0) for item in data_24h.values())
+        output_tokens = sum(item.get("output_tokens_24h", 0) for item in data_24h.values())
+        total_tokens = sum(item.get("total_tokens_24h", 0) for item in data_24h.values())
+        cached_tokens = sum(item.get("cached_tokens_24h", 0) for item in data_24h.values())
+        reasoning_tokens = sum(item.get("reasoning_tokens_24h", 0) for item in data_24h.values())
         total_files = await get_total_files_count()
         avg_calls = total_calls / total_files if total_files > 0 else 0.0
+        avg_tokens = total_tokens / total_calls if total_calls > 0 else 0.0
 
         return {
             "success": True,
             "data": {
                 "total_calls_24h": total_calls,
                 "total_files": total_files,
-                "avg_calls_per_file": avg_calls
+                "avg_calls_per_file": avg_calls,
+                "input_tokens_24h": input_tokens,
+                "output_tokens_24h": output_tokens,
+                "total_tokens_24h": total_tokens,
+                "cached_tokens_24h": cached_tokens,
+                "reasoning_tokens_24h": reasoning_tokens,
+                "avg_tokens_per_request": avg_tokens
             }
         }
     except Exception as e:

@@ -61,6 +61,7 @@ router = APIRouter()
 
 
 @router.post("/v1/messages")
+@router.post("/v1/v1/messages", include_in_schema=False)
 async def messages(
     claude_request: ClaudeRequest,
     _token: str = Depends(authenticate_bearer)
@@ -333,6 +334,7 @@ async def messages(
 
 
 @router.post("/v1/messages/count_tokens")
+@router.post("/v1/v1/messages/count_tokens", include_in_schema=False)
 async def count_tokens(
     request: Request,
     _token: str = Depends(authenticate_bearer)

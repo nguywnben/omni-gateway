@@ -24,6 +24,10 @@ from log import log
 from core.credential_manager import credential_manager
 from core.httpx_client import stream_post_async, post_async
 from core.models import Model, model_to_dict
+from core.usage_stats import (
+    extract_token_usage_from_response,
+    extract_token_usage_from_stream_chunk,
+)
 
 
 from core.api.utils import (
@@ -371,7 +375,8 @@ async def stream_request(
         return True
 
     for attempt in range(max_retries + 1):
-        success_recorded = False
+        received_content = False
+        stream_token_usage: Dict[str, int] = {}
         need_retry = False
 
         try:
@@ -448,13 +453,13 @@ async def stream_request(
                 else:
 
 
-                    if not success_recorded:
-                        await record_api_call_success(
-                            credential_manager, current_file, mode="primary", model_name=model_name
-                        )
-                        success_recorded = True
+                    if not received_content:
+                        received_content = True
                         log.debug(f"[provider stream] started receiving streaming responses, model: {model_name}")
 
+                    chunk_token_usage = extract_token_usage_from_stream_chunk(chunk)
+                    if any(chunk_token_usage.values()):
+                        stream_token_usage = chunk_token_usage
 
                     if isinstance(chunk, bytes):
                         log.debug(f"[provider stream raw] chunk(bytes): {chunk}")
@@ -464,7 +469,14 @@ async def stream_request(
                     yield chunk
 
 
-            if success_recorded:
+            if received_content:
+                await record_api_call_success(
+                    credential_manager,
+                    current_file,
+                    mode="primary",
+                    model_name=model_name,
+                    token_usage=stream_token_usage,
+                )
                 log.debug(f"[provider stream] Streaming response completed, model: {model_name}")
                 return
             elif not need_retry:
@@ -679,8 +691,14 @@ async def non_stream_request(
                         )
                 else:
 
+                    token_usage = extract_token_usage_from_response(response.content)
                     await record_api_call_success(
-                        credential_manager, current_file, mode="primary", model_name=model_name
+                        credential_manager,
+                        current_file,
+                        mode="primary",
+                        model_name=model_name,
+                        token_usage=token_usage,
+                        status_code=status_code,
                     )
                     return Response(
                         content=response.content,
