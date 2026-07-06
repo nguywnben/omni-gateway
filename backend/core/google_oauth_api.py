@@ -4,14 +4,35 @@ import asyncio
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional, Tuple
 from urllib.parse import urlencode
+import httpx
 import jwt
-from config import get_googleapis_proxy_url, get_oauth_proxy_url, get_resource_manager_api_url, get_service_usage_api_url
+from config import get_googleapis_proxy_url, get_oauth_proxy_url, get_proxy_config, get_resource_manager_api_url, get_service_usage_api_url
 from log import log
 from core.httpx_client import get_async, post_async
 
 class TokenError(Exception):
     """Internal implementation detail."""
     pass
+
+
+async def _format_oauth_request_error(action: str, token_url: str, error: Exception) -> str:
+    """Build an actionable OAuth network error without exposing request payloads."""
+    try:
+        proxy_url = await get_proxy_config()
+    except Exception:
+        proxy_url = None
+
+    proxy_hint = (
+        f"Current outbound proxy: {proxy_url}."
+        if proxy_url
+        else "No outbound proxy is configured."
+    )
+    return (
+        f"{action}: Unable to reach OAuth token endpoint {token_url}. "
+        "Check the OAuth API endpoint and configure an outbound proxy if this environment cannot access Google directly. "
+        f"{proxy_hint} Original error: {error}"
+    )
+
 
 class Credentials:
     """Internal implementation detail."""
@@ -62,6 +83,12 @@ class Credentials:
             if 'refresh_token' in token_data:
                 self.refresh_token = token_data['refresh_token']
             log.debug(f'Token refreshed successfully, expires {self.expires_at}')
+        except httpx.RequestError as e:
+            error_msg = await _format_oauth_request_error('Token refresh failed', token_url, e)
+            log.error(error_msg)
+            token_error = TokenError(error_msg)
+            token_error.status_code = None
+            raise token_error
         except Exception as e:
             error_msg = str(e)
             status_code = None
@@ -136,6 +163,10 @@ class Flow:
                 expires_at = datetime.now(timezone.utc) + timedelta(seconds=expires_in)
             self.credentials = Credentials(access_token=token_data['access_token'], refresh_token=token_data.get('refresh_token'), client_id=self.client_id, client_secret=self.client_secret, expires_at=expires_at)
             return self.credentials
+        except httpx.RequestError as e:
+            error_msg = await _format_oauth_request_error('Failed to retrieve token', token_url, e)
+            log.error(error_msg)
+            raise TokenError(error_msg)
         except Exception as e:
             error_msg = f'Failed to retrieve token: {str(e)}'
             log.error(error_msg)
@@ -184,6 +215,10 @@ class ServiceAccount:
                 expires_in = int(token_data['expires_in'])
                 self.expires_at = datetime.now(timezone.utc) + timedelta(seconds=expires_in)
             return self.access_token
+        except httpx.RequestError as e:
+            error_msg = await _format_oauth_request_error('Service Account failed to retrieve token', token_url, e)
+            log.error(error_msg)
+            raise TokenError(error_msg)
         except Exception as e:
             error_msg = f'Service Account failed to retrieve token: {str(e)}'
             log.error(error_msg)

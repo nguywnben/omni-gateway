@@ -8,6 +8,7 @@ from typing import Any, Dict, List, Optional, Tuple
 from log import log
 
 from core.google_oauth_api import Credentials
+from core.credential_pool import upsert_credential_by_email
 from core.storage_adapter import get_storage_adapter
 
 class CredentialManager:
@@ -117,14 +118,16 @@ class CredentialManager:
     async def add_credential(self, credential_name: str, credential_data: Dict[str, Any]):
         """Internal implementation detail."""
         await self._ensure_initialized()
-        await self._storage_adapter.store_credential(credential_name, credential_data)
-        log.info(f"Credential added/updated: {credential_name}")
+        result = await upsert_credential_by_email(credential_name, credential_data)
+        log.info(f"Credential pool write result: {result.get('action')} ({result.get('filename')})")
+        return result
 
     async def add_primary_credential(self, credential_name: str, credential_data: Dict[str, Any]):
         """Internal implementation detail."""
         await self._ensure_initialized()
-        await self._storage_adapter.store_credential(credential_name, credential_data, mode="primary")
-        log.info(f"Provider credential added/updated: {credential_name}")
+        result = await upsert_credential_by_email(credential_name, credential_data, mode="primary")
+        log.info(f"Provider credential pool write result: {result.get('action')} ({result.get('filename')})")
+        return result
 
     async def remove_credential(self, credential_name: str, mode: str = "code_assist") -> bool:
         """Internal implementation detail."""

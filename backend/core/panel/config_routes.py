@@ -224,7 +224,7 @@ async def save_config(request: ConfigSaveRequest, token: str = Depends(verify_pa
 
         # Build response message
         response_data = {
-            "message": "Configuration saved successfully",
+            "message": "Configuration saved successfully.",
             "saved_config": {k: v for k, v in new_config.items() if k not in env_locked_keys},
         }
 

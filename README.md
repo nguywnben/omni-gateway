@@ -120,10 +120,12 @@ Omni Gateway reads configuration from environment variables first, then stored c
 | `MONGODB_URI` | empty | Enables MongoDB storage when set. |
 | `POSTGRESQL_URI` | empty | Enables PostgreSQL storage when set. |
 | `REDIS_URL` | empty | Enables Redis-backed caches/session state when set. |
-| `CODE_ASSIST_CLIENT_ID` | empty | Required for Code Assist OAuth flow. |
-| `CODE_ASSIST_CLIENT_SECRET` | empty | Required for Code Assist OAuth flow. |
-| `CLIENT_ID` | empty | Required for the provider OAuth flow. |
-| `CLIENT_SECRET` | empty | Required for the provider OAuth flow. |
+| `CODE_ASSIST_CLIENT_ID` | default desktop client | Optional override for the Code Assist OAuth flow. |
+| `CODE_ASSIST_CLIENT_SECRET` | empty | Required when using the Code Assist OAuth flow with a custom client. |
+| `ANTIGRAVITY_CLIENT_ID` | default desktop client | Optional override for the Antigravity OAuth flow. |
+| `ANTIGRAVITY_CLIENT_SECRET` | empty | Required when using the Antigravity OAuth flow with a custom client. |
+| `CLIENT_ID` | empty | Optional legacy-compatible fallback for provider OAuth override. |
+| `CLIENT_SECRET` | empty | Optional legacy-compatible fallback for provider OAuth override. |
 | `USER_AGENT` | `router/cli/...` | Optional upstream user-agent override. |
 
 ## API Surfaces

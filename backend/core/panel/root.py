@@ -15,6 +15,8 @@ router = APIRouter(tags=["root"])
 @router.get("/setup", response_class=HTMLResponse)
 @router.get("/dashboard", response_class=HTMLResponse)
 @router.get("/code_assist", response_class=HTMLResponse)
+@router.get("/pool", response_class=HTMLResponse)
+@router.get("/providers", response_class=HTMLResponse)
 @router.get("/provider", response_class=HTMLResponse)
 @router.get("/oauth", response_class=HTMLResponse)
 @router.get("/upload", response_class=HTMLResponse)
@@ -22,7 +24,7 @@ router = APIRouter(tags=["root"])
 @router.get("/logs", response_class=HTMLResponse)
 @router.get("/about", response_class=HTMLResponse)
 async def serve_control_panel():
-    """Serve the single responsive console entry point for every app route."""
+    """Serve the single responsive console entry point for public app routes."""
     try:
         with open(FRONTEND_DIR / "control_panel.html", "r", encoding="utf-8") as f:
             html_content = f.read()

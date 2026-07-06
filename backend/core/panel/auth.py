@@ -8,7 +8,7 @@ import re
 import time
 from typing import Any, Dict, List
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import JSONResponse
 
 import config
@@ -17,6 +17,7 @@ from core.auth import (
     asyncio_complete_auth_flow,
     complete_auth_flow_from_callback_url,
     create_auth_url,
+    get_auth_status_by_state,
     get_auth_status,
     verify_password,
 )
@@ -27,6 +28,7 @@ from core.models import (
     AuthCallbackRequest,
     AuthCallbackUrlRequest,
 )
+from core.credential_pool import upsert_credential_by_email
 from core.storage_adapter import get_storage_adapter
 from core.utils import create_panel_session_token, verify_panel_token
 from .utils import public_mode_name, validate_mode
@@ -97,10 +99,35 @@ def _credential_mode_from_env_name(env_name: str) -> str:
     return "code_assist" if env_name.startswith("CODE_ASSIST_CREDENTIALS") else "provider"
 
 
+def _credential_result_message(result: Dict[str, Any]) -> str:
+    action = result.get("credential_action")
+    if action == "replaced":
+        return "Authentication successful. Existing credential was renewed with a later expiry."
+    if action == "skipped":
+        return "Authentication successful, but the credential was not added because the pool already has the same email with an equal or later expiry."
+    return "Authentication successful. Credentials saved."
+
+
+def _auth_success_content(result: Dict[str, Any]) -> Dict[str, Any]:
+    return {
+        "credentials": result["credentials"],
+        "file_path": result["file_path"],
+        "message": _credential_result_message(result),
+        "auto_detected_project": result.get("auto_detected_project", False),
+        "credential_saved": result.get("credential_saved", True),
+        "credential_action": result.get("credential_action", "created"),
+        "credential_message": result.get("credential_message"),
+        "email": result.get("email"),
+        "existing_expiry": result.get("existing_expiry"),
+        "incoming_expiry": result.get("incoming_expiry"),
+        "deleted_duplicates": result.get("deleted_duplicates", []),
+    }
+
+
 def _decode_env_credential_payload(env_name: str, raw_value: str) -> Any:
     value = raw_value.strip()
     if not value:
-        raise ValueError(f"{env_name} is empty")
+        raise ValueError(f"{env_name} is empty.")
 
     try:
         return json.loads(value)
@@ -112,7 +139,7 @@ def _decode_env_credential_payload(env_name: str, raw_value: str) -> Any:
         decoded = base64.b64decode(padded, validate=True).decode("utf-8")
         return json.loads(decoded)
     except (binascii.Error, UnicodeDecodeError, json.JSONDecodeError) as exc:
-        raise ValueError(f"{env_name} must contain JSON or base64-encoded JSON") from exc
+        raise ValueError(f"{env_name} must contain JSON or base64-encoded JSON.") from exc
 
 
 def _extract_credential_entries(payload: Any) -> List[Dict[str, Any]]:
@@ -143,12 +170,12 @@ def _extract_credential_entries(payload: Any) -> List[Dict[str, Any]]:
             return [payload]
         return [payload]
 
-    raise ValueError("Credential payload must be a JSON object or array")
+    raise ValueError("Credential payload must be a JSON object or array.")
 
 
 def _normalize_env_credential(env_name: str, index: int, entry: Dict[str, Any]) -> Dict[str, Any]:
     if not isinstance(entry, dict):
-        raise ValueError("Credential entry must be an object")
+        raise ValueError("Credential entry must be an object.")
 
     default_mode = _credential_mode_from_env_name(env_name)
     requested_mode = entry.get("mode")
@@ -158,7 +185,7 @@ def _normalize_env_credential(env_name: str, index: int, entry: Dict[str, Any]) 
     credential_data = dict(credential)
 
     if not (credential_data.get("token") or credential_data.get("access_token") or credential_data.get("refresh_token")):
-        raise ValueError("Credential must contain token, access_token, or refresh_token")
+        raise ValueError("Credential must contain token, access_token, or refresh_token.")
 
     if credential_data.get("access_token") and not credential_data.get("token"):
         credential_data["token"] = credential_data["access_token"]
@@ -249,7 +276,7 @@ async def login(payload: LoginRequest, request: Request):
     """Internal implementation detail."""
     try:
         if not await config.has_password_configured():
-            raise HTTPException(status_code=428, detail="Initial setup is required before login")
+            raise HTTPException(status_code=428, detail="Initial setup is required before login.")
 
         client_id = _client_identity(request)
         _assert_login_allowed(client_id)
@@ -259,12 +286,12 @@ async def login(payload: LoginRequest, request: Request):
             return JSONResponse(
                 content={
                     "token": await create_panel_session_token(),
-                    "message": "Login successful",
+                    "message": "Login successful.",
                 }
             )
 
         _record_login_failure(client_id)
-        raise HTTPException(status_code=401, detail="Incorrect password")
+        raise HTTPException(status_code=401, detail="Incorrect password.")
     except HTTPException:
         raise
     except Exception as e:
@@ -287,16 +314,16 @@ async def complete_setup(request: SetupRequest):
     """Create the first control-panel password when no password exists yet."""
     try:
         if await config.has_password_configured():
-            raise HTTPException(status_code=409, detail="Initial setup has already been completed")
+            raise HTTPException(status_code=409, detail="Initial setup has already been completed.")
 
         password = request.password.strip()
         confirm_password = (request.confirm_password or request.password).strip()
 
         if len(password) < 8:
-            raise HTTPException(status_code=400, detail="Password must be at least 8 characters")
+            raise HTTPException(status_code=400, detail="Password must be at least 8 characters.")
 
         if password != confirm_password:
-            raise HTTPException(status_code=400, detail="Passwords do not match")
+            raise HTTPException(status_code=400, detail="Passwords do not match.")
 
         storage_adapter = await get_storage_adapter()
         for key in ("password", "panel_password", "api_password"):
@@ -307,7 +334,7 @@ async def complete_setup(request: SetupRequest):
         return JSONResponse(
             content={
                 "token": await create_panel_session_token(),
-                "message": "Initial setup completed",
+                "message": "Initial setup completed.",
                 "setup_required": False,
             }
         )
@@ -343,8 +370,8 @@ async def start_auth(request: AuthStartRequest, token: str = Depends(verify_pane
                 }
             )
         else:
-            error_message = result.get("error", "Unable to start authentication flow")
-            status_code = 400 if "Missing OAuth client configuration" in error_message else 500
+            error_message = result.get("error", "Unable to start authentication flow.")
+            status_code = 400 if result.get("error_code") == "missing_oauth_client_config" else 500
             raise HTTPException(status_code=status_code, detail=error_message)
 
     except HTTPException:
@@ -371,12 +398,7 @@ async def auth_callback(request: AuthCallbackRequest, token: str = Depends(verif
         if result["success"]:
 
             return JSONResponse(
-                content={
-                    "credentials": result["credentials"],
-                    "file_path": result["file_path"],
-                    "message": "Authentication successful. Credentials saved.",
-                    "auto_detected_project": result.get("auto_detected_project", False),
-                }
+                content=_auth_success_content(result)
             )
         else:
 
@@ -412,7 +434,7 @@ async def auth_callback_url(request: AuthCallbackUrlRequest, token: str = Depend
     try:
 
         if not request.callback_url or not request.callback_url.startswith(("http://", "https://")):
-            raise HTTPException(status_code=400, detail="Please provide a valid callback URL")
+            raise HTTPException(status_code=400, detail="Please provide a valid callback URL.")
 
 
         result = await complete_auth_flow_from_callback_url(
@@ -422,12 +444,7 @@ async def auth_callback_url(request: AuthCallbackUrlRequest, token: str = Depend
         if result["success"]:
 
             return JSONResponse(
-                content={
-                    "credentials": result["credentials"],
-                    "file_path": result["file_path"],
-                    "message": "Authentication successful from callback URL, credentials saved",
-                    "auto_detected_project": result.get("auto_detected_project", False),
-                }
+                content=_auth_success_content(result)
             )
         else:
 
@@ -460,13 +477,26 @@ async def check_auth_status(project_id: str, token: str = Depends(verify_panel_t
     """Internal implementation detail."""
     try:
         if not project_id:
-            raise HTTPException(status_code=400, detail="Project ID cannot be empty")
+            raise HTTPException(status_code=400, detail="Project ID cannot be empty.")
 
         status = get_auth_status(project_id)
         return JSONResponse(content=status)
 
     except Exception as e:
         log.error(f"Failed to check authentication status: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/status")
+async def check_auth_flow_status(
+    state: str = Query(..., min_length=1),
+    token: str = Depends(verify_panel_token),
+):
+    """Return OAuth callback status for the active browser session without waiting."""
+    try:
+        return JSONResponse(content=get_auth_status_by_state(state, token))
+    except Exception as e:
+        log.error(f"Failed to check authentication flow status: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -557,39 +587,43 @@ async def load_env_credentials(token: str = Depends(verify_panel_token)):
                     "loaded_count": 0,
                     "total_count": 0,
                     "results": [],
-                    "message": "No supported environment credential variables were found",
+                    "message": "No supported environment credential variables were found.",
                 }
             )
 
         from core.storage_adapter import get_storage_adapter
 
-        storage_adapter = await get_storage_adapter()
         results = []
         loaded_count = 0
+        skipped_count = 0
 
         for item in env_credentials:
             filename = item["filename"]
             mode = item["mode"]
             try:
-                success = await storage_adapter.store_credential(filename, item["credential"], mode=mode)
-                if success:
+                write_result = await upsert_credential_by_email(filename, item["credential"], mode=mode)
+                if write_result.get("stored"):
                     loaded_count += 1
                     results.append(
                         {
-                            "filename": filename,
+                            "filename": write_result.get("filename", filename),
                             "mode": public_mode_name(mode),
                             "env_var": item["credential"].get("env_var", ""),
                             "status": "success",
-                            "message": "Imported successfully",
+                            "action": write_result.get("action"),
+                            "message": write_result.get("message") or "Imported successfully.",
                         }
                     )
                 else:
+                    skipped_count += 1
                     results.append(
                         {
-                            "filename": filename,
+                            "filename": write_result.get("filename", filename),
                             "mode": public_mode_name(mode),
-                            "status": "error",
-                            "message": "Storage adapter rejected the credential",
+                            "env_var": item["credential"].get("env_var", ""),
+                            "status": "skipped",
+                            "action": write_result.get("action"),
+                            "message": write_result.get("message") or "Import skipped.",
                         }
                     )
             except Exception as item_error:
@@ -605,9 +639,10 @@ async def load_env_credentials(token: str = Depends(verify_panel_token)):
         return JSONResponse(
             content={
                 "loaded_count": loaded_count,
+                "skipped_count": skipped_count,
                 "total_count": len(env_credentials),
                 "results": results,
-                "message": f"Imported {loaded_count}/{len(env_credentials)} environment credential(s)",
+                "message": f"Imported {loaded_count}/{len(env_credentials)} environment credential(s); skipped {skipped_count} duplicate credential(s).",
             }
         )
 
@@ -643,7 +678,7 @@ async def clear_env_credentials(token: str = Depends(verify_panel_token)):
                             "filename": filename,
                             "mode": public_mode_name(mode),
                             "status": "error",
-                            "message": "Credential was not deleted",
+                            "message": "Credential was not deleted.",
                         }
                     )
             except Exception as item_error:
@@ -661,7 +696,7 @@ async def clear_env_credentials(token: str = Depends(verify_panel_token)):
                 "deleted_count": deleted_count,
                 "total_count": len(imported),
                 "results": results,
-                "message": f"Deleted {deleted_count}/{len(imported)} environment credential(s)",
+                "message": f"Deleted {deleted_count}/{len(imported)} environment credential(s).",
             }
         )
 

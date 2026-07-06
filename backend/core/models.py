@@ -333,6 +333,13 @@ class AuthResponse(BaseModel):
     error: Optional[str] = None
     credentials: Optional[Dict[str, Any]] = None
     file_path: Optional[str] = None
+    credential_saved: Optional[bool] = None
+    credential_action: Optional[str] = None
+    credential_message: Optional[str] = None
+    email: Optional[str] = None
+    existing_expiry: Optional[str] = None
+    incoming_expiry: Optional[str] = None
+    deleted_duplicates: Optional[List[str]] = None
     requires_manual_project_id: Optional[bool] = None
     requires_project_selection: Optional[bool] = None
     available_projects: Optional[List[Dict[str, str]]] = None

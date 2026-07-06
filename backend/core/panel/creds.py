@@ -12,6 +12,7 @@ from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, Respons
 from fastapi.responses import JSONResponse
 
 from log import log
+from core.credential_pool import deduplicate_credentials_by_account_email, parse_credential_expiry, resolve_credential_email
 from core.credential_manager import credential_manager
 from core.models import (
     CredFileActionRequest,
@@ -52,7 +53,7 @@ async def extract_json_files_from_zip(zip_file: UploadFile) -> List[dict]:
             ]
 
             if not json_files:
-                raise HTTPException(status_code=400, detail="JSON file not found in zip file")
+                raise HTTPException(status_code=400, detail="JSON file not found in ZIP file.")
 
             log.info(f"Found {zip_file.filename} JSON files in ZIP file {len(json_files)}")
 
@@ -80,7 +81,7 @@ async def extract_json_files_from_zip(zip_file: UploadFile) -> List[dict]:
         return files_data
 
     except zipfile.BadZipFile:
-        raise HTTPException(status_code=400, detail="Invalid ZIP file format")
+        raise HTTPException(status_code=400, detail="Invalid ZIP file format.")
     except Exception as e:
         log.error(f"Failed to process ZIP file: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to process ZIP file: {str(e)}")
@@ -100,6 +101,84 @@ async def clear_all_model_cooldowns_for_credential(
         log.warning(f"Error occurred while clearing model CD: {filename} (mode={mode}), error={e}")
 
 
+def _incoming_credential_is_better(candidate: dict, current: dict) -> bool:
+    candidate_expiry = candidate.get("expiry")
+    current_expiry = current.get("expiry")
+    if candidate_expiry is None:
+        return False
+    if current_expiry is None:
+        return True
+    return candidate_expiry > current_expiry
+
+
+async def _prepare_upload_candidates(files_data: List[dict]) -> tuple[List[dict], List[dict]]:
+    candidates = []
+    immediate_results = []
+    best_by_email = {}
+
+    for file_data in files_data:
+        filename = os.path.basename(file_data["filename"])
+        try:
+            credential_data = json.loads(file_data["content"])
+        except json.JSONDecodeError as e:
+            immediate_results.append(
+                {
+                    "filename": file_data["filename"],
+                    "status": "error",
+                    "message": f"JSON format error: {str(e)}.",
+                }
+            )
+            continue
+
+        email = await resolve_credential_email(credential_data)
+        if email:
+            credential_data["user_email"] = email
+
+        candidate = {
+            "filename": filename,
+            "source_filename": filename,
+            "credential_data": credential_data,
+            "email": email,
+            "expiry": parse_credential_expiry(credential_data),
+        }
+
+        if not candidate["email"]:
+            candidates.append(candidate)
+            continue
+
+        current = best_by_email.get(candidate["email"])
+        if current is None:
+            best_by_email[candidate["email"]] = candidate
+            continue
+
+        if _incoming_credential_is_better(candidate, current):
+            immediate_results.append(
+                {
+                    "filename": current["filename"],
+                    "source_filename": current["source_filename"],
+                    "status": "skipped",
+                    "action": "skipped",
+                    "email": current["email"],
+                    "message": "Skipped because another uploaded credential has the same email with a later expiry.",
+                }
+            )
+            best_by_email[candidate["email"]] = candidate
+        else:
+            immediate_results.append(
+                {
+                    "filename": candidate["filename"],
+                    "source_filename": candidate["source_filename"],
+                    "status": "skipped",
+                    "action": "skipped",
+                    "email": candidate["email"],
+                    "message": "Skipped because another uploaded credential has the same email with an equal or later expiry.",
+                }
+            )
+
+    candidates.extend(best_by_email.values())
+    return candidates, immediate_results
+
+
 async def upload_credentials_common(
     files: List[UploadFile], mode: str = "code_assist"
 ) -> JSONResponse:
@@ -107,12 +186,12 @@ async def upload_credentials_common(
     mode = validate_mode(mode)
 
     if not files:
-        raise HTTPException(status_code=400, detail="Please select files to upload")
+        raise HTTPException(status_code=400, detail="Please select files to upload.")
 
 
     if len(files) > 100:
         raise HTTPException(
-            status_code=400, detail=f"Too many files; maximum of 100 supported, current: {len(files)}"
+            status_code=400, detail=f"Too many files. A maximum of 100 files is supported; current count: {len(files)}."
         )
 
     files_data = []
@@ -137,52 +216,56 @@ async def upload_credentials_common(
                 content_str = content.decode("utf-8")
             except UnicodeDecodeError:
                 raise HTTPException(
-                    status_code=400, detail=f"File '{file.filename}' encoding is not supported"
+                    status_code=400, detail=f"File '{file.filename}' encoding is not supported."
                 )
 
             files_data.append({"filename": file.filename, "content": content_str})
         else:
             raise HTTPException(
-                status_code=400, detail=f"File format '{file.filename}' is not supported; only JSON and ZIP files are supported"
+                status_code=400, detail=f"File format '{file.filename}' is not supported. Only JSON and ZIP files are supported."
             )
 
-
+    upload_candidates, preprocessed_results = await _prepare_upload_candidates(files_data)
 
     batch_size = 1000
-    all_results = []
+    all_results = list(preprocessed_results)
     total_success = 0
 
-    for i in range(0, len(files_data), batch_size):
-        batch_files = files_data[i : i + batch_size]
+    for i in range(0, len(upload_candidates), batch_size):
+        batch_files = upload_candidates[i : i + batch_size]
 
         async def process_single_file(file_data):
             try:
                 filename = file_data["filename"]
 
                 filename = os.path.basename(filename)
-                content_str = file_data["content"]
-                credential_data = json.loads(content_str)
+                credential_data = file_data["credential_data"]
 
 
                 if mode == "primary":
-                    await credential_manager.add_primary_credential(filename, credential_data)
+                    write_result = await credential_manager.add_primary_credential(filename, credential_data)
                 else:
-                    await credential_manager.add_credential(filename, credential_data)
+                    write_result = await credential_manager.add_credential(filename, credential_data)
 
-                log.debug(f"Successfully uploaded {mode} credential files: {filename}")
-                return {"filename": filename, "status": "success", "message": "Upload successful"}
-
-            except json.JSONDecodeError as e:
+                stored = write_result.get("stored", False)
+                action = write_result.get("action", "created")
+                status = "success" if stored else "skipped"
+                saved_filename = write_result.get("filename", filename)
+                log.debug(f"Credential upload result: {action} ({saved_filename}, mode={mode})")
                 return {
-                    "filename": file_data["filename"],
-                    "status": "error",
-                    "message": f"JSON format error: {str(e)}",
+                    "filename": saved_filename,
+                    "source_filename": filename,
+                    "status": status,
+                    "action": action,
+                    "email": write_result.get("email"),
+                    "message": write_result.get("message") or ("Upload successful." if stored else "Upload skipped."),
                 }
+
             except Exception as e:
                 return {
                     "filename": file_data["filename"],
                     "status": "error",
-                    "message": f"Processing failed: {str(e)}",
+                    "message": f"Processing failed: {str(e)}.",
                 }
 
         log.info(f"Starting concurrent processing of {len(batch_files)} {mode} files...")
@@ -191,41 +274,51 @@ async def upload_credentials_common(
 
         processed_results = []
         batch_uploaded_count = 0
+        batch_skipped_count = 0
         for result in batch_results:
             if isinstance(result, Exception):
                 processed_results.append(
                     {
                         "filename": "unknown",
                         "status": "error",
-                        "message": f"Processing exception: {str(result)}",
+                        "message": f"Processing exception: {str(result)}.",
                     }
                 )
             else:
                 processed_results.append(result)
                 if result["status"] == "success":
                     batch_uploaded_count += 1
+                elif result["status"] == "skipped":
+                    batch_skipped_count += 1
 
         all_results.extend(processed_results)
         total_success += batch_uploaded_count
+        total_skipped = sum(1 for result in all_results if result.get("status") == "skipped")
 
         batch_num = (i // batch_size) + 1
-        total_batches = (len(files_data) + batch_size - 1) // batch_size
+        total_batches = (len(upload_candidates) + batch_size - 1) // batch_size
         log.info(
             f"Batch {batch_num}/{total_batches} complete: successfully uploaded "
-            f"{batch_uploaded_count}/{len(batch_files)} {mode} files"
+            f"{batch_uploaded_count}/{len(batch_files)} {mode} files; skipped {batch_skipped_count}."
         )
 
-    if total_success > 0:
+    total_skipped = sum(1 for result in all_results if result.get("status") == "skipped")
+    if total_success > 0 or total_skipped > 0:
+        message = (
+            f"Batch upload complete: saved or renewed {total_success}/{len(files_data)} {mode} file(s); "
+            f"skipped {total_skipped} duplicate file(s) with an equal or shorter expiry."
+        )
         return JSONResponse(
             content={
                 "uploaded_count": total_success,
+                "skipped_count": total_skipped,
                 "total_count": len(files_data),
                 "results": all_results,
-                "message": f"Batch upload complete: successfully uploaded {total_success}/{len(files_data)} {mode} files",
+                "message": message,
             }
         )
     else:
-        raise HTTPException(status_code=400, detail=f"No {mode} files uploaded successfully")
+        raise HTTPException(status_code=400, detail=f"No {mode} files were uploaded successfully.")
 
 
 async def get_creds_status_common(
@@ -249,6 +342,7 @@ async def get_creds_status_common(
         raise HTTPException(status_code=400, detail="tier_filter must be one of: all, free, pro, or ultra")
 
 
+    dedupe_result = await deduplicate_credentials_by_account_email(mode=mode)
 
     storage_adapter = await get_storage_adapter()
     backend_info = await storage_adapter.get_backend_info()
@@ -293,6 +387,7 @@ async def get_creds_status_common(
         "limit": limit,
         "has_more": (offset + limit) < result["total"],
         "stats": result.get("stats", {"total": 0, "normal": 0, "disabled": 0}),
+        "deduplicated_count": dedupe_result.get("deleted_count", 0),
     })
 
 
@@ -300,6 +395,8 @@ async def download_all_creds_common(mode: str = "code_assist") -> Response:
     """Internal implementation detail."""
     mode = validate_mode(mode)
     zip_filename = "provider_credentials.zip" if mode == "primary" else "credentials.zip"
+
+    await deduplicate_credentials_by_account_email(mode=mode)
 
     storage_adapter = await get_storage_adapter()
     credential_filenames = await storage_adapter.list_credentials(mode=mode)
@@ -358,7 +455,7 @@ async def fetch_user_email_common(filename: str, mode: str = "code_assist") -> J
             content={
                 "filename": filename_only,
                 "user_email": email,
-                "message": "Successfully retrieved user email",
+                "message": "Successfully retrieved user email.",
             }
         )
     else:
@@ -430,24 +527,19 @@ async def refresh_all_user_emails_common(mode: str = "code_assist") -> JSONRespo
             "total_count": total_count,
             "skipped_count": skipped_count,
             "results": results,
-            "message": f"Successfully retrieved {success_count}/{total_count} email addresses, skipped {skipped_count} credentials with existing emails",
+            "message": f"Successfully retrieved {success_count}/{total_count} email addresses; skipped {skipped_count} credentials with existing emails.",
         }
     )
 
 
 async def deduplicate_credentials_by_email_common(mode: str = "code_assist") -> JSONResponse:
-    """Batch deduplicate credential files by email (keep only one per email)."""
+    """Batch deduplicate credential files by email, keeping the latest expiry."""
     mode = validate_mode(mode)
-    storage_adapter = await get_storage_adapter()
 
     try:
-        duplicate_info = await storage_adapter._backend.get_duplicate_credentials_by_email(
-            mode=mode
-        )
-
-        duplicate_groups = duplicate_info.get("duplicate_groups", [])
-        no_email_files = duplicate_info.get("no_email_files", [])
-        total_count = duplicate_info.get("total_count", 0)
+        dedupe_result = await deduplicate_credentials_by_account_email(mode=mode)
+        duplicate_groups = dedupe_result.get("duplicate_groups", [])
+        total_count = dedupe_result.get("total_count", 0)
 
         if not duplicate_groups:
             return JSONResponse(
@@ -455,57 +547,36 @@ async def deduplicate_credentials_by_email_common(mode: str = "code_assist") -> 
                     "deleted_count": 0,
                     "kept_count": total_count,
                     "total_count": total_count,
-                    "unique_emails_count": duplicate_info.get("unique_email_count", 0),
-                    "no_email_count": len(no_email_files),
+                    "unique_emails_count": dedupe_result.get("unique_emails_count", 0),
+                    "no_email_count": dedupe_result.get("no_email_count", 0),
                     "duplicate_groups": [],
                     "delete_errors": [],
-                    "message": "No duplicate credentials (same email) found",
+                    "message": "No duplicate credentials with the same email were found.",
                 }
             )
 
-
-        deleted_count = 0
-        delete_errors = []
-        result_duplicate_groups = []
-
-        for group in duplicate_groups:
-            email = group["email"]
-            kept_file = group["kept_file"]
-            duplicate_files = group["duplicate_files"]
-
-            deleted_files_in_group = []
-            for filename in duplicate_files:
-                try:
-                    success = await credential_manager.remove_credential(filename, mode=mode)
-                    if success:
-                        deleted_count += 1
-                        deleted_files_in_group.append(os.path.basename(filename))
-                        log.info(f"Deduplicating/deleting credential: {filename} (email: {email}) (mode={mode})")
-                    else:
-                        delete_errors.append(f"{os.path.basename(filename)}: Delete failed")
-                except Exception as e:
-                    delete_errors.append(f"{os.path.basename(filename)}: {str(e)}")
-                    log.error(f"Error while deduplicating/deleting credential {filename}: {e}")
-
-            result_duplicate_groups.append({
-                "email": email,
-                "kept_file": os.path.basename(kept_file),
-                "deleted_files": deleted_files_in_group,
-                "duplicate_count": len(deleted_files_in_group),
-            })
-
-        kept_count = total_count - deleted_count
+        deleted_count = dedupe_result.get("deleted_count", 0)
+        kept_count = dedupe_result.get("kept_count", total_count - deleted_count)
+        result_duplicate_groups = [
+            {
+                "email": group["email"],
+                "kept_file": os.path.basename(group["kept_file"]),
+                "deleted_files": [os.path.basename(filename) for filename in group.get("deleted_files", [])],
+                "duplicate_count": group.get("duplicate_count", len(group.get("deleted_files", []))),
+            }
+            for group in duplicate_groups
+        ]
 
         return JSONResponse(
             content={
                 "deleted_count": deleted_count,
                 "kept_count": kept_count,
                 "total_count": total_count,
-                "unique_emails_count": duplicate_info.get("unique_email_count", 0),
-                "no_email_count": len(no_email_files),
+                "unique_emails_count": dedupe_result.get("unique_emails_count", 0),
+                "no_email_count": dedupe_result.get("no_email_count", 0),
                 "duplicate_groups": result_duplicate_groups,
-                "delete_errors": delete_errors,
-                "message": f"Deduplication complete: deleted {deleted_count} duplicate credentials, kept {kept_count} credentials ({duplicate_info.get('unique_email_count', 0)} unique emails)",
+                "delete_errors": [],
+                "message": f"Deduplication complete: deleted {deleted_count} duplicate credentials and kept {kept_count} credentials ({dedupe_result.get('unique_emails_count', 0)} unique emails).",
             }
         )
 
@@ -938,7 +1009,7 @@ async def creds_batch_action(
                 continue
 
         # Build response message
-        result_message = f"Batch operation complete: successfully processed {success_count}/{len(filenames)} files"
+        result_message = f"Batch operation complete: successfully processed {success_count}/{len(filenames)} files."
         if errors:
             result_message += "\nError details:\n" + "\n".join(errors)
 
@@ -1352,7 +1423,7 @@ async def configure_preview_channel(
                 "success": True,
                 "filename": filename,
                 "preview": True,
-                "message": "Preview channel configured successfully; preview attribute set to true",
+                "message": "Preview channel configured successfully, and preview mode is now enabled.",
                 "setting_id": setting_id,
                 "binding_id": binding_id
             })
@@ -1368,7 +1439,7 @@ async def configure_preview_channel(
                 "success": True,
                 "filename": filename,
                 "preview": True,
-                "message": "Preview channel configuration already exists; preview attribute set to true"
+                "message": "Preview channel configuration already exists, and preview mode is enabled."
             })
         else:
             # Step 2 failed
@@ -1528,7 +1599,7 @@ async def test_credential(
                 content={
                     "success": True,
                     "status_code": status_code,
-                    "message": "Test successful",
+                    "message": "Test successful.",
                     "filename": filename
                 }
             )

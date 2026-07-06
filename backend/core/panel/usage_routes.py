@@ -42,6 +42,6 @@ async def get_aggregated_stats(token: str = Depends(verify_panel_token)):
 async def reset_usage_stats(request: ResetUsageRequest, token: str = Depends(verify_panel_token)):
     try:
         reset_stats(request.filename)
-        return {"success": True, "message": f"Successfully reset usage statistics for {request.filename}"}
+        return {"success": True, "message": f"Successfully reset usage statistics for {request.filename}."}
     except Exception as e:
         return JSONResponse(status_code=500, content={"success": False, "detail": str(e)})

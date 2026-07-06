@@ -40,16 +40,16 @@ async def clear_logs(token: str = Depends(verify_panel_token)):
                 log.info(f"Log file cleared: {log_file_path}")
 
 
-                await manager.broadcast("--- Log file cleared ---")
+                await manager.broadcast("--- Log file cleared. ---")
 
                 return JSONResponse(
-                    content={"message": f"Log file cleared: {os.path.basename(log_file_path)}"}
+                    content={"message": f"Log file cleared: {os.path.basename(log_file_path)}."}
                 )
             except Exception as e:
                 log.error(f"Failed to clear log file: {e}")
                 raise HTTPException(status_code=500, detail=f"Failed to clear log file: {str(e)}")
         else:
-            return JSONResponse(content={"message": "Log file does not exist"})
+            return JSONResponse(content={"message": "Log file does not exist."})
 
     except Exception as e:
         log.error(f"Failed to clear log file: {e}")
@@ -220,7 +220,7 @@ async def websocket_logs(websocket: WebSocket):
 
                     elif current_size < last_size:
                         last_size = 0
-                        await websocket.send_text("--- Log file cleared ---")
+                        await websocket.send_text("--- Log file cleared. ---")
 
         finally:
 

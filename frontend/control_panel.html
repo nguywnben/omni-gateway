@@ -6,8 +6,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Omni Gateway Console</title>
     <link rel="icon" href="/frontend/assets/favicon.ico" sizes="any">
-    <link rel="icon" type="image/png" href="/frontend/assets/icon.png">
-    <link rel="apple-touch-icon" href="/frontend/assets/icon.png">
+    <link rel="icon" type="image/png" href="/frontend/assets/logo.png">
+    <link rel="apple-touch-icon" href="/frontend/assets/logo.png">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Google+Sans:ital,opsz,wght@0,17..18,400..700;1,17..18,400..700&display=swap" rel="stylesheet">
@@ -21,7 +21,7 @@
         <div class="login-card">
             <div class="login-brand">
                 <span class="app-mark" aria-hidden="true">
-                    <img class="app-mark-image" src="/frontend/assets/icon.png" alt="">
+                    <img class="app-mark-image" src="/frontend/assets/logo.png" alt="">
                 </span>
                 <div class="login-brand-title">Omni Gateway</div>
             </div>
@@ -39,7 +39,7 @@
         <div class="login-card">
             <div class="login-brand">
                 <span class="app-mark" aria-hidden="true">
-                    <img class="app-mark-image" src="/frontend/assets/icon.png" alt="">
+                    <img class="app-mark-image" src="/frontend/assets/logo.png" alt="">
                 </span>
                 <div class="login-brand-title">Omni Gateway</div>
             </div>
@@ -59,7 +59,7 @@
         <aside class="dashboard-sidebar" aria-label="Primary navigation">
             <div class="sidebar-brand">
                 <span class="app-mark" aria-hidden="true">
-                    <img class="app-mark-image" src="/frontend/assets/icon.png" alt="">
+                    <img class="app-mark-image" src="/frontend/assets/logo.png" alt="">
                 </span>
                 <h2>Omni Gateway</h2>
             </div>
@@ -69,17 +69,13 @@
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 13h6V4H4z"></path><path d="M14 20h6V4h-6z"></path><path d="M4 20h6v-3H4z"></path></svg>
                     <span>Dashboard</span>
                 </button>
-                <button type="button" class="tab" onclick="switchTab('manage')">
+                <button type="button" class="tab" onclick="switchTab('pool')">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 7h14"></path><path d="M5 12h14"></path><path d="M5 17h14"></path><circle cx="7" cy="7" r="1"></circle><circle cx="7" cy="12" r="1"></circle><circle cx="7" cy="17" r="1"></circle></svg>
-                    <span>Credentials</span>
+                    <span>Pool</span>
                 </button>
-                <button type="button" class="tab" onclick="switchTab('oauth')">
+                <button type="button" class="tab" onclick="switchTab('providers')">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M15 7h3a4 4 0 0 1 0 8h-3"></path><path d="M9 17H6a4 4 0 0 1 0-8h3"></path><path d="M8 12h8"></path></svg>
-                    <span>OAuth</span>
-                </button>
-                <button type="button" class="tab" onclick="switchTab('upload')">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V4"></path><path d="M7 9l5-5 5 5"></path><path d="M5 20h14"></path></svg>
-                    <span>Upload</span>
+                    <span>Providers</span>
                 </button>
                 <button type="button" class="tab" onclick="switchTab('config')">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19 12a7 7 0 0 0-.1-1.2l2-1.5-2-3.4-2.4 1a7.7 7.7 0 0 0-2-1.2L14 3h-4l-.4 2.7a7.7 7.7 0 0 0-2 1.2l-2.4-1-2 3.4 2 1.5A7 7 0 0 0 5 12c0 .4 0 .8.1 1.2l-2 1.5 2 3.4 2.4-1c.6.5 1.3.9 2 1.2L10 21h4l.4-2.7c.7-.3 1.4-.7 2-1.2l2.4 1 2-3.4-2-1.5c.1-.4.2-.8.2-1.2z"></path></svg>
@@ -107,7 +103,7 @@
         <header class="mobile-topbar">
             <div class="mobile-topbar-brand">
                 <span class="app-mark" aria-hidden="true">
-                    <img class="app-mark-image" src="/frontend/assets/icon.png" alt="">
+                    <img class="app-mark-image" src="/frontend/assets/logo.png" alt="">
                 </span>
                 <span>Omni Gateway</span>
             </div>
@@ -199,19 +195,20 @@
                             </div>
                         </section>
                     </div>
+
                 </div>
 
-                <div id="manageTab" class="tab-content">
+                <div id="poolTab" class="tab-content">
                     <header class="page-header">
-                        <div>
-                            <div class="page-kicker">Credentials</div>
-                            <h1 class="page-title">Provider credential pool</h1>
-                            <p class="page-description">Audit account health, cooldowns, quota state, and batch operations for active routing capacity.</p>
-                        </div>
-                        <div class="page-actions">
-                            <button type="button" class="btn" onclick="refreshPrimaryCredsList()">Refresh</button>
-                            <button type="button" class="btn btn-secondary" onclick="downloadAllPrimaryCreds()">Download ZIP</button>
-                        </div>
+                            <div>
+                                <div class="page-kicker">Pool</div>
+                                <h1 class="page-title">Provider credential pool</h1>
+                                <p class="page-description">Manage accounts and API keys from every connected provider. Audit account health, cooldowns, quota state, and batch operations for active routing capacity.</p>
+                            </div>
+                            <div class="page-actions">
+                                <button type="button" class="btn" onclick="refreshPrimaryCredsList()">Refresh</button>
+                                <button type="button" class="btn btn-secondary" onclick="downloadAllPrimaryCreds()">Download ZIP</button>
+                            </div>
                     </header>
 
                     <div class="stats-container">
@@ -301,85 +298,105 @@
                     </div>
                 </div>
 
-                <div id="oauthTab" class="tab-content">
+                <div id="providersTab" class="tab-content">
                     <header class="page-header">
                         <div>
-                            <div class="page-kicker">OAuth</div>
-                            <h1 class="page-title">Connect a Google account</h1>
-                            <p class="page-description">Create and save provider credentials through the Google authorization flow.</p>
+                            <div class="page-kicker">Providers</div>
+                            <h1 class="page-title">Add provider credentials</h1>
+                            <p class="page-description">Choose a supported provider, authorize an account, or import credential files into the shared routing pool.</p>
                         </div>
                     </header>
 
-                    <section class="tool-panel">
-                        <h2 class="card-title">Provider authentication</h2>
-                        <div class="page-actions">
-                            <button type="button" class="btn" id="getPrimaryAuthBtn">Generate authorization link</button>
+                    <section class="provider-hero-card">
+                        <div class="provider-logo-frame">
+                            <img src="/frontend/assets/antigravity-logo.png" alt="Antigravity logo">
                         </div>
-
-                        <div id="primaryAuthUrlSection" class="hidden" style="margin-top: 18px;">
-                            <label>Authorization link</label>
-                            <div class="endpoint-code-card">
-                                <a id="primaryAuthUrl" href="#" target="_blank" rel="noreferrer">Open Google authorization</a>
-                            </div>
-
-                            <div class="tool-panel" style="margin-top: 14px;">
-                                <button type="button" class="btn btn-secondary btn-small" onclick="togglePrimaryCallbackUrlSection()">
-                                    Callback URL fallback <span id="primaryCallbackUrlToggleIcon">Show</span>
-                                </button>
-                                <div id="primaryCallbackUrlSection" style="display: none; margin-top: 12px;">
-                                    <label for="primaryCallbackUrlInput">Callback URL</label>
-                                    <input type="url" id="primaryCallbackUrlInput" placeholder="http://localhost:11451/?state=...&code=...">
-                                    <button type="button" class="btn btn-secondary btn-small" style="margin-top: 10px;" onclick="processPrimaryCallbackUrl()">Parse callback URL</button>
-                                </div>
-                            </div>
-
-                            <div class="page-actions" style="margin-top: 14px;">
-                                <button type="button" class="btn" id="getPrimaryCredsBtn" onclick="getPrimaryCredentials()">Save credentials</button>
-                            </div>
-
-                            <div id="primaryCredsSection" class="hidden" style="margin-top: 14px;">
-                                <label>Saved credential payload</label>
-                                <div class="credentials">
-                                    <pre id="primaryCredsContent"></pre>
-                                </div>
-                                <button type="button" class="btn btn-secondary btn-small" style="margin-top: 10px;" onclick="downloadPrimaryCredentials()">Download credentials</button>
-                            </div>
+                        <div class="provider-summary">
+                            <div class="provider-eyebrow">Available now</div>
+                            <h2>Antigravity</h2>
+                            <p>Connect Google Antigravity credentials through OAuth or import existing credential JSON files and ZIP archives.</p>
+                        </div>
+                        <div class="provider-capabilities" aria-label="Supported methods">
+                            <span>OAuth</span>
+                            <span>JSON import</span>
+                            <span>ZIP import</span>
                         </div>
                     </section>
-                </div>
 
-                <div id="uploadTab" class="tab-content">
-                    <header class="page-header">
-                        <div>
-                            <div class="page-kicker">Upload</div>
-                            <h1 class="page-title">Batch upload credentials</h1>
-                            <p class="page-description">Import provider credential JSON files or ZIP archives into the active credential pool.</p>
-                        </div>
-                    </header>
-
-                    <section class="tool-panel">
-                        <div class="upload-area" id="primaryUploadArea" onclick="document.getElementById('primaryFileInput').click()" ondrop="handlePrimaryFileDrop(event)" ondragover="event.preventDefault(); this.classList.add('dragover');" ondragleave="this.classList.remove('dragover');">
-                            <div>
-                                <div class="upload-title">Drop credential files here</div>
-                                <p class="upload-copy">Supports JSON and ZIP archives.</p>
-                            </div>
-                        </div>
-                        <input type="file" id="primaryFileInput" multiple accept=".json,.zip" style="display: none;" onchange="handlePrimaryFileSelect(event)">
-
-                        <div id="primaryFileListSection" class="hidden" style="margin-top: 16px;">
-                            <label>Pending files</label>
-                            <div class="file-list" id="primaryFileList"></div>
+                    <div class="provider-tools-grid">
+                        <section class="tool-panel">
+                            <h2 class="card-title">Antigravity OAuth</h2>
+                            <p class="card-copy provider-tool-copy">Generate an authorization link and save the account directly into the active pool.</p>
                             <div class="page-actions">
-                                <button type="button" class="btn btn-small" onclick="uploadPrimaryFiles()">Upload</button>
-                                <button type="button" class="btn btn-secondary btn-small" onclick="clearPrimaryFiles()">Clear</button>
+                                <button type="button" class="btn" id="getPrimaryAuthBtn">Generate authorization link</button>
                             </div>
-                        </div>
 
-                        <div id="primaryUploadProgressSection" class="hidden" style="margin-top: 16px;">
-                            <div class="progress-bar"><div class="progress-fill" id="primaryProgressFill"></div></div>
-                            <p id="primaryProgressText" class="page-description" style="margin-top: 8px;">Upload progress: 0%</p>
-                        </div>
-                    </section>
+                            <div id="primaryAuthUrlSection" class="hidden" style="margin-top: 18px;">
+                                <div class="auth-link-header">
+                                    <label>Authorization link</label>
+                                    <button type="button" class="btn btn-secondary" title="Copy authorization link" aria-label="Copy authorization link" onclick="cpUrl(document.getElementById('primaryAuthUrl'))">Copy</button>
+                                </div>
+                                <div class="endpoint-code-card auth-link-card">
+                                    <a id="primaryAuthUrl" href="#" target="_blank" rel="noreferrer">Open Google authorization</a>
+                                </div>
+
+                                <div class="page-actions" style="margin-top: 14px;">
+                                    <button type="button" class="btn" id="getPrimaryCredsBtn" onclick="getPrimaryCredentials()">Save credentials</button>
+                                </div>
+
+                                <div id="primarySaveResult" class="save-result hidden" style="margin-top: 14px;">
+                                    <div>
+                                        <strong id="primarySaveResultTitle">Credential saved to pool</strong>
+                                        <p id="primarySaveResultText"></p>
+                                    </div>
+                                    <button type="button" class="btn btn-secondary" onclick="switchTab('pool')">View</button>
+                                </div>
+
+                                <div id="primaryCredsSection" class="hidden" style="margin-top: 14px;">
+                                    <label>Saved credential payload</label>
+                                    <div class="credentials">
+                                        <pre id="primaryCredsContent"></pre>
+                                    </div>
+                                    <button type="button" class="btn btn-secondary" id="primaryCredsDownloadBtn" style="margin-top: 10px;" onclick="downloadPrimaryCredentials()">Download credentials</button>
+                                </div>
+                            </div>
+                        </section>
+
+                        <section class="tool-panel">
+                            <h2 class="card-title">Batch import</h2>
+                            <p class="card-copy provider-tool-copy">Import Antigravity credential JSON files or ZIP archives into the active pool.</p>
+                            <div class="upload-area" id="primaryUploadArea" onclick="document.getElementById('primaryFileInput').click()" ondrop="handlePrimaryFileDrop(event)" ondragover="event.preventDefault(); this.classList.add('dragover');" ondragleave="this.classList.remove('dragover');">
+                                <div>
+                                    <div class="upload-title">Drop credential files here</div>
+                                    <p class="upload-copy">Supports JSON and ZIP archives.</p>
+                                </div>
+                            </div>
+                            <input type="file" id="primaryFileInput" multiple accept=".json,.zip" style="display: none;" onchange="handlePrimaryFileSelect(event)">
+
+                            <div id="primaryFileListSection" class="hidden" style="margin-top: 16px;">
+                                <label>Pending files</label>
+                                <div class="file-list" id="primaryFileList"></div>
+                                <div class="page-actions">
+                                    <button type="button" class="btn btn-small" onclick="uploadPrimaryFiles()">Upload</button>
+                                    <button type="button" class="btn btn-secondary btn-small" onclick="clearPrimaryFiles()">Clear</button>
+                                </div>
+                            </div>
+
+                            <div id="primaryUploadProgressSection" class="hidden" style="margin-top: 16px;">
+                                <div class="progress-bar"><div class="progress-fill" id="primaryProgressFill"></div></div>
+                                <p id="primaryProgressText" class="page-description" style="margin-top: 8px;">Upload progress: 0%</p>
+                            </div>
+
+                            <div id="primaryUploadResult" class="save-result upload-result hidden" style="margin-top: 14px;">
+                                <div>
+                                    <strong id="primaryUploadResultTitle">Import complete</strong>
+                                    <p id="primaryUploadResultText"></p>
+                                    <div id="primaryUploadResultDetails" class="upload-result-details"></div>
+                                </div>
+                                <button type="button" class="btn btn-secondary" onclick="switchTab('pool')">View</button>
+                            </div>
+                        </section>
+                    </div>
                 </div>
 
                 <div id="configTab" class="tab-content">

@@ -310,7 +310,6 @@ const TRANSLATIONS = {
     "credit_disabled_title": "Credit mode is currently disabled",
     "other_models_title": "Other models",
     "btn_view_content": "View content",
-    "btn_view_email": "View email",
     "btn_view_quota": "View quota",
     "btn_view_quota_title": "View quota usage info for this credential",
     "btn_disable_credit": "Disable credit",
@@ -325,7 +324,7 @@ const TRANSLATIONS = {
     "btn_message_test_title": "Test whether this credential is working.",
     "btn_view_errors": "View errors",
     "btn_view_errors_title": "View detailed error messages for this credential.",
-    "email_not_fetched": "Email not fetched",
+    "email_not_fetched": "Email unavailable",
     "click_view_content_to_load": "Click 'View content' to load file details.",
     "click_view_errors_to_load": "Click 'View errors' to load error messages.",
     "click_view_quota_to_load": "Click 'View quota' to load quota usage details.",
@@ -442,7 +441,10 @@ const TRANSLATIONS = {
     "unable_to_autodetect_project_id_ple": "Unable to auto-detect Project ID. Please manually enter your Google Cloud Project ID:",
     "click_this_link_to_authorize_your_g": "Open this link to authorize your Google account.",
     "email_groupemailnkeep_groupkept_fil": "Email: {group_email}\\nKeep: {group_kept_file}\\nDelete: {group_deleted_files_join}\\n\\n",
-    "primary_authentication_link_gen": "Provider authentication link generated. Open the link to complete authorization.",
+    "primary_authentication_link_gen": "Provider authentication link generated. Open the link, finish Google authorization, then return here to save it.",
+    "checking_provider_authorization": "Checking authorization status...",
+    "provider_authorization_pending": "Authorization is not complete yet. Open the authorization link, finish Google sign-in, then return here and click Save credentials.",
+    "provider_authorization_expired": "This authorization session was not found or has expired. Generate a new authorization link and try again.",
     "check_successful_already_running_th": "Update check completed. You are already running the latest version.",
     "switched_to_official_endpoint_confi": "Switched to the official endpoint configuration. Click \"Save config\" to save the settings.",
     "nplease_enter_index_1dataavailable": "\\nPlease enter an index (1-{data_available_projects_length}):",
@@ -450,7 +452,7 @@ const TRANSLATIONS = {
     "failed_to_generate_authentication_l": "Failed to generate authentication link: {error}",
     "action": "Action",
     "save_config": "Save config",
-    "fetch_primary_credentials": "Fetch provider credentials",
+    "fetch_primary_credentials": "Save credentials",
     "failed_to_generate_authentication_l_dup": "Failed to generate authentication link",
     "retry_using_the_selected_project": "Retrying with the selected project...",
     "div_styletextalign_center_padding_2_dup": "<div style=\"text-align: center; padding: 20px; color: #dc3545;\">\n\n                        <div style=\"font-size: 48px; margin-bottom: 10px;\"></div>\n\n                        <div style=\"font-weight: bold; margin-bottom: 5px;\">Network Error</div>\n\n                        <div style=\"font-size: 13px; color: #666;\">{error_message}</div>\n\n                    </div>",
@@ -647,7 +649,18 @@ const TRANSLATIONS = {
     "div_stylecolor_007bfftype_highlight": "<div style=\"color: #007bff;\">Type: {highlightedType}</div>",
     "failed_to_check_for_updates_errorme": "Failed to check for updates: {error_message}",
     "nerror_detailsndataerror": "\\nError details:\\n{data_error}",
-    "primary_authentication_successf_dup": "Provider authentication completed successfully. File saved to: {data_file_path}.",
+    "primary_authentication_successf_dup": "Credential saved to the pool. File: {data_file_path}.",
+    "saving_provider_credentials": "Saving credentials to the pool...",
+    "provider_credential_saved_title": "Credential saved to pool",
+    "provider_credential_replaced_title": "Credential renewed",
+    "provider_credential_skipped_title": "Credential already exists",
+    "provider_credential_saved_body": "The credential was saved and the provider pool was refreshed. File: {data_file_path}.",
+    "provider_credential_skipped_body": "The credential was not added because the pool already has the same email with an equal or later expiry. File: {data_file_path}.",
+    "view_pool": "View",
+    "upload_result_success_title": "Credentials imported",
+    "upload_result_skipped_title": "Duplicate credentials skipped",
+    "upload_result_mixed_title": "Import complete",
+    "upload_result_error_title": "Import failed",
     "batch_verify_project_id": "Batch verify Project ID",
     "filter_thiscurrentstatusfilter_enab": "(Filter: {filter})",
     "are_you_sure_you_want_to_configure": "Are you sure you want to configure all endpoints to official addresses?",
@@ -665,7 +678,7 @@ const TRANSLATIONS = {
     "page_page_of_total_showing_startend": "Page {page} of {total} (Showing {start}-{end}, {count} items in total)",
     "loading_file_content": "Loading file content...",
     "generating_authentication_link": "Generating authentication link...",
-    "failed_to_refresh_emails": "Failed to refresh emails",
+    "failed_to_refresh_emails": "Failed to refresh emails.",
     "preview_only": "Preview only",
     "max_retries_on_failure": "Max retries on failure:",
     "batch_operation_complete_successful": "Batch operation complete. Processed {successCount}/{selectedFiles_length} files successfully.",
@@ -781,8 +794,8 @@ const TRANSLATIONS = {
     "check_for_updates_failed_dataupdate": "Update check failed: {data_update_error}",
     "upload_failed": "Upload failed:",
     "all_verifications_failed_failed_fai": "All verifications failed. Failed {failCount}/{selectedFiles_length} credentials.",
-    "upload_failed_server_response_forma": "Upload failed: Server response format error",
-    "deduplication_failed": "Deduplication failed",
+    "upload_failed_server_response_forma": "Upload failed: server response format error.",
+    "deduplication_failed": "Deduplication failed.",
     "credit_resultcreditamount": "(Credit: {result_creditAmount})",
     "are_you_sure_you_want_to_delete_the_dup": "Are you sure you want to delete the credential file?\\n{filename}",
     "test_failed": "Test failed",
@@ -869,7 +882,7 @@ const TRANSLATIONS = {
     "listening_port": "Listening Port:",
     "email_refresh_complete_successfully": "Email refresh complete. Retrieved {data_success_count}/{data_total_count} email addresses.",
     "already_up_to_date_dup": "Already up to date",
-    "no_credential_files_available": "No credential files available",
+    "no_credential_files_available": "No credential files available.",
     "validation_successfulnnfile_filenam": "Validation successful.\\n\\nFile: {filename}\\nProject ID: {data_project_id}{tierLine}{creditLine}\\n\\n{data_message}",
     "selectedcount_items_selected": "{selectedCount} items selected",
     "click_the_view_content_button_to_lo": "Click the \"View content\" button to load file details...",
@@ -894,7 +907,20 @@ const TRANSLATIONS = {
     "multiple_projects_detected_please_s": "Multiple projects were detected. Specify a Project ID in advanced options:",
     "failed_to_fetch_error_information_e": "Failed to fetch error information: {error_message}",
     "status_net_error": "Network error: {error}",
+    "status_no_creds": "No credentials are in this pool yet. Add an account or upload credentials to get started.",
     "status_no_filter_data": "No usage statistics found.",
+    "status_no_errors": "No errors",
+    "action_enable": "Enable",
+    "action_disable": "Disable",
+    "action_delete": "Delete",
+    "action_enable_credit": "Enable credit",
+    "action_disable_credit": "Disable credit",
+    "btn_download": "Download",
+    "error_code_prefix": "Error",
+    "model_title": "Model",
+    "provider_antigravity": "Antigravity",
+    "provider_code_assist": "Code Assist",
+    "credential_account_fallback": "Provider account",
     "table_calls": "Requests",
     "btn_reset_stats": "Reset Stats",
     "confirm_reset_stats": "Are you sure you want to reset statistics for {filename}?",
@@ -1013,11 +1039,15 @@ const ROUTE_MAP = {
 
     '/dashboard': 'dashboard',
 
-    '/provider': 'manage',
+    '/pool': 'pool',
 
-    '/oauth': 'oauth',
+    '/provider': 'pool',
 
-    '/upload': 'upload',
+    '/providers': 'providers',
+
+    '/oauth': 'providers',
+
+    '/upload': 'providers',
 
     '/config': 'config',
 
@@ -1027,13 +1057,14 @@ const ROUTE_MAP = {
 
 };
 
-const TAB_MAP = {};
-
-for (const [route, tab] of Object.entries(ROUTE_MAP)) {
-
-    TAB_MAP[tab] = route;
-
-}
+const TAB_MAP = {
+    dashboard: '/dashboard',
+    pool: '/pool',
+    providers: '/providers',
+    config: '/config',
+    logs: '/logs',
+    about: '/about'
+};
 
 function navigate(path, pushState = true) {
 
@@ -1115,13 +1146,24 @@ function navigate(path, pushState = true) {
 
     }
 
-    if (pushState && window.location.pathname !== targetPath) {
+    const tabName = ROUTE_MAP[targetPath] || 'dashboard';
+    const canonicalPath = TAB_MAP[tabName] || '/dashboard';
 
-        history.pushState(null, '', targetPath);
+    targetPath = canonicalPath;
+
+    if (window.location.pathname !== targetPath) {
+
+        if (pushState) {
+
+            history.pushState(null, '', targetPath);
+
+        } else {
+
+            history.replaceState(null, '', targetPath);
+
+        }
 
     }
-
-    const tabName = ROUTE_MAP[targetPath] || 'dashboard';
 
     // Close mobile menu instantly (Zero Animations!)
 
@@ -1196,6 +1238,8 @@ const AppState = {
     primaryAuthState: null,
 
     primaryAuthInProgress: false,
+
+    primaryCredentialFilename: '',
 
     creds: createCredsManager('normal'),
 
@@ -1274,8 +1318,6 @@ function createCredsManager(type) {
                 downloadAll: `./api/creds/download-all`,
 
                 detail: `./api/creds/detail`,
-
-                fetchEmail: `./api/creds/fetch-email`,
 
                 refreshAllEmails: `./api/creds/refresh-all-emails`,
 
@@ -1454,6 +1496,7 @@ function createCredsManager(type) {
             const list = document.getElementById(this.getElementId('CredsList'));
 
             list.innerHTML = '';
+            list.classList.remove('is-empty');
 
             const entries = Object.entries(this.filteredData);
 
@@ -1461,7 +1504,12 @@ function createCredsManager(type) {
 
                 const msg = this.totalCount === 0 ? t('status_no_creds') : t('status_no_filter_data');
 
-                list.innerHTML = `<p style="text-align: center; color: #666;">${msg}</p>`;
+                list.classList.add('is-empty');
+
+                const emptyState = document.createElement('div');
+                emptyState.className = 'creds-empty-state';
+                emptyState.textContent = msg;
+                list.appendChild(emptyState);
 
                 document.getElementById(this.getElementId('PaginationContainer')).style.display = 'none';
 
@@ -1763,6 +1811,86 @@ function createUploadManager(type) {
 
         },
 
+        hideUploadResult() {
+
+            const panel = document.getElementById(this.getElementId('UploadResult'));
+
+            if (panel) panel.classList.add('hidden');
+
+        },
+
+        renderUploadResult(data, fallbackVariant = 'success') {
+
+            const panel = document.getElementById(this.getElementId('UploadResult'));
+            const title = document.getElementById(this.getElementId('UploadResultTitle'));
+            const text = document.getElementById(this.getElementId('UploadResultText'));
+            const details = document.getElementById(this.getElementId('UploadResultDetails'));
+
+            if (!panel || !title || !text || !details) return;
+
+            const results = Array.isArray(data.results) ? data.results : [];
+            const savedCount = Number(data.uploaded_count || data.loaded_count || 0);
+            const skippedCount = Number(data.skipped_count || 0);
+            const errorCount = results.filter(item => item.status === 'error').length;
+
+            let variant = 'success';
+            if (fallbackVariant === 'error' || (errorCount > 0 && savedCount === 0 && skippedCount === 0)) {
+                variant = 'error';
+            } else if (skippedCount > 0 && savedCount === 0 && errorCount === 0) {
+                variant = 'info';
+            } else if (skippedCount > 0 || errorCount > 0) {
+                variant = 'warning';
+            }
+
+            const titleText = variant === 'error'
+                ? t('upload_result_error_title')
+                : variant === 'info'
+                    ? t('upload_result_skipped_title')
+                    : variant === 'warning'
+                        ? t('upload_result_mixed_title')
+                        : t('upload_result_success_title');
+
+            panel.classList.remove('hidden', 'info', 'warning', 'error');
+            if (variant !== 'success') panel.classList.add(variant);
+
+            title.textContent = titleText;
+            text.textContent = ensureTerminalPunctuation(data.message || t('status_upload_success', {count: savedCount, type: type === 'primary' ? 'provider' : ''}));
+            details.replaceChildren();
+
+            const visibleResults = results.slice(0, 6);
+            visibleResults.forEach(item => {
+                const detailItem = document.createElement('div');
+                detailItem.className = 'upload-result-item';
+
+                const fileLine = document.createElement('div');
+                fileLine.className = 'upload-result-file';
+
+                const actionLabel = item.status === 'skipped'
+                    ? 'Skipped'
+                    : item.status === 'error'
+                        ? 'Error'
+                        : item.action === 'replaced'
+                            ? 'Renewed'
+                            : 'Added';
+                fileLine.textContent = `${actionLabel}: ${item.filename || item.source_filename || 'Credential'}`;
+
+                const messageLine = document.createElement('div');
+                messageLine.className = 'upload-result-message';
+                messageLine.textContent = ensureTerminalPunctuation(item.message || data.message || '');
+
+                detailItem.append(fileLine, messageLine);
+                details.appendChild(detailItem);
+            });
+
+            if (results.length > visibleResults.length) {
+                const moreItem = document.createElement('div');
+                moreItem.className = 'upload-result-message';
+                moreItem.textContent = `${results.length - visibleResults.length} more result(s) not shown.`;
+                details.appendChild(moreItem);
+            }
+
+        },
+
         handleFileSelect(event) {
 
             this.addFiles(Array.from(event.target.files));
@@ -1770,6 +1898,8 @@ function createUploadManager(type) {
         },
 
         addFiles(files) {
+
+            this.hideUploadResult();
 
             files.forEach(file => {
 
@@ -1863,11 +1993,13 @@ function createUploadManager(type) {
 
         },
 
-        clearFiles() {
+        clearFiles(hideResult = true) {
 
             this.selectedFiles = [];
 
             this.updateFileList();
+
+            if (hideResult) this.hideUploadResult();
 
         },
 
@@ -1927,9 +2059,11 @@ function createUploadManager(type) {
 
                             const data = JSON.parse(xhr.responseText);
 
-                            showStatus(t('status_upload_success', {count: data.uploaded_count, type: type === 'primary' ? 'provider' : ''}), 'success');
+                            const message = data.message || t('status_upload_success', {count: data.uploaded_count, type: type === 'primary' ? 'provider' : ''});
+                            showStatus(message, data.uploaded_count > 0 ? 'success' : 'info');
+                            this.renderUploadResult(data);
 
-                            this.clearFiles();
+                            this.clearFiles(false);
 
                             progressSection.classList.add('hidden');
 
@@ -1944,12 +2078,15 @@ function createUploadManager(type) {
                         try {
 
                             const error = JSON.parse(xhr.responseText);
+                            const errorMessage = error.detail || error.error || t('unknown_error');
 
-                            showStatus(t('status_upload_failed_details', {error: error.detail || error.error || t('unknown_error')}), 'error');
+                            showStatus(t('status_upload_failed_details', {error: errorMessage}), 'error');
+                            this.renderUploadResult({message: errorMessage, results: []}, 'error');
 
                         } catch (e) {
 
                             showStatus(t('status_upload_failed_http', {status: xhr.status}), 'error');
+                            this.renderUploadResult({message: t('status_upload_failed_http', {status: xhr.status}), results: []}, 'error');
 
                         }
 
@@ -1960,6 +2097,7 @@ function createUploadManager(type) {
                 xhr.onerror = () => {
 
                     showStatus(t('status_upload_aborted', {count: this.selectedFiles.length}), 'error');
+                    this.renderUploadResult({message: t('status_upload_aborted', {count: this.selectedFiles.length}), results: []}, 'error');
 
                     progressSection.classList.add('hidden');
 
@@ -1968,6 +2106,7 @@ function createUploadManager(type) {
                 xhr.ontimeout = () => {
 
                     showStatus(t('status_upload_timeout'), 'error');
+                    this.renderUploadResult({message: t('status_upload_timeout'), results: []}, 'error');
 
                     progressSection.classList.add('hidden');
 
@@ -1982,6 +2121,7 @@ function createUploadManager(type) {
             } catch (error) {
 
                 showStatus(t('status_upload_failed_details', {error: error.message}), 'error');
+                this.renderUploadResult({message: error.message, results: []}, 'error');
 
             }
 
@@ -1997,7 +2137,27 @@ function createUploadManager(type) {
 
 // =====================================================================
 
+function ensureTerminalPunctuation(message) {
+
+    const value = String(message ?? '');
+    const trimmedEnd = value.trimEnd();
+
+    if (!trimmedEnd) return value;
+
+    const visibleText = trimmedEnd
+        .replace(/<br\s*\/?>/gi, ' ')
+        .replace(/<[^>]+>/g, '')
+        .trim();
+
+    if (!visibleText || /[.!?;:…]$/.test(visibleText)) return value;
+
+    return value.slice(0, trimmedEnd.length) + '.' + value.slice(trimmedEnd.length);
+
+}
+
 function showStatus(message, type = 'info') {
+
+    const displayMessage = ensureTerminalPunctuation(message);
 
     const statusSection = document.getElementById('statusSection');
 
@@ -2009,7 +2169,7 @@ function showStatus(message, type = 'info') {
 
         }
 
-        statusSection.innerHTML = `<div class="status ${type}">${message}</div>`;
+        statusSection.innerHTML = `<div class="status ${type}">${displayMessage}</div>`;
 
         const statusDiv = statusSection.querySelector('.status');
 
@@ -2031,7 +2191,7 @@ function showStatus(message, type = 'info') {
 
     } else {
 
-        showMessageModal(t('dialog_tip'), message, 'info');
+        showMessageModal(t('dialog_tip'), displayMessage, 'info');
 
     }
 
@@ -2179,7 +2339,7 @@ function showMessageModal(title, message, type = 'info') {
 
             <div class="message-modal-body">
 
-                ${linkifyText(message).replace(/\n/g, '<br>')}
+                ${linkifyText(normalizeDialogMessage(message)).replace(/\n/g, '<br>')}
 
             </div>
 
@@ -2221,9 +2381,25 @@ function showMessageModal(title, message, type = 'info') {
 
 }
 
-function renderDialogMessage(message) {
+function normalizeDialogMessage(message) {
 
-    return escapeHtml(String(message || '')).replace(/\n/g, '<br>');
+    return String(message || '').replace(/\\n/g, '\n');
+
+}
+
+function renderDialogMessage(message, options = {}) {
+
+    const escaped = escapeHtml(normalizeDialogMessage(message));
+
+    if (options.compact) {
+
+        return escaped
+            .replace(/\n{2,}/g, '<span class="message-modal-break"></span>')
+            .replace(/\n/g, '<br>');
+
+    }
+
+    return escaped.replace(/\n/g, '<br>');
 
 }
 
@@ -2255,7 +2431,7 @@ function showConfirmModal(message, options = {}) {
 
                 <div class="message-modal-body">
 
-                    ${renderDialogMessage(message)}
+                    ${renderDialogMessage(message, { compact: true })}
 
                 </div>
 
@@ -2461,6 +2637,26 @@ function formatCooldownTime(remainingSeconds) {
 
 // =====================================================================
 
+function getCredentialProviderMeta(credInfo, managerType) {
+
+    const provider = String(credInfo.provider || credInfo.provider_name || '').toLowerCase();
+
+    if (managerType === 'primary' || provider.includes('antigravity')) {
+
+        return {
+            name: t('provider_antigravity'),
+            logo: '/frontend/assets/antigravity-logo.png'
+        };
+
+    }
+
+    return {
+        name: t('provider_code_assist'),
+        logo: ''
+    };
+
+}
+
 function createCredCard(credInfo, manager) {
 
     const div = document.createElement('div');
@@ -2468,6 +2664,12 @@ function createCredCard(credInfo, manager) {
     const { status, filename } = credInfo;
 
     const managerType = manager.type;
+    const providerMeta = getCredentialProviderMeta(credInfo, managerType);
+    const accountLabel = credInfo.user_email || t('email_not_fetched');
+    const accountClass = credInfo.user_email ? 'cred-email' : 'cred-email empty';
+    const providerLogo = providerMeta.logo
+        ? `<img src="${providerMeta.logo}" alt="${escapeHtml(providerMeta.name)} logo">`
+        : `<span>${escapeHtml(providerMeta.name.charAt(0))}</span>`;
 
     div.className = status.disabled ? 'cred-card disabled' : 'cred-card';
 
@@ -2599,8 +2801,6 @@ function createCredCard(credInfo, manager) {
 
         <button class="cred-btn download" onclick="download${managerType === 'primary' ? 'Primary' : ''}Cred('${filename}')">${t('btn_download')}</button>
 
-        <button class="cred-btn email" onclick="fetch${managerType === 'primary' ? 'Primary' : ''}UserEmail('${filename}')">${t('btn_view_email')}</button>
-
         ${managerType === 'primary' ? `<button class="cred-btn" onclick="togglePrimaryQuotaDetails('${pathId}')" title="${t('btn_view_quota_title')}">${t('btn_view_quota')}</button>` : ''}
 
         ${managerType === 'primary' ? (credInfo.enable_credit
@@ -2623,12 +2823,6 @@ function createCredCard(credInfo, manager) {
 
     `;
 
-    const emailInfo = credInfo.user_email
-
-        ? `<div class="cred-email">${credInfo.user_email}</div>`
-
-        : `<div class="cred-email empty">${t('email_not_fetched')}</div>`;
-
     const checkboxClass = manager.getElementId('file-checkbox');
 
     div.innerHTML = `
@@ -2639,12 +2833,12 @@ function createCredCard(credInfo, manager) {
 
                 <input type="checkbox" class="${checkboxClass}" data-filename="${filename}" onchange="toggle${managerType === 'primary' ? 'Primary' : ''}FileSelection('${filename}')">
 
-                <div>
-
-                    <div class="cred-filename">${filename}</div>
-
-                    ${emailInfo}
-
+                <div class="cred-identity" title="${escapeHtml(filename)}">
+                    <div class="cred-provider-logo" aria-hidden="true">${providerLogo}</div>
+                    <div class="cred-identity-copy">
+                        <div class="cred-provider-name">${escapeHtml(providerMeta.name)}</div>
+                        <div class="${accountClass}">${escapeHtml(accountLabel)}</div>
+                    </div>
                 </div>
 
             </div>
@@ -3123,10 +3317,9 @@ function triggerTabDataLoad(tabName) {
         refreshUsageStats();
 
         updateEndpointUrls();
-
     }
 
-    if (tabName === 'manage') {
+    if (tabName === 'pool') {
         AppState.primaryCreds.refresh();
     }
 
@@ -3190,7 +3383,7 @@ async function startAuth() {
 
         } else {
 
-            showStatus(t('error_dataerror_failed_to_fetch_aut', {data_error: data.error || t('failed_to_fetch_authentication_link')}), 'error');
+            showStatus(t('error_dataerror_failed_to_fetch_aut', {data_error: data.detail || data.error || t('failed_to_fetch_authentication_link')}), 'error');
 
         }
 
@@ -3316,7 +3509,7 @@ async function getCredentials() {
 
         } else {
 
-            showStatus(t('error_dataerror_failed_to_get_authe', {data_error: data.error || t('failed_to_retrieve_authentication_f_dup')}), 'error');
+            showStatus(t('error_dataerror_failed_to_get_authe', {data_error: data.detail || data.error || t('failed_to_retrieve_authentication_f_dup')}), 'error');
 
         }
 
@@ -3368,6 +3561,8 @@ async function startPrimaryAuth() {
 
             AppState.primaryAuthInProgress = true;
 
+            AppState.primaryCredentialFilename = '';
+
             const authUrlLink = document.getElementById('primaryAuthUrl');
 
             authUrlLink.href = data.auth_url;
@@ -3375,12 +3570,16 @@ async function startPrimaryAuth() {
             authUrlLink.textContent = data.auth_url;
 
             document.getElementById('primaryAuthUrlSection').classList.remove('hidden');
+            document.getElementById('primarySaveResult')?.classList.add('hidden');
+            document.getElementById('primaryCredsSection')?.classList.add('hidden');
+            const primaryCredsContent = document.getElementById('primaryCredsContent');
+            if (primaryCredsContent) primaryCredsContent.textContent = '';
 
             showStatus(t('primary_authentication_link_gen'), 'success');
 
         } else {
 
-            showStatus(t('error_dataerror_failed_to_generate', {data_error: data.error || t('failed_to_generate_authentication_l_dup')}), 'error');
+            showStatus(t('error_dataerror_failed_to_generate', {data_error: data.detail || data.error || t('failed_to_generate_authentication_l_dup')}), 'error');
 
         }
 
@@ -3412,11 +3611,37 @@ async function getPrimaryCredentials() {
 
     btn.disabled = true;
 
-    btn.textContent = t('waiting_for_oauth_callback');
+    btn.textContent = t('checking_provider_authorization');
 
     try {
 
-        showStatus(t('waiting_for_primary_oauth_callb'), 'info');
+        showStatus(t('checking_provider_authorization'), 'info');
+
+        const state = AppState.primaryAuthState;
+        const statusResponse = await fetch(`./api/auth/status?state=${encodeURIComponent(state)}`, {
+            headers: getAuthHeaders()
+        });
+        const statusData = await statusResponse.json().catch(() => ({}));
+
+        if (!statusResponse.ok) {
+            showStatus(t('error_dataerror_failed_to_get_authe', {data_error: statusData.detail || statusData.error || t('unknown_error')}), 'error');
+            return;
+        }
+
+        if (statusData.status === 'not_found') {
+            AppState.primaryAuthInProgress = false;
+            showStatus(t('provider_authorization_expired'), 'error');
+            return;
+        }
+
+        if (statusData.status !== 'completed') {
+            showStatus(t('provider_authorization_pending'), 'info');
+            return;
+        }
+
+        btn.textContent = t('saving_provider_credentials');
+
+        showStatus(t('saving_provider_credentials'), 'info');
 
         const response = await fetch('./api/auth/callback', {
 
@@ -3432,17 +3657,59 @@ async function getPrimaryCredentials() {
 
         if (response.ok) {
 
-            document.getElementById('primaryCredsContent').textContent = JSON.stringify(data.credentials, null, 2);
+            const credentialSaved = data.credential_saved !== false;
+            const credentialAction = data.credential_action || 'created';
+            const resultTitle = credentialAction === 'skipped'
+                ? t('provider_credential_skipped_title')
+                : credentialAction === 'replaced'
+                    ? t('provider_credential_replaced_title')
+                    : t('provider_credential_saved_title');
+            const fileSuffix = data.file_path ? ` File: ${data.file_path}.` : '';
+            const resultBody = data.message
+                ? `${data.message}${data.message.endsWith('.') ? '' : '.'}${fileSuffix}`
+                : credentialSaved
+                    ? t('provider_credential_saved_body', {data_file_path: data.file_path})
+                    : t('provider_credential_skipped_body', {data_file_path: data.file_path});
 
-            document.getElementById('primaryCredsSection').classList.remove('hidden');
+            const primaryCredsSection = document.getElementById('primaryCredsSection');
+            const primaryCredsContent = document.getElementById('primaryCredsContent');
+            const primaryCredsDownloadBtn = document.getElementById('primaryCredsDownloadBtn');
+
+            if (credentialSaved) {
+                primaryCredsContent.textContent = JSON.stringify(data.credentials, null, 2);
+                primaryCredsSection.classList.remove('hidden');
+                primaryCredsDownloadBtn?.classList.remove('hidden');
+                AppState.primaryCredentialFilename = getDownloadFilename(data.file_path, `primary-credential-${Date.now()}.json`);
+            } else {
+                primaryCredsContent.textContent = '';
+                primaryCredsSection.classList.add('hidden');
+                primaryCredsDownloadBtn?.classList.add('hidden');
+                AppState.primaryCredentialFilename = '';
+            }
 
             AppState.primaryAuthInProgress = false;
 
-            showStatus(t('primary_authentication_successf_dup', {data_file_path: data.file_path}), 'success');
+            const saveResult = document.getElementById('primarySaveResult');
+            const saveResultTitle = document.getElementById('primarySaveResultTitle');
+            const saveResultText = document.getElementById('primarySaveResultText');
+            if (saveResult && saveResultText) {
+                if (saveResultTitle) saveResultTitle.textContent = resultTitle;
+                saveResultText.textContent = resultBody;
+                saveResult.classList.remove('hidden');
+            }
+
+            try {
+                await AppState.primaryCreds.refresh();
+                await refreshUsageStats();
+            } catch (refreshError) {
+                console.warn('Credential flow completed, but pool refresh failed:', refreshError);
+            }
+
+            showStatus(resultBody, credentialSaved ? 'success' : 'info');
 
         } else {
 
-            showStatus(t('error_dataerror_failed_to_get_authe', {data_error: data.error || t('failed_to_retrieve_authentication_f_dup')}), 'error');
+            showStatus(t('error_dataerror_failed_to_get_authe', {data_error: data.detail || data.error || t('failed_to_retrieve_authentication_f_dup')}), 'error');
 
         }
 
@@ -3460,6 +3727,14 @@ async function getPrimaryCredentials() {
 
 }
 
+function getDownloadFilename(filePath, fallback) {
+
+    const rawName = String(filePath || '').split(/[\\/]/).pop().trim();
+
+    return rawName || fallback;
+
+}
+
 function downloadPrimaryCredentials() {
 
     const content = document.getElementById('primaryCredsContent').textContent;
@@ -3472,7 +3747,7 @@ function downloadPrimaryCredentials() {
 
     a.href = url;
 
-    a.download = `primary-credential-${Date.now()}.json`;
+    a.download = getDownloadFilename(AppState.primaryCredentialFilename, `primary-credential-${Date.now()}.json`);
 
     a.click();
 
@@ -3515,32 +3790,6 @@ function toggleCallbackUrlSection() {
     const section = document.getElementById('callbackUrlSection');
 
     const icon = document.getElementById('callbackUrlToggleIcon');
-
-    if (section.style.display === 'none') {
-
-        section.style.display = 'block';
-
-        icon.style.transform = 'rotate(180deg)';
-
-        icon.textContent = '';
-
-    } else {
-
-        section.style.display = 'none';
-
-        icon.style.transform = 'rotate(0deg)';
-
-        icon.textContent = '';
-
-    }
-
-}
-
-function togglePrimaryCallbackUrlSection() {
-
-    const section = document.getElementById('primaryCallbackUrlSection');
-
-    const icon = document.getElementById('primaryCallbackUrlToggleIcon');
 
     if (section.style.display === 'none') {
 
@@ -3634,7 +3883,7 @@ async function processCallbackUrl() {
 
         } else {
 
-            showStatus(result.error || t('failed_to_fetch_credentials_from_ca'), 'error');
+            showStatus(result.detail || result.error || t('failed_to_fetch_credentials_from_ca'), 'error');
 
         }
 
@@ -3643,74 +3892,6 @@ async function processCallbackUrl() {
     } catch (error) {
 
         showStatus(t('failed_to_retrieve_credentials_from_dup', {error_message: error.message}), 'error');
-
-    }
-
-}
-
-async function processPrimaryCallbackUrl() {
-
-    const callbackUrl = document.getElementById('primaryCallbackUrlInput').value.trim();
-
-    if (!callbackUrl) {
-
-        showStatus(t('please_enter_the_callback_url'), 'error');
-
-        return;
-
-    }
-
-    if (!callbackUrl.startsWith('http://') && !callbackUrl.startsWith('https://')) {
-
-        showStatus(t('please_enter_a_valid_url_starting_w'), 'error');
-
-        return;
-
-    }
-
-    if (!callbackUrl.includes('code=') || !callbackUrl.includes('state=')) {
-
-        showStatus(t('this_is_not_a_valid_callback_url_pl_dup'), 'error');
-
-        return;
-
-    }
-
-    showStatus(t('retrieving_primary_credentials'), 'info');
-
-    try {
-
-        const response = await fetch('./api/auth/callback-url', {
-
-            method: 'POST',
-
-            headers: getAuthHeaders(),
-
-            body: JSON.stringify({ callback_url: callbackUrl, mode: 'provider' })
-
-        });
-
-        const result = await response.json();
-
-        if (result.credentials) {
-
-            showStatus(result.message || t('primary_credentials_successfull'), 'success');
-
-            document.getElementById('primaryCredsContent').textContent = JSON.stringify(result.credentials, null, 2);
-
-            document.getElementById('primaryCredsSection').classList.remove('hidden');
-
-        } else {
-
-            showStatus(result.error || t('failed_to_retrieve_primary_cred'), 'error');
-
-        }
-
-        document.getElementById('primaryCallbackUrlInput').value = '';
-
-    } catch (error) {
-
-        showStatus(t('failed_to_retrieve_primary_cred_dup', {error_message: error.message}), 'error');
 
     }
 
@@ -3981,112 +4162,6 @@ function removePrimaryFile(index) { AppState.primaryUploadFiles.removeFile(index
 function clearPrimaryFiles() { AppState.primaryUploadFiles.clearFiles(); }
 
 function uploadPrimaryFiles() { AppState.primaryUploadFiles.upload(); }
-
-function updateEmailDisplay(filename, email, managerType = 'normal') {
-
-    const containerId = managerType === 'primary' ? 'primaryCredsList' : 'credsList';
-
-    const container = document.getElementById(containerId);
-
-    if (!container) return false;
-
-    const checkbox = container.querySelector(`input[data-filename="${filename}"]`);
-
-    if (!checkbox) return false;
-
-    const card = checkbox.closest('.cred-card');
-
-    if (!card) return false;
-
-    const emailDiv = card.querySelector('.cred-email');
-
-    if (emailDiv) {
-
-        emailDiv.textContent = email;
-
-        emailDiv.style.color = '#666';
-
-        emailDiv.style.fontStyle = 'normal';
-
-        return true;
-
-    }
-
-    return false;
-
-}
-
-async function fetchUserEmail(filename) {
-
-    try {
-
-        showStatus(t('retrieving_user_emails'), 'info');
-
-        const response = await fetch(`./api/creds/fetch-email/${encodeURIComponent(filename)}`, {
-
-            method: 'POST',
-
-            headers: getAuthHeaders()
-
-        });
-
-        const data = await response.json();
-
-        if (response.ok && data.user_email) {
-
-            showStatus(t('successfully_retrieved_email_dataus', {data_user_email: data.user_email}), 'success');
-
-            updateEmailDisplay(filename, data.user_email, 'normal');
-
-        } else {
-
-            showStatus(data.message || t('unable_to_fetch_user_email'), 'error');
-
-        }
-
-    } catch (error) {
-
-        showStatus(t('failed_to_get_email_errormessage', {error_message: error.message}), 'error');
-
-    }
-
-}
-
-async function fetchPrimaryUserEmail(filename) {
-
-    try {
-
-        showStatus(t('retrieving_user_emails'), 'info');
-
-        const response = await fetch(`./api/creds/fetch-email/${encodeURIComponent(filename)}?mode=provider`, {
-
-            method: 'POST',
-
-            headers: getAuthHeaders()
-
-        });
-
-        const data = await response.json();
-
-        if (response.ok && data.user_email) {
-
-            showStatus(t('successfully_retrieved_email_dataus', {data_user_email: data.user_email}), 'success');
-
-            updateEmailDisplay(filename, data.user_email, 'primary');
-
-        } else {
-
-            showStatus(data.message || t('unable_to_fetch_user_email'), 'error');
-
-        }
-
-    } catch (error) {
-
-        showStatus(t('failed_to_get_email_errormessage', {error_message: error.message}), 'error');
-
-    }
-
-}
 
 async function verifyProjectId(filename) {
 
