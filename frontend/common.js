@@ -2361,19 +2361,20 @@ function showMessageModal(title, message, type = 'info', options = {}) {
     const modal = document.createElement('div');
 
     modal.className = 'message-modal-overlay';
+    const safeType = String(type || 'info').replace(/[^\w-]/g, '') || 'info';
+    const safeTitle = escapeHtml(title);
+    const normalizedMessage = normalizeDialogMessage(message);
     const bodyContent = options.html
         ? String(message || '')
-        : linkifyText(normalizeDialogMessage(message)).replace(/\n/g, '<br>');
+        : `<div class="message-modal-copy">${linkifyText(escapeHtml(normalizedMessage)).replace(/\n/g, '<br>')}</div>`;
 
     modal.innerHTML = `
 
-        <div class="message-modal ${type}">
+        <div class="message-modal informational ${safeType}" role="dialog" aria-modal="true" aria-label="${safeTitle}">
 
             <div class="message-modal-header">
 
-                <h3>${title}</h3>
-
-                <button class="message-modal-close" onclick="this.closest('.message-modal-overlay').remove()">&times;</button>
+                <h3>${safeTitle}</h3>
 
             </div>
 
@@ -2385,7 +2386,7 @@ function showMessageModal(title, message, type = 'info', options = {}) {
 
             <div class="message-modal-footer">
 
-                <button class="message-modal-btn" onclick="this.closest('.message-modal-overlay').remove()">${t('btn_close')}</button>
+                <button type="button" class="message-modal-btn" data-dialog-close>${escapeHtml(t('btn_close'))}</button>
 
             </div>
 
@@ -2393,31 +2394,35 @@ function showMessageModal(title, message, type = 'info', options = {}) {
 
     `;
 
-    document.body.appendChild(modal);
+    let closed = false;
+
+    const close = () => {
+
+        if (closed) return;
+
+        closed = true;
+
+        document.removeEventListener('keydown', escHandler);
+
+        modal.remove();
+
+    };
 
     modal.addEventListener('click', function(e) {
 
-        if (e.target === modal) {
-
-            modal.remove();
-
-        }
+        if (e.target === modal || e.target.closest('[data-dialog-close]')) close();
 
     });
 
     const escHandler = function(e) {
 
-        if (e.key === 'Escape') {
-
-            modal.remove();
-
-            document.removeEventListener('keydown', escHandler);
-
-        }
+        if (e.key === 'Escape') close();
 
     };
 
     document.addEventListener('keydown', escHandler);
+
+    document.body.appendChild(modal);
 
 }
 
@@ -2440,6 +2445,70 @@ function renderDialogMessage(message, options = {}) {
     }
 
     return escaped.replace(/\n/g, '<br>');
+
+}
+
+function stringifyModalDetail(value) {
+
+    if (value === undefined || value === null || value === '') return '';
+
+    if (typeof value === 'string') return normalizeDialogMessage(value);
+
+    try {
+
+        return JSON.stringify(value, null, 2);
+
+    } catch {
+
+        return String(value);
+
+    }
+
+}
+
+function buildMessageResultDetails(label, value, options = {}) {
+
+    const text = stringifyModalDetail(value);
+
+    if (!text) return '';
+
+    return `
+        <details class="message-result-details"${options.open ? ' open' : ''}>
+            <summary>${escapeHtml(label || 'Response details')}</summary>
+            <pre>${escapeHtml(text)}</pre>
+        </details>
+    `;
+
+}
+
+function buildApiResultHtml(options = {}) {
+
+    const headingHtml = options.heading
+        ? `<div class="message-result-heading">${escapeHtml(options.heading)}</div>`
+        : '';
+
+    const summaryHtml = options.rows?.length
+        ? `<div class="message-result-summary">${renderMessageResultRows(options.rows)}</div>`
+        : '';
+
+    const noteHtml = options.note
+        ? `<div class="message-result-note">${renderDialogMessage(ensureTerminalPunctuation(options.note))}</div>`
+        : '';
+
+    const detailsHtml = buildMessageResultDetails(
+        options.detailsLabel || 'Response details',
+        options.details,
+        { open: options.detailsOpen }
+    );
+
+    return `
+        <div class="message-result-panel">
+            ${headingHtml}
+            ${summaryHtml}
+            ${noteHtml}
+            ${detailsHtml}
+        </div>
+    `;
 
 }
 
@@ -2502,6 +2571,28 @@ function buildCredentialTestErrorHtml(filename, data, response) {
 
 }
 
+function buildCredentialTestResultHtml(filename, data, response, options = {}) {
+
+    const logicalStatus = data.status_code || response.status;
+    const isRateLimited = logicalStatus === 429 && data.success === true;
+    const statusMessage = data.message || (isRateLimited ? t('credential_rate_limited') : t('credential_available'));
+
+    return buildApiResultHtml({
+        heading: isRateLimited ? 'Credential is rate limited.' : 'Credential test completed.',
+        rows: [
+            ['Result', isRateLimited ? 'Rate limited' : 'Successful'],
+            [t('table_filename'), filename],
+            ['HTTP code', logicalStatus || response.status],
+            [t('credential_status_label').replace(':', ''), statusMessage],
+            options.mode ? ['Mode', options.mode] : null,
+        ].filter(Boolean),
+        note: statusMessage,
+        detailsLabel: 'Response details',
+        details: data,
+    });
+
+}
+
 function normalizeVerificationMessage(message) {
 
     return String(message || '')
@@ -2514,6 +2605,7 @@ function normalizeVerificationMessage(message) {
 function buildCredentialVerificationHtml(filename, data) {
 
     const rows = [
+        ['Result', 'Successful'],
         [t('table_filename'), filename],
         data.project_id ? ['Project ID', data.project_id] : null,
         data.subscription_tier ? ['Tier', data.subscription_tier] : null,
@@ -2537,6 +2629,7 @@ function buildCredentialVerificationHtml(filename, data) {
             <div class="message-result-heading">Credential verified.</div>
             <div class="message-result-summary">${summaryHtml}</div>
             ${detailHtml}
+            ${buildMessageResultDetails('Response details', data)}
         </div>
     `;
 
@@ -2625,12 +2718,15 @@ function buildCredentialQuotaHtml(filename, data) {
             <div class="modal-quota-card ${level}">
                 <div class="modal-quota-head">
                     <div class="modal-quota-model" title="${escapeHtml(modelName)}">${escapeHtml(modelName)}</div>
-                    <div class="modal-quota-percent">${remainingPercentage}%</div>
+                    <div class="modal-quota-percent">${remainingPercentage}% left</div>
                 </div>
                 <div class="modal-quota-bar">
-                    <div class="modal-quota-bar-value" style="width: ${usedPercentage}%;"></div>
+                    <div class="modal-quota-bar-value" style="width: ${remainingPercentage}%;"></div>
                 </div>
-                <div class="modal-quota-foot">${resetTime !== 'N/A' ? `Reset ${escapeHtml(resetTime)}` : '&nbsp;'}</div>
+                <div class="modal-quota-foot">
+                    <span>Used ${usedPercentage}%</span>
+                    <span>${resetTime !== 'N/A' ? `Reset ${escapeHtml(resetTime)}` : 'Reset time unavailable'}</span>
+                </div>
             </div>
         `;
 
@@ -2754,13 +2850,11 @@ function showConfirmModal(message, options = {}) {
 
         modal.innerHTML = `
 
-            <div class="message-modal confirm">
+            <div class="message-modal confirm" role="dialog" aria-modal="true" aria-label="${escapeHtml(title)}">
 
                 <div class="message-modal-header">
 
                     <h3>${escapeHtml(title)}</h3>
-
-                    <button type="button" class="message-modal-close" data-dialog-cancel>&times;</button>
 
                 </div>
 
@@ -2842,13 +2936,11 @@ function showPromptModal(message, options = {}) {
 
         modal.innerHTML = `
 
-            <div class="message-modal prompt">
+            <div class="message-modal prompt" role="dialog" aria-modal="true" aria-label="${escapeHtml(title)}">
 
                 <div class="message-modal-header">
 
                     <h3>${escapeHtml(title)}</h3>
-
-                    <button type="button" class="message-modal-close" data-dialog-cancel>&times;</button>
 
                 </div>
 
@@ -3257,7 +3349,7 @@ async function toggleCredDetailsCommon(pathId, manager) {
 
             showStatus(`${t('unable_to_load_file_content')} ${errorMsg}`, 'error');
 
-            showMessageModal('Unable to load credential content', `${t('unable_to_load_file_content')} ${errorMsg}`, 'error');
+            showMessageModal('Credential content', `${t('unable_to_load_file_content')} ${errorMsg}`, 'error');
 
         }
 
@@ -3267,7 +3359,7 @@ async function toggleCredDetailsCommon(pathId, manager) {
 
         showStatus(errorMsg, 'error');
 
-        showMessageModal('Unable to load credential content', errorMsg, 'error');
+        showMessageModal('Credential content', errorMsg, 'error');
 
     }
 
@@ -4496,7 +4588,7 @@ async function verifyProjectId(filename) {
 
             showStatus(successMsg.replace(/\n/g, '<br>'), 'success');
 
-            showMessageModal(t('verification_successful'), buildCredentialVerificationHtml(filename, data), 'success', {html: true});
+            showMessageModal('Credential verification', buildCredentialVerificationHtml(filename, data), 'success', {html: true});
 
             await AppState.creds.refresh();
 
@@ -4506,7 +4598,7 @@ async function verifyProjectId(filename) {
 
             showStatus(` ${errorMsg}`, 'error');
 
-            showMessageModal(t('verification_failed'), t('verification_failednnerrormsg', {errorMsg: errorMsg}), 'error');
+            showMessageModal('Credential verification', t('verification_failednnerrormsg', {errorMsg: errorMsg}), 'error');
 
         }
 
@@ -4516,7 +4608,7 @@ async function verifyProjectId(filename) {
 
         showStatus(` ${errorMsg}`, 'error');
 
-        showMessageModal(t('verification_failed'), ` ${errorMsg}`, 'error');
+        showMessageModal('Credential verification', ` ${errorMsg}`, 'error');
 
     }
 
@@ -4552,7 +4644,7 @@ async function verifyPrimaryProjectId(filename) {
 
             showStatus(successMsg.replace(/\n/g, '<br>'), 'success');
 
-            showMessageModal(t('verification_successful'), buildCredentialVerificationHtml(filename, data), 'success', {html: true});
+            showMessageModal('Credential verification', buildCredentialVerificationHtml(filename, data), 'success', {html: true});
 
             await AppState.primaryCreds.refresh();
 
@@ -4562,7 +4654,7 @@ async function verifyPrimaryProjectId(filename) {
 
             showStatus(` ${errorMsg}`, 'error');
 
-            showMessageModal(t('verification_failed'), t('verification_failednnerrormsg', {errorMsg: errorMsg}), 'error');
+            showMessageModal('Credential verification', t('verification_failednnerrormsg', {errorMsg: errorMsg}), 'error');
 
         }
 
@@ -4572,7 +4664,7 @@ async function verifyPrimaryProjectId(filename) {
 
         showStatus(` ${errorMsg}`, 'error');
 
-        showMessageModal(t('verification_failed'), ` ${errorMsg}`, 'error');
+        showMessageModal('Credential verification', ` ${errorMsg}`, 'error');
 
     }
 
@@ -4604,7 +4696,7 @@ async function testCredential(filename) {
 
             showStatus(isRateLimited ? t('credential_rate_limited') : t('test_successful'), isRateLimited ? 'warning' : 'success');
 
-            showMessageModal(isRateLimited ? t('test_rate_limited') : t('test_successful_dup'), successMsg, isRateLimited ? 'info' : 'success');
+            showMessageModal('Message test', successMsg, isRateLimited ? 'info' : 'success');
 
             await AppState.creds.refresh();
 
@@ -4616,7 +4708,7 @@ async function testCredential(filename) {
 
             showStatus(`Test failed: ${data.message || `${t('error_code_prefix')} ${data.status_code || response.status}`}`, 'error');
 
-            showMessageModal(t('test_failed'), errorDetails, 'error', {html: true});
+            showMessageModal('Message test', errorDetails, 'error', {html: true});
 
         }
 
@@ -4626,7 +4718,7 @@ async function testCredential(filename) {
 
         showStatus(errorMsg, 'error');
 
-        showMessageModal(t('test_failed'), errorMsg, 'error');
+        showMessageModal('Message test', errorMsg, 'error');
 
     }
 
@@ -4658,7 +4750,7 @@ async function testPrimaryCredential(filename) {
 
             showStatus(isRateLimited ? t('credential_rate_limited') : t('test_successful'), isRateLimited ? 'warning' : 'success');
 
-            showMessageModal(isRateLimited ? t('test_rate_limited') : t('test_successful_dup'), successMsg, isRateLimited ? 'info' : 'success');
+            showMessageModal('Message test', successMsg, isRateLimited ? 'info' : 'success');
 
             await AppState.primaryCreds.refresh();
 
@@ -4670,7 +4762,7 @@ async function testPrimaryCredential(filename) {
 
             showStatus(`Test failed: ${data.message || `${t('error_code_prefix')} ${data.status_code || response.status}`}`, 'error');
 
-            showMessageModal(t('test_failed'), errorDetails, 'error', {html: true});
+            showMessageModal('Message test', errorDetails, 'error', {html: true});
 
         }
 
@@ -4680,7 +4772,7 @@ async function testPrimaryCredential(filename) {
 
         showStatus(errorMsg, 'error');
 
-        showMessageModal(t('test_failed'), errorMsg, 'error');
+        showMessageModal('Message test', errorMsg, 'error');
 
     }
 
@@ -4708,7 +4800,7 @@ async function configurePreviewChannel(filename) {
 
             showStatus(successMsg.replace(/\n/g, '<br>'), 'success');
 
-            showMessageModal(t('preview_channel_configuration_succe_dup'), `${t('status_action_success', {action: t('btn_setup_preview')})}\n\n${t('table_filename')}: ${filename}\n\n${data.message}\n\nSetting ID: ${data.setting_id || 'N/A'}\nBinding ID: ${data.binding_id || 'N/A'}`, 'success');
+            showMessageModal('Preview channel configuration', `${t('status_action_success', {action: t('btn_setup_preview')})}\n\n${t('table_filename')}: ${filename}\n\n${data.message}\n\nSetting ID: ${data.setting_id || 'N/A'}\nBinding ID: ${data.binding_id || 'N/A'}`, 'success');
 
             await AppState.creds.refresh();
 
@@ -4736,7 +4828,7 @@ async function configurePreviewChannel(filename) {
 
             showStatus(errorMsg, 'error');
 
-            showMessageModal(t('preview_channel_configuration_faile_dup'), alertMsg, 'error');
+            showMessageModal('Preview channel configuration', alertMsg, 'error');
 
         }
 
@@ -4746,7 +4838,7 @@ async function configurePreviewChannel(filename) {
 
         showStatus(errorMsg, 'error');
 
-        showMessageModal(t('failed_to_configure_preview_channel_dup'), errorMsg, 'error');
+        showMessageModal('Preview channel configuration', errorMsg, 'error');
 
     }
 
@@ -4782,7 +4874,7 @@ async function togglePrimaryQuotaDetails(pathId) {
 
             showStatus(errorMsg, 'error');
 
-            showMessageModal(t('status_quota_failed'), errorMsg, 'error');
+            showMessageModal(t('quota_details'), errorMsg, 'error');
 
         }
 
@@ -4792,7 +4884,7 @@ async function togglePrimaryQuotaDetails(pathId) {
 
         showStatus(errorMsg, 'error');
 
-        showMessageModal(t('status_quota_failed'), errorMsg, 'error');
+        showMessageModal(t('quota_details'), errorMsg, 'error');
 
     }
 
@@ -4846,7 +4938,7 @@ async function toggleErrorDetailsCommon(pathId, manager) {
 
             showStatus(t('failed_to_fetch_error_message_error', {errorMsg: errorMsg}), 'error');
 
-            showMessageModal('Unable to load details', errorMsg, 'error');
+            showMessageModal(t('btn_view_errors'), errorMsg, 'error');
 
         }
 
@@ -4856,7 +4948,7 @@ async function toggleErrorDetailsCommon(pathId, manager) {
 
         showStatus(errorMsg, 'error');
 
-        showMessageModal('Unable to load details', errorMsg, 'error');
+        showMessageModal(t('btn_view_errors'), errorMsg, 'error');
 
     }
 
@@ -4990,19 +5082,19 @@ async function batchVerifyProjectIds() {
 
         showStatus(t('all_verifications_successful_succes', {successCount: successCount, selectedFiles_length: selectedFiles.length}), 'success');
 
-        showMessageModal(t('batch_verification_complete'), summary, 'success');
+        showMessageModal('Batch verification', summary, 'success');
 
     } else if (successCount === 0) {
 
         showStatus(t('all_verifications_failed_failed_fai', {failCount: failCount, selectedFiles_length: selectedFiles.length}), 'error');
 
-        showMessageModal(t('batch_verification_complete'), summary, 'error');
+        showMessageModal('Batch verification', summary, 'error');
 
     } else {
 
         showStatus(t('batch_verification_completed_succes', {successCount: successCount, selectedFiles_length: selectedFiles.length, failCount: failCount}), 'info');
 
-        showMessageModal(t('batch_verification_complete'), summary, 'info');
+        showMessageModal('Batch verification', summary, 'info');
 
     }
 
@@ -5116,19 +5208,19 @@ async function batchVerifyPrimaryProjectIds() {
 
         showStatus(t('all_verifications_successful_verifi', {successCount: successCount, selectedFiles_length: selectedFiles.length}), 'success');
 
-        showMessageModal(t('primary_batch_verification_comp'), summary, 'success');
+        showMessageModal('Provider batch verification', summary, 'success');
 
     } else if (successCount === 0) {
 
         showStatus(t('verification_failed_for_all_failed', {failCount: failCount, selectedFiles_length: selectedFiles.length}), 'error');
 
-        showMessageModal(t('primary_batch_verification_comp'), summary, 'error');
+        showMessageModal('Provider batch verification', summary, 'error');
 
     } else {
 
         showStatus(t('batch_verification_completed_succes', {successCount: successCount, selectedFiles_length: selectedFiles.length, failCount: failCount}), 'info');
 
-        showMessageModal(t('primary_batch_verification_comp'), summary, 'info');
+        showMessageModal('Provider batch verification', summary, 'info');
 
     }
 
@@ -6049,6 +6141,49 @@ async function saveAntigravitySettings() {
 
 }
 
+async function resetAntigravitySettings() {
+
+    const confirmed = await showConfirmModal(
+        'Reset Antigravity advanced settings to their defaults? Environment-managed values will be preserved.'
+    );
+
+    if (!confirmed) return;
+
+    try {
+
+        const response = await fetch('./api/providers/antigravity/config/reset', {
+            method: 'POST',
+            headers: getAuthHeaders()
+        });
+
+        const data = await response.json().catch(() => ({}));
+
+        if (response.ok) {
+
+            showStatus(data.message || 'Antigravity settings reset to defaults.', 'success');
+
+            AppState.antigravityConfig = data.config || {};
+
+            AppState.antigravityEnvLockedFields = new Set(data.env_locked || []);
+
+            populateAntigravitySettings();
+
+            setTimeout(() => loadAntigravitySettings(), 600);
+
+        } else {
+
+            showStatus(`Failed to reset Antigravity settings: ${data.detail || data.error || t('unknown_error')}`, 'error');
+
+        }
+
+    } catch (error) {
+
+        showStatus(t('status_net_error', {error: error.message}), 'error');
+
+    }
+
+}
+
 // =====================================================================
 
 // =====================================================================
@@ -6316,6 +6451,43 @@ async function saveConfig() {
         } else {
 
             showStatus(t('failed_to_save_config_datadetail_da', {data_detail____data_error: data.detail || data.error || t('unknown_error')}), 'error');
+
+        }
+
+    } catch (error) {
+
+        showStatus(t('status_net_error', {error: error.message}), 'error');
+
+    }
+
+}
+
+async function resetConfig() {
+
+    const confirmed = await showConfirmModal(
+        'Reset system configuration to defaults? Access passwords and the generated API key will be preserved.'
+    );
+
+    if (!confirmed) return;
+
+    try {
+
+        const response = await fetch('./api/config/reset', {
+            method: 'POST',
+            headers: getAuthHeaders()
+        });
+
+        const data = await response.json().catch(() => ({}));
+
+        if (response.ok) {
+
+            showStatus(data.message || 'System configuration reset to defaults.', 'success');
+
+            setTimeout(() => loadConfig(), 600);
+
+        } else {
+
+            showStatus(`Failed to reset system configuration: ${data.detail || data.error || t('unknown_error')}`, 'error');
 
         }
 

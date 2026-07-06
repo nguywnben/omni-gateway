@@ -123,3 +123,30 @@ async def save_antigravity_config(request: ConfigSaveRequest, token: str = Depen
     except Exception as e:
         log.error(f"Failed to save Antigravity configuration: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/config/reset")
+async def reset_antigravity_config(token: str = Depends(verify_panel_token)):
+    """Reset Antigravity provider settings to built-in or environment defaults."""
+    try:
+        env_locked = get_env_locked_keys() & ANTIGRAVITY_CONFIG_KEYS
+        storage_adapter = await get_storage_adapter()
+
+        deleted_keys = []
+        for key in sorted(ANTIGRAVITY_CONFIG_KEYS - env_locked):
+            if await storage_adapter.delete_config(key):
+                deleted_keys.append(key)
+
+        await config.reload_config()
+
+        return JSONResponse(
+            content={
+                "message": "Antigravity settings reset to defaults.",
+                "config": await _current_antigravity_config(),
+                "reset_config": deleted_keys,
+                "env_locked": sorted(env_locked),
+            }
+        )
+    except Exception as e:
+        log.error(f"Failed to reset Antigravity configuration: {e}")
+        raise HTTPException(status_code=500, detail=str(e))

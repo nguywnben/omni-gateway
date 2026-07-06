@@ -22,6 +22,31 @@ DEFAULT_BACKED_CONFIG_KEYS = {
     "antigravity_client_id",
     "antigravity_client_secret",
 }
+RESETTABLE_CONFIG_KEYS = {
+    "host",
+    "port",
+    "credentials_dir",
+    "proxy",
+    "code_assist_endpoint",
+    "code_assist_client_id",
+    "code_assist_client_secret",
+    "auto_disable_enabled",
+    "auto_disable_error_codes",
+    "retry_429_enabled",
+    "retry_429_max_retries",
+    "retry_429_interval",
+    "compatibility_mode_enabled",
+    "return_thoughts_to_frontend",
+    "anti_truncation_max_attempts",
+    "keepalive_url",
+    "keepalive_interval",
+}
+PRESERVED_RESET_KEYS = {
+    "api_key",
+    "api_password",
+    "panel_password",
+    "password",
+}
 
 
 @router.get("/get")
@@ -262,4 +287,38 @@ async def save_config(request: ConfigSaveRequest, token: str = Depends(verify_pa
         raise
     except Exception as e:
         log.error(f"Failed to save configuration: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/reset")
+async def reset_config(token: str = Depends(verify_panel_token)):
+    """Reset global configuration overrides while preserving access secrets."""
+    try:
+        env_locked_keys = get_env_locked_keys()
+        resettable_keys = RESETTABLE_CONFIG_KEYS - env_locked_keys
+
+        storage_adapter = await get_storage_adapter()
+        deleted_keys = []
+        for key in sorted(resettable_keys):
+            if await storage_adapter.delete_config(key):
+                deleted_keys.append(key)
+
+        await config.reload_config()
+
+        try:
+            await keepalive_service.restart()
+        except Exception as e:
+            log.warning(f"Failed to restart keep-alive service after configuration reset: {e}")
+
+        return JSONResponse(
+            content={
+                "message": "System configuration reset to defaults. Access passwords and the generated API key were preserved.",
+                "reset_config": deleted_keys,
+                "env_locked": sorted(env_locked_keys & RESETTABLE_CONFIG_KEYS),
+                "preserved": sorted(PRESERVED_RESET_KEYS),
+            }
+        )
+
+    except Exception as e:
+        log.error(f"Failed to reset configuration: {e}")
         raise HTTPException(status_code=500, detail=str(e))
