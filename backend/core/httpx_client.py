@@ -13,7 +13,7 @@ class HttpxClientManager:
     """Internal implementation detail."""
     async def get_client_kwargs(self, timeout: float = 30.0, **kwargs) -> Dict[str, Any]:
         """Internal implementation detail."""
-        client_kwargs = {"timeout": timeout, **kwargs}
+        client_kwargs = {"timeout": timeout, "trust_env": False, **kwargs}
 
 
         current_proxy_config = await get_proxy_config()

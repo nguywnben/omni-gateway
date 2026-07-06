@@ -120,13 +120,15 @@ Omni Gateway reads configuration from environment variables first, then stored c
 | `MONGODB_URI` | empty | Enables MongoDB storage when set. |
 | `POSTGRESQL_URI` | empty | Enables PostgreSQL storage when set. |
 | `REDIS_URL` | empty | Enables Redis-backed caches/session state when set. |
-| `CODE_ASSIST_CLIENT_ID` | default desktop client | Optional override for the Code Assist OAuth flow. |
-| `CODE_ASSIST_CLIENT_SECRET` | empty | Required when using the Code Assist OAuth flow with a custom client. |
-| `ANTIGRAVITY_CLIENT_ID` | default desktop client | Optional override for the Antigravity OAuth flow. |
-| `ANTIGRAVITY_CLIENT_SECRET` | empty | Required when using the Antigravity OAuth flow with a custom client. |
+| `CODE_ASSIST_CLIENT_ID` | bundled desktop client | Optional override for the Code Assist OAuth client ID. |
+| `CODE_ASSIST_CLIENT_SECRET` | bundled desktop client | Optional override for the Code Assist OAuth client secret. |
+| `ANTIGRAVITY_CLIENT_ID` | bundled desktop client | Optional override for the Antigravity OAuth client ID. It can also be managed from the Providers page. |
+| `ANTIGRAVITY_CLIENT_SECRET` | bundled desktop client | Optional override for the Antigravity OAuth client secret. Configure it through env or the Providers page when the upstream client changes. |
 | `CLIENT_ID` | empty | Optional legacy-compatible fallback for provider OAuth override. |
 | `CLIENT_SECRET` | empty | Optional legacy-compatible fallback for provider OAuth override. |
-| `USER_AGENT` | `router/cli/...` | Optional upstream user-agent override. |
+| `ANTIGRAVITY_API_URL` / `API_URL` | `https://daily-cloudcode-pa.googleapis.com` | Optional Antigravity upstream endpoint override. |
+| `USER_AGENT` / `ANTIGRAVITY_USER_AGENT` | `antigravity/cli/1.0.1 windows/amd64` | Optional Antigravity protocol user-agent override. |
+| `ANTIGRAVITY_PAYLOAD_USER_AGENT` | `antigravity` | Optional payload-level Antigravity userAgent override. |
 
 ## API Surfaces
 

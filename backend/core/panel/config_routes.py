@@ -16,6 +16,12 @@ from .utils import get_env_locked_keys
 router = APIRouter(prefix="/api/config", tags=["config"])
 
 ALLOWED_CONFIG_KEYS = set(config.ENV_MAPPINGS.values())
+DEFAULT_BACKED_CONFIG_KEYS = {
+    "code_assist_client_id",
+    "code_assist_client_secret",
+    "antigravity_client_id",
+    "antigravity_client_secret",
+}
 
 
 @router.get("/get")
@@ -38,6 +44,14 @@ async def get_config(token: str = Depends(verify_panel_token)):
         current_config["resource_manager_url"] = await config.get_resource_manager_api_url()
         current_config["service_usage_url"] = await config.get_service_usage_api_url()
         current_config["api_url"] = await config.get_api_url()
+        code_assist_client_id, code_assist_client_secret = await config.get_code_assist_oauth_client_config()
+        antigravity_client_id, antigravity_client_secret = await config.get_antigravity_oauth_client_config()
+        current_config["code_assist_client_id"] = code_assist_client_id
+        current_config["code_assist_client_secret"] = code_assist_client_secret
+        current_config["antigravity_client_id"] = antigravity_client_id
+        current_config["antigravity_client_secret"] = antigravity_client_secret
+        current_config["antigravity_user_agent"] = await config.get_antigravity_user_agent()
+        current_config["antigravity_payload_user_agent"] = await config.get_antigravity_payload_user_agent()
 
 
         current_config["auto_disable_enabled"] = await config.get_auto_disable_enabled()
@@ -80,6 +94,8 @@ async def get_config(token: str = Depends(verify_panel_token)):
 
 
         for key, value in storage_config.items():
+            if key in DEFAULT_BACKED_CONFIG_KEYS and (value is None or (isinstance(value, str) and not value.strip())):
+                continue
             if key in ALLOWED_CONFIG_KEYS and key not in env_locked_keys:
                 current_config[key] = value
 
@@ -191,6 +207,18 @@ async def save_config(request: ConfigSaveRequest, token: str = Depends(verify_pa
         if "password" in new_config:
             if not isinstance(new_config["password"], str):
                 raise HTTPException(status_code=400, detail="Access password must be a string")
+
+        oauth_client_keys = {
+            "code_assist_client_id",
+            "code_assist_client_secret",
+            "antigravity_client_id",
+            "antigravity_client_secret",
+            "client_id",
+            "client_secret",
+        }
+        for key in oauth_client_keys & set(new_config):
+            if not isinstance(new_config[key], str):
+                raise HTTPException(status_code=400, detail=f"{key} must be a string")
 
 
         env_locked_keys = get_env_locked_keys()

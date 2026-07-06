@@ -30,37 +30,12 @@ def get_code_assist_user_agent(model: str = "") -> str:
 CODE_ASSIST_USER_AGENT = get_code_assist_user_agent()
 
 
-CLI_VERSION = os.getenv("CLI_VERSION", "1.0.1")
-CLI_PLATFORM = os.getenv("CLI_PLATFORM", "windows/amd64")
-USER_AGENT = os.getenv("USER_AGENT", f"router/cli/{CLI_VERSION} {CLI_PLATFORM}")
-
-
-DEFAULT_CODE_ASSIST_CLIENT_ID = "681255809395-oo8ft2oprdrnp9e3aqf6av3hmdib135j.apps.googleusercontent.com"
-DEFAULT_ANTIGRAVITY_CLIENT_ID = "1071006060591-tmhssin2h21lcre235vtolojh4g403ep.apps.googleusercontent.com"
-
-
-def _oauth_client_value(primary_name: str, default: str, fallback_name: str = "") -> str:
-    """Return an OAuth client value from env, with an optional non-secret default."""
-    return os.getenv(primary_name) or (os.getenv(fallback_name) if fallback_name else "") or default
-
-
-CODE_ASSIST_CLIENT_ID = _oauth_client_value("CODE_ASSIST_CLIENT_ID", DEFAULT_CODE_ASSIST_CLIENT_ID)
-CODE_ASSIST_CLIENT_SECRET = _oauth_client_value("CODE_ASSIST_CLIENT_SECRET", "")
 CODE_ASSIST_SCOPES = [
     "https://www.googleapis.com/auth/cloud-platform",
     "https://www.googleapis.com/auth/userinfo.email",
     "https://www.googleapis.com/auth/userinfo.profile",
 ]
 
-# Antigravity provider OAuth configuration.
-ANTIGRAVITY_CLIENT_ID = _oauth_client_value("ANTIGRAVITY_CLIENT_ID", DEFAULT_ANTIGRAVITY_CLIENT_ID, "CLIENT_ID")
-ANTIGRAVITY_CLIENT_SECRET = _oauth_client_value(
-    "ANTIGRAVITY_CLIENT_SECRET",
-    "",
-    "CLIENT_SECRET",
-)
-CLIENT_ID = ANTIGRAVITY_CLIENT_ID
-CLIENT_SECRET = ANTIGRAVITY_CLIENT_SECRET
 SCOPES = [
     'https://www.googleapis.com/auth/cloud-platform',
     'https://www.googleapis.com/auth/userinfo.email',

@@ -9,23 +9,31 @@ from datetime import timezone
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from typing import Any, Dict, Optional
 from urllib.parse import parse_qs, urlparse
-from config import get_config_value, get_api_url
+from config import (
+    get_antigravity_api_url,
+    get_antigravity_oauth_client_config,
+    get_antigravity_user_agent,
+    get_code_assist_oauth_client_config,
+    get_config_value,
+)
 from log import log
 from .google_oauth_api import Credentials, Flow, enable_required_apis, fetch_project_id_and_tier, get_user_projects, select_default_project
 from .credential_pool import upsert_credential_by_email
 from .storage_adapter import get_storage_adapter
-from .utils import ANTIGRAVITY_CLIENT_ID, ANTIGRAVITY_CLIENT_SECRET, SCOPES, USER_AGENT, CODE_ASSIST_CLIENT_ID, CODE_ASSIST_CLIENT_SECRET, CODE_ASSIST_SCOPES, CALLBACK_HOST, TOKEN_URL
+from .utils import SCOPES, CODE_ASSIST_SCOPES, CALLBACK_HOST, TOKEN_URL
 
 async def get_callback_port():
     """Internal implementation detail."""
     return int(await get_config_value('oauth_callback_port', '11451', 'OAUTH_CALLBACK_PORT'))
 
-def _prepare_credentials_data(credentials: Credentials, project_id: str, mode: str='code_assist', subscription_tier: str=None) -> Dict[str, Any]:
+async def _prepare_credentials_data(credentials: Credentials, project_id: str, mode: str='code_assist', subscription_tier: str=None) -> Dict[str, Any]:
     """Internal implementation detail."""
     if mode == 'primary':
-        creds_data = {'client_id': ANTIGRAVITY_CLIENT_ID, 'client_secret': ANTIGRAVITY_CLIENT_SECRET, 'token': credentials.access_token, 'refresh_token': credentials.refresh_token, 'scopes': SCOPES, 'token_uri': TOKEN_URL, 'project_id': project_id}
+        client_id, client_secret = await get_antigravity_oauth_client_config()
+        creds_data = {'client_id': client_id, 'client_secret': client_secret, 'token': credentials.access_token, 'refresh_token': credentials.refresh_token, 'scopes': SCOPES, 'token_uri': TOKEN_URL, 'project_id': project_id}
     else:
-        creds_data = {'client_id': CODE_ASSIST_CLIENT_ID, 'client_secret': CODE_ASSIST_CLIENT_SECRET, 'token': credentials.access_token, 'refresh_token': credentials.refresh_token, 'scopes': CODE_ASSIST_SCOPES, 'token_uri': TOKEN_URL, 'project_id': project_id}
+        client_id, client_secret = await get_code_assist_oauth_client_config()
+        creds_data = {'client_id': client_id, 'client_secret': client_secret, 'token': credentials.access_token, 'refresh_token': credentials.refresh_token, 'scopes': CODE_ASSIST_SCOPES, 'token_uri': TOKEN_URL, 'project_id': project_id}
     if credentials.expires_at:
         if credentials.expires_at.tzinfo is None:
             expiry_utc = credentials.expires_at.replace(tzinfo=timezone.utc)
@@ -170,13 +178,11 @@ async def create_auth_url(project_id: Optional[str]=None, user_session: str=None
     """Internal implementation detail."""
     try:
         if mode == 'primary':
-            client_id = ANTIGRAVITY_CLIENT_ID
-            client_secret = ANTIGRAVITY_CLIENT_SECRET
+            client_id, client_secret = await get_antigravity_oauth_client_config()
             scopes = SCOPES
             missing_config_error = 'Antigravity OAuth client configuration is unavailable.'
         else:
-            client_id = CODE_ASSIST_CLIENT_ID
-            client_secret = CODE_ASSIST_CLIENT_SECRET
+            client_id, client_secret = await get_code_assist_oauth_client_config()
             scopes = CODE_ASSIST_SCOPES
             missing_config_error = 'Code Assist OAuth client configuration is unavailable.'
         if not client_id or not client_secret:
@@ -308,7 +314,7 @@ async def complete_auth_flow(project_id: Optional[str]=None, user_session: str=N
                     flow_data['project_id'] = project_id
                     log.warning(f'Project ID was still empty; using default project ID {DEFAULT_PROJECT_ID}.')
                 save_result = await save_credentials(credentials, project_id)
-                creds_data = _prepare_credentials_data(credentials, project_id, mode='code_assist')
+                creds_data = await _prepare_credentials_data(credentials, project_id, mode='code_assist')
                 _cleanup_auth_flow_server(state)
                 log.info(f"OAuth credential pool result: {save_result.get('action')} ({save_result.get('filename')}).")
                 return {'success': True, 'credentials': creds_data, 'auto_detected_project': flow_data.get('auto_project_detection', False), **_credential_save_response(save_result)}
@@ -414,15 +420,16 @@ async def asyncio_complete_auth_flow(project_id: Optional[str]=None, user_sessio
                 cred_mode = flow_data.get('mode', 'code_assist') if flow_data.get('mode') else mode
                 if cred_mode == 'primary':
                     log.info('Fetching provider project ID and subscription tier.')
-                    primary_url = await get_api_url()
-                    project_id, subscription_tier = await fetch_project_id_and_tier(credentials.access_token, USER_AGENT, primary_url)
+                    primary_url = await get_antigravity_api_url()
+                    user_agent = await get_antigravity_user_agent()
+                    project_id, subscription_tier = await fetch_project_id_and_tier(credentials.access_token, user_agent, primary_url)
                     if project_id:
                         log.info(f'Fetched Project ID from provider API: {project_id}; tier: {subscription_tier}.')
                     else:
                         project_id = DEFAULT_PROJECT_ID
                         log.warning(f'Unable to fetch Project ID from provider API; using default Project ID {project_id}.')
                     save_result = await save_credentials(credentials, project_id, mode='primary', subscription_tier=subscription_tier)
-                    creds_data = _prepare_credentials_data(credentials, project_id, mode='primary', subscription_tier=subscription_tier)
+                    creds_data = await _prepare_credentials_data(credentials, project_id, mode='primary', subscription_tier=subscription_tier)
                     _cleanup_auth_flow_server(state)
                     log.info(f"Provider OAuth credential pool result: {save_result.get('action')} ({save_result.get('filename')}).")
                     return {'success': True, 'credentials': creds_data, 'auto_detected_project': False, 'mode': 'provider', **_credential_save_response(save_result)}
@@ -458,7 +465,7 @@ async def asyncio_complete_auth_flow(project_id: Optional[str]=None, user_sessio
                     flow_data['project_id'] = project_id
                     log.warning(f'Project ID was still empty; using default project ID {DEFAULT_PROJECT_ID}.')
                 save_result = await save_credentials(credentials, project_id)
-                creds_data = _prepare_credentials_data(credentials, project_id, mode='code_assist')
+                creds_data = await _prepare_credentials_data(credentials, project_id, mode='code_assist')
                 _cleanup_auth_flow_server(state)
                 log.info(f"Code Assist OAuth credential pool result: {save_result.get('action')} ({save_result.get('filename')}).")
                 return {'success': True, 'credentials': creds_data, 'auto_detected_project': flow_data.get('auto_project_detection', False), **_credential_save_response(save_result)}
@@ -492,15 +499,16 @@ async def complete_auth_flow_from_callback_url(callback_url: str, project_id: Op
             cred_mode = flow_data.get('mode', 'code_assist') if flow_data.get('mode') else mode
             if cred_mode == 'primary':
                 log.info('Provider callback URL received; fetching project ID from API.')
-                primary_url = await get_api_url()
-                project_id, subscription_tier = await fetch_project_id_and_tier(credentials.access_token, USER_AGENT, primary_url)
+                primary_url = await get_antigravity_api_url()
+                user_agent = await get_antigravity_user_agent()
+                project_id, subscription_tier = await fetch_project_id_and_tier(credentials.access_token, user_agent, primary_url)
                 if project_id:
                     log.info(f'Fetched Project ID from provider API: {project_id}; tier: {subscription_tier}.')
                 else:
                     project_id = DEFAULT_PROJECT_ID
                     log.warning(f'Unable to fetch Project ID from provider API; using default Project ID {project_id}.')
                 save_result = await save_credentials(credentials, project_id, mode='primary', subscription_tier=subscription_tier)
-                creds_data = _prepare_credentials_data(credentials, project_id, mode='primary', subscription_tier=subscription_tier)
+                creds_data = await _prepare_credentials_data(credentials, project_id, mode='primary', subscription_tier=subscription_tier)
                 _cleanup_auth_flow_server(state)
                 log.info(f"Provider OAuth callback credential pool result: {save_result.get('action')} ({save_result.get('filename')}).")
                 return {'success': True, 'credentials': creds_data, 'auto_detected_project': False, 'mode': 'provider', **_credential_save_response(save_result)}
@@ -538,7 +546,7 @@ async def complete_auth_flow_from_callback_url(callback_url: str, project_id: Op
                 except Exception as e:
                     log.warning(f'Failed to enable API services: {e}')
             save_result = await save_credentials(credentials, detected_project_id, subscription_tier=subscription_tier)
-            creds_data = _prepare_credentials_data(credentials, detected_project_id, mode='code_assist', subscription_tier=subscription_tier)
+            creds_data = await _prepare_credentials_data(credentials, detected_project_id, mode='code_assist', subscription_tier=subscription_tier)
             _cleanup_auth_flow_server(state)
             log.info(f"Code Assist callback credential pool result: {save_result.get('action')} ({save_result.get('filename')}).")
             return {'success': True, 'credentials': creds_data, 'auto_detected_project': auto_detected, **_credential_save_response(save_result)}
@@ -556,7 +564,7 @@ async def save_credentials(creds: Credentials, project_id: str, mode: str='code_
         filename = f'provider_{project_id}-{timestamp}.json'
     else:
         filename = f'{project_id}-{timestamp}.json'
-    creds_data = _prepare_credentials_data(creds, project_id, mode, subscription_tier)
+    creds_data = await _prepare_credentials_data(creds, project_id, mode, subscription_tier)
     save_result = await upsert_credential_by_email(filename, creds_data, mode=mode)
     if save_result.get('stored'):
         try:

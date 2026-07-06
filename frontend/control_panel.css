@@ -477,8 +477,80 @@ code {
     align-items: start;
 }
 
+.provider-advanced-panel {
+    grid-column: 1 / -1;
+}
+
+.provider-settings-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 16px;
+    margin-bottom: 18px;
+}
+
+.provider-settings-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.4fr) minmax(0, 1fr);
+    gap: 22px;
+}
+
+.provider-settings-group {
+    min-width: 0;
+}
+
+.provider-settings-group h3 {
+    color: var(--text);
+    font-size: 13px;
+    font-weight: 680;
+    letter-spacing: 0;
+    line-height: 1.2;
+    margin-bottom: 12px;
+}
+
 .provider-tool-copy {
     margin: -6px 0 14px;
+}
+
+.config-note {
+    margin-bottom: 16px;
+    padding: 12px 14px;
+    background: var(--bg-subtle);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    color: var(--text-muted);
+    font-size: 13px;
+    line-height: 1.5;
+}
+
+.config-grid {
+    display: grid;
+    grid-template-columns: repeat(12, minmax(0, 1fr));
+    gap: 16px;
+    align-items: start;
+}
+
+.config-two-column {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 14px 16px;
+    align-items: start;
+}
+
+.config-two-column .form-group,
+.config-two-column .switch-row {
+    margin-bottom: 0;
+}
+
+.config-inline-action {
+    margin-top: 10px;
+}
+
+.field-hint {
+    margin-top: 8px;
+    color: var(--text-muted);
+    font-size: 12px;
+    line-height: 1.5;
 }
 
 .span-4 {
@@ -495,6 +567,10 @@ code {
 
 .span-7 {
     grid-column: span 7;
+}
+
+.span-8 {
+    grid-column: span 8;
 }
 
 .span-12 {
@@ -1515,11 +1591,19 @@ textarea[readonly] {
 
 .message-modal-body {
     max-height: 58vh;
-    overflow: auto;
+    overflow-y: auto;
+    overflow-x: hidden;
     padding: 16px;
     color: var(--text-muted);
     line-height: 1.6;
-    white-space: pre-wrap;
+    white-space: normal;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+}
+
+.message-modal-body .message-link {
+    overflow-wrap: anywhere;
+    word-break: break-word;
 }
 
 .message-modal.confirm .message-modal-body {
@@ -1534,6 +1618,267 @@ textarea[readonly] {
 .message-modal-break {
     display: block;
     height: 8px;
+}
+
+.message-result-panel {
+    display: grid;
+    gap: 14px;
+}
+
+.message-result-heading {
+    color: var(--text);
+    font-size: 14px;
+    font-weight: 680;
+}
+
+.message-result-summary {
+    display: grid;
+    gap: 8px;
+}
+
+.message-result-row {
+    display: grid;
+    grid-template-columns: 112px minmax(0, 1fr);
+    gap: 12px;
+    align-items: start;
+}
+
+.message-result-label {
+    color: var(--text-soft);
+    font-size: 12px;
+    font-weight: 680;
+}
+
+.message-result-value {
+    min-width: 0;
+    color: var(--text-muted);
+    overflow-wrap: anywhere;
+}
+
+.message-result-note {
+    border-top: 1px solid var(--border);
+    padding-top: 12px;
+    color: var(--text-muted);
+    font-size: 13px;
+    line-height: 1.5;
+}
+
+.message-modal-code {
+    max-height: 46vh;
+    overflow: auto;
+    padding: 12px;
+    background: var(--bg-subtle);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    color: var(--text);
+    font-family: "Google Sans", sans-serif;
+    font-size: 12px;
+    line-height: 1.55;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+}
+
+.modal-empty-state {
+    display: grid;
+    gap: 4px;
+    justify-items: center;
+    padding: 18px;
+    background: var(--bg-subtle);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    color: var(--text-muted);
+    text-align: center;
+}
+
+.modal-empty-state.success {
+    background: var(--success-bg);
+    border-color: #c8e6cf;
+    color: var(--success);
+}
+
+.modal-empty-state span {
+    color: var(--text-muted);
+    font-size: 12px;
+}
+
+.modal-quota-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+    gap: 10px;
+}
+
+.modal-quota-card {
+    display: grid;
+    gap: 8px;
+    padding: 10px;
+    background: var(--bg-subtle);
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--success);
+    border-radius: var(--radius);
+}
+
+.modal-quota-card.info {
+    border-left-color: var(--info);
+}
+
+.modal-quota-card.warning {
+    border-left-color: var(--warning);
+}
+
+.modal-quota-card.danger {
+    border-left-color: var(--danger);
+}
+
+.modal-quota-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+}
+
+.modal-quota-model {
+    min-width: 0;
+    overflow: hidden;
+    color: var(--text);
+    font-size: 12px;
+    font-weight: 680;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.modal-quota-percent {
+    color: var(--text);
+    font-size: 12px;
+    font-weight: 680;
+}
+
+.modal-quota-bar {
+    height: 7px;
+    overflow: hidden;
+    background: var(--bg-muted);
+    border-radius: var(--radius);
+}
+
+.modal-quota-bar-value {
+    height: 100%;
+    background: var(--success);
+    border-radius: inherit;
+}
+
+.modal-quota-card.info .modal-quota-bar-value {
+    background: var(--info);
+}
+
+.modal-quota-card.warning .modal-quota-bar-value {
+    background: var(--warning);
+}
+
+.modal-quota-card.danger .modal-quota-bar-value {
+    background: var(--danger);
+}
+
+.modal-quota-foot {
+    min-height: 14px;
+    color: var(--text-soft);
+    font-size: 11px;
+    text-align: right;
+}
+
+.message-error-list {
+    display: grid;
+    gap: 10px;
+}
+
+.message-error-card {
+    display: grid;
+    gap: 8px;
+    padding: 12px;
+    background: var(--danger-bg);
+    border: 1px solid #f2c9c6;
+    border-left: 3px solid var(--danger);
+    border-radius: var(--radius);
+}
+
+.message-error-title {
+    color: var(--danger);
+    font-size: 13px;
+    font-weight: 680;
+}
+
+.message-error-copy {
+    color: var(--text);
+    font-size: 13px;
+    line-height: 1.55;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+}
+
+.message-error-meta {
+    border-top: 1px solid rgba(179, 38, 30, 0.16);
+    padding-top: 10px;
+}
+
+.test-error-panel {
+    display: grid;
+    gap: 14px;
+}
+
+.test-error-heading {
+    color: var(--text);
+    font-size: 14px;
+    font-weight: 680;
+}
+
+.test-error-summary {
+    display: grid;
+    gap: 8px;
+}
+
+.test-error-row {
+    display: grid;
+    grid-template-columns: 112px minmax(0, 1fr);
+    gap: 12px;
+    align-items: start;
+}
+
+.test-error-label {
+    color: var(--text-soft);
+    font-size: 12px;
+    font-weight: 680;
+}
+
+.test-error-value {
+    color: var(--text-muted);
+    min-width: 0;
+    overflow-wrap: anywhere;
+}
+
+.test-error-link {
+    justify-self: start;
+}
+
+.test-error-details {
+    border-top: 1px solid var(--border);
+    padding-top: 12px;
+}
+
+.test-error-details summary {
+    color: var(--text);
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 680;
+}
+
+.test-error-details pre {
+    margin: 10px 0 0;
+    max-width: 100%;
+    overflow: visible;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+    font-family: "Google Sans", sans-serif;
+    font-size: 12px;
+    line-height: 1.55;
 }
 
 .message-modal-btn-primary {
@@ -1558,8 +1903,11 @@ textarea[readonly] {
 
 @media (max-width: 1080px) {
     .dashboard-grid,
+    .config-grid,
+    .config-two-column,
     .form-grid,
     .grid-split-2,
+    .provider-settings-grid,
     .provider-tools-grid {
         grid-template-columns: 1fr;
     }
@@ -1568,6 +1916,7 @@ textarea[readonly] {
     .span-5,
     .span-6,
     .span-7,
+    .span-8,
     .span-12 {
         grid-column: auto;
     }
@@ -1599,6 +1948,10 @@ textarea[readonly] {
     .page-header {
         display: grid;
         gap: 16px;
+    }
+
+    .provider-settings-header {
+        display: grid;
     }
 
     .provider-hero-card {

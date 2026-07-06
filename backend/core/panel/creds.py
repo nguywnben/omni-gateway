@@ -19,10 +19,10 @@ from core.models import (
     CredFileBatchActionRequest
 )
 from core.storage_adapter import get_storage_adapter
-from core.utils import verify_panel_token, CODE_ASSIST_USER_AGENT, USER_AGENT
+from core.utils import verify_panel_token, CODE_ASSIST_USER_AGENT
 from core.api.primary import fetch_quota_info
 from core.google_oauth_api import Credentials, fetch_project_id_and_tier, get_user_projects, select_default_project, enable_required_apis
-from config import get_code_assist_endpoint, get_api_url
+from config import get_antigravity_api_url, get_antigravity_user_agent, get_code_assist_endpoint
 from .utils import validate_mode
 
 
@@ -623,8 +623,8 @@ async def verify_credential_project_common(filename: str, mode: str = "code_assi
 
 
     if mode == "primary":
-        api_base_url = await get_api_url()
-        user_agent = USER_AGENT
+        api_base_url = await get_antigravity_api_url()
+        user_agent = await get_antigravity_user_agent()
         project_id, subscription_tier, credit_amount = await fetch_project_id_and_tier(
             access_token=credentials.access_token,
             user_agent=user_agent,
@@ -1514,10 +1514,20 @@ async def test_credential(
 
         test_model = "gemini-2.5-flash"
 
+        test_request = {
+            "contents": [{"role": "user", "parts": [{"text": "hi"}]}],
+            "generationConfig": {"maxOutputTokens": 1}
+        }
+
         if mode == "primary":
-            api_base_url = await get_api_url()
+            api_base_url = await get_antigravity_api_url()
             from core.api.primary import build_primary_headers
-            headers = build_primary_headers(access_token)
+            headers = await build_primary_headers(access_token, test_model)
+            request_body = {
+                "model": test_model,
+                "project": project_id,
+                "request": test_request,
+            }
         else:
             api_base_url = await get_code_assist_endpoint()
             headers = {
@@ -1525,18 +1535,16 @@ async def test_credential(
                 "Content-Type": "application/json",
                 "User-Agent": CODE_ASSIST_USER_AGENT,
             }
+            request_body = {
+                "model": test_model,
+                "project": project_id,
+                "request": test_request,
+            }
 
 
         response = await post_async(
             url=f"{api_base_url}/v1internal:generateContent",
-            json={
-                "model": test_model,
-                "project": project_id,
-                "request": {
-                    "contents": [{"role": "user", "parts": [{"text": "hi"}]}],
-                    "generationConfig": {"maxOutputTokens": 1}
-                }
-            },
+            json=request_body,
             headers=headers,
             timeout=30.0
         )
@@ -1594,12 +1602,17 @@ async def test_credential(
                         log.error(f"Preview Model Test Exception: {filename} - {e}")
 
 
+            message = (
+                "Credential is valid, but the upstream provider is currently rate limited."
+                if status_code == 429
+                else "Test successful."
+            )
             return JSONResponse(
-                status_code=status_code,
+                status_code=200,
                 content={
                     "success": True,
                     "status_code": status_code,
-                    "message": "Test successful.",
+                    "message": message,
                     "filename": filename
                 }
             )
@@ -1644,4 +1657,14 @@ async def test_credential(
         raise
     except Exception as e:
         log.error(f"Failed to test credential {filename}: {e}")
-        raise HTTPException(status_code=500, detail=f"Test failed: {str(e)}")
+        return JSONResponse(
+            status_code=500,
+            content={
+                "success": False,
+                "status_code": 500,
+                "message": "Test failed.",
+                "error": str(e),
+                "detail": f"Test failed: {str(e)}",
+                "filename": filename,
+            }
+        )

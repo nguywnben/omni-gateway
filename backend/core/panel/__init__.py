@@ -2,7 +2,7 @@
 
 from fastapi import APIRouter
 
-from . import auth, creds, config_routes, logs, version, root, usage_routes
+from . import auth, creds, config_routes, logs, version, root, usage_routes, provider_settings
 
 
 def create_router() -> APIRouter:
@@ -17,6 +17,7 @@ def create_router() -> APIRouter:
     router.include_router(logs.router)
     router.include_router(version.router)
     router.include_router(usage_routes.router)
+    router.include_router(provider_settings.router)
 
     return router
 

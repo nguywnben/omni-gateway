@@ -419,7 +419,7 @@ async def fetch_project_id_and_tier(access_token: str, user_agent: str, api_base
 async def _try_load_code_assist(api_base_url: str, headers: dict) -> Tuple[Optional[str], Optional[str], Optional[str]]:
     """Internal implementation detail."""
     request_url = f"{api_base_url.rstrip('/')}/v1internal:loadCodeAssist"
-    request_body = {'metadata': {'ideType': 'PRIMARY'}}
+    request_body = {'metadata': {'ideType': 'ANTIGRAVITY'}}
     log.debug(f'[loadCodeAssist] Fetching Project ID from: {request_url}')
     log.debug(f'[loadCodeAssist] Request body: {request_body}')
     response = await post_async(request_url, json=request_body, headers=headers, timeout=30.0)
@@ -470,7 +470,7 @@ async def _try_onboard_user(api_base_url: str, headers: dict) -> Optional[str]:
         log.error('[onboardUser] Failed to determine user tier')
         return None
     log.info(f'[onboardUser] User tier: {tier_id}')
-    request_body = {'tierId': tier_id, 'metadata': {'ideType': 'PRIMARY', 'platform': 'PLATFORM_UNSPECIFIED', 'pluginType': 'GEMINI'}}
+    request_body = {'tierId': tier_id, 'metadata': {'ideType': 'ANTIGRAVITY', 'platform': 'PLATFORM_UNSPECIFIED', 'pluginType': 'GEMINI'}}
     log.debug(f'[onboardUser] Request URL: {request_url}')
     log.debug(f'[onboardUser] Request body: {request_body}')
     max_attempts = 5
@@ -512,7 +512,7 @@ async def _try_onboard_user(api_base_url: str, headers: dict) -> Optional[str]:
 async def _get_onboard_tier(api_base_url: str, headers: dict) -> Optional[str]:
     """Internal implementation detail."""
     request_url = f"{api_base_url.rstrip('/')}/v1internal:loadCodeAssist"
-    request_body = {'metadata': {'ideType': 'PRIMARY', 'platform': 'PLATFORM_UNSPECIFIED', 'pluginType': 'GEMINI'}}
+    request_body = {'metadata': {'ideType': 'ANTIGRAVITY', 'platform': 'PLATFORM_UNSPECIFIED', 'pluginType': 'GEMINI'}}
     log.debug(f'[_get_onboard_tier] Fetching tier info from: {request_url}')
     response = await post_async(request_url, json=request_body, headers=headers, timeout=30.0)
     if response.status_code == 200:

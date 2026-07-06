@@ -12,8 +12,11 @@ from typing import Any, Dict, List, Optional, Callable, Tuple
 
 from fastapi import Response
 from config import (
-    get_api_url,
-    get_stream_to_nonstream,
+    get_antigravity_api_url,
+    get_antigravity_payload_user_agent,
+    get_antigravity_stream_to_nonstream,
+    get_antigravity_switch_credential_enabled,
+    get_antigravity_user_agent,
     get_auto_disable_error_codes,
 )
 from log import log
@@ -21,7 +24,6 @@ from log import log
 from core.credential_manager import credential_manager
 from core.httpx_client import stream_post_async, post_async
 from core.models import Model, model_to_dict
-from core.utils import USER_AGENT
 
 
 from core.api.utils import (
@@ -226,7 +228,7 @@ async def wrap_cli_request(
         "requestId": request_id,
         "request": inner,
         "model": model,
-        "userAgent": "primary",
+        "userAgent": await get_antigravity_payload_user_agent(),
         "requestType": "agent",
         "enabledCreditTypes": ["GOOGLE_ONE_AI"],
     }
@@ -235,10 +237,10 @@ async def wrap_cli_request(
 
 
 
-def build_primary_headers(access_token: str) -> Dict[str, str]:
+async def build_primary_headers(access_token: str, model: str = "") -> Dict[str, str]:
     """Internal implementation detail."""
     return {
-        "User-Agent": USER_AGENT,
+        "User-Agent": await get_antigravity_user_agent(),
         "Authorization": f"Bearer {access_token}",
         "Content-Type": "application/json",
         "Accept-Encoding": "gzip",
@@ -316,10 +318,10 @@ async def stream_request(
         return
 
 
-    primary_url = await get_api_url()
+    primary_url = await get_antigravity_api_url()
     target_url = f"{primary_url}/v1internal:streamGenerateContent?alt=sse"
 
-    auth_headers = build_primary_headers(access_token)
+    auth_headers = await build_primary_headers(access_token)
 
 
     if headers:
@@ -333,6 +335,7 @@ async def stream_request(
     retry_config = await get_retry_config()
     max_retries = retry_config["max_retries"]
     retry_interval = retry_config["retry_interval"]
+    switch_credential_enabled = await get_antigravity_switch_credential_enabled()
 
     DISABLE_ERROR_CODES = await get_auto_disable_error_codes()
     last_error_response = None
@@ -403,7 +406,7 @@ async def stream_request(
                                 pass
 
 
-                        if next_cred_task is None and attempt < max_retries:
+                        if switch_credential_enabled and next_cred_task is None and attempt < max_retries:
                             next_cred_task = asyncio.create_task(
                                 credential_manager.get_valid_credential(
                                     mode="primary", model_name=model_name
@@ -488,21 +491,22 @@ async def stream_request(
             if need_retry:
                 log.info(f"[provider stream] retry request (attempt {attempt + 2}/{max_retries + 1})...")
 
-                switched, next_cred_task = await _switch_credential_for_retry(
-                    next_cred_task=next_cred_task,
-                    retry_interval=retry_interval,
-                    refresh_credential_fast=refresh_credential_fast,
-                    apply_cred_result=apply_cred_result,
-                    log_prefix="[provider stream]",
-                )
-                if not switched:
-                    log.error("[provider stream] No credentials or tokens available when retrying")
-                    yield Response(
-                        content=json.dumps({"error": "No credentials available"}),
-                        status_code=500,
-                        media_type="application/json"
+                if switch_credential_enabled:
+                    switched, next_cred_task = await _switch_credential_for_retry(
+                        next_cred_task=next_cred_task,
+                        retry_interval=retry_interval,
+                        refresh_credential_fast=refresh_credential_fast,
+                        apply_cred_result=apply_cred_result,
+                        log_prefix="[provider stream]",
                     )
-                    return
+                    if not switched:
+                        log.error("[provider stream] No credentials or tokens available when retrying")
+                        yield Response(
+                            content=json.dumps({"error": "No credentials available"}),
+                            status_code=500,
+                            media_type="application/json"
+                        )
+                        return
                 continue
 
         except Exception as e:
@@ -543,7 +547,7 @@ async def non_stream_request(
 ) -> Response:
     """Internal implementation detail."""
 
-    if await get_stream_to_nonstream():
+    if await get_antigravity_stream_to_nonstream():
         log.debug("[provider] Streaming collection mode for non-streaming requests")
 
 
@@ -586,10 +590,10 @@ async def non_stream_request(
         )
 
 
-    primary_url = await get_api_url()
+    primary_url = await get_antigravity_api_url()
     target_url = f"{primary_url}/v1internal:generateContent"
 
-    auth_headers = build_primary_headers(access_token)
+    auth_headers = await build_primary_headers(access_token)
 
 
     if headers:
@@ -603,6 +607,7 @@ async def non_stream_request(
     retry_config = await get_retry_config()
     max_retries = retry_config["max_retries"]
     retry_interval = retry_config["retry_interval"]
+    switch_credential_enabled = await get_antigravity_switch_credential_enabled()
 
     DISABLE_ERROR_CODES = await get_auto_disable_error_codes()
     last_error_response = None
@@ -711,7 +716,7 @@ async def non_stream_request(
                             pass
 
 
-                    if next_cred_task is None and attempt < max_retries:
+                    if switch_credential_enabled and next_cred_task is None and attempt < max_retries:
                         next_cred_task = asyncio.create_task(
                             credential_manager.get_valid_credential(
                                 mode="primary", model_name=model_name
@@ -752,20 +757,21 @@ async def non_stream_request(
             if need_retry:
                 log.info(f"[provider] Retry request (attempt {attempt + 2}/{max_retries + 1})...")
 
-                switched, next_cred_task = await _switch_credential_for_retry(
-                    next_cred_task=next_cred_task,
-                    retry_interval=retry_interval,
-                    refresh_credential_fast=refresh_credential_fast,
-                    apply_cred_result=apply_cred_result,
-                    log_prefix="[provider]",
-                )
-                if not switched:
-                    log.error("[provider] No credentials or tokens available when retrying")
-                    return Response(
-                        content=json.dumps({"error": "No credentials available"}),
-                        status_code=500,
-                        media_type="application/json"
+                if switch_credential_enabled:
+                    switched, next_cred_task = await _switch_credential_for_retry(
+                        next_cred_task=next_cred_task,
+                        retry_interval=retry_interval,
+                        refresh_credential_fast=refresh_credential_fast,
+                        apply_cred_result=apply_cred_result,
+                        log_prefix="[provider]",
                     )
+                    if not switched:
+                        log.error("[provider] No credentials or tokens available when retrying")
+                        return Response(
+                            content=json.dumps({"error": "No credentials available"}),
+                            status_code=500,
+                            media_type="application/json"
+                        )
                 continue
 
         except Exception as e:
@@ -816,11 +822,11 @@ async def fetch_available_models() -> List[Dict[str, Any]]:
         return []
 
 
-    headers = build_primary_headers(access_token)
+    headers = await build_primary_headers(access_token)
 
     try:
 
-        primary_url = await get_api_url()
+        primary_url = await get_antigravity_api_url()
 
         response = await post_async(
             url=f"{primary_url}/v1internal:fetchAvailableModels",
@@ -881,10 +887,10 @@ async def fetch_available_models() -> List[Dict[str, Any]]:
 async def fetch_quota_info(access_token: str) -> Dict[str, Any]:
     """Internal implementation detail."""
 
-    headers = build_primary_headers(access_token)
+    headers = await build_primary_headers(access_token)
 
     try:
-        primary_url = await get_api_url()
+        primary_url = await get_antigravity_api_url()
 
         response = await post_async(
             url=f"{primary_url}/v1internal:fetchAvailableModels",

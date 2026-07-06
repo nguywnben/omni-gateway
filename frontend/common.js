@@ -126,6 +126,11 @@ const TRANSLATIONS = {
     "card_loading_details": "Loading file content...",
     "card_loading_errors": "Loading error details...",
     "card_loading_quota": "Loading quota details...",
+    "quota_details": "Quota details",
+    "status_no_quota_info": "No quota information is available for this credential.",
+    "status_quota_failed": "Unable to load quota details.",
+    "status_load_failed": "Unable to load details. {error}",
+    "status_credential_normal": "This credential has no recorded error details.",
     "btn_card_enable": "Enable",
     "btn_card_disable": "Disable",
     "btn_card_view": "View content",
@@ -907,6 +912,16 @@ const TRANSLATIONS = {
     "multiple_projects_detected_please_s": "Multiple projects were detected. Specify a Project ID in advanced options:",
     "failed_to_fetch_error_information_e": "Failed to fetch error information: {error_message}",
     "status_net_error": "Network error: {error}",
+    "status_action_success": "Action completed: {action}.",
+    "status_action_failed": "Action failed: {error}.",
+    "status_batch_complete": "Batch operation complete. Processed {success}/{total} credentials.",
+    "status_batch_failed": "Batch operation failed: {error}",
+    "status_batch_net_error": "Batch operation network error: {error}",
+    "credential_status_label": "Status:",
+    "error_details": "Error details",
+    "open_troubleshooter": "Open troubleshooter",
+    "test_rate_limited": "Credential rate limited.",
+    "credential_rate_limited": "Credential is valid, but the upstream provider is currently rate limited.",
     "status_no_creds": "No credentials are in this pool yet. Add an account or upload credentials to get started.",
     "status_no_filter_data": "No usage statistics found.",
     "status_no_errors": "No errors",
@@ -1245,6 +1260,8 @@ const AppState = {
 
     primaryCreds: createCredsManager('primary'),
 
+    credentialCardIndex: {},
+
     uploadFiles: createUploadManager('normal'),
 
     primaryUploadFiles: createUploadManager('primary'),
@@ -1252,6 +1269,10 @@ const AppState = {
     currentConfig: {},
 
     envLockedFields: new Set(),
+
+    antigravityConfig: {},
+
+    antigravityEnvLockedFields: new Set(),
 
     logWebSocket: null,
 
@@ -2235,26 +2256,6 @@ function cpUrl(element) {
     });
 }
 
-function toggleKeyVisibility(inputId, btn) {
-    const input = document.getElementById(inputId);
-    if (!input) return;
-    const isHidden = input.type === 'password';
-    input.type = isHidden ? 'text' : 'password';
-
-    // Toggle eye icons
-    const iconHidden = btn.querySelector('.eye-icon-hidden');
-    const iconVisible = btn.querySelector('.eye-icon-visible');
-    if (iconHidden && iconVisible) {
-        if (isHidden) {
-            iconHidden.style.display = 'none';
-            iconVisible.style.display = 'block';
-        } else {
-            iconHidden.style.display = 'block';
-            iconVisible.style.display = 'none';
-        }
-    }
-}
-
 function copyInputValue(inputId) {
     const input = document.getElementById(inputId);
     if (!input || !input.value || input.value === '...') return;
@@ -2319,11 +2320,14 @@ function linkifyText(text) {
 
 }
 
-function showMessageModal(title, message, type = 'info') {
+function showMessageModal(title, message, type = 'info', options = {}) {
 
     const modal = document.createElement('div');
 
     modal.className = 'message-modal-overlay';
+    const bodyContent = options.html
+        ? String(message || '')
+        : linkifyText(normalizeDialogMessage(message)).replace(/\n/g, '<br>');
 
     modal.innerHTML = `
 
@@ -2339,7 +2343,7 @@ function showMessageModal(title, message, type = 'info') {
 
             <div class="message-modal-body">
 
-                ${linkifyText(normalizeDialogMessage(message)).replace(/\n/g, '<br>')}
+                ${bodyContent}
 
             </div>
 
@@ -2400,6 +2404,301 @@ function renderDialogMessage(message, options = {}) {
     }
 
     return escaped.replace(/\n/g, '<br>');
+
+}
+
+function buildCredentialTestErrorHtml(filename, data, response) {
+
+    let parsedError = null;
+    const rawErrorValue = data?.error || data?.detail || data?.message || '';
+    if (rawErrorValue) {
+        try {
+            parsedError = typeof rawErrorValue === 'string' ? JSON.parse(rawErrorValue) : rawErrorValue;
+        } catch {
+            parsedError = null;
+        }
+    }
+
+    const errorRoot = parsedError?.error || parsedError || {};
+    const firstDetail = Array.isArray(errorRoot.details) ? errorRoot.details[0] || {} : {};
+    const metadata = firstDetail.metadata || {};
+    const httpCode = errorRoot.code || data.status_code || response.status;
+    const statusText = errorRoot.status || data.message || data.detail || data.error || t('unknown_error');
+    const reason = firstDetail.reason || '';
+    const permission = metadata.permission || '';
+    const resource = metadata.resource || '';
+    const troubleshooterUrl = metadata.troubleshooter_url || '';
+    const rawDetails = parsedError
+        ? JSON.stringify(parsedError, null, 2)
+        : String(data.detail || data.error || data.message || `${t('error_code_prefix')} ${httpCode}`);
+
+    const summaryRows = [
+        [t('table_filename'), filename],
+        ['Code', httpCode],
+        [t('credential_status_label').replace(':', ''), statusText],
+        reason ? ['Reason', reason] : null,
+        permission ? ['Permission', permission] : null,
+        resource ? ['Resource', resource] : null,
+    ].filter(Boolean);
+
+    const summaryHtml = summaryRows.map(([label, value]) => `
+        <div class="test-error-row">
+            <div class="test-error-label">${escapeHtml(label)}</div>
+            <div class="test-error-value">${escapeHtml(String(value))}</div>
+        </div>
+    `).join('');
+
+    const troubleshooterHtml = troubleshooterUrl
+        ? `<a class="message-link test-error-link" href="${escapeHtml(troubleshooterUrl)}" target="_blank" rel="noopener noreferrer">${t('open_troubleshooter')}</a>`
+        : '';
+
+    return `
+        <div class="test-error-panel">
+            <div class="test-error-heading">${escapeHtml(t('status_action_failed', {error: t('btn_message_test')}))}</div>
+            <div class="test-error-summary">${summaryHtml}</div>
+            ${troubleshooterHtml}
+            <details class="test-error-details">
+                <summary>${escapeHtml(t('error_details'))}</summary>
+                <pre>${escapeHtml(rawDetails)}</pre>
+            </details>
+        </div>
+    `;
+
+}
+
+function normalizeVerificationMessage(message) {
+
+    return String(message || '')
+        .replace(/^verification successful\.?\s*/i, '')
+        .replace(/^validation successful\.?\s*/i, '')
+        .trim();
+
+}
+
+function buildCredentialVerificationHtml(filename, data) {
+
+    const rows = [
+        [t('table_filename'), filename],
+        data.project_id ? ['Project ID', data.project_id] : null,
+        data.subscription_tier ? ['Tier', data.subscription_tier] : null,
+        data.credit_amount !== undefined && data.credit_amount !== null ? ['Credit', data.credit_amount] : null,
+    ].filter(Boolean);
+
+    const summaryHtml = rows.map(([label, value]) => `
+        <div class="message-result-row">
+            <div class="message-result-label">${escapeHtml(label)}</div>
+            <div class="message-result-value">${escapeHtml(String(value))}</div>
+        </div>
+    `).join('');
+
+    const detailMessage = normalizeVerificationMessage(data.message);
+    const detailHtml = detailMessage
+        ? `<div class="message-result-note">${escapeHtml(ensureTerminalPunctuation(detailMessage))}</div>`
+        : '';
+
+    return `
+        <div class="message-result-panel">
+            <div class="message-result-heading">Credential verified.</div>
+            <div class="message-result-summary">${summaryHtml}</div>
+            ${detailHtml}
+        </div>
+    `;
+
+}
+
+function renderMessageResultRows(rows) {
+
+    return rows.filter(Boolean).map(([label, value]) => `
+        <div class="message-result-row">
+            <div class="message-result-label">${escapeHtml(label)}</div>
+            <div class="message-result-value">${escapeHtml(String(value))}</div>
+        </div>
+    `).join('');
+
+}
+
+function getCredentialModalContext(pathId, manager) {
+
+    const context = AppState.credentialCardIndex[pathId] || {};
+    const resolvedManager = context.managerType === 'primary' ? AppState.primaryCreds : manager;
+
+    if (context.filename) {
+
+        return { filename: context.filename, manager: resolvedManager };
+
+    }
+
+    const details = document.getElementById('details-' + pathId)
+        || document.getElementById('errors-' + pathId)
+        || document.getElementById('quota-' + pathId);
+
+    const filename = details?.querySelector('[data-filename]')?.getAttribute('data-filename') || '';
+
+    return { filename, manager };
+
+}
+
+function buildCredentialContentHtml(filename, content) {
+
+    const rows = renderMessageResultRows([[t('table_filename'), filename]]);
+    const body = JSON.stringify(content, null, 2);
+
+    return `
+        <div class="message-result-panel">
+            <div class="message-result-summary">${rows}</div>
+            <pre class="message-modal-code">${escapeHtml(body)}</pre>
+        </div>
+    `;
+
+}
+
+function quotaLevelFromUsedPercentage(usedPercentage) {
+
+    if (usedPercentage >= 90) return 'danger';
+    if (usedPercentage >= 70) return 'warning';
+    if (usedPercentage >= 50) return 'info';
+    return 'success';
+
+}
+
+function buildCredentialQuotaHtml(filename, data) {
+
+    const models = data.models || {};
+    const rows = renderMessageResultRows([[t('table_filename'), filename]]);
+
+    if (Object.keys(models).length === 0) {
+
+        return `
+            <div class="message-result-panel">
+                <div class="message-result-summary">${rows}</div>
+                <div class="modal-empty-state">${escapeHtml(t('status_no_quota_info'))}</div>
+            </div>
+        `;
+
+    }
+
+    const cards = Object.entries(models).map(([modelName, quotaData]) => {
+
+        const remainingFraction = Number(quotaData.remaining || 0);
+        const resetTime = quotaData.resetTime || 'N/A';
+        const usedPercentage = Math.max(0, Math.min(100, Math.round((1 - remainingFraction) * 100)));
+        const remainingPercentage = Math.max(0, Math.min(100, Math.round(remainingFraction * 100)));
+        const level = quotaLevelFromUsedPercentage(usedPercentage);
+
+        return `
+            <div class="modal-quota-card ${level}">
+                <div class="modal-quota-head">
+                    <div class="modal-quota-model" title="${escapeHtml(modelName)}">${escapeHtml(modelName)}</div>
+                    <div class="modal-quota-percent">${remainingPercentage}%</div>
+                </div>
+                <div class="modal-quota-bar">
+                    <div class="modal-quota-bar-value" style="width: ${usedPercentage}%;"></div>
+                </div>
+                <div class="modal-quota-foot">${resetTime !== 'N/A' ? `Reset ${escapeHtml(resetTime)}` : '&nbsp;'}</div>
+            </div>
+        `;
+
+    }).join('');
+
+    return `
+        <div class="message-result-panel">
+            <div class="message-result-summary">${rows}</div>
+            <div class="modal-quota-grid">${cards}</div>
+        </div>
+    `;
+
+}
+
+function renderCredentialErrorDetails(parsedMsg) {
+
+    const error = parsedMsg?.error;
+    if (!error) return '';
+
+    const rows = [];
+
+    if (error.status) rows.push(['Status', error.status]);
+
+    if (Array.isArray(error.details)) {
+
+        error.details.forEach((detail, index) => {
+
+            if (detail['@type']) rows.push([`Type ${index + 1}`, detail['@type']]);
+            if (detail.reason) rows.push([`Reason ${index + 1}`, detail.reason]);
+
+            if (detail.metadata && typeof detail.metadata === 'object') {
+
+                Object.entries(detail.metadata).forEach(([key, value]) => {
+                    rows.push([key, String(value)]);
+                });
+
+            }
+
+        });
+
+    }
+
+    if (!rows.length) return '';
+
+    return `<div class="message-error-meta">${renderMessageResultRows(rows)}</div>`;
+
+}
+
+function buildCredentialErrorsHtml(filename, data) {
+
+    const errorCodes = data.error_codes || [];
+    const errorMessages = data.error_messages || {};
+    const rows = renderMessageResultRows([[t('table_filename'), filename]]);
+
+    if (errorCodes.length === 0) {
+
+        return `
+            <div class="message-result-panel">
+                <div class="message-result-summary">${rows}</div>
+                <div class="modal-empty-state success">
+                    <strong>${escapeHtml(t('status_no_errors'))}</strong>
+                    <span>${escapeHtml(t('status_credential_normal'))}</span>
+                </div>
+            </div>
+        `;
+
+    }
+
+    const errorCards = errorCodes.map((errorCode) => {
+
+        const messageStr = errorMessages[errorCode] || t('no_details_available');
+        let displayMsg = messageStr;
+        let detailsHtml = '';
+
+        try {
+
+            const parsedMsg = JSON.parse(messageStr);
+
+            if (parsedMsg?.error?.message) displayMsg = parsedMsg.error.message;
+
+            detailsHtml = renderCredentialErrorDetails(parsedMsg);
+
+        } catch {
+
+            detailsHtml = '';
+
+        }
+
+        return `
+            <div class="message-error-card">
+                <div class="message-error-title">${escapeHtml(t('error_code_prefix'))} ${escapeHtml(String(errorCode))}</div>
+                <div class="message-error-copy">${highlightHttpLinks(escapeHtml(displayMsg))}</div>
+                ${detailsHtml}
+            </div>
+        `;
+
+    }).join('');
+
+    return `
+        <div class="message-result-panel">
+            <div class="message-result-summary">${rows}</div>
+            <div class="message-error-list">${errorCards}</div>
+        </div>
+    `;
 
 }
 
@@ -2787,6 +3086,8 @@ function createCredCard(credInfo, manager) {
 
     const pathId = (managerType === 'primary' ? 'primary_' : '') + btoa(encodeURIComponent(filename)).replace(/[+/=]/g, '_');
 
+    AppState.credentialCardIndex[pathId] = { filename, managerType };
+
     const actionButtons = `
 
         ${status.disabled
@@ -2849,32 +3150,6 @@ function createCredCard(credInfo, manager) {
 
         <div class="cred-actions">${actionButtons}</div>
 
-        <div class="cred-details" id="details-${pathId}">
-
-            <div class="cred-content" data-filename="${filename}" data-loaded="false">${t('click_view_content_to_load')}</div>
-
-        </div>
-
-        <div class="cred-details" id="errors-${pathId}">
-
-            <div class="cred-content error-content" data-filename="${filename}" data-loaded="false">${t('click_view_errors_to_load')}</div>
-
-        </div>
-
-        ${managerType === 'primary' ? `
-
-        <div class="cred-quota-details" id="quota-${pathId}">
-
-            <div class="cred-quota-content" data-filename="${filename}" data-loaded="false">
-
-                ${t('click_view_quota_to_load')}
-
-            </div>
-
-        </div>
-
-        ` : ''}
-
     `;
 
     div.querySelectorAll('[data-filename][data-action]').forEach(button => {
@@ -2920,53 +3195,43 @@ async function togglePrimaryCredDetails(pathId) {
 
 async function toggleCredDetailsCommon(pathId, manager) {
 
-    const details = document.getElementById('details-' + pathId);
+    const { filename, manager: resolvedManager } = getCredentialModalContext(pathId, manager);
 
-    if (!details) return;
+    if (!filename) return;
 
-    const isShowing = details.classList.toggle('show');
+    showStatus(t('status_loading_file_content'), 'info');
 
-    if (isShowing) {
+    try {
 
-        const contentDiv = details.querySelector('.cred-content');
+        const modeParam = resolvedManager.type === 'primary' ? 'mode=provider' : 'mode=code_assist';
 
-        const filename = contentDiv.getAttribute('data-filename');
+        const endpoint = `./api/creds/detail/${encodeURIComponent(filename)}?${modeParam}`;
 
-        const loaded = contentDiv.getAttribute('data-loaded');
+        const response = await fetch(endpoint, { headers: getAuthHeaders() });
 
-        if (loaded === 'false' && filename) {
+        const data = await response.json();
 
-            contentDiv.textContent = t('status_loading_file_content');
+        if (response.ok && data.content) {
 
-            try {
+            showMessageModal('Credential content', buildCredentialContentHtml(filename, data.content), 'info', {html: true});
 
-                const modeParam = manager.type === 'primary' ? 'mode=provider' : 'mode=code_assist';
+        } else {
 
-                const endpoint = `./api/creds/detail/${encodeURIComponent(filename)}?${modeParam}`;
+            const errorMsg = data.error || data.detail || t('unknown_error');
 
-                const response = await fetch(endpoint, { headers: getAuthHeaders() });
+            showStatus(`${t('unable_to_load_file_content')} ${errorMsg}`, 'error');
 
-                const data = await response.json();
-
-                if (response.ok && data.content) {
-
-                    contentDiv.textContent = JSON.stringify(data.content, null, 2);
-
-                    contentDiv.setAttribute('data-loaded', 'true');
-
-                } else {
-
-                    contentDiv.textContent = `${t('unable_to_load_file_content')} ${data.error || data.detail || t('unknown_error')}`;
-
-                }
-
-            } catch (error) {
-
-                contentDiv.textContent = `${t('unable_to_load_file_content')} ${error.message}`;
-
-            }
+            showMessageModal('Unable to load credential content', `${t('unable_to_load_file_content')} ${errorMsg}`, 'error');
 
         }
+
+    } catch (error) {
+
+        const errorMsg = `${t('unable_to_load_file_content')} ${error.message}`;
+
+        showStatus(errorMsg, 'error');
+
+        showMessageModal('Unable to load credential content', errorMsg, 'error');
 
     }
 
@@ -3322,6 +3587,8 @@ function triggerTabDataLoad(tabName) {
     if (tabName === 'pool') {
         AppState.primaryCreds.refresh();
     }
+
+    if (tabName === 'providers') loadAntigravitySettings();
 
     if (tabName === 'config') loadConfig();
 
@@ -4193,7 +4460,7 @@ async function verifyProjectId(filename) {
 
             showStatus(successMsg.replace(/\n/g, '<br>'), 'success');
 
-            showMessageModal(t('verification_successful'), t('validation_successfulnnfile_filenam', {filename: filename, data_project_id: data.project_id, tierLine: tierLine, creditLine: creditLine, data_message: data.message}), 'success');
+            showMessageModal(t('verification_successful'), buildCredentialVerificationHtml(filename, data), 'success', {html: true});
 
             await AppState.creds.refresh();
 
@@ -4249,7 +4516,7 @@ async function verifyPrimaryProjectId(filename) {
 
             showStatus(successMsg.replace(/\n/g, '<br>'), 'success');
 
-            showMessageModal(t('verification_successful'), t('validation_successfulnnfile_filenam', {filename: filename, data_project_id: data.project_id, tierLine: tierLine, creditLine: creditLine, data_message: data.message}), 'success');
+            showMessageModal(t('verification_successful'), buildCredentialVerificationHtml(filename, data), 'success', {html: true});
 
             await AppState.primaryCreds.refresh();
 
@@ -4291,13 +4558,17 @@ async function testCredential(filename) {
 
         const data = await response.json();
 
-        if (response.status === 200) {
+        const logicalStatus = data.status_code || response.status;
+        const isRateLimited = logicalStatus === 429 && data.success === true;
 
-            const successMsg = `${t('status_action_success', {action: t('btn_message_test')})}\n${t('table_filename')}: ${filename}\n${t('log_status_label')} ${data.message || t('credential_available')} (${data.status_code || 200})`;
+        if (response.status === 200 || isRateLimited) {
 
-            showStatus(t('test_successful'), 'success');
+            const statusMessage = data.message || (isRateLimited ? t('credential_rate_limited') : t('credential_available'));
+            const successMsg = `${t('status_action_success', {action: t('btn_message_test')})}\n${t('table_filename')}: ${filename}\n${t('credential_status_label')} ${statusMessage} (${logicalStatus || 200})`;
 
-            showMessageModal(t('test_successful_dup'), successMsg, 'success');
+            showStatus(isRateLimited ? t('credential_rate_limited') : t('test_successful'), isRateLimited ? 'warning' : 'success');
+
+            showMessageModal(isRateLimited ? t('test_rate_limited') : t('test_successful_dup'), successMsg, isRateLimited ? 'info' : 'success');
 
             await AppState.creds.refresh();
 
@@ -4305,31 +4576,11 @@ async function testCredential(filename) {
 
         else {
 
-            let errorDetails = `${t('status_action_failed', {error: t('btn_message_test')})}\n${t('table_filename')}: ${filename}\n`;
-
-            if (data.error) {
-
-                try {
-
-                    const errorObj = JSON.parse(data.error);
-
-                    errorDetails += t('nerror_detailsnjsonstringifyerrorob', {JSON_stringify_errorObj__null__2: JSON.stringify(errorObj, null, 2)});
-
-                } catch {
-
-                    errorDetails += t('nerror_detailsndataerror', {data_error: data.error});
-
-                }
-
-            } else {
-
-                errorDetails += t('error_code_datastatus_code_response', {data_status_code____response_status: data.status_code || response.status});
-
-            }
+            const errorDetails = buildCredentialTestErrorHtml(filename, data, response);
 
             showStatus(`Test failed: ${data.message || `${t('error_code_prefix')} ${data.status_code || response.status}`}`, 'error');
 
-            showMessageModal(t('test_failed'), errorDetails, 'error');
+            showMessageModal(t('test_failed'), errorDetails, 'error', {html: true});
 
         }
 
@@ -4361,13 +4612,17 @@ async function testPrimaryCredential(filename) {
 
         const data = await response.json();
 
-        if (response.status === 200) {
+        const logicalStatus = data.status_code || response.status;
+        const isRateLimited = logicalStatus === 429 && data.success === true;
 
-            const successMsg = `${t('status_action_success', {action: t('btn_message_test')})}\n${t('table_filename')}: ${filename}\n${t('log_status_label')} ${data.message || t('primary_credential_valid')} (${data.status_code || 200})`;
+        if (response.status === 200 || isRateLimited) {
 
-            showStatus(t('test_successful'), 'success');
+            const statusMessage = data.message || (isRateLimited ? t('credential_rate_limited') : t('primary_credential_valid'));
+            const successMsg = `${t('status_action_success', {action: t('btn_message_test')})}\n${t('table_filename')}: ${filename}\n${t('credential_status_label')} ${statusMessage} (${logicalStatus || 200})`;
 
-            showMessageModal(t('test_successful_dup'), successMsg, 'success');
+            showStatus(isRateLimited ? t('credential_rate_limited') : t('test_successful'), isRateLimited ? 'warning' : 'success');
+
+            showMessageModal(isRateLimited ? t('test_rate_limited') : t('test_successful_dup'), successMsg, isRateLimited ? 'info' : 'success');
 
             await AppState.primaryCreds.refresh();
 
@@ -4375,31 +4630,11 @@ async function testPrimaryCredential(filename) {
 
         else {
 
-            let errorDetails = `${t('status_action_failed', {error: t('btn_message_test')})}\n${t('table_filename')}: ${filename}\n`;
-
-            if (data.error) {
-
-                try {
-
-                    const errorObj = JSON.parse(data.error);
-
-                    errorDetails += t('nerror_detailsnjsonstringifyerrorob', {JSON_stringify_errorObj__null__2: JSON.stringify(errorObj, null, 2)});
-
-                } catch {
-
-                    errorDetails += t('nerror_detailsndataerror', {data_error: data.error});
-
-                }
-
-            } else {
-
-                errorDetails += t('error_code_datastatus_code_response', {data_status_code____response_status: data.status_code || response.status});
-
-            }
+            const errorDetails = buildCredentialTestErrorHtml(filename, data, response);
 
             showStatus(`Test failed: ${data.message || `${t('error_code_prefix')} ${data.status_code || response.status}`}`, 'error');
 
-            showMessageModal(t('test_failed'), errorDetails, 'error');
+            showMessageModal(t('test_failed'), errorDetails, 'error', {html: true});
 
         }
 
@@ -4433,7 +4668,7 @@ async function configurePreviewChannel(filename) {
 
         if (response.ok && data.success) {
 
-            const successMsg = `${t('status_action_success', {action: t('btn_setup_preview')})}\n${t('table_filename')}: ${filename}\n${t('log_status_label')} ${data.message}`;
+            const successMsg = `${t('status_action_success', {action: t('btn_setup_preview')})}\n${t('table_filename')}: ${filename}\n${t('credential_status_label')} ${data.message}`;
 
             showStatus(successMsg.replace(/\n/g, '<br>'), 'success');
 
@@ -4483,181 +4718,45 @@ async function configurePreviewChannel(filename) {
 
 async function togglePrimaryQuotaDetails(pathId) {
 
-    const quotaDetails = document.getElementById('quota-' + pathId);
+    const { filename } = getCredentialModalContext(pathId, AppState.primaryCreds);
 
-    if (!quotaDetails) return;
+    if (!filename) return;
 
-    const isShowing = quotaDetails.style.display === 'block';
+    showStatus(t('card_loading_quota'), 'info');
 
-    if (isShowing) {
+    try {
 
-        quotaDetails.style.display = 'none';
+        const response = await fetch(`./api/creds/quota/${encodeURIComponent(filename)}?mode=provider`, {
 
-    } else {
+            method: 'GET',
 
-        quotaDetails.style.display = 'block';
+            headers: getAuthHeaders()
 
-        const contentDiv = quotaDetails.querySelector('.cred-quota-content');
+        });
 
-        const filename = contentDiv.getAttribute('data-filename');
+        const data = await response.json();
 
-        if (filename) {
+        if (response.ok && data.success) {
 
-            contentDiv.innerHTML = t('div_styletextalign_center_padding_2_dup_dup_dup_dup_dup');
+            showMessageModal(t('quota_details'), buildCredentialQuotaHtml(filename, data), 'info', {html: true});
 
-            try {
+        } else {
 
-                const response = await fetch(`./api/creds/quota/${encodeURIComponent(filename)}?mode=provider`, {
+            const errorMsg = data.error || t('failed_to_get_quota_information');
 
-                    method: 'GET',
+            showStatus(errorMsg, 'error');
 
-                    headers: getAuthHeaders()
-
-                });
-
-                const data = await response.json();
-
-                if (response.ok && data.success) {
-
-                    const models = data.models || {};
-
-                    if (Object.keys(models).length === 0) {
-
-                        contentDiv.innerHTML = `
-
-                            <div style="text-align: center; padding: 20px; color: #999;">
-
-                                <div>${t('status_no_quota_info')}</div>
-
-                            </div>
-
-                        `;
-
-                    } else {
-
-                        let quotaHTML = `
-
-                            <div style="background: var(--bg-subtle); color: var(--text-primary); padding: 14px 0; border-bottom: 1px solid var(--border); margin-bottom: 15px;">
-
-                                <h4 style="margin: 0; font-size: 16px; display: flex; align-items: center; gap: 8px;">
-
-                                    <span style="font-size: 20px;"></span>
-
-                                    <span>${t('quota_details')}</span>
-
-                                </h4>
-
-                                <div style="font-size: 12px; color: var(--text-muted); margin-top: 5px;">${t('table_filename')}: ${filename}</div>
-
-                            </div>
-
-                            <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 10px;">
-
-                        `;
-
-                        for (const [modelName, quotaData] of Object.entries(models)) {
-
-                            const remainingFraction = quotaData.remaining || 0;
-
-                            const resetTime = quotaData.resetTime || 'N/A';
-
-                            const usedPercentage = Math.round((1 - remainingFraction) * 100);
-
-                            const remainingPercentage = Math.round(remainingFraction * 100);
-
-                            let percentageColor = '#28a745';
-
-                            if (usedPercentage >= 90) percentageColor = '#dc3545';
-
-                            else if (usedPercentage >= 70) percentageColor = '#ffc107';
-
-                            else if (usedPercentage >= 50) percentageColor = '#17a2b8';
-
-                            quotaHTML += `
-
-                                <div style="background: var(--bg); border: 1px solid var(--border); border-left: 4px solid ${percentageColor}; border-radius: var(--radius); padding: 8px 10px;">
-
-                                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
-
-                                        <div style="font-weight: bold; color: #333; font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; margin-right: 8px;" title="${modelName} - ${t('remaining_label')}: ${remainingPercentage}% - ${resetTime}">
-
-                                            ${modelName}
-
-                                        </div>
-
-                                        <div style="font-size: 13px; font-weight: bold; color: ${percentageColor}; white-space: nowrap;">
-
-                                            ${remainingPercentage}%
-
-                                        </div>
-
-                                    </div>
-
-                                    <div style="width: 100%; height: 8px; background-color: var(--bg-subtle); border-radius: var(--radius); overflow: hidden; margin-bottom: 4px;">
-
-                                        <div style="width: ${usedPercentage}%; height: 100%; background-color: ${percentageColor};"></div>
-
-                                    </div>
-
-                                    <div style="font-size: 10px; color: #666; text-align: right;">
-
-                                        ${resetTime !== 'N/A' ? 'Reset ' + resetTime : ''}
-
-                                    </div>
-
-                                </div>
-
-                            `;
-
-                        }
-
-                        quotaHTML += '</div>';
-
-                        contentDiv.innerHTML = quotaHTML;
-
-                    }
-
-                    // showStatus(t('quota_information_loaded_successful'), 'success');
-
-                } else {
-
-                    const errorMsg = data.error || t('failed_to_get_quota_information');
-
-                    contentDiv.innerHTML = `
-
-                        <div style="text-align: center; padding: 20px; color: #dc3545;">
-
-                            <div style="font-weight: bold; margin-bottom: 5px;">${t('status_quota_failed')}</div>
-
-                            <div style="font-size: 13px; color: #666;">${errorMsg}</div>
-
-                        </div>
-
-                    `;
-
-                    showStatus(` ${errorMsg}`, 'error');
-
-                }
-
-            } catch (error) {
-
-                contentDiv.innerHTML = `
-
-                    <div style="text-align: center; padding: 20px; color: #dc3545;">
-
-                        <div style="font-weight: bold; margin-bottom: 5px;">${t('net_error')}</div>
-
-                        <div style="font-size: 13px; color: #666;">${error.message}</div>
-
-                    </div>
-
-                `;
-
-                showStatus(t('failed_to_get_quota_information_err', {error_message: error.message}), 'error');
-
-            }
+            showMessageModal(t('status_quota_failed'), errorMsg, 'error');
 
         }
+
+    } catch (error) {
+
+        const errorMsg = t('failed_to_get_quota_information_err', {error_message: error.message});
+
+        showStatus(errorMsg, 'error');
+
+        showMessageModal(t('status_quota_failed'), errorMsg, 'error');
 
     }
 
@@ -4681,223 +4780,47 @@ async function togglePrimaryErrorDetails(pathId) {
 
 async function toggleErrorDetailsCommon(pathId, manager) {
 
-    const errorDetails = document.getElementById('errors-' + pathId);
+    const { filename, manager: resolvedManager } = getCredentialModalContext(pathId, manager);
 
-    if (!errorDetails) return;
+    if (!filename) return;
 
-    const isShowing = errorDetails.classList.toggle('show');
+    showStatus(t('card_loading_errors'), 'info');
 
-    if (isShowing) {
+    try {
 
-        const contentDiv = errorDetails.querySelector('.cred-content');
+        const modeParam = resolvedManager.type === 'primary' ? 'mode=provider' : 'mode=code_assist';
 
-        const filename = contentDiv.getAttribute('data-filename');
+        const response = await fetch(`./api/creds/errors/${encodeURIComponent(filename)}?${modeParam}`, {
 
-        if (filename) {
+            method: 'GET',
 
-            contentDiv.innerHTML = t('div_styletextalign_center_padding_2_dup_dup_dup_dup_dup_dup');
+            headers: getAuthHeaders()
 
-            try {
+        });
 
-                const modeParam = manager.type === 'primary' ? 'mode=provider' : 'mode=code_assist';
+        const data = await response.json();
 
-                const response = await fetch(`./api/creds/errors/${encodeURIComponent(filename)}?${modeParam}`, {
+        if (response.ok) {
 
-                    method: 'GET',
+            showMessageModal(t('btn_view_errors'), buildCredentialErrorsHtml(filename, data), 'info', {html: true});
 
-                    headers: getAuthHeaders()
+        } else {
 
-                });
+            const errorMsg = data.detail || data.error || t('failed_to_fetch_error_message');
 
-                const data = await response.json();
+            showStatus(t('failed_to_fetch_error_message_error', {errorMsg: errorMsg}), 'error');
 
-                if (response.ok) {
-
-                    const errorCodes = data.error_codes || [];
-
-                    const errorMessages = data.error_messages || {};
-
-                    if (errorCodes.length === 0) {
-
-                        contentDiv.innerHTML = `
-
-                            <div style="text-align: center; padding: 20px; color: #28a745;">
-
-                                <div style="font-weight: bold;">${t('status_no_errors')}</div>
-
-                                <div style="font-size: 12px; color: #666; margin-top: 8px;">${t('status_credential_normal')}</div>
-
-                            </div>
-
-                        `;
-
-                    } else {
-
-                        let errorHTML = '';
-
-                        errorCodes.forEach((errorCode) => {
-
-                            const messageStr = errorMessages[errorCode] || t('no_details_available');
-
-                            let displayMsg = messageStr;
-
-                            let detailsHtml = '';
-
-                            try {
-
-                                const parsedMsg = JSON.parse(messageStr);
-
-                                if (parsedMsg.error) {
-
-                                    if (parsedMsg.error.message) {
-
-                                        displayMsg = parsedMsg.error.message;
-
-                                    }
-
-                                    if (parsedMsg.error.details && Array.isArray(parsedMsg.error.details)) {
-
-                                        detailsHtml = '<div style="margin-top: 10px; padding-top: 10px; border-top: 1px dashed #ddd;">';
-
-                                        detailsHtml += t('div_stylefontsize_12px_color_666_ma');
-
-                                        parsedMsg.error.details.forEach((detail, idx) => {
-
-                                            detailsHtml += '<div style="font-size: 12px; margin-left: 10px; margin-bottom: 5px;">';
-
-                                            // Toggle element display @type
-
-                                            if (detail['@type']) {
-
-                                                const highlightedType = highlightHttpLinks(escapeHtml(detail['@type']));
-
-                                                detailsHtml += t('div_stylecolor_007bfftype_highlight', {highlightedType: highlightedType});
-
-                                            }
-
-                                            // Toggle element display reason
-
-                                            if (detail.reason) {
-
-                                                detailsHtml += t('div_stylecolor_dc3545reason_escapeh', {escapeHtml_detail_reason: escapeHtml(detail.reason)});
-
-                                            }
-
-                                            if (detail.metadata) {
-
-                                                detailsHtml += '<div style="margin-left: 10px; margin-top: 3px;">';
-
-                                                for (const [key, value] of Object.entries(detail.metadata)) {
-
-                                                    const highlightedValue = highlightHttpLinks(escapeHtml(String(value)));
-
-                                                    detailsHtml += `<div style="color: #333;">${escapeHtml(key)}: ${highlightedValue}</div>`;
-
-                                                }
-
-                                                detailsHtml += '</div>';
-
-                                            }
-
-                                            detailsHtml += '</div>';
-
-                                        });
-
-                                        detailsHtml += '</div>';
-
-                                    }
-
-                                    if (parsedMsg.error.status) {
-
-                                        if (!detailsHtml) {
-
-                                            detailsHtml = '<div style="margin-top: 10px; padding-top: 10px; border-top: 1px dashed #ddd;">';
-
-                                        }
-
-                                        detailsHtml += t('div_stylefontsize_12px_color_666sta', {escapeHtml_parsedMsg_error_status: escapeHtml(parsedMsg.error.status)});
-
-                                        if (!parsedMsg.error.details) {
-
-                                            detailsHtml += '</div>';
-
-                                        }
-
-                                    }
-
-                                }
-
-                            } catch (e) {
-
-                            }
-
-                            const highlightedMsg = highlightHttpLinks(escapeHtml(displayMsg));
-
-                            errorHTML += `
-
-                                <div style="padding: 12px; margin-bottom: 10px; border-left: 3px solid #dc3545; background-color: #f8f9fa;">
-
-                                    <div style="font-weight: bold; color: #dc3545; margin-bottom: 8px;">${t('error_code_prefix')} ${errorCode}</div>
-
-                                    <div style="line-height: 1.6; color: #333; white-space: pre-wrap; word-break: break-word;">
-
-                                        ${highlightedMsg}
-
-                                    </div>
-
-                                    ${detailsHtml}
-
-                                </div>
-
-                            `;
-
-                        });
-
-                        contentDiv.innerHTML = errorHTML;
-
-                    }
-
-                    // showStatus(t('error_information_loaded_successful'), 'success');
-
-                } else {
-
-                    const errorMsg = data.detail || data.error || t('failed_to_fetch_error_message');
-
-                    contentDiv.innerHTML = `
-
-                        <div style="text-align: center; padding: 20px; color: #dc3545;">
-
-                            <div style="font-weight: bold;">${t('status_load_failed')}</div>
-
-                            <div style="font-size: 12px; margin-top: 8px;">${errorMsg}</div>
-
-                        </div>
-
-                    `;
-
-                    showStatus(t('failed_to_fetch_error_message_error', {errorMsg: errorMsg}), 'error');
-
-                }
-
-            } catch (error) {
-
-                contentDiv.innerHTML = `
-
-                    <div style="text-align: center; padding: 20px; color: #dc3545;">
-
-                        <div style="font-weight: bold;">${t('net_error')}</div>
-
-                        <div style="font-size: 12px; margin-top: 8px;">${error.message}</div>
-
-                    </div>
-
-                `;
-
-                showStatus(t('failed_to_fetch_error_information_e', {error_message: error.message}), 'error');
-
-            }
+            showMessageModal('Unable to load details', errorMsg, 'error');
 
         }
+
+    } catch (error) {
+
+        const errorMsg = t('failed_to_fetch_error_information_e', {error_message: error.message});
+
+        showStatus(errorMsg, 'error');
+
+        showMessageModal('Unable to load details', errorMsg, 'error');
 
     }
 
@@ -5907,6 +5830,193 @@ async function clearEnvCredentials() {
 
 // =====================================================================
 
+const ANTIGRAVITY_CONFIG_FIELD_KEYS = {
+    antigravityOauthClientId: 'antigravity_client_id',
+    antigravityOauthClientSecret: 'antigravity_client_secret',
+    antigravityApiUrl: 'api_url',
+    antigravityOauthUrl: 'oauth_url',
+    antigravityGoogleApisUrl: 'google_apis_url',
+    antigravityResourceManagerUrl: 'resource_manager_url',
+    antigravityServiceUsageUrl: 'service_usage_url',
+    antigravityUserAgent: 'antigravity_user_agent',
+    antigravityPayloadUserAgent: 'antigravity_payload_user_agent',
+    antigravityStreamToNonstream: 'stream_to_nonstream',
+    antigravitySwitchCredential: 'switch_credential_enabled'
+};
+
+async function loadAntigravitySettings() {
+
+    const loading = document.getElementById('antigravitySettingsLoading');
+
+    const form = document.getElementById('antigravitySettingsForm');
+
+    if (!loading || !form) return;
+
+    try {
+
+        loading.style.display = 'block';
+
+        form.classList.add('hidden');
+
+        const response = await fetch('./api/providers/antigravity/config', { headers: getAuthHeaders() });
+
+        const data = await response.json();
+
+        if (response.ok) {
+
+            AppState.antigravityConfig = data.config || {};
+
+            AppState.antigravityEnvLockedFields = new Set(data.env_locked || []);
+
+            populateAntigravitySettings();
+
+            form.classList.remove('hidden');
+
+        } else {
+
+            showStatus(`Failed to load Antigravity settings: ${data.detail || data.error || t('unknown_error')}`, 'error');
+
+        }
+
+    } catch (error) {
+
+        showStatus(t('status_net_error', {error: error.message}), 'error');
+
+    } finally {
+
+        loading.style.display = 'none';
+
+    }
+
+}
+
+function populateAntigravitySettings() {
+
+    const c = AppState.antigravityConfig || {};
+
+    setAntigravityConfigField('antigravityOauthClientId', c.antigravity_client_id || '');
+
+    setAntigravityConfigField('antigravityOauthClientSecret', c.antigravity_client_secret || '');
+
+    setAntigravityConfigField('antigravityApiUrl', c.api_url || '');
+
+    setAntigravityConfigField('antigravityOauthUrl', c.oauth_url || '');
+
+    setAntigravityConfigField('antigravityGoogleApisUrl', c.google_apis_url || '');
+
+    setAntigravityConfigField('antigravityResourceManagerUrl', c.resource_manager_url || '');
+
+    setAntigravityConfigField('antigravityServiceUsageUrl', c.service_usage_url || '');
+
+    setAntigravityConfigField('antigravityUserAgent', c.antigravity_user_agent || '');
+
+    setAntigravityConfigField('antigravityPayloadUserAgent', c.antigravity_payload_user_agent || '');
+
+    setAntigravityConfigCheckbox('antigravityStreamToNonstream', Boolean(c.stream_to_nonstream !== false));
+
+    setAntigravityConfigCheckbox('antigravitySwitchCredential', Boolean(c.switch_credential_enabled));
+
+}
+
+function setAntigravityConfigField(fieldId, value) {
+
+    const field = document.getElementById(fieldId);
+
+    if (!field) return;
+
+    field.value = value;
+
+    const configKey = ANTIGRAVITY_CONFIG_FIELD_KEYS[fieldId];
+
+    const isLocked = AppState.antigravityEnvLockedFields.has(configKey);
+
+    field.disabled = isLocked;
+
+    field.classList.toggle('env-locked', isLocked);
+
+}
+
+function setAntigravityConfigCheckbox(fieldId, checked) {
+
+    const field = document.getElementById(fieldId);
+
+    if (!field) return;
+
+    field.checked = checked;
+
+    const configKey = ANTIGRAVITY_CONFIG_FIELD_KEYS[fieldId];
+
+    const isLocked = AppState.antigravityEnvLockedFields.has(configKey);
+
+    field.disabled = isLocked;
+
+    field.classList.toggle('env-locked', isLocked);
+
+    field.closest('.switch-row')?.classList.toggle('env-locked', isLocked);
+
+}
+
+async function saveAntigravitySettings() {
+
+    try {
+
+        const getValue = (id, def = '') => document.getElementById(id)?.value.trim() || def;
+
+        const getChecked = (id, def = false) => {
+            const field = document.getElementById(id);
+            return field ? field.checked : def;
+        };
+
+        const config = {
+            antigravity_client_id: getValue('antigravityOauthClientId'),
+            antigravity_client_secret: getValue('antigravityOauthClientSecret'),
+            api_url: getValue('antigravityApiUrl'),
+            oauth_url: getValue('antigravityOauthUrl'),
+            google_apis_url: getValue('antigravityGoogleApisUrl'),
+            resource_manager_url: getValue('antigravityResourceManagerUrl'),
+            service_usage_url: getValue('antigravityServiceUsageUrl'),
+            antigravity_user_agent: getValue('antigravityUserAgent'),
+            antigravity_payload_user_agent: getValue('antigravityPayloadUserAgent'),
+            stream_to_nonstream: getChecked('antigravityStreamToNonstream', true),
+            switch_credential_enabled: getChecked('antigravitySwitchCredential')
+        };
+
+        const response = await fetch('./api/providers/antigravity/config', {
+
+            method: 'POST',
+
+            headers: getAuthHeaders(),
+
+            body: JSON.stringify({ config })
+
+        });
+
+        const data = await response.json();
+
+        if (response.ok) {
+
+            showStatus(data.message || 'Antigravity settings saved successfully.', 'success');
+
+            setTimeout(() => loadAntigravitySettings(), 600);
+
+        } else {
+
+            showStatus(`Failed to save Antigravity settings: ${data.detail || data.error || t('unknown_error')}`, 'error');
+
+        }
+
+    } catch (error) {
+
+        showStatus(t('status_net_error', {error: error.message}), 'error');
+
+    }
+
+}
+
+// =====================================================================
+
+// =====================================================================
+
 const CONFIG_FIELD_KEYS = {
     host: 'host',
     port: 'port',
@@ -5915,12 +6025,9 @@ const CONFIG_FIELD_KEYS = {
     configPassword: 'password',
     credentialsDir: 'credentials_dir',
     proxy: 'proxy',
+    codeAssistClientId: 'code_assist_client_id',
+    codeAssistClientSecret: 'code_assist_client_secret',
     codeAssistEndpoint: 'code_assist_endpoint',
-    oauthProxyUrl: 'oauth_url',
-    googleapisProxyUrl: 'google_apis_url',
-    resourceManagerApiUrl: 'resource_manager_url',
-    serviceUsageApiUrl: 'service_usage_url',
-    primaryApiUrl: 'api_url',
     autoBanEnabled: 'auto_disable_enabled',
     autoBanErrorCodes: 'auto_disable_error_codes',
     retry429Enabled: 'retry_429_enabled',
@@ -5928,8 +6035,6 @@ const CONFIG_FIELD_KEYS = {
     retry429Interval: 'retry_429_interval',
     compatibilityModeEnabled: 'compatibility_mode_enabled',
     returnThoughtsToFrontend: 'return_thoughts_to_frontend',
-    primaryStreamToNonstream: 'stream_to_nonstream',
-    primarySwitchCredentialEnabled: 'switch_credential_enabled',
     antiTruncationMaxAttempts: 'anti_truncation_max_attempts',
     keepaliveUrl: 'keepalive_url',
     keepaliveInterval: 'keepalive_interval'
@@ -5999,17 +6104,11 @@ function populateConfigForm() {
 
     setConfigField('proxy', c.proxy || '');
 
+    setConfigField('codeAssistClientId', c.code_assist_client_id || '');
+
+    setConfigField('codeAssistClientSecret', c.code_assist_client_secret || '');
+
     setConfigField('codeAssistEndpoint', c.code_assist_endpoint || '');
-
-    setConfigField('oauthProxyUrl', c.oauth_url || '');
-
-    setConfigField('googleapisProxyUrl', c.google_apis_url || '');
-
-    setConfigField('resourceManagerApiUrl', c.resource_manager_url || '');
-
-    setConfigField('serviceUsageApiUrl', c.service_usage_url || '');
-
-    setConfigField('primaryApiUrl', c.api_url || '');
 
     setConfigCheckbox('autoBanEnabled', Boolean(c.auto_disable_enabled));
 
@@ -6024,10 +6123,6 @@ function populateConfigForm() {
     setConfigCheckbox('compatibilityModeEnabled', Boolean(c.compatibility_mode_enabled));
 
     setConfigCheckbox('returnThoughtsToFrontend', Boolean(c.return_thoughts_to_frontend !== false));
-
-    setConfigCheckbox('primaryStreamToNonstream', Boolean(c.stream_to_nonstream !== false));
-
-    setConfigCheckbox('primarySwitchCredentialEnabled', Boolean(c.switch_credential_enabled));
 
     setConfigField('antiTruncationMaxAttempts', c.anti_truncation_max_attempts || 3);
 
@@ -6118,15 +6213,9 @@ async function saveConfig() {
 
             proxy: getValue('proxy'),
 
-            oauth_url: getValue('oauthProxyUrl'),
+            code_assist_client_id: getValue('codeAssistClientId'),
 
-            google_apis_url: getValue('googleapisProxyUrl'),
-
-            resource_manager_url: getValue('resourceManagerApiUrl'),
-
-            service_usage_url: getValue('serviceUsageApiUrl'),
-
-            api_url: getValue('primaryApiUrl'),
+            code_assist_client_secret: getValue('codeAssistClientSecret'),
 
             auto_disable_enabled: getChecked('autoBanEnabled'),
 
@@ -6143,10 +6232,6 @@ async function saveConfig() {
             compatibility_mode_enabled: getChecked('compatibilityModeEnabled'),
 
             return_thoughts_to_frontend: getChecked('returnThoughtsToFrontend'),
-
-            stream_to_nonstream: getChecked('primaryStreamToNonstream'),
-
-            switch_credential_enabled: getChecked('primarySwitchCredentialEnabled'),
 
             anti_truncation_max_attempts: getInt('antiTruncationMaxAttempts', 3),
 
@@ -6201,74 +6286,6 @@ async function saveConfig() {
     } catch (error) {
 
         showStatus(t('status_net_error', {error: error.message}), 'error');
-
-    }
-
-}
-
-const mirrorUrls = {
-
-    codeAssistEndpoint: 'https://cloudcode-pa.googleapis.com',
-
-    oauthProxyUrl: 'https://oauth2.googleapis.com',
-
-    googleapisProxyUrl: 'https://www.googleapis.com',
-
-    resourceManagerApiUrl: 'https://cloudresourcemanager.googleapis.com',
-
-    serviceUsageApiUrl: 'https://serviceusage.googleapis.com',
-
-    primaryApiUrl: 'https://daily-cloudcode-pa.googleapis.com'
-
-};
-
-const officialUrls = {
-
-    codeAssistEndpoint: 'https://cloudcode-pa.googleapis.com',
-
-    oauthProxyUrl: 'https://oauth2.googleapis.com',
-
-    googleapisProxyUrl: 'https://www.googleapis.com',
-
-    resourceManagerApiUrl: 'https://cloudresourcemanager.googleapis.com',
-
-    serviceUsageApiUrl: 'https://serviceusage.googleapis.com',
-
-    primaryApiUrl: 'https://daily-cloudcode-pa.googleapis.com'
-
-};
-
-async function useMirrorUrls() {
-
-    if (await showConfirmModal(t('are_you_sure_you_want_to_configure_dup'))) {
-
-        for (const [fieldId, url] of Object.entries(mirrorUrls)) {
-
-            const field = document.getElementById(fieldId);
-
-            if (field && !field.disabled) field.value = url;
-
-        }
-
-        showStatus(t('switched_to_mirror_url_configuratio'), 'success');
-
-    }
-
-}
-
-async function restoreOfficialUrls() {
-
-    if (await showConfirmModal(t('are_you_sure_you_want_to_configure'))) {
-
-        for (const [fieldId, url] of Object.entries(officialUrls)) {
-
-            const field = document.getElementById(fieldId);
-
-            if (field && !field.disabled) field.value = url;
-
-        }
-
-        showStatus(t('switched_to_official_endpoint_confi'), 'success');
 
     }
 

@@ -14,6 +14,13 @@ _config_initialized = False
 
 AUTO_DISABLE_ERROR_CODES = [403]
 API_KEY_PREFIX = "sk-ogw-"
+DEFAULT_CODE_ASSIST_CLIENT_ID = "681255809395-oo8ft2oprdrnp9e3aqf6av3hmdib135j.apps.googleusercontent.com"
+DEFAULT_CODE_ASSIST_CLIENT_SECRET = "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"
+DEFAULT_ANTIGRAVITY_CLIENT_ID = "1071006060591-tmhssin2h21lcre235vtolojh4g403ep.apps.googleusercontent.com"
+DEFAULT_ANTIGRAVITY_CLIENT_SECRET = "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"
+DEFAULT_ANTIGRAVITY_API_URL = "https://daily-cloudcode-pa.googleapis.com"
+DEFAULT_ANTIGRAVITY_USER_AGENT = "antigravity/cli/1.0.1 windows/amd64"
+DEFAULT_ANTIGRAVITY_PAYLOAD_USER_AGENT = "antigravity"
 
 
 
@@ -23,10 +30,24 @@ ENV_MAPPINGS = {
     "CREDENTIALS_DIR": "credentials_dir",
     "PROXY": "proxy",
     "OAUTH_URL": "oauth_url",
+    "OAUTH_PROXY_URL": "oauth_url",
     "GOOGLE_APIS_URL": "google_apis_url",
+    "GOOGLEAPIS_PROXY_URL": "google_apis_url",
     "RESOURCE_MANAGER_URL": "resource_manager_url",
+    "RESOURCE_MANAGER_API_URL": "resource_manager_url",
     "SERVICE_USAGE_URL": "service_usage_url",
+    "SERVICE_USAGE_API_URL": "service_usage_url",
     "API_URL": "api_url",
+    "ANTIGRAVITY_API_URL": "api_url",
+    "CODE_ASSIST_CLIENT_ID": "code_assist_client_id",
+    "CODE_ASSIST_CLIENT_SECRET": "code_assist_client_secret",
+    "ANTIGRAVITY_CLIENT_ID": "antigravity_client_id",
+    "ANTIGRAVITY_CLIENT_SECRET": "antigravity_client_secret",
+    "ANTIGRAVITY_USER_AGENT": "antigravity_user_agent",
+    "USER_AGENT": "antigravity_user_agent",
+    "ANTIGRAVITY_PAYLOAD_USER_AGENT": "antigravity_payload_user_agent",
+    "CLIENT_ID": "client_id",
+    "CLIENT_SECRET": "client_secret",
     "AUTO_DISABLE": "auto_disable_enabled",
     "AUTO_DISABLE_ERROR_CODES": "auto_disable_error_codes",
     "RETRY_429_MAX_RETRIES": "retry_429_max_retries",
@@ -36,7 +57,9 @@ ENV_MAPPINGS = {
     "COMPATIBILITY_MODE": "compatibility_mode_enabled",
     "RETURN_THOUGHTS_TO_FRONTEND": "return_thoughts_to_frontend",
     "STREAM_TO_NONSTREAM": "stream_to_nonstream",
+    "ANTIGRAVITY_STREAM2NOSTREAM": "stream_to_nonstream",
     "SWITCH_CREDENTIAL_ENABLED": "switch_credential_enabled",
+    "ANTIGRAVITY_SWITCH_CREDENTIAL": "switch_credential_enabled",
     "HOST": "host",
     "PORT": "port",
     "API_KEY": "api_key",
@@ -339,69 +362,170 @@ async def get_return_thoughts_to_frontend() -> bool:
 
 async def get_stream_to_nonstream() -> bool:
     """Internal implementation detail."""
-    env_value = os.getenv("STREAM_TO_NONSTREAM")
+    env_value = os.getenv("ANTIGRAVITY_STREAM2NOSTREAM") or os.getenv("STREAM_TO_NONSTREAM")
     if env_value:
         return env_value.lower() in ("true", "1", "yes", "on")
 
     return bool(await get_config_value("stream_to_nonstream", True))
 
 
+async def get_antigravity_stream_to_nonstream() -> bool:
+    """Return whether Antigravity non-stream requests should collect stream responses."""
+    return await get_stream_to_nonstream()
+
+
 async def get_switch_credential_enabled() -> bool:
     """Internal implementation detail."""
-    env_value = os.getenv("SWITCH_CREDENTIAL_ENABLED")
+    env_value = os.getenv("ANTIGRAVITY_SWITCH_CREDENTIAL") or os.getenv("SWITCH_CREDENTIAL_ENABLED")
     if env_value:
         return env_value.lower() in ("true", "1", "yes", "on")
 
     return bool(await get_config_value("switch_credential_enabled", False))
 
 
+async def get_antigravity_switch_credential_enabled() -> bool:
+    """Return whether Antigravity retries may switch to another credential."""
+    return await get_switch_credential_enabled()
+
+
 async def get_oauth_proxy_url() -> str:
     """Internal implementation detail."""
-    return str(
-        await get_config_value(
-            "oauth_url", "https://oauth2.googleapis.com", "OAUTH_URL"
-        )
-    )
+    env_value = os.getenv("OAUTH_URL") or os.getenv("OAUTH_PROXY_URL")
+    if env_value:
+        return env_value
+
+    return str(await get_config_value("oauth_url", "https://oauth2.googleapis.com"))
 
 
 async def get_googleapis_proxy_url() -> str:
     """Internal implementation detail."""
-    return str(
-        await get_config_value(
-            "google_apis_url", "https://www.googleapis.com", "GOOGLE_APIS_URL"
-        )
-    )
+    env_value = os.getenv("GOOGLE_APIS_URL") or os.getenv("GOOGLEAPIS_PROXY_URL")
+    if env_value:
+        return env_value
+
+    return str(await get_config_value("google_apis_url", "https://www.googleapis.com"))
 
 
 async def get_resource_manager_api_url() -> str:
     """Internal implementation detail."""
+    env_value = os.getenv("RESOURCE_MANAGER_URL") or os.getenv("RESOURCE_MANAGER_API_URL")
+    if env_value:
+        return env_value
+
     return str(
         await get_config_value(
             "resource_manager_url",
             "https://cloudresourcemanager.googleapis.com",
-            "RESOURCE_MANAGER_URL",
         )
     )
 
 
 async def get_service_usage_api_url() -> str:
     """Internal implementation detail."""
-    return str(
-        await get_config_value(
-            "service_usage_url", "https://serviceusage.googleapis.com", "SERVICE_USAGE_URL"
-        )
-    )
+    env_value = os.getenv("SERVICE_USAGE_URL") or os.getenv("SERVICE_USAGE_API_URL")
+    if env_value:
+        return env_value
+
+    return str(await get_config_value("service_usage_url", "https://serviceusage.googleapis.com"))
 
 
 async def get_api_url() -> str:
     """Internal implementation detail."""
+    env_value = os.getenv("ANTIGRAVITY_API_URL") or os.getenv("API_URL")
+    if env_value:
+        return env_value
+
+    return str(await get_config_value("api_url", DEFAULT_ANTIGRAVITY_API_URL))
+
+
+async def get_antigravity_api_url() -> str:
+    """Return the Antigravity upstream API endpoint."""
+    return await get_api_url()
+
+
+async def get_antigravity_user_agent() -> str:
+    """Return the Antigravity CLI user agent."""
+    env_value = os.getenv("ANTIGRAVITY_USER_AGENT") or os.getenv("USER_AGENT")
+    if env_value:
+        return env_value
+
     return str(
         await get_config_value(
-            "api_url",
-            "https://daily-cloudcode-pa.googleapis.com",
-            "API_URL",
+            "antigravity_user_agent",
+            DEFAULT_ANTIGRAVITY_USER_AGENT,
         )
+        or DEFAULT_ANTIGRAVITY_USER_AGENT
     )
+
+
+async def get_antigravity_payload_user_agent() -> str:
+    """Return the Antigravity payload userAgent value."""
+    return str(
+        await get_config_value(
+            "antigravity_payload_user_agent",
+            DEFAULT_ANTIGRAVITY_PAYLOAD_USER_AGENT,
+            "ANTIGRAVITY_PAYLOAD_USER_AGENT",
+        )
+        or DEFAULT_ANTIGRAVITY_PAYLOAD_USER_AGENT
+    )
+
+
+async def get_code_assist_oauth_client_config() -> tuple[str, str]:
+    """Return the OAuth client used for Code Assist credential creation."""
+    client_id = str(
+        await get_config_value(
+            "code_assist_client_id",
+            DEFAULT_CODE_ASSIST_CLIENT_ID,
+            "CODE_ASSIST_CLIENT_ID",
+        )
+        or ""
+    )
+    client_secret = str(
+        await get_config_value(
+            "code_assist_client_secret",
+            DEFAULT_CODE_ASSIST_CLIENT_SECRET,
+            "CODE_ASSIST_CLIENT_SECRET",
+        )
+        or DEFAULT_CODE_ASSIST_CLIENT_SECRET
+    )
+    return client_id, client_secret
+
+
+async def get_antigravity_oauth_client_config() -> tuple[str, str]:
+    """Return the OAuth client used for Antigravity provider credential creation."""
+    client_id = str(
+        await get_config_value(
+            "antigravity_client_id",
+            "",
+            "ANTIGRAVITY_CLIENT_ID",
+        )
+        or ""
+    )
+    if not client_id:
+        client_id = str(
+            await get_config_value("client_id", DEFAULT_ANTIGRAVITY_CLIENT_ID, "CLIENT_ID")
+            or ""
+        )
+
+    client_secret = str(
+        await get_config_value(
+            "antigravity_client_secret",
+            None,
+            "ANTIGRAVITY_CLIENT_SECRET",
+        )
+        or ""
+    )
+    if not client_secret:
+        client_secret = str(
+            await get_config_value(
+                "client_secret",
+                DEFAULT_ANTIGRAVITY_CLIENT_SECRET,
+                "CLIENT_SECRET",
+            )
+            or DEFAULT_ANTIGRAVITY_CLIENT_SECRET
+        )
+
+    return client_id, client_secret
 
 
 async def get_keepalive_url() -> str:
