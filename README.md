@@ -262,6 +262,7 @@ git status --short
 - Use a dedicated `API_KEY` for client integrations and a separate `PANEL_PASSWORD` for console access.
 - Put Omni Gateway behind TLS when reachable outside localhost.
 - Set `CORS_ORIGINS` to explicit trusted origins when browser clients need cross-origin access.
+- Docker image publishing uses the `DOCKER_USERNAME` and `DOCKER_PASSWORD` repository secrets. Set the optional `IMAGE_NAME` repository variable only when publishing to a custom Docker Hub image name.
 - Use MongoDB/PostgreSQL for multi-instance deployments.
 - Keep log retention and credential rotation policies aligned with your usage limits.
 - Rotate credentials immediately if a repository or platform scanner reports a leaked secret.
