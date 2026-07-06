@@ -1,4 +1,4 @@
-full_hash=bb9c5cc2de62c273bc21098d05f986c58e32eeea
-short_hash=bb9c5cc
-message=Merge branch 'main' of https://github.com/nguywnben/omni-gateway
-date=2026-07-06 22:06:24 +0700
+full_hash=fd3d48ba462016680f78c3b1916d5dc08f8fe20c
+short_hash=fd3d48b
+message=feat: add reset functionality for Antigravity and system configuration settings
+date=2026-07-06 23:55:30 +0700
