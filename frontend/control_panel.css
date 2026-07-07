@@ -606,6 +606,12 @@ code {
     line-height: 1.6;
 }
 
+.card-title-copy {
+    margin: -6px 0 14px;
+    font-size: 12px;
+    line-height: 1.5;
+}
+
 .stats-container {
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -634,6 +640,13 @@ code {
     color: var(--text-muted);
     font-size: 13px;
     line-height: 1.35;
+}
+
+.stat-detail {
+    display: block;
+    margin-top: 4px;
+    color: var(--text-soft);
+    font-size: 12px;
 }
 
 .metric-row {
@@ -803,6 +816,155 @@ button.endpoint-code-card:hover {
 .integration-list {
     display: grid;
     gap: 10px;
+}
+
+.client-setup-card {
+    position: relative;
+}
+
+.setup-language-radio {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    opacity: 0;
+    pointer-events: none;
+}
+
+.setup-card-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 16px;
+    margin-bottom: 14px;
+}
+
+.setup-card-header .card-title {
+    margin-bottom: 4px;
+}
+
+.setup-card-copy {
+    color: var(--text-muted);
+    font-size: 12px;
+    line-height: 1.5;
+}
+
+.setup-language-switch {
+    display: inline-grid;
+    grid-template-columns: repeat(2, minmax(70px, 1fr));
+    gap: 2px;
+    padding: 2px;
+    background: var(--bg-subtle);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+}
+
+.setup-language-option {
+    min-height: 32px;
+    display: inline-grid;
+    place-items: center;
+    margin-bottom: 0;
+    padding: 0 12px;
+    border: 1px solid transparent;
+    border-radius: 6px;
+    color: var(--text-muted);
+    cursor: pointer;
+    font-size: 12px;
+    font-weight: 680;
+    line-height: 1;
+    white-space: nowrap;
+}
+
+.setup-language-option:hover {
+    background: var(--control-hover);
+    color: var(--text);
+}
+
+#setupLangPython:checked ~ .setup-card-header label[for="setupLangPython"],
+#setupLangNode:checked ~ .setup-card-header label[for="setupLangNode"] {
+    background: var(--surface);
+    border-color: var(--border-strong);
+    color: var(--text);
+}
+
+.client-setup-panels {
+    display: grid;
+}
+
+.client-setup-panel {
+    display: none;
+    gap: 8px;
+}
+
+#setupLangPython:checked ~ .client-setup-panels .setup-python,
+#setupLangNode:checked ~ .client-setup-panels .setup-node {
+    display: grid;
+}
+
+.client-route-card {
+    display: grid;
+    gap: 8px;
+    padding: 10px;
+    background: var(--bg-subtle);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+}
+
+.client-route-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.client-route-header > div {
+    display: grid;
+    gap: 3px;
+    min-width: 0;
+}
+
+.client-route-header strong {
+    color: var(--text);
+    font-size: 13px;
+    font-weight: 680;
+    line-height: 1.35;
+}
+
+.client-route-header span {
+    color: var(--text-muted);
+    font-size: 12px;
+    line-height: 1.35;
+    text-align: right;
+}
+
+.client-route-details {
+    display: grid;
+    gap: 6px;
+    margin: 0;
+}
+
+.client-route-details > div {
+    display: grid;
+    grid-template-columns: 58px minmax(0, 1fr);
+    gap: 8px;
+    align-items: baseline;
+}
+
+.client-route-details dt,
+.client-route-details dd {
+    margin: 0;
+    line-height: 1.4;
+}
+
+.client-route-details dt {
+    color: var(--text-muted);
+    font-size: 12px;
+    font-weight: 650;
+}
+
+.client-route-details dd {
+    color: var(--text);
+    font-size: 12px;
+    word-break: break-word;
 }
 
 .usage-table-wrapper {
@@ -2065,6 +2227,15 @@ textarea[readonly] {
 
     .provider-settings-header {
         display: grid;
+    }
+
+    .setup-card-header {
+        display: grid;
+        grid-template-columns: 1fr;
+    }
+
+    .setup-language-switch {
+        width: 100%;
     }
 
     .provider-hero-card {

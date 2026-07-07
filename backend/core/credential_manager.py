@@ -38,7 +38,7 @@ class CredentialManager:
 
     async def close(self):
         """Internal implementation detail."""
-        log.debug("Closing credential manager...")
+        log.debug("Closing credential manager.")
         self._initialized = False
         log.debug("Credential manager closed")
 
@@ -70,7 +70,7 @@ class CredentialManager:
                 if refreshed_data:
 
                     credential_data = refreshed_data
-                    log.debug(f"Token successfully refreshed: {filename} (mode = {mode})")
+                    log.debug(f"Token refreshed: {filename} (mode = {mode}).")
                     return filename, credential_data
                 else:
 
@@ -143,11 +143,11 @@ class CredentialManager:
     async def update_credential_state(self, credential_name: str, state_updates: Dict[str, Any], mode: str = "code_assist"):
         """Internal implementation detail."""
         log.debug(f"[CredMgr] update_credential_state Start: credential_name = {credential_name}, state_updates = {state_updates}, mode = {mode}")
-        log.debug(f"[CredMgr] Calling_ensure_initialized...")
+        log.debug("[credential-manager] Ensuring storage is initialized.")
         await self._ensure_initialized()
         log.debug(f"[CredMgr]_ensure_initialized Done")
         try:
-            log.debug(f"[CredMgr] Calling storage_adapter.update_credential_state...")
+            log.debug("[credential-manager] Updating credential state in storage.")
             success = await self._storage_adapter.update_credential_state(
                 credential_name, state_updates, mode=mode
             )
@@ -340,7 +340,7 @@ class CredentialManager:
                 if time_left > 300:
                     return False
                 else:
-                    log.debug(f"Token is about to expire ({int(time_left/60)} minutes left) and needs to be refreshed")
+                    log.debug(f"Token is about to expire in {int(time_left / 60)} minutes and needs a refresh.")
                     return True
 
             except Exception as e:
@@ -386,7 +386,7 @@ class CredentialManager:
 
 
             await self._storage_adapter.store_credential(filename, credential_data, mode=mode)
-            log.info(f"Token refreshed successfully and saved: {filename} (mode = {mode})")
+            log.info(f"Token refreshed and saved: {filename} (mode = {mode}).")
 
             return credential_data
 

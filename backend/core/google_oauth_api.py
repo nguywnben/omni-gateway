@@ -82,7 +82,7 @@ class Credentials:
                 log.debug(f'Token refresh: current UTC time={current_utc.isoformat()}, expires_in={expires_in}s, expiry={self.expires_at.isoformat()}')
             if 'refresh_token' in token_data:
                 self.refresh_token = token_data['refresh_token']
-            log.debug(f'Token refreshed successfully, expires {self.expires_at}')
+            log.debug(f'Token refreshed. Expires at {self.expires_at}.')
         except httpx.RequestError as e:
             error_msg = await _format_oauth_request_error('Token refresh failed', token_url, e)
             log.error(error_msg)
@@ -250,7 +250,7 @@ async def get_user_email(credentials: Credentials) -> Optional[str]:
         if user_info:
             email = user_info.get('email')
             if email:
-                log.info(f'Successfully retrieved email address: {email}')
+                log.info(f'Retrieved email address: {email}.')
                 return email
             else:
                 log.warning(f'No email information found in userinfo response: {user_info}')
@@ -310,7 +310,7 @@ async def enable_required_apis(credentials: Credentials, project_id: str) -> boo
             try:
                 enable_response = await post_async(enable_url, headers=headers, json={})
                 if enable_response.status_code in [200, 201]:
-                    log.info(f'Service {service} enabled successfully.')
+                    log.info(f'Service {service} enabled.')
                 elif enable_response.status_code == 400:
                     error_data = enable_response.json()
                     if 'already enabled' in error_data.get('error', {}).get('message', '').lower():

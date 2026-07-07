@@ -186,7 +186,7 @@ async def _fetch_recaptcha_token_once() -> Optional[str]:
             emulation=emulation,
         )
         if anchor_resp.status != 200:
-            log.warning(f"[VERTEX RECAPTCHA] anchor GET failed: status={anchor_resp.status}")
+            log.warning(f"[vertex recaptcha] anchor GET failed (status={anchor_resp.status}).")
             return None
 
         anchor_body = await anchor_resp.text()
@@ -224,7 +224,7 @@ async def _fetch_recaptcha_token_once() -> Optional[str]:
             emulation=emulation,
         )
         if reload_resp.status != 200:
-            log.warning(f"[VERTEX RECAPTCHA] reload POST failed: status={reload_resp.status}")
+            log.warning(f"[vertex recaptcha] reload POST failed (status={reload_resp.status}).")
             return None
 
         reload_body = await reload_resp.text()
@@ -248,8 +248,8 @@ async def fetch_recaptcha_token() -> Optional[str]:
         if token:
             log.debug(f"[VERTEX RECAPTCHA] token obtained on attempt {attempt + 1}")
             return token
-        log.warning(f"[VERTEX RECAPTCHA] attempt {attempt + 1} failed")
-    log.error("[VERTEX RECAPTCHA] all 3 attempts failed")
+        log.warning(f"[vertex recaptcha] attempt {attempt + 1} failed.")
+    log.error("[vertex recaptcha] all 3 attempts failed.")
     return None
 
 
@@ -292,7 +292,7 @@ def _drop_invalid_tool_turns(contents: list) -> list:
     if not invalid_indices:
         return contents
     result = [msg for i, msg in enumerate(contents) if i not in invalid_indices]
-    log.debug(f"[VERTEX] dropped {len(invalid_indices)} invalid tool turn messages (empty functionCall name)")
+    log.debug(f"[vertex] dropped {len(invalid_indices)} invalid tool-turn messages with empty functionCall names.")
     return result
 
 
@@ -843,12 +843,12 @@ async def non_stream_request(
 
         result = _build_non_stream_response(raw_text)
         if result is None:
-            log.error(f"[VERTEX NON-STREAM] parse failed: {raw_text[:300]}")
+            log.error(f"[vertex non-stream] failed to parse upstream response: {raw_text[:300]}")
             if attempt < max_retries:
                 await asyncio.sleep(1)
                 continue
             return Response(
-                content=json.dumps({"error": {"code": 500, "message": "Failed to parse upstream response", "status": "INTERNAL"}}),
+                content=json.dumps({"error": {"code": 500, "message": "Failed to parse upstream response.", "status": "INTERNAL"}}),
                 status_code=500,
                 media_type="application/json",
             )

@@ -31,7 +31,7 @@ if ! command -v pm2 >/dev/null 2>&1; then
     npm install -g pm2
 fi
 
-PROJECT_DIR="${PROJECT_DIR:-router}"
+PROJECT_DIR="${PROJECT_DIR:-omni-gateway}"
 REPOSITORY_URL="${REPOSITORY_URL:-}"
 
 if [ -f "./backend/main.py" ]; then
@@ -57,5 +57,5 @@ log "Installing Python dependencies..."
 .venv/bin/python -m pip install -r deploy/requirements-termux.txt
 
 log "Starting Omni Gateway with PM2..."
-pm2 start .venv/bin/python --name router -- backend/main.py
+pm2 start .venv/bin/python --name omni-gateway -- backend/main.py
 pm2 save

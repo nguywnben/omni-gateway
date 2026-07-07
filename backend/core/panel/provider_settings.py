@@ -88,16 +88,16 @@ async def save_antigravity_config(request: ConfigSaveRequest, token: str = Depen
         if unknown_keys:
             raise HTTPException(
                 status_code=400,
-                detail=f"Unsupported Antigravity configuration key(s): {', '.join(unknown_keys)}",
+                detail=f"Unsupported Antigravity setting(s): {', '.join(unknown_keys)}.",
             )
 
         for key in STRING_KEYS & set(new_config):
             if not isinstance(new_config[key], str):
-                raise HTTPException(status_code=400, detail=f"{key} must be a string.")
+                raise HTTPException(status_code=400, detail=f"Antigravity setting '{key}' must be a string.")
 
         for key in BOOLEAN_KEYS & set(new_config):
             if not isinstance(new_config[key], bool):
-                raise HTTPException(status_code=400, detail=f"{key} must be a boolean.")
+                raise HTTPException(status_code=400, detail=f"Antigravity setting '{key}' must be a boolean.")
 
         env_locked = get_env_locked_keys() & ANTIGRAVITY_CONFIG_KEYS
         storage_adapter = await get_storage_adapter()
@@ -113,7 +113,7 @@ async def save_antigravity_config(request: ConfigSaveRequest, token: str = Depen
 
         return JSONResponse(
             content={
-                "message": "Antigravity settings saved successfully.",
+                "message": "Antigravity settings saved.",
                 "saved_config": saved_config,
                 "env_locked": sorted(env_locked),
             }

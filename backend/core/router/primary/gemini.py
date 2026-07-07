@@ -112,7 +112,7 @@ async def generate_content(
 
         return response
     except Exception as e:
-        log.warning(f"Failed to unwrap response: {e}, returning original response")
+        log.warning(f"Failed to unwrap response: {e}. Returning the original response.")
         return response
 
 @router.post("/v1beta/models/{model:path}:streamGenerateContent")
@@ -190,7 +190,7 @@ async def stream_generate_content(
                 yield f"data: {chunk_json}\n\n".encode()
 
         except Exception as e:
-            log.error(f"Response parsing failed: {e}, directly yield original response")
+            log.error(f"Response parsing failed: {e}. Returning the original response.")
 
             yield f"data: {response_body}\n\n".encode()
 

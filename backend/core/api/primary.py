@@ -35,6 +35,7 @@ from core.api.utils import (
     get_retry_config,
     record_api_call_success,
     record_api_call_error,
+    record_unassigned_api_call_error,
     parse_and_log_cooldown,
     collect_streaming_response,
 )
@@ -301,8 +302,11 @@ async def stream_request(
     if not cred_result:
 
         log.error("[provider stream] No credentials currently available")
+        await record_unassigned_api_call_error(
+            status_code=500, mode="primary", model_name=model_name
+        )
         yield Response(
-            content=json.dumps({"error": "No credentials available"}),
+            content=json.dumps({"error": "No credentials are available."}),
             status_code=500,
             media_type="application/json"
         )
@@ -314,6 +318,11 @@ async def stream_request(
 
     if not access_token:
         log.error(f"[provider stream] No access token in credential: {current_file}")
+        await record_api_call_error(
+            credential_manager, current_file, 500,
+            None, mode="primary", model_name=model_name,
+            error_message="No access token in credential"
+        )
         yield Response(
             content=json.dumps({"error": "No access token in credential"}),
             status_code=500,
@@ -400,7 +409,7 @@ async def stream_request(
 
 
                     if _is_retryable_status(status_code, DISABLE_ERROR_CODES):
-                        log.warning(f"[provider stream] streaming request failed (status = {status_code}), credentials: {current_file}, response: {error_body[:500] if error_body else 'None'}")
+                        log.warning(f"[provider stream] streaming request failed (status={status_code}), credential={current_file}, response={error_body[:500] if error_body else 'None'}")
 
 
                         cooldown_until = None
@@ -442,7 +451,7 @@ async def stream_request(
                             return
                     else:
 
-                        log.error(f"[provider stream] streaming request failed, non-retry error code (status = {status_code}), credentials: {current_file}, response: {error_body[:500] if error_body else 'None'}")
+                        log.error(f"[provider stream] streaming request failed with a non-retryable status (status={status_code}), credential={current_file}, response={error_body[:500] if error_body else 'None'}")
                         await record_api_call_error(
                             credential_manager, current_file, status_code,
                             None, mode="primary", model_name=model_name,
@@ -501,7 +510,7 @@ async def stream_request(
 
 
             if need_retry:
-                log.info(f"[provider stream] retry request (attempt {attempt + 2}/{max_retries + 1})...")
+                log.info(f"[provider stream] retrying request (attempt {attempt + 2}/{max_retries + 1}).")
 
                 if switch_credential_enabled:
                     switched, next_cred_task = await _switch_credential_for_retry(
@@ -514,7 +523,7 @@ async def stream_request(
                     if not switched:
                         log.error("[provider stream] No credentials or tokens available when retrying")
                         yield Response(
-                            content=json.dumps({"error": "No credentials available"}),
+                            content=json.dumps({"error": "No credentials are available."}),
                             status_code=500,
                             media_type="application/json"
                         )
@@ -523,13 +532,18 @@ async def stream_request(
 
         except Exception as e:
             log.error(f"[provider stream] Streaming Request Exception: {e}, Credentials: {current_file}")
+            await record_api_call_error(
+                credential_manager, current_file, 500,
+                None, mode="primary", model_name=model_name,
+                error_message=str(e)
+            )
             if attempt < max_retries:
                 log.info(f"[provider stream] retry after abnormality (attempt {attempt + 2}/{max_retries + 1})...")
                 await asyncio.sleep(retry_interval)
                 continue
             else:
 
-                log.error(f"[provider stream] All retries failed with last exception: {e}")
+                log.error(f"[provider stream] all retries failed. Last exception: {e}")
                 if last_error_response:
                     yield last_error_response
                 else:
@@ -542,12 +556,12 @@ async def stream_request(
                 return
 
 
-    log.error("[provider stream] All retries failed")
+    log.error("[provider stream] all retries failed.")
     if last_error_response:
         yield last_error_response
     else:
         yield Response(
-            content=json.dumps({"error": "Request failed, all retries exhausted"}),
+            content=json.dumps({"error": "Request failed after all retries were exhausted."}),
             status_code=429,
             media_type="application/json"
         )
@@ -583,8 +597,11 @@ async def non_stream_request(
     if not cred_result:
 
         log.error("[provider] No credentials currently available")
+        await record_unassigned_api_call_error(
+            status_code=500, mode="primary", model_name=model_name
+        )
         return Response(
-            content=json.dumps({"error": "No credentials available"}),
+            content=json.dumps({"error": "No credentials are available."}),
             status_code=500,
             media_type="application/json"
         )
@@ -595,6 +612,11 @@ async def non_stream_request(
 
     if not access_token:
         log.error(f"[provider] No access token in credential: {current_file}")
+        await record_api_call_error(
+            credential_manager, current_file, 500,
+            None, mode="primary", model_name=model_name,
+            error_message="No access token in credential"
+        )
         return Response(
             content=json.dumps({"error": "No access token in credential"}),
             status_code=500,
@@ -723,7 +745,7 @@ async def non_stream_request(
                     pass
 
                 if _is_retryable_status(status_code, DISABLE_ERROR_CODES):
-                    log.warning(f"[provider] Non streaming request failed (status = {status_code}), credentials: {current_file}, response: {error_text[:500] if error_text else 'None'}")
+                    log.warning(f"[provider] non-streaming request failed (status={status_code}), credential={current_file}, response={error_text[:500] if error_text else 'None'}")
 
 
                     cooldown_until = None
@@ -763,7 +785,7 @@ async def non_stream_request(
                         return last_error_response
                 else:
 
-                    log.error(f"[provider] Non Streaming Request Failed, Non Retry Error Code (status = {status_code}), Credential: {current_file}, Response: {error_text[:500] if error_text else 'None'}")
+                    log.error(f"[provider] non-streaming request failed with a non-retryable status (status={status_code}), credential={current_file}, response={error_text[:500] if error_text else 'None'}")
                     await record_api_call_error(
                         credential_manager, current_file, status_code,
                         None, mode="primary", model_name=model_name,
@@ -773,7 +795,7 @@ async def non_stream_request(
 
 
             if need_retry:
-                log.info(f"[provider] Retry request (attempt {attempt + 2}/{max_retries + 1})...")
+                log.info(f"[provider] retrying request (attempt {attempt + 2}/{max_retries + 1}).")
 
                 if switch_credential_enabled:
                     switched, next_cred_task = await _switch_credential_for_retry(
@@ -786,21 +808,26 @@ async def non_stream_request(
                     if not switched:
                         log.error("[provider] No credentials or tokens available when retrying")
                         return Response(
-                            content=json.dumps({"error": "No credentials available"}),
+                            content=json.dumps({"error": "No credentials are available."}),
                             status_code=500,
                             media_type="application/json"
                         )
                 continue
 
         except Exception as e:
-            log.error(f"[provider] Non Streaming Request Exception: {e}, Credentials: {current_file}")
+            log.error(f"[provider] non-streaming request raised an exception: {e}; credential={current_file}")
+            await record_api_call_error(
+                credential_manager, current_file, 500,
+                None, mode="primary", model_name=model_name,
+                error_message=str(e)
+            )
             if attempt < max_retries:
                 log.info(f"[provider] Retry after exception (attempt {attempt + 2}/{max_retries + 1})...")
                 await asyncio.sleep(retry_interval)
                 continue
             else:
 
-                log.error(f"[provider] All retries failed with last exception: {e}")
+                log.error(f"[provider] all retries failed. Last exception: {e}")
                 if last_error_response:
                     return last_error_response
                 else:
@@ -811,12 +838,12 @@ async def non_stream_request(
                     )
 
 
-    log.error("[provider] All retries failed")
+    log.error("[provider] all retries failed.")
     if last_error_response:
         return last_error_response
     else:
         return Response(
-            content=json.dumps({"error": "All retries failed"}),
+            content=json.dumps({"error": "Request failed after all retries were exhausted."}),
             status_code=500,
             media_type="application/json"
         )

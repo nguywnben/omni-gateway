@@ -32,7 +32,7 @@ services:
 
       # Optional: MongoDB configuration (for distributed storage)
       # - MONGODB_URI=${MONGODB_URI}
-      # - MONGODB_DATABASE=${MONGODB_DATABASE:-core}
+      # - MONGODB_DATABASE=${MONGODB_DATABASE:-omni_gateway}
 
       # Optional: PostgreSQL configuration (for distributed storage)
       # - POSTGRESQL_URI=${POSTGRESQL_URI}

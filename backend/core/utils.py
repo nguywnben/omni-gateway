@@ -193,7 +193,7 @@ async def authenticate_flexible(
         if not authorization.startswith("Bearer "):
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid authentication scheme. Use 'Bearer <token>'",
+                detail="Invalid authentication scheme. Use 'Bearer <token>'.",
                 headers={"WWW-Authenticate": "Bearer"},
             )
         token = authorization[7:]
@@ -203,7 +203,7 @@ async def authenticate_flexible(
     if not token:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Missing authentication credentials. Use 'key' URL parameter, 'x-goog-api-key', 'x-anthropic-auth-token', 'anthropic-auth-token', 'x-api-key', 'access_token' header, or 'Authorization: Bearer <token>'",
+            detail="Missing authentication credentials. Use the 'key' URL parameter, the 'x-goog-api-key', 'x-anthropic-auth-token', 'anthropic-auth-token', 'x-api-key', or 'access_token' header, or 'Authorization: Bearer <token>'.",
             headers={"WWW-Authenticate": "Bearer"},
         )
 
@@ -222,7 +222,7 @@ async def authenticate_flexible(
         log.debug(f"Authentication failed using {auth_method}")
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Invalid API key"
+            detail="Invalid API key."
         )
 
     log.debug(f"Authentication successful using {auth_method}")
@@ -285,7 +285,7 @@ async def verify_panel_token_value(token: str) -> str:
     except jwt.ExpiredSignatureError:
         raise HTTPException(status_code=401, detail="Session expired. Please sign in again.")
     except jwt.InvalidTokenError:
-        raise HTTPException(status_code=401, detail="Invalid session token")
+        raise HTTPException(status_code=401, detail="Invalid session token.")
 
     return token
 

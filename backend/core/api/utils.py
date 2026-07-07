@@ -19,6 +19,9 @@ from core.credential_manager import CredentialManager
 from core.usage_stats import record_call
 
 
+UNASSIGNED_USAGE_FILENAME = "__gateway_unassigned__.json"
+
+
 
 
 async def check_should_auto_disable(status_code: int) -> bool:
@@ -116,6 +119,7 @@ async def record_api_call_success(
                 model=model_name or "",
                 provider=mode,
                 status_code=status_code,
+                success=True,
                 token_usage=token_usage,
             )
         except Exception as e:
@@ -137,6 +141,19 @@ async def record_api_call_error(
 ) -> None:
     """Internal implementation detail."""
     if credential_manager and credential_name:
+        try:
+            await asyncio.to_thread(
+                record_call,
+                credential_name,
+                model=model_name or "",
+                provider=mode,
+                status_code=status_code,
+                success=False,
+                token_usage=None,
+            )
+        except Exception as e:
+            log.error(f"Failed to record failed usage for {credential_name}: {e}")
+
         await credential_manager.record_api_call_result(
             credential_name,
             False,
@@ -146,6 +163,27 @@ async def record_api_call_error(
             model_name=model_name,
             error_message=error_message
         )
+
+
+async def record_unassigned_api_call_error(
+    *,
+    status_code: int = 500,
+    mode: str = "primary",
+    model_name: Optional[str] = None,
+) -> None:
+    """Record a gateway-level request failure that cannot be attributed to a credential."""
+    try:
+        await asyncio.to_thread(
+            record_call,
+            UNASSIGNED_USAGE_FILENAME,
+            model=model_name or "",
+            provider=mode,
+            status_code=status_code,
+            success=False,
+            token_usage=None,
+        )
+    except Exception as e:
+        log.error(f"Failed to record unassigned usage failure: {e}")
 
 
 
@@ -165,7 +203,7 @@ async def parse_and_log_cooldown(
             )
             return cooldown_until
     except Exception as parse_err:
-        log.debug(f"[{mode.upper()}] Failed to parse cooldown time: {parse_err}")
+        log.debug(f"[{mode.upper()}] failed to parse cooldown time: {parse_err}")
     return None
 
 
@@ -300,7 +338,7 @@ async def collect_streaming_response(stream_generator) -> Response:
                     merged_response["response"]["usageMetadata"].update(usage)
 
             except json.JSONDecodeError as e:
-                log.debug(f"[STREAM COLLECTOR] Failed to parse JSON chunk: {e}")
+                log.debug(f"[stream collector] failed to parse JSON chunk: {e}")
                 continue
             except Exception as e:
                 log.debug(f"[STREAM COLLECTOR] Error processing chunk: {e}")
@@ -309,7 +347,7 @@ async def collect_streaming_response(stream_generator) -> Response:
     except Exception as e:
         log.error(f"[STREAM COLLECTOR] Error collecting stream after {line_count} lines: {e}")
         return Response(
-            content=json.dumps({"error": f"Failed to collect streaming response: {str(e)}"}),
+            content=json.dumps({"error": f"Failed to collect streaming response: {str(e)}."}),
             status_code=500,
             media_type="application/json"
         )

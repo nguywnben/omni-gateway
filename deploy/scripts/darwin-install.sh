@@ -28,7 +28,7 @@ log "Installing required tools..."
 brew update
 brew install git uv
 
-PROJECT_DIR="${PROJECT_DIR:-router}"
+PROJECT_DIR="${PROJECT_DIR:-omni-gateway}"
 REPOSITORY_URL="${REPOSITORY_URL:-}"
 
 if [ -f "./backend/main.py" ]; then

@@ -65,12 +65,12 @@ async def download_logs(token: str = Depends(verify_panel_token)):
 
 
         if not os.path.exists(log_file_path):
-            raise HTTPException(status_code=404, detail="Log file does not exist")
+            raise HTTPException(status_code=404, detail="Log file does not exist.")
 
 
         file_size = os.path.getsize(log_file_path)
         if file_size == 0:
-            raise HTTPException(status_code=404, detail="Log file is empty")
+            raise HTTPException(status_code=404, detail="Log file is empty.")
 
 
         timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")

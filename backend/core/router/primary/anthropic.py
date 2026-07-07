@@ -129,7 +129,7 @@ async def messages(
             gemini_response = json.loads(response_body)
         except Exception as e:
             log.error(f"Failed to parse Gemini response: {e}")
-            raise HTTPException(status_code=500, detail="Response parsing failed")
+            raise HTTPException(status_code=500, detail="Response parsing failed.")
 
 
         from core.converter.anthropic2gemini import gemini_to_anthropic_response
@@ -196,7 +196,7 @@ async def messages(
                 yield f"data: {chunk_json}\n\n".encode()
 
         except Exception as e:
-            log.error(f"Response parsing failed: {e}, directly yield error")
+            log.error(f"Response parsing failed: {e}. Returning the upstream error.")
 
             error_chunk = {
                 "type": "error",
@@ -343,19 +343,19 @@ async def count_tokens(
     except Exception as e:
         return JSONResponse(
             status_code=400,
-            content={"type": "error", "error": {"type": "invalid_request_error", "message": f"JSON parsing failed: {str(e)}"}}
+            content={"type": "error", "error": {"type": "invalid_request_error", "message": f"JSON parsing failed: {str(e)}."}}
         )
 
     if not isinstance(payload, dict):
         return JSONResponse(
             status_code=400,
-            content={"type": "error", "error": {"type": "invalid_request_error", "message": "Request body must be a JSON object"}}
+            content={"type": "error", "error": {"type": "invalid_request_error", "message": "Request body must be a JSON object."}}
         )
 
     if not payload.get("model") or not isinstance(payload.get("messages"), list):
         return JSONResponse(
             status_code=400,
-            content={"type": "error", "error": {"type": "invalid_request_error", "message": "Missing required fields: model / messages"}}
+            content={"type": "error", "error": {"type": "invalid_request_error", "message": "Missing required fields: model and messages."}}
         )
 
     try:

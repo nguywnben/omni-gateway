@@ -24,7 +24,7 @@ foreach ($tool in @("git", "uv")) {
     }
 }
 
-$ProjectDir = if ($env:PROJECT_DIR) { $env:PROJECT_DIR } else { "router" }
+$ProjectDir = if ($env:PROJECT_DIR) { $env:PROJECT_DIR } else { "omni-gateway" }
 $RepositoryUrl = $env:REPOSITORY_URL
 
 if (Test-Path -LiteralPath "./backend/main.py") {

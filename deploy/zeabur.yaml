@@ -1,13 +1,13 @@
 apiVersion: zeabur.com/v1
 kind: Template
 metadata:
-  name: router
+  name: omni-gateway
 spec:
-  description: "A universal AI router for coding tools with smart fallback, token compression, and format translation."
+  description: "A universal AI router for coding tools with smart auto-fallback, token compression, and seamless format translation."
   tags:
     - ai
     - api
-    - router
+    - ai-router
     - gemini
     - openai
   variables:
@@ -32,11 +32,11 @@ spec:
     After deployment, open your assigned domain, sign in with the configured
     password, and add credentials from the control panel.
   services:
-    - name: router
+    - name: omni-gateway
       template: PREBUILT
       spec:
-        id: router
-        name: router
+        id: omni-gateway
+        name: omni-gateway
         source:
           image: ${IMAGE}
         ports:

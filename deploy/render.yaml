@@ -1,6 +1,6 @@
 services:
   - type: web
-    name: router
+    name: omni-gateway
     runtime: docker
     dockerfilePath: ./deploy/Dockerfile
     dockerContext: .

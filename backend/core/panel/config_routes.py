@@ -139,7 +139,6 @@ async def save_config(request: ConfigSaveRequest, token: str = Depends(verify_pa
         new_config = request.config
 
         log.debug(f"Received configuration data: {list(new_config.keys())}")
-        log.debug(f"Received shared password value: {new_config.get('password', 'NOT_FOUND')}")
 
         unknown_keys = sorted(set(new_config) - ALLOWED_CONFIG_KEYS)
         if unknown_keys:
@@ -154,20 +153,20 @@ async def save_config(request: ConfigSaveRequest, token: str = Depends(verify_pa
                 not isinstance(new_config["retry_429_max_retries"], int)
                 or new_config["retry_429_max_retries"] < 0
             ):
-                raise HTTPException(status_code=400, detail="Maximum 429 retries must be an integer greater than or equal to 0")
+                raise HTTPException(status_code=400, detail="Maximum 429 retries must be an integer greater than or equal to 0.")
 
         if "retry_429_enabled" in new_config:
             if not isinstance(new_config["retry_429_enabled"], bool):
-                raise HTTPException(status_code=400, detail="429 Retry switch must be a boolean")
+                raise HTTPException(status_code=400, detail="The 429 retry switch must be a boolean.")
 
 
         if "retry_429_interval" in new_config:
             try:
                 interval = float(new_config["retry_429_interval"])
                 if interval < 0.01 or interval > 10:
-                    raise HTTPException(status_code=400, detail="429 Retry interval must be between 0.01 -10 seconds")
+                    raise HTTPException(status_code=400, detail="The 429 retry interval must be between 0.01 and 10 seconds.")
             except (ValueError, TypeError):
-                raise HTTPException(status_code=400, detail="429 Retry interval must be a valid number")
+                raise HTTPException(status_code=400, detail="The 429 retry interval must be a valid number.")
 
         if "anti_truncation_max_attempts" in new_config:
             if (
@@ -176,42 +175,42 @@ async def save_config(request: ConfigSaveRequest, token: str = Depends(verify_pa
                 or new_config["anti_truncation_max_attempts"] > 10
             ):
                 raise HTTPException(
-                    status_code=400, detail="Anti-truncation max retries must be an integer between 1 and 10"
+                    status_code=400, detail="Anti-truncation recovery attempts must be an integer between 1 and 10."
                 )
 
         if "compatibility_mode_enabled" in new_config:
             if not isinstance(new_config["compatibility_mode_enabled"], bool):
-                raise HTTPException(status_code=400, detail="Compatibility mode switch must be a boolean")
+                raise HTTPException(status_code=400, detail="The compatibility mode switch must be a boolean.")
 
         if "return_thoughts_to_frontend" in new_config:
             if not isinstance(new_config["return_thoughts_to_frontend"], bool):
-                raise HTTPException(status_code=400, detail="Chain-of-thought return switch must be a boolean")
+                raise HTTPException(status_code=400, detail="The reasoning content switch must be a boolean.")
 
         if "stream_to_nonstream" in new_config:
             if not isinstance(new_config["stream_to_nonstream"], bool):
-                raise HTTPException(status_code=400, detail="Stream-to-non-stream switch must be a boolean")
+                raise HTTPException(status_code=400, detail="The stream-to-non-stream switch must be a boolean.")
 
         if "switch_credential_enabled" in new_config:
             if not isinstance(new_config["switch_credential_enabled"], bool):
-                raise HTTPException(status_code=400, detail="Credential switching must be a boolean")
+                raise HTTPException(status_code=400, detail="The credential switching setting must be a boolean.")
 
 
         if "keepalive_url" in new_config:
             if not isinstance(new_config["keepalive_url"], str):
-                raise HTTPException(status_code=400, detail="Keep-alive URL must be a string")
+                raise HTTPException(status_code=400, detail="Keep-alive URL must be a string.")
 
         if "keepalive_interval" in new_config:
             try:
                 interval = int(new_config["keepalive_interval"])
                 if interval < 5 or interval > 86400:
-                    raise HTTPException(status_code=400, detail="Keep-alive interval must be between 5 and 86400 seconds")
+                    raise HTTPException(status_code=400, detail="Keep-alive interval must be between 5 and 86400 seconds.")
                 new_config["keepalive_interval"] = interval
             except (ValueError, TypeError):
-                raise HTTPException(status_code=400, detail="Keep-alive interval must be a valid integer")
+                raise HTTPException(status_code=400, detail="Keep-alive interval must be a valid integer.")
 
         if "host" in new_config:
             if not isinstance(new_config["host"], str) or not new_config["host"].strip():
-                raise HTTPException(status_code=400, detail="Server host address cannot be empty")
+                raise HTTPException(status_code=400, detail="Server host address cannot be empty.")
 
         if "port" in new_config:
             if (
@@ -219,19 +218,19 @@ async def save_config(request: ConfigSaveRequest, token: str = Depends(verify_pa
                 or new_config["port"] < 1
                 or new_config["port"] > 65535
             ):
-                raise HTTPException(status_code=400, detail="Port number must be an integer between 1 and 65535")
+                raise HTTPException(status_code=400, detail="Port number must be an integer between 1 and 65535.")
 
         if "api_password" in new_config:
             if not isinstance(new_config["api_password"], str):
-                raise HTTPException(status_code=400, detail="API access password must be a string")
+                raise HTTPException(status_code=400, detail="API access password must be a string.")
 
         if "panel_password" in new_config:
             if not isinstance(new_config["panel_password"], str):
-                raise HTTPException(status_code=400, detail="Control panel password must be a string")
+                raise HTTPException(status_code=400, detail="Control panel password must be a string.")
 
         if "password" in new_config:
             if not isinstance(new_config["password"], str):
-                raise HTTPException(status_code=400, detail="Access password must be a string")
+                raise HTTPException(status_code=400, detail="Access password must be a string.")
 
         oauth_client_keys = {
             "code_assist_client_id",
@@ -243,7 +242,7 @@ async def save_config(request: ConfigSaveRequest, token: str = Depends(verify_pa
         }
         for key in oauth_client_keys & set(new_config):
             if not isinstance(new_config[key], str):
-                raise HTTPException(status_code=400, detail=f"{key} must be a string")
+                raise HTTPException(status_code=400, detail=f"Configuration value '{key}' must be a string.")
 
 
         env_locked_keys = get_env_locked_keys()
@@ -253,8 +252,6 @@ async def save_config(request: ConfigSaveRequest, token: str = Depends(verify_pa
         for key, value in new_config.items():
             if key not in env_locked_keys:
                 await storage_adapter.set_config(key, value)
-                if key in ("password", "api_password", "panel_password"):
-                    log.debug(f"Setting field {key} to: {value}")
 
 
         await config.reload_config()
@@ -267,17 +264,9 @@ async def save_config(request: ConfigSaveRequest, token: str = Depends(verify_pa
             except Exception as e:
                 log.warning(f"Failed to restart keep-alive service: {e}")
 
-
-        test_api_password = await config.get_api_password()
-        test_panel_password = await config.get_panel_password()
-        test_password = await config.get_server_password()
-        log.debug(f"API password read immediately after saving: {test_api_password}")
-        log.debug(f"Panel password read immediately after saving: {test_panel_password}")
-        log.debug(f"General password read immediately after saving: {test_password}")
-
         # Build response message
         response_data = {
-            "message": "Configuration saved successfully.",
+            "message": "Configuration saved.",
             "saved_config": {k: v for k, v in new_config.items() if k not in env_locked_keys},
         }
 

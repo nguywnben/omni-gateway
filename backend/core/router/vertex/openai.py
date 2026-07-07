@@ -66,8 +66,8 @@ async def chat_completions(
         try:
             gemini_response = json.loads(response_body)
         except Exception as e:
-            log.error(f"[VERTEX-OPENAI] Failed to parse response: {e}")
-            return JSONResponse(content={"error": "Response parsing failed"}, status_code=500)
+            log.error(f"[vertex openai] failed to parse response: {e}")
+            return JSONResponse(content={"error": "Response parsing failed."}, status_code=500)
 
         from core.converter.openai2gemini import convert_gemini_to_openai_response
         openai_response = convert_gemini_to_openai_response(gemini_response, real_model, status_code)
@@ -119,7 +119,7 @@ async def chat_completions(
                     if openai_chunk_str:
                         yield openai_chunk_str.encode("utf-8")
                 except Exception as e:
-                    log.error(f"[VERTEX-OPENAI] Failed to convert chunk: {e}")
+                    log.error(f"[vertex openai] failed to convert chunk: {e}")
                     continue
 
         yield "data: [DONE]\n\n".encode("utf-8")

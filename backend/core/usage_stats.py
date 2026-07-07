@@ -11,12 +11,14 @@ from paths import DEFAULT_CREDENTIALS_DIR
 
 db_lock = threading.Lock()
 db_path = str(DEFAULT_CREDENTIALS_DIR / "usage_stats.db")
+UNASSIGNED_USAGE_FILENAME = "__gateway_unassigned__.json"
 
 
 TOKEN_COLUMNS = {
     "model": "TEXT DEFAULT ''",
     "provider": "TEXT DEFAULT ''",
     "status_code": "INTEGER DEFAULT 200",
+    "success": "INTEGER DEFAULT 1",
     "input_tokens": "INTEGER DEFAULT 0",
     "output_tokens": "INTEGER DEFAULT 0",
     "total_tokens": "INTEGER DEFAULT 0",
@@ -164,6 +166,7 @@ def record_call(
     model: str = "",
     provider: str = "Antigravity",
     status_code: int = 200,
+    success: bool = True,
     token_usage: Optional[Dict[str, Any]] = None,
 ):
     filename = os.path.basename(filename)
@@ -183,13 +186,14 @@ def record_call(
                     model,
                     provider,
                     status_code,
+                    success,
                     input_tokens,
                     output_tokens,
                     total_tokens,
                     cached_tokens,
                     reasoning_tokens
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     filename,
@@ -197,6 +201,7 @@ def record_call(
                     model or "",
                     provider or "",
                     _int_value(status_code or 200),
+                    1 if success else 0,
                     tokens["input_tokens"],
                     tokens["output_tokens"],
                     tokens["total_tokens"],
@@ -211,21 +216,37 @@ def record_call(
             conn.close()
 
 
-async def get_total_files_count() -> int:
+async def get_credential_counts() -> Dict[str, int]:
     try:
         from core.storage_adapter import get_storage_adapter
 
         storage_adapter = await get_storage_adapter()
-        provider_summary = await storage_adapter._backend.get_credentials_summary(limit=10000, mode="primary")
+        provider_summary = await storage_adapter._backend.get_credentials_summary(limit=None, mode="primary")
+        summary_stats = provider_summary.get("stats") or {}
 
         filenames = set()
         for item in provider_summary.get("items", []):
             filenames.add(os.path.basename(item["filename"]))
 
-        return len(filenames)
+        total = _int_value(summary_stats.get("total")) or len(filenames)
+        active = _int_value(summary_stats.get("normal"))
+        disabled = _int_value(summary_stats.get("disabled"))
+        if active == 0 and total > disabled:
+            active = total - disabled
+
+        return {
+            "total": total,
+            "active": active,
+            "disabled": disabled,
+        }
     except Exception as e:
         log.error(f"Error counting credentials for usage aggregation: {e}")
-        return 0
+        return {"total": 0, "active": 0, "disabled": 0}
+
+
+async def get_total_files_count() -> int:
+    counts = await get_credential_counts()
+    return counts["total"]
 
 
 async def get_all_credential_filenames() -> List[str]:
@@ -233,7 +254,7 @@ async def get_all_credential_filenames() -> List[str]:
         from core.storage_adapter import get_storage_adapter
 
         storage_adapter = await get_storage_adapter()
-        provider_summary = await storage_adapter._backend.get_credentials_summary(limit=10000, mode="primary")
+        provider_summary = await storage_adapter._backend.get_credentials_summary(limit=None, mode="primary")
 
         filenames = set()
         for item in provider_summary.get("items", []):
@@ -254,6 +275,8 @@ async def get_stats_24h() -> Dict[str, Dict[str, int]]:
     for name in filenames:
         res[name] = {
             "calls_24h": 0,
+            "successful_calls_24h": 0,
+            "failed_calls_24h": 0,
             "input_tokens_24h": 0,
             "output_tokens_24h": 0,
             "total_tokens_24h": 0,
@@ -269,6 +292,8 @@ async def get_stats_24h() -> Dict[str, Dict[str, int]]:
                 SELECT
                     filename,
                     COUNT(*),
+                    COALESCE(SUM(CASE WHEN success = 1 THEN 1 ELSE 0 END), 0),
+                    COALESCE(SUM(CASE WHEN success = 0 THEN 1 ELSE 0 END), 0),
                     COALESCE(SUM(input_tokens), 0),
                     COALESCE(SUM(output_tokens), 0),
                     COALESCE(SUM(total_tokens), 0),
@@ -283,11 +308,13 @@ async def get_stats_24h() -> Dict[str, Dict[str, int]]:
             for row in cursor.fetchall():
                 res[row[0]] = {
                     "calls_24h": row[1],
-                    "input_tokens_24h": row[2],
-                    "output_tokens_24h": row[3],
-                    "total_tokens_24h": row[4],
-                    "cached_tokens_24h": row[5],
-                    "reasoning_tokens_24h": row[6],
+                    "successful_calls_24h": row[2],
+                    "failed_calls_24h": row[3],
+                    "input_tokens_24h": row[4],
+                    "output_tokens_24h": row[5],
+                    "total_tokens_24h": row[6],
+                    "cached_tokens_24h": row[7],
+                    "reasoning_tokens_24h": row[8],
                 }
         except Exception as e:
             log.error(f"Failed to fetch 24h stats: {e}")

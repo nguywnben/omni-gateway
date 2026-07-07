@@ -102,10 +102,10 @@ def _credential_mode_from_env_name(env_name: str) -> str:
 def _credential_result_message(result: Dict[str, Any]) -> str:
     action = result.get("credential_action")
     if action == "replaced":
-        return "Authentication successful. Existing credential was renewed with a later expiry."
+        return "Authentication completed. The existing credential was renewed with a later expiry."
     if action == "skipped":
-        return "Authentication successful, but the credential was not added because the pool already has the same email with an equal or later expiry."
-    return "Authentication successful. Credentials saved."
+        return "Authentication completed, but the credential was not added because the pool already has the same email with an equal or later expiry."
+    return "Authentication completed. Credential saved."
 
 
 def _auth_success_content(result: Dict[str, Any]) -> Dict[str, Any]:
@@ -286,7 +286,7 @@ async def login(payload: LoginRequest, request: Request):
             return JSONResponse(
                 content={
                     "token": await create_panel_session_token(),
-                    "message": "Login successful.",
+                    "message": "Signed in.",
                 }
             )
 
@@ -352,7 +352,7 @@ async def start_auth(request: AuthStartRequest, token: str = Depends(verify_pane
 
         project_id = request.project_id
         if not project_id:
-            log.info("User did not provide a project ID; auto-detection will be used hereafter...")
+            log.info("No Project ID was provided; auto-detection will be used.")
 
 
         user_session = token if token else None
@@ -611,7 +611,7 @@ async def load_env_credentials(token: str = Depends(verify_panel_token)):
                             "env_var": item["credential"].get("env_var", ""),
                             "status": "success",
                             "action": write_result.get("action"),
-                            "message": write_result.get("message") or "Imported successfully.",
+                            "message": write_result.get("message") or "Imported.",
                         }
                     )
                 else:
@@ -642,7 +642,7 @@ async def load_env_credentials(token: str = Depends(verify_panel_token)):
                 "skipped_count": skipped_count,
                 "total_count": len(env_credentials),
                 "results": results,
-                "message": f"Imported {loaded_count}/{len(env_credentials)} environment credential(s); skipped {skipped_count} duplicate credential(s).",
+                "message": f"Imported {loaded_count}/{len(env_credentials)} environment credentials; skipped {skipped_count} duplicates.",
             }
         )
 
@@ -696,7 +696,7 @@ async def clear_env_credentials(token: str = Depends(verify_panel_token)):
                 "deleted_count": deleted_count,
                 "total_count": len(imported),
                 "results": results,
-                "message": f"Deleted {deleted_count}/{len(imported)} environment credential(s).",
+                "message": f"Deleted {deleted_count}/{len(imported)} environment credentials.",
             }
         )
 

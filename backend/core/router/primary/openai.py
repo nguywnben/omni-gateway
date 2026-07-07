@@ -126,7 +126,7 @@ async def chat_completions(
             gemini_response = json.loads(response_body)
         except Exception as e:
             log.error(f"Failed to parse Gemini response: {e}")
-            raise HTTPException(status_code=500, detail="Response parsing failed")
+            raise HTTPException(status_code=500, detail="Response parsing failed.")
 
 
         from core.converter.openai2gemini import convert_gemini_to_openai_response
@@ -193,7 +193,7 @@ async def chat_completions(
                 yield f"data: {chunk_json}\n\n".encode()
 
         except Exception as e:
-            log.error(f"Response parsing failed: {e}, directly yield error")
+            log.error(f"Response parsing failed: {e}. Returning the upstream error.")
 
             error_chunk = {
                 "id": "error",

@@ -495,7 +495,7 @@ async def complete_auth_flow_from_callback_url(callback_url: str, project_id: Op
         log.info(f'Using OAuth redirect URI: {redirect_uri}')
         try:
             credentials = await flow.exchange_code(code)
-            log.info('Access token retrieved successfully.')
+            log.info('Access token retrieved.')
             cred_mode = flow_data.get('mode', 'code_assist') if flow_data.get('mode') else mode
             if cred_mode == 'primary':
                 log.info('Provider callback URL received; fetching project ID from API.')
@@ -541,7 +541,7 @@ async def complete_auth_flow_from_callback_url(callback_url: str, project_id: Op
                 detected_project_id = project_id
             if detected_project_id:
                 try:
-                    log.info(f'Enabling required API services for project {detected_project_id}...')
+                    log.info(f'Enabling required API services for project {detected_project_id}.')
                     await enable_required_apis(credentials, detected_project_id)
                 except Exception as e:
                     log.warning(f'Failed to enable API services: {e}')

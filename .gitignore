@@ -11,8 +11,10 @@ CLAUDE.md
 GEMINI.md
 .kiro
 
-# Agent configurations/customizations
-.agents/
+# Agent project standards are tracked; local agent scratch files stay ignored.
+.agents/*
+!.agents/
+!.agents/omni-gateway-standards.md
 
 # Databases
 *.db

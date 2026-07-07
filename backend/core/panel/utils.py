@@ -139,7 +139,7 @@ def validate_mode(mode: str = "code_assist") -> str:
     if normalized not in ["code_assist", "primary"]:
         raise HTTPException(
             status_code=400,
-            detail=f"Invalid mode parameter: '{mode}'; only 'code_assist' or 'provider' are supported"
+            detail=f"Invalid mode parameter: '{mode}'. Only 'code_assist' or 'provider' are supported."
         )
     return normalized
 

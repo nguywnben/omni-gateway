@@ -19,23 +19,23 @@ Modern coding workflows often mix clients and providers: OpenAI-compatible tools
 
 ```text
 client tools
-  OpenAI SDKs | Gemini SDKs | Anthropic-compatible agents | IDE integrations
+  OpenAI SDKs | Google GenAI SDKs | Anthropic SDKs | IDE integrations
         |
         v
 Omni Gateway
-  auth -> format translation -> token cleanup -> routing -> fallback -> streaming
+  authentication -> format translation -> token cleanup -> routing -> fallback -> streaming
         |
         v
 provider adapters
-  Code Assist | provider backend | Vertex route
+  Code Assist | Antigravity | Vertex-compatible route
 ```
 
-The public API stays stable while provider-specific adapters can evolve behind the gateway.
+The public API stays stable while provider-specific adapters evolve behind Omni Gateway.
 
 ## Repository Structure
 
 ```text
-backend/     FastAPI entrypoint, routing core, format translators, storage, auth
+backend/     FastAPI entry point, routing core, format translators, storage, authentication
 frontend/    Management console HTML, CSS, and JavaScript
 deploy/      Docker, platform manifests, and install/start scripts
 ```
@@ -74,7 +74,7 @@ On first run, open the control panel and create the console password on the setu
 
 ```bash
 docker run -d \
-  --name router \
+  --name omni-gateway \
   -p 4283:4283 \
   -v "$(pwd)/backend/data/creds:/app/backend/data/creds" \
   nguywnben/omni-gateway:latest
@@ -236,15 +236,15 @@ Credential mode names:
 
 ## Storage
 
-Omni Gateway works out of the box with local SQLite-style storage under the project data directories. For distributed deployments, configure a shared backend:
+Omni Gateway works out of the box with SQLite-backed local storage under the project data directories. For distributed deployments, configure a shared backend:
 
 ```bash
 MONGODB_URI=mongodb://localhost:27017
-MONGODB_DATABASE=core
+MONGODB_DATABASE=omni_gateway
 ```
 
 ```bash
-POSTGRESQL_URI=postgresql://user:password@localhost:5432/core
+POSTGRESQL_URI=postgresql://user:password@localhost:5432/omni_gateway
 ```
 
 Redis can be added for cache/session acceleration:

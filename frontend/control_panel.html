@@ -25,7 +25,7 @@
                 </span>
                 <div class="login-brand-title">Omni Gateway</div>
             </div>
-            <h1 class="login-title">Sign in to console</h1>
+            <h1 class="login-title">Sign In to the Console</h1>
             <p class="login-copy">Manage routing, credentials, fallback behavior, and protocol translation from one focused workspace.</p>
             <div class="login-form">
                 <label for="loginPassword">Console password</label>
@@ -43,7 +43,7 @@
                 </span>
                 <div class="login-brand-title">Omni Gateway</div>
             </div>
-            <h1 class="login-title">Create your console password</h1>
+            <h1 class="login-title">Create Your Console Password</h1>
             <p class="login-copy">Secure this new Omni Gateway instance before opening the management console.</p>
             <div class="login-form">
                 <label for="setupPassword">Console password</label>
@@ -122,8 +122,8 @@
                     <header class="page-header">
                         <div>
                             <div class="page-kicker">Overview</div>
-                            <h1 class="page-title">Omni Gateway dashboard</h1>
-                            <p class="page-description">Monitor request flow, active credential capacity, and integration details for your coding-tool router.</p>
+                            <h1 class="page-title">Omni Gateway Dashboard</h1>
+                            <p class="page-description">Monitor request flow, active credential capacity, and integration details for coding-tool traffic.</p>
                         </div>
                     </header>
 
@@ -133,35 +133,36 @@
                             <span class="stat-label">Requests in the last 24 hours</span>
                         </div>
                         <div class="stat-item">
-                            <span class="stat-number" id="totalFiles">0</span>
-                            <span class="stat-label">Monitored credentials</span>
+                            <span class="stat-number" id="successRate24h">0%</span>
+                            <span class="stat-label"><span id="successfulApiCalls">0</span> successful requests</span>
+                        </div>
+                        <div class="stat-item">
+                            <span class="stat-number" id="failedApiCalls">0</span>
+                            <span class="stat-label">Failed requests</span>
+                        </div>
+                        <div class="stat-item">
+                            <span class="stat-number"><span id="activeFiles">0</span>/<span id="totalFiles">0</span></span>
+                            <span class="stat-label">Active / total credentials</span>
                         </div>
                         <div class="stat-item">
                             <span class="stat-number" id="avgCallsPerFile">0.0</span>
-                            <span class="stat-label">Average requests per credential</span>
+                            <span class="stat-label">Requests per active credential</span>
                         </div>
                         <div class="stat-item">
                             <span class="stat-number" id="totalTokens24h">0</span>
-                            <span class="stat-label">Tokens in the last 24 hours</span>
-                        </div>
-                        <div class="stat-item">
-                            <span class="stat-number" id="inputTokens24h">0</span>
-                            <span class="stat-label">Input tokens</span>
-                        </div>
-                        <div class="stat-item">
-                            <span class="stat-number" id="outputTokens24h">0</span>
-                            <span class="stat-label">Output tokens</span>
+                            <span class="stat-label">Tokens in the last 24 hours<span class="stat-detail">Input <span id="inputTokens24h">0</span> / output <span id="outputTokens24h">0</span></span></span>
                         </div>
                     </div>
 
                     <div class="dashboard-grid">
                         <section class="card span-6">
-                            <h2 class="card-title">API integration</h2>
+                            <h2 class="card-title">API Integration</h2>
+                            <p class="card-copy card-title-copy">Copy the API key and SDK base URLs used by local clients.</p>
                             <div class="metric-row">
                                 <div class="copy-field">
-                                    <label for="apiKey">Unified API key</label>
+                                    <label for="apiKey">API key</label>
                                     <div class="secret-field">
-                                        <input type="password" id="apiKey" value="..." readonly title="Copy API key" aria-label="Unified API key. Copy API key." onmousedown="event.preventDefault()" onclick="copyInputValue('apiKey')">
+                                        <input type="password" id="apiKey" value="..." readonly title="Copy API key" aria-label="API key. Copy API key." onmousedown="event.preventDefault()" onclick="copyInputValue('apiKey')">
                                         <button type="button" id="toggleApiKeyVisibilityBtn" class="btn btn-secondary icon-btn" onclick="toggleApiKeyVisibility()" title="Show API key" aria-label="Show API key">
                                             <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z"></path><circle cx="12" cy="12" r="3"></circle></svg>
                                         </button>
@@ -185,20 +186,105 @@
                             </div>
                         </section>
 
-                        <section class="card span-6">
-                            <h2 class="card-title">Client routes</h2>
-                            <div class="integration-list">
-                                <div class="code-block">openai: base_url = /v1, POST /chat/completions</div>
-                                <div class="code-block">anthropic: base_url = origin, POST /v1/messages</div>
-                                <div class="code-block">google-genai: base_url = origin, POST /v1beta/models/{model}:generateContent</div>
+                        <section class="card span-6 client-setup-card">
+                            <input class="setup-language-radio" type="radio" id="setupLangPython" name="setupLanguage" checked>
+                            <input class="setup-language-radio" type="radio" id="setupLangNode" name="setupLanguage">
+                            <div class="setup-card-header">
+                                <div>
+                                    <h2 class="card-title">SDK Setup</h2>
+                                    <p class="setup-card-copy">Select a language to view the client configuration for each supported SDK.</p>
+                                </div>
+                                <div class="setup-language-switch" role="radiogroup" aria-label="Client language">
+                                    <label for="setupLangPython" class="setup-language-option">Python</label>
+                                    <label for="setupLangNode" class="setup-language-option">Node.js</label>
+                                </div>
+                            </div>
+                            <div class="client-setup-panels">
+                                <div class="client-setup-panel setup-python">
+                                    <div class="client-route-card">
+                                        <div class="client-route-header">
+                                            <div>
+                                                <strong>OpenAI</strong>
+                                            </div>
+                                            <span>openai</span>
+                                        </div>
+                                        <dl class="client-route-details">
+                                            <div><dt>Initialize</dt><dd>OpenAI(base_url, api_key)</dd></div>
+                                            <div><dt>Request</dt><dd>client.chat.completions.create(model, messages)</dd></div>
+                                        </dl>
+                                    </div>
+                                    <div class="client-route-card">
+                                        <div class="client-route-header">
+                                            <div>
+                                                <strong>Anthropic</strong>
+                                            </div>
+                                            <span>anthropic</span>
+                                        </div>
+                                        <dl class="client-route-details">
+                                            <div><dt>Initialize</dt><dd>Anthropic(base_url, api_key)</dd></div>
+                                            <div><dt>Request</dt><dd>client.messages.create(model, max_tokens, messages)</dd></div>
+                                        </dl>
+                                    </div>
+                                    <div class="client-route-card">
+                                        <div class="client-route-header">
+                                            <div>
+                                                <strong>Google GenAI</strong>
+                                            </div>
+                                            <span>google-genai</span>
+                                        </div>
+                                        <dl class="client-route-details">
+                                            <div><dt>Initialize</dt><dd>genai.Client(api_key, http_options)</dd></div>
+                                            <div><dt>Request</dt><dd>client.models.generate_content(model, contents)</dd></div>
+                                        </dl>
+                                    </div>
+                                </div>
+                                <div class="client-setup-panel setup-node">
+                                    <div class="client-route-card">
+                                        <div class="client-route-header">
+                                            <div>
+                                                <strong>OpenAI</strong>
+                                            </div>
+                                            <span>openai</span>
+                                        </div>
+                                        <dl class="client-route-details">
+                                            <div><dt>Initialize</dt><dd>new OpenAI({ baseURL, apiKey })</dd></div>
+                                            <div><dt>Request</dt><dd>client.chat.completions.create({ model, messages })</dd></div>
+                                        </dl>
+                                    </div>
+                                    <div class="client-route-card">
+                                        <div class="client-route-header">
+                                            <div>
+                                                <strong>Anthropic</strong>
+                                            </div>
+                                            <span>@anthropic-ai/sdk</span>
+                                        </div>
+                                        <dl class="client-route-details">
+                                            <div><dt>Initialize</dt><dd>new Anthropic({ baseURL, apiKey })</dd></div>
+                                            <div><dt>Request</dt><dd>client.messages.create({ model, max_tokens, messages })</dd></div>
+                                        </dl>
+                                    </div>
+                                    <div class="client-route-card">
+                                        <div class="client-route-header">
+                                            <div>
+                                                <strong>Google GenAI</strong>
+                                            </div>
+                                            <span>@google/genai</span>
+                                        </div>
+                                        <dl class="client-route-details">
+                                            <div><dt>Initialize</dt><dd>new GoogleGenAI({ apiKey, httpOptions })</dd></div>
+                                            <div><dt>Request</dt><dd>ai.models.generateContent({ model, contents })</dd></div>
+                                        </dl>
+                                    </div>
+                                </div>
                             </div>
                         </section>
 
                         <section class="card span-12">
-                            <h2 class="card-title">24-hour request breakdown</h2>
+                            <h2 class="card-title">24-Hour Request Breakdown</h2>
+                            <p class="card-copy card-title-copy">Review request volume, success rate, failures, and reported token usage by credential.</p>
                             <div id="usageLoading" class="skeleton-table">
-                                <div class="skeleton-row header"><div class="skeleton-cell"></div><div class="skeleton-cell"></div><div class="skeleton-cell"></div><div class="skeleton-cell"></div><div class="skeleton-cell"></div><div class="skeleton-cell"></div></div>
-                                <div class="skeleton-row"><div class="skeleton-cell"></div><div class="skeleton-cell"></div><div class="skeleton-cell"></div><div class="skeleton-cell"></div><div class="skeleton-cell"></div><div class="skeleton-cell"></div></div>
+                                <div class="skeleton-row header"><div class="skeleton-cell"></div><div class="skeleton-cell"></div><div class="skeleton-cell"></div><div class="skeleton-cell"></div><div class="skeleton-cell"></div><div class="skeleton-cell"></div><div class="skeleton-cell"></div><div class="skeleton-cell"></div></div>
+                                <div class="skeleton-row"><div class="skeleton-cell"></div><div class="skeleton-cell"></div><div class="skeleton-cell"></div><div class="skeleton-cell"></div><div class="skeleton-cell"></div><div class="skeleton-cell"></div><div class="skeleton-cell"></div><div class="skeleton-cell"></div></div>
                             </div>
                             <div class="usage-table-wrapper">
                                 <table class="usage-table">
@@ -206,6 +292,8 @@
                                         <tr>
                                             <th>Credential</th>
                                             <th>Requests</th>
+                                            <th>Successful</th>
+                                            <th>Failed</th>
                                             <th>Input tokens</th>
                                             <th>Output tokens</th>
                                             <th>Total tokens</th>
@@ -224,7 +312,7 @@
                     <header class="page-header">
                             <div>
                                 <div class="page-kicker">Pool</div>
-                                <h1 class="page-title">Provider credential pool</h1>
+                                <h1 class="page-title">Provider Credential Pool</h1>
                                 <p class="page-description">Manage accounts and API keys from every connected provider. Audit account health, cooldowns, quota state, and batch operations for active routing capacity.</p>
                             </div>
                             <div class="page-actions">
@@ -324,7 +412,7 @@
                     <header class="page-header">
                         <div>
                             <div class="page-kicker">Providers</div>
-                            <h1 class="page-title">Add provider credentials</h1>
+                            <h1 class="page-title">Add Provider Credentials</h1>
                             <p class="page-description">Choose a supported provider, authorize an account, or import credential files into the shared routing pool.</p>
                         </div>
                     </header>
@@ -334,7 +422,7 @@
                             <img src="/frontend/assets/antigravity-logo.png" alt="Antigravity logo">
                         </div>
                         <div class="provider-summary">
-                            <div class="provider-eyebrow">Available now</div>
+                            <div class="provider-eyebrow">Available Now</div>
                             <h2>Antigravity</h2>
                             <p>Connect Google Antigravity credentials through OAuth or import existing credential JSON files and ZIP archives.</p>
                         </div>
@@ -385,7 +473,7 @@
                         </section>
 
                         <section class="tool-panel">
-                            <h2 class="card-title">Batch import</h2>
+                            <h2 class="card-title">Batch Import</h2>
                             <p class="card-copy provider-tool-copy">Import Antigravity credential JSON files or ZIP archives into the active pool.</p>
                             <div class="upload-area" id="primaryUploadArea" onclick="document.getElementById('primaryFileInput').click()" ondrop="handlePrimaryFileDrop(event)" ondragover="event.preventDefault(); this.classList.add('dragover');" ondragleave="this.classList.remove('dragover');">
                                 <div>
@@ -422,7 +510,7 @@
                         <section class="tool-panel provider-advanced-panel">
                             <div class="provider-settings-header">
                                 <div>
-                                    <h2 class="card-title">Antigravity advanced settings</h2>
+                                    <h2 class="card-title">Antigravity Advanced Settings</h2>
                                     <p class="card-copy provider-tool-copy">Configure the OAuth client, upstream endpoints, protocol headers, and runtime behavior used by the Antigravity provider.</p>
                                 </div>
                                 <div class="page-actions">
@@ -436,13 +524,15 @@
 
                             <div id="antigravitySettingsForm" class="provider-settings-grid hidden">
                                 <section class="provider-settings-group">
-                                    <h3>OAuth client</h3>
+                                    <h3>OAuth Client</h3>
+                                    <p class="card-copy provider-tool-copy">Manage the OAuth application used for Antigravity authorization.</p>
                                     <div class="form-group"><label for="antigravityOauthClientId">Client ID</label><input type="text" id="antigravityOauthClientId" autocomplete="off"></div>
                                     <div class="form-group"><label for="antigravityOauthClientSecret">Client secret</label><input type="text" id="antigravityOauthClientSecret" autocomplete="off"></div>
                                 </section>
 
                                 <section class="provider-settings-group">
-                                    <h3>Upstream endpoints</h3>
+                                    <h3>Upstream Endpoints</h3>
+                                    <p class="card-copy provider-tool-copy">Configure provider and Google API hosts used by Antigravity requests.</p>
                                     <div class="form-group"><label for="antigravityApiUrl">Antigravity API</label><input type="text" id="antigravityApiUrl"></div>
                                     <div class="form-group"><label for="antigravityOauthUrl">OAuth API</label><input type="text" id="antigravityOauthUrl"></div>
                                     <div class="form-group"><label for="antigravityGoogleApisUrl">Google APIs</label><input type="text" id="antigravityGoogleApisUrl"></div>
@@ -451,9 +541,10 @@
                                 </section>
 
                                 <section class="provider-settings-group">
-                                    <h3>Protocol behavior</h3>
-                                    <div class="form-group"><label for="antigravityUserAgent">HTTP user agent</label><input type="text" id="antigravityUserAgent"></div>
-                                    <div class="form-group"><label for="antigravityPayloadUserAgent">Payload userAgent</label><input type="text" id="antigravityPayloadUserAgent"></div>
+                                    <h3>Protocol Behavior</h3>
+                                    <p class="card-copy provider-tool-copy">Tune headers, streaming conversion, and retry credential switching.</p>
+                                    <div class="form-group"><label for="antigravityUserAgent">HTTP User-Agent</label><input type="text" id="antigravityUserAgent"></div>
+                                    <div class="form-group"><label for="antigravityPayloadUserAgent">Payload user agent</label><input type="text" id="antigravityPayloadUserAgent"></div>
                                     <label class="switch-row"><input type="checkbox" id="antigravityStreamToNonstream" class="config-checkbox"><span>Collect streaming responses for non-stream clients</span></label>
                                     <label class="switch-row" style="margin-top: 12px;"><input type="checkbox" id="antigravitySwitchCredential" class="config-checkbox"><span>Switch Antigravity credentials during retries</span></label>
                                 </section>
@@ -466,7 +557,7 @@
                     <header class="page-header">
                         <div>
                             <div class="page-kicker">Settings</div>
-                            <h1 class="page-title">System configuration</h1>
+                            <h1 class="page-title">System Configuration</h1>
                             <p class="page-description">Tune console access, storage, proxy, retry policy, response translation, and keep-alive behavior.</p>
                         </div>
                         <div class="page-actions">
@@ -489,7 +580,8 @@
 
                             <div class="config-grid">
                                 <section class="config-group span-4">
-                                    <h2 class="card-title">Server access</h2>
+                                    <h2 class="card-title">Server Access</h2>
+                                    <p class="card-copy card-title-copy">Control listener settings, panel access, and API authentication.</p>
                                     <div class="form-group"><label for="host">Bind host</label><input type="text" id="host" placeholder="0.0.0.0"></div>
                                     <div class="form-group"><label for="port">Port</label><input type="number" id="port" min="1" max="65535" placeholder="4283"></div>
                                     <div class="form-group"><label for="configApiPassword">API password</label><input type="text" id="configApiPassword"></div>
@@ -498,21 +590,24 @@
                                 </section>
 
                                 <section class="config-group span-4">
-                                    <h2 class="card-title">Storage and proxy</h2>
+                                    <h2 class="card-title">Storage and Proxy</h2>
+                                    <p class="card-copy card-title-copy">Set credential storage and outbound network routing.</p>
                                     <div class="form-group"><label for="credentialsDir">Credentials directory</label><input type="text" id="credentialsDir"></div>
                                     <div class="form-group"><label for="proxy">Outbound proxy</label><input type="text" id="proxy" placeholder="http://127.0.0.1:7890"></div>
                                     <p class="field-hint">Use the proxy when the server cannot reach Google OAuth or provider APIs directly.</p>
                                 </section>
 
                                 <section class="config-group span-4">
-                                    <h2 class="card-title">Code Assist compatibility</h2>
+                                    <h2 class="card-title">Code Assist Compatibility</h2>
+                                    <p class="card-copy card-title-copy">Configure optional Code Assist compatibility endpoints and clients.</p>
                                     <div class="form-group"><label for="codeAssistEndpoint">Code Assist API</label><input type="text" id="codeAssistEndpoint"></div>
                                     <div class="form-group"><label for="codeAssistClientId">Code Assist client ID</label><input type="text" id="codeAssistClientId" autocomplete="off"></div>
                                     <div class="form-group"><label for="codeAssistClientSecret">Code Assist client secret</label><input type="text" id="codeAssistClientSecret" autocomplete="off"></div>
                                 </section>
 
                                 <section class="config-group span-4">
-                                    <h2 class="card-title">Failover policy</h2>
+                                    <h2 class="card-title">Failover Policy</h2>
+                                    <p class="card-copy card-title-copy">Define automatic disabling, retries, and alternate credential behavior.</p>
                                     <label class="switch-row"><input type="checkbox" id="autoBanEnabled" class="config-checkbox"><span>Auto-disable credentials for configured error codes</span></label>
                                     <div class="form-group" style="margin-top: 14px;"><label for="autoBanErrorCodes">Auto-disable error codes</label><input type="text" id="autoBanErrorCodes" placeholder="400,403"></div>
                                     <label class="switch-row"><input type="checkbox" id="retry429Enabled" class="config-checkbox"><span>Retry failed requests with alternate credentials</span></label>
@@ -521,14 +616,16 @@
                                 </section>
 
                                 <section class="config-group span-4">
-                                    <h2 class="card-title">Translation and runtime</h2>
+                                    <h2 class="card-title">Translation and Runtime</h2>
+                                    <p class="card-copy card-title-copy">Adjust compatibility translation and response recovery behavior.</p>
                                     <label class="switch-row"><input type="checkbox" id="compatibilityModeEnabled" class="config-checkbox"><span>Flatten system instructions for compatibility</span></label>
                                     <label class="switch-row" style="margin-top: 12px;"><input type="checkbox" id="returnThoughtsToFrontend" class="config-checkbox"><span>Return reasoning content when available</span></label>
                                     <div class="form-group" style="margin-top: 14px;"><label for="antiTruncationMaxAttempts">Truncation recovery attempts</label><input type="number" id="antiTruncationMaxAttempts" min="1" max="10"></div>
                                 </section>
 
                                 <section class="config-group span-4">
-                                    <h2 class="card-title">Keep-alive</h2>
+                                    <h2 class="card-title">Keep-Alive</h2>
+                                    <p class="card-copy card-title-copy">Keep hosted deployments warm with periodic internal requests.</p>
                                     <div class="form-group"><label for="keepaliveUrl">Keep-alive URL</label><input type="text" id="keepaliveUrl"><button type="button" class="btn btn-secondary btn-small config-inline-action" onclick="autoSetKeepaliveUrl()">Use current URL</button></div>
                                     <div class="form-group"><label for="keepaliveInterval">Keep-alive interval in seconds</label><input type="number" id="keepaliveInterval" min="5" max="86400"></div>
                                 </section>
@@ -541,7 +638,7 @@
                     <header class="page-header">
                         <div>
                             <div class="page-kicker">Logs</div>
-                            <h1 class="page-title">Runtime log stream</h1>
+                            <h1 class="page-title">Runtime Log Stream</h1>
                             <p class="page-description">Watch routing decisions, upstream responses, credential rotation, and application errors.</p>
                         </div>
                         <div class="page-actions">
@@ -591,7 +688,8 @@
                             <p class="card-copy" style="margin-top: 14px;">Repository: <a href="https://github.com/nguywnben/omni-gateway" target="_blank" rel="noreferrer">nguywnben/omni-gateway</a></p>
                         </section>
                         <section class="card span-5">
-                            <h2 class="card-title">Operating model</h2>
+                            <h2 class="card-title">Operating Model</h2>
+                            <p class="card-copy card-title-copy">Core capabilities available through the routing layer.</p>
                             <div class="integration-list">
                                 <div class="code-block">Smart auto-fallback</div>
                                 <div class="code-block">Token compression and response shaping</div>

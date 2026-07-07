@@ -56,7 +56,7 @@ async def lifespan(app: FastAPI):
     try:
         import config
         await config.init_config()
-        log.info("Configuration cache initialized successfully.")
+        log.info("Configuration cache initialized.")
     except Exception as e:
         log.error(f"Failed to initialize the configuration cache: {e}")
 
@@ -65,7 +65,7 @@ async def lifespan(app: FastAPI):
 
 
         await credential_manager._get_or_create()
-        log.info("Credential manager initialized successfully.")
+        log.info("Credential manager initialized.")
     except Exception as e:
         log.error(f"Credential manager initialization failed: {e}")
         global_credential_manager = None
@@ -110,7 +110,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(
     title="Omni Gateway",
-    description="Universal AI router with smart fallback, token compression, and format translation.",
+    description="Universal AI router with smart auto-fallback, token compression, and seamless format translation.",
     version="2.0.0",
     lifespan=lifespan,
 )

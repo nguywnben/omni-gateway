@@ -231,7 +231,7 @@ fi
 
 # Determine working directory
 log_info "Checking project directory..."
-PROJECT_DIR="${PROJECT_DIR:-router}"
+PROJECT_DIR="${PROJECT_DIR:-omni-gateway}"
 REPOSITORY_URL="${REPOSITORY_URL:-}"
 
 if [ -f "./backend/main.py" ]; then
