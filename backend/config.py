@@ -252,7 +252,7 @@ async def get_server_port() -> int:
 
     Environment variable: PORT
     Database config key: port
-    Default: 7861
+    Default: 4283
     """
     env_value = os.getenv("PORT")
     if env_value:
@@ -261,7 +261,7 @@ async def get_server_port() -> int:
         except ValueError:
             pass
 
-    return int(await get_config_value("port", 7861))
+    return int(await get_config_value("port", 4283))
 
 
 async def get_api_password() -> str:

@@ -216,7 +216,7 @@ def main():
         asyncio.run(_run())
     else:
 
-        port = int(os.environ.get("PORT", 7861))
+        port = int(os.environ.get("PORT", 4283))
         host = os.environ.get("HOST", "0.0.0.0")
 
         log.info("=" * 60)

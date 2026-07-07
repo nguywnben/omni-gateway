@@ -65,7 +65,7 @@ python backend/main.py
 Open the control panel at:
 
 ```text
-http://127.0.0.1:7861
+http://127.0.0.1:4283
 ```
 
 On first run, open the control panel and create the console password on the setup screen. No default password is shipped.
@@ -75,7 +75,7 @@ On first run, open the control panel and create the console password on the setu
 ```bash
 docker run -d \
   --name router \
-  -p 7861:7861 \
+  -p 4283:4283 \
   -v "$(pwd)/backend/data/creds:/app/backend/data/creds" \
   nguywnben/omni-gateway:latest
 ```
@@ -95,7 +95,7 @@ Omni Gateway reads configuration from environment variables first, then stored c
 | Variable | Default | Purpose |
 | --- | --- | --- |
 | `HOST` | `0.0.0.0` | Bind address. |
-| `PORT` | `7861` | HTTP port. |
+| `PORT` | `4283` | HTTP port. |
 | `CORS_ORIGINS` | empty | Comma-separated browser origins allowed to call the API cross-origin. Leave empty for same-origin console usage. |
 | `CORS_ORIGIN_REGEX` | empty | Optional regex for managed dynamic browser origins. |
 | `API_KEY` | generated automatically | Preferred key for public client API requests. Must start with `sk-ogw-`. |
@@ -130,64 +130,81 @@ Omni Gateway reads configuration from environment variables first, then stored c
 | `USER_AGENT` / `ANTIGRAVITY_USER_AGENT` | `antigravity/cli/1.0.1 windows/amd64` | Optional Antigravity protocol user-agent override. |
 | `ANTIGRAVITY_PAYLOAD_USER_AGENT` | `antigravity` | Optional payload-level Antigravity userAgent override. |
 
-## API Surfaces
+## SDK Surfaces
 
-### OpenAI-Compatible Chat
+Omni Gateway is designed around the standard URL behavior of the official Python SDKs. Configure each client exactly as shown below; the gateway does not require non-standard duplicated path prefixes.
 
-```bash
-curl http://127.0.0.1:7861/v1/chat/completions \
-  -H "Authorization: Bearer $API_KEY" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "model": "gemini-2.5-flash",
-    "messages": [
-      {"role": "user", "content": "Explain this repository in one paragraph."}
-    ],
-    "stream": true
-  }'
+### OpenAI Python SDK
+
+Use `/v1` as the OpenAI base URL. The SDK appends `/chat/completions`.
+
+```python
+from openai import OpenAI
+
+client = OpenAI(
+    base_url="http://127.0.0.1:4283/v1",
+    api_key="sk-ogw-..."
+)
+
+response = client.chat.completions.create(
+    model="gemini-2.5-flash",
+    messages=[{"role": "user", "content": "Explain this repository in one paragraph."}],
+)
 ```
 
-### Gemini Native
+### Anthropic Python SDK
 
-```bash
-curl "http://127.0.0.1:7861/v1/models/gemini-2.5-flash:generateContent?key=$API_KEY" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "contents": [
-      {"role": "user", "parts": [{"text": "Write a small Python function."}]}
-    ]
-  }'
+Use the gateway origin as the Anthropic base URL. The SDK appends `/v1/messages`.
+
+```python
+from anthropic import Anthropic
+
+client = Anthropic(
+    base_url="http://127.0.0.1:4283",
+    api_key="sk-ogw-..."
+)
+
+response = client.messages.create(
+    model="gemini-2.5-flash",
+    max_tokens=1024,
+    messages=[{"role": "user", "content": "Draft a commit message."}],
+)
 ```
 
-### Anthropic Messages
+### Google GenAI Python SDK
 
-```bash
-curl http://127.0.0.1:7861/v1/messages \
-  -H "x-api-key: $API_KEY" \
-  -H "anthropic-version: 2023-06-01" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "model": "gemini-2.5-flash",
-    "max_tokens": 1024,
-    "messages": [
-      {"role": "user", "content": "Draft a commit message."}
-    ]
-  }'
+Use the gateway origin as the Google GenAI base URL. The SDK appends its default model route, such as `/v1beta/models/{model}:generateContent`.
+
+```python
+from google import genai
+from google.genai import types
+
+client = genai.Client(
+    http_options={
+        "base_url": "http://127.0.0.1:4283",
+    },
+    api_key="sk-ogw-..."
+)
+
+response = client.models.generate_content(
+    model="gemini-2.5-flash",
+    contents="Write a small Python function.",
+    config=types.GenerateContentConfig(
+        system_instruction="You are a helpful assistant.",
+    ),
+)
 ```
 
-### Normalized Client Routes
+### Supported Routes
 
-Omni Gateway exposes provider-compatible routes without a product namespace:
+Omni Gateway exposes SDK-compatible routes without a product namespace:
 
 - `POST /v1/chat/completions`
 - `POST /v1/messages`
 - `GET /v1/models`
 - `GET /v1beta/models`
-- `POST /v1/models/{model}:generateContent`
 - `POST /v1beta/models/{model}:generateContent`
-- `POST /v1/models/{model}:streamGenerateContent`
 - `POST /v1beta/models/{model}:streamGenerateContent`
-- `POST /v1/models/{model}:countTokens`
 - `POST /v1beta/models/{model}:countTokens`
 - `POST /vertex/v1/chat/completions`
 - `POST /vertex/v1/models/{model}:generateContent`
@@ -206,7 +223,7 @@ Provider adapters normalize these feature names before sending upstream requests
 ## Credential Workflow
 
 1. Start Omni Gateway.
-2. Open `http://127.0.0.1:7861`.
+2. Open `http://127.0.0.1:4283`.
 3. Create the console password on the first-run setup screen, or sign in with `PANEL_PASSWORD` when it is preconfigured.
 4. Add credentials through OAuth or upload existing credential JSON files.
 5. Verify credentials and watch cooldown/error state in the panel.

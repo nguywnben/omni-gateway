@@ -9,7 +9,7 @@ services:
     container_name: omni-gateway
     restart: unless-stopped
     ports:
-      - "${PORT:-7861}:${PORT:-7861}"
+      - "${PORT:-4283}:${PORT:-4283}"
     environment:
       # Password configuration. Leave unset for the first-run web setup screen.
       # - PASSWORD=${PASSWORD}
@@ -17,7 +17,7 @@ services:
       # - PANEL_PASSWORD=${PANEL_PASSWORD:-your_panel_password}
 
       # Server configuration
-      - PORT=${PORT:-7861}
+      - PORT=${PORT:-4283}
       - HOST=${HOST:-0.0.0.0}
       - CORS_ORIGINS=${CORS_ORIGINS:-}
       - PANEL_SESSION_TTL_SECONDS=${PANEL_SESSION_TTL_SECONDS:-86400}

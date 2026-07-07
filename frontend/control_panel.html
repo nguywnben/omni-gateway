@@ -171,8 +171,16 @@
                                     </div>
                                 </div>
                                 <div class="copy-field">
-                                    <label>Base URL</label>
-                                    <button type="button" class="endpoint-code-card" id="unifiedEndpointUrl" title="Copy Base URL" aria-label="Base URL. Copy Base URL." onclick="cpUrl(this)">Loading</button>
+                                    <label>OpenAI base URL</label>
+                                    <button type="button" class="endpoint-code-card" id="openaiEndpointUrl" title="Copy OpenAI base URL" aria-label="OpenAI base URL. Copy OpenAI base URL." onclick="cpUrl(this)">Loading</button>
+                                </div>
+                                <div class="copy-field">
+                                    <label>Anthropic base URL</label>
+                                    <button type="button" class="endpoint-code-card" id="anthropicEndpointUrl" title="Copy Anthropic base URL" aria-label="Anthropic base URL. Copy Anthropic base URL." onclick="cpUrl(this)">Loading</button>
+                                </div>
+                                <div class="copy-field">
+                                    <label>Google GenAI base URL</label>
+                                    <button type="button" class="endpoint-code-card" id="googleGenaiEndpointUrl" title="Copy Google GenAI base URL" aria-label="Google GenAI base URL. Copy Google GenAI base URL." onclick="cpUrl(this)">Loading</button>
                                 </div>
                             </div>
                         </section>
@@ -180,9 +188,9 @@
                         <section class="card span-6">
                             <h2 class="card-title">Client routes</h2>
                             <div class="integration-list">
-                                <div class="code-block">OpenAI compatible: POST /v1/chat/completions</div>
-                                <div class="code-block">Anthropic compatible: POST /v1/messages</div>
-                                <div class="code-block">Gemini compatible: POST /v1beta/models/{model}:generateContent</div>
+                                <div class="code-block">openai: base_url = /v1, POST /chat/completions</div>
+                                <div class="code-block">anthropic: base_url = origin, POST /v1/messages</div>
+                                <div class="code-block">google-genai: base_url = origin, POST /v1beta/models/{model}:generateContent</div>
                             </div>
                         </section>
 
@@ -483,7 +491,7 @@
                                 <section class="config-group span-4">
                                     <h2 class="card-title">Server access</h2>
                                     <div class="form-group"><label for="host">Bind host</label><input type="text" id="host" placeholder="0.0.0.0"></div>
-                                    <div class="form-group"><label for="port">Port</label><input type="number" id="port" min="1" max="65535" placeholder="7861"></div>
+                                    <div class="form-group"><label for="port">Port</label><input type="number" id="port" min="1" max="65535" placeholder="4283"></div>
                                     <div class="form-group"><label for="configApiPassword">API password</label><input type="text" id="configApiPassword"></div>
                                     <div class="form-group"><label for="configPanelPassword">Panel password</label><input type="text" id="configPanelPassword"></div>
                                     <div class="form-group"><label for="configPassword">Unified password override</label><input type="text" id="configPassword"></div>

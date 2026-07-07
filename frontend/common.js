@@ -2221,8 +2221,14 @@ function showStatus(message, type = 'info') {
 async function updateEndpointUrls() {
     const origin = window.location.origin;
 
-    const unifiedEl = document.getElementById('unifiedEndpointUrl');
-    if (unifiedEl) unifiedEl.textContent = `${origin}/v1`;
+    const openaiEl = document.getElementById('openaiEndpointUrl');
+    if (openaiEl) openaiEl.textContent = `${origin}/v1`;
+
+    const anthropicEl = document.getElementById('anthropicEndpointUrl');
+    if (anthropicEl) anthropicEl.textContent = origin;
+
+    const googleGenaiEl = document.getElementById('googleGenaiEndpointUrl');
+    if (googleGenaiEl) googleGenaiEl.textContent = origin;
 
     try {
         const response = await fetch('./api/auth/keys', { headers: getAuthHeaders() });
@@ -6263,7 +6269,7 @@ function populateConfigForm() {
 
     setConfigField('host', c.host || '0.0.0.0');
 
-    setConfigField('port', c.port || 7861);
+    setConfigField('port', c.port || 4283);
 
     setConfigField('configApiPassword', c.api_password || '');
 
@@ -6370,7 +6376,7 @@ async function saveConfig() {
 
             host: getValue('host', '0.0.0.0'),
 
-            port: getInt('port', 7861),
+            port: getInt('port', 4283),
 
             api_password: getValue('configApiPassword'),
 
