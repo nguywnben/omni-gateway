@@ -11,7 +11,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Google+Sans:ital,opsz,wght@0,17..18,400..700;1,17..18,400..700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/frontend/control_panel.css">
+    <link rel="stylesheet" href="/frontend/control_panel.css?v=local">
 </head>
 
 <body>
@@ -130,27 +130,27 @@
                     <div class="stats-container">
                         <div class="stat-item">
                             <span class="stat-number" id="totalApiCalls">0</span>
-                            <span class="stat-label">Requests in the last 24 hours</span>
+                            <span class="stat-label">Requests in the last 24 hours<span class="stat-detail"><span id="successfulApiCalls">0</span> successful / <span id="failedApiCalls">0</span> failed</span></span>
                         </div>
                         <div class="stat-item">
                             <span class="stat-number" id="successRate24h">0%</span>
-                            <span class="stat-label"><span id="successfulApiCalls">0</span> successful requests</span>
-                        </div>
-                        <div class="stat-item">
-                            <span class="stat-number" id="failedApiCalls">0</span>
-                            <span class="stat-label">Failed requests</span>
+                            <span class="stat-label">Success rate<span class="stat-detail" id="successRateDetail">No traffic yet</span></span>
                         </div>
                         <div class="stat-item">
                             <span class="stat-number"><span id="activeFiles">0</span>/<span id="totalFiles">0</span></span>
-                            <span class="stat-label">Active / total credentials</span>
+                            <span class="stat-label">Active / total credentials<span class="stat-detail"><span id="disabledFiles">0</span> disabled</span></span>
                         </div>
                         <div class="stat-item">
                             <span class="stat-number" id="avgCallsPerFile">0.0</span>
-                            <span class="stat-label">Requests per active credential</span>
+                            <span class="stat-label">Requests per active credential<span class="stat-detail"><span id="assignedApiCalls">0</span> assigned requests</span></span>
                         </div>
                         <div class="stat-item">
                             <span class="stat-number" id="totalTokens24h">0</span>
                             <span class="stat-label">Tokens in the last 24 hours<span class="stat-detail">Input <span id="inputTokens24h">0</span> / output <span id="outputTokens24h">0</span></span></span>
+                        </div>
+                        <div class="stat-item">
+                            <span class="stat-number" id="avgTokensPerRequest">0</span>
+                            <span class="stat-label">Tokens per successful request<span class="stat-detail">Cached <span id="cachedTokens24h">0</span> / reasoning <span id="reasoningTokens24h">0</span></span></span>
                         </div>
                     </div>
 
@@ -281,10 +281,10 @@
 
                         <section class="card span-12">
                             <h2 class="card-title">24-Hour Request Breakdown</h2>
-                            <p class="card-copy card-title-copy">Review request volume, success rate, failures, and reported token usage by credential.</p>
+                            <p class="card-copy card-title-copy">Review credential-level traffic and token usage for the last 24 hours.</p>
                             <div id="usageLoading" class="skeleton-table">
-                                <div class="skeleton-row header"><div class="skeleton-cell"></div><div class="skeleton-cell"></div><div class="skeleton-cell"></div><div class="skeleton-cell"></div><div class="skeleton-cell"></div><div class="skeleton-cell"></div><div class="skeleton-cell"></div><div class="skeleton-cell"></div></div>
-                                <div class="skeleton-row"><div class="skeleton-cell"></div><div class="skeleton-cell"></div><div class="skeleton-cell"></div><div class="skeleton-cell"></div><div class="skeleton-cell"></div><div class="skeleton-cell"></div><div class="skeleton-cell"></div><div class="skeleton-cell"></div></div>
+                                <div class="skeleton-row header"><div class="skeleton-cell"></div><div class="skeleton-cell"></div><div class="skeleton-cell"></div><div class="skeleton-cell"></div></div>
+                                <div class="skeleton-row"><div class="skeleton-cell"></div><div class="skeleton-cell"></div><div class="skeleton-cell"></div><div class="skeleton-cell"></div></div>
                             </div>
                             <div class="usage-table-wrapper">
                                 <table class="usage-table">
@@ -292,12 +292,8 @@
                                         <tr>
                                             <th>Credential</th>
                                             <th>Requests</th>
-                                            <th>Successful</th>
-                                            <th>Failed</th>
-                                            <th>Input tokens</th>
-                                            <th>Output tokens</th>
-                                            <th>Total tokens</th>
-                                            <th>Actions</th>
+                                            <th>Success</th>
+                                            <th>Tokens</th>
                                         </tr>
                                     </thead>
                                     <tbody id="usageList"></tbody>
@@ -703,7 +699,7 @@
     </section>
 
     <div id="statusSection"></div>
-    <script src="/frontend/common.js"></script>
+    <script src="/frontend/common.js?v=local"></script>
 </body>
 
 </html>

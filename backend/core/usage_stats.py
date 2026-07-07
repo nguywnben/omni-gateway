@@ -36,6 +36,17 @@ def _int_value(value: Any) -> int:
         return 0
 
 
+def _provider_display_name(value: Any) -> str:
+    normalized = str(value or "").strip().lower().replace("-", "_")
+    if normalized in {"primary", "provider", "antigravity"}:
+        return "Antigravity"
+    if normalized == "code_assist":
+        return "Code Assist"
+    if not normalized:
+        return "Provider"
+    return " ".join(part.capitalize() for part in normalized.split("_") if part)
+
+
 def normalize_token_usage(usage: Optional[Dict[str, Any]]) -> Dict[str, int]:
     usage = usage or {}
     prompt_details = usage.get("prompt_tokens_details") or {}
@@ -249,6 +260,32 @@ async def get_total_files_count() -> int:
     return counts["total"]
 
 
+async def get_credential_usage_metadata() -> Dict[str, Dict[str, str]]:
+    try:
+        from core.storage_adapter import get_storage_adapter
+
+        storage_adapter = await get_storage_adapter()
+        provider_summary = await storage_adapter._backend.get_credentials_summary(limit=None, mode="primary")
+
+        metadata: Dict[str, Dict[str, str]] = {}
+        for item in provider_summary.get("items", []):
+            filename = os.path.basename(item.get("filename") or "")
+            if not filename:
+                continue
+
+            metadata[filename] = {
+                "user_email": str(item.get("user_email") or ""),
+                "provider": _provider_display_name(
+                    item.get("provider") or item.get("provider_name") or "Antigravity"
+                ),
+            }
+
+        return metadata
+    except Exception as e:
+        log.error(f"Error getting credential metadata for usage: {e}")
+        return {}
+
+
 async def get_all_credential_filenames() -> List[str]:
     try:
         from core.storage_adapter import get_storage_adapter
@@ -266,14 +303,18 @@ async def get_all_credential_filenames() -> List[str]:
         return []
 
 
-async def get_stats_24h() -> Dict[str, Dict[str, int]]:
+async def get_stats_24h() -> Dict[str, Dict[str, Any]]:
     init_db()
     since = time.time() - 86400
     res = {}
 
+    metadata_by_filename = await get_credential_usage_metadata()
     filenames = await get_all_credential_filenames()
     for name in filenames:
+        metadata = metadata_by_filename.get(name, {})
         res[name] = {
+            "user_email": metadata.get("user_email", ""),
+            "provider": metadata.get("provider", "Antigravity"),
             "calls_24h": 0,
             "successful_calls_24h": 0,
             "failed_calls_24h": 0,
@@ -298,7 +339,8 @@ async def get_stats_24h() -> Dict[str, Dict[str, int]]:
                     COALESCE(SUM(output_tokens), 0),
                     COALESCE(SUM(total_tokens), 0),
                     COALESCE(SUM(cached_tokens), 0),
-                    COALESCE(SUM(reasoning_tokens), 0)
+                    COALESCE(SUM(reasoning_tokens), 0),
+                    COALESCE(MAX(NULLIF(provider, '')), '')
                 FROM usage_logs
                 WHERE timestamp >= ?
                 GROUP BY filename
@@ -306,7 +348,10 @@ async def get_stats_24h() -> Dict[str, Dict[str, int]]:
                 (since,)
             )
             for row in cursor.fetchall():
+                existing = res.get(row[0], {})
                 res[row[0]] = {
+                    "user_email": existing.get("user_email", ""),
+                    "provider": existing.get("provider") or _provider_display_name(row[9]),
                     "calls_24h": row[1],
                     "successful_calls_24h": row[2],
                     "failed_calls_24h": row[3],
@@ -322,20 +367,3 @@ async def get_stats_24h() -> Dict[str, Dict[str, int]]:
             conn.close()
 
     return res
-
-
-def reset_stats(filename: str):
-    init_db()
-    filename = os.path.basename(filename)
-    with db_lock:
-        conn = sqlite3.connect(db_path)
-        try:
-            if filename == "all":
-                conn.execute("DELETE FROM usage_logs")
-            else:
-                conn.execute("DELETE FROM usage_logs WHERE filename = ?", (filename,))
-            conn.commit()
-        except Exception as e:
-            log.error(f"Failed to reset stats for {filename}: {e}")
-        finally:
-            conn.close()

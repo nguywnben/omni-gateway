@@ -1,16 +1,11 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel
-import time
 
 from core.utils import verify_panel_token
 from core.usage_stats import UNASSIGNED_USAGE_FILENAME
-from .usage import get_credential_counts, get_stats_24h, reset_stats
+from .usage import get_credential_counts, get_stats_24h
 
 router = APIRouter(prefix="/api/usage", tags=["usage"])
-
-class ResetUsageRequest(BaseModel):
-    filename: str = "all"
 
 @router.get("/stats")
 async def get_usage_stats(token: str = Depends(verify_panel_token)):
@@ -63,14 +58,5 @@ async def get_aggregated_stats(token: str = Depends(verify_panel_token)):
                 "avg_tokens_per_successful_request": avg_tokens
             }
         }
-    except Exception as e:
-        return JSONResponse(status_code=500, content={"success": False, "detail": str(e)})
-
-@router.post("/reset")
-async def reset_usage_stats(request: ResetUsageRequest, token: str = Depends(verify_panel_token)):
-    try:
-        reset_stats(request.filename)
-        target = "all credentials" if request.filename == "all" else request.filename
-        return {"success": True, "message": f"Usage statistics reset for {target}."}
     except Exception as e:
         return JSONResponse(status_code=500, content={"success": False, "detail": str(e)})

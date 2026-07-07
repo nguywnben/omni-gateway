@@ -46,7 +46,6 @@ const TRANSLATIONS = {
         "btn_enable_credit_title": "Enable credit mode for this credential",
         "btn_message_test": "Message test",
         "btn_message_test_title": "Test whether this credential is working.",
-        "btn_reset_stats": "Reset stats",
         "btn_setup_preview": "Set up Preview",
         "btn_setup_preview_title": "Configure the Preview channel and enable experimental features.",
         "btn_verify_id": "Verify",
@@ -78,8 +77,6 @@ const TRANSLATIONS = {
         "confirm_batch_delete": "Delete {count} selected credential files? This action cannot be undone.",
         "confirm_delete_cred": "Are you sure you want to delete this credential?\\n{filename}",
         "confirm_regenerate_key": "Are you sure you want to regenerate this API key? Previous key will become invalid immediately.",
-        "confirm_reset_stats": "Are you sure you want to reset statistics for {filename}?",
-        "confirm_reset_usage_statistics": "Are you sure you want to reset all usage statistics?",
         "connected": "Connected",
         "connecting": "Connecting...",
         "connection_error": "Connection error",
@@ -220,7 +217,6 @@ const TRANSLATIONS = {
         "quota_details": "Quota details",
         "refreshing_all_user_emails": "Refreshing all user emails...",
         "regenerate_success": "API key regenerated.",
-        "reset_failed_datamessage_datadetail": "Reset failed: {data_message____data_detail____data_error}",
         "resulterror_step_resultstep": "{result_error} (Step: {result_step})",
         "resultfilename_resultmessage_config": "{result_filename}: {result_message}",
         "retrieving_credentials_from_callbac": "Retrieving credentials from callback URL...",
@@ -5919,6 +5915,8 @@ async function refreshUsageStats() {
 
             const successfulCalls24h = Number(aggData.successful_calls_24h || 0);
 
+            const failedCalls24h = Number(aggData.failed_calls_24h || 0);
+
             const successRate24h = totalCalls24h > 0 ? Math.round((successfulCalls24h / totalCalls24h) * 100) : 0;
 
             document.getElementById('totalApiCalls').textContent = formatUsageNumber(totalCalls24h);
@@ -5927,19 +5925,39 @@ async function refreshUsageStats() {
 
             document.getElementById('successfulApiCalls').textContent = formatUsageNumber(successfulCalls24h);
 
-            document.getElementById('failedApiCalls').textContent = formatUsageNumber(aggData.failed_calls_24h);
+            document.getElementById('failedApiCalls').textContent = formatUsageNumber(failedCalls24h);
+
+            document.getElementById('successRateDetail').textContent = totalCalls24h > 0
+                ? `${formatUsageNumber(successfulCalls24h)} of ${formatUsageNumber(totalCalls24h)} requests succeeded.`
+                : 'No traffic yet';
 
             document.getElementById('totalFiles').textContent = formatUsageNumber(aggData.total_files);
 
             document.getElementById('activeFiles').textContent = formatUsageNumber(aggData.active_files);
 
-            document.getElementById('avgCallsPerFile').textContent = (aggData.avg_calls_per_file || 0).toFixed(1);
+            document.getElementById('disabledFiles').textContent = formatUsageNumber(aggData.disabled_files);
+
+            document.getElementById('avgCallsPerFile').textContent = formatUsageNumber(
+                aggData.avg_calls_per_file,
+                { decimals: 1 }
+            );
+
+            document.getElementById('assignedApiCalls').textContent = formatUsageNumber(aggData.assigned_calls_24h);
 
             document.getElementById('totalTokens24h').textContent = formatUsageNumber(aggData.total_tokens_24h);
 
             document.getElementById('inputTokens24h').textContent = formatUsageNumber(aggData.input_tokens_24h);
 
             document.getElementById('outputTokens24h').textContent = formatUsageNumber(aggData.output_tokens_24h);
+
+            document.getElementById('avgTokensPerRequest').textContent = formatUsageNumber(
+                aggData.avg_tokens_per_successful_request,
+                { decimals: 1 }
+            );
+
+            document.getElementById('cachedTokens24h').textContent = formatUsageNumber(aggData.cached_tokens_24h);
+
+            document.getElementById('reasoningTokens24h').textContent = formatUsageNumber(aggData.reasoning_tokens_24h);
 
             renderUsageList();
 
@@ -5977,7 +5995,7 @@ function renderUsageList() {
 
         const tr = document.createElement('tr');
 
-        tr.innerHTML = `<td colspan="8" style="text-align: center; color: var(--text-muted); padding: 18px 12px;">${t('status_no_filter_data')}</td>`;
+        tr.innerHTML = `<td colspan="4" style="text-align: center; color: var(--text-muted); padding: 18px 12px;">${t('status_no_filter_data')}</td>`;
 
         list.appendChild(tr);
 
@@ -5995,110 +6013,48 @@ function renderUsageList() {
         const inputTokens = stats.input_tokens_24h || 0;
         const outputTokens = stats.output_tokens_24h || 0;
         const totalTokens = stats.total_tokens_24h || 0;
-        const credentialLabel = filename === '__gateway_unassigned__.json' ? 'Gateway / unassigned' : filename;
-        const resetPayload = JSON.stringify(filename).replace(/</g, '\\u003c');
+        const successRate = calls24h > 0 ? Math.round((successfulCalls / calls24h) * 100) : 0;
+        const isUnassigned = filename === '__gateway_unassigned__.json';
+        const providerMeta = isUnassigned
+            ? { name: 'Gateway', logo: '/frontend/assets/logo.png' }
+            : getCredentialProviderMeta({ provider: stats.provider || 'Antigravity' }, 'usage');
+        const accountLabel = isUnassigned
+            ? 'No credential assigned'
+            : (stats.user_email || t('email_not_fetched'));
+        const providerLogo = providerMeta.logo
+            ? `<img src="${providerMeta.logo}" alt="${escapeHtml(providerMeta.name)} logo">`
+            : `<span>${escapeHtml(providerMeta.name.charAt(0))}</span>`;
 
         tr.innerHTML = `
 
-            <td style="font-size: 13px; color: var(--color-ink); word-break: break-all;">${escapeHtml(credentialLabel)}</td>
-
-            <td style="font-weight: 600; color: var(--color-primary); font-size: 14px;">${formatUsageNumber(calls24h)}</td>
-
-            <td>${formatUsageNumber(successfulCalls)}</td>
-
-            <td>${formatUsageNumber(failedCalls)}</td>
-
-            <td>${formatUsageNumber(inputTokens)}</td>
-
-            <td>${formatUsageNumber(outputTokens)}</td>
-
-            <td>${formatUsageNumber(totalTokens)}</td>
+            <td>
+                <div class="usage-credential-identity">
+                    <div class="cred-provider-logo" aria-hidden="true">${providerLogo}</div>
+                    <div class="usage-credential-copy">
+                        <div class="usage-credential-name">${escapeHtml(accountLabel)}</div>
+                        <div class="usage-credential-meta">${escapeHtml(providerMeta.name)}</div>
+                    </div>
+                </div>
+            </td>
 
             <td>
+                <div class="usage-cell-primary">${formatUsageNumber(calls24h)} requests</div>
+                <div class="usage-cell-meta">${formatUsageNumber(successfulCalls)} successful / ${formatUsageNumber(failedCalls)} failed</div>
+            </td>
 
-                <button class="btn btn-secondary btn-small" onclick="resetSingleUsageStats(${resetPayload})">${t('btn_reset_stats')}</button>
+            <td>
+                <div class="usage-cell-primary">${successRate}%</div>
+                <div class="usage-cell-meta">${calls24h > 0 ? `${formatUsageNumber(successfulCalls)} of ${formatUsageNumber(calls24h)} succeeded` : 'No traffic recorded'}</div>
+            </td>
 
+            <td>
+                <div class="usage-cell-primary">${formatUsageNumber(totalTokens)} total</div>
+                <div class="usage-cell-meta">Input ${formatUsageNumber(inputTokens)} / output ${formatUsageNumber(outputTokens)}</div>
             </td>
 
         `;
 
         list.appendChild(tr);
-
-    }
-
-}
-
-async function resetSingleUsageStats(filename) {
-
-    if (!(await showConfirmModal(t('confirm_reset_stats', {filename: filename})))) return;
-
-    try {
-
-        const response = await fetch('./api/usage/reset', {
-
-            method: 'POST',
-
-            headers: getAuthHeaders(),
-
-            body: JSON.stringify({ filename })
-
-        });
-
-        const data = await response.json();
-
-        if (response.ok && data.success) {
-
-            showStatus(data.message, 'success');
-
-            await refreshUsageStats();
-
-        } else {
-
-            showStatus(t('reset_failed_datamessage_datadetail', {data_message____data_detail____data_error: data.message || data.detail || data.error || t('unknown_error')}), 'error');
-
-        }
-
-    } catch (error) {
-
-        showStatus(t('status_net_error', {error: error.message}), 'error');
-
-    }
-
-}
-
-async function resetAllUsageStats() {
-
-    if (!(await showConfirmModal(t('confirm_reset_usage_statistics')))) return;
-
-    try {
-
-        const response = await fetch('./api/usage/reset', {
-
-            method: 'POST',
-
-            headers: getAuthHeaders(),
-
-            body: JSON.stringify({})
-
-        });
-
-        const data = await response.json();
-
-        if (response.ok && data.success) {
-
-            showStatus(data.message, 'success');
-
-            await refreshUsageStats();
-
-        } else {
-
-            showStatus(t('reset_failed_datamessage_datadetail', {data_message____data_detail____data_error: data.message || data.detail || data.error || t('unknown_error')}), 'error');
-
-        }
-
-    } catch (error) {
-
-        showStatus(t('status_net_error', {error: error.message}), 'error');
 
     }
 

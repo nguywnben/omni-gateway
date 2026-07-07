@@ -651,7 +651,7 @@ code {
 
 .metric-row {
     display: grid;
-    gap: 8px;
+    gap: 12px;
 }
 
 .endpoint-code-card,
@@ -995,6 +995,47 @@ button.endpoint-code-card:hover {
 
 .usage-table tr:last-child td {
     border-bottom: 0;
+}
+
+.usage-cell-primary {
+    color: var(--text);
+    font-size: 13px;
+    font-weight: 680;
+    line-height: 1.35;
+}
+
+.usage-cell-meta {
+    margin-top: 4px;
+    color: var(--text-soft);
+    font-size: 12px;
+    line-height: 1.35;
+}
+
+.usage-credential-identity {
+    display: grid;
+    grid-template-columns: 24px minmax(0, 1fr);
+    align-items: center;
+    gap: 10px;
+    min-width: 0;
+}
+
+.usage-credential-copy {
+    min-width: 0;
+}
+
+.usage-credential-name {
+    color: var(--text);
+    font-size: 13px;
+    font-weight: 680;
+    line-height: 1.35;
+    word-break: break-word;
+}
+
+.usage-credential-meta {
+    margin-top: 4px;
+    color: var(--text-soft);
+    font-size: 12px;
+    line-height: 1.35;
 }
 
 label {
