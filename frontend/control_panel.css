@@ -118,6 +118,7 @@ code {
 }
 
 .login-wrapper {
+    position: relative;
     min-height: 100vh;
     display: flex;
     align-items: center;
@@ -170,6 +171,28 @@ code {
 .login-form label {
     margin-bottom: 0;
     pointer-events: none;
+}
+
+.login-footer {
+    position: absolute;
+    left: 32px;
+    right: 32px;
+    bottom: 22px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    color: var(--text-soft);
+    font-size: 12px;
+    line-height: 1.4;
+    text-align: center;
+}
+
+.login-footer span + span::before,
+.site-footer span + span::before {
+    content: "/";
+    margin-right: 8px;
+    color: var(--border-strong);
 }
 
 .dashboard-wrapper {
@@ -285,6 +308,20 @@ code {
     width: min(100%, 1240px);
     margin: 0 auto;
     padding: 34px 40px 56px;
+}
+
+.site-footer {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    margin-top: 34px;
+    padding-top: 18px;
+    border-top: 1px solid var(--border);
+    color: var(--text-soft);
+    font-size: 12px;
+    line-height: 1.4;
+    text-align: center;
 }
 
 .mobile-topbar {
@@ -2216,6 +2253,21 @@ textarea[readonly] {
 }
 
 @media (max-width: 820px) {
+    .login-wrapper {
+        padding: 24px 16px 72px;
+    }
+
+    .login-footer,
+    .site-footer {
+        flex-wrap: wrap;
+    }
+
+    .login-footer {
+        left: 16px;
+        right: 16px;
+        bottom: 16px;
+    }
+
     .message-modal-overlay {
         padding: 14px;
     }

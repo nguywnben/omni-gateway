@@ -11,6 +11,7 @@ from paths import VERSION_FILE
 
 
 router = APIRouter(prefix="/api/version", tags=["version"])
+DEFAULT_UPDATE_VERSION_URL = "https://raw.githubusercontent.com/nguywnben/omni-gateway/main/backend/version.txt"
 
 
 @router.get("/info")
@@ -56,13 +57,7 @@ async def get_version_info(check_update: bool = False):
                 from core.httpx_client import get_async
 
 
-                update_version_url = os.getenv("UPDATE_VERSION_URL", "").strip()
-                if not update_version_url:
-                    response_data['check_update'] = False
-                    response_data['update_error'] = "UPDATE_VERSION_URL is not configured."
-                    return JSONResponse(response_data)
-
-                resp = await get_async(update_version_url, timeout=10.0)
+                resp = await get_async(DEFAULT_UPDATE_VERSION_URL, timeout=10.0)
 
                 if resp.status_code == 200:
 
