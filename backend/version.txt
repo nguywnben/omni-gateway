@@ -1,4 +1,4 @@
-full_hash=9c1af7a8b0b3d5f3384431a207c9f89e6cf8ae90
-short_hash=9c1af7a
-message=docs: add credential pool preview
-date=2026-07-08 15:52:24 +0700
+full_hash=6944c030b0630316f4af7c538220fc6ab3a543a4
+short_hash=6944c03
+message=docs: make deployment guidance production-first
+date=2026-07-08 16:12:14 +0700
