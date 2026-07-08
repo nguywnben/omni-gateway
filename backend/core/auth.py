@@ -15,6 +15,7 @@ from config import (
     get_antigravity_user_agent,
     get_code_assist_oauth_client_config,
     get_config_value,
+    get_server_port,
 )
 from log import log
 from .google_oauth_api import Credentials, Flow, enable_required_apis, fetch_project_id_and_tier, get_user_projects, select_default_project
@@ -90,6 +91,19 @@ class _OAuthLibPatcher:
         if self.original_validate:
             self.module.validate_token_parameters = self.original_validate
 auth_flows = {}
+
+def accept_oauth_callback(code: Optional[str], state: Optional[str]) -> tuple[bool, str]:
+    """Record an OAuth callback code for an active authorization flow."""
+    log.info(f'Received OAuth callback for state {state or "<missing>"}.')
+    if not code or not state:
+        return False, 'The OAuth callback is missing a code or state parameter.'
+    if state not in auth_flows:
+        return False, 'The OAuth session was not found or has expired.'
+
+    auth_flows[state]['code'] = code
+    auth_flows[state]['completed'] = True
+    log.info(f'OAuth callback accepted for state {state}.')
+    return True, 'OAuth authentication successful.'
 MAX_AUTH_FLOWS = 20
 DEFAULT_PROJECT_ID = 'gemini-pro-1751713012-07fc4dfd'
 
@@ -156,11 +170,8 @@ class AuthCallbackHandler(BaseHTTPRequestHandler):
         query_components = parse_qs(urlparse(self.path).query)
         code = query_components.get('code', [None])[0]
         state = query_components.get('state', [None])[0]
-        log.info(f'Received OAuth callback for state {state or "<missing>"}.')
-        if code and state and (state in auth_flows):
-            auth_flows[state]['code'] = code
-            auth_flows[state]['completed'] = True
-            log.info(f'OAuth callback accepted for state {state}.')
+        accepted, message = accept_oauth_callback(code, state)
+        if accepted:
             self.send_response(200)
             self.send_header('Content-type', 'text/html')
             self.end_headers()
@@ -169,7 +180,7 @@ class AuthCallbackHandler(BaseHTTPRequestHandler):
             self.send_response(400)
             self.send_header('Content-type', 'text/html')
             self.end_headers()
-            self.wfile.write(b'<h1>Authentication failed.</h1><p>Please try again.</p>')
+            self.wfile.write(f'<h1>Authentication failed.</h1><p>{message}</p>'.encode('utf-8'))
 
     def log_message(self, format, *args):
         pass
@@ -187,16 +198,23 @@ async def create_auth_url(project_id: Optional[str]=None, user_session: str=None
             missing_config_error = 'Code Assist OAuth client configuration is unavailable.'
         if not client_id or not client_secret:
             return {'success': False, 'error': missing_config_error, 'error_code': 'missing_oauth_client_config'}
-        callback_port = await find_available_port()
-        callback_url = f'http://{CALLBACK_HOST}:{callback_port}'
-        try:
-            callback_server = create_callback_server(callback_port)
-            server_thread = threading.Thread(target=callback_server.serve_forever, daemon=True, name=f'OAuth-Server-{callback_port}')
-            server_thread.start()
-            log.info(f'OAuth callback server started on {callback_url}.')
-        except Exception as e:
-            log.error(f'Failed to start OAuth callback server on port {callback_port}: {e}')
-            return {'success': False, 'error': f'Failed to start OAuth callback server on port {callback_port}: {str(e)}'}
+        callback_server = None
+        server_thread = None
+        if mode == 'primary':
+            callback_port = await get_server_port()
+            callback_url = f'http://{CALLBACK_HOST}:{callback_port}/callback'
+            log.info(f'Provider OAuth callback will return to {callback_url}.')
+        else:
+            callback_port = await find_available_port()
+            callback_url = f'http://{CALLBACK_HOST}:{callback_port}'
+            try:
+                callback_server = create_callback_server(callback_port)
+                server_thread = threading.Thread(target=callback_server.serve_forever, daemon=True, name=f'OAuth-Server-{callback_port}')
+                server_thread.start()
+                log.info(f'OAuth callback server started on {callback_url}.')
+            except Exception as e:
+                log.error(f'Failed to start OAuth callback server on port {callback_port}: {e}')
+                return {'success': False, 'error': f'Failed to start OAuth callback server on port {callback_port}: {str(e)}'}
         flow = Flow(client_id=client_id, client_secret=client_secret, scopes=scopes, redirect_uri=callback_url)
         if user_session:
             state = f'{user_session}_{str(uuid.uuid4())}'
