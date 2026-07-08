@@ -189,7 +189,6 @@ async def create_auth_url(
     project_id: Optional[str]=None,
     user_session: str=None,
     mode: str='code_assist',
-    callback_origin: Optional[str]=None,
 ) -> Dict[str, Any]:
     """Internal implementation detail."""
     try:
@@ -207,7 +206,7 @@ async def create_auth_url(
         server_thread = None
         if mode == 'primary':
             callback_port = await get_server_port()
-            callback_url = f'{callback_origin.rstrip("/")}/callback' if callback_origin else f'http://{CALLBACK_HOST}:{callback_port}/callback'
+            callback_url = f'http://{CALLBACK_HOST}:{callback_port}/callback'
             log.info(f'Provider OAuth callback will return to {callback_url}.')
         else:
             callback_port = await find_available_port()

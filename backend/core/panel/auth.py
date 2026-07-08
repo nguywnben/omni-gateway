@@ -7,7 +7,6 @@ import os
 import re
 import time
 from typing import Any, Dict, List
-from urllib.parse import urlparse
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import JSONResponse
@@ -63,42 +62,6 @@ def _client_identity(request: Request) -> str:
     if forwarded_for:
         return forwarded_for.split(",", 1)[0].strip()
     return request.client.host if request.client else "unknown"
-
-
-def _normalize_origin(value: str) -> str | None:
-    raw_value = (value or "").strip()
-    if not raw_value:
-        return None
-
-    if "://" not in raw_value:
-        raw_value = f"http://{raw_value}"
-
-    parsed = urlparse(raw_value)
-    if parsed.scheme not in {"http", "https"} or not parsed.netloc:
-        return None
-
-    return f"{parsed.scheme}://{parsed.netloc}"
-
-
-def _request_origin(request: Request) -> str:
-    for header_name in ("origin", "referer"):
-        origin = _normalize_origin(request.headers.get(header_name, ""))
-        if origin:
-            return origin
-
-    forwarded_host = request.headers.get("x-forwarded-host", "").split(",", 1)[0].strip()
-    host = forwarded_host or request.headers.get("host", "").split(",", 1)[0].strip()
-    if host:
-        scheme = request.headers.get("x-forwarded-proto", "").split(",", 1)[0].strip()
-        if scheme not in {"http", "https"}:
-            scheme = request.url.scheme or "http"
-        origin = _normalize_origin(f"{scheme}://{host}")
-        if origin:
-            return origin
-
-    fallback_netloc = request.url.netloc or "127.0.0.1:4283"
-    fallback_scheme = request.url.scheme or "http"
-    return _normalize_origin(str(request.base_url)) or f"{fallback_scheme}://{fallback_netloc}"
 
 
 def _recent_failures(client_id: str) -> List[float]:
@@ -383,22 +346,21 @@ async def complete_setup(request: SetupRequest):
 
 
 @router.post("/start")
-async def start_auth(payload: AuthStartRequest, request: Request, token: str = Depends(verify_panel_token)):
+async def start_auth(request: AuthStartRequest, token: str = Depends(verify_panel_token)):
     """Internal implementation detail."""
     try:
 
-        project_id = payload.project_id
+        project_id = request.project_id
         if not project_id:
             log.info("No Project ID was provided; auto-detection will be used.")
 
 
         user_session = token if token else None
-        mode = validate_mode(payload.mode)
+        mode = validate_mode(request.mode)
         result = await create_auth_url(
             project_id,
             user_session,
             mode=mode,
-            callback_origin=_request_origin(request) if mode == "primary" else None,
         )
 
         if result["success"]:
