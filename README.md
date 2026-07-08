@@ -15,6 +15,10 @@ Modern coding workflows often mix clients and providers: OpenAI-compatible tools
 - Streaming resilience: supports SSE streaming, pseudo-streaming for clients that require streamed output, and anti-truncation retries for long generations.
 - Control panel: ships with a local web console for credentials, logs, configuration, usage, and version information.
 
+## Console Preview
+
+![Omni Gateway credential pool](docs/assets/screenshots/credential-pool.png)
+
 ## Architecture
 
 ```text
