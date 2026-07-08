@@ -464,6 +464,8 @@ function navigate(path, pushState = true) {
 
         if (mainEl) mainEl.style.setProperty('display', 'none', 'important');
 
+        resetConsoleScroll();
+
         return;
 
     }
@@ -487,6 +489,8 @@ function navigate(path, pushState = true) {
         if (loginEl) loginEl.style.setProperty('display', 'flex', 'important');
 
         if (mainEl) mainEl.style.setProperty('display', 'none', 'important');
+
+        resetConsoleScroll();
 
         return;
 
@@ -555,6 +559,8 @@ function navigate(path, pushState = true) {
 
     const targetContent = document.getElementById(tabName + 'Tab');
 
+    const shouldResetScroll = !currentContent || currentContent !== targetContent;
+
     document.querySelectorAll('.tab').forEach(tab => tab.classList.remove('active'));
 
     const targetTabButton = document.querySelector(`.tab[onclick*="'${tabName}'"]`);
@@ -579,7 +585,49 @@ function navigate(path, pushState = true) {
 
         triggerTabDataLoad(tabName);
 
+        if (shouldResetScroll) {
+
+            resetConsoleScroll(targetContent);
+
+        }
+
     }
+
+}
+
+function resetConsoleScroll(activeContent = null) {
+
+    window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+
+    document.documentElement.scrollTop = 0;
+
+    document.documentElement.scrollLeft = 0;
+
+    document.body.scrollTop = 0;
+
+    document.body.scrollLeft = 0;
+
+    const scrollTargets = [
+
+        document.getElementById('mainSection'),
+
+        document.querySelector('.dashboard-main'),
+
+        document.querySelector('.dashboard-wrapper'),
+
+        activeContent
+
+    ];
+
+    scrollTargets.forEach(target => {
+
+        if (!target) return;
+
+        target.scrollTop = 0;
+
+        target.scrollLeft = 0;
+
+    });
 
 }
 
@@ -6693,7 +6741,41 @@ async function checkForUpdates() {
 
     if (!checkBtn) return;
 
-    const originalText = checkBtn.textContent;
+    if (!checkBtn.dataset.defaultText) {
+
+        checkBtn.dataset.defaultText = checkBtn.textContent.trim() || 'Check for updates';
+
+    }
+
+    const originalText = checkBtn.dataset.defaultText;
+
+    const hadUpdateAvailable = checkBtn.classList.contains('update-available');
+
+    if (checkBtn._resetTimer) {
+
+        clearTimeout(checkBtn._resetTimer);
+
+        checkBtn._resetTimer = null;
+
+    }
+
+    checkBtn.classList.remove('update-available');
+
+    const restoreIdleState = () => {
+
+        if (hadUpdateAvailable) {
+
+            checkBtn.textContent = t('new_version_available');
+
+            checkBtn.classList.add('update-available');
+
+            return;
+
+        }
+
+        checkBtn.textContent = originalText;
+
+    };
 
     try {
 
@@ -6717,31 +6799,23 @@ async function checkForUpdates() {
 
                 showStatus(updateMsg.replace(/\n/g, ' '), 'warning');
 
-                checkBtn.style.backgroundColor = '#ffc107';
-
                 checkBtn.textContent = t('new_version_available');
 
-                setTimeout(() => {
-
-                    checkBtn.style.backgroundColor = '#17a2b8';
-
-                    checkBtn.textContent = originalText;
-
-                }, 5000);
+                checkBtn.classList.add('update-available');
 
             } else if (data.has_update === false) {
 
                 showStatus(t('already_up_to_date'), 'success');
 
-                checkBtn.style.backgroundColor = '#28a745';
-
                 checkBtn.textContent = t('already_up_to_date_dup');
 
-                setTimeout(() => {
+                checkBtn._resetTimer = setTimeout(() => {
 
-                    checkBtn.style.backgroundColor = '#17a2b8';
+                    checkBtn.classList.remove('update-available');
 
                     checkBtn.textContent = originalText;
+
+                    checkBtn._resetTimer = null;
 
                 }, 3000);
 
@@ -6769,7 +6843,7 @@ async function checkForUpdates() {
 
         if (checkBtn.textContent === t('checking')) {
 
-            checkBtn.textContent = originalText;
+            restoreIdleState();
 
         }
 
