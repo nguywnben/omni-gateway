@@ -1,4 +1,4 @@
-full_hash=da3a9eea0a48f68e05392d6fe681e4d066c80315
-short_hash=da3a9ee
-message=feat: add site footer and fixed update source
-date=2026-07-07 22:16:03 +0700
+full_hash=9c1af7a8b0b3d5f3384431a207c9f89e6cf8ae90
+short_hash=9c1af7a
+message=docs: add credential pool preview
+date=2026-07-08 15:52:24 +0700
