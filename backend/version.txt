@@ -1,4 +1,4 @@
-full_hash=97c513b456129a471b3b280a5ee78ec956acd3a4
-short_hash=97c513b
-message=fix: support clipboard copy on HTTP deployments
-date=2026-07-08 19:14:17 +0700
+full_hash=bf130af1b3f558b82851491499740984cb49d38e
+short_hash=bf130af
+message=fix: use active host for provider oauth callback
+date=2026-07-08 22:38:26 +0700
