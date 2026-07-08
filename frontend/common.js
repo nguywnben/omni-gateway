@@ -1835,7 +1835,7 @@ function buildMessageResultDetails(label, value, options = {}) {
 
     return `
         <details class="message-result-details"${options.open ? ' open' : ''}>
-            <summary>${escapeHtml(label || 'Response Details')}</summary>
+            <summary>${escapeHtml(label || 'Details')}</summary>
             <pre>${escapeHtml(text)}</pre>
         </details>
     `;
@@ -1844,12 +1844,21 @@ function buildMessageResultDetails(label, value, options = {}) {
 
 function buildApiResultHtml(options = {}) {
 
+    const introHtml = options.intro
+        ? `<div class="message-result-intro">${renderDialogMessage(ensureTerminalPunctuation(options.intro))}</div>`
+        : '';
+
     const headingHtml = options.heading
         ? `<div class="message-result-heading">${escapeHtml(options.heading)}</div>`
         : '';
 
     const summaryHtml = options.rows?.length
-        ? `<div class="message-result-summary">${renderMessageResultRows(options.rows)}</div>`
+        ? `
+            <div class="message-result-section">
+                <div class="message-result-section-title">${escapeHtml(options.summaryLabel || 'Summary')}</div>
+                <div class="message-result-summary">${renderMessageResultRows(options.rows)}</div>
+            </div>
+        `
         : '';
 
     const noteHtml = options.note
@@ -1857,16 +1866,18 @@ function buildApiResultHtml(options = {}) {
         : '';
 
     const detailsHtml = buildMessageResultDetails(
-        options.detailsLabel || 'Response Details',
+        options.detailsLabel || 'Details',
         options.details,
         { open: options.detailsOpen }
     );
 
     return `
         <div class="message-result-panel">
+            ${introHtml}
             ${headingHtml}
             ${summaryHtml}
             ${noteHtml}
+            ${options.extraHtml || ''}
             ${detailsHtml}
         </div>
     `;
@@ -1907,28 +1918,19 @@ function buildCredentialTestErrorHtml(filename, data, response) {
         resource ? ['Resource', resource] : null,
     ].filter(Boolean);
 
-    const summaryHtml = summaryRows.map(([label, value]) => `
-        <div class="test-error-row">
-            <div class="test-error-label">${escapeHtml(label)}</div>
-            <div class="test-error-value">${escapeHtml(String(value))}</div>
-        </div>
-    `).join('');
-
     const troubleshooterHtml = troubleshooterUrl
-        ? `<a class="message-link test-error-link" href="${escapeHtml(troubleshooterUrl)}" target="_blank" rel="noopener noreferrer">${t('open_troubleshooter')}</a>`
+        ? `<div class="message-result-actions"><a class="message-link" href="${escapeHtml(troubleshooterUrl)}" target="_blank" rel="noopener noreferrer">${t('open_troubleshooter')}</a></div>`
         : '';
 
-    return `
-        <div class="test-error-panel">
-            <div class="test-error-heading">${escapeHtml(t('status_action_failed', {error: t('btn_message_test')}))}</div>
-            <div class="test-error-summary">${summaryHtml}</div>
-            ${troubleshooterHtml}
-            <details class="test-error-details">
-                <summary>${escapeHtml(t('error_details'))}</summary>
-                <pre>${escapeHtml(rawDetails)}</pre>
-            </details>
-        </div>
-    `;
+    return buildApiResultHtml({
+        intro: 'The message test did not complete successfully. Review the provider status and raw error response below.',
+        rows: summaryRows,
+        summaryLabel: 'Failure summary',
+        extraHtml: troubleshooterHtml,
+        detailsLabel: 'Error details',
+        details: rawDetails,
+        detailsOpen: true,
+    });
 
 }
 
@@ -1939,7 +1941,9 @@ function buildCredentialTestResultHtml(filename, data, response, options = {}) {
     const statusMessage = data.message || (isRateLimited ? t('credential_rate_limited') : t('credential_available'));
 
     return buildApiResultHtml({
-        heading: isRateLimited ? 'Credential is rate limited.' : 'Credential test completed.',
+        intro: isRateLimited
+            ? 'The credential responded, but the provider reported a temporary rate limit. The router can continue with another available credential.'
+            : 'The credential completed a live message test successfully.',
         rows: [
             ['Result', isRateLimited ? 'Rate limited' : 'Successful'],
             [t('table_filename'), filename],
@@ -1947,9 +1951,7 @@ function buildCredentialTestResultHtml(filename, data, response, options = {}) {
             [t('credential_status_label').replace(':', ''), statusMessage],
             options.mode ? ['Mode', options.mode] : null,
         ].filter(Boolean),
-        note: statusMessage,
-        detailsLabel: 'Response Details',
-        details: data,
+        summaryLabel: 'Test summary',
     });
 
 }
@@ -1973,26 +1975,14 @@ function buildCredentialVerificationHtml(filename, data) {
         data.credit_amount !== undefined && data.credit_amount !== null ? ['Credit', data.credit_amount] : null,
     ].filter(Boolean);
 
-    const summaryHtml = rows.map(([label, value]) => `
-        <div class="message-result-row">
-            <div class="message-result-label">${escapeHtml(label)}</div>
-            <div class="message-result-value">${escapeHtml(String(value))}</div>
-        </div>
-    `).join('');
-
     const detailMessage = normalizeVerificationMessage(data.message);
-    const detailHtml = detailMessage
-        ? `<div class="message-result-note">${escapeHtml(ensureTerminalPunctuation(detailMessage))}</div>`
-        : '';
 
-    return `
-        <div class="message-result-panel">
-            <div class="message-result-heading">Credential verified.</div>
-            <div class="message-result-summary">${summaryHtml}</div>
-            ${detailHtml}
-            ${buildMessageResultDetails('Response Details', data)}
-        </div>
-    `;
+    return buildApiResultHtml({
+        intro: 'The credential was verified and its provider metadata was refreshed.',
+        rows,
+        summaryLabel: 'Verification summary',
+        note: detailMessage,
+    });
 
 }
 
@@ -2030,13 +2020,25 @@ function getCredentialModalContext(pathId, manager) {
 
 function buildCredentialContentHtml(filename, content) {
 
-    const rows = renderMessageResultRows([[t('table_filename'), filename]]);
+    const rows = renderMessageResultRows([
+        [t('table_filename'), filename],
+        content?.user_email || content?.email ? ['Email', content.user_email || content.email] : null,
+        content?.project_id ? ['Project ID', content.project_id] : null,
+        content?.expiry ? ['Expiry', content.expiry] : null,
+    ].filter(Boolean));
     const body = JSON.stringify(content, null, 2);
 
     return `
         <div class="message-result-panel">
-            <div class="message-result-summary">${rows}</div>
-            <pre class="message-modal-code">${escapeHtml(body)}</pre>
+            <div class="message-result-intro">This is the stored credential payload for the selected account.</div>
+            <div class="message-result-section">
+                <div class="message-result-section-title">Credential summary</div>
+                <div class="message-result-summary">${rows}</div>
+            </div>
+            <div class="message-result-section">
+                <div class="message-result-section-title">Credential payload</div>
+                <pre class="message-modal-code">${escapeHtml(body)}</pre>
+            </div>
         </div>
     `;
 
@@ -2054,20 +2056,35 @@ function quotaLevelFromUsedPercentage(usedPercentage) {
 function buildCredentialQuotaHtml(filename, data) {
 
     const models = data.models || {};
-    const rows = renderMessageResultRows([[t('table_filename'), filename]]);
+    const entries = Object.entries(models);
+    const summary = summarizeCredentialQuota(data);
+    const resetTimes = entries
+        .map(([, quotaData]) => quotaData?.resetTime)
+        .filter(Boolean);
+    const nextReset = resetTimes.length ? resetTimes.sort()[0] : '';
+    const rows = renderMessageResultRows([
+        [t('table_filename'), filename],
+        ['Tracked models', entries.length],
+        summary.label ? ['Average remaining quota', summary.label] : null,
+        nextReset ? ['Next reset', nextReset] : null,
+    ].filter(Boolean));
 
-    if (Object.keys(models).length === 0) {
+    if (entries.length === 0) {
 
         return `
             <div class="message-result-panel">
-                <div class="message-result-summary">${rows}</div>
+                <div class="message-result-intro">No quota information is available for this credential yet.</div>
+                <div class="message-result-section">
+                    <div class="message-result-section-title">Quota summary</div>
+                    <div class="message-result-summary">${rows}</div>
+                </div>
                 <div class="modal-empty-state">${escapeHtml(t('status_no_quota_info'))}</div>
             </div>
         `;
 
     }
 
-    const cards = Object.entries(models).map(([modelName, quotaData]) => {
+    const cards = entries.map(([modelName, quotaData]) => {
 
         const remainingFraction = Number(quotaData.remaining || 0);
         const resetTime = quotaData.resetTime || 'N/A';
@@ -2095,8 +2112,15 @@ function buildCredentialQuotaHtml(filename, data) {
 
     return `
         <div class="message-result-panel">
-            <div class="message-result-summary">${rows}</div>
-            <div class="modal-quota-grid">${cards}</div>
+            <div class="message-result-intro">Quota usage is grouped by model for the selected credential.</div>
+            <div class="message-result-section">
+                <div class="message-result-section-title">Quota summary</div>
+                <div class="message-result-summary">${rows}</div>
+            </div>
+            <div class="message-result-section">
+                <div class="message-result-section-title">Model quota</div>
+                <div class="modal-quota-grid">${cards}</div>
+            </div>
         </div>
     `;
 
@@ -2116,30 +2140,24 @@ function summarizeCredentialQuota(data) {
 
     }
 
-    let lowestRemaining = 100;
-    let lowestModel = '';
+    let remainingTotal = 0;
 
-    entries.forEach(([modelName, quotaData]) => {
+    entries.forEach(([, quotaData]) => {
 
         const remainingFraction = Number(quotaData?.remaining || 0);
         const remainingPercentage = Math.max(0, Math.min(100, Math.round(remainingFraction * 100)));
 
-        if (remainingPercentage <= lowestRemaining) {
-
-            lowestRemaining = remainingPercentage;
-            lowestModel = modelName;
-
-        }
+        remainingTotal += remainingPercentage;
 
     });
 
-    const usedPercentage = 100 - lowestRemaining;
+    const averageRemaining = Math.round(remainingTotal / entries.length);
+    const usedPercentage = 100 - averageRemaining;
     const level = quotaLevelFromUsedPercentage(usedPercentage);
 
     return {
         level,
-        label: `${lowestRemaining}% left`,
-        model: lowestModel,
+        label: `${averageRemaining}% left`,
         modelCount: entries.length,
     };
 
@@ -2159,7 +2177,7 @@ function renderCredentialQuotaPreview(pathId, filename, managerType) {
                     level: cached.summary.level,
                     label: cached.summary.label,
                     title: cached.summary.modelCount
-                        ? `${cached.summary.label} across ${cached.summary.modelCount} model${cached.summary.modelCount === 1 ? '' : 's'}`
+                        ? `Average quota: ${cached.summary.label} across ${cached.summary.modelCount} model${cached.summary.modelCount === 1 ? '' : 's'}`
                         : t('btn_view_quota_title'),
                 }
                 : { level: 'loading', label: t('quota_preview_loading'), title: t('card_loading_quota') };
@@ -2220,13 +2238,20 @@ function buildCredentialErrorsHtml(filename, data) {
 
     const errorCodes = data.error_codes || [];
     const errorMessages = data.error_messages || {};
-    const rows = renderMessageResultRows([[t('table_filename'), filename]]);
+    const rows = renderMessageResultRows([
+        [t('table_filename'), filename],
+        ['Stored errors', errorCodes.length],
+    ]);
 
     if (errorCodes.length === 0) {
 
         return `
             <div class="message-result-panel">
-                <div class="message-result-summary">${rows}</div>
+                <div class="message-result-intro">This credential has no stored provider errors.</div>
+                <div class="message-result-section">
+                    <div class="message-result-section-title">Error summary</div>
+                    <div class="message-result-summary">${rows}</div>
+                </div>
                 <div class="modal-empty-state success">
                     <strong>${escapeHtml(t('status_no_errors'))}</strong>
                     <span>${escapeHtml(t('status_credential_normal'))}</span>
@@ -2268,8 +2293,15 @@ function buildCredentialErrorsHtml(filename, data) {
 
     return `
         <div class="message-result-panel">
-            <div class="message-result-summary">${rows}</div>
-            <div class="message-error-list">${errorCards}</div>
+            <div class="message-result-intro">These are the latest provider errors recorded for this credential.</div>
+            <div class="message-result-section">
+                <div class="message-result-section-title">Error summary</div>
+                <div class="message-result-summary">${rows}</div>
+            </div>
+            <div class="message-result-section">
+                <div class="message-result-section-title">Error details</div>
+                <div class="message-error-list">${errorCards}</div>
+            </div>
         </div>
     `;
 
@@ -4181,12 +4213,11 @@ async function testCredential(filename) {
 
         if (response.status === 200 || isRateLimited) {
 
-            const statusMessage = data.message || (isRateLimited ? t('credential_rate_limited') : t('credential_available'));
-            const successMsg = `${t('status_action_success', {action: t('btn_message_test')})}\n${t('table_filename')}: ${filename}\n${t('credential_status_label')} ${statusMessage} (${logicalStatus || 200})`;
+            const resultHtml = buildCredentialTestResultHtml(filename, data, response, { mode: 'Code Assist' });
 
             showStatus(isRateLimited ? t('credential_rate_limited') : t('test_successful'), isRateLimited ? 'warning' : 'success');
 
-            showMessageModal('Message Test', successMsg, isRateLimited ? 'info' : 'success');
+            showMessageModal('Message Test', resultHtml, isRateLimited ? 'info' : 'success', {html: true});
 
             await AppState.creds.refresh();
 
@@ -4235,12 +4266,11 @@ async function testPrimaryCredential(filename) {
 
         if (response.status === 200 || isRateLimited) {
 
-            const statusMessage = data.message || (isRateLimited ? t('credential_rate_limited') : t('primary_credential_valid'));
-            const successMsg = `${t('status_action_success', {action: t('btn_message_test')})}\n${t('table_filename')}: ${filename}\n${t('credential_status_label')} ${statusMessage} (${logicalStatus || 200})`;
+            const resultHtml = buildCredentialTestResultHtml(filename, data, response, { mode: 'Provider' });
 
             showStatus(isRateLimited ? t('credential_rate_limited') : t('test_successful'), isRateLimited ? 'warning' : 'success');
 
-            showMessageModal('Message Test', successMsg, isRateLimited ? 'info' : 'success');
+            showMessageModal('Message Test', resultHtml, isRateLimited ? 'info' : 'success', {html: true});
 
             await AppState.primaryCreds.refresh();
 
