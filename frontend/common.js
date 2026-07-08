@@ -215,6 +215,8 @@ const TRANSLATIONS = {
         "provider_credential_skipped_body": "The credential was not added because the pool already has the same email with an equal or later expiry. File: {data_file_path}.",
         "provider_credential_skipped_title": "Credential already exists",
         "quota_details": "Quota details",
+        "quota_preview_loading": "Loading",
+        "quota_unavailable": "Unavailable",
         "refreshing_all_user_emails": "Refreshing all user emails...",
         "regenerate_success": "API key regenerated.",
         "resulterror_step_resultstep": "{result_error} (Step: {result_step})",
@@ -631,6 +633,8 @@ const AppState = {
     usageStatsData: {},
 
     usagePeriod: '1d',
+
+    quotaPreviewCache: {},
 
     cooldownTimerInterval: null
 
@@ -2098,6 +2102,86 @@ function buildCredentialQuotaHtml(filename, data) {
 
 }
 
+function summarizeCredentialQuota(data) {
+
+    const models = data?.models || {};
+    const entries = Object.entries(models);
+
+    if (!entries.length) {
+
+        return {
+            level: 'muted',
+            label: 'No quota',
+        };
+
+    }
+
+    let lowestRemaining = 100;
+    let lowestModel = '';
+
+    entries.forEach(([modelName, quotaData]) => {
+
+        const remainingFraction = Number(quotaData?.remaining || 0);
+        const remainingPercentage = Math.max(0, Math.min(100, Math.round(remainingFraction * 100)));
+
+        if (remainingPercentage <= lowestRemaining) {
+
+            lowestRemaining = remainingPercentage;
+            lowestModel = modelName;
+
+        }
+
+    });
+
+    const usedPercentage = 100 - lowestRemaining;
+    const level = quotaLevelFromUsedPercentage(usedPercentage);
+
+    return {
+        level,
+        label: `${lowestRemaining}% left`,
+        model: lowestModel,
+        modelCount: entries.length,
+    };
+
+}
+
+function renderCredentialQuotaPreview(pathId, filename, managerType) {
+
+    if (managerType !== 'primary') return '';
+
+    const cached = AppState.quotaPreviewCache[filename] || {};
+    const chipState = cached.loading
+        ? { level: 'loading', label: t('quota_preview_loading'), title: t('card_loading_quota') }
+        : cached.error
+            ? { level: 'danger', label: t('quota_unavailable'), title: cached.error }
+            : cached.summary
+                ? {
+                    level: cached.summary.level,
+                    label: cached.summary.label,
+                    title: cached.summary.modelCount
+                        ? `${cached.summary.label} across ${cached.summary.modelCount} model${cached.summary.modelCount === 1 ? '' : 's'}`
+                        : t('btn_view_quota_title'),
+                }
+                : { level: 'loading', label: t('quota_preview_loading'), title: t('card_loading_quota') };
+
+    return `
+        <button type="button" class="cred-quota-preview ${chipState.level}" id="quota-preview-${pathId}" onclick="loadPrimaryQuotaPreview('${pathId}')" title="${escapeHtml(chipState.title)}">
+            <span>${escapeHtml(chipState.label)}</span>
+        </button>
+    `;
+
+}
+
+function updateCredentialQuotaPreview(pathId, filename) {
+
+    const chip = document.getElementById(`quota-preview-${pathId}`);
+
+    if (!chip) return;
+
+    chip.outerHTML = renderCredentialQuotaPreview(pathId, filename, 'primary');
+
+}
+
 function renderCredentialErrorDetails(parsedMsg) {
 
     const error = parsedMsg?.error;
@@ -2573,6 +2657,14 @@ function createCredCard(credInfo, manager) {
 
     AppState.credentialCardIndex[pathId] = { filename, managerType };
 
+    const shouldAutoLoadQuota = managerType === 'primary' && !AppState.quotaPreviewCache[filename];
+
+    if (shouldAutoLoadQuota) {
+
+        AppState.quotaPreviewCache[filename] = { loading: true };
+
+    }
+
     const actionButtons = `
 
         ${status.disabled
@@ -2610,6 +2702,7 @@ function createCredCard(credInfo, manager) {
     `;
 
     const checkboxClass = manager.getElementId('file-checkbox');
+    const quotaPreview = renderCredentialQuotaPreview(pathId, filename, managerType);
 
     div.innerHTML = `
 
@@ -2626,6 +2719,8 @@ function createCredCard(credInfo, manager) {
                         <div class="${accountClass}">${escapeHtml(accountLabel)}</div>
                     </div>
                 </div>
+
+                ${quotaPreview}
 
             </div>
 
@@ -2657,6 +2752,12 @@ function createCredCard(credInfo, manager) {
         });
 
     });
+
+    if (shouldAutoLoadQuota) {
+
+        setTimeout(() => loadPrimaryQuotaPreview(pathId), 0);
+
+    }
 
     return div;
 
@@ -3043,6 +3144,38 @@ function initTabSlider() {
 }
 
 document.addEventListener('DOMContentLoaded', initTabSlider);
+
+function initPoolToolsMenu() {
+
+    document.addEventListener('click', (event) => {
+
+        document.querySelectorAll('.pool-tools[open]').forEach((menu) => {
+
+            if (!menu.contains(event.target)) {
+
+                menu.removeAttribute('open');
+
+            }
+
+        });
+
+    });
+
+    document.addEventListener('keydown', (event) => {
+
+        if (event.key !== 'Escape') return;
+
+        document.querySelectorAll('.pool-tools[open]').forEach((menu) => {
+
+            menu.removeAttribute('open');
+
+        });
+
+    });
+
+}
+
+document.addEventListener('DOMContentLoaded', initPoolToolsMenu);
 
 window.addEventListener('resize', () => {
 
@@ -4211,23 +4344,26 @@ async function togglePrimaryQuotaDetails(pathId) {
 
     try {
 
-        const response = await fetch(`./api/creds/quota/${encodeURIComponent(filename)}?mode=provider`, {
-
-            method: 'GET',
-
-            headers: getAuthHeaders()
-
-        });
-
-        const data = await response.json();
+        const { response, data } = await fetchPrimaryQuota(filename);
 
         if (response.ok && data.success) {
+
+            AppState.quotaPreviewCache[filename] = {
+                summary: summarizeCredentialQuota(data),
+                data,
+            };
+
+            updateCredentialQuotaPreview(pathId, filename);
 
             showMessageModal(t('quota_details'), buildCredentialQuotaHtml(filename, data), 'info', {html: true});
 
         } else {
 
             const errorMsg = data.error || t('failed_to_get_quota_information');
+
+            AppState.quotaPreviewCache[filename] = { error: errorMsg };
+
+            updateCredentialQuotaPreview(pathId, filename);
 
             showStatus(errorMsg, 'error');
 
@@ -4239,9 +4375,72 @@ async function togglePrimaryQuotaDetails(pathId) {
 
         const errorMsg = t('failed_to_get_quota_information_err', {error_message: error.message});
 
+        AppState.quotaPreviewCache[filename] = { error: errorMsg };
+
+        updateCredentialQuotaPreview(pathId, filename);
+
         showStatus(errorMsg, 'error');
 
         showMessageModal(t('quota_details'), errorMsg, 'error');
+
+    }
+
+}
+
+async function fetchPrimaryQuota(filename) {
+
+    const response = await fetch(`./api/creds/quota/${encodeURIComponent(filename)}?mode=provider`, {
+
+        method: 'GET',
+
+        headers: getAuthHeaders()
+
+    });
+
+    const data = await response.json();
+
+    return { response, data };
+
+}
+
+async function loadPrimaryQuotaPreview(pathId) {
+
+    const { filename } = getCredentialModalContext(pathId, AppState.primaryCreds);
+
+    if (!filename) return;
+
+    AppState.quotaPreviewCache[filename] = { loading: true };
+
+    updateCredentialQuotaPreview(pathId, filename);
+
+    try {
+
+        const { response, data } = await fetchPrimaryQuota(filename);
+
+        if (response.ok && data.success) {
+
+            AppState.quotaPreviewCache[filename] = {
+                summary: summarizeCredentialQuota(data),
+                data,
+            };
+
+        } else {
+
+            AppState.quotaPreviewCache[filename] = {
+                error: data.error || t('failed_to_get_quota_information'),
+            };
+
+        }
+
+    } catch (error) {
+
+        AppState.quotaPreviewCache[filename] = {
+            error: t('failed_to_get_quota_information_err', {error_message: error.message}),
+        };
+
+    } finally {
+
+        updateCredentialQuotaPreview(pathId, filename);
 
     }
 

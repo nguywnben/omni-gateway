@@ -1350,6 +1350,70 @@ textarea[readonly] {
     margin-bottom: 0;
 }
 
+.pool-tools {
+    position: relative;
+    margin-left: auto;
+}
+
+.pool-tools summary {
+    min-height: 32px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 6px 11px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--surface);
+    color: var(--text-muted);
+    cursor: pointer;
+    font-size: 12px;
+    font-weight: 650;
+    list-style: none;
+}
+
+.pool-tools summary::-webkit-details-marker {
+    display: none;
+}
+
+.pool-tools summary:hover {
+    background: var(--control-hover);
+    border-color: var(--control-hover-border);
+    color: var(--text);
+}
+
+.pool-tools-menu {
+    position: absolute;
+    top: calc(100% + 6px);
+    right: 0;
+    z-index: 20;
+    min-width: 168px;
+    display: grid;
+    gap: 6px;
+    padding: 8px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--surface);
+}
+
+.pool-tool-btn {
+    min-height: 32px;
+    width: 100%;
+    padding: 6px 10px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--surface);
+    color: var(--text);
+    cursor: pointer;
+    font-size: 12px;
+    font-weight: 650;
+    text-align: left;
+}
+
+.pool-tool-btn:hover {
+    background: var(--control-hover);
+    border-color: var(--control-hover-border);
+}
+
 .selected-count,
 .pagination-info {
     color: var(--text-muted);
@@ -1420,7 +1484,7 @@ textarea[readonly] {
 
 .cred-title-row {
     display: grid;
-    grid-template-columns: auto minmax(0, 1fr);
+    grid-template-columns: auto minmax(0, 1fr) auto;
     align-items: start;
     gap: 10px;
 }
@@ -1477,6 +1541,60 @@ textarea[readonly] {
 
 .cred-email.empty {
     color: var(--text-soft);
+}
+
+.cred-quota-preview {
+    min-width: 0;
+    min-height: 24px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    justify-self: end;
+    padding: 4px 9px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--bg-subtle);
+    color: var(--text-muted);
+    cursor: pointer;
+    text-align: center;
+    white-space: nowrap;
+}
+
+.cred-quota-preview:hover {
+    background: var(--control-hover);
+    border-color: var(--control-hover-border);
+    color: var(--text);
+}
+
+.cred-quota-preview span {
+    color: var(--text);
+    font-size: 11px;
+    font-weight: 680;
+    line-height: 1;
+}
+
+.cred-quota-preview.success {
+    background: var(--success-bg);
+    border-color: #cce8d2;
+}
+
+.cred-quota-preview.info {
+    background: var(--info-bg);
+    border-color: #cdddfb;
+}
+
+.cred-quota-preview.warning {
+    background: var(--warning-bg);
+    border-color: #f0dfaa;
+}
+
+.cred-quota-preview.danger {
+    background: var(--danger-bg);
+    border-color: #f0c9c6;
+}
+
+.cred-quota-preview.loading {
+    pointer-events: none;
 }
 
 .cred-status {
@@ -2377,8 +2495,18 @@ textarea[readonly] {
     .filter-group,
     .page-actions,
     .manage-actions,
-    .batch-actions {
+    .batch-actions,
+    .pool-tools {
         width: 100%;
+    }
+
+    .pool-tools summary {
+        width: 100%;
+    }
+
+    .pool-tools-menu {
+        position: static;
+        margin-top: 6px;
     }
 
     .filter-select,
