@@ -307,7 +307,7 @@ code {
 .dashboard-content-container {
     width: min(100%, 1240px);
     margin: 0 auto;
-    padding: 34px 40px 56px;
+    padding: 40px;
 }
 
 .site-footer {
@@ -2323,7 +2323,7 @@ textarea[readonly] {
     }
 
     .dashboard-content-container {
-        padding: 24px 16px 42px;
+        padding: 16px;
     }
 
     .page-header {
