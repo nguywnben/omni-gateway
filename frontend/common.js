@@ -1643,28 +1643,66 @@ function toggleApiKeyVisibility() {
     setApiKeyVisibility(input.type === 'password');
 }
 
+async function copyTextToClipboard(text) {
+    const value = String(text || '');
+    if (!value) return false;
+
+    if (navigator.clipboard && window.isSecureContext) {
+        try {
+            await navigator.clipboard.writeText(value);
+            return true;
+        } catch (error) {
+            // Fall through to the legacy path below. Public HTTP deployments do
+            // not always expose the modern clipboard API.
+        }
+    }
+
+    const textarea = document.createElement('textarea');
+    textarea.value = value;
+    textarea.setAttribute('readonly', '');
+    textarea.style.position = 'fixed';
+    textarea.style.inset = '0 auto auto 0';
+    textarea.style.width = '1px';
+    textarea.style.height = '1px';
+    textarea.style.opacity = '0';
+    textarea.style.pointerEvents = 'none';
+
+    document.body.appendChild(textarea);
+    textarea.focus();
+    textarea.select();
+    textarea.setSelectionRange(0, textarea.value.length);
+
+    let copied = false;
+    try {
+        copied = document.execCommand('copy');
+    } catch (error) {
+        copied = false;
+    } finally {
+        document.body.removeChild(textarea);
+    }
+
+    return copied;
+}
+
+async function copyTextWithStatus(text) {
+    const copied = await copyTextToClipboard(text);
+    showStatus(t(copied ? 'copy_success' : 'copy_fail'), copied ? 'success' : 'error');
+    return copied;
+}
+
 function cpUrl(element) {
     const text = element.textContent || element.innerText;
     if (!text) return;
-    navigator.clipboard.writeText(text).then(() => {
-        showStatus(t('copy_success'), 'success');
-    }).catch(err => {
-        showStatus(t('copy_fail'), 'error');
-    });
+    copyTextWithStatus(text.trim());
 }
 
 function copyInputValue(inputId) {
     const input = document.getElementById(inputId);
     if (!input || !input.value || input.value === '...') return;
-    const copyPromise = navigator.clipboard.writeText(input.value);
     if (document.activeElement === input) {
         input.blur();
     }
-    copyPromise.then(() => {
-        showStatus(t('copy_success'), 'success');
-    }).catch(err => {
-        showStatus(t('copy_fail'), 'error');
-    });
+    copyTextWithStatus(input.value);
 }
 
 async function regenerateApiKey() {
