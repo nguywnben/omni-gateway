@@ -13,7 +13,7 @@ Modern coding workflows often mix clients and providers: OpenAI-compatible tools
 - Format translation: accepts OpenAI chat completions, Gemini native requests, and Anthropic Messages, then translates requests and streaming responses across formats.
 - Credential orchestration: manages multiple OAuth credential pools with health state, cooldown tracking, bulk upload, verification, and quota visibility.
 - Streaming resilience: supports SSE streaming, pseudo-streaming for clients that require streamed output, and anti-truncation retries for long generations.
-- Control panel: ships with a local web console for credentials, logs, configuration, usage, and version information.
+- Control panel: ships with a web console for credentials, logs, configuration, usage, and version information.
 
 ## Console Preview
 
@@ -44,9 +44,77 @@ frontend/    Management console HTML, CSS, and JavaScript
 deploy/      Docker, platform manifests, and install/start scripts
 ```
 
-## Quick Start
+## Deployment
 
-### Local Python
+Omni Gateway is intended for real deployments. Docker is the recommended path for VPS and server environments because it keeps the runtime isolated while preserving credentials and logs on the host.
+
+### Docker on a VPS
+
+Create persistent host directories first:
+
+```bash
+sudo mkdir -p /opt/omni-gateway/creds /opt/omni-gateway/logs
+```
+
+Start the service:
+
+```bash
+sudo docker run -d \
+  --name omni-gateway \
+  --pull always \
+  --restart unless-stopped \
+  -p 4283:4283 \
+  -v /opt/omni-gateway/creds:/app/backend/data/creds \
+  -v /opt/omni-gateway/logs:/app/backend/data/logs \
+  nguywnben/omni-gateway:latest
+```
+
+Open the control panel at:
+
+```text
+http://YOUR_SERVER_IP:4283
+```
+
+On first run, create the console password on the setup screen. No default password is shipped.
+
+If the server firewall is enabled, allow the gateway port:
+
+```bash
+sudo ufw allow 4283/tcp
+```
+
+View logs:
+
+```bash
+sudo docker logs -f omni-gateway
+```
+
+Update to the latest image:
+
+```bash
+sudo docker pull nguywnben/omni-gateway:latest
+sudo docker stop omni-gateway
+sudo docker rm omni-gateway
+```
+
+Then start the container again with the same `docker run` command above. The mounted `/opt/omni-gateway` directories preserve credentials, configuration, usage data, and logs across container updates.
+
+### Docker Compose
+
+For repository-based deployments:
+
+```bash
+git clone https://github.com/nguywnben/omni-gateway.git
+cd omni-gateway
+sudo mkdir -p /opt/omni-gateway/creds /opt/omni-gateway/logs
+docker compose -f deploy/docker-compose.yml up -d
+```
+
+The included compose file pulls `nguywnben/omni-gateway:latest` and uses `/opt/omni-gateway` by default for persistent host data. Set `DATA_DIR=/custom/path` before running compose if your server uses a different storage location.
+
+### Local Development
+
+Use the Python workflow when developing or debugging the gateway locally:
 
 ```bash
 python -m venv .venv
@@ -72,25 +140,7 @@ Open the control panel at:
 http://127.0.0.1:4283
 ```
 
-On first run, open the control panel and create the console password on the setup screen. No default password is shipped.
-
-### Docker
-
-```bash
-docker run -d \
-  --name omni-gateway \
-  -p 4283:4283 \
-  -v "$(pwd)/backend/data/creds:/app/backend/data/creds" \
-  nguywnben/omni-gateway:latest
-```
-
-### Docker Compose
-
-```bash
-docker compose -f deploy/docker-compose.yml up -d
-```
-
-The included compose file starts Omni Gateway with a persistent `backend/data/creds` volume.
+Local development uses the same first-run setup screen as the Docker deployment.
 
 ## Configuration
 
@@ -109,7 +159,7 @@ Omni Gateway reads configuration from environment variables first, then stored c
 | `PANEL_SESSION_TTL_SECONDS` | `86400` | Web console session lifetime in seconds. |
 | `PANEL_LOGIN_WINDOW_SECONDS` | `300` | Login rate-limit window in seconds. |
 | `PANEL_LOGIN_MAX_ATTEMPTS` | `10` | Failed login attempts allowed per client within the rate-limit window. |
-| `CREDENTIALS_DIR` | `./backend/data/creds` | Local credential storage directory. |
+| `CREDENTIALS_DIR` | `./backend/data/creds` | Credential storage directory. In Docker, persist `/app/backend/data/creds` with a host volume. |
 | `CODE_ASSIST_ENDPOINT` | `https://cloudcode-pa.googleapis.com` | Code Assist backend endpoint. |
 | `API_URL` | `https://daily-cloudcode-pa.googleapis.com` | Provider backend endpoint. |
 | `PROXY` | empty | Optional HTTP, HTTPS, or SOCKS proxy. |
@@ -133,6 +183,8 @@ Omni Gateway reads configuration from environment variables first, then stored c
 | `ANTIGRAVITY_API_URL` / `API_URL` | `https://daily-cloudcode-pa.googleapis.com` | Optional Google Antigravity upstream endpoint override. |
 | `USER_AGENT` / `ANTIGRAVITY_USER_AGENT` | `antigravity/cli/1.0.1 windows/amd64` | Optional Google Antigravity protocol User-Agent override. |
 | `ANTIGRAVITY_PAYLOAD_USER_AGENT` | `antigravity` | Optional payload-level Google Antigravity userAgent override. |
+| `LOG_LEVEL` | `info` | Runtime log level. |
+| `LOG_FILE` | `./backend/data/logs/omni-gateway.log` | File log destination. In Docker, persist `/app/backend/data/logs` with a host volume. |
 
 ## SDK Surfaces
 
@@ -231,7 +283,7 @@ Omni Gateway records request volume, success rate, credential attribution, and r
 ## Credential Workflow
 
 1. Start Omni Gateway.
-2. Open `http://127.0.0.1:4283`.
+2. Open `http://YOUR_SERVER_IP:4283` on a VPS, or `http://127.0.0.1:4283` for local development.
 3. Create the console password on the first-run setup screen, or sign in with `PANEL_PASSWORD` when it is preconfigured.
 4. Add credentials through OAuth or upload existing credential JSON files.
 5. Verify credentials and watch cooldown/error state in the panel.
@@ -244,7 +296,9 @@ Credential mode names:
 
 ## Storage
 
-Omni Gateway works out of the box with SQLite-backed local storage under the project data directories. For distributed deployments, configure a shared backend:
+Single-instance deployments use SQLite-backed storage in the mounted data directory. On Docker, keep `/app/backend/data/creds` and `/app/backend/data/logs` mounted to durable host paths such as `/opt/omni-gateway/creds` and `/opt/omni-gateway/logs`.
+
+For distributed or multi-instance deployments, configure a shared backend:
 
 ```bash
 MONGODB_URI=mongodb://localhost:27017
@@ -272,6 +326,8 @@ The payload can be a single credential object, an array, or `{ "credentials": [.
 
 ## Development
 
+This section is for contributors and local debugging. Production deployments should use Docker with persistent host volumes.
+
 ```bash
 pip install -r requirements.txt
 python -m compileall backend
@@ -289,8 +345,9 @@ git status --short
 
 - Never commit credential JSON files or `.env`.
 - Use a dedicated `API_KEY` for client integrations and a separate `PANEL_PASSWORD` for console access.
-- Put Omni Gateway behind TLS when reachable outside localhost.
+- Put Omni Gateway behind a reverse proxy with TLS when reachable outside localhost.
 - Set `CORS_ORIGINS` to explicit trusted origins when browser clients need cross-origin access.
+- Keep `/opt/omni-gateway` or your chosen `DATA_DIR` backed up before upgrading or moving servers.
 - Docker image publishing uses the `DOCKERHUB_USERNAME` and `DOCKERHUB_TOKEN` repository secrets. Set the optional `IMAGE_NAME` repository variable only when publishing to a custom Docker Hub image name.
 - Use MongoDB/PostgreSQL for multi-instance deployments.
 - Keep log retention and credential rotation policies aligned with your usage limits.

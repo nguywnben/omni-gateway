@@ -1,11 +1,7 @@
-version: '3.8'
-
 services:
   app:
     image: ${IMAGE:-nguywnben/omni-gateway:latest}
-    build:
-      context: ..
-      dockerfile: deploy/Dockerfile
+    pull_policy: always
     container_name: omni-gateway
     restart: unless-stopped
     ports:
@@ -24,8 +20,9 @@ services:
       - PANEL_LOGIN_WINDOW_SECONDS=${PANEL_LOGIN_WINDOW_SECONDS:-300}
       - PANEL_LOGIN_MAX_ATTEMPTS=${PANEL_LOGIN_MAX_ATTEMPTS:-10}
 
-      # Optional: Logging configuration
-      # - LOG_LEVEL=${LOG_LEVEL:-info}
+      # Logging configuration
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+      - LOG_FILE=${LOG_FILE:-./backend/data/logs/omni-gateway.log}
 
       # Optional: Redis configuration (for distributed storage)
       # - REDIS_URL=${REDIS_URL}
@@ -40,5 +37,5 @@ services:
       # Optional: Proxy configuration
       # - PROXY=${PROXY}
     volumes:
-      - ../backend/data/creds:/app/backend/data/creds
-
+      - ${DATA_DIR:-/opt/omni-gateway}/creds:/app/backend/data/creds
+      - ${DATA_DIR:-/opt/omni-gateway}/logs:/app/backend/data/logs
