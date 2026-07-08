@@ -1,4 +1,4 @@
-full_hash=cf52495ce756dea81b68155e420df88e257e2d25
-short_hash=cf52495
-message=fix: restore localhost provider oauth callback
-date=2026-07-08 22:50:32 +0700
+full_hash=b6061c4c3a858fa500e3840a6c82001c7254f9cf
+short_hash=b6061c4
+message=chore: harden gitignore rules
+date=2026-07-08 22:55:19 +0700
