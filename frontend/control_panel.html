@@ -458,7 +458,7 @@
                             <h2 class="card-title">Google Antigravity OAuth</h2>
                             <p class="card-copy provider-tool-copy">Generate an authorization link and save the account directly into the active pool.</p>
                             <div class="page-actions">
-                                <button type="button" class="btn" id="getPrimaryAuthBtn">Generate authorization link</button>
+                                <button type="button" class="btn" id="getPrimaryAuthBtn">Get provider authentication link</button>
                             </div>
 
                             <div id="primaryAuthUrlSection" class="hidden" style="margin-top: 18px;">
@@ -468,6 +468,12 @@
                                 </div>
                                 <div class="endpoint-code-card auth-link-card">
                                     <a id="primaryAuthUrl" href="#" target="_blank" rel="noreferrer">Open Google authorization</a>
+                                </div>
+
+                                <div id="primaryCallbackUrlSection" class="manual-callback-panel hidden">
+                                    <label for="primaryCallbackUrlInput">Callback URL</label>
+                                    <p class="card-copy provider-tool-copy">If Google opens a localhost page after sign-in, copy the full URL from that tab and paste it here.</p>
+                                    <textarea id="primaryCallbackUrlInput" rows="3" placeholder="http://localhost:11451/?state=...&code=..."></textarea>
                                 </div>
 
                                 <div class="page-actions" style="margin-top: 14px;">

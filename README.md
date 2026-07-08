@@ -289,6 +289,8 @@ Omni Gateway records request volume, success rate, credential attribution, and r
 5. Verify credentials and watch cooldown/error state in the panel.
 6. Point your coding tool to one of the API surfaces above.
 
+When adding Google Antigravity credentials from a VPS, Google may redirect the browser to a `localhost` callback URL after sign-in. If that page cannot be reached, copy the full URL from the browser address bar, return to the Providers page, paste it into `Callback URL`, and click `Save credentials`.
+
 Credential mode names:
 
 - `code_assist`: standard Code Assist credential pool.
