@@ -1,4 +1,4 @@
-full_hash=bf130af1b3f558b82851491499740984cb49d38e
-short_hash=bf130af
-message=fix: use active host for provider oauth callback
-date=2026-07-08 22:38:26 +0700
+full_hash=cf52495ce756dea81b68155e420df88e257e2d25
+short_hash=cf52495
+message=fix: restore localhost provider oauth callback
+date=2026-07-08 22:50:32 +0700
