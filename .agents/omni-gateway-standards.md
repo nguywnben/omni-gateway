@@ -61,7 +61,7 @@ Google Antigravity is the first supported provider workflow. It must be presente
 - Keep `.env.example` safe, complete, and copy-paste ready.
 - Use placeholders for private values. Public/bundled provider client settings may be shown when they are required for normal operation.
 - Treat Omni Gateway as a real deployment project, not a demo. Docker/VPS instructions should be production-first, use restart policies, and persist credentials/logs in durable host paths such as `/opt/omni-gateway`.
-- OAuth provider flows must account for VPS deployments. Google Antigravity should redirect to `localhost:4283/callback`, which works on local machines and intentionally lands on the user's browser machine when the console runs on a VPS. The UI must keep a clear manual callback URL path for that server scenario.
+- OAuth provider flows must account for VPS deployments. Google Antigravity should redirect to the active console host plus `/callback`, such as `http://YOUR_SERVER_IP:4283/callback` or a reverse-proxy domain. The UI must keep a clear manual callback URL path for environments where the browser opens a separate callback page.
 - Deployment service names, container names, default directories, and metadata should use `omni-gateway`.
 - Default MongoDB database names should use `omni_gateway`.
 - Docker Hub secrets should be named `DOCKERHUB_USERNAME` and `DOCKERHUB_TOKEN`.

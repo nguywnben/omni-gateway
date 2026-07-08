@@ -289,7 +289,7 @@ Omni Gateway records request volume, success rate, credential attribution, and r
 5. Verify credentials and watch cooldown/error state in the panel.
 6. Point your coding tool to one of the API surfaces above.
 
-When adding Google Antigravity credentials, Google redirects the browser to `http://localhost:4283/callback` after sign-in. On a local machine, Omni Gateway shows an OAuth success page. On a VPS, that `localhost` address belongs to the user's browser machine, so the page may not load; copy the full URL from the browser address bar, return to the Providers page, paste it into `Callback URL`, and click `Save credentials`.
+When adding Google Antigravity credentials, Google redirects the browser to the current Omni Gateway host, such as `http://127.0.0.1:4283/callback`, `http://YOUR_SERVER_IP:4283/callback`, or your reverse-proxy domain. If Google opens a separate callback page after sign-in, copy the full URL from the browser address bar, return to the Providers page, paste it into `Callback URL`, and click `Save credentials`.
 
 Credential mode names:
 

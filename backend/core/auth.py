@@ -185,7 +185,12 @@ class AuthCallbackHandler(BaseHTTPRequestHandler):
     def log_message(self, format, *args):
         pass
 
-async def create_auth_url(project_id: Optional[str]=None, user_session: str=None, mode: str='code_assist') -> Dict[str, Any]:
+async def create_auth_url(
+    project_id: Optional[str]=None,
+    user_session: str=None,
+    mode: str='code_assist',
+    callback_origin: Optional[str]=None,
+) -> Dict[str, Any]:
     """Internal implementation detail."""
     try:
         if mode == 'primary':
@@ -202,7 +207,7 @@ async def create_auth_url(project_id: Optional[str]=None, user_session: str=None
         server_thread = None
         if mode == 'primary':
             callback_port = await get_server_port()
-            callback_url = f'http://{CALLBACK_HOST}:{callback_port}/callback'
+            callback_url = f'{callback_origin.rstrip("/")}/callback' if callback_origin else f'http://{CALLBACK_HOST}:{callback_port}/callback'
             log.info(f'Provider OAuth callback will return to {callback_url}.')
         else:
             callback_port = await find_available_port()
@@ -238,7 +243,7 @@ async def create_auth_url(project_id: Optional[str]=None, user_session: str=None
         log.info(f'Created OAuth flow {state} using mode {mode}.')
         log.debug(f'OAuth redirect URI: {callback_url}')
         log.debug(f'OAuth auto project detection: {project_id is None}')
-        return {'auth_url': auth_url, 'state': state, 'callback_port': callback_port, 'success': True, 'auto_project_detection': project_id is None, 'detected_project_id': project_id}
+        return {'auth_url': auth_url, 'state': state, 'callback_port': callback_port, 'callback_url': callback_url, 'success': True, 'auto_project_detection': project_id is None, 'detected_project_id': project_id}
     except Exception as e:
         log.error(f'Failed to create OAuth authorization URL: {e}')
         return {'success': False, 'error': str(e)}
