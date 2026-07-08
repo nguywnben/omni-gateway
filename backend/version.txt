@@ -1,4 +1,4 @@
-full_hash=090985c0883c8e3fbf7e1c74eeca95695b84e9b0
-short_hash=090985c
-message=ci: publish docker image to github packages
-date=2026-07-08 23:04:18 +0700
+full_hash=82ac27f5d436c4d40b82edef790ee3cf1c836316
+short_hash=82ac27f
+message=fix: refine mobile console layout
+date=2026-07-08 23:40:10 +0700
