@@ -1,4 +1,4 @@
-full_hash=6944c030b0630316f4af7c538220fc6ab3a543a4
-short_hash=6944c03
-message=docs: make deployment guidance production-first
-date=2026-07-08 16:12:14 +0700
+full_hash=97c513b456129a471b3b280a5ee78ec956acd3a4
+short_hash=97c513b
+message=fix: support clipboard copy on HTTP deployments
+date=2026-07-08 19:14:17 +0700
