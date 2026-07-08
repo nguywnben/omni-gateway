@@ -640,6 +640,10 @@ const AppState = {
 
 };
 
+const STORAGE_KEYS = {
+    logAutoScroll: 'omni_gateway_log_auto_scroll',
+};
+
 // =====================================================================
 
 // =====================================================================
@@ -5136,6 +5140,30 @@ async function deduplicatePrimaryByEmail() {
 
 // =====================================================================
 
+function initLogAutoScrollPreference() {
+
+    const autoScroll = document.getElementById('autoScroll');
+
+    if (!autoScroll) return;
+
+    const savedValue = localStorage.getItem(STORAGE_KEYS.logAutoScroll);
+
+    if (savedValue !== null) {
+
+        autoScroll.checked = savedValue === 'true';
+
+    }
+
+    autoScroll.addEventListener('change', () => {
+
+        localStorage.setItem(STORAGE_KEYS.logAutoScroll, String(autoScroll.checked));
+
+    });
+
+}
+
+document.addEventListener('DOMContentLoaded', initLogAutoScrollPreference);
+
 function connectWebSocket() {
 
     if (AppState.logWebSocket && AppState.logWebSocket.readyState === WebSocket.OPEN) {
@@ -5188,7 +5216,7 @@ function connectWebSocket() {
 
                 filterLogs();
 
-                if (document.getElementById('autoScroll').checked) {
+                if (document.getElementById('autoScroll')?.checked) {
 
                     const logContainer = document.getElementById('logContainer');
 
