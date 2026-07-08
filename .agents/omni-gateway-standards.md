@@ -4,9 +4,9 @@ These rules define the shared quality bar for Omni Gateway. Apply them when edit
 
 ## Product Definition
 
-Omni Gateway is a universal AI router for coding tools. It provides smart auto-fallback, token compression, and seamless format translation so OpenAI, Anthropic, Google GenAI, and provider-native clients can share one stable routing layer.
+Omni Gateway is a universal AI router for coding tools. It provides smart auto-fallback, token-aware request cleanup, usage visibility, and seamless format translation so OpenAI, Anthropic, Google GenAI, and provider-native clients can share one stable routing layer.
 
-Antigravity is the first supported provider workflow. It must be presented as one provider inside Omni Gateway, not as the whole product.
+Google Antigravity is the first supported provider workflow. It must be presented as one provider inside Omni Gateway, not as the whole product. Use `Google Antigravity` in provider introductions, OAuth setup, advanced settings, and documentation; use `Antigravity` only in compact cards, badges, and space-constrained labels.
 
 ## Brand and Architecture Boundaries
 
@@ -35,7 +35,7 @@ Antigravity is the first supported provider workflow. It must be presented as on
 - Use `var(--radius)` for standard component radius. Do not reintroduce pill radius globally unless the component is intentionally pill-shaped.
 - Disabled and readonly inputs must use `background: var(--bg-subtle);` with readable text color.
 - Do not use heavy shadows, decorative effects, slow animations, or floating marketing-style cards.
-- Keep information modals structured: first section for summary/context, later sections for details or raw API responses.
+- Keep information modals structured: first section for summary/context, later sections for details. Avoid raw API responses in user-facing modals unless they are explicitly needed for troubleshooting.
 - Confirmation modals may stay simpler, but their body text must remain natural and readable.
 - Do not place raw JSON or long text where it can overflow horizontally. Wrap, scroll vertically, or use structured detail blocks.
 

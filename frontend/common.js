@@ -93,6 +93,7 @@ const TRANSLATIONS = {
         "credits_label": "Credits",
         "dataexisting_env_files_count_files": "{data_existing_env_files_count} files",
         "deduplication_complete_deleted_data": "Deduplication complete. Deleted {data_deleted_count} duplicate credentials and kept {data_kept_count} credentials ({data_unique_emails_count} unique emails).",
+        "deduplication_details_title": "Deduplication Details",
         "deduplication_detailsnn": "Deduplication details:\\n\\n",
         "deduplication_failed": "Deduplication failed.",
         "deduplication_network_error_errorme": "Deduplication network error: {error_message}",
@@ -4688,8 +4689,6 @@ async function batchVerifyProjectIds() {
 
     }
 
-    console.log(summary);
-
 }
 
 async function batchVerifyPrimaryProjectIds() {
@@ -4813,8 +4812,6 @@ async function batchVerifyPrimaryProjectIds() {
         showMessageModal('Provider Batch Verification', summary, 'info');
 
     }
-
-    console.log(summary);
 
 }
 
@@ -4948,8 +4945,6 @@ async function batchConfigurePreview() {
 
     }
 
-    console.log(summary);
-
 }
 
 async function refreshAllEmails() {
@@ -5064,7 +5059,7 @@ async function deduplicateByEmail() {
 
                 });
 
-                console.log(details);
+                showMessageModal(t('deduplication_details_title'), details, 'info');
 
             }
 
@@ -5118,7 +5113,7 @@ async function deduplicatePrimaryByEmail() {
 
                 });
 
-                console.log(details);
+                showMessageModal(t('deduplication_details_title'), details, 'info');
 
             }
 
@@ -5616,7 +5611,7 @@ async function loadAntigravitySettings() {
 
         } else {
 
-            showStatus(`Failed to load Antigravity settings: ${data.detail || data.error || t('unknown_error')}`, 'error');
+            showStatus(`Failed to load Google Antigravity settings: ${data.detail || data.error || t('unknown_error')}`, 'error');
 
         }
 
@@ -5737,13 +5732,13 @@ async function saveAntigravitySettings() {
 
         if (response.ok) {
 
-            showStatus(data.message || 'Antigravity settings saved.', 'success');
+            showStatus(data.message || 'Google Antigravity settings saved.', 'success');
 
             setTimeout(() => loadAntigravitySettings(), 600);
 
         } else {
 
-            showStatus(`Failed to save Antigravity settings: ${data.detail || data.error || t('unknown_error')}`, 'error');
+            showStatus(`Failed to save Google Antigravity settings: ${data.detail || data.error || t('unknown_error')}`, 'error');
 
         }
 
@@ -5758,7 +5753,7 @@ async function saveAntigravitySettings() {
 async function resetAntigravitySettings() {
 
     const confirmed = await showConfirmModal(
-        'Reset Antigravity advanced settings to their defaults? Environment-managed values will be preserved.'
+        'Reset Google Antigravity advanced settings to their defaults? Environment-managed values will be preserved.'
     );
 
     if (!confirmed) return;
@@ -5774,7 +5769,7 @@ async function resetAntigravitySettings() {
 
         if (response.ok) {
 
-            showStatus(data.message || 'Antigravity settings reset to defaults.', 'success');
+            showStatus(data.message || 'Google Antigravity settings reset to defaults.', 'success');
 
             AppState.antigravityConfig = data.config || {};
 
@@ -5786,7 +5781,7 @@ async function resetAntigravitySettings() {
 
         } else {
 
-            showStatus(`Failed to reset Antigravity settings: ${data.detail || data.error || t('unknown_error')}`, 'error');
+            showStatus(`Failed to reset Google Antigravity settings: ${data.detail || data.error || t('unknown_error')}`, 'error');
 
         }
 

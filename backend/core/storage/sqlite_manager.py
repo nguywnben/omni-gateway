@@ -381,7 +381,10 @@ class SQLiteManager:
                         SELECT filename, credential_data, model_cooldowns, preview
                         FROM {table_name}
                         WHERE disabled = 0
-                        ORDER BY RANDOM()
+                        ORDER BY call_count ASC,
+                                 COALESCE(last_success, 0) ASC,
+                                 rotation_order ASC,
+                                 filename ASC
                     """) as cursor:
                         rows = await cursor.fetchall()
 
@@ -426,7 +429,10 @@ class SQLiteManager:
                         SELECT filename, credential_data, model_cooldowns, enable_credit
                         FROM {table_name}
                         WHERE disabled = 0
-                        ORDER BY RANDOM()
+                        ORDER BY call_count ASC,
+                                 COALESCE(last_success, 0) ASC,
+                                 rotation_order ASC,
+                                 filename ASC
                     """) as cursor:
                         rows = await cursor.fetchall()
 
@@ -1273,11 +1279,11 @@ class SQLiteManager:
                 await db.execute(f"""
                     UPDATE {table_name}
                     SET last_success = unixepoch(),
-                        error_codes   = '[]',
+                        call_count = COALESCE(call_count, 0) + 1,
+                        error_codes = '[]',
                         error_messages = '{{}}',
-                        updated_at    = unixepoch()
+                        updated_at = unixepoch()
                     WHERE filename = ?
-                      AND (error_codes IS NOT NULL AND error_codes != '[]' AND error_codes != '')
                 """, (filename,))
 
 

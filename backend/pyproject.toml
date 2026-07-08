@@ -1,7 +1,7 @@
 [project]
 name = "omni-gateway"
 version = "0.1.0"
-description = "A universal AI router for coding tools with smart auto-fallback, token compression, and seamless format translation."
+description = "A universal AI router for coding tools with smart auto-fallback, token-aware request cleanup, usage visibility, and seamless format translation."
 readme = "../README.md"
 requires-python = ">=3.12"
 license = {text = "MIT"}

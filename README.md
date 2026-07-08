@@ -1,6 +1,6 @@
 # Omni Gateway
 
-A universal AI router for coding tools. Omni Gateway provides smart auto-fallback, token compression, and seamless format translation so local agents, IDE assistants, and automation scripts can use free and premium LLM capacity through one stable API surface.
+A universal AI router for coding tools. Omni Gateway provides smart auto-fallback, token-aware request cleanup, usage visibility, and seamless format translation so local agents, IDE assistants, and automation scripts can use free and premium LLM capacity through one stable API surface.
 
 ## Why Omni Gateway
 
@@ -9,7 +9,7 @@ Modern coding workflows often mix clients and providers: OpenAI-compatible tools
 ## Core Capabilities
 
 - Smart auto-fallback: rotates credentials, retries transient failures, and routes around cooldowns, rate limits, and exhausted capacity.
-- Token compression: normalizes payloads, removes incompatible fields, trims avoidable overhead, and keeps long coding sessions within practical context limits.
+- Token-aware cleanup: normalizes payloads, removes incompatible fields, trims avoidable overhead, and reports token usage across requests.
 - Format translation: accepts OpenAI chat completions, Gemini native requests, and Anthropic Messages, then translates requests and streaming responses across formats.
 - Credential orchestration: manages multiple OAuth credential pools with health state, cooldown tracking, bulk upload, verification, and quota visibility.
 - Streaming resilience: supports SSE streaming, pseudo-streaming for clients that require streamed output, and anti-truncation retries for long generations.
@@ -23,11 +23,11 @@ client tools
         |
         v
 Omni Gateway
-  authentication -> format translation -> token cleanup -> routing -> fallback -> streaming
+  authentication -> format translation -> token-aware cleanup -> routing -> fallback -> streaming
         |
         v
 provider adapters
-  Code Assist | Antigravity | Vertex-compatible route
+  Code Assist | Google Antigravity | Vertex-compatible route
 ```
 
 The public API stays stable while provider-specific adapters evolve behind Omni Gateway.
@@ -122,13 +122,13 @@ Omni Gateway reads configuration from environment variables first, then stored c
 | `REDIS_URL` | empty | Enables Redis-backed caches/session state when set. |
 | `CODE_ASSIST_CLIENT_ID` | bundled desktop client | Optional override for the Code Assist OAuth client ID. |
 | `CODE_ASSIST_CLIENT_SECRET` | bundled desktop client | Optional override for the Code Assist OAuth client secret. |
-| `ANTIGRAVITY_CLIENT_ID` | bundled desktop client | Optional override for the Antigravity OAuth client ID. It can also be managed from the Providers page. |
-| `ANTIGRAVITY_CLIENT_SECRET` | bundled desktop client | Optional override for the Antigravity OAuth client secret. Configure it through env or the Providers page when the upstream client changes. |
+| `ANTIGRAVITY_CLIENT_ID` | bundled desktop client | Optional override for the Google Antigravity OAuth client ID. It can also be managed from the Providers page. |
+| `ANTIGRAVITY_CLIENT_SECRET` | bundled desktop client | Optional override for the Google Antigravity OAuth client secret. Configure it through env or the Providers page when the upstream client changes. |
 | `CLIENT_ID` | empty | Optional legacy-compatible fallback for provider OAuth override. |
 | `CLIENT_SECRET` | empty | Optional legacy-compatible fallback for provider OAuth override. |
-| `ANTIGRAVITY_API_URL` / `API_URL` | `https://daily-cloudcode-pa.googleapis.com` | Optional Antigravity upstream endpoint override. |
-| `USER_AGENT` / `ANTIGRAVITY_USER_AGENT` | `antigravity/cli/1.0.1 windows/amd64` | Optional Antigravity protocol user-agent override. |
-| `ANTIGRAVITY_PAYLOAD_USER_AGENT` | `antigravity` | Optional payload-level Antigravity userAgent override. |
+| `ANTIGRAVITY_API_URL` / `API_URL` | `https://daily-cloudcode-pa.googleapis.com` | Optional Google Antigravity upstream endpoint override. |
+| `USER_AGENT` / `ANTIGRAVITY_USER_AGENT` | `antigravity/cli/1.0.1 windows/amd64` | Optional Google Antigravity protocol User-Agent override. |
+| `ANTIGRAVITY_PAYLOAD_USER_AGENT` | `antigravity` | Optional payload-level Google Antigravity userAgent override. |
 
 ## SDK Surfaces
 
@@ -219,6 +219,10 @@ Omni Gateway recognizes feature prefixes and suffixes in model names:
 - Search suffixes such as `-search` for models that support Google Search grounding.
 
 Provider adapters normalize these feature names before sending upstream requests.
+
+## Usage and Cost Visibility
+
+Omni Gateway records request volume, success rate, credential attribution, and reported token usage for each supported time range in the dashboard. Current optimization focuses on credential capacity, cooldown avoidance, retry/fallback behavior, request cleanup, and token usage visibility. Provider price-based routing is intentionally left as a future policy layer so the core API remains stable as more providers are added.
 
 ## Credential Workflow
 

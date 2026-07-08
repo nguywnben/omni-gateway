@@ -65,7 +65,7 @@ async def _current_antigravity_config() -> dict:
 
 @router.get("/config")
 async def get_antigravity_config(token: str = Depends(verify_panel_token)):
-    """Return Antigravity provider settings for the provider setup UI."""
+    """Return Google Antigravity provider settings for the provider setup UI."""
     try:
         env_locked = get_env_locked_keys() & ANTIGRAVITY_CONFIG_KEYS
         return JSONResponse(
@@ -75,29 +75,29 @@ async def get_antigravity_config(token: str = Depends(verify_panel_token)):
             }
         )
     except Exception as e:
-        log.error(f"Failed to retrieve Antigravity configuration: {e}")
+        log.error(f"Failed to retrieve Google Antigravity configuration: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.post("/config")
 async def save_antigravity_config(request: ConfigSaveRequest, token: str = Depends(verify_panel_token)):
-    """Save Antigravity provider settings from the provider setup UI."""
+    """Save Google Antigravity provider settings from the provider setup UI."""
     try:
         new_config = request.config or {}
         unknown_keys = sorted(set(new_config) - ANTIGRAVITY_CONFIG_KEYS)
         if unknown_keys:
             raise HTTPException(
                 status_code=400,
-                detail=f"Unsupported Antigravity setting(s): {', '.join(unknown_keys)}.",
+                detail=f"Unsupported Google Antigravity setting(s): {', '.join(unknown_keys)}.",
             )
 
         for key in STRING_KEYS & set(new_config):
             if not isinstance(new_config[key], str):
-                raise HTTPException(status_code=400, detail=f"Antigravity setting '{key}' must be a string.")
+                raise HTTPException(status_code=400, detail=f"Google Antigravity setting '{key}' must be a string.")
 
         for key in BOOLEAN_KEYS & set(new_config):
             if not isinstance(new_config[key], bool):
-                raise HTTPException(status_code=400, detail=f"Antigravity setting '{key}' must be a boolean.")
+                raise HTTPException(status_code=400, detail=f"Google Antigravity setting '{key}' must be a boolean.")
 
         env_locked = get_env_locked_keys() & ANTIGRAVITY_CONFIG_KEYS
         storage_adapter = await get_storage_adapter()
@@ -113,7 +113,7 @@ async def save_antigravity_config(request: ConfigSaveRequest, token: str = Depen
 
         return JSONResponse(
             content={
-                "message": "Antigravity settings saved.",
+                "message": "Google Antigravity settings saved.",
                 "saved_config": saved_config,
                 "env_locked": sorted(env_locked),
             }
@@ -121,13 +121,13 @@ async def save_antigravity_config(request: ConfigSaveRequest, token: str = Depen
     except HTTPException:
         raise
     except Exception as e:
-        log.error(f"Failed to save Antigravity configuration: {e}")
+        log.error(f"Failed to save Google Antigravity configuration: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.post("/config/reset")
 async def reset_antigravity_config(token: str = Depends(verify_panel_token)):
-    """Reset Antigravity provider settings to built-in or environment defaults."""
+    """Reset Google Antigravity provider settings to built-in or environment defaults."""
     try:
         env_locked = get_env_locked_keys() & ANTIGRAVITY_CONFIG_KEYS
         storage_adapter = await get_storage_adapter()
@@ -141,12 +141,12 @@ async def reset_antigravity_config(token: str = Depends(verify_panel_token)):
 
         return JSONResponse(
             content={
-                "message": "Antigravity settings reset to defaults.",
+                "message": "Google Antigravity settings reset to defaults.",
                 "config": await _current_antigravity_config(),
                 "reset_config": deleted_keys,
                 "env_locked": sorted(env_locked),
             }
         )
     except Exception as e:
-        log.error(f"Failed to reset Antigravity configuration: {e}")
+        log.error(f"Failed to reset Google Antigravity configuration: {e}")
         raise HTTPException(status_code=500, detail=str(e))

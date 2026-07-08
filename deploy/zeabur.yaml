@@ -3,7 +3,7 @@ kind: Template
 metadata:
   name: omni-gateway
 spec:
-  description: "A universal AI router for coding tools with smart auto-fallback, token compression, and seamless format translation."
+  description: "A universal AI router for coding tools with smart auto-fallback, token-aware request cleanup, usage visibility, and seamless format translation."
   tags:
     - ai
     - api

@@ -439,11 +439,11 @@
 
                     <section class="provider-hero-card">
                         <div class="provider-logo-frame">
-                            <img src="/frontend/assets/antigravity-logo.png" alt="Antigravity logo">
+                            <img src="/frontend/assets/antigravity-logo.png" alt="Google Antigravity logo">
                         </div>
                         <div class="provider-summary">
                             <div class="provider-eyebrow">Available Now</div>
-                            <h2>Antigravity</h2>
+                            <h2>Google Antigravity</h2>
                             <p>Connect Google Antigravity credentials through OAuth or import existing credential JSON files and ZIP archives.</p>
                         </div>
                         <div class="provider-capabilities" aria-label="Supported methods">
@@ -455,7 +455,7 @@
 
                     <div class="provider-tools-grid">
                         <section class="tool-panel">
-                            <h2 class="card-title">Antigravity OAuth</h2>
+                            <h2 class="card-title">Google Antigravity OAuth</h2>
                             <p class="card-copy provider-tool-copy">Generate an authorization link and save the account directly into the active pool.</p>
                             <div class="page-actions">
                                 <button type="button" class="btn" id="getPrimaryAuthBtn">Generate authorization link</button>
@@ -494,7 +494,7 @@
 
                         <section class="tool-panel">
                             <h2 class="card-title">Batch Import</h2>
-                            <p class="card-copy provider-tool-copy">Import Antigravity credential JSON files or ZIP archives into the active pool.</p>
+                            <p class="card-copy provider-tool-copy">Import Google Antigravity credential JSON files or ZIP archives into the active pool.</p>
                             <div class="upload-area" id="primaryUploadArea" onclick="document.getElementById('primaryFileInput').click()" ondrop="handlePrimaryFileDrop(event)" ondragover="event.preventDefault(); this.classList.add('dragover');" ondragleave="this.classList.remove('dragover');">
                                 <div>
                                     <div class="upload-title">Drop credential files here</div>
@@ -530,8 +530,8 @@
                         <section class="tool-panel provider-advanced-panel">
                             <div class="provider-settings-header">
                                 <div>
-                                    <h2 class="card-title">Antigravity Advanced Settings</h2>
-                                    <p class="card-copy provider-tool-copy">Configure the OAuth client, upstream endpoints, protocol headers, and runtime behavior used by the Antigravity provider.</p>
+                                    <h2 class="card-title">Google Antigravity Advanced Settings</h2>
+                                    <p class="card-copy provider-tool-copy">Configure the OAuth client, upstream endpoints, protocol headers, and runtime behavior used by the Google Antigravity provider.</p>
                                 </div>
                                 <div class="page-actions">
                                     <button type="button" class="btn" onclick="saveAntigravitySettings()">Save</button>
@@ -540,20 +540,20 @@
                                 </div>
                             </div>
 
-                            <div id="antigravitySettingsLoading" class="page-description">Loading Antigravity settings...</div>
+                            <div id="antigravitySettingsLoading" class="page-description">Loading Google Antigravity settings...</div>
 
                             <div id="antigravitySettingsForm" class="provider-settings-grid hidden">
                                 <section class="provider-settings-group">
                                     <h3>OAuth Client</h3>
-                                    <p class="card-copy provider-tool-copy">Manage the OAuth application used for Antigravity authorization.</p>
+                                    <p class="card-copy provider-tool-copy">Manage the OAuth application used for Google Antigravity authorization.</p>
                                     <div class="form-group"><label for="antigravityOauthClientId">Client ID</label><input type="text" id="antigravityOauthClientId" autocomplete="off"></div>
                                     <div class="form-group"><label for="antigravityOauthClientSecret">Client secret</label><input type="text" id="antigravityOauthClientSecret" autocomplete="off"></div>
                                 </section>
 
                                 <section class="provider-settings-group">
                                     <h3>Upstream Endpoints</h3>
-                                    <p class="card-copy provider-tool-copy">Configure provider and Google API hosts used by Antigravity requests.</p>
-                                    <div class="form-group"><label for="antigravityApiUrl">Antigravity API</label><input type="text" id="antigravityApiUrl"></div>
+                                    <p class="card-copy provider-tool-copy">Configure provider and Google API hosts used by Google Antigravity requests.</p>
+                                    <div class="form-group"><label for="antigravityApiUrl">Google Antigravity API</label><input type="text" id="antigravityApiUrl"></div>
                                     <div class="form-group"><label for="antigravityOauthUrl">OAuth API</label><input type="text" id="antigravityOauthUrl"></div>
                                     <div class="form-group"><label for="antigravityGoogleApisUrl">Google APIs</label><input type="text" id="antigravityGoogleApisUrl"></div>
                                     <div class="form-group"><label for="antigravityResourceManagerUrl">Resource Manager API</label><input type="text" id="antigravityResourceManagerUrl"></div>
@@ -566,7 +566,7 @@
                                     <div class="form-group"><label for="antigravityUserAgent">HTTP User-Agent</label><input type="text" id="antigravityUserAgent"></div>
                                     <div class="form-group"><label for="antigravityPayloadUserAgent">Payload user agent</label><input type="text" id="antigravityPayloadUserAgent"></div>
                                     <label class="switch-row"><input type="checkbox" id="antigravityStreamToNonstream" class="config-checkbox"><span>Collect streaming responses for non-stream clients</span></label>
-                                    <label class="switch-row" style="margin-top: 12px;"><input type="checkbox" id="antigravitySwitchCredential" class="config-checkbox"><span>Switch Antigravity credentials during retries</span></label>
+                                    <label class="switch-row" style="margin-top: 12px;"><input type="checkbox" id="antigravitySwitchCredential" class="config-checkbox"><span>Switch Google Antigravity credentials during retries</span></label>
                                 </section>
                             </div>
                         </section>
@@ -692,7 +692,7 @@
                         <div>
                             <div class="page-kicker">About</div>
                             <h1 class="page-title">Omni Gateway</h1>
-                            <p class="page-description">A universal AI router for coding tools with smart auto-fallback, token compression, and seamless format translation.</p>
+                            <p class="page-description">A universal AI router for coding tools with smart auto-fallback, token-aware request cleanup, usage visibility, and seamless format translation.</p>
                         </div>
                         <div class="page-actions">
                             <button type="button" class="btn btn-secondary" id="checkUpdateBtn" onclick="checkForUpdates()">Check for updates</button>
@@ -710,7 +710,7 @@
                             <p class="card-copy card-title-copy">Core capabilities available through the routing layer.</p>
                             <div class="integration-list">
                                 <div class="code-block">Smart auto-fallback</div>
-                                <div class="code-block">Token compression and response shaping</div>
+                                <div class="code-block">Token-aware cleanup and usage visibility</div>
                                 <div class="code-block">OpenAI, Anthropic, Gemini, and provider-native format translation</div>
                             </div>
                         </section>

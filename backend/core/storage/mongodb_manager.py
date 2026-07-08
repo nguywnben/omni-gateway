@@ -2,7 +2,6 @@
 
 import json
 import os
-import random
 import time
 from typing import Any, Dict, List, Optional
 
@@ -370,6 +369,37 @@ class MongoDBManager:
         except Exception as e:
             log.warning(f"Redis sync_cred error: {e}")
 
+    async def _choose_best_redis_candidate(self, mode: str, candidates: list[str]) -> Optional[str]:
+        """Select the least-used sampled Redis candidate using MongoDB metadata."""
+        normalized_candidates = [os.path.basename(str(item)) for item in candidates if item]
+        if not normalized_candidates:
+            return None
+
+        try:
+            collection = self._db[self._get_collection_name(mode)]
+            doc = await collection.find_one(
+                {"filename": {"$in": normalized_candidates}, "disabled": False},
+                projection={
+                    "filename": 1,
+                    "call_count": 1,
+                    "last_success": 1,
+                    "rotation_order": 1,
+                    "_id": 0,
+                },
+                sort=[
+                    ("call_count", 1),
+                    ("last_success", 1),
+                    ("rotation_order", 1),
+                    ("filename", 1),
+                ],
+            )
+            if doc and doc.get("filename"):
+                return str(doc["filename"])
+        except Exception as e:
+            log.debug(f"Redis candidate ranking fell back to sampled order: {e}")
+
+        return normalized_candidates[0]
+
     async def _get_next_available_from_redis(
         self, mode: str, model_name: Optional[str], exclude_free_tier: bool = False, preview_only: bool = False
     ) -> Optional[tuple]:
@@ -386,8 +416,7 @@ class MongoDBManager:
                 if not all_candidates:
                     log.debug(f"[Redis MISS] mode={mode} preview+non-free: no candidates, fallback to MongoDB")
                     return None
-                sample_size = min(len(all_candidates), 10)
-                candidates = random.sample(all_candidates, sample_size)
+                candidates = sorted(all_candidates)
             elif preview_only:
                 preview_key = self._rk_preview(mode)
                 preview_size = await self._redis.scard(preview_key)
@@ -405,8 +434,7 @@ class MongoDBManager:
                 if not all_candidates:
                     log.debug(f"[Redis MISS] mode={mode} exclude_free: no non-free creds, fallback to MongoDB")
                     return None
-                sample_size = min(len(all_candidates), 10)
-                candidates = random.sample(all_candidates, sample_size)
+                candidates = sorted(all_candidates)
             else:
                 pool_key = self._rk_avail(mode)
                 pool_size = await self._redis.scard(pool_key)
@@ -421,21 +449,28 @@ class MongoDBManager:
 
             if model_name:
                 escaped = self._escape_model_name(model_name)
+                available_candidates = []
                 for filename in candidates:
                     cd_key = self._rk_cd(mode, filename, escaped)
                     if not await self._redis.exists(cd_key):
-                        credential_data = await self.get_credential(filename, mode)
-                        if mode == "primary":
-                            state = await self.get_credential_state(filename, mode)
-                            credential_data = credential_data or {}
-                            credential_data["enable_credit"] = bool(state.get("enable_credit", False))
-                        log.debug(f"[Redis HIT] mode={mode} model={model_name} -> {filename}")
-                        return filename, credential_data
+                        available_candidates.append(filename)
+
+                filename = await self._choose_best_redis_candidate(mode, available_candidates)
+                if filename:
+                    credential_data = await self.get_credential(filename, mode)
+                    if mode == "primary":
+                        state = await self.get_credential_state(filename, mode)
+                        credential_data = credential_data or {}
+                        credential_data["enable_credit"] = bool(state.get("enable_credit", False))
+                    log.debug(f"[Redis HIT] mode={mode} model={model_name} -> {filename}")
+                    return filename, credential_data
 
                 log.debug(f"[Redis MISS] mode={mode} model={model_name}: all {len(candidates)} candidates in cooldown, fallback to MongoDB")
                 return None
             else:
-                filename = candidates[0]
+                filename = await self._choose_best_redis_candidate(mode, candidates)
+                if not filename:
+                    return None
                 credential_data = await self.get_credential(filename, mode)
                 if mode == "primary":
                     state = await self.get_credential_state(filename, mode)
@@ -517,14 +552,14 @@ class MongoDBManager:
                 ]
 
 
-            count = await collection.count_documents(match_query)
-            if count == 0:
-                return None
-
-
-            skip_n = random.randint(0, count - 1)
             projection = {"filename": 1, "credential_data": 1, "enable_credit": 1, "_id": 0}
-            docs = await collection.find(match_query, projection).skip(skip_n).limit(1).to_list(1)
+            docs = await (
+                collection
+                .find(match_query, projection)
+                .sort([("call_count", 1), ("last_success", 1), ("rotation_order", 1), ("filename", 1)])
+                .limit(1)
+                .to_list(1)
+            )
 
             if docs:
                 doc = docs[0]
@@ -1416,13 +1451,13 @@ class MongoDBManager:
 
 
             await collection.update_one(
-                {"filename": filename, "error_codes": {"$ne": []}},
+                {"filename": filename},
                 {"$set": {
                     "last_success": now,
                     "error_codes": [],
                     "error_messages": {},
                     "updated_at": now,
-                }}
+                }, "$inc": {"call_count": 1}}
             )
 
 

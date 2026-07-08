@@ -110,7 +110,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(
     title="Omni Gateway",
-    description="Universal AI router with smart auto-fallback, token compression, and seamless format translation.",
+    description="Universal AI router with smart auto-fallback, token-aware request cleanup, usage visibility, and seamless format translation.",
     version="2.0.0",
     lifespan=lifespan,
 )

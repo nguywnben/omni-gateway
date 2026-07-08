@@ -255,7 +255,10 @@ class PSQLManager:
                         SELECT filename, credential_data, model_cooldowns, preview
                         FROM {table_name}
                         WHERE disabled = 0
-                        ORDER BY RANDOM()
+                        ORDER BY call_count ASC NULLS FIRST,
+                                 last_success ASC NULLS FIRST,
+                                 rotation_order ASC,
+                                 filename ASC
                     """)
 
                     if not model_name:
@@ -291,7 +294,10 @@ class PSQLManager:
                         SELECT filename, credential_data, model_cooldowns, enable_credit
                         FROM {table_name}
                         WHERE disabled = 0
-                        ORDER BY RANDOM()
+                        ORDER BY call_count ASC NULLS FIRST,
+                                 last_success ASC NULLS FIRST,
+                                 rotation_order ASC,
+                                 filename ASC
                     """)
 
                     if not model_name:
@@ -999,11 +1005,11 @@ class PSQLManager:
                 await conn.execute(f"""
                     UPDATE {table_name}
                     SET last_success = EXTRACT(EPOCH FROM NOW()),
+                        call_count = COALESCE(call_count, 0) + 1,
                         error_codes = '[]',
                         error_messages = '{{}}',
                         updated_at = EXTRACT(EPOCH FROM NOW())
                     WHERE filename = $1
-                      AND (error_codes IS NOT NULL AND error_codes != '[]' AND error_codes != '')
                 """, filename)
 
                 if model_name:
