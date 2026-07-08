@@ -1,37 +1,43 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from fastapi.responses import JSONResponse
 
 from core.utils import verify_panel_token
 from core.usage_stats import UNASSIGNED_USAGE_FILENAME
-from .usage import get_credential_counts, get_stats_24h
+from .usage import get_credential_counts, get_stats_for_period, get_usage_period_metadata, normalize_usage_period
 
 router = APIRouter(prefix="/api/usage", tags=["usage"])
 
 @router.get("/stats")
-async def get_usage_stats(token: str = Depends(verify_panel_token)):
+async def get_usage_stats(period: str = Query("1d"), token: str = Depends(verify_panel_token)):
     try:
-        data = await get_stats_24h()
-        return {"success": True, "data": data}
+        normalized_period = normalize_usage_period(period)
+        data = await get_stats_for_period(normalized_period)
+        return {
+            "success": True,
+            "period": get_usage_period_metadata(normalized_period),
+            "data": data,
+        }
     except Exception as e:
         return JSONResponse(status_code=500, content={"success": False, "detail": str(e)})
 
 @router.get("/aggregated")
-async def get_aggregated_stats(token: str = Depends(verify_panel_token)):
+async def get_aggregated_stats(period: str = Query("1d"), token: str = Depends(verify_panel_token)):
     try:
-        data_24h = await get_stats_24h()
-        total_calls = sum(item["calls_24h"] for item in data_24h.values())
-        successful_calls = sum(item.get("successful_calls_24h", 0) for item in data_24h.values())
-        failed_calls = sum(item.get("failed_calls_24h", 0) for item in data_24h.values())
-        assigned_data_24h = {
-            filename: item for filename, item in data_24h.items()
+        normalized_period = normalize_usage_period(period)
+        usage_data = await get_stats_for_period(normalized_period)
+        total_calls = sum(item["calls"] for item in usage_data.values())
+        successful_calls = sum(item.get("successful_calls", 0) for item in usage_data.values())
+        failed_calls = sum(item.get("failed_calls", 0) for item in usage_data.values())
+        assigned_usage_data = {
+            filename: item for filename, item in usage_data.items()
             if filename != UNASSIGNED_USAGE_FILENAME
         }
-        assigned_calls = sum(item["calls_24h"] for item in assigned_data_24h.values())
-        input_tokens = sum(item.get("input_tokens_24h", 0) for item in data_24h.values())
-        output_tokens = sum(item.get("output_tokens_24h", 0) for item in data_24h.values())
-        total_tokens = sum(item.get("total_tokens_24h", 0) for item in data_24h.values())
-        cached_tokens = sum(item.get("cached_tokens_24h", 0) for item in data_24h.values())
-        reasoning_tokens = sum(item.get("reasoning_tokens_24h", 0) for item in data_24h.values())
+        assigned_calls = sum(item["calls"] for item in assigned_usage_data.values())
+        input_tokens = sum(item.get("input_tokens", 0) for item in usage_data.values())
+        output_tokens = sum(item.get("output_tokens", 0) for item in usage_data.values())
+        total_tokens = sum(item.get("total_tokens", 0) for item in usage_data.values())
+        cached_tokens = sum(item.get("cached_tokens", 0) for item in usage_data.values())
+        reasoning_tokens = sum(item.get("reasoning_tokens", 0) for item in usage_data.values())
         credential_counts = await get_credential_counts()
         total_files = credential_counts["total"]
         active_files = credential_counts["active"]
@@ -42,6 +48,11 @@ async def get_aggregated_stats(token: str = Depends(verify_panel_token)):
         return {
             "success": True,
             "data": {
+                "period": get_usage_period_metadata(normalized_period),
+                "total_calls": total_calls,
+                "assigned_calls": assigned_calls,
+                "successful_calls": successful_calls,
+                "failed_calls": failed_calls,
                 "total_calls_24h": total_calls,
                 "assigned_calls_24h": assigned_calls,
                 "successful_calls_24h": successful_calls,
@@ -50,6 +61,11 @@ async def get_aggregated_stats(token: str = Depends(verify_panel_token)):
                 "active_files": active_files,
                 "disabled_files": disabled_files,
                 "avg_calls_per_file": avg_calls,
+                "input_tokens": input_tokens,
+                "output_tokens": output_tokens,
+                "total_tokens": total_tokens,
+                "cached_tokens": cached_tokens,
+                "reasoning_tokens": reasoning_tokens,
                 "input_tokens_24h": input_tokens,
                 "output_tokens_24h": output_tokens,
                 "total_tokens_24h": total_tokens,

@@ -12,6 +12,12 @@ from paths import DEFAULT_CREDENTIALS_DIR
 db_lock = threading.Lock()
 db_path = str(DEFAULT_CREDENTIALS_DIR / "usage_stats.db")
 UNASSIGNED_USAGE_FILENAME = "__gateway_unassigned__.json"
+USAGE_PERIODS = {
+    "1d": {"seconds": 86400, "label": "Last 24 hours"},
+    "7d": {"seconds": 7 * 86400, "label": "Last 7 days"},
+    "30d": {"seconds": 30 * 86400, "label": "Last 30 days"},
+    "all": {"seconds": None, "label": "All time"},
+}
 
 
 TOKEN_COLUMNS = {
@@ -45,6 +51,80 @@ def _provider_display_name(value: Any) -> str:
     if not normalized:
         return "Provider"
     return " ".join(part.capitalize() for part in normalized.split("_") if part)
+
+
+def normalize_usage_period(period: str = "1d") -> str:
+    normalized = str(period or "1d").strip().lower()
+    return normalized if normalized in USAGE_PERIODS else "1d"
+
+
+def get_usage_period_metadata(period: str = "1d") -> Dict[str, str]:
+    normalized = normalize_usage_period(period)
+    return {
+        "value": normalized,
+        "label": str(USAGE_PERIODS[normalized]["label"]),
+    }
+
+
+def _empty_usage_record(metadata: Dict[str, str]) -> Dict[str, Any]:
+    return {
+        "user_email": metadata.get("user_email", ""),
+        "provider": metadata.get("provider", "Antigravity"),
+        "calls": 0,
+        "successful_calls": 0,
+        "failed_calls": 0,
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 0,
+        "cached_tokens": 0,
+        "reasoning_tokens": 0,
+        "calls_24h": 0,
+        "successful_calls_24h": 0,
+        "failed_calls_24h": 0,
+        "input_tokens_24h": 0,
+        "output_tokens_24h": 0,
+        "total_tokens_24h": 0,
+        "cached_tokens_24h": 0,
+        "reasoning_tokens_24h": 0,
+    }
+
+
+def _usage_record(
+    *,
+    existing: Dict[str, Any],
+    provider: Any,
+    calls: int,
+    successful_calls: int,
+    failed_calls: int,
+    input_tokens: int,
+    output_tokens: int,
+    total_tokens: int,
+    cached_tokens: int,
+    reasoning_tokens: int,
+) -> Dict[str, Any]:
+    record = {
+        "user_email": existing.get("user_email", ""),
+        "provider": existing.get("provider") or _provider_display_name(provider),
+        "calls": calls,
+        "successful_calls": successful_calls,
+        "failed_calls": failed_calls,
+        "input_tokens": input_tokens,
+        "output_tokens": output_tokens,
+        "total_tokens": total_tokens,
+        "cached_tokens": cached_tokens,
+        "reasoning_tokens": reasoning_tokens,
+    }
+    record.update({
+        "calls_24h": calls,
+        "successful_calls_24h": successful_calls,
+        "failed_calls_24h": failed_calls,
+        "input_tokens_24h": input_tokens,
+        "output_tokens_24h": output_tokens,
+        "total_tokens_24h": total_tokens,
+        "cached_tokens_24h": cached_tokens,
+        "reasoning_tokens_24h": reasoning_tokens,
+    })
+    return record
 
 
 def normalize_token_usage(usage: Optional[Dict[str, Any]]) -> Dict[str, int]:
@@ -303,33 +383,26 @@ async def get_all_credential_filenames() -> List[str]:
         return []
 
 
-async def get_stats_24h() -> Dict[str, Dict[str, Any]]:
+async def get_stats_for_period(period: str = "1d") -> Dict[str, Dict[str, Any]]:
     init_db()
-    since = time.time() - 86400
+    normalized_period = normalize_usage_period(period)
+    seconds = USAGE_PERIODS[normalized_period]["seconds"]
+    since = time.time() - int(seconds) if seconds is not None else None
     res = {}
 
     metadata_by_filename = await get_credential_usage_metadata()
     filenames = await get_all_credential_filenames()
     for name in filenames:
         metadata = metadata_by_filename.get(name, {})
-        res[name] = {
-            "user_email": metadata.get("user_email", ""),
-            "provider": metadata.get("provider", "Antigravity"),
-            "calls_24h": 0,
-            "successful_calls_24h": 0,
-            "failed_calls_24h": 0,
-            "input_tokens_24h": 0,
-            "output_tokens_24h": 0,
-            "total_tokens_24h": 0,
-            "cached_tokens_24h": 0,
-            "reasoning_tokens_24h": 0,
-        }
+        res[name] = _empty_usage_record(metadata)
 
     with db_lock:
         conn = sqlite3.connect(db_path)
         try:
+            where_clause = "WHERE timestamp >= ?" if since is not None else ""
+            params = (since,) if since is not None else ()
             cursor = conn.execute(
-                """
+                f"""
                 SELECT
                     filename,
                     COUNT(*),
@@ -342,28 +415,32 @@ async def get_stats_24h() -> Dict[str, Dict[str, Any]]:
                     COALESCE(SUM(reasoning_tokens), 0),
                     COALESCE(MAX(NULLIF(provider, '')), '')
                 FROM usage_logs
-                WHERE timestamp >= ?
+                {where_clause}
                 GROUP BY filename
                 """,
-                (since,)
+                params,
             )
             for row in cursor.fetchall():
                 existing = res.get(row[0], {})
-                res[row[0]] = {
-                    "user_email": existing.get("user_email", ""),
-                    "provider": existing.get("provider") or _provider_display_name(row[9]),
-                    "calls_24h": row[1],
-                    "successful_calls_24h": row[2],
-                    "failed_calls_24h": row[3],
-                    "input_tokens_24h": row[4],
-                    "output_tokens_24h": row[5],
-                    "total_tokens_24h": row[6],
-                    "cached_tokens_24h": row[7],
-                    "reasoning_tokens_24h": row[8],
-                }
+                res[row[0]] = _usage_record(
+                    existing=existing,
+                    provider=row[9],
+                    calls=row[1],
+                    successful_calls=row[2],
+                    failed_calls=row[3],
+                    input_tokens=row[4],
+                    output_tokens=row[5],
+                    total_tokens=row[6],
+                    cached_tokens=row[7],
+                    reasoning_tokens=row[8],
+                )
         except Exception as e:
-            log.error(f"Failed to fetch 24h stats: {e}")
+            log.error(f"Failed to fetch usage stats for {normalized_period}: {e}")
         finally:
             conn.close()
 
     return res
+
+
+async def get_stats_24h() -> Dict[str, Dict[str, Any]]:
+    return await get_stats_for_period("1d")

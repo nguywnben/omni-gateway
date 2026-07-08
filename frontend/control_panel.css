@@ -424,6 +424,19 @@ code {
     gap: 8px;
 }
 
+.dashboard-range-control {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    color: var(--text-muted);
+    font-size: 12px;
+    font-weight: 650;
+}
+
+.dashboard-range-control .filter-select {
+    min-width: 118px;
+}
+
 .dashboard-grid {
     display: grid;
     grid-template-columns: repeat(12, minmax(0, 1fr));

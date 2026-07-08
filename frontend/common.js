@@ -630,6 +630,8 @@ const AppState = {
 
     usageStatsData: {},
 
+    usagePeriod: '1d',
+
     cooldownTimerInterval: null
 
 };
@@ -5871,11 +5873,96 @@ function formatUsageNumber(value, options = {}) {
 
 }
 
+function getUsagePeriodConfig(period = AppState.usagePeriod) {
+
+    const periods = {
+        '1d': {
+            value: '1d',
+            optionLabel: '1 day',
+            metricLabel: 'in the last 24 hours',
+            title: '24-Hour Request Breakdown',
+            description: 'Review credential-level traffic and token usage for the last 24 hours.',
+        },
+        '7d': {
+            value: '7d',
+            optionLabel: '7 days',
+            metricLabel: 'in the last 7 days',
+            title: '7-Day Request Breakdown',
+            description: 'Review credential-level traffic and token usage for the last 7 days.',
+        },
+        '30d': {
+            value: '30d',
+            optionLabel: '30 days',
+            metricLabel: 'in the last 30 days',
+            title: '30-Day Request Breakdown',
+            description: 'Review credential-level traffic and token usage for the last 30 days.',
+        },
+        all: {
+            value: 'all',
+            optionLabel: 'All',
+            metricLabel: 'across all recorded time',
+            title: 'All-Time Request Breakdown',
+            description: 'Review all recorded credential-level traffic and token usage.',
+        },
+    };
+
+    return periods[period] || periods['1d'];
+
+}
+
+function updateUsagePeriodLabels() {
+
+    const periodConfig = getUsagePeriodConfig();
+
+    const periodSelect = document.getElementById('usagePeriodSelect');
+
+    if (periodSelect) periodSelect.value = periodConfig.value;
+
+    const totalCallsLabel = document.getElementById('totalApiCallsLabel');
+
+    if (totalCallsLabel) totalCallsLabel.textContent = `Requests ${periodConfig.metricLabel}`;
+
+    const totalTokensLabel = document.getElementById('totalTokensLabel');
+
+    if (totalTokensLabel) totalTokensLabel.textContent = `Tokens ${periodConfig.metricLabel}`;
+
+    const breakdownTitle = document.getElementById('usageBreakdownTitle');
+
+    if (breakdownTitle) breakdownTitle.textContent = periodConfig.title;
+
+    const breakdownDescription = document.getElementById('usageBreakdownDescription');
+
+    if (breakdownDescription) breakdownDescription.textContent = periodConfig.description;
+
+}
+
+function setUsagePeriod(period) {
+
+    const nextPeriod = getUsagePeriodConfig(period).value;
+
+    if (AppState.usagePeriod === nextPeriod) {
+
+        updateUsagePeriodLabels();
+
+        return;
+
+    }
+
+    AppState.usagePeriod = nextPeriod;
+
+    updateUsagePeriodLabels();
+
+    refreshUsageStats();
+
+}
+
 async function refreshUsageStats() {
 
     const loading = document.getElementById('usageLoading');
 
     const list = document.getElementById('usageList');
+
+    updateUsagePeriodLabels();
 
     try {
 
@@ -5883,11 +5970,15 @@ async function refreshUsageStats() {
 
         list.innerHTML = '';
 
+        const usagePeriod = getUsagePeriodConfig().value;
+
+        const usagePeriodQuery = `period=${encodeURIComponent(usagePeriod)}`;
+
         const [statsResponse, aggregatedResponse] = await Promise.all([
 
-            fetch('./api/usage/stats', { headers: getAuthHeaders() }),
+            fetch(`./api/usage/stats?${usagePeriodQuery}`, { headers: getAuthHeaders() }),
 
-            fetch('./api/usage/aggregated', { headers: getAuthHeaders() })
+            fetch(`./api/usage/aggregated?${usagePeriodQuery}`, { headers: getAuthHeaders() })
 
         ]);
 
@@ -5911,24 +6002,24 @@ async function refreshUsageStats() {
 
             const aggData = aggregatedData.success ? aggregatedData.data : aggregatedData;
 
-            const totalCalls24h = Number(aggData.total_calls_24h || 0);
+            const totalCalls = Number(aggData.total_calls ?? aggData.total_calls_24h ?? 0);
 
-            const successfulCalls24h = Number(aggData.successful_calls_24h || 0);
+            const successfulCalls = Number(aggData.successful_calls ?? aggData.successful_calls_24h ?? 0);
 
-            const failedCalls24h = Number(aggData.failed_calls_24h || 0);
+            const failedCalls = Number(aggData.failed_calls ?? aggData.failed_calls_24h ?? 0);
 
-            const successRate24h = totalCalls24h > 0 ? Math.round((successfulCalls24h / totalCalls24h) * 100) : 0;
+            const successRate = totalCalls > 0 ? Math.round((successfulCalls / totalCalls) * 100) : 0;
 
-            document.getElementById('totalApiCalls').textContent = formatUsageNumber(totalCalls24h);
+            document.getElementById('totalApiCalls').textContent = formatUsageNumber(totalCalls);
 
-            document.getElementById('successRate24h').textContent = `${successRate24h}%`;
+            document.getElementById('successRate24h').textContent = `${successRate}%`;
 
-            document.getElementById('successfulApiCalls').textContent = formatUsageNumber(successfulCalls24h);
+            document.getElementById('successfulApiCalls').textContent = formatUsageNumber(successfulCalls);
 
-            document.getElementById('failedApiCalls').textContent = formatUsageNumber(failedCalls24h);
+            document.getElementById('failedApiCalls').textContent = formatUsageNumber(failedCalls);
 
-            document.getElementById('successRateDetail').textContent = totalCalls24h > 0
-                ? `${formatUsageNumber(successfulCalls24h)} of ${formatUsageNumber(totalCalls24h)} requests succeeded.`
+            document.getElementById('successRateDetail').textContent = totalCalls > 0
+                ? `${formatUsageNumber(successfulCalls)} of ${formatUsageNumber(totalCalls)} requests succeeded.`
                 : 'No traffic yet';
 
             document.getElementById('totalFiles').textContent = formatUsageNumber(aggData.total_files);
@@ -5942,22 +6033,22 @@ async function refreshUsageStats() {
                 { decimals: 1 }
             );
 
-            document.getElementById('assignedApiCalls').textContent = formatUsageNumber(aggData.assigned_calls_24h);
+            document.getElementById('assignedApiCalls').textContent = formatUsageNumber(aggData.assigned_calls ?? aggData.assigned_calls_24h);
 
-            document.getElementById('totalTokens24h').textContent = formatUsageNumber(aggData.total_tokens_24h);
+            document.getElementById('totalTokens24h').textContent = formatUsageNumber(aggData.total_tokens ?? aggData.total_tokens_24h);
 
-            document.getElementById('inputTokens24h').textContent = formatUsageNumber(aggData.input_tokens_24h);
+            document.getElementById('inputTokens24h').textContent = formatUsageNumber(aggData.input_tokens ?? aggData.input_tokens_24h);
 
-            document.getElementById('outputTokens24h').textContent = formatUsageNumber(aggData.output_tokens_24h);
+            document.getElementById('outputTokens24h').textContent = formatUsageNumber(aggData.output_tokens ?? aggData.output_tokens_24h);
 
             document.getElementById('avgTokensPerRequest').textContent = formatUsageNumber(
                 aggData.avg_tokens_per_successful_request,
                 { decimals: 1 }
             );
 
-            document.getElementById('cachedTokens24h').textContent = formatUsageNumber(aggData.cached_tokens_24h);
+            document.getElementById('cachedTokens24h').textContent = formatUsageNumber(aggData.cached_tokens ?? aggData.cached_tokens_24h);
 
-            document.getElementById('reasoningTokens24h').textContent = formatUsageNumber(aggData.reasoning_tokens_24h);
+            document.getElementById('reasoningTokens24h').textContent = formatUsageNumber(aggData.reasoning_tokens ?? aggData.reasoning_tokens_24h);
 
             renderUsageList();
 
@@ -6007,13 +6098,13 @@ function renderUsageList() {
 
         const tr = document.createElement('tr');
 
-        const calls24h = stats.calls_24h || 0;
-        const successfulCalls = stats.successful_calls_24h || 0;
-        const failedCalls = stats.failed_calls_24h || 0;
-        const inputTokens = stats.input_tokens_24h || 0;
-        const outputTokens = stats.output_tokens_24h || 0;
-        const totalTokens = stats.total_tokens_24h || 0;
-        const successRate = calls24h > 0 ? Math.round((successfulCalls / calls24h) * 100) : 0;
+        const calls = stats.calls ?? stats.calls_24h ?? 0;
+        const successfulCalls = stats.successful_calls ?? stats.successful_calls_24h ?? 0;
+        const failedCalls = stats.failed_calls ?? stats.failed_calls_24h ?? 0;
+        const inputTokens = stats.input_tokens ?? stats.input_tokens_24h ?? 0;
+        const outputTokens = stats.output_tokens ?? stats.output_tokens_24h ?? 0;
+        const totalTokens = stats.total_tokens ?? stats.total_tokens_24h ?? 0;
+        const successRate = calls > 0 ? Math.round((successfulCalls / calls) * 100) : 0;
         const isUnassigned = filename === '__gateway_unassigned__.json';
         const providerMeta = isUnassigned
             ? { name: 'Gateway', logo: '/frontend/assets/logo.png' }
@@ -6038,13 +6129,13 @@ function renderUsageList() {
             </td>
 
             <td>
-                <div class="usage-cell-primary">${formatUsageNumber(calls24h)} requests</div>
+                <div class="usage-cell-primary">${formatUsageNumber(calls)} requests</div>
                 <div class="usage-cell-meta">${formatUsageNumber(successfulCalls)} successful / ${formatUsageNumber(failedCalls)} failed</div>
             </td>
 
             <td>
                 <div class="usage-cell-primary">${successRate}%</div>
-                <div class="usage-cell-meta">${calls24h > 0 ? `${formatUsageNumber(successfulCalls)} of ${formatUsageNumber(calls24h)} succeeded` : 'No traffic recorded'}</div>
+                <div class="usage-cell-meta">${calls > 0 ? `${formatUsageNumber(successfulCalls)} of ${formatUsageNumber(calls)} succeeded` : 'No traffic recorded'}</div>
             </td>
 
             <td>
