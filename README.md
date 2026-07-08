@@ -69,6 +69,8 @@ sudo docker run -d \
   nguywnben/omni-gateway:latest
 ```
 
+The same image is also published to GitHub Packages as `ghcr.io/nguywnben/omni-gateway:latest`.
+
 Open the control panel at:
 
 ```text
@@ -350,7 +352,7 @@ git status --short
 - Put Omni Gateway behind a reverse proxy with TLS when reachable outside localhost.
 - Set `CORS_ORIGINS` to explicit trusted origins when browser clients need cross-origin access.
 - Keep `/opt/omni-gateway` or your chosen `DATA_DIR` backed up before upgrading or moving servers.
-- Docker image publishing uses the `DOCKERHUB_USERNAME` and `DOCKERHUB_TOKEN` repository secrets. Set the optional `IMAGE_NAME` repository variable only when publishing to a custom Docker Hub image name.
+- Docker image publishing uses the `DOCKERHUB_USERNAME` and `DOCKERHUB_TOKEN` repository secrets for Docker Hub, and the built-in `GITHUB_TOKEN` for GitHub Packages at `ghcr.io/nguywnben/omni-gateway`. Set the optional `IMAGE_NAME` repository variable only when publishing to a custom Docker Hub image name.
 - Use MongoDB/PostgreSQL for multi-instance deployments.
 - Keep log retention and credential rotation policies aligned with your usage limits.
 - Rotate credentials immediately if a repository or platform scanner reports a leaked secret.
