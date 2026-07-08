@@ -1,4 +1,4 @@
-full_hash=b6061c4c3a858fa500e3840a6c82001c7254f9cf
-short_hash=b6061c4
-message=chore: harden gitignore rules
-date=2026-07-08 22:55:19 +0700
+full_hash=090985c0883c8e3fbf7e1c74eeca95695b84e9b0
+short_hash=090985c
+message=ci: publish docker image to github packages
+date=2026-07-08 23:04:18 +0700
