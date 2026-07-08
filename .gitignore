@@ -32,7 +32,13 @@ GEMINI.md
 *.crt
 *.p12
 *.pfx
+*.p8
+*.ppk
+*.jks
+*.keystore
 *.token
+id_rsa
+id_ed25519
 *credentials*
 *secret*
 
@@ -86,9 +92,11 @@ coverage.xml
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
+.pyre/
+.pytype/
+.ipynb_checkpoints/
 
 # Virtual environments
-.env
 .venv
 env/
 venv/
@@ -96,10 +104,25 @@ ENV/
 env.bak/
 venv.bak/
 
+# Node / frontend tooling
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+coverage/
+*.tsbuildinfo
+
+# Docker local overrides
+docker-compose.override.yml
+compose.override.yml
+
 # IDE
 .vscode/
 .idea/
 .claude/
+.codex/
+.cursor/
 *.swp
 *.swo
 *~
@@ -112,16 +135,21 @@ venv.bak/
 .Trashes
 ehthumbs.db
 Thumbs.db
+desktop.ini
 
 # Logs
 *.log
 log.txt
 logs_*/
+logs/
+backend/logs/
 
 # Temporary files
 *.tmp
 *.temp
 *.bak
+tmp/
+temp/
 
 tools/
 aicode/
