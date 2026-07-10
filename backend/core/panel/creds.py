@@ -32,6 +32,7 @@ from core.provider_registry import (
     GOOGLE_ANTIGRAVITY,
     GOOGLE_AI_STUDIO,
     get_credential_provider,
+    normalize_provider_id,
 )
 from config import (
     get_antigravity_api_url,
@@ -340,7 +341,9 @@ async def upload_credentials_common(
 
 async def get_creds_status_common(
     offset: int, limit: int, status_filter: str, mode: str = "code_assist",
-    error_code_filter: str = None, cooldown_filter: str = None, preview_filter: str = None, tier_filter: str = None
+    error_code_filter: str = None, cooldown_filter: str = None,
+    preview_filter: str = None, tier_filter: str = None,
+    provider_filter: str = None,
 ) -> JSONResponse:
     """Internal implementation detail."""
     mode = validate_mode(mode)
@@ -358,6 +361,18 @@ async def get_creds_status_common(
     if tier_filter and tier_filter not in ["all", "free", "pro", "ultra"]:
         raise HTTPException(status_code=400, detail="Tier filter must be all, free, pro, or ultra.")
 
+    normalized_provider_filter = "all"
+    if provider_filter and str(provider_filter).strip().lower() != "all":
+        normalized_provider_filter = normalize_provider_id(provider_filter)
+        if mode != "primary" or normalized_provider_filter not in {
+            GOOGLE_ANTIGRAVITY,
+            GOOGLE_AI_STUDIO,
+        }:
+            raise HTTPException(
+                status_code=400,
+                detail="Provider filter must be all, google_antigravity, or google_ai_studio.",
+            )
+
 
     dedupe_result = await deduplicate_credentials_by_account_email(mode=mode)
 
@@ -366,9 +381,10 @@ async def get_creds_status_common(
     backend_type = backend_info.get("backend_type", "unknown")
 
 
+    filter_by_provider = normalized_provider_filter != "all"
     result = await storage_adapter._backend.get_credentials_summary(
-        offset=offset,
-        limit=limit,
+        offset=0 if filter_by_provider else offset,
+        limit=None if filter_by_provider else limit,
         status_filter=status_filter,
         mode=mode,
         error_code_filter=error_code_filter if error_code_filter and error_code_filter != "all" else None,
@@ -377,11 +393,13 @@ async def get_creds_status_common(
         tier_filter=tier_filter if tier_filter and tier_filter != "all" else None
     )
 
-    creds_list = []
+    matching_creds = []
     for summary in result["items"]:
         filename = os.path.basename(summary["filename"])
         credential_data = await storage_adapter.get_credential(filename, mode=mode) or {}
         provider_id = get_credential_provider(credential_data)
+        if filter_by_provider and provider_id != normalized_provider_filter:
+            continue
         cred_info = {
             "filename": filename,
             "user_email": summary["user_email"],
@@ -401,15 +419,29 @@ async def get_creds_status_common(
         else:
             cred_info["enable_credit"] = summary.get("enable_credit", False)
 
-        creds_list.append(cred_info)
+        matching_creds.append(cred_info)
+
+    if filter_by_provider:
+        total_count = len(matching_creds)
+        creds_list = matching_creds[offset:offset + limit]
+        stats = {
+            "total": total_count,
+            "normal": sum(1 for item in matching_creds if not item["disabled"]),
+            "disabled": sum(1 for item in matching_creds if item["disabled"]),
+        }
+    else:
+        total_count = result["total"]
+        creds_list = matching_creds
+        stats = result.get("stats", {"total": 0, "normal": 0, "disabled": 0})
 
     return JSONResponse(content={
         "items": creds_list,
-        "total": result["total"],
+        "total": total_count,
         "offset": offset,
         "limit": limit,
-        "has_more": (offset + limit) < result["total"],
-        "stats": result.get("stats", {"total": 0, "normal": 0, "disabled": 0}),
+        "has_more": (offset + limit) < total_count,
+        "stats": stats,
+        "provider_filter": normalized_provider_filter,
         "deduplicated_count": dedupe_result.get("deleted_count", 0),
     })
 
@@ -787,6 +819,7 @@ async def get_creds_status(
     cooldown_filter: str = "all",
     preview_filter: str = "all",
     tier_filter: str = "all",
+    provider_filter: str = "all",
     mode: str = "code_assist"
 ):
     """Internal implementation detail."""
@@ -797,7 +830,8 @@ async def get_creds_status(
             error_code_filter=error_code_filter,
             cooldown_filter=cooldown_filter,
             preview_filter=preview_filter,
-            tier_filter=tier_filter
+            tier_filter=tier_filter,
+            provider_filter=provider_filter,
         )
     except HTTPException:
         raise

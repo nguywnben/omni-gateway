@@ -16,7 +16,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
 from config import get_server_host, get_server_port
-from log import log
+from log import configure_logging, log
 from paths import FRONTEND_DIR
 
 # Import managers and utilities
@@ -56,6 +56,12 @@ async def lifespan(app: FastAPI):
     try:
         import config
         await config.init_config()
+        log_config = await config.get_log_config()
+        configure_logging(
+            log_config["level"],
+            log_config["max_mb"],
+            log_config["backup_count"],
+        )
         log.info("Configuration cache initialized.")
     except Exception as e:
         log.error(f"Failed to initialize the configuration cache: {e}")

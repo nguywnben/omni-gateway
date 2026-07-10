@@ -2,11 +2,15 @@
 
 from __future__ import annotations
 
+import io
+import json
 import sys
 import unittest
+import zipfile
 from pathlib import Path
 from unittest.mock import AsyncMock, patch
 
+from fastapi import UploadFile
 
 BACKEND_DIR = Path(__file__).resolve().parents[1]
 if str(BACKEND_DIR) not in sys.path:
@@ -14,9 +18,11 @@ if str(BACKEND_DIR) not in sys.path:
 
 from core.google_ai_studio import (
     GoogleAIStudioError,
+    GoogleAIStudioValidation,
     build_api_key_headers,
     build_generation_url,
     parse_model_ids,
+    parse_api_key_import_payload,
     validate_api_key,
 )
 from core.provider_registry import (
@@ -27,6 +33,10 @@ from core.provider_registry import (
     get_credential_provider,
     get_static_credential_identity,
 )
+from core.panel.provider_settings import (
+    _extract_ai_studio_import_file,
+    import_google_ai_studio_credentials,
+)
 
 
 class FakeResponse:
@@ -36,6 +46,120 @@ class FakeResponse:
 
     def json(self):
         return self._payload
+
+
+class GoogleAIStudioImportPayloadTests(unittest.TestCase):
+    def test_parses_single_key_object(self):
+        self.assertEqual(
+            parse_api_key_import_payload(
+                {"provider": "google_ai_studio", "api_key": " example-key "}
+            ),
+            ["example-key"],
+        )
+
+    def test_parses_mixed_key_array(self):
+        self.assertEqual(
+            parse_api_key_import_payload(
+                ["first-key", {"api_key": "second-key"}]
+            ),
+            ["first-key", "second-key"],
+        )
+
+    def test_parses_api_keys_container(self):
+        self.assertEqual(
+            parse_api_key_import_payload({"api_keys": ["first-key", "second-key"]}),
+            ["first-key", "second-key"],
+        )
+
+    def test_rejects_payload_for_another_provider(self):
+        with self.assertRaisesRegex(ValueError, "different provider"):
+            parse_api_key_import_payload(
+                {"provider": "google_antigravity", "api_key": "example-key"}
+            )
+
+
+class GoogleAIStudioImportArchiveTests(unittest.IsolatedAsyncioTestCase):
+    @staticmethod
+    def build_zip(entries):
+        buffer = io.BytesIO()
+        with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as archive:
+            for name, payload in entries.items():
+                archive.writestr(name, json.dumps(payload))
+        return buffer.getvalue()
+
+    async def test_extracts_api_keys_from_zip_without_writing_files(self):
+        upload = UploadFile(
+            filename="keys.zip",
+            file=io.BytesIO(
+                self.build_zip(
+                    {
+                        "one.json": {"api_key": "first-key"},
+                        "nested/two.json": {"api_keys": ["second-key", "third-key"]},
+                    }
+                )
+            ),
+        )
+
+        candidates, errors = await _extract_ai_studio_import_file(upload)
+
+        self.assertEqual([key for _, key in candidates], ["first-key", "second-key", "third-key"])
+        self.assertEqual(errors, [])
+
+    async def test_keeps_valid_zip_entries_when_another_entry_is_invalid(self):
+        upload = UploadFile(
+            filename="mixed.zip",
+            file=io.BytesIO(
+                self.build_zip(
+                    {
+                        "valid.json": {"api_key": "valid-key"},
+                        "invalid.json": {"provider": "google_antigravity", "api_key": "wrong"},
+                    }
+                )
+            ),
+        )
+
+        candidates, errors = await _extract_ai_studio_import_file(upload)
+
+        self.assertEqual([key for _, key in candidates], ["valid-key"])
+        self.assertEqual(len(errors), 1)
+        self.assertIn("different provider", errors[0]["message"])
+
+    async def test_batch_import_deduplicates_and_never_returns_key_values(self):
+        first_key = "example-google-key-value-one"
+        second_key = "example-google-key-value-two"
+        upload = UploadFile(
+            filename="keys.json",
+            file=io.BytesIO(
+                json.dumps({"api_keys": [first_key, first_key, second_key]}).encode()
+            ),
+        )
+        validation = GoogleAIStudioValidation(model_ids=["gemini-test"])
+
+        with (
+            patch(
+                "core.panel.provider_settings.validate_api_key",
+                new=AsyncMock(return_value=validation),
+            ) as validate_mock,
+            patch(
+                "core.panel.provider_settings._store_google_ai_studio_credential",
+                new=AsyncMock(
+                    side_effect=[
+                        {"action": "created", "filename": "first.json", "label": "First"},
+                        {"action": "created", "filename": "second.json", "label": "Second"},
+                    ]
+                ),
+            ),
+        ):
+            response = await import_google_ai_studio_credentials(files=[upload], token="test")
+
+        payload = json.loads(response.body)
+        response_text = response.body.decode()
+        self.assertEqual(payload["uploaded_count"], 2)
+        self.assertEqual(payload["skipped_count"], 1)
+        self.assertEqual(payload["error_count"], 0)
+        self.assertEqual(validate_mock.await_count, 2)
+        self.assertNotIn(first_key, response_text)
+        self.assertNotIn(second_key, response_text)
 
 
 class ProviderRegistryTests(unittest.TestCase):

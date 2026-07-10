@@ -10,6 +10,7 @@ import httpx
 
 from config import get_google_ai_studio_api_url
 from core.httpx_client import get_async
+from core.provider_registry import GOOGLE_AI_STUDIO, normalize_provider_id
 
 
 class GoogleAIStudioError(RuntimeError):
@@ -27,6 +28,48 @@ class GoogleAIStudioValidation:
     @property
     def model_count(self) -> int:
         return len(self.model_ids)
+
+
+def parse_api_key_import_payload(payload: Any) -> List[str]:
+    """Extract Google AI Studio API keys from a supported JSON payload."""
+    entries: List[Any]
+
+    if isinstance(payload, dict):
+        declared_provider = payload.get("provider")
+        if declared_provider and normalize_provider_id(declared_provider) != GOOGLE_AI_STUDIO:
+            raise ValueError("The import payload targets a different provider.")
+        if "api_keys" in payload:
+            if not isinstance(payload["api_keys"], list):
+                raise ValueError("The api_keys field must be an array.")
+            entries = payload["api_keys"]
+        elif "api_key" in payload:
+            entries = [payload]
+        else:
+            raise ValueError("The JSON payload must contain api_key or api_keys.")
+    elif isinstance(payload, list):
+        entries = payload
+    else:
+        raise ValueError("The JSON payload must be an object or array.")
+
+    api_keys: List[str] = []
+    for index, entry in enumerate(entries, start=1):
+        if isinstance(entry, str):
+            api_key = entry.strip()
+        elif isinstance(entry, dict):
+            declared_provider = entry.get("provider")
+            if declared_provider and normalize_provider_id(declared_provider) != GOOGLE_AI_STUDIO:
+                raise ValueError(f"Entry {index} targets a different provider.")
+            api_key = str(entry.get("api_key") or "").strip()
+        else:
+            raise ValueError(f"Entry {index} must be an API key string or object.")
+
+        if not api_key:
+            raise ValueError(f"Entry {index} does not contain an API key.")
+        api_keys.append(api_key)
+
+    if not api_keys:
+        raise ValueError("The import payload does not contain any API keys.")
+    return api_keys
 
 
 def normalize_api_base_url(value: str) -> str:
@@ -86,7 +129,7 @@ def parse_model_ids(payload: Any) -> List[str]:
 async def validate_api_key(api_key: str) -> GoogleAIStudioValidation:
     """Validate a key and return models available to generateContent."""
     normalized_key = str(api_key or "").strip()
-    if len(normalized_key) < 16:
+    if len(normalized_key) < 16 or len(normalized_key) > 512:
         raise GoogleAIStudioError("Enter a valid Google AI Studio API key.")
 
     try:

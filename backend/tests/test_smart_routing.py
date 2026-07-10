@@ -204,6 +204,56 @@ class SmartCredentialRouterTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(result[0], "ai-studio.json")
 
+    async def test_priority_strategy_prefers_the_configured_provider(self):
+        storage = FakeStorageAdapter(
+            {
+                "antigravity.json": credential_state(rotation_order=0),
+                "ai-studio.json": credential_state(rotation_order=1),
+            }
+        )
+        storage.credentials["antigravity.json"]["provider"] = "google_antigravity"
+        storage.credentials["ai-studio.json"] = {
+            "provider": "google_ai_studio",
+            "credential_type": "api_key",
+            "api_key": "example-key",
+        }
+        router = SmartCredentialRouter(clock=lambda: 100.0)
+
+        result = await router.acquire(
+            storage,
+            mode="primary",
+            model_name="gemini-2.5-flash",
+            routing_strategy="priority",
+            preferred_provider="google_ai_studio",
+        )
+
+        self.assertEqual(result[0], "ai-studio.json")
+
+    async def test_priority_strategy_falls_back_when_preferred_provider_is_unavailable(self):
+        storage = FakeStorageAdapter(
+            {
+                "antigravity.json": credential_state(rotation_order=0),
+                "ai-studio.json": credential_state(disabled=True, rotation_order=1),
+            }
+        )
+        storage.credentials["antigravity.json"]["provider"] = "google_antigravity"
+        storage.credentials["ai-studio.json"] = {
+            "provider": "google_ai_studio",
+            "credential_type": "api_key",
+            "api_key": "example-key",
+        }
+        router = SmartCredentialRouter(clock=lambda: 100.0)
+
+        result = await router.acquire(
+            storage,
+            mode="primary",
+            model_name="gemini-2.5-flash",
+            routing_strategy="priority",
+            preferred_provider="google_ai_studio",
+        )
+
+        self.assertEqual(result[0], "antigravity.json")
+
 
 if __name__ == "__main__":
     unittest.main()

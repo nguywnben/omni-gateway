@@ -4,7 +4,7 @@ import secrets
 import time
 from typing import List, Optional
 
-from config import get_api_password, get_panel_password
+from config import get_panel_password
 from fastapi import Depends, HTTPException, Header, Query, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 import jwt
@@ -154,7 +154,6 @@ async def authenticate_flexible(
     key: Optional[str] = Query(None)
 ) -> str:
     """Internal implementation detail."""
-    password = await get_api_password()
     token = None
     auth_method = None
 

@@ -77,7 +77,7 @@ Open the control panel at:
 http://YOUR_SERVER_IP:4283
 ```
 
-On first run, create the console password on the setup screen. No default password is shipped.
+On first run, create the console password on the setup screen. No default password is shipped. Passwords managed by the application are stored as salted scrypt hashes; public SDK requests authenticate with the generated `sk-ogw-` API key.
 
 If the server firewall is enabled, allow the gateway port:
 
@@ -155,9 +155,8 @@ Omni Gateway reads configuration from environment variables first, then stored c
 | `CORS_ORIGINS` | empty | Comma-separated browser origins allowed to call the API cross-origin. Leave empty for same-origin console usage. |
 | `CORS_ORIGIN_REGEX` | empty | Optional regex for managed dynamic browser origins. |
 | `API_KEY` | generated automatically | Preferred key for public client API requests. Must start with `sk-ogw-`. |
-| `API_PASSWORD` | empty until setup | Password for API requests. |
 | `PANEL_PASSWORD` | empty until setup | Password for the web control panel. |
-| `PASSWORD` | empty until setup | Shared fallback password for API and panel. |
+| `PASSWORD` | empty until setup | Legacy fallback password for the web control panel. |
 | `PANEL_SESSION_TTL_SECONDS` | `86400` | Web console session lifetime in seconds. |
 | `PANEL_LOGIN_WINDOW_SECONDS` | `300` | Login rate-limit window in seconds. |
 | `PANEL_LOGIN_MAX_ATTEMPTS` | `10` | Failed login attempts allowed per client within the rate-limit window. |
@@ -170,6 +169,9 @@ Omni Gateway reads configuration from environment variables first, then stored c
 | `RETRY_429_INTERVAL` | `1` | Delay between retries in seconds. |
 | `AUTO_DISABLE` | `false` | Disable credentials after configured hard failures. |
 | `AUTO_DISABLE_ERROR_CODES` | `403` | Comma-separated hard-failure status codes. |
+| `ROUTING_STRATEGY` | `balanced` | Credential selection policy: `balanced` or `priority`. |
+| `PREFERRED_PROVIDER` | empty | Provider preferred by the `priority` strategy, such as `google_antigravity` or `google_ai_studio`. |
+| `UPSTREAM_TIMEOUT_SECONDS` | `300` | Provider inference timeout, bounded between 5 and 900 seconds. |
 | `ANTI_TRUNCATION_MAX_ATTEMPTS` | `3` | Maximum continuation attempts for anti-truncation streaming. |
 | `TOKEN_COMPRESSION_ENABLED` | `true` | Compress oversized conversation history before provider routing. |
 | `TOKEN_COMPRESSION_THRESHOLD` | `32000` | Estimated input-token threshold that activates compression. |
@@ -191,6 +193,8 @@ Omni Gateway reads configuration from environment variables first, then stored c
 | `USER_AGENT` / `ANTIGRAVITY_USER_AGENT` | `antigravity/cli/1.0.1 windows/amd64` | Optional Google Antigravity protocol User-Agent override. |
 | `ANTIGRAVITY_PAYLOAD_USER_AGENT` | `antigravity` | Optional payload-level Google Antigravity userAgent override. |
 | `LOG_LEVEL` | `info` | Runtime log level. |
+| `LOG_MAX_MB` | `10` | Maximum active log file size before rotation. |
+| `LOG_BACKUP_COUNT` | `3` | Number of rotated log files retained. |
 | `LOG_FILE` | `./backend/data/logs/omni-gateway.log` | File log destination. In Docker, persist `/app/backend/data/logs` with a host volume. |
 
 ## SDK Surfaces
@@ -299,6 +303,20 @@ Omni Gateway records request volume, success rate, credential attribution, provi
 When adding Google Antigravity credentials, Google redirects the browser to `http://localhost:4283/callback` after sign-in. On a local machine, Omni Gateway shows an OAuth success page. On a VPS, that `localhost` address belongs to the user's browser machine, so the page may not load; copy the full URL from the browser address bar, return to the Providers page, paste it into `Callback URL`, and click `Save credentials`.
 
 Google AI Studio uses API-key authentication instead of OAuth. Add a key from the Providers page; Omni Gateway validates it against Google's model catalog, stores it as a provider credential, and routes compatible Gemini or Gemma requests through it. The smart router can fall back between AI Studio and Google Antigravity for shared Gemini models while keeping provider-specific models on compatible credentials.
+
+Google AI Studio batch import accepts JSON files and ZIP archives containing JSON files. A JSON document may contain one key, an `api_keys` array, or an array of key objects:
+
+```json
+{
+  "provider": "google_ai_studio",
+  "api_keys": [
+    "YOUR_FIRST_API_KEY",
+    "YOUR_SECOND_API_KEY"
+  ]
+}
+```
+
+Every imported key is validated before storage. Duplicate keys within the same import are skipped, existing keys are revalidated and updated, and invalid entries are reported without exposing the key value.
 
 Credential mode names:
 

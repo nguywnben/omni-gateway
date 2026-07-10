@@ -206,7 +206,7 @@ const TRANSLATIONS = {
         "primary_batch_verification_comp_dup": "Provider batch verification complete.\\n\\nSuccess: {successCount}\\nFailed: {failCount}\\nTotal: {selectedFiles_length}\\n\\nDetailed results:\\n{resultMessages_join___n}",
         "primary_credential_valid": "Provider credential is valid.",
         "project_id_required_to_complete_aut": "A Project ID is required to complete authentication. Restart the flow and enter the correct Project ID.",
-        "provider_antigravity": "Antigravity",
+        "provider_antigravity": "Google Antigravity",
         "provider_google_ai_studio": "Google AI Studio",
         "provider_authorization_expired": "This authorization session was not found or has expired. Generate a new authorization link and try again.",
         "provider_authorization_pending": "Authorization is not complete yet. If Google opened a localhost callback page, copy the full callback URL from that tab and paste it into Callback URL.",
@@ -652,6 +652,15 @@ const AppState = {
 
     primaryUploadFiles: createUploadManager('primary'),
 
+    googleAiStudioUploadFiles: createUploadManager('googleAiStudio', {
+        endpoint: './api/providers/google-ai-studio/credentials/import',
+        elementPrefix: 'googleAiStudio',
+        credentialType: 'Google AI Studio',
+        removeFunction: 'removeGoogleAiStudioFile',
+        timeoutMs: 900000,
+        onComplete: () => AppState.primaryCreds.refresh()
+    }),
+
     currentConfig: {},
 
     envLockedFields: new Set(),
@@ -659,6 +668,8 @@ const AppState = {
     antigravityConfig: {},
 
     antigravityEnvLockedFields: new Set(),
+
+    activeProviderWorkspace: 'google_antigravity',
 
     logWebSocket: null,
 
@@ -715,6 +726,8 @@ function createCredsManager(type) {
         currentPreviewFilter: 'all',
 
         currentTierFilter: 'all',
+
+        currentProviderFilter: 'all',
 
         statsData: { total: 0, normal: 0, disabled: 0 },
 
@@ -784,9 +797,11 @@ function createCredsManager(type) {
 
                 const tierFilter = this.currentTierFilter || 'all';
 
+                const providerFilter = this.currentProviderFilter || 'all';
+
                 const response = await fetch(
 
-                    `${this.getEndpoint('status')}?offset=${offset}&limit=${this.pageSize}&status_filter=${this.currentStatusFilter}&error_code_filter=${errorCodeFilter}&cooldown_filter=${cooldownFilter}&preview_filter=${previewFilter}&tier_filter=${tierFilter}&${this.getModeParam()}`,
+                    `${this.getEndpoint('status')}?offset=${offset}&limit=${this.pageSize}&status_filter=${this.currentStatusFilter}&error_code_filter=${errorCodeFilter}&cooldown_filter=${cooldownFilter}&preview_filter=${previewFilter}&tier_filter=${tierFilter}&provider_filter=${providerFilter}&${this.getModeParam()}`,
 
                     { headers: getAuthHeaders() }
 
@@ -815,6 +830,12 @@ function createCredsManager(type) {
                             },
 
                             user_email: item.user_email,
+
+                            credential_label: item.credential_label,
+
+                            credential_type: item.credential_type,
+
+                            provider: item.provider,
 
                             model_cooldowns: item.model_cooldowns || {},
 
@@ -932,11 +953,39 @@ function createCredsManager(type) {
 
             }
 
-            entries.forEach(([, credInfo]) => {
+            if (this.type === 'primary') {
 
-                list.appendChild(createCredCard(credInfo, this));
+                const providerGroups = new Map();
 
-            });
+                entries.forEach(([, credInfo]) => {
+
+                    const providerMeta = getCredentialProviderMeta(credInfo, this.type);
+
+                    if (!providerGroups.has(providerMeta.id)) {
+
+                        providerGroups.set(providerMeta.id, { providerMeta, credentials: [] });
+
+                    }
+
+                    providerGroups.get(providerMeta.id).credentials.push(credInfo);
+
+                });
+
+                providerGroups.forEach(({ providerMeta, credentials }) => {
+
+                    list.appendChild(createCredentialProviderGroup(providerMeta, credentials, this));
+
+                });
+
+            } else {
+
+                entries.forEach(([, credInfo]) => {
+
+                    list.appendChild(createCredCard(credInfo, this));
+
+                });
+
+            }
 
             document.getElementById(this.getElementId('PaginationContainer')).style.display =
 
@@ -1006,13 +1055,33 @@ function createCredsManager(type) {
 
             const tierFilterEl = document.getElementById(this.getElementId('TierFilter'));
 
+            const providerFilterEl = document.getElementById(this.getElementId('ProviderFilter'));
+
             this.currentErrorCodeFilter = errorCodeFilterEl ? errorCodeFilterEl.value : 'all';
 
             this.currentCooldownFilter = cooldownFilterEl ? cooldownFilterEl.value : 'all';
 
             this.currentPreviewFilter = previewFilterEl ? previewFilterEl.value : 'all';
 
-            this.currentTierFilter = tierFilterEl ? tierFilterEl.value : 'all';
+            this.currentProviderFilter = providerFilterEl ? providerFilterEl.value : 'all';
+
+            if (tierFilterEl) {
+
+                const tierIsRelevant = this.currentProviderFilter !== 'google_ai_studio';
+
+                tierFilterEl.disabled = !tierIsRelevant;
+
+                if (!tierIsRelevant) tierFilterEl.value = 'all';
+
+                this.currentTierFilter = tierIsRelevant ? tierFilterEl.value : 'all';
+
+            } else {
+
+                this.currentTierFilter = 'all';
+
+            }
+
+            this.selectedFiles.clear();
 
             this.currentPage = 1;
 
@@ -1043,6 +1112,32 @@ function createCredsManager(type) {
             );
 
             batchBtns.forEach(btn => btn && (btn.disabled = selectedCount === 0));
+
+            if (this.type === 'primary') {
+
+                const selectedCredentials = Array.from(this.selectedFiles)
+
+                    .map(filename => this.data[filename])
+
+                    .filter(Boolean);
+
+                const supportsCreditActions = selectedCredentials.length > 0
+
+                    && selectedCredentials.every((credInfo) => (
+
+                        getCredentialProviderMeta(credInfo, this.type).id === 'google_antigravity'
+
+                    ));
+
+                ['EnableCredit', 'DisableCredit'].forEach((action) => {
+
+                    const button = document.getElementById(this.getElementId(`Batch${action}Btn`));
+
+                    if (button) button.disabled = !supportsCreditActions;
+
+                });
+
+            }
 
             const selectAllCheckbox = document.getElementById(this.getElementId('SelectAllCheckbox'));
 
@@ -1202,11 +1297,17 @@ function createCredsManager(type) {
 
 // =====================================================================
 
-function createUploadManager(type) {
+function createUploadManager(type, options = {}) {
 
     const modeParam = type === 'primary' ? 'mode=provider' : 'mode=code_assist';
 
-    const endpoint = `./api/creds/upload?${modeParam}`;
+    const endpoint = options.endpoint || `./api/creds/upload?${modeParam}`;
+
+    const elementPrefix = options.elementPrefix || (type === 'primary' ? 'primary' : '');
+
+    const credentialType = options.credentialType || (type === 'primary' ? 'provider' : 'Code Assist');
+
+    const removeFunction = options.removeFunction || (type === 'primary' ? 'removePrimaryFile' : 'removeFile');
 
     return {
 
@@ -1216,9 +1317,9 @@ function createUploadManager(type) {
 
         getElementId: (suffix) => {
 
-            if (type === 'primary') {
+            if (elementPrefix) {
 
-                return 'primary' + suffix.charAt(0).toUpperCase() + suffix.slice(1);
+                return elementPrefix + suffix.charAt(0).toUpperCase() + suffix.slice(1);
 
             }
 
@@ -1269,7 +1370,6 @@ function createUploadManager(type) {
             if (variant !== 'success') panel.classList.add(variant);
 
             title.textContent = titleText;
-            const credentialType = type === 'primary' ? 'provider' : 'Code Assist';
             text.textContent = ensureTerminalPunctuation(data.message || t('status_upload_success', {count: savedCount, type: credentialType}));
             details.replaceChildren();
 
@@ -1287,7 +1387,9 @@ function createUploadManager(type) {
                         ? 'Error'
                         : item.action === 'replaced'
                             ? 'Renewed'
-                            : 'Added';
+                            : item.action === 'updated'
+                                ? 'Updated'
+                                : 'Added';
                 fileLine.textContent = `${actionLabel}: ${item.filename || item.source_filename || 'Credential'}`;
 
                 const messageLine = document.createElement('div');
@@ -1392,7 +1494,7 @@ function createUploadManager(type) {
 
                     </div>
 
-                    <button class="remove-btn" onclick="${type === 'primary' ? 'removePrimaryFile' : 'removeFile'}(${index})">${t('action_delete')}</button>
+                    <button class="remove-btn" onclick="${removeFunction}(${index})">${t('action_delete')}</button>
 
                 `;
 
@@ -1413,6 +1515,10 @@ function createUploadManager(type) {
         clearFiles(hideResult = true) {
 
             this.selectedFiles = [];
+
+            const fileInput = document.getElementById(this.getElementId('FileInput'));
+
+            if (fileInput) fileInput.value = '';
 
             this.updateFileList();
 
@@ -1452,7 +1558,7 @@ function createUploadManager(type) {
 
                 const xhr = new XMLHttpRequest();
 
-                xhr.timeout = 300000; // 5 minutes
+                xhr.timeout = options.timeoutMs || 300000;
 
                 xhr.upload.onprogress = (event) => {
 
@@ -1470,18 +1576,22 @@ function createUploadManager(type) {
 
                 xhr.onload = () => {
 
-                    if (xhr.status === 200) {
+                    if (xhr.status >= 200 && xhr.status < 300) {
 
                         try {
 
                             const data = JSON.parse(xhr.responseText);
 
-                            const credentialType = type === 'primary' ? 'provider' : 'Code Assist';
                             const message = data.message || t('status_upload_success', {count: data.uploaded_count, type: credentialType});
-                            showStatus(message, data.uploaded_count > 0 ? 'success' : 'info');
+                            const uploadStatus = data.uploaded_count > 0
+                                ? (data.error_count > 0 ? 'warning' : 'success')
+                                : (data.error_count > 0 ? 'error' : 'info');
+                            showStatus(message, uploadStatus);
                             this.renderUploadResult(data);
 
                             this.clearFiles(false);
+
+                            if (options.onComplete) Promise.resolve(options.onComplete(data));
 
                             progressSection.classList.add('hidden');
 
@@ -2654,6 +2764,50 @@ function getCredentialProviderMeta(credInfo, managerType) {
 
 }
 
+function createCredentialProviderGroup(providerMeta, credentials, manager) {
+
+    const section = document.createElement('section');
+
+    section.className = 'credential-provider-group';
+
+    section.setAttribute('aria-labelledby', `credentialProviderGroup-${providerMeta.id}`);
+
+    const logo = providerMeta.logo
+
+        ? `<img src="${providerMeta.logo}" alt="">`
+
+        : `<span>${escapeHtml(providerMeta.name.charAt(0))}</span>`;
+
+    const countLabel = `${credentials.length} credential${credentials.length === 1 ? '' : 's'}`;
+
+    section.innerHTML = `
+
+        <div class="credential-provider-group-header">
+
+            <div class="credential-provider-group-logo" aria-hidden="true">${logo}</div>
+
+            <h2 class="credential-provider-group-title" id="credentialProviderGroup-${providerMeta.id}">${escapeHtml(providerMeta.name)}</h2>
+
+            <span class="credential-provider-group-count">${countLabel}</span>
+
+        </div>
+
+        <div class="credential-provider-grid"></div>
+
+    `;
+
+    const grid = section.querySelector('.credential-provider-grid');
+
+    credentials.forEach((credInfo) => {
+
+        grid.appendChild(createCredCard(credInfo, manager));
+
+    });
+
+    return section;
+
+}
+
 function createCredCard(credInfo, manager) {
 
     const div = document.createElement('div');
@@ -3064,12 +3218,6 @@ async function completeInitialSetup() {
 
 }
 
-function handleSetupEnter(event) {
-
-    if (event.key === 'Enter') completeInitialSetup();
-
-}
-
 async function login() {
 
     const password = document.getElementById('loginPassword').value;
@@ -3226,12 +3374,6 @@ function logout() {
 
 }
 
-function handlePasswordEnter(event) {
-
-    if (event.key === 'Enter') login();
-
-}
-
 // =====================================================================
 
 // =====================================================================
@@ -3337,6 +3479,63 @@ function switchTab(tabName) {
     navigate(route, true);
 
 }
+
+const PROVIDER_WORKSPACES = {
+    google_antigravity: {
+        selectorId: 'providerSelectorGoogleAntigravity',
+        panelId: 'providerWorkspaceGoogleAntigravity'
+    },
+    google_ai_studio: {
+        selectorId: 'providerSelectorGoogleAiStudio',
+        panelId: 'providerWorkspaceGoogleAiStudio'
+    }
+};
+
+function selectProviderWorkspace(providerId, focusSelector = false) {
+    const selected = PROVIDER_WORKSPACES[providerId];
+    if (!selected) return;
+
+    AppState.activeProviderWorkspace = providerId;
+
+    Object.entries(PROVIDER_WORKSPACES).forEach(([id, workspace]) => {
+        const selector = document.getElementById(workspace.selectorId);
+        const panel = document.getElementById(workspace.panelId);
+        const isActive = id === providerId;
+
+        selector?.classList.toggle('active', isActive);
+        selector?.setAttribute('aria-selected', String(isActive));
+        if (selector) selector.tabIndex = isActive ? 0 : -1;
+        panel?.classList.toggle('hidden', !isActive);
+    });
+
+    if (focusSelector) {
+        document.getElementById(selected.selectorId)?.focus();
+    }
+}
+
+function initProviderWorkspaceSelector() {
+    const providerIds = Object.keys(PROVIDER_WORKSPACES);
+
+    providerIds.forEach((providerId, index) => {
+        const selector = document.getElementById(PROVIDER_WORKSPACES[providerId].selectorId);
+        selector?.addEventListener('keydown', (event) => {
+            if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
+            event.preventDefault();
+
+            let nextIndex = index;
+            if (event.key === 'ArrowLeft') nextIndex = (index - 1 + providerIds.length) % providerIds.length;
+            if (event.key === 'ArrowRight') nextIndex = (index + 1) % providerIds.length;
+            if (event.key === 'Home') nextIndex = 0;
+            if (event.key === 'End') nextIndex = providerIds.length - 1;
+
+            selectProviderWorkspace(providerIds[nextIndex], true);
+        });
+    });
+
+    selectProviderWorkspace(AppState.activeProviderWorkspace);
+}
+
+document.addEventListener('DOMContentLoaded', initProviderWorkspaceSelector);
 
 function triggerTabDataLoad(tabName) {
 
@@ -4279,6 +4478,28 @@ function removePrimaryFile(index) { AppState.primaryUploadFiles.removeFile(index
 function clearPrimaryFiles() { AppState.primaryUploadFiles.clearFiles(); }
 
 function uploadPrimaryFiles() { AppState.primaryUploadFiles.upload(); }
+
+function handleGoogleAiStudioFileSelect(event) {
+    AppState.googleAiStudioUploadFiles.handleFileSelect(event);
+}
+
+function handleGoogleAiStudioFileDrop(event) {
+    event.preventDefault();
+    event.currentTarget.classList.remove('dragover');
+    AppState.googleAiStudioUploadFiles.addFiles(Array.from(event.dataTransfer.files));
+}
+
+function removeGoogleAiStudioFile(index) {
+    AppState.googleAiStudioUploadFiles.removeFile(index);
+}
+
+function clearGoogleAiStudioFiles() {
+    AppState.googleAiStudioUploadFiles.clearFiles();
+}
+
+function uploadGoogleAiStudioFiles() {
+    AppState.googleAiStudioUploadFiles.upload();
+}
 
 async function verifyProjectId(filename) {
 
@@ -5836,7 +6057,6 @@ async function resetGoogleAIStudioSettings() {
 async function addGoogleAIStudioCredential(event) {
     event?.preventDefault();
     const keyField = document.getElementById('googleAiStudioApiKey');
-    const labelField = document.getElementById('googleAiStudioKeyLabel');
     const button = document.getElementById('addGoogleAiStudioKeyBtn');
     const apiKey = keyField?.value.trim() || '';
 
@@ -5854,10 +6074,7 @@ async function addGoogleAIStudioCredential(event) {
         const response = await fetch('./api/providers/google-ai-studio/credentials', {
             method: 'POST',
             headers: getAuthHeaders(),
-            body: JSON.stringify({
-                api_key: apiKey,
-                label: labelField?.value.trim() || null
-            })
+            body: JSON.stringify({ api_key: apiKey })
         });
         const data = await response.json().catch(() => ({}));
         if (!response.ok) {
@@ -6121,9 +6338,6 @@ async function resetAntigravitySettings() {
 const CONFIG_FIELD_KEYS = {
     host: 'host',
     port: 'port',
-    configApiPassword: 'api_password',
-    configPanelPassword: 'panel_password',
-    configPassword: 'password',
     credentialsDir: 'credentials_dir',
     proxy: 'proxy',
     codeAssistClientId: 'code_assist_client_id',
@@ -6141,6 +6355,12 @@ const CONFIG_FIELD_KEYS = {
     tokenCompressionThreshold: 'token_compression_threshold',
     tokenCompressionTarget: 'token_compression_target',
     tokenCompressionMinRecentTurns: 'token_compression_min_recent_turns',
+    routingStrategy: 'routing_strategy',
+    preferredProvider: 'preferred_provider',
+    upstreamTimeoutSeconds: 'upstream_timeout_seconds',
+    runtimeLogLevel: 'log_level',
+    runtimeLogMaxMb: 'log_max_mb',
+    runtimeLogBackupCount: 'log_backup_count',
     keepaliveUrl: 'keepalive_url',
     keepaliveInterval: 'keepalive_interval'
 };
@@ -6199,11 +6419,7 @@ function populateConfigForm() {
 
     setConfigField('port', c.port || 4283);
 
-    setConfigField('configApiPassword', c.api_password || '');
-
-    setConfigField('configPanelPassword', c.panel_password || '');
-
-    setConfigField('configPassword', c.password || '');
+    populateAccessCredentialStatus(c);
 
     setConfigField('credentialsDir', c.credentials_dir || '');
 
@@ -6238,6 +6454,20 @@ function populateConfigForm() {
     setConfigField('tokenCompressionTarget', c.token_compression_target ?? 24000);
 
     setConfigField('tokenCompressionMinRecentTurns', c.token_compression_min_recent_turns ?? 4);
+
+    setConfigField('routingStrategy', c.routing_strategy || 'balanced');
+
+    setConfigField('preferredProvider', c.preferred_provider || '');
+
+    setConfigField('upstreamTimeoutSeconds', c.upstream_timeout_seconds ?? 300);
+
+    setConfigField('runtimeLogLevel', c.log_level || 'info');
+
+    setConfigField('runtimeLogMaxMb', c.log_max_mb ?? 10);
+
+    setConfigField('runtimeLogBackupCount', c.log_backup_count ?? 3);
+
+    syncRoutingPolicyControls();
 
     setConfigField('keepaliveUrl', c.keepalive_url || '');
 
@@ -6314,12 +6544,6 @@ async function saveConfig() {
 
             port: getInt('port', 4283),
 
-            api_password: getValue('configApiPassword'),
-
-            panel_password: getValue('configPanelPassword'),
-
-            password: getValue('configPassword'),
-
             code_assist_endpoint: getValue('codeAssistEndpoint'),
 
             credentials_dir: getValue('credentialsDir'),
@@ -6356,6 +6580,18 @@ async function saveConfig() {
 
             token_compression_min_recent_turns: getInt('tokenCompressionMinRecentTurns', 4),
 
+            routing_strategy: getValue('routingStrategy', 'balanced'),
+
+            preferred_provider: getValue('preferredProvider'),
+
+            upstream_timeout_seconds: getFloat('upstreamTimeoutSeconds', 300),
+
+            log_level: getValue('runtimeLogLevel', 'info'),
+
+            log_max_mb: getInt('runtimeLogMaxMb', 10),
+
+            log_backup_count: getInt('runtimeLogBackupCount', 3),
+
             keepalive_url: getValue('keepaliveUrl'),
 
             keepalive_interval: getInt('keepaliveInterval', 60)
@@ -6375,25 +6611,13 @@ async function saveConfig() {
         const data = await response.json();
 
         if (response.ok) {
-
-            let message = t('configuration_saved_successfully');
-
-            if (data.hot_updated && data.hot_updated.length > 0) {
-
-                message += t('the_following_configurations_have_t_dup', {data_hot_updated_join: data.hot_updated.join(', ')});
-
-            }
-
             if (data.restart_required && data.restart_required.length > 0) {
-
-                message += t('n_restart_notice_datarestart_notice', {data_restart_notice: data.restart_notice});
-
-                showStatus(message, 'info');
-
+                showStatus(
+                    data.restart_notice || 'Configuration saved. Restart the application to apply listener or storage changes.',
+                    'info'
+                );
             } else {
-
-                showStatus(message, 'success');
-
+                showStatus(data.message || 'Configuration saved.', 'success');
             }
 
             setTimeout(() => loadConfig(), 1000);
@@ -6410,6 +6634,87 @@ async function saveConfig() {
 
     }
 
+}
+
+function syncRoutingPolicyControls() {
+    const strategy = document.getElementById('routingStrategy');
+    const provider = document.getElementById('preferredProvider');
+    if (!strategy || !provider) return;
+
+    const isEnvironmentLocked = AppState.envLockedFields.has('preferred_provider');
+    provider.disabled = strategy.value !== 'priority' || isEnvironmentLocked;
+    provider.classList.toggle('env-locked', isEnvironmentLocked);
+}
+
+function populateAccessCredentialStatus(config) {
+    const panelLocked = AppState.envLockedFields.has('panel_password');
+    const panelStatus = document.getElementById('panelPasswordStatus');
+    if (panelStatus) {
+        panelStatus.textContent = panelLocked
+            ? 'Managed by environment'
+            : (config.panel_password_configured ? 'Configured' : 'Not configured');
+    }
+    for (const id of ['newPanelPassword', 'confirmPanelPassword']) {
+        const field = document.getElementById(id);
+        if (field) field.disabled = panelLocked;
+    }
+    const button = document.getElementById('updateAccessCredentialsBtn');
+    if (button) button.disabled = panelLocked;
+}
+
+async function saveAccessCredentials() {
+    const currentPassword = document.getElementById('currentConsolePassword')?.value || '';
+    const panelPassword = document.getElementById('newPanelPassword')?.value || '';
+    const panelConfirmation = document.getElementById('confirmPanelPassword')?.value || '';
+
+    if (!currentPassword) {
+        showStatus('Enter the current console password.', 'error');
+        document.getElementById('currentConsolePassword')?.focus();
+        return;
+    }
+    if (!panelPassword) {
+        showStatus('Enter a new console password.', 'error');
+        return;
+    }
+    if (panelPassword !== panelConfirmation) {
+        showStatus('Console password confirmation does not match.', 'error');
+        return;
+    }
+    const button = document.getElementById('updateAccessCredentialsBtn');
+    if (button) button.disabled = true;
+    try {
+        const response = await fetch('./api/config/access', {
+            method: 'POST',
+            headers: getAuthHeaders(),
+            body: JSON.stringify({
+                current_password: currentPassword,
+                panel_password: panelPassword || null,
+                panel_password_confirm: panelConfirmation || null
+            })
+        });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) {
+            throw new Error(data.detail || data.error || t('unknown_error'));
+        }
+        if (data.token) {
+            AppState.authToken = data.token;
+            localStorage.setItem('auth_token', data.token);
+        }
+        for (const id of [
+            'currentConsolePassword',
+            'newPanelPassword',
+            'confirmPanelPassword'
+        ]) {
+            const field = document.getElementById(id);
+            if (field) field.value = '';
+        }
+        showStatus(data.message || 'Console password updated.', 'success');
+        await loadConfig();
+    } catch (error) {
+        showStatus(`Failed to update the console password: ${error.message}`, 'error');
+    } finally {
+        if (button) button.disabled = false;
+    }
 }
 
 async function resetConfig() {
@@ -6430,8 +6735,11 @@ async function resetConfig() {
         const data = await response.json().catch(() => ({}));
 
         if (response.ok) {
-
-            showStatus(data.message || 'System configuration reset to defaults.', 'success');
+            const requiresRestart = Array.isArray(data.restart_required) && data.restart_required.length > 0;
+            const message = requiresRestart
+                ? `${data.message} Restart the application to apply listener or storage changes.`
+                : (data.message || 'System configuration reset to defaults.');
+            showStatus(message, requiresRestart ? 'info' : 'success');
 
             setTimeout(() => loadConfig(), 600);
 

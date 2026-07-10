@@ -57,6 +57,8 @@ _writer_running = False
 # -----------------------------------------------------------------
 _cached_log_level: int = LOG_LEVELS["info"]
 _cached_log_file: str = str(DEFAULT_LOG_FILE)
+_log_max_bytes: int = 10 * 1024 * 1024
+_log_backup_count: int = 3
 
 _log_enabled: bool = True
 
@@ -64,10 +66,19 @@ _log_enabled: bool = True
 def _refresh_config():
     """Internal implementation detail."""
     global _cached_log_level, _cached_log_file, _log_enabled
+    global _log_max_bytes, _log_backup_count
     level = os.getenv("LOG_LEVEL", "info").lower()
     _cached_log_level = LOG_LEVELS.get(level, LOG_LEVELS["info"])
     _cached_log_file = os.getenv("LOG_FILE", str(DEFAULT_LOG_FILE))
     _log_enabled = os.getenv("ENABLE_LOG", "1").strip().lower() not in ("0", "false", "no", "off")
+    try:
+        _log_max_bytes = max(1, min(int(os.getenv("LOG_MAX_MB", "10")), 1024)) * 1024 * 1024
+    except ValueError:
+        _log_max_bytes = 10 * 1024 * 1024
+    try:
+        _log_backup_count = max(1, min(int(os.getenv("LOG_BACKUP_COUNT", "3")), 20))
+    except ValueError:
+        _log_backup_count = 3
 
 
 def _get_current_log_level() -> int:
@@ -138,6 +149,32 @@ def _clear_log_file():
         print(f"Warning: Failed to clear log file: {e}", file=sys.stderr)
 
 
+def _rotate_log_file_if_needed(incoming_bytes: int) -> None:
+    """Rotate the active log before a write would exceed its configured size."""
+    if _log_max_bytes <= 0:
+        return
+    try:
+        if _log_file_handle is not None:
+            _log_file_handle.flush()
+        current_size = os.path.getsize(_cached_log_file) if os.path.exists(_cached_log_file) else 0
+        if current_size + incoming_bytes <= _log_max_bytes:
+            return
+
+        _close_log_file()
+        oldest_backup = f"{_cached_log_file}.{_log_backup_count}"
+        if os.path.exists(oldest_backup):
+            os.remove(oldest_backup)
+        for index in range(_log_backup_count - 1, 0, -1):
+            source = f"{_cached_log_file}.{index}"
+            if os.path.exists(source):
+                os.replace(source, f"{_cached_log_file}.{index + 1}")
+        if os.path.exists(_cached_log_file):
+            os.replace(_cached_log_file, f"{_cached_log_file}.1")
+        _open_log_file("a")
+    except OSError as exc:
+        print(f"Warning: Failed to rotate log file: {exc}", file=sys.stderr)
+
+
 # -----------------------------------------------------------------
 
 # -----------------------------------------------------------------
@@ -168,6 +205,7 @@ def _log_writer_worker():
 
             chunk = "\n".join(batch) + "\n"
             try:
+                _rotate_log_file_if_needed(len(chunk.encode("utf-8")))
                 if _log_file_handle is None:
                     _open_log_file("a")
                 if _log_file_handle is not None:
@@ -291,6 +329,14 @@ def set_log_level(level: str):
     return True
 
 
+def configure_logging(level: str, max_mb: int, backup_count: int) -> None:
+    """Apply validated logging settings without restarting the process."""
+    global _log_max_bytes, _log_backup_count
+    set_log_level(level)
+    _log_max_bytes = max(1, min(int(max_mb), 1024)) * 1024 * 1024
+    _log_backup_count = max(1, min(int(backup_count), 20))
+
+
 class Logger:
     """Internal implementation detail."""
     def __call__(self, level: str, message: str):
@@ -333,12 +379,12 @@ class Logger:
 log = Logger()
 
 
-__all__ = ["log", "set_log_level", "LOG_LEVELS", "redact_text"]
+__all__ = ["log", "set_log_level", "configure_logging", "LOG_LEVELS", "redact_text"]
 
 
 _refresh_config()
 if _log_enabled:
-    _clear_log_file()
+    _open_log_file("a")
     _start_writer_thread()
 
 

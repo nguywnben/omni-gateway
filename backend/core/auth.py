@@ -1,5 +1,6 @@
 """Internal implementation detail."""
 import asyncio
+import os
 import secrets
 import socket
 import threading
@@ -678,10 +679,26 @@ TOKEN_EXPIRY = 3600
 
 async def verify_password(password: str) -> bool:
     """Internal implementation detail."""
-    from config import get_panel_password, has_password_configured
-    if not await has_password_configured():
+    import config
+    from core.passwords import hash_password, is_password_hash, verify_password_value
+
+    if not await config.has_password_configured():
         return False
-    correct_password = await get_panel_password()
+    correct_password = await config.get_panel_password()
     if not correct_password:
         return False
-    return secrets.compare_digest(password, correct_password)
+    is_valid = verify_password_value(password, correct_password)
+    if (
+        is_valid
+        and not is_password_hash(correct_password)
+        and not os.getenv("PANEL_PASSWORD")
+        and not os.getenv("PASSWORD")
+    ):
+        try:
+            storage_adapter = await get_storage_adapter()
+            await storage_adapter.set_config("panel_password", hash_password(password))
+            await config.reload_config()
+            log.info("Migrated the control-panel password to scrypt storage.")
+        except Exception as exc:
+            log.warning(f"Failed to migrate the control-panel password hash: {exc}")
+    return is_valid

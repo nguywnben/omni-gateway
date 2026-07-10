@@ -9,7 +9,11 @@ from dataclasses import dataclass
 from typing import Any, Callable, Deque, Dict, Optional, Tuple
 
 from log import log
-from core.provider_registry import credential_supports_model, get_credential_provider
+from core.provider_registry import (
+    credential_supports_model,
+    get_credential_provider,
+    normalize_provider_id,
+)
 
 
 CredentialResult = Tuple[str, Dict[str, Any]]
@@ -45,6 +49,7 @@ class SmartCredentialRouter:
         self._leases: Dict[CredentialKey, Deque[float]] = {}
         self._failures: Dict[CredentialKey, FailurePenalty] = {}
         self._last_selected: Dict[CredentialKey, float] = {}
+        self._providers: Dict[CredentialKey, str] = {}
         self._state_cache: Dict[
             str, Tuple[float, Dict[str, Dict[str, Any]]]
         ] = {}
@@ -88,6 +93,8 @@ class SmartCredentialRouter:
         *,
         mode: str,
         model_name: Optional[str],
+        routing_strategy: str,
+        preferred_provider: Optional[str],
         now: float,
     ) -> list[tuple[tuple[Any, ...], str]]:
         candidates = []
@@ -103,6 +110,11 @@ class SmartCredentialRouter:
                 continue
 
             key = (mode, filename)
+            provider_penalty = 0
+            if routing_strategy == "priority" and preferred_provider:
+                provider_penalty = int(
+                    self._providers.get(key) != preferred_provider
+                )
             failure = self._failures.get(key)
             retry_after = failure.retry_after if failure else 0.0
             consecutive_failures = failure.consecutive_failures if failure else 0
@@ -114,6 +126,7 @@ class SmartCredentialRouter:
             )
 
             score = (
+                provider_penalty,
                 preview_penalty,
                 in_flight,
                 last_selected,
@@ -129,6 +142,24 @@ class SmartCredentialRouter:
         ranked_pool = ready if ready else candidates
         return sorted((score, filename) for score, filename, _ in ranked_pool)
 
+    async def _load_candidate_providers(
+        self,
+        storage_adapter: Any,
+        filenames,
+        *,
+        mode: str,
+    ) -> None:
+        """Cache provider identities used by the routing policy."""
+        for filename in filenames:
+            key = (mode, filename)
+            if key in self._providers:
+                continue
+            credential_data = await storage_adapter.get_credential(
+                filename, mode=mode
+            )
+            if credential_data:
+                self._providers[key] = get_credential_provider(credential_data)
+
     async def acquire(
         self,
         storage_adapter: Any,
@@ -136,6 +167,8 @@ class SmartCredentialRouter:
         mode: str = "primary",
         model_name: Optional[str] = None,
         provider_id: Optional[str] = None,
+        routing_strategy: str = "balanced",
+        preferred_provider: Optional[str] = None,
     ) -> Optional[CredentialResult]:
         """Reserve and return the best currently available credential."""
         async with self._lock:
@@ -150,8 +183,24 @@ class SmartCredentialRouter:
                     now + self._state_cache_ttl_seconds,
                     states,
                 )
+            await self._load_candidate_providers(
+                storage_adapter, states, mode=mode
+            )
+            normalized_strategy = (
+                "priority" if str(routing_strategy).lower() == "priority" else "balanced"
+            )
+            normalized_preferred_provider = (
+                normalize_provider_id(preferred_provider)
+                if preferred_provider
+                else None
+            )
             ranked = self._rank_candidates(
-                states, mode=mode, model_name=model_name, now=now
+                states,
+                mode=mode,
+                model_name=model_name,
+                routing_strategy=normalized_strategy,
+                preferred_provider=normalized_preferred_provider,
+                now=now,
             )
 
             for score, filename in ranked:
@@ -179,7 +228,7 @@ class SmartCredentialRouter:
                     f"Smart routing selected {filename} "
                     f"(mode={mode}, model={model_name or ''}, "
                     f"provider={get_credential_provider(credential_data)}, "
-                    f"in_flight={score[1] + 1}, calls={score[3]})."
+                    f"in_flight={score[2] + 1}, calls={score[4]})."
                 )
                 return filename, credential_data
 
@@ -238,4 +287,5 @@ class SmartCredentialRouter:
             self._leases.clear()
             self._failures.clear()
             self._last_selected.clear()
+            self._providers.clear()
             self._state_cache.clear()

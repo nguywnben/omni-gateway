@@ -27,11 +27,12 @@
             </div>
             <h1 class="login-title">Sign In to the Console</h1>
             <p class="login-copy">Manage routing, credentials, fallback behavior, and protocol translation from one focused workspace.</p>
-            <div class="login-form">
+            <form class="login-form" autocomplete="on" onsubmit="event.preventDefault(); login();">
+                <input class="password-manager-identity" type="text" name="username" value="admin" autocomplete="username" tabindex="-1" aria-hidden="true">
                 <label for="loginPassword">Console password</label>
-                <input type="password" id="loginPassword" placeholder="Enter password" autocomplete="current-password" onkeypress="handlePasswordEnter(event)">
-                <button type="button" class="btn" onclick="login()">Continue</button>
-            </div>
+                <input type="password" id="loginPassword" name="password" placeholder="Enter password" autocomplete="current-password">
+                <button type="submit" class="btn">Continue</button>
+            </form>
         </div>
         <footer class="login-footer" aria-label="Site footer">
             <span>Omni Gateway</span>
@@ -49,13 +50,14 @@
             </div>
             <h1 class="login-title">Create Your Console Password</h1>
             <p class="login-copy">Secure this new Omni Gateway instance before opening the management console.</p>
-            <div class="login-form">
+            <form class="login-form" autocomplete="on" onsubmit="event.preventDefault(); completeInitialSetup();">
+                <input class="password-manager-identity" type="text" name="username" value="admin" autocomplete="username" tabindex="-1" aria-hidden="true">
                 <label for="setupPassword">Console password</label>
-                <input type="password" id="setupPassword" placeholder="At least 8 characters" autocomplete="new-password" onkeypress="handleSetupEnter(event)">
+                <input type="password" id="setupPassword" name="new-password" placeholder="At least 8 characters" autocomplete="new-password">
                 <label for="setupPasswordConfirm">Confirm password</label>
-                <input type="password" id="setupPasswordConfirm" placeholder="Re-enter password" autocomplete="new-password" onkeypress="handleSetupEnter(event)">
-                <button type="button" class="btn" onclick="completeInitialSetup()">Create password</button>
-            </div>
+                <input type="password" id="setupPasswordConfirm" name="confirm-password" placeholder="Re-enter password" autocomplete="new-password">
+                <button type="submit" class="btn">Create password</button>
+            </form>
         </div>
         <footer class="login-footer" aria-label="Site footer">
             <span>Omni Gateway</span>
@@ -354,7 +356,7 @@
                             <button type="button" class="batch-btn batch-delete" id="primaryBatchDeleteBtn" onclick="batchPrimaryAction('delete')" disabled>Delete</button>
                             <button type="button" class="batch-btn" id="primaryBatchEnableCreditBtn" onclick="batchPrimaryAction('enable_credit')" disabled>Enable credit</button>
                             <button type="button" class="batch-btn" id="primaryBatchDisableCreditBtn" onclick="batchPrimaryAction('disable_credit')" disabled>Disable credit</button>
-                            <button type="button" class="batch-btn" id="primaryBatchVerifyBtn" onclick="batchVerifyPrimaryProjectIds()" disabled>Verify project</button>
+                            <button type="button" class="batch-btn" id="primaryBatchVerifyBtn" onclick="batchVerifyPrimaryProjectIds()" disabled>Verify</button>
                         </div>
                         <details class="pool-tools">
                             <summary>Pool tools</summary>
@@ -366,6 +368,14 @@
                     </div>
 
                     <div class="filter-container">
+                        <div class="filter-group">
+                            <label for="primaryProviderFilter">Provider</label>
+                            <select id="primaryProviderFilter" class="filter-select" onchange="applyPrimaryStatusFilter()">
+                                <option value="all">All providers</option>
+                                <option value="google_antigravity">Google Antigravity</option>
+                                <option value="google_ai_studio">Google AI Studio</option>
+                            </select>
+                        </div>
                         <div class="filter-group">
                             <label for="primaryStatusFilter">Status</label>
                             <select id="primaryStatusFilter" class="filter-select" onchange="applyPrimaryStatusFilter()">
@@ -419,7 +429,7 @@
                             <div class="skeleton-item"><div class="skeleton-line title"></div><div class="skeleton-line content"></div><div class="skeleton-line buttons"></div></div>
                             <div class="skeleton-item"><div class="skeleton-line title"></div><div class="skeleton-line content"></div><div class="skeleton-line buttons"></div></div>
                         </div>
-                        <div class="creds-grid" id="primaryCredsList"></div>
+                        <div class="credential-provider-groups" id="primaryCredsList"></div>
                         <div class="pagination-container" id="primaryPaginationContainer" style="display: none;">
                             <button type="button" class="pagination-btn" id="primaryPrevPageBtn" onclick="changePrimaryPage(-1)">Previous</button>
                             <div class="pagination-info" id="primaryPaginationInfo">Page 1 of 1</div>
@@ -437,14 +447,14 @@
                         </div>
                     </header>
 
-                    <div class="provider-catalog" aria-label="Available providers">
-                        <section class="provider-hero-card">
+                    <div class="provider-catalog" role="tablist" aria-label="Available providers">
+                        <button type="button" class="provider-hero-card provider-selector-button active" id="providerSelectorGoogleAntigravity" role="tab" aria-label="Google Antigravity" aria-selected="true" aria-controls="providerWorkspaceGoogleAntigravity" onclick="selectProviderWorkspace('google_antigravity')">
                             <div class="provider-logo-frame">
                                 <img src="/frontend/assets/antigravity-logo.png" alt="Google Antigravity logo">
                             </div>
                             <div class="provider-summary">
                                 <div class="provider-eyebrow">Account Provider</div>
-                                <h2>Google Antigravity</h2>
+                                <strong class="provider-name">Google Antigravity</strong>
                                 <p>Connect Google Antigravity accounts through OAuth or import existing credential archives.</p>
                             </div>
                             <div class="provider-capabilities" aria-label="Google Antigravity methods">
@@ -452,36 +462,42 @@
                                 <span>JSON</span>
                                 <span>ZIP</span>
                             </div>
-                        </section>
+                        </button>
 
-                        <section class="provider-hero-card">
+                        <button type="button" class="provider-hero-card provider-selector-button" id="providerSelectorGoogleAiStudio" role="tab" aria-label="Google AI Studio" aria-selected="false" aria-controls="providerWorkspaceGoogleAiStudio" onclick="selectProviderWorkspace('google_ai_studio')">
                             <div class="provider-logo-frame">
                                 <img src="/frontend/assets/google-ai-studio-logo.png" alt="Google AI Studio logo">
                             </div>
                             <div class="provider-summary">
                                 <div class="provider-eyebrow">API Key Provider</div>
-                                <h2>Google AI Studio</h2>
+                                <strong class="provider-name">Google AI Studio</strong>
                                 <p>Add Gemini API keys for native Google model access and automatic provider fallback.</p>
                             </div>
                             <div class="provider-capabilities" aria-label="Google AI Studio methods">
                                 <span>API key</span>
+                                <span>JSON</span>
+                                <span>ZIP</span>
                                 <span>Gemini</span>
                             </div>
-                        </section>
+                        </button>
                     </div>
 
-                    <div class="provider-tools-grid">
+                    <section class="provider-workspace hidden" id="providerWorkspaceGoogleAiStudio" role="tabpanel" aria-labelledby="providerSelectorGoogleAiStudio">
+                        <div class="provider-workspace-heading">
+                            <div class="provider-workspace-logo"><img src="/frontend/assets/google-ai-studio-logo.png" alt=""></div>
+                            <div>
+                                <h2>Google AI Studio</h2>
+                                <p>Add and configure API key credentials for native Gemini model access.</p>
+                            </div>
+                        </div>
+                        <div class="provider-tools-grid">
                         <section class="tool-panel">
                             <h2 class="card-title">Google AI Studio API Key</h2>
                             <p class="card-copy provider-tool-copy">Validate a Gemini API key and add it to the active provider pool.</p>
-                            <form id="googleAiStudioCredentialForm" onsubmit="addGoogleAIStudioCredential(event)">
-                                <div class="form-group">
-                                    <label for="googleAiStudioKeyLabel">Key label</label>
-                                    <input type="text" id="googleAiStudioKeyLabel" maxlength="80" placeholder="Personal Gemini key" autocomplete="off">
-                                </div>
+                            <form id="googleAiStudioCredentialForm" autocomplete="off" onsubmit="addGoogleAIStudioCredential(event)">
                                 <div class="form-group">
                                     <label for="googleAiStudioApiKey">API key</label>
-                                    <input type="password" id="googleAiStudioApiKey" placeholder="Enter a Google AI Studio API key" autocomplete="off" spellcheck="false" required>
+                                    <input type="password" id="googleAiStudioApiKey" name="google-ai-studio-api-key" placeholder="Enter a Google AI Studio API key" autocomplete="one-time-code" data-1p-ignore data-lpignore="true" data-bwignore="true" autocapitalize="none" spellcheck="false" required>
                                 </div>
                                 <div class="page-actions">
                                     <button type="submit" class="btn" id="addGoogleAiStudioKeyBtn">Validate and add</button>
@@ -497,20 +513,77 @@
                                 <button type="button" class="btn btn-secondary" onclick="switchTab('pool')">View</button>
                             </div>
 
-                            <div class="provider-inline-settings">
-                                <h3>Advanced Settings</h3>
-                                <p class="card-copy provider-tool-copy">Override the Google Generative Language API endpoint when required by your network.</p>
-                                <div class="form-group">
-                                    <label for="googleAiStudioApiUrl">API endpoint</label>
-                                    <input type="url" id="googleAiStudioApiUrl" placeholder="https://generativelanguage.googleapis.com">
+                        </section>
+
+                        <section class="tool-panel">
+                            <h2 class="card-title">Batch Import</h2>
+                            <p class="card-copy provider-tool-copy">Import Google AI Studio API keys from JSON files or ZIP archives. Every key is validated before it enters the pool.</p>
+                            <button type="button" class="upload-area" id="googleAiStudioUploadArea" aria-describedby="googleAiStudioUploadHelp" onclick="document.getElementById('googleAiStudioFileInput').click()" ondrop="handleGoogleAiStudioFileDrop(event)" ondragover="event.preventDefault(); this.classList.add('dragover');" ondragleave="this.classList.remove('dragover');">
+                                <div>
+                                    <div class="upload-title">Drop API key files here</div>
+                                    <p class="upload-copy" id="googleAiStudioUploadHelp">Supports JSON and ZIP archives.</p>
                                 </div>
+                            </button>
+                            <input type="file" id="googleAiStudioFileInput" multiple accept=".json,.zip" style="display: none;" onchange="handleGoogleAiStudioFileSelect(event)">
+
+                            <div id="googleAiStudioFileListSection" class="hidden" style="margin-top: 16px;">
+                                <label>Pending files</label>
+                                <div class="file-list" id="googleAiStudioFileList"></div>
                                 <div class="page-actions">
-                                    <button type="button" class="btn btn-secondary" onclick="saveGoogleAIStudioSettings()">Save endpoint</button>
-                                    <button type="button" class="btn btn-secondary" onclick="resetGoogleAIStudioSettings()">Reset</button>
+                                    <button type="button" class="btn btn-small" onclick="uploadGoogleAiStudioFiles()">Import</button>
+                                    <button type="button" class="btn btn-secondary btn-small" onclick="clearGoogleAiStudioFiles()">Clear</button>
                                 </div>
+                            </div>
+
+                            <div id="googleAiStudioUploadProgressSection" class="hidden" style="margin-top: 16px;">
+                                <div class="progress-bar"><div class="progress-fill" id="googleAiStudioProgressFill"></div></div>
+                                <p id="googleAiStudioProgressText" class="page-description" style="margin-top: 8px;">0%</p>
+                            </div>
+
+                            <div id="googleAiStudioUploadResult" class="save-result upload-result hidden" style="margin-top: 14px;">
+                                <div>
+                                    <strong id="googleAiStudioUploadResultTitle">Import complete</strong>
+                                    <p id="googleAiStudioUploadResultText"></p>
+                                    <div id="googleAiStudioUploadResultDetails" class="upload-result-details"></div>
+                                </div>
+                                <button type="button" class="btn btn-secondary" onclick="switchTab('pool')">View</button>
                             </div>
                         </section>
 
+                        <section class="tool-panel provider-advanced-panel">
+                            <div class="provider-settings-header">
+                                <div>
+                                    <h2 class="card-title">Google AI Studio Advanced Settings</h2>
+                                    <p class="card-copy provider-tool-copy">Configure the upstream endpoint used to validate API keys and route Google AI Studio requests.</p>
+                                </div>
+                                <div class="page-actions">
+                                    <button type="button" class="btn" onclick="saveGoogleAIStudioSettings()">Save</button>
+                                    <button type="button" class="btn btn-secondary" onclick="resetGoogleAIStudioSettings()">Reset defaults</button>
+                                </div>
+                            </div>
+                            <div class="provider-settings-grid provider-settings-grid-single">
+                                <section class="provider-settings-group">
+                                    <h3>Upstream Endpoint</h3>
+                                    <p class="card-copy provider-tool-copy">Set the Google Generative Language API host used for validation and inference.</p>
+                                    <div class="form-group">
+                                        <label for="googleAiStudioApiUrl">Google AI Studio API</label>
+                                        <input type="url" id="googleAiStudioApiUrl" placeholder="https://generativelanguage.googleapis.com">
+                                    </div>
+                                </section>
+                            </div>
+                        </section>
+                        </div>
+                    </section>
+
+                    <section class="provider-workspace" id="providerWorkspaceGoogleAntigravity" role="tabpanel" aria-labelledby="providerSelectorGoogleAntigravity">
+                        <div class="provider-workspace-heading">
+                            <div class="provider-workspace-logo"><img src="/frontend/assets/antigravity-logo.png" alt=""></div>
+                            <div>
+                                <h2>Google Antigravity</h2>
+                                <p>Authorize accounts, import credential archives, and manage provider-specific behavior.</p>
+                            </div>
+                        </div>
+                        <div class="provider-tools-grid">
                         <section class="tool-panel">
                             <h2 class="card-title">Google Antigravity OAuth</h2>
                             <p class="card-copy provider-tool-copy">Generate an authorization link and save the account directly into the active pool.</p>
@@ -634,6 +707,7 @@
                             </div>
                         </section>
                     </div>
+                    </section>
                 </div>
 
                 <div id="configTab" class="tab-content">
@@ -664,12 +738,22 @@
                             <div class="config-grid">
                                 <section class="config-group span-4">
                                     <h2 class="card-title">Server Access</h2>
-                                    <p class="card-copy card-title-copy">Control listener settings, panel access, and API authentication.</p>
+                                    <p class="card-copy card-title-copy">Control the network interface used by the service after its next restart.</p>
                                     <div class="form-group"><label for="host">Bind host</label><input type="text" id="host" placeholder="0.0.0.0"></div>
                                     <div class="form-group"><label for="port">Port</label><input type="number" id="port" min="1" max="65535" placeholder="4283"></div>
-                                    <div class="form-group"><label for="configApiPassword">API password</label><input type="text" id="configApiPassword"></div>
-                                    <div class="form-group"><label for="configPanelPassword">Panel password</label><input type="text" id="configPanelPassword"></div>
-                                    <div class="form-group"><label for="configPassword">Unified password override</label><input type="text" id="configPassword"></div>
+                                    <p class="field-hint">Listener changes require an application restart. Docker port publishing must be updated separately.</p>
+                                </section>
+
+                                <section class="config-group span-4">
+                                    <h2 class="card-title">Console Access</h2>
+                                    <p class="card-copy card-title-copy">Change the console password without revealing its current value.</p>
+                                    <div class="access-status-list" aria-label="Password status">
+                                        <div class="access-status-row"><span>Console password</span><strong id="panelPasswordStatus">Configured</strong></div>
+                                    </div>
+                                    <div class="form-group"><label for="currentConsolePassword">Current console password</label><input type="password" id="currentConsolePassword" autocomplete="current-password"></div>
+                                    <div class="form-group"><label for="newPanelPassword">New console password</label><input type="password" id="newPanelPassword" autocomplete="new-password" placeholder="Leave blank to keep unchanged"></div>
+                                    <div class="form-group"><label for="confirmPanelPassword">Confirm console password</label><input type="password" id="confirmPanelPassword" autocomplete="new-password"></div>
+                                    <div class="page-actions"><button type="button" class="btn btn-secondary" id="updateAccessCredentialsBtn" onclick="saveAccessCredentials()">Update password</button></div>
                                 </section>
 
                                 <section class="config-group span-4">
@@ -678,15 +762,22 @@
                                     <div class="form-group"><label for="credentialsDir">Credentials directory</label><input type="text" id="credentialsDir"></div>
                                     <div class="form-group"><label for="proxy">Outbound proxy</label><input type="text" id="proxy" placeholder="http://127.0.0.1:7890"></div>
                                     <p class="field-hint">Use the proxy when the server cannot reach Google OAuth or provider APIs directly.</p>
+                                    <p class="field-hint">Changing the credentials directory requires an application restart.</p>
                                 </section>
 
-                                <section class="config-group span-4">
-                                    <h2 class="card-title">Code Assist Compatibility</h2>
-                                    <p class="card-copy card-title-copy">Configure optional Code Assist compatibility endpoints and clients.</p>
-                                    <div class="form-group"><label for="codeAssistEndpoint">Code Assist API</label><input type="text" id="codeAssistEndpoint"></div>
-                                    <div class="form-group"><label for="codeAssistClientId">Code Assist client ID</label><input type="text" id="codeAssistClientId" autocomplete="off"></div>
-                                    <div class="form-group"><label for="codeAssistClientSecret">Code Assist client secret</label><input type="text" id="codeAssistClientSecret" autocomplete="off"></div>
-                                </section>
+                                <details class="config-group config-advanced-group span-4">
+                                    <summary class="config-advanced-summary">
+                                        <span>
+                                            <strong>Code Assist Compatibility</strong>
+                                            <small>Optional legacy client and endpoint compatibility.</small>
+                                        </span>
+                                    </summary>
+                                    <div class="config-advanced-body">
+                                        <div class="form-group"><label for="codeAssistEndpoint">Code Assist API</label><input type="text" id="codeAssistEndpoint"></div>
+                                        <div class="form-group"><label for="codeAssistClientId">Code Assist client ID</label><input type="text" id="codeAssistClientId" autocomplete="off"></div>
+                                        <div class="form-group"><label for="codeAssistClientSecret">Code Assist client secret</label><input type="text" id="codeAssistClientSecret" autocomplete="off"></div>
+                                    </div>
+                                </details>
 
                                 <section class="config-group span-4">
                                     <h2 class="card-title">Failover Policy</h2>
@@ -696,6 +787,28 @@
                                     <label class="switch-row"><input type="checkbox" id="retry429Enabled" class="config-checkbox"><span>Retry failed requests with alternate credentials</span></label>
                                     <div class="form-group" style="margin-top: 14px;"><label for="retry429MaxRetries">Maximum retries</label><input type="number" id="retry429MaxRetries" min="0" max="50"></div>
                                     <div class="form-group"><label for="retry429Interval">Retry interval in seconds</label><input type="number" id="retry429Interval" min="0.01" max="10" step="0.01"></div>
+                                </section>
+
+                                <section class="config-group span-4">
+                                    <h2 class="card-title">Routing Policy</h2>
+                                    <p class="card-copy card-title-copy">Balance healthy credentials automatically or prefer one provider while retaining fallback.</p>
+                                    <div class="form-group">
+                                        <label for="routingStrategy">Credential selection</label>
+                                        <select id="routingStrategy" onchange="syncRoutingPolicyControls()">
+                                            <option value="balanced">Balanced</option>
+                                            <option value="priority">Provider priority</option>
+                                        </select>
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="preferredProvider">Preferred provider</label>
+                                        <select id="preferredProvider">
+                                            <option value="">Automatic</option>
+                                            <option value="google_antigravity">Google Antigravity</option>
+                                            <option value="google_ai_studio">Google AI Studio</option>
+                                        </select>
+                                    </div>
+                                    <div class="form-group"><label for="upstreamTimeoutSeconds">Inference timeout in seconds</label><input type="number" id="upstreamTimeoutSeconds" min="5" max="900" step="1"></div>
+                                    <p class="field-hint">If the preferred provider is unavailable or incompatible with a model, routing continues through another healthy provider.</p>
                                 </section>
 
                                 <section class="config-group span-4">
@@ -715,12 +828,42 @@
                                     <div class="form-group"><label for="tokenCompressionMinRecentTurns">Recent turns to preserve</label><input type="number" id="tokenCompressionMinRecentTurns" min="1" max="50"></div>
                                 </section>
 
-                                <section class="config-group span-4">
-                                    <h2 class="card-title">Keep-Alive</h2>
-                                    <p class="card-copy card-title-copy">Keep hosted deployments warm with periodic internal requests.</p>
-                                    <div class="form-group"><label for="keepaliveUrl">Keep-alive URL</label><input type="text" id="keepaliveUrl"><button type="button" class="btn btn-secondary btn-small config-inline-action" onclick="autoSetKeepaliveUrl()">Use current URL</button></div>
-                                    <div class="form-group"><label for="keepaliveInterval">Keep-alive interval in seconds</label><input type="number" id="keepaliveInterval" min="5" max="86400"></div>
-                                </section>
+                                <details class="config-group config-advanced-group span-4">
+                                    <summary class="config-advanced-summary">
+                                        <span>
+                                            <strong>Hosted Keep-Alive</strong>
+                                            <small>Optional periodic requests for hosting platforms that suspend idle services.</small>
+                                        </span>
+                                    </summary>
+                                    <div class="config-advanced-body">
+                                        <div class="form-group"><label for="keepaliveUrl">Keep-alive URL</label><input type="url" id="keepaliveUrl"><button type="button" class="btn btn-secondary btn-small config-inline-action" onclick="autoSetKeepaliveUrl()">Use current URL</button></div>
+                                        <div class="form-group"><label for="keepaliveInterval">Keep-alive interval in seconds</label><input type="number" id="keepaliveInterval" min="5" max="86400"></div>
+                                    </div>
+                                </details>
+
+                                <details class="config-group config-advanced-group span-4">
+                                    <summary class="config-advanced-summary">
+                                        <span>
+                                            <strong>Runtime Logs</strong>
+                                            <small>Control server-side verbosity and bounded file retention.</small>
+                                        </span>
+                                    </summary>
+                                    <div class="config-advanced-body">
+                                        <div class="form-group">
+                                            <label for="runtimeLogLevel">Log level</label>
+                                            <select id="runtimeLogLevel">
+                                                <option value="debug">Debug</option>
+                                                <option value="info">Info</option>
+                                                <option value="warning">Warning</option>
+                                                <option value="error">Error</option>
+                                                <option value="critical">Critical</option>
+                                            </select>
+                                        </div>
+                                        <div class="form-group"><label for="runtimeLogMaxMb">Maximum file size in MB</label><input type="number" id="runtimeLogMaxMb" min="1" max="1024"></div>
+                                        <div class="form-group"><label for="runtimeLogBackupCount">Retained backup files</label><input type="number" id="runtimeLogBackupCount" min="1" max="20"></div>
+                                        <p class="field-hint">Logs rotate automatically when the active file reaches the configured size.</p>
+                                    </div>
+                                </details>
                             </div>
                         </div>
                     </div>

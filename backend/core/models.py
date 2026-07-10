@@ -379,7 +379,6 @@ class AuthCallbackUrlRequest(BaseModel):
 
 class GoogleAIStudioCredentialRequest(BaseModel):
     api_key: str
-    label: Optional[str] = None
 
 
 class CredFileActionRequest(BaseModel):
@@ -394,3 +393,9 @@ class CredFileBatchActionRequest(BaseModel):
 
 class ConfigSaveRequest(BaseModel):
     config: dict
+
+
+class AccessCredentialsUpdateRequest(BaseModel):
+    current_password: str
+    panel_password: Optional[str] = None
+    panel_password_confirm: Optional[str] = None

@@ -60,6 +60,12 @@ ENV_MAPPINGS = {
     "TOKEN_COMPRESSION_THRESHOLD": "token_compression_threshold",
     "TOKEN_COMPRESSION_TARGET": "token_compression_target",
     "TOKEN_COMPRESSION_MIN_RECENT_TURNS": "token_compression_min_recent_turns",
+    "ROUTING_STRATEGY": "routing_strategy",
+    "PREFERRED_PROVIDER": "preferred_provider",
+    "UPSTREAM_TIMEOUT_SECONDS": "upstream_timeout_seconds",
+    "LOG_LEVEL": "log_level",
+    "LOG_MAX_MB": "log_max_mb",
+    "LOG_BACKUP_COUNT": "log_backup_count",
     "COMPATIBILITY_MODE": "compatibility_mode_enabled",
     "RETURN_THOUGHTS_TO_FRONTEND": "return_thoughts_to_frontend",
     "STREAM_TO_NONSTREAM": "stream_to_nonstream",
@@ -69,7 +75,6 @@ ENV_MAPPINGS = {
     "HOST": "host",
     "PORT": "port",
     "API_KEY": "api_key",
-    "API_PASSWORD": "api_password",
     "PANEL_PASSWORD": "panel_password",
     "PASSWORD": "password",
     "KEEPALIVE_URL": "keepalive_url",
@@ -140,15 +145,15 @@ async def get_config_value(key: str, default: Any = None, env_var: Optional[str]
 
 
 async def has_password_configured() -> bool:
-    """Return True when any panel/API password source has been configured."""
+    """Return True when a control-panel password source is configured."""
     if not _config_initialized:
         await init_config()
 
-    password_env_vars = ("PANEL_PASSWORD", "API_PASSWORD", "PASSWORD")
+    password_env_vars = ("PANEL_PASSWORD", "PASSWORD")
     if any(os.getenv(name) for name in password_env_vars):
         return True
 
-    password_keys = ("panel_password", "api_password", "password")
+    password_keys = ("panel_password", "password")
     return any(bool(_get_cached_config(key)) for key in password_keys)
 
 
@@ -304,6 +309,68 @@ async def get_token_compression_config() -> dict[str, Any]:
     }
 
 
+async def get_routing_policy() -> dict[str, str]:
+    """Return the cross-provider credential selection policy."""
+    strategy = str(
+        await get_config_value(
+            "routing_strategy", "balanced", "ROUTING_STRATEGY"
+        )
+        or "balanced"
+    ).strip().lower()
+    if strategy not in {"balanced", "priority"}:
+        strategy = "balanced"
+
+    preferred_provider = str(
+        await get_config_value(
+            "preferred_provider", "", "PREFERRED_PROVIDER"
+        )
+        or ""
+    ).strip().lower().replace("-", "_").replace(" ", "_")
+    return {
+        "strategy": strategy,
+        "preferred_provider": preferred_provider,
+    }
+
+
+async def get_upstream_timeout_seconds() -> float:
+    """Return the bounded timeout used for provider inference requests."""
+    raw_value = await get_config_value(
+        "upstream_timeout_seconds", 300.0, "UPSTREAM_TIMEOUT_SECONDS"
+    )
+    try:
+        timeout = float(raw_value)
+    except (TypeError, ValueError):
+        timeout = 300.0
+    return min(900.0, max(5.0, timeout))
+
+
+async def get_log_config() -> dict[str, Any]:
+    """Return validated runtime log level and file retention settings."""
+    level = str(
+        await get_config_value("log_level", "info", "LOG_LEVEL") or "info"
+    ).strip().lower()
+    if level not in {"debug", "info", "warning", "error", "critical"}:
+        level = "info"
+
+    max_mb = _coerce_bounded_int(
+        await get_config_value("log_max_mb", 10, "LOG_MAX_MB"),
+        10,
+        1,
+        1024,
+    )
+    backup_count = _coerce_bounded_int(
+        await get_config_value("log_backup_count", 3, "LOG_BACKUP_COUNT"),
+        3,
+        1,
+        20,
+    )
+    return {
+        "level": level,
+        "max_mb": max_mb,
+        "backup_count": backup_count,
+    }
+
+
 # Server Configuration
 async def get_server_host() -> str:
     """
@@ -334,23 +401,6 @@ async def get_server_port() -> int:
     return int(await get_config_value("port", 4283))
 
 
-async def get_api_password() -> str:
-    """
-    Get API password setting for chat endpoints.
-
-    Environment variable: API_PASSWORD
-    Database config key: api_password
-    Default: Empty string until the first-run setup creates a password.
-    """
-    # Prefer API_PASSWORD before falling back to PASSWORD.
-    api_password = await get_config_value("api_password", None, "API_PASSWORD")
-    if api_password is not None:
-        return str(api_password)
-
-
-    return str(await get_config_value("password", "", "PASSWORD") or "")
-
-
 async def get_panel_password() -> str:
     """
     Get panel password setting for web interface.
@@ -370,7 +420,7 @@ async def get_panel_password() -> str:
 
 async def get_server_password() -> str:
     """
-    Get server password setting (deprecated, use get_api_password or get_panel_password).
+    Get the legacy shared password setting (deprecated, use get_panel_password).
 
     Environment variable: PASSWORD
     Database config key: password

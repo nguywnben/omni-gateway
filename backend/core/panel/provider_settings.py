@@ -1,8 +1,12 @@
 """Provider-specific control-panel configuration and credential routes."""
 
+import io
+import json
+import zipfile
 from datetime import datetime, timezone
+from typing import List, Tuple
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from fastapi.responses import JSONResponse
 
 import config
@@ -10,6 +14,7 @@ from core.credential_manager import credential_manager
 from core.google_ai_studio import (
     GoogleAIStudioError,
     normalize_api_base_url,
+    parse_api_key_import_payload,
     validate_api_key,
 )
 from core.models import ConfigSaveRequest, GoogleAIStudioCredentialRequest
@@ -25,6 +30,10 @@ from .utils import get_env_locked_keys
 
 
 router = APIRouter(tags=["provider-settings"])
+
+MAX_AI_STUDIO_IMPORT_FILE_BYTES = 2 * 1024 * 1024
+MAX_AI_STUDIO_IMPORT_UNCOMPRESSED_BYTES = 5 * 1024 * 1024
+MAX_AI_STUDIO_IMPORT_ENTRIES = 200
 
 ANTIGRAVITY_CONFIG_KEYS = {
     "antigravity_client_id",
@@ -243,29 +252,14 @@ async def add_google_ai_studio_credential(
 ):
     """Validate and add one Google AI Studio API key to the provider pool."""
     api_key = request.api_key.strip()
-    label = " ".join(str(request.label or "").split())[:80]
 
     try:
         validation = await validate_api_key(api_key)
     except GoogleAIStudioError as exc:
         raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc
 
-    fingerprint = api_key_fingerprint(api_key)
-    credential_label = label or f"API key ending {api_key[-4:]}"
-    credential_data = {
-        "provider": GOOGLE_AI_STUDIO,
-        "credential_type": "api_key",
-        "api_key": api_key,
-        "credential_label": credential_label,
-        "key_fingerprint": fingerprint,
-        "model_ids": validation.model_ids,
-        "created_at": datetime.now(timezone.utc).isoformat(),
-    }
-    filename = f"google-ai-studio-{fingerprint}.json"
-    result = await credential_manager.add_primary_credential(filename, credential_data)
-
-    action = result.get("action", "created")
-    saved_filename = result.get("filename", filename)
+    saved = await _store_google_ai_studio_credential(api_key, validation)
+    action = saved["action"]
     message = (
         "Google AI Studio API key revalidated and updated in the provider pool."
         if action == "updated"
@@ -277,10 +271,229 @@ async def add_google_ai_studio_credential(
             "success": True,
             "credential_saved": True,
             "credential_action": action,
-            "filename": saved_filename,
+            "filename": saved["filename"],
             "provider": GOOGLE_AI_STUDIO,
-            "label": credential_label,
+            "label": saved["label"],
             "model_count": validation.model_count,
+            "message": message,
+        },
+    )
+
+
+async def _store_google_ai_studio_credential(api_key: str, validation) -> dict:
+    """Store one validated key without exposing it in the result."""
+    fingerprint = api_key_fingerprint(api_key)
+    credential_label = f"API key ending {api_key[-4:]}"
+    credential_data = {
+        "provider": GOOGLE_AI_STUDIO,
+        "credential_type": "api_key",
+        "api_key": api_key,
+        "credential_label": credential_label,
+        "key_fingerprint": fingerprint,
+        "model_ids": validation.model_ids,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }
+    filename = f"google-ai-studio-{fingerprint}.json"
+    result = await credential_manager.add_primary_credential(filename, credential_data)
+    action = result.get("action", "created")
+    return {
+        "action": action,
+        "filename": result.get("filename", filename),
+        "label": credential_label,
+        "fingerprint": fingerprint,
+    }
+
+
+def _safe_import_name(value: str, fallback: str = "credential.json") -> str:
+    normalized = str(value or "").replace("\\", "/").rstrip("/")
+    return normalized.rsplit("/", 1)[-1] or fallback
+
+
+def _parse_import_document(content: bytes, source_name: str) -> List[Tuple[str, str]]:
+    try:
+        payload = json.loads(content.decode("utf-8-sig"))
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise ValueError(f"{source_name} is not valid UTF-8 JSON.") from exc
+
+    api_keys = parse_api_key_import_payload(payload)
+    return [
+        (f"{source_name} #{index}" if len(api_keys) > 1 else source_name, api_key)
+        for index, api_key in enumerate(api_keys, start=1)
+    ]
+
+
+async def _extract_ai_studio_import_file(
+    upload: UploadFile,
+) -> Tuple[List[Tuple[str, str]], List[dict]]:
+    upload_name = _safe_import_name(upload.filename or "credential.json")
+    content = await upload.read(MAX_AI_STUDIO_IMPORT_FILE_BYTES + 1)
+    if len(content) > MAX_AI_STUDIO_IMPORT_FILE_BYTES:
+        raise ValueError(f"{upload_name} exceeds the 2 MB file limit.")
+
+    lower_name = upload_name.lower()
+    if lower_name.endswith(".json"):
+        return _parse_import_document(content, upload_name), []
+    if not lower_name.endswith(".zip"):
+        raise ValueError(f"{upload_name} must be a JSON file or ZIP archive.")
+
+    try:
+        archive = zipfile.ZipFile(io.BytesIO(content))
+    except zipfile.BadZipFile as exc:
+        raise ValueError(f"{upload_name} is not a valid ZIP archive.") from exc
+
+    candidates: List[Tuple[str, str]] = []
+    errors: List[dict] = []
+    with archive:
+        json_entries = [
+            entry
+            for entry in archive.infolist()
+            if not entry.is_dir() and entry.filename.lower().endswith(".json")
+        ]
+        if not json_entries:
+            raise ValueError(f"{upload_name} does not contain any JSON files.")
+        if len(json_entries) > MAX_AI_STUDIO_IMPORT_ENTRIES:
+            raise ValueError(
+                f"{upload_name} contains more than {MAX_AI_STUDIO_IMPORT_ENTRIES} JSON files."
+            )
+
+        total_uncompressed = sum(entry.file_size for entry in json_entries)
+        if total_uncompressed > MAX_AI_STUDIO_IMPORT_UNCOMPRESSED_BYTES:
+            raise ValueError(f"{upload_name} exceeds the 5 MB uncompressed limit.")
+
+        for entry in json_entries:
+            entry_name = _safe_import_name(entry.filename)
+            source_name = f"{upload_name} / {entry_name}"
+            if entry.flag_bits & 0x1:
+                errors.append(
+                    {
+                        "status": "error",
+                        "source_filename": source_name,
+                        "message": "Encrypted ZIP entries are not supported.",
+                    }
+                )
+                continue
+            try:
+                entry_content = archive.read(entry)
+                candidates.extend(_parse_import_document(entry_content, source_name))
+            except (RuntimeError, ValueError, zipfile.BadZipFile) as exc:
+                errors.append(
+                    {
+                        "status": "error",
+                        "source_filename": source_name,
+                        "message": str(exc),
+                    }
+                )
+    return candidates, errors
+
+
+@router.post("/api/providers/google-ai-studio/credentials/import")
+async def import_google_ai_studio_credentials(
+    files: List[UploadFile] = File(...),
+    token: str = Depends(verify_panel_token),
+):
+    """Validate and import Google AI Studio API keys from JSON files or ZIP archives."""
+    if not files:
+        raise HTTPException(status_code=400, detail="Select at least one import file.")
+    if len(files) > 50:
+        raise HTTPException(status_code=400, detail="A single import supports up to 50 files.")
+
+    candidates: List[Tuple[str, str]] = []
+    results: List[dict] = []
+    for upload in files:
+        try:
+            extracted, extraction_errors = await _extract_ai_studio_import_file(upload)
+            candidates.extend(extracted)
+            results.extend(extraction_errors)
+        except ValueError as exc:
+            results.append(
+                {
+                    "status": "error",
+                    "source_filename": _safe_import_name(upload.filename or "Import file"),
+                    "message": str(exc),
+                }
+            )
+
+    if len(candidates) > MAX_AI_STUDIO_IMPORT_ENTRIES:
+        raise HTTPException(
+            status_code=400,
+            detail=f"A single import supports up to {MAX_AI_STUDIO_IMPORT_ENTRIES} API keys.",
+        )
+
+    seen_fingerprints = set()
+    created_count = 0
+    updated_count = 0
+    skipped_count = 0
+
+    for source_name, api_key in candidates:
+        fingerprint = api_key_fingerprint(api_key)
+        if fingerprint in seen_fingerprints:
+            skipped_count += 1
+            results.append(
+                {
+                    "status": "skipped",
+                    "source_filename": source_name,
+                    "message": "Duplicate API key in this import was skipped.",
+                }
+            )
+            continue
+        seen_fingerprints.add(fingerprint)
+
+        try:
+            validation = await validate_api_key(api_key)
+            saved = await _store_google_ai_studio_credential(api_key, validation)
+            action = saved["action"]
+            if action == "updated":
+                updated_count += 1
+            else:
+                created_count += 1
+            results.append(
+                {
+                    "status": "success",
+                    "action": action,
+                    "filename": saved["filename"],
+                    "source_filename": source_name,
+                    "model_count": validation.model_count,
+                    "message": (
+                        "Existing API key was revalidated and updated."
+                        if action == "updated"
+                        else "API key was validated and added to the pool."
+                    ),
+                }
+            )
+        except GoogleAIStudioError as exc:
+            results.append(
+                {
+                    "status": "error",
+                    "source_filename": source_name,
+                    "message": str(exc),
+                }
+            )
+        except Exception as exc:
+            log.error(f"Failed to import a Google AI Studio credential: {exc}")
+            results.append(
+                {
+                    "status": "error",
+                    "source_filename": source_name,
+                    "message": "The API key could not be stored.",
+                }
+            )
+
+    error_count = sum(1 for item in results if item.get("status") == "error")
+    uploaded_count = created_count + updated_count
+    message = (
+        f"Import complete: added {created_count}, updated {updated_count}, "
+        f"skipped {skipped_count}, and failed {error_count}."
+    )
+    return JSONResponse(
+        content={
+            "success": True,
+            "uploaded_count": uploaded_count,
+            "created_count": created_count,
+            "updated_count": updated_count,
+            "skipped_count": skipped_count,
+            "error_count": error_count,
+            "total_count": len(candidates),
+            "results": results,
             "message": message,
         },
     )

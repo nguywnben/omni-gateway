@@ -29,6 +29,7 @@ from core.models import (
     AuthCallbackUrlRequest,
 )
 from core.credential_pool import upsert_credential_by_email
+from core.passwords import hash_password
 from core.storage_adapter import get_storage_adapter
 from core.utils import create_panel_session_token, verify_panel_token
 from .utils import public_mode_name, validate_mode
@@ -326,8 +327,7 @@ async def complete_setup(request: SetupRequest):
             raise HTTPException(status_code=400, detail="Passwords do not match.")
 
         storage_adapter = await get_storage_adapter()
-        for key in ("password", "panel_password", "api_password"):
-            await storage_adapter.set_config(key, password)
+        await storage_adapter.set_config("panel_password", hash_password(password))
 
         await config.reload_config()
 

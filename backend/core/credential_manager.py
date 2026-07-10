@@ -5,6 +5,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from log import log
 
+from config import get_routing_policy
 from core.google_oauth_api import Credentials
 from core.credential_pool import upsert_credential_by_email
 from core.provider_registry import is_api_key_credential
@@ -56,11 +57,18 @@ class CredentialManager:
 
         max_retries = 3
         for attempt in range(max_retries):
+            routing_policy = (
+                await get_routing_policy()
+                if mode == "primary" and provider_id is None
+                else {"strategy": "balanced", "preferred_provider": ""}
+            )
             result = await self._routing.acquire(
                 self._storage_adapter,
                 mode=mode,
                 model_name=model_name,
                 provider_id=provider_id,
+                routing_strategy=routing_policy["strategy"],
+                preferred_provider=routing_policy["preferred_provider"],
             )
 
 

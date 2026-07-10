@@ -20,6 +20,7 @@ from config import (
     get_auto_disable_error_codes,
     get_google_ai_studio_api_url,
     get_token_compression_config,
+    get_upstream_timeout_seconds,
 )
 from log import log
 
@@ -491,7 +492,8 @@ async def stream_request(
                 url=target_url,
                 body=final_payload,
                 native=native,
-                headers=auth_headers
+                headers=auth_headers,
+                timeout=await get_upstream_timeout_seconds(),
             ):
 
                 if isinstance(chunk, Response):
@@ -787,7 +789,7 @@ async def non_stream_request(
                 url=target_url,
                 json=final_payload,
                 headers=auth_headers,
-                timeout=300.0
+                timeout=await get_upstream_timeout_seconds(),
             )
 
             status_code = response.status_code
