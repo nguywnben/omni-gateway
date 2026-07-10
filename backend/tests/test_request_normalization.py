@@ -1,0 +1,84 @@
+"""Regression tests for provider request normalization."""
+
+from __future__ import annotations
+
+import sys
+import unittest
+from pathlib import Path
+from unittest.mock import AsyncMock, patch
+
+
+BACKEND_DIR = Path(__file__).resolve().parents[1]
+if str(BACKEND_DIR) not in sys.path:
+    sys.path.insert(0, str(BACKEND_DIR))
+
+from core.converter.gemini_fix import normalize_gemini_request
+from core.api.primary import PrimarySessionState, wrap_cli_request
+
+
+def request_payload(generation_config):
+    return {
+        "model": "gemini-2.5-flash",
+        "contents": [{"role": "user", "parts": [{"text": "Hello"}]}],
+        "generationConfig": generation_config,
+    }
+
+
+class RequestNormalizationTests(unittest.IsolatedAsyncioTestCase):
+    async def test_client_output_limit_is_preserved(self):
+        normalized = await normalize_gemini_request(
+            request_payload({"maxOutputTokens": 256}), mode="primary"
+        )
+
+        self.assertEqual(normalized["generationConfig"]["maxOutputTokens"], 256)
+
+    async def test_output_limit_is_not_invented_when_client_omits_it(self):
+        normalized = await normalize_gemini_request(
+            request_payload({"temperature": 0.2}), mode="primary"
+        )
+
+        self.assertNotIn("maxOutputTokens", normalized["generationConfig"])
+
+    async def test_credit_capacity_is_only_enabled_for_opted_in_credentials(self):
+        session = PrimarySessionState(
+            conversation_id="conversation",
+            trajectory_id="trajectory",
+            session_id="session",
+            step_index=1,
+            created_at=1.0,
+            last_used_at=1.0,
+        )
+        with (
+            patch(
+                "core.api.primary._get_session_state",
+                AsyncMock(return_value=session),
+            ),
+            patch(
+                "core.api.primary.get_token_compression_config",
+                AsyncMock(
+                    return_value={
+                        "enabled": True,
+                        "threshold_tokens": 32000,
+                        "target_tokens": 24000,
+                        "min_recent_turns": 4,
+                    }
+                ),
+            ),
+            patch(
+                "core.api.primary.get_antigravity_payload_user_agent",
+                AsyncMock(return_value="antigravity"),
+            ),
+        ):
+            free_payload, _, _ = await wrap_cli_request(
+                request_payload({}), "gemini-2.5-flash", "project", enable_credit=False
+            )
+            credit_payload, _, _ = await wrap_cli_request(
+                request_payload({}), "gemini-2.5-flash", "project", enable_credit=True
+            )
+
+        self.assertNotIn("enabledCreditTypes", free_payload)
+        self.assertEqual(credit_payload["enabledCreditTypes"], ["GOOGLE_ONE_AI"])
+
+
+if __name__ == "__main__":
+    unittest.main()

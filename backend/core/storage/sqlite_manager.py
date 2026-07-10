@@ -673,7 +673,8 @@ class SQLiteManager:
 
                 if mode == "code_assist":
                     async with db.execute(f"""
-                        SELECT disabled, error_codes, last_success, user_email, model_cooldowns, preview, tier
+                        SELECT disabled, error_codes, last_success, user_email, model_cooldowns,
+                               preview, tier, call_count, rotation_order
                         FROM {table_name} WHERE filename = ?
                     """, (filename,)) as cursor:
                         row = await cursor.fetchone()
@@ -689,6 +690,8 @@ class SQLiteManager:
                                 "model_cooldowns": json.loads(model_cooldowns_json),
                                 "preview": bool(row[5]) if row[5] is not None else True,
                                 "tier": row[6] if row[6] is not None else "pro",
+                                "call_count": row[7] or 0,
+                                "rotation_order": row[8] or 0,
                             }
 
 
@@ -700,11 +703,14 @@ class SQLiteManager:
                         "model_cooldowns": {},
                         "preview": True,
                         "tier": "pro",
+                        "call_count": 0,
+                        "rotation_order": 0,
                     }
                 else:
 
                     async with db.execute(f"""
-                        SELECT disabled, error_codes, last_success, user_email, model_cooldowns, tier, enable_credit
+                        SELECT disabled, error_codes, last_success, user_email, model_cooldowns,
+                               tier, enable_credit, call_count, rotation_order
                         FROM {table_name} WHERE filename = ?
                     """, (filename,)) as cursor:
                         row = await cursor.fetchone()
@@ -720,6 +726,8 @@ class SQLiteManager:
                                 "model_cooldowns": json.loads(model_cooldowns_json),
                                 "tier": row[5] if row[5] is not None else "pro",
                                 "enable_credit": bool(row[6]) if row[6] is not None else False,
+                                "call_count": row[7] or 0,
+                                "rotation_order": row[8] or 0,
                             }
 
 
@@ -731,6 +739,8 @@ class SQLiteManager:
                         "model_cooldowns": {},
                         "tier": "pro",
                         "enable_credit": False,
+                        "call_count": 0,
+                        "rotation_order": 0,
                     }
 
         except Exception as e:
@@ -747,7 +757,8 @@ class SQLiteManager:
                 if mode == "code_assist":
                     async with db.execute(f"""
                         SELECT filename, disabled, error_codes, last_success,
-                               user_email, model_cooldowns, preview, tier
+                               user_email, model_cooldowns, preview, tier,
+                               call_count, rotation_order
                         FROM {table_name}
                     """) as cursor:
                         rows = await cursor.fetchall()
@@ -776,6 +787,8 @@ class SQLiteManager:
                                 "model_cooldowns": model_cooldowns,
                                 "preview": bool(row[6]) if row[6] is not None else True,
                                 "tier": row[7] if row[7] is not None else "pro",
+                                "call_count": row[8] or 0,
+                                "rotation_order": row[9] or 0,
                             }
 
                         return states
@@ -783,7 +796,8 @@ class SQLiteManager:
 
                     async with db.execute(f"""
                         SELECT filename, disabled, error_codes, last_success,
-                               user_email, model_cooldowns, tier, enable_credit
+                               user_email, model_cooldowns, tier, enable_credit,
+                               call_count, rotation_order
                         FROM {table_name}
                     """) as cursor:
                         rows = await cursor.fetchall()
@@ -812,6 +826,8 @@ class SQLiteManager:
                                 "model_cooldowns": model_cooldowns,
                                 "tier": row[6] if row[6] is not None else "pro",
                                 "enable_credit": bool(row[7]) if row[7] is not None else False,
+                                "call_count": row[8] or 0,
+                                "rotation_order": row[9] or 0,
                             }
 
                         return states
@@ -1306,3 +1322,26 @@ class SQLiteManager:
 
         except Exception as e:
             log.error(f"Error recording success for {filename}: {e}")
+
+    async def record_failure(
+        self, filename: str, mode: str = "code_assist"
+    ) -> None:
+        """Count failed attempts so routing fairness includes all upstream traffic."""
+        self._ensure_initialized()
+        filename = os.path.basename(filename)
+
+        try:
+            table_name = self._get_table_name(mode)
+            async with aiosqlite.connect(self._db_path) as db:
+                await db.execute(
+                    f"""
+                    UPDATE {table_name}
+                    SET call_count = COALESCE(call_count, 0) + 1,
+                        updated_at = unixepoch()
+                    WHERE filename = ?
+                    """,
+                    (filename,),
+                )
+                await db.commit()
+        except Exception as e:
+            log.error(f"Error recording failure for {filename}: {e}")

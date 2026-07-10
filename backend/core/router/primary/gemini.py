@@ -45,6 +45,7 @@ from core.router.stream_passthrough import (
 
 
 from core.models import GeminiRequest, model_to_dict
+from core.token_estimator import estimate_input_tokens
 
 
 from core.task_manager import create_managed_task
@@ -382,28 +383,5 @@ async def count_tokens(
         raise HTTPException(status_code=400, detail=f"Invalid JSON: {str(e)}")
 
 
-    total_tokens = 0
-
-
-    if "contents" in request_data:
-        for content in request_data["contents"]:
-            if "parts" in content:
-                for part in content["parts"]:
-                    if "text" in part:
-
-                        text_length = len(part["text"])
-                        total_tokens += max(1, text_length // 4)
-
-
-    elif "generateContentRequest" in request_data:
-        gen_request = request_data["generateContentRequest"]
-        if "contents" in gen_request:
-            for content in gen_request["contents"]:
-                if "parts" in content:
-                    for part in content["parts"]:
-                        if "text" in part:
-                            text_length = len(part["text"])
-                            total_tokens += max(1, text_length // 4)
-
-
-    return JSONResponse(content={"totalTokens": total_tokens})
+    payload = request_data.get("generateContentRequest", request_data)
+    return JSONResponse(content={"totalTokens": estimate_input_tokens(payload)})

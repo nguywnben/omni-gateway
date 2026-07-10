@@ -8,8 +8,8 @@ Modern coding workflows often mix clients and providers: OpenAI-compatible tools
 
 ## Core Capabilities
 
-- Smart auto-fallback: rotates credentials, retries transient failures, and routes around cooldowns, rate limits, and exhausted capacity.
-- Token-aware cleanup: normalizes payloads, removes incompatible fields, trims avoidable overhead, and reports token usage across requests.
+- Smart auto-fallback: reserves credentials per request, spreads concurrent traffic, tracks every attempt for fair rotation, and routes around recent failures, cooldowns, rate limits, and exhausted capacity.
+- Token-aware cleanup: normalizes payloads and trims only oversized conversation prefixes at safe turn boundaries while preserving system instructions, tool definitions, and recent context.
 - Format translation: accepts OpenAI chat completions, Gemini native requests, and Anthropic Messages, then translates requests and streaming responses across formats.
 - Credential orchestration: manages multiple OAuth credential pools with health state, cooldown tracking, bulk upload, verification, and quota visibility.
 - Streaming resilience: supports SSE streaming, pseudo-streaming for clients that require streamed output, and anti-truncation retries for long generations.
@@ -171,6 +171,10 @@ Omni Gateway reads configuration from environment variables first, then stored c
 | `AUTO_DISABLE` | `false` | Disable credentials after configured hard failures. |
 | `AUTO_DISABLE_ERROR_CODES` | `403` | Comma-separated hard-failure status codes. |
 | `ANTI_TRUNCATION_MAX_ATTEMPTS` | `3` | Maximum continuation attempts for anti-truncation streaming. |
+| `TOKEN_COMPRESSION_ENABLED` | `true` | Compress oversized conversation history before provider routing. |
+| `TOKEN_COMPRESSION_THRESHOLD` | `32000` | Estimated input-token threshold that activates compression. |
+| `TOKEN_COMPRESSION_TARGET` | `24000` | Estimated input-token target after compression. Must be lower than the threshold. |
+| `TOKEN_COMPRESSION_MIN_RECENT_TURNS` | `4` | Minimum number of recent user turns retained during compression. |
 | `COMPATIBILITY_MODE` | `false` | Converts system messages for clients/models that reject them. |
 | `RETURN_THOUGHTS_TO_FRONTEND` | `true` | Include model reasoning fields when available. |
 | `MONGODB_URI` | empty | Enables MongoDB storage when set. |
@@ -280,7 +284,7 @@ Provider adapters normalize these feature names before sending upstream requests
 
 ## Usage and Cost Visibility
 
-Omni Gateway records request volume, success rate, credential attribution, and reported token usage for each supported time range in the dashboard. Current optimization focuses on credential capacity, cooldown avoidance, retry/fallback behavior, request cleanup, and token usage visibility. Provider price-based routing is intentionally left as a future policy layer so the core API remains stable as more providers are added.
+Omni Gateway records request volume, success rate, credential attribution, provider-reported token usage, and estimated tokens removed by context compression for each dashboard time range. Compression savings are labeled as estimates because provider tokenizers and billing rules remain authoritative. Provider price-based routing is intentionally left as a future policy layer so the core API remains stable as more providers are added.
 
 ## Credential Workflow
 

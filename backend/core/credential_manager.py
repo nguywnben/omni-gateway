@@ -1,7 +1,5 @@
 """Internal implementation detail."""
 
-import asyncio
-import time
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -9,6 +7,7 @@ from log import log
 
 from core.google_oauth_api import Credentials
 from core.credential_pool import upsert_credential_by_email
+from core.smart_routing import SmartCredentialRouter
 from core.storage_adapter import get_storage_adapter
 
 class CredentialManager:
@@ -18,6 +17,7 @@ class CredentialManager:
 
         self._initialized = False
         self._storage_adapter = None
+        self._routing = SmartCredentialRouter()
 
 
 
@@ -39,6 +39,7 @@ class CredentialManager:
     async def close(self):
         """Internal implementation detail."""
         log.debug("Closing credential manager.")
+        await self._routing.reset()
         self._initialized = False
         log.debug("Credential manager closed")
 
@@ -51,8 +52,8 @@ class CredentialManager:
 
         max_retries = 3
         for attempt in range(max_retries):
-            result = await self._storage_adapter._backend.get_next_available_credential(
-                mode=mode, model_name=model_name
+            result = await self._routing.acquire(
+                self._storage_adapter, mode=mode, model_name=model_name
             )
 
 
@@ -75,7 +76,9 @@ class CredentialManager:
                 else:
 
                     log.warning(f"Token refresh failed, attempt to get next credentials: {filename} (mode = {mode}, attempt = {attempt+1}/{max_retries})")
-
+                    await self._routing.complete(
+                        filename, mode=mode, success=False
+                    )
                     continue
             else:
 
@@ -94,8 +97,7 @@ class CredentialManager:
         """
         await self._ensure_initialized()
 
-        # Check primary active credentials
-        anti_res = await self._storage_adapter._backend.get_next_available_credential(
+        anti_res = await self.get_valid_credential(
             mode="primary", model_name=model_name
         )
         if not anti_res:
@@ -104,14 +106,6 @@ class CredentialManager:
 
         filename, credential_data = anti_res
         selected_mode = "primary"
-
-        # Token refresh check
-        if await self._should_refresh_token(credential_data):
-            refreshed_data = await self._refresh_token(credential_data, filename, mode=selected_mode)
-            if refreshed_data:
-                credential_data = refreshed_data
-            else:
-                return None
 
         return selected_mode, filename, credential_data
 
@@ -139,6 +133,12 @@ class CredentialManager:
         except Exception as e:
             log.error(f"Error removing credential {credential_name}: {e}")
             return False
+
+    async def release_credential(
+        self, credential_name: str, mode: str = "code_assist"
+    ) -> None:
+        """Release a routing reservation for a non-inference operation."""
+        await self._routing.release(credential_name, mode=mode)
 
     async def update_credential_state(self, credential_name: str, state_updates: Dict[str, Any], mode: str = "code_assist"):
         """Internal implementation detail."""
@@ -261,12 +261,8 @@ class CredentialManager:
         await self._ensure_initialized()
         try:
             if success:
-
-
-                asyncio.create_task(
-                    self._storage_adapter._backend.record_success(
-                        credential_name, model_name=model_name, mode=mode
-                    )
+                await self._storage_adapter._backend.record_success(
+                    credential_name, model_name=model_name, mode=mode
                 )
 
             elif error_code:
@@ -282,6 +278,11 @@ class CredentialManager:
 
                 await self.update_credential_state(credential_name, state_updates, mode=mode)
 
+                if hasattr(self._storage_adapter._backend, "record_failure"):
+                    await self._storage_adapter._backend.record_failure(
+                        credential_name, mode=mode
+                    )
+
 
                 if cooldown_until is not None and model_name:
                     if hasattr(self._storage_adapter._backend, 'set_model_cooldown'):
@@ -295,6 +296,13 @@ class CredentialManager:
 
         except Exception as e:
             log.error(f"Error recording API call result for {credential_name}: {e}")
+        finally:
+            await self._routing.complete(
+                credential_name,
+                mode=mode,
+                success=success,
+                cooldown_until=cooldown_until,
+            )
 
     async def _should_refresh_token(self, credential_data: Dict[str, Any]) -> bool:
         """Internal implementation detail."""
@@ -405,10 +413,19 @@ class CredentialManager:
             if is_permanent_failure:
                 log.warning(f"Permanent credential failure detected (HTTP {status_code}): {filename}")
 
-                if status_code:
-                    await self.record_api_call_result(filename, False, status_code, mode=mode)
-                else:
-                    await self.record_api_call_result(filename, False, 400, mode=mode)
+                refresh_error_code = status_code or 400
+                await self.update_credential_state(
+                    filename,
+                    {
+                        "error_codes": [refresh_error_code],
+                        "error_messages": {str(refresh_error_code): error_msg},
+                    },
+                    mode=mode,
+                )
+                if hasattr(self._storage_adapter._backend, "record_failure"):
+                    await self._storage_adapter._backend.record_failure(
+                        filename, mode=mode
+                    )
 
 
                 try:

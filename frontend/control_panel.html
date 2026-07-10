@@ -15,7 +15,7 @@
 </head>
 
 <body>
-    <div class="sidebar-overlay" onclick="toggleMobileMenu()"></div>
+    <div id="mobileNavigationOverlay" class="sidebar-overlay" aria-hidden="true" onclick="toggleMobileMenu()"></div>
 
     <section id="loginSection" class="login-wrapper" aria-label="Login">
         <div class="login-card">
@@ -64,7 +64,7 @@
     </section>
 
     <section id="mainSection" class="dashboard-wrapper hidden" aria-label="Dashboard">
-        <aside class="dashboard-sidebar" aria-label="Primary navigation">
+        <aside id="primaryNavigation" class="dashboard-sidebar" aria-label="Primary navigation">
             <div class="sidebar-brand">
                 <span class="app-mark" aria-hidden="true">
                     <img class="app-mark-image" src="/frontend/assets/logo.png" alt="">
@@ -73,7 +73,7 @@
             </div>
 
             <nav class="sidebar-menu">
-                <button type="button" class="tab active" onclick="switchTab('dashboard')">
+                <button type="button" class="tab active" aria-current="page" onclick="switchTab('dashboard')">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 13h6V4H4z"></path><path d="M14 20h6V4h-6z"></path><path d="M4 20h6v-3H4z"></path></svg>
                     <span>Dashboard</span>
                 </button>
@@ -109,8 +109,8 @@
         </aside>
 
         <header class="mobile-topbar">
-            <button type="button" class="mobile-menu-btn" onclick="toggleMobileMenu()" aria-label="Open navigation">
-                <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+            <button type="button" class="mobile-menu-btn" onclick="toggleMobileMenu()" aria-label="Open navigation" aria-controls="primaryNavigation" aria-expanded="false">
+                <svg aria-hidden="true" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
                     <path d="M4 7h16"></path>
                     <path d="M4 12h16"></path>
                     <path d="M4 17h16"></path>
@@ -169,7 +169,7 @@
                         </div>
                         <div class="stat-item">
                             <span class="stat-number" id="avgTokensPerRequest">0</span>
-                            <span class="stat-label">Tokens per successful request<span class="stat-detail">Cached <span id="cachedTokens24h">0</span> / reasoning <span id="reasoningTokens24h">0</span></span></span>
+                            <span class="stat-label">Tokens per successful request<span class="stat-detail">Cached <span id="cachedTokens24h">0</span> / estimated savings <span id="estimatedTokensSaved">0</span></span></span>
                         </div>
                     </div>
 
@@ -501,12 +501,12 @@
                         <section class="tool-panel">
                             <h2 class="card-title">Batch Import</h2>
                             <p class="card-copy provider-tool-copy">Import Google Antigravity credential JSON files or ZIP archives into the active pool.</p>
-                            <div class="upload-area" id="primaryUploadArea" onclick="document.getElementById('primaryFileInput').click()" ondrop="handlePrimaryFileDrop(event)" ondragover="event.preventDefault(); this.classList.add('dragover');" ondragleave="this.classList.remove('dragover');">
+                            <button type="button" class="upload-area" id="primaryUploadArea" aria-describedby="primaryUploadHelp" onclick="document.getElementById('primaryFileInput').click()" ondrop="handlePrimaryFileDrop(event)" ondragover="event.preventDefault(); this.classList.add('dragover');" ondragleave="this.classList.remove('dragover');">
                                 <div>
                                     <div class="upload-title">Drop credential files here</div>
-                                    <p class="upload-copy">Supports JSON and ZIP archives.</p>
+                                    <p class="upload-copy" id="primaryUploadHelp">Supports JSON and ZIP archives.</p>
                                 </div>
-                            </div>
+                            </button>
                             <input type="file" id="primaryFileInput" multiple accept=".json,.zip" style="display: none;" onchange="handlePrimaryFileSelect(event)">
 
                             <div id="primaryFileListSection" class="hidden" style="margin-top: 16px;">
@@ -647,6 +647,15 @@
                                     <label class="switch-row"><input type="checkbox" id="compatibilityModeEnabled" class="config-checkbox"><span>Flatten system instructions for compatibility</span></label>
                                     <label class="switch-row" style="margin-top: 12px;"><input type="checkbox" id="returnThoughtsToFrontend" class="config-checkbox"><span>Return reasoning content when available</span></label>
                                     <div class="form-group" style="margin-top: 14px;"><label for="antiTruncationMaxAttempts">Truncation recovery attempts</label><input type="number" id="antiTruncationMaxAttempts" min="1" max="10"></div>
+                                </section>
+
+                                <section class="config-group span-4">
+                                    <h2 class="card-title">Context Optimization</h2>
+                                    <p class="card-copy card-title-copy">Reduce oversized conversation history while preserving system instructions, tool definitions, and recent turns.</p>
+                                    <label class="switch-row"><input type="checkbox" id="tokenCompressionEnabled" class="config-checkbox"><span>Compress oversized conversation history</span></label>
+                                    <div class="form-group" style="margin-top: 14px;"><label for="tokenCompressionThreshold">Compression threshold in tokens</label><input type="number" id="tokenCompressionThreshold" min="128" max="2000000"></div>
+                                    <div class="form-group"><label for="tokenCompressionTarget">Target size in tokens</label><input type="number" id="tokenCompressionTarget" min="64" max="1999999"></div>
+                                    <div class="form-group"><label for="tokenCompressionMinRecentTurns">Recent turns to preserve</label><input type="number" id="tokenCompressionMinRecentTurns" min="1" max="50"></div>
                                 </section>
 
                                 <section class="config-group span-4">

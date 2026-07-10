@@ -535,25 +535,7 @@ function navigate(path, pushState = true) {
 
     }
 
-    // Close mobile menu instantly (Zero Animations!)
-
-    const sidebar = document.querySelector('.dashboard-sidebar');
-
-    const overlay = document.querySelector('.sidebar-overlay');
-
-    if (sidebar && sidebar.classList.contains('open')) {
-
-        sidebar.classList.remove('open');
-
-        if (overlay) {
-
-            overlay.classList.remove('open');
-
-            overlay.style.display = 'none';
-
-        }
-
-    }
+    setMobileMenuState(false);
 
     const currentContent = document.querySelector('.tab-content.active');
 
@@ -561,13 +543,17 @@ function navigate(path, pushState = true) {
 
     const shouldResetScroll = !currentContent || currentContent !== targetContent;
 
-    document.querySelectorAll('.tab').forEach(tab => tab.classList.remove('active'));
+    document.querySelectorAll('.tab').forEach(tab => {
+        tab.classList.remove('active');
+        tab.removeAttribute('aria-current');
+    });
 
     const targetTabButton = document.querySelector(`.tab[onclick*="'${tabName}'"]`);
 
     if (targetTabButton) {
 
         targetTabButton.classList.add('active');
+        targetTabButton.setAttribute('aria-current', 'page');
 
     }
 
@@ -2097,7 +2083,7 @@ function getCredentialModalContext(pathId, manager) {
 
     if (context.filename) {
 
-        return { filename: context.filename, manager: resolvedManager };
+        return { ...context, filename: context.filename, manager: resolvedManager };
 
     }
 
@@ -2146,7 +2132,7 @@ function quotaLevelFromUsedPercentage(usedPercentage) {
 
 }
 
-function buildCredentialQuotaHtml(filename, data) {
+function buildCredentialQuotaHtml(filename, data, context = {}) {
 
     const models = data.models || {};
     const entries = Object.entries(models);
@@ -2156,7 +2142,8 @@ function buildCredentialQuotaHtml(filename, data) {
         .filter(Boolean);
     const nextReset = resetTimes.length ? resetTimes.sort()[0] : '';
     const rows = renderMessageResultRows([
-        [t('table_filename'), filename],
+        ['Provider', context.providerName || t('provider_antigravity')],
+        context.email ? ['Account', context.email] : ['Credential', filename],
         ['Tracked models', entries.length],
         summary.label ? ['Average remaining quota', summary.label] : null,
         nextReset ? ['Next reset', nextReset] : null,
@@ -2780,7 +2767,12 @@ function createCredCard(credInfo, manager) {
 
     const pathId = (managerType === 'primary' ? 'primary_' : '') + btoa(encodeURIComponent(filename)).replace(/[+/=]/g, '_');
 
-    AppState.credentialCardIndex[pathId] = { filename, managerType };
+    AppState.credentialCardIndex[pathId] = {
+        filename,
+        managerType,
+        email: credInfo.user_email || '',
+        providerName: providerMeta.name,
+    };
 
     const shouldAutoLoadQuota = managerType === 'primary' && !AppState.quotaPreviewCache[filename];
 
@@ -2835,7 +2827,7 @@ function createCredCard(credInfo, manager) {
 
             <div class="cred-title-row">
 
-                <input type="checkbox" class="${checkboxClass}" data-filename="${filename}" onchange="toggle${managerType === 'primary' ? 'Primary' : ''}FileSelection('${filename}')">
+                <input type="checkbox" class="${checkboxClass}" data-filename="${filename}" aria-label="Select ${escapeHtml(providerMeta.name)} credential for ${escapeHtml(accountLabel)}" onchange="toggle${managerType === 'primary' ? 'Primary' : ''}FileSelection('${filename}')">
 
                 <div class="cred-identity" title="${escapeHtml(filename)}">
                     <div class="cred-provider-logo" aria-hidden="true">${providerLogo}</div>
@@ -3307,6 +3299,8 @@ window.addEventListener('resize', () => {
     const activeTab = document.querySelector('.tab.active');
 
     if (activeTab) updateTabSlider(activeTab, false);
+
+    if (window.innerWidth > 960) setMobileMenuState(false);
 
 });
 
@@ -4543,7 +4537,8 @@ async function configurePreviewChannel(filename) {
 
 async function togglePrimaryQuotaDetails(pathId) {
 
-    const { filename } = getCredentialModalContext(pathId, AppState.primaryCreds);
+    const context = getCredentialModalContext(pathId, AppState.primaryCreds);
+    const { filename } = context;
 
     if (!filename) return;
 
@@ -4562,7 +4557,7 @@ async function togglePrimaryQuotaDetails(pathId) {
 
             updateCredentialQuotaPreview(pathId, filename);
 
-            showMessageModal(t('quota_details'), buildCredentialQuotaHtml(filename, data), 'info', {html: true});
+            showMessageModal(t('quota_details'), buildCredentialQuotaHtml(filename, data, context), 'info', {html: true});
 
         } else {
 
@@ -5988,6 +5983,10 @@ const CONFIG_FIELD_KEYS = {
     compatibilityModeEnabled: 'compatibility_mode_enabled',
     returnThoughtsToFrontend: 'return_thoughts_to_frontend',
     antiTruncationMaxAttempts: 'anti_truncation_max_attempts',
+    tokenCompressionEnabled: 'token_compression_enabled',
+    tokenCompressionThreshold: 'token_compression_threshold',
+    tokenCompressionTarget: 'token_compression_target',
+    tokenCompressionMinRecentTurns: 'token_compression_min_recent_turns',
     keepaliveUrl: 'keepalive_url',
     keepaliveInterval: 'keepalive_interval'
 };
@@ -6068,15 +6067,23 @@ function populateConfigForm() {
 
     setConfigCheckbox('retry429Enabled', Boolean(c.retry_429_enabled));
 
-    setConfigField('retry429MaxRetries', c.retry_429_max_retries || 20);
+    setConfigField('retry429MaxRetries', c.retry_429_max_retries ?? 5);
 
-    setConfigField('retry429Interval', c.retry_429_interval || 0.1);
+    setConfigField('retry429Interval', c.retry_429_interval ?? 1);
 
     setConfigCheckbox('compatibilityModeEnabled', Boolean(c.compatibility_mode_enabled));
 
     setConfigCheckbox('returnThoughtsToFrontend', Boolean(c.return_thoughts_to_frontend !== false));
 
     setConfigField('antiTruncationMaxAttempts', c.anti_truncation_max_attempts || 3);
+
+    setConfigCheckbox('tokenCompressionEnabled', Boolean(c.token_compression_enabled !== false));
+
+    setConfigField('tokenCompressionThreshold', c.token_compression_threshold ?? 32000);
+
+    setConfigField('tokenCompressionTarget', c.token_compression_target ?? 24000);
+
+    setConfigField('tokenCompressionMinRecentTurns', c.token_compression_min_recent_turns ?? 4);
 
     setConfigField('keepaliveUrl', c.keepalive_url || '');
 
@@ -6177,15 +6184,23 @@ async function saveConfig() {
 
             retry_429_enabled: getChecked('retry429Enabled'),
 
-            retry_429_max_retries: getInt('retry429MaxRetries', 20),
+            retry_429_max_retries: getInt('retry429MaxRetries', 5),
 
-            retry_429_interval: getFloat('retry429Interval', 0.1),
+            retry_429_interval: getFloat('retry429Interval', 1),
 
             compatibility_mode_enabled: getChecked('compatibilityModeEnabled'),
 
             return_thoughts_to_frontend: getChecked('returnThoughtsToFrontend'),
 
             anti_truncation_max_attempts: getInt('antiTruncationMaxAttempts', 3),
+
+            token_compression_enabled: getChecked('tokenCompressionEnabled', true),
+
+            token_compression_threshold: getInt('tokenCompressionThreshold', 32000),
+
+            token_compression_target: getInt('tokenCompressionTarget', 24000),
+
+            token_compression_min_recent_turns: getInt('tokenCompressionMinRecentTurns', 4),
 
             keepalive_url: getValue('keepaliveUrl'),
 
@@ -6472,7 +6487,7 @@ async function refreshUsageStats() {
 
             document.getElementById('cachedTokens24h').textContent = formatUsageNumber(aggData.cached_tokens ?? aggData.cached_tokens_24h);
 
-            document.getElementById('reasoningTokens24h').textContent = formatUsageNumber(aggData.reasoning_tokens ?? aggData.reasoning_tokens_24h);
+            document.getElementById('estimatedTokensSaved').textContent = formatUsageNumber(aggData.estimated_tokens_saved ?? aggData.estimated_tokens_saved_24h);
 
             renderUsageList();
 
@@ -6528,6 +6543,7 @@ function renderUsageList() {
         const inputTokens = stats.input_tokens ?? stats.input_tokens_24h ?? 0;
         const outputTokens = stats.output_tokens ?? stats.output_tokens_24h ?? 0;
         const totalTokens = stats.total_tokens ?? stats.total_tokens_24h ?? 0;
+        const estimatedTokensSaved = stats.estimated_tokens_saved ?? stats.estimated_tokens_saved_24h ?? 0;
         const successRate = calls > 0 ? Math.round((successfulCalls / calls) * 100) : 0;
         const isUnassigned = filename === '__gateway_unassigned__.json';
         const providerMeta = isUnassigned
@@ -6564,7 +6580,7 @@ function renderUsageList() {
 
             <td>
                 <div class="usage-cell-primary">${formatUsageNumber(totalTokens)} total</div>
-                <div class="usage-cell-meta">Input ${formatUsageNumber(inputTokens)} / output ${formatUsageNumber(outputTokens)}</div>
+                <div class="usage-cell-meta">Input ${formatUsageNumber(inputTokens)} / output ${formatUsageNumber(outputTokens)} / estimated savings ${formatUsageNumber(estimatedTokensSaved)}</div>
             </td>
 
         `;
@@ -6943,19 +6959,29 @@ function autoSetKeepaliveUrl() {
 
 
 
-function toggleMobileMenu() {
+function setMobileMenuState(isOpen) {
     const sidebar = document.querySelector('.dashboard-sidebar');
     const overlay = document.querySelector('.sidebar-overlay');
-    if (sidebar && overlay) {
-        const isOpen = sidebar.classList.contains('open');
-        if (isOpen) {
-            sidebar.classList.remove('open');
-            overlay.classList.remove('open');
-            overlay.style.display = 'none';
-        } else {
-            sidebar.classList.add('open');
-            overlay.classList.add('open');
-            overlay.style.display = 'block';
-        }
+    const menuButton = document.querySelector('.mobile-menu-btn');
+    if (!sidebar || !overlay) return;
+
+    sidebar.classList.toggle('open', isOpen);
+    overlay.classList.toggle('open', isOpen);
+    document.body.classList.toggle('mobile-menu-open', isOpen);
+    overlay.style.display = isOpen ? 'block' : 'none';
+    overlay.setAttribute('aria-hidden', String(!isOpen));
+
+    if (menuButton) {
+        menuButton.setAttribute('aria-expanded', String(isOpen));
+        menuButton.setAttribute('aria-label', isOpen ? 'Close navigation' : 'Open navigation');
     }
 }
+
+function toggleMobileMenu() {
+    const sidebar = document.querySelector('.dashboard-sidebar');
+    setMobileMenuState(!sidebar?.classList.contains('open'));
+}
+
+document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape') setMobileMenuState(false);
+});

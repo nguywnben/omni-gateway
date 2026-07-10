@@ -30,6 +30,9 @@ TOKEN_COLUMNS = {
     "total_tokens": "INTEGER DEFAULT 0",
     "cached_tokens": "INTEGER DEFAULT 0",
     "reasoning_tokens": "INTEGER DEFAULT 0",
+    "estimated_input_tokens": "INTEGER DEFAULT 0",
+    "estimated_tokens_saved": "INTEGER DEFAULT 0",
+    "compressed_messages": "INTEGER DEFAULT 0",
 }
 
 
@@ -78,6 +81,9 @@ def _empty_usage_record(metadata: Dict[str, str]) -> Dict[str, Any]:
         "total_tokens": 0,
         "cached_tokens": 0,
         "reasoning_tokens": 0,
+        "estimated_input_tokens": 0,
+        "estimated_tokens_saved": 0,
+        "compressed_messages": 0,
         "calls_24h": 0,
         "successful_calls_24h": 0,
         "failed_calls_24h": 0,
@@ -86,6 +92,9 @@ def _empty_usage_record(metadata: Dict[str, str]) -> Dict[str, Any]:
         "total_tokens_24h": 0,
         "cached_tokens_24h": 0,
         "reasoning_tokens_24h": 0,
+        "estimated_input_tokens_24h": 0,
+        "estimated_tokens_saved_24h": 0,
+        "compressed_messages_24h": 0,
     }
 
 
@@ -101,6 +110,9 @@ def _usage_record(
     total_tokens: int,
     cached_tokens: int,
     reasoning_tokens: int,
+    estimated_input_tokens: int,
+    estimated_tokens_saved: int,
+    compressed_messages: int,
 ) -> Dict[str, Any]:
     record = {
         "user_email": existing.get("user_email", ""),
@@ -113,6 +125,9 @@ def _usage_record(
         "total_tokens": total_tokens,
         "cached_tokens": cached_tokens,
         "reasoning_tokens": reasoning_tokens,
+        "estimated_input_tokens": estimated_input_tokens,
+        "estimated_tokens_saved": estimated_tokens_saved,
+        "compressed_messages": compressed_messages,
     }
     record.update({
         "calls_24h": calls,
@@ -123,6 +138,9 @@ def _usage_record(
         "total_tokens_24h": total_tokens,
         "cached_tokens_24h": cached_tokens,
         "reasoning_tokens_24h": reasoning_tokens,
+        "estimated_input_tokens_24h": estimated_input_tokens,
+        "estimated_tokens_saved_24h": estimated_tokens_saved,
+        "compressed_messages_24h": compressed_messages,
     })
     return record
 
@@ -259,12 +277,14 @@ def record_call(
     status_code: int = 200,
     success: bool = True,
     token_usage: Optional[Dict[str, Any]] = None,
+    request_metrics: Optional[Dict[str, Any]] = None,
 ):
     filename = os.path.basename(filename)
     if not filename:
         return
 
     tokens = normalize_token_usage(token_usage)
+    request_metrics = request_metrics or {}
     init_db()
     with db_lock:
         conn = sqlite3.connect(db_path)
@@ -282,9 +302,12 @@ def record_call(
                     output_tokens,
                     total_tokens,
                     cached_tokens,
-                    reasoning_tokens
+                    reasoning_tokens,
+                    estimated_input_tokens,
+                    estimated_tokens_saved,
+                    compressed_messages
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     filename,
@@ -298,6 +321,9 @@ def record_call(
                     tokens["total_tokens"],
                     tokens["cached_tokens"],
                     tokens["reasoning_tokens"],
+                    _int_value(request_metrics.get("estimated_input_tokens")),
+                    _int_value(request_metrics.get("estimated_tokens_saved")),
+                    _int_value(request_metrics.get("compressed_messages")),
                 )
             )
             conn.commit()
@@ -413,6 +439,9 @@ async def get_stats_for_period(period: str = "1d") -> Dict[str, Dict[str, Any]]:
                     COALESCE(SUM(total_tokens), 0),
                     COALESCE(SUM(cached_tokens), 0),
                     COALESCE(SUM(reasoning_tokens), 0),
+                    COALESCE(SUM(estimated_input_tokens), 0),
+                    COALESCE(SUM(estimated_tokens_saved), 0),
+                    COALESCE(SUM(compressed_messages), 0),
                     COALESCE(MAX(NULLIF(provider, '')), '')
                 FROM usage_logs
                 {where_clause}
@@ -424,7 +453,7 @@ async def get_stats_for_period(period: str = "1d") -> Dict[str, Dict[str, Any]]:
                 existing = res.get(row[0], {})
                 res[row[0]] = _usage_record(
                     existing=existing,
-                    provider=row[9],
+                    provider=row[12],
                     calls=row[1],
                     successful_calls=row[2],
                     failed_calls=row[3],
@@ -433,6 +462,9 @@ async def get_stats_for_period(period: str = "1d") -> Dict[str, Dict[str, Any]]:
                     total_tokens=row[6],
                     cached_tokens=row[7],
                     reasoning_tokens=row[8],
+                    estimated_input_tokens=row[9],
+                    estimated_tokens_saved=row[10],
+                    compressed_messages=row[11],
                 )
         except Exception as e:
             log.error(f"Failed to fetch usage stats for {normalized_period}: {e}")

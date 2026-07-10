@@ -54,6 +54,10 @@ ENV_MAPPINGS = {
     "RETRY_429_ENABLED": "retry_429_enabled",
     "RETRY_429_INTERVAL": "retry_429_interval",
     "ANTI_TRUNCATION_MAX_ATTEMPTS": "anti_truncation_max_attempts",
+    "TOKEN_COMPRESSION_ENABLED": "token_compression_enabled",
+    "TOKEN_COMPRESSION_THRESHOLD": "token_compression_threshold",
+    "TOKEN_COMPRESSION_TARGET": "token_compression_target",
+    "TOKEN_COMPRESSION_MIN_RECENT_TURNS": "token_compression_min_recent_turns",
     "COMPATIBILITY_MODE": "compatibility_mode_enabled",
     "RETURN_THOUGHTS_TO_FRONTEND": "return_thoughts_to_frontend",
     "STREAM_TO_NONSTREAM": "stream_to_nonstream",
@@ -234,6 +238,70 @@ async def get_anti_truncation_max_attempts() -> int:
     return int(await get_config_value("anti_truncation_max_attempts", 3))
 
 
+def _coerce_bool(value: Any, default: bool) -> bool:
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        normalized = value.strip().lower()
+        if normalized in ("true", "1", "yes", "on"):
+            return True
+        if normalized in ("false", "0", "no", "off"):
+            return False
+    return default
+
+
+def _coerce_bounded_int(value: Any, default: int, minimum: int, maximum: int) -> int:
+    try:
+        parsed = int(value)
+    except (TypeError, ValueError):
+        return default
+    return min(maximum, max(minimum, parsed))
+
+
+async def get_token_compression_config() -> dict[str, Any]:
+    """Return validated settings for bounded conversation-history compression."""
+    enabled = _coerce_bool(
+        await get_config_value(
+            "token_compression_enabled", True, "TOKEN_COMPRESSION_ENABLED"
+        ),
+        True,
+    )
+    threshold = _coerce_bounded_int(
+        await get_config_value(
+            "token_compression_threshold", 32_000, "TOKEN_COMPRESSION_THRESHOLD"
+        ),
+        32_000,
+        128,
+        2_000_000,
+    )
+    target = _coerce_bounded_int(
+        await get_config_value(
+            "token_compression_target", 24_000, "TOKEN_COMPRESSION_TARGET"
+        ),
+        24_000,
+        64,
+        1_999_999,
+    )
+    if target >= threshold:
+        target = max(64, threshold * 3 // 4)
+    min_recent_turns = _coerce_bounded_int(
+        await get_config_value(
+            "token_compression_min_recent_turns",
+            4,
+            "TOKEN_COMPRESSION_MIN_RECENT_TURNS",
+        ),
+        4,
+        1,
+        50,
+    )
+    return {
+        "enabled": enabled,
+        "threshold_tokens": threshold,
+        "target_tokens": target,
+        "min_recent_turns": min_recent_turns,
+    }
+
+
 # Server Configuration
 async def get_server_host() -> str:
     """
@@ -380,7 +448,7 @@ async def get_switch_credential_enabled() -> bool:
     if env_value:
         return env_value.lower() in ("true", "1", "yes", "on")
 
-    return bool(await get_config_value("switch_credential_enabled", False))
+    return bool(await get_config_value("switch_credential_enabled", True))
 
 
 async def get_antigravity_switch_credential_enabled() -> bool:

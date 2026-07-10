@@ -38,6 +38,10 @@ RESETTABLE_CONFIG_KEYS = {
     "compatibility_mode_enabled",
     "return_thoughts_to_frontend",
     "anti_truncation_max_attempts",
+    "token_compression_enabled",
+    "token_compression_threshold",
+    "token_compression_target",
+    "token_compression_min_recent_turns",
     "keepalive_url",
     "keepalive_interval",
 }
@@ -88,6 +92,12 @@ async def get_config(token: str = Depends(verify_panel_token)):
         current_config["retry_429_interval"] = await config.get_retry_429_interval()
 
         current_config["anti_truncation_max_attempts"] = await config.get_anti_truncation_max_attempts()
+
+        compression_config = await config.get_token_compression_config()
+        current_config["token_compression_enabled"] = compression_config["enabled"]
+        current_config["token_compression_threshold"] = compression_config["threshold_tokens"]
+        current_config["token_compression_target"] = compression_config["target_tokens"]
+        current_config["token_compression_min_recent_turns"] = compression_config["min_recent_turns"]
 
 
         current_config["compatibility_mode_enabled"] = await config.get_compatibility_mode_enabled()
@@ -176,6 +186,55 @@ async def save_config(request: ConfigSaveRequest, token: str = Depends(verify_pa
             ):
                 raise HTTPException(
                     status_code=400, detail="Anti-truncation recovery attempts must be an integer between 1 and 10."
+                )
+
+        if "token_compression_enabled" in new_config:
+            if not isinstance(new_config["token_compression_enabled"], bool):
+                raise HTTPException(
+                    status_code=400,
+                    detail="The token compression switch must be a boolean.",
+                )
+
+        current_compression = await config.get_token_compression_config()
+        compression_threshold = new_config.get(
+            "token_compression_threshold",
+            current_compression["threshold_tokens"],
+        )
+        compression_target = new_config.get(
+            "token_compression_target",
+            current_compression["target_tokens"],
+        )
+        if (
+            not isinstance(compression_threshold, int)
+            or isinstance(compression_threshold, bool)
+            or compression_threshold < 128
+            or compression_threshold > 2_000_000
+        ):
+            raise HTTPException(
+                status_code=400,
+                detail="The compression threshold must be an integer between 128 and 2000000 tokens.",
+            )
+        if (
+            not isinstance(compression_target, int)
+            or isinstance(compression_target, bool)
+            or compression_target < 64
+            or compression_target >= compression_threshold
+        ):
+            raise HTTPException(
+                status_code=400,
+                detail="The compression target must be an integer of at least 64 tokens and lower than the threshold.",
+            )
+        if "token_compression_min_recent_turns" in new_config:
+            min_recent_turns = new_config["token_compression_min_recent_turns"]
+            if (
+                not isinstance(min_recent_turns, int)
+                or isinstance(min_recent_turns, bool)
+                or min_recent_turns < 1
+                or min_recent_turns > 50
+            ):
+                raise HTTPException(
+                    status_code=400,
+                    detail="Recent turns to preserve must be an integer between 1 and 50.",
                 )
 
         if "compatibility_mode_enabled" in new_config:

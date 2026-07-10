@@ -48,6 +48,21 @@ class StorageBackend(Protocol):
         """Internal implementation detail."""
         ...
 
+    async def record_success(
+        self,
+        filename: str,
+        model_name: Optional[str] = None,
+        mode: str = "code_assist",
+    ) -> None:
+        """Record a completed provider attempt."""
+        ...
+
+    async def record_failure(
+        self, filename: str, mode: str = "code_assist"
+    ) -> None:
+        """Record a failed provider attempt for fair routing."""
+        ...
+
 
     async def set_config(self, key: str, value: Any) -> bool:
         """Internal implementation detail."""

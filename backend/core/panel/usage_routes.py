@@ -38,6 +38,15 @@ async def get_aggregated_stats(period: str = Query("1d"), token: str = Depends(v
         total_tokens = sum(item.get("total_tokens", 0) for item in usage_data.values())
         cached_tokens = sum(item.get("cached_tokens", 0) for item in usage_data.values())
         reasoning_tokens = sum(item.get("reasoning_tokens", 0) for item in usage_data.values())
+        estimated_input_tokens = sum(
+            item.get("estimated_input_tokens", 0) for item in usage_data.values()
+        )
+        estimated_tokens_saved = sum(
+            item.get("estimated_tokens_saved", 0) for item in usage_data.values()
+        )
+        compressed_messages = sum(
+            item.get("compressed_messages", 0) for item in usage_data.values()
+        )
         credential_counts = await get_credential_counts()
         total_files = credential_counts["total"]
         active_files = credential_counts["active"]
@@ -66,11 +75,17 @@ async def get_aggregated_stats(period: str = Query("1d"), token: str = Depends(v
                 "total_tokens": total_tokens,
                 "cached_tokens": cached_tokens,
                 "reasoning_tokens": reasoning_tokens,
+                "estimated_input_tokens": estimated_input_tokens,
+                "estimated_tokens_saved": estimated_tokens_saved,
+                "compressed_messages": compressed_messages,
                 "input_tokens_24h": input_tokens,
                 "output_tokens_24h": output_tokens,
                 "total_tokens_24h": total_tokens,
                 "cached_tokens_24h": cached_tokens,
                 "reasoning_tokens_24h": reasoning_tokens,
+                "estimated_input_tokens_24h": estimated_input_tokens,
+                "estimated_tokens_saved_24h": estimated_tokens_saved,
+                "compressed_messages_24h": compressed_messages,
                 "avg_tokens_per_successful_request": avg_tokens
             }
         }

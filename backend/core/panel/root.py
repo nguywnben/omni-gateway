@@ -43,9 +43,11 @@ def _oauth_callback_page(success: bool, title: str, message: str) -> HTMLRespons
         }}
         body {{
             min-height: 100vh;
+            min-height: 100dvh;
             margin: 0;
             display: grid;
             place-items: center;
+            padding: 16px;
             background: var(--bg-subtle);
             color: var(--text);
             font-family: "Google Sans", Arial, sans-serif;

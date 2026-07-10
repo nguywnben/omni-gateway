@@ -923,6 +923,8 @@ class MongoDBManager:
                     "model_cooldowns": model_cooldowns,
                     "preview": doc.get("preview", True),
                     "tier": doc.get("tier", "pro"),
+                    "call_count": doc.get("call_count", 0),
+                    "rotation_order": doc.get("rotation_order", 0),
                 }
                 if mode == "primary":
                     state["enable_credit"] = doc.get("enable_credit", False)
@@ -937,6 +939,8 @@ class MongoDBManager:
                 "model_cooldowns": {},
                 "preview": True,
                 "tier": "pro",
+                "call_count": 0,
+                "rotation_order": 0,
             }
             if mode == "primary":
                 default_state["enable_credit"] = False
@@ -965,6 +969,8 @@ class MongoDBManager:
                 "preview": 1,
                 "tier": 1,
                 "enable_credit": 1,
+                "call_count": 1,
+                "rotation_order": 1,
                 "_id": 0
             }
 
@@ -992,6 +998,8 @@ class MongoDBManager:
                     "model_cooldowns": model_cooldowns,
                     "preview": doc.get("preview", True),
                     "tier": doc.get("tier", "pro"),
+                    "call_count": doc.get("call_count", 0),
+                    "rotation_order": doc.get("rotation_order", 0),
                 }
                 if mode == "primary":
                     state["enable_credit"] = doc.get("enable_credit", False)
@@ -1473,3 +1481,23 @@ class MongoDBManager:
 
         except Exception as e:
             log.error(f"Error recording success for {filename}: {e}")
+
+    async def record_failure(
+        self, filename: str, mode: str = "code_assist"
+    ) -> None:
+        """Count failed attempts so routing fairness includes all upstream traffic."""
+        self._ensure_initialized()
+        filename = os.path.basename(filename)
+
+        try:
+            collection = self._db[self._get_collection_name(mode)]
+            now = time.time()
+            await collection.update_one(
+                {"filename": filename},
+                {
+                    "$inc": {"call_count": 1},
+                    "$set": {"updated_at": now},
+                },
+            )
+        except Exception as e:
+            log.error(f"Error recording failure for {filename}: {e}")

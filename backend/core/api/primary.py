@@ -8,7 +8,7 @@ import time
 import uuid
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional, Callable, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 from fastapi import Response
 from config import (
@@ -18,12 +18,18 @@ from config import (
     get_antigravity_switch_credential_enabled,
     get_antigravity_user_agent,
     get_auto_disable_error_codes,
+    get_token_compression_config,
 )
 from log import log
 
 from core.credential_manager import credential_manager
 from core.httpx_client import stream_post_async, post_async
 from core.models import Model, model_to_dict
+from core.token_compression import (
+    CompressionResult,
+    CompressionSettings,
+    compress_gemini_request,
+)
 from core.usage_stats import (
     extract_token_usage_from_response,
     extract_token_usage_from_stream_chunk,
@@ -197,19 +203,39 @@ def _build_labels(model: str, trajectory_id: str, step: int) -> Dict[str, str]:
     }
 
 
+def _apply_credit_mode(payload: Dict[str, Any], enabled: bool) -> None:
+    if enabled:
+        payload["enabledCreditTypes"] = ["GOOGLE_ONE_AI"]
+    else:
+        payload.pop("enabledCreditTypes", None)
+
+
 async def wrap_cli_request(
     gemini_request: Dict[str, Any],
     model: str,
     project_id: str,
-) -> Tuple[Dict[str, Any], str]:
+    enable_credit: bool = False,
+) -> Tuple[Dict[str, Any], str, CompressionResult]:
     """Internal implementation detail."""
-    inner = dict(gemini_request)
+    original_inner = dict(gemini_request)
+    state = await _get_session_state(original_inner, model)
+    compression_result = compress_gemini_request(
+        original_inner,
+        CompressionSettings(**await get_token_compression_config()),
+    )
+    inner = dict(compression_result.request)
+
+    if compression_result.applied:
+        log.info(
+            f"Compressed request history for model={model}: "
+            f"removed_contents={compression_result.removed_contents}, "
+            f"estimated_tokens={compression_result.original_estimated_tokens}"
+            f"->{compression_result.final_estimated_tokens}, "
+            f"reason={compression_result.reason}."
+        )
 
 
     inner.pop("safetySettings", None)
-
-
-    state = await _get_session_state(inner, model)
 
 
     if not inner.get("sessionId"):
@@ -235,9 +261,9 @@ async def wrap_cli_request(
         "model": model,
         "userAgent": await get_antigravity_payload_user_agent(),
         "requestType": "agent",
-        "enabledCreditTypes": ["GOOGLE_ONE_AI"],
     }
-    return payload, request_id
+    _apply_credit_mode(payload, enable_credit)
+    return payload, request_id, compression_result
 
 
 
@@ -259,29 +285,15 @@ def _is_retryable_status(status_code: int, disable_error_codes: List[int]) -> bo
 
 async def _switch_credential_for_retry(
     *,
-    next_cred_task: Optional[asyncio.Task],
-    retry_interval: float,
-    refresh_credential_fast: Callable[[], Any],
-    apply_cred_result: Callable[[Tuple[str, Dict[str, Any]]], bool],
+    refresh_credential_fast,
     log_prefix: str,
-) -> Tuple[bool, Optional[asyncio.Task]]:
-    """Internal implementation detail."""
-    if next_cred_task is not None:
-        try:
-            cred_result = await next_cred_task
-            next_cred_task = None
-            if cred_result and apply_cred_result(cred_result):
-                await asyncio.sleep(retry_interval)
-                return True, next_cred_task
-        except Exception as e:
-            log.warning(f"{log_prefix} Credential warming task failed: {e}")
-            next_cred_task = None
-
-    await asyncio.sleep(retry_interval)
+) -> bool:
+    """Acquire a new credential after the current attempt has been recorded."""
     if await refresh_credential_fast():
-        return True, next_cred_task
+        return True
 
-    return False, next_cred_task
+    log.warning(f"{log_prefix} No alternate credential is currently available.")
+    return False
 
 
 
@@ -342,7 +354,13 @@ async def stream_request(
 
 
     inner_request = body.get("request", body)
-    final_payload, _ = await wrap_cli_request(inner_request, model_name, project_id)
+    final_payload, _, compression_result = await wrap_cli_request(
+        inner_request,
+        model_name,
+        project_id,
+        enable_credit=bool(credential_data.get("enable_credit", False)),
+    )
+    request_metrics = compression_result.as_metrics()
 
 
     retry_config = await get_retry_config()
@@ -352,7 +370,6 @@ async def stream_request(
 
     DISABLE_ERROR_CODES = await get_auto_disable_error_codes()
     last_error_response = None
-    next_cred_task = None
 
 
     async def refresh_credential_fast():
@@ -370,17 +387,9 @@ async def stream_request(
 
         auth_headers["Authorization"] = f"Bearer {access_token}"
         final_payload["project"] = project_id
-        return True
-
-    def apply_cred_result(cred_result: Tuple[str, Dict[str, Any]]) -> bool:
-        nonlocal current_file, access_token, project_id, auth_headers, final_payload
-        current_file, credential_data = cred_result
-        access_token = credential_data.get("access_token") or credential_data.get("token")
-        project_id = credential_data.get("project_id", "")
-        if not access_token or not project_id:
-            return False
-        auth_headers["Authorization"] = f"Bearer {access_token}"
-        final_payload["project"] = project_id
+        _apply_credit_mode(
+            final_payload, bool(credential_data.get("enable_credit", False))
+        )
         return True
 
     for attempt in range(max_retries + 1):
@@ -418,14 +427,6 @@ async def stream_request(
                                 cooldown_until = await parse_and_log_cooldown(error_body, mode="primary")
                             except Exception:
                                 pass
-
-
-                        if switch_credential_enabled and next_cred_task is None and attempt < max_retries:
-                            next_cred_task = asyncio.create_task(
-                                credential_manager.get_valid_credential(
-                                    mode="primary", model_name=model_name
-                                )
-                            )
 
 
                         await record_api_call_error(
@@ -485,6 +486,7 @@ async def stream_request(
                     mode="primary",
                     model_name=model_name,
                     token_usage=stream_token_usage,
+                    request_metrics=request_metrics,
                 )
                 log.debug(f"[provider stream] Streaming response completed, model: {model_name}")
                 return
@@ -513,11 +515,8 @@ async def stream_request(
                 log.info(f"[provider stream] retrying request (attempt {attempt + 2}/{max_retries + 1}).")
 
                 if switch_credential_enabled:
-                    switched, next_cred_task = await _switch_credential_for_retry(
-                        next_cred_task=next_cred_task,
-                        retry_interval=retry_interval,
+                    switched = await _switch_credential_for_retry(
                         refresh_credential_fast=refresh_credential_fast,
-                        apply_cred_result=apply_cred_result,
                         log_prefix="[provider stream]",
                     )
                     if not switched:
@@ -540,6 +539,18 @@ async def stream_request(
             if attempt < max_retries:
                 log.info(f"[provider stream] retry after abnormality (attempt {attempt + 2}/{max_retries + 1})...")
                 await asyncio.sleep(retry_interval)
+                if switch_credential_enabled:
+                    switched = await _switch_credential_for_retry(
+                        refresh_credential_fast=refresh_credential_fast,
+                        log_prefix="[provider stream]",
+                    )
+                    if not switched:
+                        yield Response(
+                            content=json.dumps({"error": "No credentials are available."}),
+                            status_code=500,
+                            media_type="application/json",
+                        )
+                        return
                 continue
             else:
 
@@ -635,7 +646,13 @@ async def non_stream_request(
 
 
     inner_request = body.get("request", body)
-    final_payload, _ = await wrap_cli_request(inner_request, model_name, project_id)
+    final_payload, _, compression_result = await wrap_cli_request(
+        inner_request,
+        model_name,
+        project_id,
+        enable_credit=bool(credential_data.get("enable_credit", False)),
+    )
+    request_metrics = compression_result.as_metrics()
 
 
     retry_config = await get_retry_config()
@@ -645,7 +662,6 @@ async def non_stream_request(
 
     DISABLE_ERROR_CODES = await get_auto_disable_error_codes()
     last_error_response = None
-    next_cred_task = None
 
 
     async def refresh_credential_fast():
@@ -663,17 +679,9 @@ async def non_stream_request(
 
         auth_headers["Authorization"] = f"Bearer {access_token}"
         final_payload["project"] = project_id
-        return True
-
-    def apply_cred_result(cred_result: Tuple[str, Dict[str, Any]]) -> bool:
-        nonlocal current_file, access_token, project_id, auth_headers, final_payload
-        current_file, credential_data = cred_result
-        access_token = credential_data.get("access_token") or credential_data.get("token")
-        project_id = credential_data.get("project_id", "")
-        if not access_token or not project_id:
-            return False
-        auth_headers["Authorization"] = f"Bearer {access_token}"
-        final_payload["project"] = project_id
+        _apply_credit_mode(
+            final_payload, bool(credential_data.get("enable_credit", False))
+        )
         return True
 
     for attempt in range(max_retries + 1):
@@ -721,6 +729,7 @@ async def non_stream_request(
                         model_name=model_name,
                         token_usage=token_usage,
                         status_code=status_code,
+                        request_metrics=request_metrics,
                     )
                     return Response(
                         content=response.content,
@@ -754,14 +763,6 @@ async def non_stream_request(
                             cooldown_until = await parse_and_log_cooldown(error_text, mode="primary")
                         except Exception:
                             pass
-
-
-                    if switch_credential_enabled and next_cred_task is None and attempt < max_retries:
-                        next_cred_task = asyncio.create_task(
-                            credential_manager.get_valid_credential(
-                                mode="primary", model_name=model_name
-                            )
-                        )
 
 
                     await record_api_call_error(
@@ -798,11 +799,8 @@ async def non_stream_request(
                 log.info(f"[provider] retrying request (attempt {attempt + 2}/{max_retries + 1}).")
 
                 if switch_credential_enabled:
-                    switched, next_cred_task = await _switch_credential_for_retry(
-                        next_cred_task=next_cred_task,
-                        retry_interval=retry_interval,
+                    switched = await _switch_credential_for_retry(
                         refresh_credential_fast=refresh_credential_fast,
-                        apply_cred_result=apply_cred_result,
                         log_prefix="[provider]",
                     )
                     if not switched:
@@ -824,6 +822,17 @@ async def non_stream_request(
             if attempt < max_retries:
                 log.info(f"[provider] Retry after exception (attempt {attempt + 2}/{max_retries + 1})...")
                 await asyncio.sleep(retry_interval)
+                if switch_credential_enabled:
+                    switched = await _switch_credential_for_retry(
+                        refresh_credential_fast=refresh_credential_fast,
+                        log_prefix="[provider]",
+                    )
+                    if not switched:
+                        return Response(
+                            content=json.dumps({"error": "No credentials are available."}),
+                            status_code=500,
+                            media_type="application/json",
+                        )
                 continue
             else:
 
@@ -864,6 +873,7 @@ async def fetch_available_models() -> List[Dict[str, Any]]:
 
     if not access_token:
         log.error(f"[provider] No access token in credential: {current_file}")
+        await credential_manager.release_credential(current_file, mode="primary")
         return []
 
 
@@ -927,6 +937,8 @@ async def fetch_available_models() -> List[Dict[str, Any]]:
         log.error(f"[provider] Failed to fetch models: {e}")
         log.error(f"[provider] Traceback: {traceback.format_exc()}")
         return []
+    finally:
+        await credential_manager.release_credential(current_file, mode="primary")
 
 
 async def fetch_quota_info(access_token: str) -> Dict[str, Any]:

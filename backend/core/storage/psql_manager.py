@@ -497,7 +497,8 @@ class PSQLManager:
             async with self._pool.acquire() as conn:
                 if mode == "code_assist":
                     row = await conn.fetchrow(f"""
-                        SELECT disabled, error_codes, last_success, user_email, model_cooldowns, preview, tier
+                        SELECT disabled, error_codes, last_success, user_email, model_cooldowns,
+                               preview, tier, call_count, rotation_order
                         FROM {table_name} WHERE filename = $1
                     """, filename)
 
@@ -510,6 +511,8 @@ class PSQLManager:
                             "model_cooldowns": json.loads(row["model_cooldowns"] or "{}"),
                             "preview": bool(row["preview"]) if row["preview"] is not None else True,
                             "tier": row["tier"] if row["tier"] is not None else "pro",
+                            "call_count": row["call_count"] or 0,
+                            "rotation_order": row["rotation_order"] or 0,
                         }
 
                     return {
@@ -520,10 +523,13 @@ class PSQLManager:
                         "model_cooldowns": {},
                         "preview": True,
                         "tier": "pro",
+                        "call_count": 0,
+                        "rotation_order": 0,
                     }
                 else:
                     row = await conn.fetchrow(f"""
-                        SELECT disabled, error_codes, last_success, user_email, model_cooldowns, tier, enable_credit
+                        SELECT disabled, error_codes, last_success, user_email, model_cooldowns,
+                               tier, enable_credit, call_count, rotation_order
                         FROM {table_name} WHERE filename = $1
                     """, filename)
 
@@ -536,6 +542,8 @@ class PSQLManager:
                             "model_cooldowns": json.loads(row["model_cooldowns"] or "{}"),
                             "tier": row["tier"] if row["tier"] is not None else "pro",
                             "enable_credit": bool(row["enable_credit"]) if row["enable_credit"] is not None else False,
+                            "call_count": row["call_count"] or 0,
+                            "rotation_order": row["rotation_order"] or 0,
                         }
 
                     return {
@@ -546,6 +554,8 @@ class PSQLManager:
                         "model_cooldowns": {},
                         "tier": "pro",
                         "enable_credit": False,
+                        "call_count": 0,
+                        "rotation_order": 0,
                     }
 
         except Exception as e:
@@ -564,7 +574,8 @@ class PSQLManager:
                 if mode == "code_assist":
                     rows = await conn.fetch(f"""
                         SELECT filename, disabled, error_codes, last_success,
-                               user_email, model_cooldowns, preview, tier
+                               user_email, model_cooldowns, preview, tier,
+                               call_count, rotation_order
                         FROM {table_name}
                     """)
 
@@ -582,12 +593,15 @@ class PSQLManager:
                             "model_cooldowns": model_cooldowns,
                             "preview": bool(row["preview"]) if row["preview"] is not None else True,
                             "tier": row["tier"] if row["tier"] is not None else "pro",
+                            "call_count": row["call_count"] or 0,
+                            "rotation_order": row["rotation_order"] or 0,
                         }
                     return states
                 else:
                     rows = await conn.fetch(f"""
                         SELECT filename, disabled, error_codes, last_success,
-                               user_email, model_cooldowns, tier, enable_credit
+                               user_email, model_cooldowns, tier, enable_credit,
+                               call_count, rotation_order
                         FROM {table_name}
                     """)
 
@@ -605,6 +619,8 @@ class PSQLManager:
                             "model_cooldowns": model_cooldowns,
                             "tier": row["tier"] if row["tier"] is not None else "pro",
                             "enable_credit": bool(row["enable_credit"]) if row["enable_credit"] is not None else False,
+                            "call_count": row["call_count"] or 0,
+                            "rotation_order": row["rotation_order"] or 0,
                         }
                     return states
 
@@ -1031,3 +1047,25 @@ class PSQLManager:
 
         except Exception as e:
             log.error(f"Error recording success for {filename}: {e}")
+
+    async def record_failure(
+        self, filename: str, mode: str = "code_assist"
+    ) -> None:
+        """Count failed attempts so routing fairness includes all upstream traffic."""
+        self._ensure_initialized()
+        filename = os.path.basename(filename)
+
+        try:
+            table_name = self._get_table_name(mode)
+            async with self._pool.acquire() as conn:
+                await conn.execute(
+                    f"""
+                    UPDATE {table_name}
+                    SET call_count = COALESCE(call_count, 0) + 1,
+                        updated_at = EXTRACT(EPOCH FROM NOW())
+                    WHERE filename = $1
+                    """,
+                    filename,
+                )
+        except Exception as e:
+            log.error(f"Error recording failure for {filename}: {e}")

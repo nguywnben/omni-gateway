@@ -747,9 +747,6 @@ async def normalize_gemini_request(
 
 
     if generation_config:
-
-        generation_config["maxOutputTokens"] = 64000
-
         generation_config["topK"] = 64
 
     if "contents" in result:

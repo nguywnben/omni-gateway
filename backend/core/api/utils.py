@@ -109,6 +109,7 @@ async def record_api_call_success(
     model_name: Optional[str] = None,
     token_usage: Optional[Dict[str, Any]] = None,
     status_code: int = 200,
+    request_metrics: Optional[Dict[str, Any]] = None,
 ) -> None:
     """Internal implementation detail."""
     if credential_manager and credential_name:
@@ -121,6 +122,7 @@ async def record_api_call_success(
                 status_code=status_code,
                 success=True,
                 token_usage=token_usage,
+                request_metrics=request_metrics,
             )
         except Exception as e:
             log.error(f"Failed to record usage for {credential_name}: {e}")

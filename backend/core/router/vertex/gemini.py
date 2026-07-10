@@ -8,6 +8,7 @@ from core.utils import authenticate_gemini_flexible
 from core.models import GeminiRequest, model_to_dict
 from core.router.hi_check import is_health_check_request, create_health_check_response
 from core.router.stream_passthrough import build_streaming_response_or_error
+from core.token_estimator import estimate_input_tokens
 
 
 router = APIRouter()
@@ -91,19 +92,5 @@ async def count_tokens(
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Invalid JSON: {str(e)}")
 
-    total_tokens = 0
-    contents = None
-
-    if "generateContentRequest" in request_data:
-        contents = request_data["generateContentRequest"].get("contents", [])
-    elif "contents" in request_data:
-        contents = request_data["contents"]
-
-    if contents:
-        for content in contents:
-            if isinstance(content, dict) and "parts" in content:
-                for part in content["parts"]:
-                    if isinstance(part, dict) and "text" in part:
-                        total_tokens += max(1, len(part["text"]) // 4)
-
-    return JSONResponse(content={"totalTokens": total_tokens})
+    payload = request_data.get("generateContentRequest", request_data)
+    return JSONResponse(content={"totalTokens": estimate_input_tokens(payload)})
