@@ -13,7 +13,7 @@ if str(BACKEND_DIR) not in sys.path:
     sys.path.insert(0, str(BACKEND_DIR))
 
 from core.converter.gemini_fix import normalize_gemini_request
-from core.api.primary import PrimarySessionState, wrap_cli_request
+from core.api.primary import PrimarySessionState, prepare_provider_request, wrap_cli_request
 
 
 def request_payload(generation_config):
@@ -78,6 +78,55 @@ class RequestNormalizationTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertNotIn("enabledCreditTypes", free_payload)
         self.assertEqual(credit_payload["enabledCreditTypes"], ["GOOGLE_ONE_AI"])
+
+    async def test_ai_studio_request_uses_native_payload_and_api_key_header(self):
+        credential = {
+            "provider": "google_ai_studio",
+            "credential_type": "api_key",
+            "api_key": "example-google-key-value",
+        }
+        body = {
+            "model": "gemini-2.5-flash",
+            "request": {
+                "contents": [{"role": "user", "parts": [{"text": "Hello"}]}],
+                "sessionId": "internal-session",
+                "labels": {"internal": "value"},
+            },
+        }
+        with (
+            patch(
+                "core.api.primary.get_google_ai_studio_api_url",
+                AsyncMock(return_value="https://generativelanguage.googleapis.com"),
+            ),
+            patch(
+                "core.api.primary.get_token_compression_config",
+                AsyncMock(
+                    return_value={
+                        "enabled": True,
+                        "threshold_tokens": 32000,
+                        "target_tokens": 24000,
+                        "min_recent_turns": 4,
+                    }
+                ),
+            ),
+        ):
+            context = await prepare_provider_request(
+                credential, body, streaming=False
+            )
+
+        self.assertEqual(context.provider_id, "google_ai_studio")
+        self.assertEqual(
+            context.target_url,
+            "https://generativelanguage.googleapis.com/v1beta/models/"
+            "gemini-2.5-flash:generateContent",
+        )
+        self.assertEqual(
+            context.headers["x-goog-api-key"], "example-google-key-value"
+        )
+        self.assertNotIn("Authorization", context.headers)
+        self.assertNotIn("sessionId", context.payload)
+        self.assertNotIn("labels", context.payload)
+        self.assertEqual(context.payload["contents"], body["request"]["contents"])
 
 
 if __name__ == "__main__":

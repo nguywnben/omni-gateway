@@ -437,23 +437,80 @@
                         </div>
                     </header>
 
-                    <section class="provider-hero-card">
-                        <div class="provider-logo-frame">
-                            <img src="/frontend/assets/antigravity-logo.png" alt="Google Antigravity logo">
-                        </div>
-                        <div class="provider-summary">
-                            <div class="provider-eyebrow">Available Now</div>
-                            <h2>Google Antigravity</h2>
-                            <p>Connect Google Antigravity credentials through OAuth or import existing credential JSON files and ZIP archives.</p>
-                        </div>
-                        <div class="provider-capabilities" aria-label="Supported methods">
-                            <span>OAuth</span>
-                            <span>JSON import</span>
-                            <span>ZIP import</span>
-                        </div>
-                    </section>
+                    <div class="provider-catalog" aria-label="Available providers">
+                        <section class="provider-hero-card">
+                            <div class="provider-logo-frame">
+                                <img src="/frontend/assets/antigravity-logo.png" alt="Google Antigravity logo">
+                            </div>
+                            <div class="provider-summary">
+                                <div class="provider-eyebrow">Account Provider</div>
+                                <h2>Google Antigravity</h2>
+                                <p>Connect Google Antigravity accounts through OAuth or import existing credential archives.</p>
+                            </div>
+                            <div class="provider-capabilities" aria-label="Google Antigravity methods">
+                                <span>OAuth</span>
+                                <span>JSON</span>
+                                <span>ZIP</span>
+                            </div>
+                        </section>
+
+                        <section class="provider-hero-card">
+                            <div class="provider-logo-frame">
+                                <img src="/frontend/assets/google-ai-studio-logo.png" alt="Google AI Studio logo">
+                            </div>
+                            <div class="provider-summary">
+                                <div class="provider-eyebrow">API Key Provider</div>
+                                <h2>Google AI Studio</h2>
+                                <p>Add Gemini API keys for native Google model access and automatic provider fallback.</p>
+                            </div>
+                            <div class="provider-capabilities" aria-label="Google AI Studio methods">
+                                <span>API key</span>
+                                <span>Gemini</span>
+                            </div>
+                        </section>
+                    </div>
 
                     <div class="provider-tools-grid">
+                        <section class="tool-panel">
+                            <h2 class="card-title">Google AI Studio API Key</h2>
+                            <p class="card-copy provider-tool-copy">Validate a Gemini API key and add it to the active provider pool.</p>
+                            <form id="googleAiStudioCredentialForm" onsubmit="addGoogleAIStudioCredential(event)">
+                                <div class="form-group">
+                                    <label for="googleAiStudioKeyLabel">Key label</label>
+                                    <input type="text" id="googleAiStudioKeyLabel" maxlength="80" placeholder="Personal Gemini key" autocomplete="off">
+                                </div>
+                                <div class="form-group">
+                                    <label for="googleAiStudioApiKey">API key</label>
+                                    <input type="password" id="googleAiStudioApiKey" placeholder="Enter a Google AI Studio API key" autocomplete="off" spellcheck="false" required>
+                                </div>
+                                <div class="page-actions">
+                                    <button type="submit" class="btn" id="addGoogleAiStudioKeyBtn">Validate and add</button>
+                                    <a class="btn btn-secondary" href="https://aistudio.google.com/app/apikey" target="_blank" rel="noreferrer">Open AI Studio</a>
+                                </div>
+                            </form>
+
+                            <div id="googleAiStudioSaveResult" class="save-result hidden" style="margin-top: 14px;">
+                                <div>
+                                    <strong id="googleAiStudioSaveResultTitle">API key added to pool</strong>
+                                    <p id="googleAiStudioSaveResultText"></p>
+                                </div>
+                                <button type="button" class="btn btn-secondary" onclick="switchTab('pool')">View</button>
+                            </div>
+
+                            <div class="provider-inline-settings">
+                                <h3>Advanced Settings</h3>
+                                <p class="card-copy provider-tool-copy">Override the Google Generative Language API endpoint when required by your network.</p>
+                                <div class="form-group">
+                                    <label for="googleAiStudioApiUrl">API endpoint</label>
+                                    <input type="url" id="googleAiStudioApiUrl" placeholder="https://generativelanguage.googleapis.com">
+                                </div>
+                                <div class="page-actions">
+                                    <button type="button" class="btn btn-secondary" onclick="saveGoogleAIStudioSettings()">Save endpoint</button>
+                                    <button type="button" class="btn btn-secondary" onclick="resetGoogleAIStudioSettings()">Reset</button>
+                                </div>
+                            </div>
+                        </section>
+
                         <section class="tool-panel">
                             <h2 class="card-title">Google Antigravity OAuth</h2>
                             <p class="card-copy provider-tool-copy">Generate an authorization link and save the account directly into the active pool.</p>

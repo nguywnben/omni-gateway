@@ -21,8 +21,24 @@ from core.models import (
 from core.storage_adapter import get_storage_adapter
 from core.utils import verify_panel_token, CODE_ASSIST_USER_AGENT
 from core.api.primary import fetch_quota_info
+from core.google_ai_studio import (
+    GoogleAIStudioError,
+    build_api_key_headers,
+    build_generation_url,
+    validate_api_key,
+)
 from core.google_oauth_api import Credentials, fetch_project_id_and_tier, get_user_projects, select_default_project, enable_required_apis
-from config import get_antigravity_api_url, get_antigravity_user_agent, get_code_assist_endpoint
+from core.provider_registry import (
+    GOOGLE_ANTIGRAVITY,
+    GOOGLE_AI_STUDIO,
+    get_credential_provider,
+)
+from config import (
+    get_antigravity_api_url,
+    get_antigravity_user_agent,
+    get_code_assist_endpoint,
+    get_google_ai_studio_api_url,
+)
 from .utils import validate_mode
 
 
@@ -363,9 +379,15 @@ async def get_creds_status_common(
 
     creds_list = []
     for summary in result["items"]:
+        filename = os.path.basename(summary["filename"])
+        credential_data = await storage_adapter.get_credential(filename, mode=mode) or {}
+        provider_id = get_credential_provider(credential_data)
         cred_info = {
-            "filename": os.path.basename(summary["filename"]),
+            "filename": filename,
             "user_email": summary["user_email"],
+            "credential_label": credential_data.get("credential_label"),
+            "credential_type": credential_data.get("credential_type", "oauth"),
+            "provider": provider_id,
             "disabled": summary["disabled"],
             "error_codes": summary["error_codes"],
             "last_success": summary["last_success"],
@@ -609,6 +631,41 @@ async def verify_credential_project_common(filename: str, mode: str = "code_assi
     credential_data = await storage_adapter.get_credential(filename, mode=mode)
     if not credential_data:
         raise HTTPException(status_code=404, detail="Credential does not exist.")
+
+    provider_id = get_credential_provider(credential_data)
+    if mode == "primary" and provider_id == GOOGLE_AI_STUDIO:
+        try:
+            validation = await validate_api_key(str(credential_data.get("api_key") or ""))
+        except GoogleAIStudioError as exc:
+            return JSONResponse(
+                status_code=exc.status_code,
+                content={
+                    "success": False,
+                    "filename": filename,
+                    "provider": provider_id,
+                    "message": str(exc),
+                },
+            )
+
+        credential_data["model_ids"] = validation.model_ids
+        await storage_adapter.store_credential(filename, credential_data, mode=mode)
+        await storage_adapter.update_credential_state(
+            filename,
+            {"disabled": False, "error_codes": [], "error_messages": {}},
+            mode=mode,
+        )
+        return JSONResponse(
+            content={
+                "success": True,
+                "filename": filename,
+                "provider": provider_id,
+                "model_count": validation.model_count,
+                "message": (
+                    "Google AI Studio API key verified. Provider metadata was "
+                    "refreshed, the credential was enabled, and recorded errors were cleared."
+                ),
+            }
+        )
 
 
     credentials = Credentials.from_dict(credential_data)
@@ -884,8 +941,11 @@ async def creds_action(
                 raise HTTPException(status_code=500, detail=f"Failed to delete the credential: {str(e)}")
 
         elif action == "enable_credit":
-            if mode != "primary":
-                raise HTTPException(status_code=400, detail="Credit mode can only be enabled for provider credentials.")
+            if mode != "primary" or get_credential_provider(credential_data) != GOOGLE_ANTIGRAVITY:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Credit mode is only available for Google Antigravity credentials.",
+                )
             updated = await storage_adapter.update_credential_state(
                 filename, {"enable_credit": True}, mode=mode
             )
@@ -895,8 +955,11 @@ async def creds_action(
             raise HTTPException(status_code=500, detail="Failed to enable credit mode. The credential may no longer exist.")
 
         elif action == "disable_credit":
-            if mode != "primary":
-                raise HTTPException(status_code=400, detail="Credit mode can only be disabled for provider credentials.")
+            if mode != "primary" or get_credential_provider(credential_data) != GOOGLE_ANTIGRAVITY:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Credit mode is only available for Google Antigravity credentials.",
+                )
             updated = await storage_adapter.update_credential_state(
                 filename, {"enable_credit": False}, mode=mode
             )
@@ -975,8 +1038,10 @@ async def creds_batch_action(
                         errors.append(f"{filename}: delete failed - {str(e)}")
                         continue
                 elif action == "enable_credit":
-                    if mode != "primary":
-                        errors.append(f"{filename}: credit mode can only be enabled for provider credentials")
+                    if mode != "primary" or get_credential_provider(credential_data) != GOOGLE_ANTIGRAVITY:
+                        errors.append(
+                            f"{filename}: credit mode is only available for Google Antigravity credentials"
+                        )
                         continue
                     updated = await storage_adapter.update_credential_state(
                         filename, {"enable_credit": True}, mode=mode
@@ -988,8 +1053,10 @@ async def creds_batch_action(
                         errors.append(f"{filename}: failed to enable credit mode")
                         continue
                 elif action == "disable_credit":
-                    if mode != "primary":
-                        errors.append(f"{filename}: credit mode can only be disabled for provider credentials")
+                    if mode != "primary" or get_credential_provider(credential_data) != GOOGLE_ANTIGRAVITY:
+                        errors.append(
+                            f"{filename}: credit mode is only available for Google Antigravity credentials"
+                        )
                         continue
                     updated = await storage_adapter.update_credential_state(
                         filename, {"enable_credit": False}, mode=mode
@@ -1202,6 +1269,22 @@ async def get_credential_quota(
         credential_data = await storage_adapter.get_credential(filename, mode=mode)
         if not credential_data:
             raise HTTPException(status_code=404, detail="Credential does not exist.")
+
+        provider_id = get_credential_provider(credential_data)
+        if provider_id == GOOGLE_AI_STUDIO:
+            return JSONResponse(
+                content={
+                    "success": True,
+                    "supported": False,
+                    "filename": filename,
+                    "provider": provider_id,
+                    "models": {},
+                    "message": (
+                        "Google AI Studio does not expose per-key quota balances "
+                        "through the Generative Language API."
+                    ),
+                }
+            )
 
 
         from core.google_oauth_api import Credentials
@@ -1488,39 +1571,51 @@ async def test_credential(
             raise HTTPException(status_code=404, detail="Credential does not exist.")
 
 
-        credentials = Credentials.from_dict(credential_data)
-        token_refreshed = await credentials.refresh_if_needed()
-
-
-        if token_refreshed:
-            log.info(f"Token automatically refreshed: {filename} (mode = {mode})")
-            credential_data = credentials.to_dict()
-            await storage_adapter.store_credential(filename, credential_data, mode=mode)
-
-
-        access_token = credential_data.get("access_token") or credential_data.get("token")
-        if not access_token:
-            raise HTTPException(status_code=400, detail="Credential does not contain an access token.")
-
-
         from core.httpx_client import post_async
-
-
-        project_id = credential_data.get("project_id", "")
-        if not project_id:
-            raise HTTPException(status_code=400, detail="Credential does not contain a Project ID.")
-
-
-
-
-        test_model = "gemini-2.5-flash"
+        provider_id = get_credential_provider(credential_data)
+        available_models = credential_data.get("model_ids") or []
+        test_model = (
+            "gemini-2.5-flash"
+            if "gemini-2.5-flash" in available_models or not available_models
+            else str(available_models[0])
+        )
 
         test_request = {
             "contents": [{"role": "user", "parts": [{"text": "hi"}]}],
             "generationConfig": {"maxOutputTokens": 1}
         }
 
-        if mode == "primary":
+        if mode == "primary" and provider_id == GOOGLE_AI_STUDIO:
+            api_key = str(credential_data.get("api_key") or "").strip()
+            headers = build_api_key_headers(api_key)
+            request_body = test_request
+            request_url = build_generation_url(
+                await get_google_ai_studio_api_url(), test_model, streaming=False
+            )
+            access_token = ""
+            project_id = ""
+        else:
+            credentials = Credentials.from_dict(credential_data)
+            token_refreshed = await credentials.refresh_if_needed()
+            if token_refreshed:
+                log.info(f"Token automatically refreshed: {filename} (mode = {mode})")
+                credential_data = credentials.to_dict()
+                await storage_adapter.store_credential(filename, credential_data, mode=mode)
+
+            access_token = credential_data.get("access_token") or credential_data.get("token")
+            if not access_token:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Credential does not contain an access token.",
+                )
+            project_id = credential_data.get("project_id", "")
+            if not project_id:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Credential does not contain a Project ID.",
+                )
+
+        if mode == "primary" and provider_id != GOOGLE_AI_STUDIO:
             api_base_url = await get_antigravity_api_url()
             from core.api.primary import build_primary_headers
             headers = await build_primary_headers(access_token, test_model)
@@ -1529,7 +1624,8 @@ async def test_credential(
                 "project": project_id,
                 "request": test_request,
             }
-        else:
+            request_url = f"{api_base_url}/v1internal:generateContent"
+        elif mode != "primary":
             api_base_url = await get_code_assist_endpoint()
             headers = {
                 "Authorization": f"Bearer {access_token}",
@@ -1541,10 +1637,11 @@ async def test_credential(
                 "project": project_id,
                 "request": test_request,
             }
+            request_url = f"{api_base_url}/v1internal:generateContent"
 
 
         response = await post_async(
-            url=f"{api_base_url}/v1internal:generateContent",
+            url=request_url,
             json=request_body,
             headers=headers,
             timeout=30.0
@@ -1614,7 +1711,9 @@ async def test_credential(
                     "success": True,
                     "status_code": status_code,
                     "message": message,
-                    "filename": filename
+                    "filename": filename,
+                    "provider": provider_id,
+                    "model": test_model,
                 }
             )
         else:

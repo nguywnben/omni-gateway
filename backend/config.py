@@ -21,6 +21,7 @@ DEFAULT_ANTIGRAVITY_CLIENT_SECRET = "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"
 DEFAULT_ANTIGRAVITY_API_URL = "https://daily-cloudcode-pa.googleapis.com"
 DEFAULT_ANTIGRAVITY_USER_AGENT = "antigravity/cli/1.0.1 windows/amd64"
 DEFAULT_ANTIGRAVITY_PAYLOAD_USER_AGENT = "antigravity"
+DEFAULT_GOOGLE_AI_STUDIO_API_URL = "https://generativelanguage.googleapis.com"
 
 
 
@@ -39,6 +40,7 @@ ENV_MAPPINGS = {
     "SERVICE_USAGE_API_URL": "service_usage_url",
     "API_URL": "api_url",
     "ANTIGRAVITY_API_URL": "api_url",
+    "GOOGLE_AI_STUDIO_API_URL": "google_ai_studio_api_url",
     "CODE_ASSIST_CLIENT_ID": "code_assist_client_id",
     "CODE_ASSIST_CLIENT_SECRET": "code_assist_client_secret",
     "ANTIGRAVITY_CLIENT_ID": "antigravity_client_id",
@@ -509,6 +511,18 @@ async def get_api_url() -> str:
 async def get_antigravity_api_url() -> str:
     """Return the Antigravity upstream API endpoint."""
     return await get_api_url()
+
+
+async def get_google_ai_studio_api_url() -> str:
+    """Return the public Google Generative Language API endpoint."""
+    return str(
+        await get_config_value(
+            "google_ai_studio_api_url",
+            DEFAULT_GOOGLE_AI_STUDIO_API_URL,
+            "GOOGLE_AI_STUDIO_API_URL",
+        )
+        or DEFAULT_GOOGLE_AI_STUDIO_API_URL
+    ).rstrip("/")
 
 
 async def get_antigravity_user_agent() -> str:

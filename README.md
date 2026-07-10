@@ -11,7 +11,7 @@ Modern coding workflows often mix clients and providers: OpenAI-compatible tools
 - Smart auto-fallback: reserves credentials per request, spreads concurrent traffic, tracks every attempt for fair rotation, and routes around recent failures, cooldowns, rate limits, and exhausted capacity.
 - Token-aware cleanup: normalizes payloads and trims only oversized conversation prefixes at safe turn boundaries while preserving system instructions, tool definitions, and recent context.
 - Format translation: accepts OpenAI chat completions, Gemini native requests, and Anthropic Messages, then translates requests and streaming responses across formats.
-- Credential orchestration: manages multiple OAuth credential pools with health state, cooldown tracking, bulk upload, verification, and quota visibility.
+- Credential orchestration: manages OAuth accounts and provider API keys with health state, cooldown tracking, verification, deduplication, and provider-aware fallback.
 - Streaming resilience: supports SSE streaming, pseudo-streaming for clients that require streamed output, and anti-truncation retries for long generations.
 - Control panel: ships with a web console for credentials, logs, configuration, usage, and version information.
 
@@ -31,7 +31,7 @@ Omni Gateway
         |
         v
 provider adapters
-  Code Assist | Google Antigravity | Vertex-compatible route
+  Google Antigravity | Google AI Studio | Code Assist | Vertex-compatible route
 ```
 
 The public API stays stable while provider-specific adapters evolve behind Omni Gateway.
@@ -187,6 +187,7 @@ Omni Gateway reads configuration from environment variables first, then stored c
 | `CLIENT_ID` | empty | Optional legacy-compatible fallback for provider OAuth override. |
 | `CLIENT_SECRET` | empty | Optional legacy-compatible fallback for provider OAuth override. |
 | `ANTIGRAVITY_API_URL` / `API_URL` | `https://daily-cloudcode-pa.googleapis.com` | Optional Google Antigravity upstream endpoint override. |
+| `GOOGLE_AI_STUDIO_API_URL` | `https://generativelanguage.googleapis.com` | Optional Google AI Studio Generative Language API endpoint override. |
 | `USER_AGENT` / `ANTIGRAVITY_USER_AGENT` | `antigravity/cli/1.0.1 windows/amd64` | Optional Google Antigravity protocol User-Agent override. |
 | `ANTIGRAVITY_PAYLOAD_USER_AGENT` | `antigravity` | Optional payload-level Google Antigravity userAgent override. |
 | `LOG_LEVEL` | `info` | Runtime log level. |
@@ -291,11 +292,13 @@ Omni Gateway records request volume, success rate, credential attribution, provi
 1. Start Omni Gateway.
 2. Open `http://YOUR_SERVER_IP:4283` on a VPS, or `http://127.0.0.1:4283` for local development.
 3. Create the console password on the first-run setup screen, or sign in with `PANEL_PASSWORD` when it is preconfigured.
-4. Add credentials through OAuth or upload existing credential JSON files.
+4. Add a Google Antigravity account through OAuth, import existing credential files, or validate a Google AI Studio API key.
 5. Verify credentials and watch cooldown/error state in the panel.
 6. Point your coding tool to one of the API surfaces above.
 
 When adding Google Antigravity credentials, Google redirects the browser to `http://localhost:4283/callback` after sign-in. On a local machine, Omni Gateway shows an OAuth success page. On a VPS, that `localhost` address belongs to the user's browser machine, so the page may not load; copy the full URL from the browser address bar, return to the Providers page, paste it into `Callback URL`, and click `Save credentials`.
+
+Google AI Studio uses API-key authentication instead of OAuth. Add a key from the Providers page; Omni Gateway validates it against Google's model catalog, stores it as a provider credential, and routes compatible Gemini or Gemma requests through it. The smart router can fall back between AI Studio and Google Antigravity for shared Gemini models while keeping provider-specific models on compatible credentials.
 
 Credential mode names:
 

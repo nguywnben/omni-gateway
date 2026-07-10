@@ -377,6 +377,11 @@ class AuthCallbackUrlRequest(BaseModel):
     mode: Optional[str] = "code_assist"
 
 
+class GoogleAIStudioCredentialRequest(BaseModel):
+    api_key: str
+    label: Optional[str] = None
+
+
 class CredFileActionRequest(BaseModel):
     filename: str
     action: str  # enable, disable, delete

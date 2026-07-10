@@ -155,6 +155,55 @@ class SmartCredentialRouterTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(result[0], "preview.json")
 
+    async def test_provider_capabilities_exclude_ai_studio_for_claude(self):
+        storage = FakeStorageAdapter(
+            {
+                "ai-studio.json": credential_state(rotation_order=0),
+                "antigravity.json": credential_state(rotation_order=1),
+            }
+        )
+        storage.credentials["ai-studio.json"] = {
+            "provider": "google_ai_studio",
+            "credential_type": "api_key",
+            "api_key": "example-key",
+        }
+        storage.credentials["antigravity.json"] = {
+            "provider": "google_antigravity",
+            "token": "access-token",
+            "project_id": "project",
+        }
+        router = SmartCredentialRouter(clock=lambda: 100.0)
+
+        result = await router.acquire(
+            storage, mode="primary", model_name="claude-sonnet-4-6"
+        )
+
+        self.assertEqual(result[0], "antigravity.json")
+
+    async def test_explicit_provider_filter_selects_matching_credential(self):
+        storage = FakeStorageAdapter(
+            {
+                "antigravity.json": credential_state(rotation_order=0),
+                "ai-studio.json": credential_state(rotation_order=1),
+            }
+        )
+        storage.credentials["antigravity.json"]["provider"] = "google_antigravity"
+        storage.credentials["ai-studio.json"] = {
+            "provider": "google_ai_studio",
+            "credential_type": "api_key",
+            "api_key": "example-key",
+        }
+        router = SmartCredentialRouter(clock=lambda: 100.0)
+
+        result = await router.acquire(
+            storage,
+            mode="primary",
+            model_name="gemini-2.5-flash",
+            provider_id="google_ai_studio",
+        )
+
+        self.assertEqual(result[0], "ai-studio.json")
+
 
 if __name__ == "__main__":
     unittest.main()

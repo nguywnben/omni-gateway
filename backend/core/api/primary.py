@@ -18,13 +18,26 @@ from config import (
     get_antigravity_switch_credential_enabled,
     get_antigravity_user_agent,
     get_auto_disable_error_codes,
+    get_google_ai_studio_api_url,
     get_token_compression_config,
 )
 from log import log
 
 from core.credential_manager import credential_manager
-from core.httpx_client import stream_post_async, post_async
+from core.httpx_client import get_async, stream_post_async, post_async
+from core.google_ai_studio import (
+    build_api_key_headers,
+    build_generation_url,
+    build_models_url,
+    parse_model_ids,
+)
 from core.models import Model, model_to_dict
+from core.provider_registry import (
+    GOOGLE_ANTIGRAVITY,
+    GOOGLE_AI_STUDIO,
+    get_credential_provider,
+)
+from core.storage_adapter import get_storage_adapter
 from core.token_compression import (
     CompressionResult,
     CompressionSettings,
@@ -66,6 +79,15 @@ class PrimarySessionState:
     step_index: int
     created_at: float
     last_used_at: float
+
+
+@dataclass(frozen=True)
+class ProviderRequestContext:
+    provider_id: str
+    target_url: str
+    headers: Dict[str, str]
+    payload: Dict[str, Any]
+    request_metrics: Dict[str, Any]
 
 
 
@@ -278,6 +300,72 @@ async def build_primary_headers(access_token: str, model: str = "") -> Dict[str,
     }
 
 
+async def prepare_provider_request(
+    credential_data: Dict[str, Any],
+    body: Dict[str, Any],
+    *,
+    streaming: bool,
+    extra_headers: Optional[Dict[str, str]] = None,
+) -> ProviderRequestContext:
+    """Build the provider-specific URL, authentication, and request payload."""
+    provider_id = get_credential_provider(credential_data)
+    model_name = str(body.get("model") or "").strip()
+    inner_request = body.get("request", body)
+
+    if provider_id == GOOGLE_AI_STUDIO:
+        api_key = str(credential_data.get("api_key") or "").strip()
+        compression_result = compress_gemini_request(
+            dict(inner_request),
+            CompressionSettings(**await get_token_compression_config()),
+        )
+        payload = dict(compression_result.request)
+        for internal_key in ("model", "sessionId", "labels", "enabledCreditTypes"):
+            payload.pop(internal_key, None)
+        target_url = build_generation_url(
+            await get_google_ai_studio_api_url(), model_name, streaming
+        )
+        auth_headers = build_api_key_headers(api_key)
+    else:
+        access_token = credential_data.get("access_token") or credential_data.get("token")
+        if not access_token:
+            raise ValueError("Credential does not contain an access token.")
+        project_id = str(credential_data.get("project_id") or "").strip()
+        if not project_id:
+            raise ValueError("Credential does not contain a Project ID.")
+        primary_url = await get_antigravity_api_url()
+        operation = (
+            "v1internal:streamGenerateContent?alt=sse"
+            if streaming
+            else "v1internal:generateContent"
+        )
+        target_url = f"{primary_url.rstrip('/')}/{operation}"
+        auth_headers = await build_primary_headers(str(access_token))
+        payload, _, compression_result = await wrap_cli_request(
+            inner_request,
+            model_name,
+            project_id,
+            enable_credit=bool(credential_data.get("enable_credit", False)),
+        )
+
+    if extra_headers:
+        auth_headers.update(extra_headers)
+        if provider_id == GOOGLE_AI_STUDIO:
+            auth_headers.pop("Authorization", None)
+            auth_headers["x-goog-api-key"] = str(credential_data.get("api_key") or "")
+        else:
+            auth_headers.pop("x-goog-api-key", None)
+            access_token = credential_data.get("access_token") or credential_data.get("token")
+            auth_headers["Authorization"] = f"Bearer {access_token}"
+
+    return ProviderRequestContext(
+        provider_id=provider_id,
+        target_url=target_url,
+        headers=auth_headers,
+        payload=payload,
+        request_metrics=compression_result.as_metrics(),
+    )
+
+
 def _is_retryable_status(status_code: int, disable_error_codes: List[int]) -> bool:
     """Internal implementation detail."""
     return status_code in (429, 503) or status_code in disable_error_codes
@@ -325,42 +413,37 @@ async def stream_request(
         return
 
     current_file, credential_data = cred_result
-    access_token = credential_data.get("access_token") or credential_data.get("token")
-    project_id = credential_data.get("project_id", "")
-
-    if not access_token:
-        log.error(f"[provider stream] No access token in credential: {current_file}")
+    try:
+        context = await prepare_provider_request(
+            credential_data,
+            body,
+            streaming=True,
+            extra_headers=headers,
+        )
+    except ValueError as exc:
+        provider_id = get_credential_provider(credential_data)
         await record_api_call_error(
-            credential_manager, current_file, 500,
-            None, mode="primary", model_name=model_name,
-            error_message="No access token in credential"
+            credential_manager,
+            current_file,
+            500,
+            None,
+            mode="primary",
+            model_name=model_name,
+            error_message=str(exc),
+            provider=provider_id,
         )
         yield Response(
-            content=json.dumps({"error": "No access token in credential"}),
+            content=json.dumps({"error": str(exc)}),
             status_code=500,
-            media_type="application/json"
+            media_type="application/json",
         )
         return
 
-
-    primary_url = await get_antigravity_api_url()
-    target_url = f"{primary_url}/v1internal:streamGenerateContent?alt=sse"
-
-    auth_headers = await build_primary_headers(access_token)
-
-
-    if headers:
-        auth_headers.update(headers)
-
-
-    inner_request = body.get("request", body)
-    final_payload, _, compression_result = await wrap_cli_request(
-        inner_request,
-        model_name,
-        project_id,
-        enable_credit=bool(credential_data.get("enable_credit", False)),
-    )
-    request_metrics = compression_result.as_metrics()
+    provider_id = context.provider_id
+    target_url = context.target_url
+    auth_headers = context.headers
+    final_payload = context.payload
+    request_metrics = context.request_metrics
 
 
     retry_config = await get_retry_config()
@@ -373,23 +456,29 @@ async def stream_request(
 
 
     async def refresh_credential_fast():
-        nonlocal current_file, access_token, auth_headers, project_id, final_payload
+        nonlocal current_file, credential_data, provider_id
+        nonlocal target_url, auth_headers, final_payload, request_metrics
         cred_result = await credential_manager.get_valid_credential(
             mode="primary", model_name=model_name
         )
         if not cred_result:
             return None
         current_file, credential_data = cred_result
-        access_token = credential_data.get("access_token") or credential_data.get("token")
-        project_id = credential_data.get("project_id", "")
-        if not access_token:
+        try:
+            new_context = await prepare_provider_request(
+                credential_data,
+                body,
+                streaming=True,
+                extra_headers=headers,
+            )
+        except ValueError:
+            await credential_manager.release_credential(current_file, mode="primary")
             return None
-
-        auth_headers["Authorization"] = f"Bearer {access_token}"
-        final_payload["project"] = project_id
-        _apply_credit_mode(
-            final_payload, bool(credential_data.get("enable_credit", False))
-        )
+        provider_id = new_context.provider_id
+        target_url = new_context.target_url
+        auth_headers = new_context.headers
+        final_payload = new_context.payload
+        request_metrics = new_context.request_metrics
         return True
 
     for attempt in range(max_retries + 1):
@@ -432,7 +521,8 @@ async def stream_request(
                         await record_api_call_error(
                             credential_manager, current_file, status_code,
                             cooldown_until, mode="primary", model_name=model_name,
-                            error_message=error_body
+                            error_message=error_body,
+                            provider=provider_id,
                         )
 
 
@@ -456,7 +546,8 @@ async def stream_request(
                         await record_api_call_error(
                             credential_manager, current_file, status_code,
                             None, mode="primary", model_name=model_name,
-                            error_message=error_body
+                            error_message=error_body,
+                            provider=provider_id,
                         )
                         yield chunk
                         return
@@ -487,6 +578,7 @@ async def stream_request(
                     model_name=model_name,
                     token_usage=stream_token_usage,
                     request_metrics=request_metrics,
+                    provider=provider_id,
                 )
                 log.debug(f"[provider stream] Streaming response completed, model: {model_name}")
                 return
@@ -496,7 +588,8 @@ async def stream_request(
                 await record_api_call_error(
                     credential_manager, current_file, 200,
                     None, mode="primary", model_name=model_name,
-                    error_message="Empty response from API"
+                    error_message="Empty response from API",
+                    provider=provider_id,
                 )
 
                 if attempt < max_retries:
@@ -534,7 +627,8 @@ async def stream_request(
             await record_api_call_error(
                 credential_manager, current_file, 500,
                 None, mode="primary", model_name=model_name,
-                error_message=str(e)
+                error_message=str(e),
+                provider=provider_id,
             )
             if attempt < max_retries:
                 log.info(f"[provider stream] retry after abnormality (attempt {attempt + 2}/{max_retries + 1})...")
@@ -618,41 +712,36 @@ async def non_stream_request(
         )
 
     current_file, credential_data = cred_result
-    access_token = credential_data.get("access_token") or credential_data.get("token")
-    project_id = credential_data.get("project_id", "")
-
-    if not access_token:
-        log.error(f"[provider] No access token in credential: {current_file}")
+    try:
+        context = await prepare_provider_request(
+            credential_data,
+            body,
+            streaming=False,
+            extra_headers=headers,
+        )
+    except ValueError as exc:
+        provider_id = get_credential_provider(credential_data)
         await record_api_call_error(
-            credential_manager, current_file, 500,
-            None, mode="primary", model_name=model_name,
-            error_message="No access token in credential"
+            credential_manager,
+            current_file,
+            500,
+            None,
+            mode="primary",
+            model_name=model_name,
+            error_message=str(exc),
+            provider=provider_id,
         )
         return Response(
-            content=json.dumps({"error": "No access token in credential"}),
+            content=json.dumps({"error": str(exc)}),
             status_code=500,
-            media_type="application/json"
+            media_type="application/json",
         )
 
-
-    primary_url = await get_antigravity_api_url()
-    target_url = f"{primary_url}/v1internal:generateContent"
-
-    auth_headers = await build_primary_headers(access_token)
-
-
-    if headers:
-        auth_headers.update(headers)
-
-
-    inner_request = body.get("request", body)
-    final_payload, _, compression_result = await wrap_cli_request(
-        inner_request,
-        model_name,
-        project_id,
-        enable_credit=bool(credential_data.get("enable_credit", False)),
-    )
-    request_metrics = compression_result.as_metrics()
+    provider_id = context.provider_id
+    target_url = context.target_url
+    auth_headers = context.headers
+    final_payload = context.payload
+    request_metrics = context.request_metrics
 
 
     retry_config = await get_retry_config()
@@ -665,23 +754,29 @@ async def non_stream_request(
 
 
     async def refresh_credential_fast():
-        nonlocal current_file, access_token, auth_headers, project_id, final_payload
+        nonlocal current_file, credential_data, provider_id
+        nonlocal target_url, auth_headers, final_payload, request_metrics
         cred_result = await credential_manager.get_valid_credential(
             mode="primary", model_name=model_name
         )
         if not cred_result:
             return None
         current_file, credential_data = cred_result
-        access_token = credential_data.get("access_token") or credential_data.get("token")
-        project_id = credential_data.get("project_id", "")
-        if not access_token:
+        try:
+            new_context = await prepare_provider_request(
+                credential_data,
+                body,
+                streaming=False,
+                extra_headers=headers,
+            )
+        except ValueError:
+            await credential_manager.release_credential(current_file, mode="primary")
             return None
-
-        auth_headers["Authorization"] = f"Bearer {access_token}"
-        final_payload["project"] = project_id
-        _apply_credit_mode(
-            final_payload, bool(credential_data.get("enable_credit", False))
-        )
+        provider_id = new_context.provider_id
+        target_url = new_context.target_url
+        auth_headers = new_context.headers
+        final_payload = new_context.payload
+        request_metrics = new_context.request_metrics
         return True
 
     for attempt in range(max_retries + 1):
@@ -707,7 +802,8 @@ async def non_stream_request(
                     await record_api_call_error(
                         credential_manager, current_file, 200,
                         None, mode="primary", model_name=model_name,
-                        error_message="Empty response from API"
+                        error_message="Empty response from API",
+                        provider=provider_id,
                     )
 
                     if attempt < max_retries:
@@ -730,6 +826,7 @@ async def non_stream_request(
                         token_usage=token_usage,
                         status_code=status_code,
                         request_metrics=request_metrics,
+                        provider=provider_id,
                     )
                     return Response(
                         content=response.content,
@@ -768,7 +865,8 @@ async def non_stream_request(
                     await record_api_call_error(
                         credential_manager, current_file, status_code,
                         cooldown_until, mode="primary", model_name=model_name,
-                        error_message=error_text
+                        error_message=error_text,
+                        provider=provider_id,
                     )
 
 
@@ -790,7 +888,8 @@ async def non_stream_request(
                     await record_api_call_error(
                         credential_manager, current_file, status_code,
                         None, mode="primary", model_name=model_name,
-                        error_message=error_text
+                        error_message=error_text,
+                        provider=provider_id,
                     )
                     return last_error_response
 
@@ -817,7 +916,8 @@ async def non_stream_request(
             await record_api_call_error(
                 credential_manager, current_file, 500,
                 None, mode="primary", model_name=model_name,
-                error_message=str(e)
+                error_message=str(e),
+                provider=provider_id,
             )
             if attempt < max_retries:
                 log.info(f"[provider] Retry after exception (attempt {attempt + 2}/{max_retries + 1})...")
@@ -861,84 +961,95 @@ async def non_stream_request(
 
 
 async def fetch_available_models() -> List[Dict[str, Any]]:
-    """Internal implementation detail."""
+    """Return the deduplicated generate-content model catalog for active providers."""
 
-    cred_result = await credential_manager.get_valid_credential(mode="primary")
-    if not cred_result:
-        log.error("[provider] No valid credentials available for fetching models")
-        return []
+    storage_adapter = await get_storage_adapter()
+    configured_providers = set()
+    for filename in await storage_adapter.list_credentials(mode="primary"):
+        state = await storage_adapter.get_credential_state(filename, mode="primary")
+        if state.get("disabled"):
+            continue
+        credential_data = await storage_adapter.get_credential(filename, mode="primary")
+        if credential_data:
+            configured_providers.add(get_credential_provider(credential_data))
 
-    current_file, credential_data = cred_result
-    access_token = credential_data.get("access_token") or credential_data.get("token")
-
-    if not access_token:
-        log.error(f"[provider] No access token in credential: {current_file}")
-        await credential_manager.release_credential(current_file, mode="primary")
-        return []
-
-
-    headers = await build_primary_headers(access_token)
-
-    try:
-
-        primary_url = await get_antigravity_api_url()
-
-        response = await post_async(
-            url=f"{primary_url}/v1internal:fetchAvailableModels",
-            json={},
-            headers=headers
+    model_ids = set()
+    if GOOGLE_ANTIGRAVITY in configured_providers:
+        cred_result = await credential_manager.get_valid_credential(
+            mode="primary", provider_id=GOOGLE_ANTIGRAVITY
         )
-
-        if response.status_code == 200:
-            data = response.json()
-            log.debug(f"[provider] Raw models response: {json.dumps(data, ensure_ascii=False)[:500]}")
-
-
-            model_list = []
-            current_timestamp = int(datetime.now(timezone.utc).timestamp())
-
-            if 'models' in data and isinstance(data['models'], dict):
-
-                for model_id in data['models'].keys():
-                    model = Model(
-                        id=model_id,
-                        object='model',
-                        created=current_timestamp,
-                        owned_by='google'
+        if cred_result:
+            current_file, credential_data = cred_result
+            try:
+                access_token = credential_data.get("access_token") or credential_data.get("token")
+                if access_token:
+                    response = await post_async(
+                        url=(
+                            f"{(await get_antigravity_api_url()).rstrip('/')}"
+                            "/v1internal:fetchAvailableModels"
+                        ),
+                        json={},
+                        headers=await build_primary_headers(str(access_token)),
                     )
-                    model_list.append(model_to_dict(model))
+                    if response.status_code == 200:
+                        data = response.json()
+                        if isinstance(data.get("models"), dict):
+                            model_ids.update(data["models"].keys())
+                            if "claude-sonnet-4-6" in data["models"]:
+                                model_ids.add("claude-sonnet-4-6-thinking")
+                            if "claude-opus-4-6-thinking" in data["models"]:
+                                model_ids.add("claude-opus-4-6")
+                    else:
+                        log.warning(
+                            "Google Antigravity model discovery failed with HTTP "
+                            f"{response.status_code}."
+                        )
+            except Exception as exc:
+                log.warning(f"Google Antigravity model discovery failed: {exc}")
+            finally:
+                await credential_manager.release_credential(current_file, mode="primary")
 
-            if "claude-sonnet-4-6" in data.get('models', {}):
-                model = Model(
-                    id='claude-sonnet-4-6-thinking',
-                    object='model',
-                    created=current_timestamp,
-                    owned_by='google'
+    if GOOGLE_AI_STUDIO in configured_providers:
+        cred_result = await credential_manager.get_valid_credential(
+            mode="primary", provider_id=GOOGLE_AI_STUDIO
+        )
+        if cred_result:
+            current_file, credential_data = cred_result
+            try:
+                response = await get_async(
+                    build_models_url(await get_google_ai_studio_api_url()),
+                    headers=build_api_key_headers(credential_data.get("api_key", "")),
+                    timeout=30.0,
                 )
-                model_list.append(model_to_dict(model))
+                if response.status_code == 200:
+                    model_ids.update(parse_model_ids(response.json()))
+                else:
+                    log.warning(
+                        "Google AI Studio model discovery failed with HTTP "
+                        f"{response.status_code}."
+                    )
+            except Exception as exc:
+                log.warning(f"Google AI Studio model discovery failed: {exc}")
+            finally:
+                await credential_manager.release_credential(current_file, mode="primary")
 
-            if "claude-opus-4-6-thinking" in data.get('models', {}):
-                claude_opus_model = Model(
-                    id='claude-opus-4-6',
-                    object='model',
-                    created=current_timestamp,
-                    owned_by='google'
-                )
-                model_list.append(model_to_dict(claude_opus_model))
-
-            log.info(f"[provider] Fetched {len(model_list)} available models")
-            return model_list
-        else:
-            log.error(f"[provider] Failed to fetch models ({response.status_code}): {response.text[:500]}")
-            return []
-
-    except Exception as e:
-        import traceback
-        log.error(f"[provider] Failed to fetch models: {e}")
-        log.error(f"[provider] Traceback: {traceback.format_exc()}")
-        return []
-    finally:
-        await credential_manager.release_credential(current_file, mode="primary")
+    current_timestamp = int(datetime.now(timezone.utc).timestamp())
+    model_list = [
+        model_to_dict(
+            Model(
+                id=model_id,
+                object="model",
+                created=current_timestamp,
+                owned_by="google",
+            )
+        )
+        for model_id in sorted(model_ids)
+    ]
+    log.info(
+        f"[provider] Fetched {len(model_list)} unique models from "
+        f"{len(configured_providers)} active providers."
+    )
+    return model_list
 
 
 async def fetch_quota_info(access_token: str) -> Dict[str, Any]:

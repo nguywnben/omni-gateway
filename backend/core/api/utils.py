@@ -110,6 +110,7 @@ async def record_api_call_success(
     token_usage: Optional[Dict[str, Any]] = None,
     status_code: int = 200,
     request_metrics: Optional[Dict[str, Any]] = None,
+    provider: Optional[str] = None,
 ) -> None:
     """Internal implementation detail."""
     if credential_manager and credential_name:
@@ -118,7 +119,7 @@ async def record_api_call_success(
                 record_call,
                 credential_name,
                 model=model_name or "",
-                provider=mode,
+                provider=provider or mode,
                 status_code=status_code,
                 success=True,
                 token_usage=token_usage,
@@ -139,7 +140,8 @@ async def record_api_call_error(
     cooldown_until: Optional[float] = None,
     mode: str = "code_assist",
     model_name: Optional[str] = None,
-    error_message: Optional[str] = None
+    error_message: Optional[str] = None,
+    provider: Optional[str] = None,
 ) -> None:
     """Internal implementation detail."""
     if credential_manager and credential_name:
@@ -148,7 +150,7 @@ async def record_api_call_error(
                 record_call,
                 credential_name,
                 model=model_name or "",
-                provider=mode,
+                provider=provider or mode,
                 status_code=status_code,
                 success=False,
                 token_usage=None,

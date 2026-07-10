@@ -207,6 +207,7 @@ const TRANSLATIONS = {
         "primary_credential_valid": "Provider credential is valid.",
         "project_id_required_to_complete_aut": "A Project ID is required to complete authentication. Restart the flow and enter the correct Project ID.",
         "provider_antigravity": "Antigravity",
+        "provider_google_ai_studio": "Google AI Studio",
         "provider_authorization_expired": "This authorization session was not found or has expired. Generate a new authorization link and try again.",
         "provider_authorization_pending": "Authorization is not complete yet. If Google opened a localhost callback page, copy the full callback URL from that tab and paste it into Callback URL.",
         "provider_callback_url_required": "Paste the localhost callback URL from the Google tab, then click Save credentials.",
@@ -2028,6 +2029,8 @@ function buildCredentialTestResultHtml(filename, data, response, options = {}) {
             [t('table_filename'), filename],
             ['HTTP code', logicalStatus || response.status],
             [t('credential_status_label').replace(':', ''), statusMessage],
+            data.provider ? ['Provider', getCredentialProviderMeta({ provider: data.provider }, 'usage').name] : null,
+            data.model ? ['Model', data.model] : null,
             options.mode ? ['Mode', options.mode] : null,
         ].filter(Boolean),
         summaryLabel: 'Test summary',
@@ -2052,6 +2055,8 @@ function buildCredentialVerificationHtml(filename, data) {
         data.project_id ? ['Project ID', data.project_id] : null,
         data.subscription_tier ? ['Tier', data.subscription_tier] : null,
         data.credit_amount !== undefined && data.credit_amount !== null ? ['Credit', data.credit_amount] : null,
+        data.provider ? ['Provider', getCredentialProviderMeta({ provider: data.provider }, 'usage').name] : null,
+        Number.isFinite(Number(data.model_count)) ? ['Available models', Number(data.model_count)] : null,
     ].filter(Boolean);
 
     const detailMessage = normalizeVerificationMessage(data.message);
@@ -2621,9 +2626,20 @@ function getCredentialProviderMeta(credInfo, managerType) {
 
     const provider = String(credInfo.provider || credInfo.provider_name || '').toLowerCase();
 
+    if (provider.includes('google_ai_studio') || provider.includes('google-ai-studio') || provider === 'gemini') {
+
+        return {
+            id: 'google_ai_studio',
+            name: t('provider_google_ai_studio'),
+            logo: '/frontend/assets/google-ai-studio-logo.png'
+        };
+
+    }
+
     if (managerType === 'primary' || provider.includes('antigravity')) {
 
         return {
+            id: 'google_antigravity',
             name: t('provider_antigravity'),
             logo: '/frontend/assets/antigravity-logo.png'
         };
@@ -2631,6 +2647,7 @@ function getCredentialProviderMeta(credInfo, managerType) {
     }
 
     return {
+        id: 'code_assist',
         name: t('provider_code_assist'),
         logo: ''
     };
@@ -2645,8 +2662,9 @@ function createCredCard(credInfo, manager) {
 
     const managerType = manager.type;
     const providerMeta = getCredentialProviderMeta(credInfo, managerType);
-    const accountLabel = credInfo.user_email || t('email_not_fetched');
-    const accountClass = credInfo.user_email ? 'cred-email' : 'cred-email empty';
+    const isGoogleAIStudio = providerMeta.id === 'google_ai_studio';
+    const accountLabel = credInfo.credential_label || credInfo.user_email || t('email_not_fetched');
+    const accountClass = (credInfo.credential_label || credInfo.user_email) ? 'cred-email' : 'cred-email empty';
     const providerLogo = providerMeta.logo
         ? `<img src="${providerMeta.logo}" alt="${escapeHtml(providerMeta.name)} logo">`
         : `<span>${escapeHtml(providerMeta.name.charAt(0))}</span>`;
@@ -2693,15 +2711,23 @@ function createCredCard(credInfo, manager) {
 
     }
 
-    const tier = (credInfo.tier || 'pro').toString().toLowerCase();
+    if (isGoogleAIStudio) {
 
-    const tierLabel = tier.toUpperCase();
+        statusBadges += '<span class="status-badge muted" title="Google AI Studio API key credential">API key</span>';
 
-    const tierClass = tier === 'ultra' ? 'tier-ultra' : (tier === 'free' ? 'tier-free' : 'tier-pro');
+    } else {
 
-    statusBadges += `<span class="status-badge ${tierClass}" title="${t('tier_badge_title')}: ${tierLabel}">Tier: ${tierLabel}</span>`;
+        const tier = (credInfo.tier || 'pro').toString().toLowerCase();
 
-    if (managerType === 'primary') {
+        const tierLabel = tier.toUpperCase();
+
+        const tierClass = tier === 'ultra' ? 'tier-ultra' : (tier === 'free' ? 'tier-free' : 'tier-pro');
+
+        statusBadges += `<span class="status-badge ${tierClass}" title="${t('tier_badge_title')}: ${tierLabel}">Tier: ${tierLabel}</span>`;
+
+    }
+
+    if (managerType === 'primary' && !isGoogleAIStudio) {
 
         if (credInfo.enable_credit) {
 
@@ -2774,7 +2800,7 @@ function createCredCard(credInfo, manager) {
         providerName: providerMeta.name,
     };
 
-    const shouldAutoLoadQuota = managerType === 'primary' && !AppState.quotaPreviewCache[filename];
+    const shouldAutoLoadQuota = managerType === 'primary' && !isGoogleAIStudio && !AppState.quotaPreviewCache[filename];
 
     if (shouldAutoLoadQuota) {
 
@@ -2796,9 +2822,9 @@ function createCredCard(credInfo, manager) {
 
         <button class="cred-btn download" onclick="download${managerType === 'primary' ? 'Primary' : ''}Cred('${filename}')">${t('btn_download')}</button>
 
-        ${managerType === 'primary' ? `<button class="cred-btn" onclick="togglePrimaryQuotaDetails('${pathId}')" title="${t('btn_view_quota_title')}">${t('btn_view_quota')}</button>` : ''}
+        ${managerType === 'primary' && !isGoogleAIStudio ? `<button class="cred-btn" onclick="togglePrimaryQuotaDetails('${pathId}')" title="${t('btn_view_quota_title')}">${t('btn_view_quota')}</button>` : ''}
 
-        ${managerType === 'primary' ? (credInfo.enable_credit
+        ${managerType === 'primary' && !isGoogleAIStudio ? (credInfo.enable_credit
 
             ? `<button class="cred-btn" data-filename="${filename}" data-action="disable_credit" title="${t('btn_disable_credit_title')}">${t('btn_disable_credit')}</button>`
 
@@ -2819,7 +2845,7 @@ function createCredCard(credInfo, manager) {
     `;
 
     const checkboxClass = manager.getElementId('file-checkbox');
-    const quotaPreview = renderCredentialQuotaPreview(pathId, filename, managerType);
+    const quotaPreview = isGoogleAIStudio ? '' : renderCredentialQuotaPreview(pathId, filename, managerType);
 
     div.innerHTML = `
 
@@ -3325,7 +3351,10 @@ function triggerTabDataLoad(tabName) {
         AppState.primaryCreds.refresh();
     }
 
-    if (tabName === 'providers') loadAntigravitySettings();
+    if (tabName === 'providers') {
+        loadAntigravitySettings();
+        loadGoogleAIStudioSettings();
+    }
 
     if (tabName === 'config') loadConfig();
 
@@ -5733,6 +5762,131 @@ async function clearEnvCredentials() {
 // =====================================================================
 
 // =====================================================================
+
+async function loadGoogleAIStudioSettings() {
+    const field = document.getElementById('googleAiStudioApiUrl');
+    if (!field) return;
+
+    try {
+        const response = await fetch('./api/providers/google-ai-studio/config', {
+            headers: getAuthHeaders()
+        });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) {
+            throw new Error(data.detail || data.error || t('unknown_error'));
+        }
+        field.value = data.config?.google_ai_studio_api_url || '';
+        const isLocked = (data.env_locked || []).includes('google_ai_studio_api_url');
+        field.disabled = isLocked;
+        field.classList.toggle('env-locked', isLocked);
+    } catch (error) {
+        showStatus(`Failed to load Google AI Studio settings: ${error.message}`, 'error');
+    }
+}
+
+async function saveGoogleAIStudioSettings() {
+    const field = document.getElementById('googleAiStudioApiUrl');
+    const apiUrl = field?.value.trim() || '';
+    if (!apiUrl) {
+        showStatus('Enter the Google AI Studio API endpoint.', 'error');
+        return;
+    }
+
+    try {
+        const response = await fetch('./api/providers/google-ai-studio/config', {
+            method: 'POST',
+            headers: getAuthHeaders(),
+            body: JSON.stringify({
+                config: { google_ai_studio_api_url: apiUrl }
+            })
+        });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) {
+            throw new Error(data.detail || data.error || t('unknown_error'));
+        }
+        showStatus(data.message || 'Google AI Studio settings saved.', 'success');
+        await loadGoogleAIStudioSettings();
+    } catch (error) {
+        showStatus(`Failed to save Google AI Studio settings: ${error.message}`, 'error');
+    }
+}
+
+async function resetGoogleAIStudioSettings() {
+    const confirmed = await showConfirmModal(
+        'Reset the Google AI Studio endpoint to its default? Environment-managed values will be preserved.'
+    );
+    if (!confirmed) return;
+
+    try {
+        const response = await fetch('./api/providers/google-ai-studio/config/reset', {
+            method: 'POST',
+            headers: getAuthHeaders()
+        });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) {
+            throw new Error(data.detail || data.error || t('unknown_error'));
+        }
+        showStatus(data.message || 'Google AI Studio settings reset to defaults.', 'success');
+        await loadGoogleAIStudioSettings();
+    } catch (error) {
+        showStatus(`Failed to reset Google AI Studio settings: ${error.message}`, 'error');
+    }
+}
+
+async function addGoogleAIStudioCredential(event) {
+    event?.preventDefault();
+    const keyField = document.getElementById('googleAiStudioApiKey');
+    const labelField = document.getElementById('googleAiStudioKeyLabel');
+    const button = document.getElementById('addGoogleAiStudioKeyBtn');
+    const apiKey = keyField?.value.trim() || '';
+
+    if (!apiKey) {
+        showStatus('Enter a Google AI Studio API key.', 'error');
+        keyField?.focus();
+        return;
+    }
+
+    button.disabled = true;
+    button.textContent = 'Validating...';
+    document.getElementById('googleAiStudioSaveResult')?.classList.add('hidden');
+
+    try {
+        const response = await fetch('./api/providers/google-ai-studio/credentials', {
+            method: 'POST',
+            headers: getAuthHeaders(),
+            body: JSON.stringify({
+                api_key: apiKey,
+                label: labelField?.value.trim() || null
+            })
+        });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) {
+            throw new Error(data.detail || data.error || t('unknown_error'));
+        }
+
+        const result = document.getElementById('googleAiStudioSaveResult');
+        const title = document.getElementById('googleAiStudioSaveResultTitle');
+        const text = document.getElementById('googleAiStudioSaveResultText');
+        if (title) {
+            title.textContent = data.credential_action === 'updated'
+                ? 'API key updated'
+                : 'API key added to pool';
+        }
+        if (text) {
+            text.textContent = `${data.message} ${data.model_count} generate-content model${data.model_count === 1 ? '' : 's'} available.`;
+        }
+        result?.classList.remove('hidden');
+        keyField.value = '';
+        showStatus(data.message, 'success');
+        await AppState.primaryCreds.refresh();
+        await refreshUsageStats();
+    } catch (error) {
+        showStatus(`Failed to add Google AI Studio API key: ${error.message}`, 'error');
+    } finally {
+        button.disabled = false;
+        button.textContent = 'Validate and add';
+    }
+}
 
 const ANTIGRAVITY_CONFIG_FIELD_KEYS = {
     antigravityOauthClientId: 'antigravity_client_id',

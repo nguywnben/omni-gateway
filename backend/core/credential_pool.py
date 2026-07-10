@@ -7,6 +7,7 @@ from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 from log import log
+from core.provider_registry import get_static_credential_identity
 from core.storage_adapter import get_storage_adapter
 
 
@@ -48,6 +49,8 @@ async def resolve_credential_email(credential_data: Dict[str, Any]) -> str:
     email = get_known_credential_email(credential_data)
     if email:
         return email
+    if get_static_credential_identity(credential_data):
+        return ""
 
     try:
         from core.google_oauth_api import Credentials, get_user_email
@@ -143,12 +146,69 @@ async def upsert_credential_by_email(
     credential_data: Dict[str, Any],
     mode: str = "code_assist",
 ) -> Dict[str, Any]:
-    """Store one credential per email, keeping the entry with the latest expiry."""
+    """Store one credential per account or API-key identity."""
     storage_adapter = await get_storage_adapter()
     mode = _normalize_mode(mode)
     lock = _POOL_LOCKS[mode]
 
     async with lock:
+        static_identity = get_static_credential_identity(credential_data)
+        if static_identity:
+            matches = []
+            for index, existing_filename in enumerate(
+                await storage_adapter.list_credentials(mode=mode)
+            ):
+                existing_data = await storage_adapter.get_credential(
+                    existing_filename, mode=mode
+                )
+                if get_static_credential_identity(existing_data or {}) == static_identity:
+                    matches.append(
+                        {
+                            "filename": existing_filename,
+                            "data": existing_data or {},
+                            "index": index,
+                        }
+                    )
+
+            if not matches:
+                target_filename = await _find_unique_filename(
+                    storage_adapter, filename, credential_data, mode
+                )
+                await _store_with_email_state(
+                    storage_adapter, target_filename, credential_data, "", mode
+                )
+                return {
+                    "action": "created",
+                    "stored": True,
+                    "filename": target_filename,
+                    "email": None,
+                    "identity": static_identity,
+                    "message": "API key added to the provider pool.",
+                }
+
+            keep = min(matches, key=lambda item: item["index"])
+            keep_filename = keep["filename"]
+            if keep["data"].get("created_at") and not credential_data.get("created_at"):
+                credential_data["created_at"] = keep["data"]["created_at"]
+            await _store_with_email_state(
+                storage_adapter, keep_filename, credential_data, "", mode
+            )
+            deleted_duplicates = []
+            for item in matches:
+                if item["filename"] == keep_filename:
+                    continue
+                if await storage_adapter.delete_credential(item["filename"], mode=mode):
+                    deleted_duplicates.append(item["filename"])
+            return {
+                "action": "updated",
+                "stored": True,
+                "filename": keep_filename,
+                "email": None,
+                "identity": static_identity,
+                "deleted_duplicates": deleted_duplicates,
+                "message": "The existing API key credential was revalidated and updated.",
+            }
+
         email = await resolve_credential_email(credential_data)
         incoming_expiry = parse_credential_expiry(credential_data)
 
@@ -236,7 +296,7 @@ async def upsert_credential_by_email(
 
 
 async def deduplicate_credentials_by_account_email(mode: str = "code_assist") -> Dict[str, Any]:
-    """Remove existing duplicate credentials by email, keeping the latest expiry."""
+    """Remove duplicate credentials by account email or API-key fingerprint."""
     storage_adapter = await get_storage_adapter()
     mode = _normalize_mode(mode)
     lock = _POOL_LOCKS[mode]
@@ -249,24 +309,30 @@ async def deduplicate_credentials_by_account_email(mode: str = "code_assist") ->
         for index, filename in enumerate(await storage_adapter.list_credentials(mode=mode)):
             total_count += 1
             credential_data = await storage_adapter.get_credential(filename, mode=mode)
-            email = await _get_existing_email(storage_adapter, filename, credential_data or {}, mode)
-            if not email:
+            static_identity = get_static_credential_identity(credential_data or {})
+            email = await _get_existing_email(
+                storage_adapter, filename, credential_data or {}, mode
+            )
+            identity = static_identity or (f"email:{email}" if email else "")
+            if not identity:
                 no_email_count += 1
                 continue
 
-            grouped.setdefault(email, []).append(
+            grouped.setdefault(identity, []).append(
                 {
                     "filename": filename,
                     "data": credential_data or {},
                     "expiry": parse_credential_expiry(credential_data or {}),
                     "index": index,
+                    "email": email or None,
+                    "identity": identity,
                 }
             )
 
         deleted_count = 0
         groups = []
 
-        for email, items in grouped.items():
+        for identity, items in grouped.items():
             if len(items) < 2:
                 continue
 
@@ -282,7 +348,8 @@ async def deduplicate_credentials_by_account_email(mode: str = "code_assist") ->
 
             groups.append(
                 {
-                    "email": email,
+                    "email": keep_item.get("email"),
+                    "identity": identity,
                     "kept_file": keep_item["filename"],
                     "kept_expiry": keep_item["expiry"].isoformat() if keep_item["expiry"] else None,
                     "deleted_files": deleted_files,
@@ -291,13 +358,19 @@ async def deduplicate_credentials_by_account_email(mode: str = "code_assist") ->
             )
 
         if deleted_count:
-            log.info(f"Deduplicated {deleted_count} credentials in the {mode} pool by email.")
+            log.info(
+                f"Deduplicated {deleted_count} credentials in the {mode} pool "
+                "by account identity."
+            )
 
         return {
             "deleted_count": deleted_count,
             "kept_count": total_count - deleted_count,
             "total_count": total_count,
-            "unique_emails_count": len(grouped),
+            "unique_emails_count": sum(
+                1 for identity in grouped if identity.startswith("email:")
+            ),
+            "unique_identities_count": len(grouped),
             "no_email_count": no_email_count,
             "duplicate_groups": groups,
         }

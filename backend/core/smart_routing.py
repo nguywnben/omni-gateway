@@ -9,6 +9,7 @@ from dataclasses import dataclass
 from typing import Any, Callable, Deque, Dict, Optional, Tuple
 
 from log import log
+from core.provider_registry import credential_supports_model, get_credential_provider
 
 
 CredentialResult = Tuple[str, Dict[str, Any]]
@@ -134,6 +135,7 @@ class SmartCredentialRouter:
         *,
         mode: str = "primary",
         model_name: Optional[str] = None,
+        provider_id: Optional[str] = None,
     ) -> Optional[CredentialResult]:
         """Reserve and return the best currently available credential."""
         async with self._lock:
@@ -158,6 +160,12 @@ class SmartCredentialRouter:
                 )
                 if not credential_data:
                     continue
+                if not credential_supports_model(
+                    credential_data,
+                    model_name,
+                    required_provider=provider_id,
+                ):
+                    continue
 
                 if mode == "primary":
                     credential_data["enable_credit"] = bool(
@@ -170,6 +178,7 @@ class SmartCredentialRouter:
                 log.debug(
                     f"Smart routing selected {filename} "
                     f"(mode={mode}, model={model_name or ''}, "
+                    f"provider={get_credential_provider(credential_data)}, "
                     f"in_flight={score[1] + 1}, calls={score[3]})."
                 )
                 return filename, credential_data

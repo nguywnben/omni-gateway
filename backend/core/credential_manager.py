@@ -7,6 +7,7 @@ from log import log
 
 from core.google_oauth_api import Credentials
 from core.credential_pool import upsert_credential_by_email
+from core.provider_registry import is_api_key_credential
 from core.smart_routing import SmartCredentialRouter
 from core.storage_adapter import get_storage_adapter
 
@@ -44,7 +45,10 @@ class CredentialManager:
         log.debug("Credential manager closed")
 
     async def get_valid_credential(
-        self, mode: str = "code_assist", model_name: Optional[str] = None
+        self,
+        mode: str = "code_assist",
+        model_name: Optional[str] = None,
+        provider_id: Optional[str] = None,
     ) -> Optional[Tuple[str, Dict[str, Any]]]:
         """Internal implementation detail."""
         await self._ensure_initialized()
@@ -53,7 +57,10 @@ class CredentialManager:
         max_retries = 3
         for attempt in range(max_retries):
             result = await self._routing.acquire(
-                self._storage_adapter, mode=mode, model_name=model_name
+                self._storage_adapter,
+                mode=mode,
+                model_name=model_name,
+                provider_id=provider_id,
             )
 
 
@@ -307,6 +314,8 @@ class CredentialManager:
     async def _should_refresh_token(self, credential_data: Dict[str, Any]) -> bool:
         """Internal implementation detail."""
         try:
+            if is_api_key_credential(credential_data):
+                return False
 
             if not credential_data.get("access_token") and not credential_data.get("token"):
                 log.debug("No access_token found, refresh required")
