@@ -7,7 +7,12 @@ from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 from log import log
-from core.provider_registry import get_static_credential_identity
+from core.provider_registry import (
+    GOOGLE_ANTIGRAVITY,
+    canonicalize_antigravity_credential_filename,
+    get_credential_provider,
+    get_static_credential_identity,
+)
 from core.storage_adapter import get_storage_adapter
 
 
@@ -149,6 +154,10 @@ async def upsert_credential_by_email(
     """Store one credential per account or API-key identity."""
     storage_adapter = await get_storage_adapter()
     mode = _normalize_mode(mode)
+    is_antigravity = (
+        mode == "primary"
+        and get_credential_provider(credential_data) == GOOGLE_ANTIGRAVITY
+    )
     lock = _POOL_LOCKS[mode]
 
     async with lock:
@@ -214,6 +223,13 @@ async def upsert_credential_by_email(
 
         if email:
             credential_data["user_email"] = email
+
+        if is_antigravity:
+            filename = canonicalize_antigravity_credential_filename(
+                filename,
+                credential_data,
+                email=email,
+            )
 
         if not email:
             target_filename = await _find_unique_filename(storage_adapter, filename, credential_data, mode)

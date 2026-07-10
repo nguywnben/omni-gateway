@@ -318,6 +318,10 @@ Google AI Studio batch import accepts JSON files and ZIP archives containing JSO
 
 Every imported key is validated before storage. Duplicate keys within the same import are skipped, existing keys are revalidated and updated, and invalid entries are reported without exposing the key value.
 
+The Pool page also provides a provider-independent backup workflow. `Download ZIP` exports the active credential pool, and `Import ZIP` restores that archive by identifying each credential as Google Antigravity or Google AI Studio. Google Antigravity accounts retain email-and-expiry deduplication, while Google AI Studio keys are validated and deduplicated by a non-reversible key fingerprint. Unsupported or malformed entries are reported individually without blocking valid credentials in the same archive.
+
+Google Antigravity credentials use `google-antigravity-{account_fingerprint}.json`, where the fingerprint is derived from the normalized account email without exposing it. Google AI Studio credentials use the parallel `google-ai-studio-{key_fingerprint}.json` convention. Legacy `provider_*.json` credentials remain compatible and are exported with canonical names.
+
 Credential mode names:
 
 - `code_assist`: standard Code Assist credential pool.

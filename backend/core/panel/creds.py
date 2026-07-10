@@ -12,7 +12,12 @@ from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, Respons
 from fastapi.responses import JSONResponse
 
 from log import log
-from core.credential_pool import deduplicate_credentials_by_account_email, parse_credential_expiry, resolve_credential_email
+from core.credential_pool import (
+    deduplicate_credentials_by_account_email,
+    get_known_credential_email,
+    parse_credential_expiry,
+    resolve_credential_email,
+)
 from core.credential_manager import credential_manager
 from core.models import (
     CredFileActionRequest,
@@ -31,9 +36,11 @@ from core.google_oauth_api import Credentials, fetch_project_id_and_tier, get_us
 from core.provider_registry import (
     GOOGLE_ANTIGRAVITY,
     GOOGLE_AI_STUDIO,
+    canonicalize_antigravity_credential_filename,
     get_credential_provider,
     normalize_provider_id,
 )
+from core.pool_import import PoolImportError, restore_pool_archive
 from config import (
     get_antigravity_api_url,
     get_antigravity_user_agent,
@@ -446,6 +453,30 @@ async def get_creds_status_common(
     })
 
 
+async def _get_download_filename(
+    storage_adapter,
+    filename: str,
+    credential_data: dict,
+    mode: str,
+) -> str:
+    download_filename = os.path.basename(filename)
+    if mode != "primary" or get_credential_provider(credential_data) != GOOGLE_ANTIGRAVITY:
+        return download_filename
+
+    email = get_known_credential_email(credential_data)
+    if not email:
+        try:
+            state = await storage_adapter.get_credential_state(filename, mode=mode)
+            email = str(state.get("user_email") or "").strip().lower()
+        except Exception:
+            email = ""
+    return canonicalize_antigravity_credential_filename(
+        download_filename,
+        credential_data,
+        email=email,
+    )
+
+
 async def download_all_creds_common(mode: str = "code_assist") -> Response:
     """Internal implementation detail."""
     mode = validate_mode(mode)
@@ -465,12 +496,26 @@ async def download_all_creds_common(mode: str = "code_assist") -> Response:
 
     with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zip_file:
         success_count = 0
+        archive_names = set()
         for idx, filename in enumerate(credential_filenames, 1):
             try:
                 credential_data = await storage_adapter.get_credential(filename, mode=mode)
                 if credential_data:
                     content = json.dumps(credential_data, ensure_ascii=False, indent=2)
-                    zip_file.writestr(os.path.basename(filename), content)
+                    download_filename = await _get_download_filename(
+                        storage_adapter,
+                        filename,
+                        credential_data,
+                        mode,
+                    )
+                    candidate_name = download_filename
+                    stem, extension = os.path.splitext(candidate_name)
+                    suffix = 2
+                    while download_filename in archive_names:
+                        download_filename = f"{stem}-{suffix}{extension}"
+                        suffix += 1
+                    archive_names.add(download_filename)
+                    zip_file.writestr(download_filename, content)
                     success_count += 1
 
                     if idx % 10 == 0:
@@ -966,7 +1011,12 @@ async def creds_action(
                 if success:
                     log.info(f"Deleted credential via manager: {filename} (mode={mode}).")
                     return JSONResponse(
-                        content={"message": f"Deleted credential {os.path.basename(filename)}."}
+                        content={
+                            "success": True,
+                            "deleted": True,
+                            "history_retained_anonymously": True,
+                            "message": "Credential deleted. Historical usage was retained anonymously.",
+                        }
                     )
                 else:
                     raise HTTPException(status_code=500, detail="Failed to delete the credential.")
@@ -1121,6 +1171,8 @@ async def creds_batch_action(
             "errors": errors,
             "message": result_message,
         }
+        if action == "delete" and success_count > 0:
+            response_data["history_retained_anonymously"] = True
 
         return JSONResponse(content=response_data)
 
@@ -1154,13 +1206,19 @@ async def download_cred_file(
 
 
         content = json.dumps(credential_data, ensure_ascii=False, indent=2)
+        download_filename = await _get_download_filename(
+            storage_adapter,
+            filename,
+            credential_data,
+            mode,
+        )
 
         from fastapi.responses import Response
 
         return Response(
             content=content,
             media_type="application/json",
-            headers={"Content-Disposition": f"attachment; filename={filename}"},
+            headers={"Content-Disposition": f"attachment; filename={download_filename}"},
         )
 
     except HTTPException:
@@ -1229,6 +1287,21 @@ async def download_all_creds(
     except Exception as e:
         log.error(f"Failed to download package: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/import")
+async def import_pool_credentials(
+    archive: UploadFile = File(...),
+    token: str = Depends(verify_panel_token),
+):
+    """Restore a mixed-provider credential pool from one ZIP archive."""
+    try:
+        return JSONResponse(content=await restore_pool_archive(archive))
+    except PoolImportError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        log.error(f"Pool restore failed: {exc}")
+        raise HTTPException(status_code=500, detail="Pool archive could not be restored.") from exc
 
 
 @router.post("/verify-project/{filename}")

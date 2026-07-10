@@ -7,11 +7,18 @@ from typing import Any, Dict, List, Optional
 
 from log import log
 from paths import DEFAULT_CREDENTIALS_DIR
+from core.provider_registry import (
+    GOOGLE_ANTIGRAVITY,
+    get_credential_provider,
+    get_provider_display_name,
+    normalize_provider_id,
+)
 
 
 db_lock = threading.Lock()
 db_path = str(DEFAULT_CREDENTIALS_DIR / "usage_stats.db")
 UNASSIGNED_USAGE_FILENAME = "__gateway_unassigned__.json"
+DELETED_USAGE_PREFIX = "__deleted_credential__"
 USAGE_PERIODS = {
     "1d": {"seconds": 86400, "label": "Last 24 hours"},
     "7d": {"seconds": 7 * 86400, "label": "Last 7 days"},
@@ -46,14 +53,21 @@ def _int_value(value: Any) -> int:
 
 
 def _provider_display_name(value: Any) -> str:
-    normalized = str(value or "").strip().lower().replace("-", "_")
-    if normalized in {"primary", "provider", "antigravity"}:
-        return "Antigravity"
-    if normalized == "code_assist":
-        return "Code Assist"
-    if not normalized:
-        return "Provider"
-    return " ".join(part.capitalize() for part in normalized.split("_") if part)
+    return get_provider_display_name(normalize_provider_id(value or GOOGLE_ANTIGRAVITY))
+
+
+def deleted_usage_filename(provider: Any) -> str:
+    """Return the anonymous history bucket for a deleted provider credential."""
+    provider_id = normalize_provider_id(provider or GOOGLE_ANTIGRAVITY)
+    safe_provider_id = "".join(
+        character if character.isalnum() or character == "_" else "_"
+        for character in provider_id
+    ).strip("_")
+    return f"{DELETED_USAGE_PREFIX}{safe_provider_id or 'unknown'}.json"
+
+
+def is_deleted_usage_filename(filename: Any) -> bool:
+    return os.path.basename(str(filename or "")).startswith(DELETED_USAGE_PREFIX)
 
 
 def normalize_usage_period(period: str = "1d") -> str:
@@ -69,10 +83,14 @@ def get_usage_period_metadata(period: str = "1d") -> Dict[str, str]:
     }
 
 
-def _empty_usage_record(metadata: Dict[str, str]) -> Dict[str, Any]:
+def _empty_usage_record(metadata: Dict[str, Any]) -> Dict[str, Any]:
+    provider_id = normalize_provider_id(metadata.get("provider") or GOOGLE_ANTIGRAVITY)
     return {
         "user_email": metadata.get("user_email", ""),
-        "provider": metadata.get("provider", "Antigravity"),
+        "credential_label": metadata.get("credential_label", ""),
+        "provider": provider_id,
+        "provider_name": metadata.get("provider_name") or _provider_display_name(provider_id),
+        "is_deleted": bool(metadata.get("is_deleted", False)),
         "calls": 0,
         "successful_calls": 0,
         "failed_calls": 0,
@@ -114,9 +132,15 @@ def _usage_record(
     estimated_tokens_saved: int,
     compressed_messages: int,
 ) -> Dict[str, Any]:
+    provider_id = normalize_provider_id(
+        existing.get("provider") or provider or GOOGLE_ANTIGRAVITY
+    )
     record = {
         "user_email": existing.get("user_email", ""),
-        "provider": existing.get("provider") or _provider_display_name(provider),
+        "credential_label": existing.get("credential_label", ""),
+        "provider": provider_id,
+        "provider_name": existing.get("provider_name") or _provider_display_name(provider_id),
+        "is_deleted": bool(existing.get("is_deleted", False)),
         "calls": calls,
         "successful_calls": successful_calls,
         "failed_calls": failed_calls,
@@ -273,7 +297,7 @@ def record_call(
     filename: str,
     *,
     model: str = "",
-    provider: str = "Antigravity",
+    provider: str = GOOGLE_ANTIGRAVITY,
     status_code: int = 200,
     success: bool = True,
     token_usage: Optional[Dict[str, Any]] = None,
@@ -333,6 +357,40 @@ def record_call(
             conn.close()
 
 
+def retire_credential_usage(filename: str, provider: Any) -> int:
+    """Detach historical usage from a deleted credential without losing totals."""
+    source_filename = os.path.basename(str(filename or ""))
+    if (
+        not source_filename
+        or source_filename == UNASSIGNED_USAGE_FILENAME
+        or is_deleted_usage_filename(source_filename)
+    ):
+        return 0
+
+    provider_id = normalize_provider_id(provider or GOOGLE_ANTIGRAVITY)
+    anonymous_filename = deleted_usage_filename(provider_id)
+    init_db()
+    with db_lock:
+        conn = sqlite3.connect(db_path)
+        try:
+            cursor = conn.execute(
+                """
+                UPDATE usage_logs
+                SET filename = ?, provider = ?
+                WHERE filename = ?
+                """,
+                (anonymous_filename, provider_id, source_filename),
+            )
+            changed = max(0, int(cursor.rowcount or 0))
+            conn.commit()
+            return changed
+        except Exception as e:
+            log.error(f"Failed to anonymize historical credential usage: {e}")
+            return 0
+        finally:
+            conn.close()
+
+
 async def get_credential_counts() -> Dict[str, int]:
     try:
         from core.storage_adapter import get_storage_adapter
@@ -379,11 +437,14 @@ async def get_credential_usage_metadata() -> Dict[str, Dict[str, str]]:
             if not filename:
                 continue
 
+            credential_data = await storage_adapter.get_credential(filename, mode="primary") or {}
+            provider_id = get_credential_provider(credential_data)
+
             metadata[filename] = {
                 "user_email": str(item.get("user_email") or ""),
-                "provider": _provider_display_name(
-                    item.get("provider") or item.get("provider_name") or "Antigravity"
-                ),
+                "credential_label": str(credential_data.get("credential_label") or ""),
+                "provider": provider_id,
+                "provider_name": _provider_display_name(provider_id),
             }
 
         return metadata
@@ -451,6 +512,15 @@ async def get_stats_for_period(period: str = "1d") -> Dict[str, Dict[str, Any]]:
             )
             for row in cursor.fetchall():
                 existing = res.get(row[0], {})
+                if is_deleted_usage_filename(row[0]):
+                    provider_id = normalize_provider_id(row[12] or GOOGLE_ANTIGRAVITY)
+                    existing = {
+                        "user_email": "",
+                        "credential_label": "Deleted credential",
+                        "provider": provider_id,
+                        "provider_name": _provider_display_name(provider_id),
+                        "is_deleted": True,
+                    }
                 res[row[0]] = _usage_record(
                     existing=existing,
                     provider=row[12],

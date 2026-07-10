@@ -578,13 +578,21 @@ class SQLiteManager:
         try:
             table_name = self._get_table_name(mode)
             async with aiosqlite.connect(self._db_path) as db:
-
+                await db.execute("PRAGMA secure_delete=ON")
                 result = await db.execute(f"""
                     DELETE FROM {table_name} WHERE filename = ?
                 """, (filename,))
                 deleted_count = result.rowcount
-
+                await result.close()
                 await db.commit()
+
+                if deleted_count > 0:
+                    try:
+                        await db.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+                    except Exception as checkpoint_error:
+                        log.warning(
+                            f"Credential deleted, but the SQLite WAL could not be truncated: {checkpoint_error}"
+                        )
 
                 if deleted_count > 0:
                     log.debug(f"Deleted {deleted_count} credentials: {filename} (mode={mode}).")

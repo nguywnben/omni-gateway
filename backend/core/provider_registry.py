@@ -10,6 +10,8 @@ GOOGLE_ANTIGRAVITY = "google_antigravity"
 GOOGLE_AI_STUDIO = "google_ai_studio"
 
 _PROVIDER_ALIASES = {
+    "primary": GOOGLE_ANTIGRAVITY,
+    "provider": GOOGLE_ANTIGRAVITY,
     "antigravity": GOOGLE_ANTIGRAVITY,
     "google-antigravity": GOOGLE_ANTIGRAVITY,
     "google_antigravity": GOOGLE_ANTIGRAVITY,
@@ -24,6 +26,68 @@ _PROVIDER_NAMES = {
     GOOGLE_ANTIGRAVITY: "Google Antigravity",
     GOOGLE_AI_STUDIO: "Google AI Studio",
 }
+
+
+def _short_fingerprint(value: Any) -> str:
+    normalized = str(value or "").strip()
+    if not normalized:
+        return ""
+    return hashlib.sha256(normalized.encode("utf-8")).hexdigest()[:16]
+
+
+def antigravity_account_fingerprint(
+    credential_data: Optional[Dict[str, Any]] = None,
+    *,
+    email: Any = None,
+) -> str:
+    """Create a stable, non-reversible Antigravity account identifier."""
+    data = credential_data or {}
+    normalized_email = str(
+        email
+        or data.get("user_email")
+        or data.get("email")
+        or data.get("account_email")
+        or ""
+    ).strip().lower()
+    if normalized_email:
+        return _short_fingerprint(normalized_email)
+
+    token_identity = data.get("refresh_token") or data.get("token")
+    if token_identity:
+        return _short_fingerprint(token_identity)
+
+    project_identity = data.get("project_id") or data.get("quota_project_id")
+    return _short_fingerprint(project_identity)
+
+
+def build_antigravity_credential_filename(
+    credential_data: Optional[Dict[str, Any]] = None,
+    *,
+    email: Any = None,
+) -> str:
+    """Build the canonical filename for a Google Antigravity credential."""
+    fingerprint = antigravity_account_fingerprint(credential_data, email=email)
+    return f"google-antigravity-{fingerprint or 'unknown'}.json"
+
+
+def canonicalize_antigravity_credential_filename(
+    filename: Any,
+    credential_data: Optional[Dict[str, Any]] = None,
+    *,
+    email: Any = None,
+) -> str:
+    """Normalize current, legacy, and imported Antigravity credential names."""
+    data = credential_data or {}
+    fingerprint = antigravity_account_fingerprint(data, email=email)
+    if fingerprint:
+        return f"google-antigravity-{fingerprint}.json"
+
+    basename = str(filename or "").replace("\\", "/").rsplit("/", 1)[-1].lower()
+    if basename.startswith("google-antigravity-") and basename.endswith(".json"):
+        suffix = basename[len("google-antigravity-"):-5]
+        if len(suffix) == 16 and all(character in "0123456789abcdef" for character in suffix):
+            return basename
+    return build_antigravity_credential_filename(data)
 
 
 def normalize_provider_id(value: Any) -> str:
@@ -50,10 +114,7 @@ def get_provider_display_name(provider_id: Any) -> str:
 
 def api_key_fingerprint(api_key: str) -> str:
     """Create a stable, non-reversible identifier for an API key."""
-    normalized = str(api_key or "").strip()
-    if not normalized:
-        return ""
-    return hashlib.sha256(normalized.encode("utf-8")).hexdigest()[:16]
+    return _short_fingerprint(api_key)
 
 
 def get_static_credential_identity(credential_data: Dict[str, Any]) -> str:

@@ -133,7 +133,7 @@
                         <div>
                             <div class="page-kicker">Overview</div>
                             <h1 class="page-title">Omni Gateway Dashboard</h1>
-                            <p class="page-description">Monitor request flow, active credential capacity, and integration details for coding-tool traffic.</p>
+                            <p class="page-description">Monitor request flow, provider capacity, and integration details for coding-tool traffic.</p>
                         </div>
                         <div class="page-actions">
                             <label class="dashboard-range-control" for="usagePeriodSelect">
@@ -302,7 +302,8 @@
 
                         <section class="card span-12">
                             <h2 class="card-title" id="usageBreakdownTitle">24-Hour Request Breakdown</h2>
-                            <p class="card-copy card-title-copy" id="usageBreakdownDescription">Review credential-level traffic and token usage for the last 24 hours.</p>
+                            <p class="card-copy card-title-copy" id="usageBreakdownDescription">Review provider and credential traffic for the last 24 hours.</p>
+                            <div class="usage-provider-summary" id="usageProviderSummary" aria-label="Provider activity"></div>
                             <div id="usageLoading" class="skeleton-table">
                                 <div class="skeleton-row header"><div class="skeleton-cell"></div><div class="skeleton-cell"></div><div class="skeleton-cell"></div><div class="skeleton-cell"></div></div>
                                 <div class="skeleton-row"><div class="skeleton-cell"></div><div class="skeleton-cell"></div><div class="skeleton-cell"></div><div class="skeleton-cell"></div></div>
@@ -330,13 +331,15 @@
                             <div>
                                 <div class="page-kicker">Pool</div>
                                 <h1 class="page-title">Provider Credential Pool</h1>
-                                <p class="page-description">Manage accounts and API keys from every connected provider. Audit account health, cooldowns, quota state, and batch operations for active routing capacity.</p>
+                                <p class="page-description">Manage accounts and API keys from every connected provider. Monitor credential health, routing capacity, and pool backups from one place.</p>
                             </div>
                             <div class="page-actions">
                                 <button type="button" class="btn" onclick="refreshPrimaryCredsList()">Refresh</button>
+                                <button type="button" class="btn btn-secondary" id="poolImportArchiveBtn" onclick="selectPoolImportArchive()">Import ZIP</button>
                                 <button type="button" class="btn btn-secondary" onclick="downloadAllPrimaryCreds()">Download ZIP</button>
                             </div>
                     </header>
+                    <input type="file" id="poolImportArchiveInput" accept=".zip,application/zip" hidden onchange="handlePoolImportArchive(event)">
 
                     <div class="stats-container">
                         <div class="stat-item"><span class="stat-number" id="primaryStatTotal">0</span><span class="stat-label">Total credentials</span></div>
@@ -926,6 +929,7 @@
                             <div class="integration-list">
                                 <div class="code-block">Smart auto-fallback</div>
                                 <div class="code-block">Token-aware cleanup and usage visibility</div>
+                                <div class="code-block">Google Antigravity OAuth and Google AI Studio API-key routing</div>
                                 <div class="code-block">OpenAI, Anthropic, Gemini, and provider-native format translation</div>
                             </div>
                         </section>

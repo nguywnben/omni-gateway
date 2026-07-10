@@ -61,8 +61,10 @@ def _build_message_with_reasoning(role: str, content: str, reasoning_content: st
     return message
 
 
-def _map_finish_reason(gemini_reason: str) -> str:
+def _map_finish_reason(gemini_reason: Optional[str]) -> Optional[str]:
     """Internal implementation detail."""
+    if gemini_reason is None:
+        return None
     if gemini_reason == "STOP":
         return "stop"
     elif gemini_reason == "MAX_TOKENS":

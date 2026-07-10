@@ -21,6 +21,7 @@ from config import (
 from log import log
 from .google_oauth_api import Credentials, Flow, enable_required_apis, fetch_project_id_and_tier, get_user_projects, select_default_project
 from .credential_pool import upsert_credential_by_email
+from .provider_registry import build_antigravity_credential_filename
 from .storage_adapter import get_storage_adapter
 from .utils import SCOPES, CODE_ASSIST_SCOPES, CALLBACK_HOST, TOKEN_URL
 
@@ -583,11 +584,11 @@ async def complete_auth_flow_from_callback_url(callback_url: str, project_id: Op
 async def save_credentials(creds: Credentials, project_id: str, mode: str='code_assist', subscription_tier: str=None) -> Dict[str, Any]:
     """Internal implementation detail."""
     timestamp = int(time.time())
+    creds_data = await _prepare_credentials_data(creds, project_id, mode, subscription_tier)
     if mode == 'primary':
-        filename = f'provider_{project_id}-{timestamp}.json'
+        filename = build_antigravity_credential_filename(creds_data)
     else:
         filename = f'{project_id}-{timestamp}.json'
-    creds_data = await _prepare_credentials_data(creds, project_id, mode, subscription_tier)
     save_result = await upsert_credential_by_email(filename, creds_data, mode=mode)
     if save_result.get('stored'):
         try:

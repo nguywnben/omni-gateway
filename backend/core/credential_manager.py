@@ -8,9 +8,10 @@ from log import log
 from config import get_routing_policy
 from core.google_oauth_api import Credentials
 from core.credential_pool import upsert_credential_by_email
-from core.provider_registry import is_api_key_credential
+from core.provider_registry import get_credential_provider, is_api_key_credential
 from core.smart_routing import SmartCredentialRouter
 from core.storage_adapter import get_storage_adapter
+from core.usage_stats import retire_credential_usage
 
 class CredentialManager:
     """Internal implementation detail."""
@@ -139,14 +140,31 @@ class CredentialManager:
         return result
 
     async def remove_credential(self, credential_name: str, mode: str = "code_assist") -> bool:
-        """Internal implementation detail."""
+        """Delete a credential and detach its retained usage history."""
         await self._ensure_initialized()
         try:
-            await self._storage_adapter.delete_credential(credential_name, mode=mode)
-            log.info(f"Credential removed: {credential_name} (mode={mode})")
+            credential_data = await self._storage_adapter.get_credential(
+                credential_name,
+                mode=mode,
+            )
+            if not credential_data:
+                log.warning(f"Credential removal skipped because it no longer exists (mode={mode}).")
+                return False
+
+            provider_id = get_credential_provider(credential_data)
+            deleted = await self._storage_adapter.delete_credential(
+                credential_name,
+                mode=mode,
+            )
+            if not deleted:
+                log.error(f"Credential storage deletion failed (mode={mode}, provider={provider_id}).")
+                return False
+
+            retire_credential_usage(credential_name, provider_id)
+            log.info(f"Credential removed (mode={mode}, provider={provider_id}).")
             return True
         except Exception as e:
-            log.error(f"Error removing credential {credential_name}: {e}")
+            log.error(f"Credential removal failed (mode={mode}): {e}")
             return False
 
     async def release_credential(

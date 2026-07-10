@@ -3,14 +3,13 @@
 import io
 import json
 import zipfile
-from datetime import datetime, timezone
 from typing import List, Tuple
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from fastapi.responses import JSONResponse
 
 import config
-from core.credential_manager import credential_manager
+from core.provider_store import store_google_ai_studio_credential
 from core.google_ai_studio import (
     GoogleAIStudioError,
     normalize_api_base_url,
@@ -282,26 +281,7 @@ async def add_google_ai_studio_credential(
 
 async def _store_google_ai_studio_credential(api_key: str, validation) -> dict:
     """Store one validated key without exposing it in the result."""
-    fingerprint = api_key_fingerprint(api_key)
-    credential_label = f"API key ending {api_key[-4:]}"
-    credential_data = {
-        "provider": GOOGLE_AI_STUDIO,
-        "credential_type": "api_key",
-        "api_key": api_key,
-        "credential_label": credential_label,
-        "key_fingerprint": fingerprint,
-        "model_ids": validation.model_ids,
-        "created_at": datetime.now(timezone.utc).isoformat(),
-    }
-    filename = f"google-ai-studio-{fingerprint}.json"
-    result = await credential_manager.add_primary_credential(filename, credential_data)
-    action = result.get("action", "created")
-    return {
-        "action": action,
-        "filename": result.get("filename", filename),
-        "label": credential_label,
-        "fingerprint": fingerprint,
-    }
+    return await store_google_ai_studio_credential(api_key, validation)
 
 
 def _safe_import_name(value: str, fallback: str = "credential.json") -> str:

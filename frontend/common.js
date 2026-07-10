@@ -74,8 +74,8 @@ const TRANSLATIONS = {
         "configuring_preview_channel_please": "Configuring Preview channel. Please wait...",
         "confirm_action_title": "Confirm action",
         "confirm_batch_action": "Are you sure you want to execute {action} on {count} selected credentials?",
-        "confirm_batch_delete": "Delete {count} selected credential files? This action cannot be undone.",
-        "confirm_delete_cred": "Are you sure you want to delete this credential?\\n{filename}",
+        "confirm_batch_delete": "Delete {count} selected credentials? Their secrets and pool state will be removed. Historical usage will be retained anonymously. This action cannot be undone.",
+        "confirm_delete_cred": "Delete this credential? Its secrets and pool state will be removed. Historical usage will be retained anonymously. This action cannot be undone.",
         "confirm_regenerate_key": "Are you sure you want to regenerate this API key? Previous key will become invalid immediately.",
         "connected": "Connected",
         "connecting": "Connecting...",
@@ -97,6 +97,7 @@ const TRANSLATIONS = {
         "deduplication_detailsnn": "Deduplication details:\\n\\n",
         "deduplication_failed": "Deduplication failed.",
         "deduplication_network_error_errorme": "Deduplication network error: {error_message}",
+        "deleted_credential": "Deleted credential",
         "dialog_tip": "Tip",
         "disable_only": "Disabled only",
         "disconnected": "Disconnected",
@@ -1195,7 +1196,25 @@ function createCredsManager(type) {
 
                     showStatus(data.message || t('status_action_success', {action: action}), 'success');
 
+                    if (action === 'delete') {
+
+                        this.selectedFiles.delete(filename);
+
+                        delete AppState.quotaPreviewCache[filename];
+
+                        Object.entries(AppState.credentialCardIndex).forEach(([pathId, context]) => {
+
+                            if (context.filename === filename) delete AppState.credentialCardIndex[pathId];
+
+                        });
+
+                        this.updateBatchControls();
+
+                    }
+
                     await this.refresh();
+
+                    if (action === 'delete') await refreshUsageStats();
 
                 } else {
 
@@ -1269,11 +1288,29 @@ function createCredsManager(type) {
 
                     showStatus(t('status_batch_complete', {success: successCount, total: selectedFiles.length}), 'success');
 
+                    if (action === 'delete') {
+
+                        selectedFiles.forEach((filename) => {
+
+                            delete AppState.quotaPreviewCache[filename];
+
+                        });
+
+                        Object.entries(AppState.credentialCardIndex).forEach(([pathId, context]) => {
+
+                            if (selectedFiles.includes(context.filename)) delete AppState.credentialCardIndex[pathId];
+
+                        });
+
+                    }
+
                     this.selectedFiles.clear();
 
                     this.updateBatchControls();
 
                     await this.refresh();
+
+                    if (action === 'delete') await refreshUsageStats();
 
                 } else {
 
@@ -2734,9 +2771,12 @@ function formatCooldownTime(remainingSeconds) {
 
 function getCredentialProviderMeta(credInfo, managerType) {
 
-    const provider = String(credInfo.provider || credInfo.provider_name || '').toLowerCase();
+    const provider = String(credInfo.provider || credInfo.provider_name || '')
+        .trim()
+        .toLowerCase()
+        .replace(/[\s-]+/g, '_');
 
-    if (provider.includes('google_ai_studio') || provider.includes('google-ai-studio') || provider === 'gemini') {
+    if (provider === 'google_ai_studio' || provider === 'ai_studio' || provider === 'aistudio' || provider === 'gemini') {
 
         return {
             id: 'google_ai_studio',
@@ -2746,7 +2786,7 @@ function getCredentialProviderMeta(credInfo, managerType) {
 
     }
 
-    if (managerType === 'primary' || provider.includes('antigravity')) {
+    if (provider === 'google_antigravity' || provider === 'antigravity' || provider === 'primary' || provider === 'provider' || (!provider && managerType === 'primary')) {
 
         return {
             id: 'google_antigravity',
@@ -3039,7 +3079,7 @@ function createCredCard(credInfo, manager) {
 
             if (action === 'delete') {
 
-                if (!(await showConfirmModal(t('confirm_delete_cred', {filename: fn})))) return;
+                if (!(await showConfirmModal(t('confirm_delete_cred')))) return;
 
             }
 
@@ -4409,7 +4449,7 @@ function downloadPrimaryCred(filename) {
 
 async function deletePrimaryCred(filename) {
 
-    if (await showConfirmModal(t('are_you_sure_you_want_to_delete_fil_dup', {filename: filename}))) {
+    if (await showConfirmModal(t('confirm_delete_cred'))) {
 
         AppState.primaryCreds.action(filename, 'delete');
 
@@ -4446,6 +4486,217 @@ async function downloadAllPrimaryCreds() {
     } catch (error) {
 
         showStatus(t('status_net_error', {error: error.message}), 'error');
+
+    }
+
+}
+
+function selectPoolImportArchive() {
+
+    const input = document.getElementById('poolImportArchiveInput');
+
+    if (!input) return;
+
+    input.value = '';
+    input.click();
+
+}
+
+function getPoolImportActionLabel(result) {
+
+    if (result.status === 'error') return 'Failed';
+    if (result.status === 'skipped') return 'Skipped';
+    if (result.action === 'replaced') return 'Renewed';
+    if (result.action === 'updated') return 'Updated';
+    return 'Added';
+
+}
+
+function buildPoolImportResultHtml(data) {
+
+    const providerItems = Object.values(data.providers || {}).filter((provider) => {
+
+        return ['created', 'updated', 'replaced', 'skipped', 'failed']
+            .some((key) => Number(provider[key] || 0) > 0);
+
+    });
+
+    const providerSummary = providerItems.length
+        ? `
+            <div class="message-result-section">
+                <div class="message-result-section-title">Provider Summary</div>
+                <div class="usage-provider-summary pool-import-provider-summary">
+                    ${providerItems.map((provider) => {
+                        const providerMeta = getCredentialProviderMeta({ provider: provider.provider }, 'usage');
+                        const imported = Number(provider.created || 0)
+                            + Number(provider.updated || 0)
+                            + Number(provider.replaced || 0);
+                        const logo = providerMeta.logo
+                            ? `<img src="${providerMeta.logo}" alt="">`
+                            : `<span>${escapeHtml(providerMeta.name.charAt(0))}</span>`;
+
+                        return `
+                            <article class="usage-provider-item">
+                                <div class="usage-provider-identity">
+                                    <div class="usage-provider-logo" aria-hidden="true">${logo}</div>
+                                    <div>
+                                        <div class="usage-provider-name">${escapeHtml(providerMeta.name)}</div>
+                                        <div class="usage-provider-meta">Credential restore</div>
+                                    </div>
+                                </div>
+                                <dl class="usage-provider-metrics">
+                                    <div><dt>Imported</dt><dd>${formatUsageNumber(imported)}</dd></div>
+                                    <div><dt>Skipped</dt><dd>${formatUsageNumber(provider.skipped)}</dd></div>
+                                    <div><dt>Failed</dt><dd>${formatUsageNumber(provider.failed)}</dd></div>
+                                </dl>
+                            </article>
+                        `;
+                    }).join('')}
+                </div>
+            </div>
+        `
+        : '';
+
+    const results = Array.isArray(data.results) ? data.results : [];
+    const visibleResults = results.slice(0, 24);
+    const fileResults = visibleResults.map((result) => {
+
+        const statusClass = result.status === 'error'
+            ? 'danger'
+            : result.status === 'skipped'
+                ? 'muted'
+                : 'success';
+        const providerName = result.provider_name
+            || (result.provider ? getCredentialProviderMeta({ provider: result.provider }, 'usage').name : 'Unrecognized provider');
+        const sourceName = result.source_filename || result.filename || 'Credential file';
+
+        return `
+            <div class="upload-result-item">
+                <div class="pool-import-result-heading">
+                    <span class="status-badge ${statusClass}">${escapeHtml(getPoolImportActionLabel(result))}</span>
+                    <span class="upload-result-file">${escapeHtml(sourceName)}</span>
+                </div>
+                <div class="upload-result-message">${escapeHtml(providerName)} - ${escapeHtml(ensureTerminalPunctuation(result.message || 'Import completed.'))}</div>
+            </div>
+        `;
+
+    }).join('');
+    const hiddenCount = Math.max(0, results.length - visibleResults.length);
+    const fileSection = results.length
+        ? `
+            <div class="message-result-section">
+                <div class="message-result-section-title">File Results</div>
+                <div class="upload-result-details">
+                    ${fileResults}
+                    ${hiddenCount ? `<div class="upload-result-message">${hiddenCount} more ${hiddenCount === 1 ? 'result was' : 'results were'} processed.</div>` : ''}
+                </div>
+            </div>
+        `
+        : '';
+
+    return `
+        <div class="message-result-panel">
+            <div class="message-result-intro">The archive was inspected and each credential was routed through its provider-specific validation and duplicate checks.</div>
+            <div class="message-result-section">
+                <div class="message-result-section-title">Restore Summary</div>
+                <div class="message-result-summary pool-import-summary">${renderMessageResultRows([
+                    ['Credential files', Number(data.total_count || 0)],
+                    ['Imported', Number(data.uploaded_count || 0)],
+                    ['Skipped', Number(data.skipped_count || 0)],
+                    ['Failed', Number(data.error_count || 0)],
+                ])}</div>
+            </div>
+            ${providerSummary}
+            ${fileSection}
+        </div>
+    `;
+
+}
+
+async function handlePoolImportArchive(event) {
+
+    const input = event.target;
+    const archive = input?.files?.[0];
+
+    if (!archive) return;
+
+    if (!archive.name.toLowerCase().endsWith('.zip')) {
+
+        showStatus('Select a ZIP archive created from the credential pool.', 'error');
+        input.value = '';
+        return;
+
+    }
+
+    if (archive.size > 10 * 1024 * 1024) {
+
+        showStatus('Pool archive exceeds the 10 MB upload limit.', 'error');
+        input.value = '';
+        return;
+
+    }
+
+    const button = document.getElementById('poolImportArchiveBtn');
+    const originalLabel = button?.textContent || 'Import ZIP';
+    const formData = new FormData();
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 15 * 60 * 1000);
+    formData.append('archive', archive);
+
+    if (button) {
+
+        button.disabled = true;
+        button.textContent = 'Importing...';
+
+    }
+
+    showStatus('Inspecting the pool archive and validating provider credentials.', 'info');
+
+    try {
+
+        const response = await fetch('./api/creds/import', {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${AppState.authToken}` },
+            body: formData,
+            signal: controller.signal,
+        });
+        const data = await response.json().catch(() => ({}));
+
+        if (!response.ok) {
+
+            throw new Error(data.detail || data.error || `Pool restore failed with HTTP ${response.status}.`);
+
+        }
+
+        const variant = Number(data.error_count || 0) > 0
+            ? (Number(data.uploaded_count || 0) > 0 ? 'warning' : 'error')
+            : Number(data.skipped_count || 0) > 0
+                ? 'info'
+                : 'success';
+
+        showStatus(data.message || 'Pool archive restored.', variant);
+        showMessageModal('Pool Import', buildPoolImportResultHtml(data), variant, { html: true });
+        await AppState.primaryCreds.refresh();
+        refreshUsageStats();
+
+    } catch (error) {
+
+        const message = error.name === 'AbortError'
+            ? 'Pool restore timed out while validating provider credentials.'
+            : error.message;
+        showStatus(message, 'error');
+        showMessageModal('Pool Import', message, 'error');
+
+    } finally {
+
+        clearTimeout(timeout);
+        input.value = '';
+        if (button) {
+
+            button.disabled = false;
+            button.textContent = originalLabel;
+
+        }
 
     }
 
@@ -6782,28 +7033,28 @@ function getUsagePeriodConfig(period = AppState.usagePeriod) {
             optionLabel: '1 day',
             metricLabel: 'in the last 24 hours',
             title: '24-Hour Request Breakdown',
-            description: 'Review credential-level traffic and token usage for the last 24 hours.',
+            description: 'Review provider and credential traffic for the last 24 hours.',
         },
         '7d': {
             value: '7d',
             optionLabel: '7 days',
             metricLabel: 'in the last 7 days',
             title: '7-Day Request Breakdown',
-            description: 'Review credential-level traffic and token usage for the last 7 days.',
+            description: 'Review provider and credential traffic for the last 7 days.',
         },
         '30d': {
             value: '30d',
             optionLabel: '30 days',
             metricLabel: 'in the last 30 days',
             title: '30-Day Request Breakdown',
-            description: 'Review credential-level traffic and token usage for the last 30 days.',
+            description: 'Review provider and credential traffic for the last 30 days.',
         },
         all: {
             value: 'all',
             optionLabel: 'All',
             metricLabel: 'across all recorded time',
             title: 'All-Time Request Breakdown',
-            description: 'Review all recorded credential-level traffic and token usage.',
+            description: 'Review all recorded provider and credential traffic.',
         },
     };
 
@@ -6863,6 +7114,8 @@ async function refreshUsageStats() {
 
     const list = document.getElementById('usageList');
 
+    const providerSummary = document.getElementById('usageProviderSummary');
+
     updateUsagePeriodLabels();
 
     try {
@@ -6870,6 +7123,13 @@ async function refreshUsageStats() {
         loading.style.display = 'block';
 
         list.innerHTML = '';
+
+        if (providerSummary) {
+
+            providerSummary.innerHTML = '';
+            providerSummary.hidden = true;
+
+        }
 
         const usagePeriod = getUsagePeriodConfig().value;
 
@@ -6983,6 +7243,8 @@ function renderUsageList() {
 
     list.innerHTML = '';
 
+    renderUsageProviderSummary();
+
     if (Object.keys(AppState.usageStatsData).length === 0) {
 
         const tr = document.createElement('tr');
@@ -7010,10 +7272,12 @@ function renderUsageList() {
         const isUnassigned = filename === '__gateway_unassigned__.json';
         const providerMeta = isUnassigned
             ? { name: 'Gateway', logo: '/frontend/assets/logo.png' }
-            : getCredentialProviderMeta({ provider: stats.provider || 'Antigravity' }, 'usage');
+            : getCredentialProviderMeta({ provider: stats.provider || stats.provider_name }, 'usage');
         const accountLabel = isUnassigned
             ? 'No credential assigned'
-            : (stats.user_email || t('email_not_fetched'));
+            : (stats.is_deleted
+                ? t('deleted_credential')
+                : (stats.credential_label || stats.user_email || t('email_not_fetched')));
         const providerLogo = providerMeta.logo
             ? `<img src="${providerMeta.logo}" alt="${escapeHtml(providerMeta.name)} logo">`
             : `<span>${escapeHtml(providerMeta.name.charAt(0))}</span>`;
@@ -7050,6 +7314,89 @@ function renderUsageList() {
         list.appendChild(tr);
 
     }
+
+}
+
+function renderUsageProviderSummary() {
+
+    const container = document.getElementById('usageProviderSummary');
+
+    if (!container) return;
+
+    const providers = new Map();
+
+    for (const [filename, stats] of Object.entries(AppState.usageStatsData || {})) {
+
+        if (filename === '__gateway_unassigned__.json') continue;
+
+        const providerMeta = getCredentialProviderMeta(
+            { provider: stats.provider || stats.provider_name },
+            'usage'
+        );
+
+        const current = providers.get(providerMeta.id) || {
+            meta: providerMeta,
+            credentials: 0,
+            calls: 0,
+            successfulCalls: 0,
+            totalTokens: 0,
+        };
+
+        if (!stats.is_deleted) current.credentials += 1;
+        current.calls += Number(stats.calls ?? stats.calls_24h ?? 0);
+        current.successfulCalls += Number(stats.successful_calls ?? stats.successful_calls_24h ?? 0);
+        current.totalTokens += Number(stats.total_tokens ?? stats.total_tokens_24h ?? 0);
+        providers.set(providerMeta.id, current);
+
+    }
+
+    if (providers.size === 0) {
+
+        container.innerHTML = '';
+        container.hidden = true;
+        return;
+
+    }
+
+    container.hidden = false;
+    const providerOrder = ['google_antigravity', 'google_ai_studio', 'code_assist'];
+    const providerItems = Array.from(providers.values()).sort((left, right) => {
+        const leftIndex = providerOrder.indexOf(left.meta.id);
+        const rightIndex = providerOrder.indexOf(right.meta.id);
+        return (leftIndex === -1 ? providerOrder.length : leftIndex)
+            - (rightIndex === -1 ? providerOrder.length : rightIndex);
+    });
+
+    container.innerHTML = providerItems.map((provider) => {
+
+        const successRate = provider.calls > 0
+            ? Math.round((provider.successfulCalls / provider.calls) * 100)
+            : 0;
+        const logo = provider.meta.logo
+            ? `<img src="${provider.meta.logo}" alt="">`
+            : `<span>${escapeHtml(provider.meta.name.charAt(0))}</span>`;
+        const credentialLabel = provider.credentials > 0
+            ? `${provider.credentials} active credential${provider.credentials === 1 ? '' : 's'}`
+            : 'No active credentials';
+
+        return `
+            <article class="usage-provider-item">
+                <div class="usage-provider-identity">
+                    <div class="usage-provider-logo" aria-hidden="true">${logo}</div>
+                    <div>
+                        <div class="usage-provider-name">${escapeHtml(provider.meta.name)}</div>
+                        <div class="usage-provider-meta">${credentialLabel}</div>
+                    </div>
+                </div>
+                <dl class="usage-provider-metrics">
+                    <div><dt>Requests</dt><dd>${formatUsageNumber(provider.calls)}</dd></div>
+                    <div><dt>Success</dt><dd>${provider.calls > 0 ? `${successRate}%` : 'No traffic'}</dd></div>
+                    <div><dt>Tokens</dt><dd>${formatUsageNumber(provider.totalTokens)}</dd></div>
+                </dl>
+            </article>
+        `;
+
+    }).join('');
 
 }
 
