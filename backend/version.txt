@@ -1,4 +1,4 @@
-full_hash=82ac27f5d436c4d40b82edef790ee3cf1c836316
-short_hash=82ac27f
-message=fix: refine mobile console layout
-date=2026-07-08 23:40:10 +0700
+full_hash=9105c896ee223315a353e469494262b2736bb78b
+short_hash=9105c89
+message=feat: polish console settings and action feedback
+date=2026-07-11 11:36:02 +0700
