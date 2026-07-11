@@ -282,6 +282,33 @@ class SmartCredentialRouterTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(result[0], "antigravity.json")
 
+    async def test_model_candidate_selection_falls_back_to_the_next_routable_model(self):
+        storage = FakeStorageAdapter(
+            {
+                "ai-studio.json": credential_state(rotation_order=0),
+            }
+        )
+        storage.credentials["ai-studio.json"] = {
+            "provider": "google_ai_studio",
+            "credential_type": "api_key",
+            "api_key": "example-key",
+        }
+        router = SmartCredentialRouter(clock=lambda: 100.0)
+
+        first = await router.acquire(
+            storage,
+            mode="primary",
+            model_name="claude-sonnet-4-6",
+        )
+        second = await router.acquire(
+            storage,
+            mode="primary",
+            model_name="gemini-2.5-flash",
+        )
+
+        self.assertIsNone(first)
+        self.assertEqual(second[0], "ai-studio.json")
+
 
 if __name__ == "__main__":
     unittest.main()

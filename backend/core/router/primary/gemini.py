@@ -45,6 +45,7 @@ from core.router.stream_passthrough import (
 
 
 from core.models import GeminiRequest, model_to_dict
+from core.model_pool import ModelPoolError, resolve_model_request
 from core.token_estimator import estimate_input_tokens
 
 
@@ -77,7 +78,13 @@ async def generate_content(
 
 
     use_anti_truncation = is_anti_truncation_model(model)
-    real_model = get_base_model_from_feature_model(model)
+    requested_model = get_base_model_from_feature_model(model)
+    try:
+        model_resolution = await resolve_model_request(requested_model)
+    except ModelPoolError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    model_candidates = list(model_resolution.candidates)
+    real_model = model_candidates[0]
 
 
     if use_anti_truncation:
@@ -98,7 +105,10 @@ async def generate_content(
 
 
     from core.api.primary import non_stream_request
-    response = await non_stream_request(body=api_request)
+    response = await non_stream_request(
+        body=api_request,
+        model_candidates=model_candidates,
+    )
 
 
 
@@ -131,7 +141,13 @@ async def stream_generate_content(
 
     use_fake_streaming = is_fake_streaming_model(model)
     use_anti_truncation = is_anti_truncation_model(model)
-    real_model = get_base_model_from_feature_model(model)
+    requested_model = get_base_model_from_feature_model(model)
+    try:
+        model_resolution = await resolve_model_request(requested_model)
+    except ModelPoolError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    model_candidates = list(model_resolution.candidates)
+    real_model = model_candidates[0]
 
 
     normalized_dict["model"] = real_model
@@ -149,7 +165,10 @@ async def stream_generate_content(
             "request": normalized_req
         }
 
-        response = await non_stream_request(body=api_request)
+        response = await non_stream_request(
+            body=api_request,
+            model_candidates=model_candidates,
+        )
 
 
         if hasattr(response, "status_code") and response.status_code != 200:
@@ -219,7 +238,11 @@ async def stream_generate_content(
 
         anti_truncation_payload = apply_anti_truncation(api_request)
 
-        first_attempt_stream = stream_request(body=anti_truncation_payload, native=False)
+        first_attempt_stream = stream_request(
+            body=anti_truncation_payload,
+            native=False,
+            model_candidates=model_candidates,
+        )
         try:
             first_chunk = await read_first_async_item(first_attempt_stream)
         except StopAsyncIteration:
@@ -238,7 +261,11 @@ async def stream_generate_content(
                 first_attempt_pending = False
                 stream_gen = prepend_async_item(first_chunk, first_attempt_stream)
             else:
-                stream_gen = stream_request(body=payload, native=False)
+                stream_gen = stream_request(
+                    body=payload,
+                    native=False,
+                    model_candidates=model_candidates,
+                )
             return StreamingResponse(stream_gen, media_type="text/event-stream")
 
 
@@ -302,7 +329,11 @@ async def stream_generate_content(
 
 
         log.debug(f"[provider] Using non-native mode, the response wrapper will be expanded")
-        stream_gen = stream_request(body=api_request, native=False)
+        stream_gen = stream_request(
+            body=api_request,
+            native=False,
+            model_candidates=model_candidates,
+        )
         try:
             first_chunk = await read_first_async_item(stream_gen)
         except StopAsyncIteration:

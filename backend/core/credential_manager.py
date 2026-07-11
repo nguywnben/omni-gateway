@@ -104,6 +104,28 @@ class CredentialManager:
         log.error(f"No available credentials after {max_retries} retries (mode={mode}, model_name={model_name})")
         return None
 
+    async def get_valid_model_credential(
+        self,
+        model_names,
+        *,
+        mode: str = "primary",
+    ) -> Optional[Tuple[str, str, Dict[str, Any]]]:
+        """Return the first routable model and credential in priority order."""
+        seen = set()
+        for value in model_names or ():
+            model_name = str(value or "").strip()
+            if not model_name or model_name in seen:
+                continue
+            seen.add(model_name)
+            credential = await self.get_valid_credential(
+                mode=mode,
+                model_name=model_name,
+            )
+            if credential:
+                filename, credential_data = credential
+                return model_name, filename, credential_data
+        return None
+
     async def get_unified_mode_and_credential(
         self, model_name: Optional[str] = None
     ) -> Optional[Tuple[str, str, Dict[str, Any]]]:

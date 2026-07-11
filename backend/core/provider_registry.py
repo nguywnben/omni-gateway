@@ -197,4 +197,15 @@ def credential_supports_model(
     if required_provider and provider_id != normalize_provider_id(required_provider):
         return False
     capabilities = get_provider_capabilities(provider_id)
-    return capabilities.supports_model(model_name) if capabilities else False
+    if not capabilities or not capabilities.supports_model(model_name):
+        return False
+    declared_models = credential_data.get("model_ids")
+    if model_name and isinstance(declared_models, list) and declared_models:
+        normalized_model = str(model_name).strip().removeprefix("models/")
+        normalized_declared = {
+            str(value).strip().removeprefix("models/")
+            for value in declared_models
+            if str(value).strip()
+        }
+        return normalized_model in normalized_declared
+    return True

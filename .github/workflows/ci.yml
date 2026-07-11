@@ -70,6 +70,9 @@ jobs:
               "/ready",
               "/api/auth/login",
               "/api/auth/keys",
+              "/api/model-catalog",
+              "/api/model-pools/omway",
+              "/models",
               "/provider",
           }
           missing = sorted(required - paths)

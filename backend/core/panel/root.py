@@ -148,6 +148,7 @@ async def serve_oauth_callback(request: Request):
 @router.get("/dashboard", response_class=HTMLResponse)
 @router.get("/code_assist", response_class=HTMLResponse)
 @router.get("/pool", response_class=HTMLResponse)
+@router.get("/models", response_class=HTMLResponse)
 @router.get("/providers", response_class=HTMLResponse)
 @router.get("/provider", response_class=HTMLResponse)
 @router.get("/oauth", response_class=HTMLResponse)

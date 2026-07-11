@@ -45,6 +45,7 @@ from core.router.stream_passthrough import (
 
 
 from core.models import OpenAIChatCompletionRequest, model_to_dict
+from core.model_pool import ModelPoolError, resolve_model_request
 
 
 from core.task_manager import create_managed_task
@@ -76,7 +77,14 @@ async def chat_completions(
 
     use_fake_streaming = is_fake_streaming_model(openai_request.model)
     use_anti_truncation = is_anti_truncation_model(openai_request.model)
-    real_model = get_base_model_from_feature_model(openai_request.model)
+    requested_model = get_base_model_from_feature_model(openai_request.model)
+    try:
+        model_resolution = await resolve_model_request(requested_model)
+    except ModelPoolError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    model_candidates = list(model_resolution.candidates)
+    real_model = model_candidates[0]
+    response_model = model_resolution.response_model
 
 
     is_streaming = openai_request.stream
@@ -109,7 +117,10 @@ async def chat_completions(
     if not is_streaming:
 
         from core.api.primary import non_stream_request
-        response = await non_stream_request(body=api_request)
+        response = await non_stream_request(
+            body=api_request,
+            model_candidates=model_candidates,
+        )
 
 
         status_code = getattr(response, "status_code", 200)
@@ -132,7 +143,7 @@ async def chat_completions(
         from core.converter.openai2gemini import convert_gemini_to_openai_response
         openai_response = convert_gemini_to_openai_response(
             gemini_response,
-            real_model,
+            response_model,
             status_code
         )
 
@@ -144,7 +155,10 @@ async def chat_completions(
     async def fake_stream_generator():
         from core.api.primary import non_stream_request
 
-        response = await non_stream_request(body=api_request)
+        response = await non_stream_request(
+            body=api_request,
+            model_candidates=model_candidates,
+        )
 
 
         if hasattr(response, "status_code") and response.status_code != 200:
@@ -171,7 +185,7 @@ async def chat_completions(
                 from core.converter.openai2gemini import convert_gemini_to_openai_response
                 openai_error = convert_gemini_to_openai_response(
                     gemini_response,
-                    real_model,
+                    response_model,
                     200
                 )
                 yield f"data: {json.dumps(openai_error)}\n\n".encode()
@@ -186,7 +200,7 @@ async def chat_completions(
             log.debug(f"OpenAI extracted images count: {len(images)}")
 
 
-            chunks = build_openai_fake_stream_chunks(content, reasoning_content, finish_reason, real_model, images)
+            chunks = build_openai_fake_stream_chunks(content, reasoning_content, finish_reason, response_model, images)
             for idx, chunk in enumerate(chunks):
                 chunk_json = json.dumps(chunk)
                 log.debug(f"[FAKE_STREAM] Yielding chunk #{idx+1}: {chunk_json[:200]}")
@@ -199,7 +213,7 @@ async def chat_completions(
                 "id": "error",
                 "object": "chat.completion.chunk",
                 "created": int(asyncio.get_event_loop().time()),
-                "model": real_model,
+                "model": response_model,
                 "choices": [{
                     "index": 0,
                     "delta": {"content": "The upstream response could not be parsed."},
@@ -222,7 +236,11 @@ async def chat_completions(
 
         anti_truncation_payload = apply_anti_truncation(api_request)
 
-        first_attempt_stream = stream_request(body=anti_truncation_payload, native=False)
+        first_attempt_stream = stream_request(
+            body=anti_truncation_payload,
+            native=False,
+            model_candidates=model_candidates,
+        )
         try:
             first_chunk = await read_first_async_item(first_attempt_stream)
         except StopAsyncIteration:
@@ -241,7 +259,11 @@ async def chat_completions(
                 first_attempt_pending = False
                 stream_gen = prepend_async_item(first_chunk, first_attempt_stream)
             else:
-                stream_gen = stream_request(body=payload, native=False)
+                stream_gen = stream_request(
+                    body=payload,
+                    native=False,
+                    model_candidates=model_candidates,
+                )
 
             return StreamingResponse(stream_gen, media_type="text/event-stream")
 
@@ -281,7 +303,7 @@ async def chat_completions(
                     from core.converter.openai2gemini import convert_gemini_to_openai_stream
                     openai_chunk_str = convert_gemini_to_openai_stream(
                         chunk_str,
-                        real_model,
+                        response_model,
                         response_id
                     )
 
@@ -302,7 +324,11 @@ async def chat_completions(
         import uuid
 
 
-        stream_gen = stream_request(body=api_request, native=False)
+        stream_gen = stream_request(
+            body=api_request,
+            native=False,
+            model_candidates=model_candidates,
+        )
         try:
             first_chunk = await read_first_async_item(stream_gen)
         except StopAsyncIteration:
@@ -326,7 +352,7 @@ async def chat_completions(
                     from core.converter.openai2gemini import convert_gemini_to_openai_response
                     openai_error = convert_gemini_to_openai_response(
                         gemini_error,
-                        real_model,
+                        response_model,
                         chunk.status_code
                     )
                     yield f"data: {json.dumps(openai_error)}\n\n".encode('utf-8')
@@ -354,7 +380,7 @@ async def chat_completions(
                         from core.converter.openai2gemini import convert_gemini_to_openai_stream
                         openai_chunk_str = convert_gemini_to_openai_stream(
                             chunk_str,
-                            real_model,
+                            response_model,
                             response_id
                         )
 

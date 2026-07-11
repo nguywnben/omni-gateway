@@ -32,7 +32,6 @@ from core.google_ai_studio import (
     build_models_url,
     parse_model_ids,
 )
-from core.models import Model, model_to_dict
 from core.provider_registry import (
     GOOGLE_ANTIGRAVITY,
     GOOGLE_AI_STUDIO,
@@ -372,6 +371,21 @@ def _is_retryable_status(status_code: int, disable_error_codes: List[int]) -> bo
     return status_code in (429, 503) or status_code in disable_error_codes
 
 
+def _normalize_model_candidates(
+    body: Dict[str, Any],
+    model_candidates: Optional[List[str]],
+) -> List[str]:
+    values = model_candidates or [str(body.get("model") or "")]
+    candidates: List[str] = []
+    seen = set()
+    for value in values:
+        model_name = str(value or "").strip()
+        if model_name and model_name not in seen:
+            seen.add(model_name)
+            candidates.append(model_name)
+    return candidates
+
+
 async def _switch_credential_for_retry(
     *,
     refresh_credential_fast,
@@ -391,21 +405,23 @@ async def stream_request(
     body: Dict[str, Any],
     native: bool = False,
     headers: Optional[Dict[str, str]] = None,
+    model_candidates: Optional[List[str]] = None,
 ):
     """Internal implementation detail."""
     request_started_at = time.perf_counter()
-    model_name = body.get("model", "")
+    requested_model = str(body.get("model") or "")
+    candidates = _normalize_model_candidates(body, model_candidates)
 
-
-    cred_result = await credential_manager.get_valid_credential(
-        mode="primary", model_name=model_name
+    route_result = await credential_manager.get_valid_model_credential(
+        candidates,
+        mode="primary",
     )
 
-    if not cred_result:
+    if not route_result:
 
         log.error("[provider stream] No credentials currently available")
         await record_unassigned_api_call_error(
-            status_code=503, mode="primary", model_name=model_name
+            status_code=503, mode="primary", model_name=requested_model
         )
         yield Response(
             content=json.dumps({"error": "No credentials are available."}),
@@ -414,11 +430,12 @@ async def stream_request(
         )
         return
 
-    current_file, credential_data = cred_result
+    model_name, current_file, credential_data = route_result
+    request_body = {**body, "model": model_name}
     try:
         context = await prepare_provider_request(
             credential_data,
-            body,
+            request_body,
             streaming=True,
             extra_headers=headers,
         )
@@ -458,18 +475,20 @@ async def stream_request(
 
 
     async def refresh_credential_fast():
-        nonlocal current_file, credential_data, provider_id
+        nonlocal model_name, current_file, credential_data, provider_id, request_body
         nonlocal target_url, auth_headers, final_payload, request_metrics
-        cred_result = await credential_manager.get_valid_credential(
-            mode="primary", model_name=model_name
+        route_result = await credential_manager.get_valid_model_credential(
+            candidates,
+            mode="primary",
         )
-        if not cred_result:
+        if not route_result:
             return None
-        current_file, credential_data = cred_result
+        model_name, current_file, credential_data = route_result
+        request_body = {**body, "model": model_name}
         try:
             new_context = await prepare_provider_request(
                 credential_data,
-                body,
+                request_body,
                 streaming=True,
                 extra_headers=headers,
             )
@@ -682,6 +701,7 @@ async def stream_request(
 async def non_stream_request(
     body: Dict[str, Any],
     headers: Optional[Dict[str, str]] = None,
+    model_candidates: Optional[List[str]] = None,
 ) -> Response:
     """Internal implementation detail."""
     request_started_at = time.perf_counter()
@@ -690,7 +710,12 @@ async def non_stream_request(
         log.debug("[provider] Streaming collection mode for non-streaming requests")
 
 
-        stream = stream_request(body=body, native=False, headers=headers)
+        stream = stream_request(
+            body=body,
+            native=False,
+            headers=headers,
+            model_candidates=model_candidates,
+        )
 
 
 
@@ -700,18 +725,19 @@ async def non_stream_request(
 
     log.debug("[provider] Direct non-streaming mode enabled")
 
-    model_name = body.get("model", "")
+    requested_model = str(body.get("model") or "")
+    candidates = _normalize_model_candidates(body, model_candidates)
 
-
-    cred_result = await credential_manager.get_valid_credential(
-        mode="primary", model_name=model_name
+    route_result = await credential_manager.get_valid_model_credential(
+        candidates,
+        mode="primary",
     )
 
-    if not cred_result:
+    if not route_result:
 
         log.error("[provider] No credentials currently available")
         await record_unassigned_api_call_error(
-            status_code=503, mode="primary", model_name=model_name
+            status_code=503, mode="primary", model_name=requested_model
         )
         return Response(
             content=json.dumps({"error": "No credentials are available."}),
@@ -719,11 +745,12 @@ async def non_stream_request(
             media_type="application/json"
         )
 
-    current_file, credential_data = cred_result
+    model_name, current_file, credential_data = route_result
+    request_body = {**body, "model": model_name}
     try:
         context = await prepare_provider_request(
             credential_data,
-            body,
+            request_body,
             streaming=False,
             extra_headers=headers,
         )
@@ -762,18 +789,20 @@ async def non_stream_request(
 
 
     async def refresh_credential_fast():
-        nonlocal current_file, credential_data, provider_id
+        nonlocal model_name, current_file, credential_data, provider_id, request_body
         nonlocal target_url, auth_headers, final_payload, request_metrics
-        cred_result = await credential_manager.get_valid_credential(
-            mode="primary", model_name=model_name
+        route_result = await credential_manager.get_valid_model_credential(
+            candidates,
+            mode="primary",
         )
-        if not cred_result:
+        if not route_result:
             return None
-        current_file, credential_data = cred_result
+        model_name, current_file, credential_data = route_result
+        request_body = {**body, "model": model_name}
         try:
             new_context = await prepare_provider_request(
                 credential_data,
-                body,
+                request_body,
                 streaming=False,
                 extra_headers=headers,
             )
@@ -972,21 +1001,45 @@ async def non_stream_request(
 
 
 
-async def fetch_available_models() -> List[Dict[str, Any]]:
-    """Return the deduplicated generate-content model catalog for active providers."""
-
+async def get_configured_provider_model_ids() -> Dict[str, set[str]]:
+    """Return enabled providers and model metadata already stored per credential."""
     storage_adapter = await get_storage_adapter()
-    configured_providers = set()
+    provider_models: Dict[str, set[str]] = {}
     for filename in await storage_adapter.list_credentials(mode="primary"):
         state = await storage_adapter.get_credential_state(filename, mode="primary")
         if state.get("disabled"):
             continue
         credential_data = await storage_adapter.get_credential(filename, mode="primary")
-        if credential_data:
-            configured_providers.add(get_credential_provider(credential_data))
+        if not credential_data:
+            continue
+        provider_id = get_credential_provider(credential_data)
+        model_ids = provider_models.setdefault(provider_id, set())
+        stored_model_ids = credential_data.get("model_ids")
+        if isinstance(stored_model_ids, list):
+            model_ids.update(
+                str(model_id).removeprefix("models/").strip()
+                for model_id in stored_model_ids
+                if str(model_id or "").strip()
+            )
+    return provider_models
 
-    model_ids = set()
-    if GOOGLE_ANTIGRAVITY in configured_providers:
+
+async def get_configured_provider_ids() -> set[str]:
+    """Return providers with at least one enabled credential."""
+    return set(await get_configured_provider_model_ids())
+
+
+async def fetch_provider_model_ids(
+    provider_id: str,
+    stored_model_ids: Optional[set[str]] = None,
+) -> set[str]:
+    """Discover model IDs exposed by one configured provider."""
+    if stored_model_ids is None:
+        provider_models = await get_configured_provider_model_ids()
+        stored_model_ids = provider_models.get(provider_id, set())
+    model_ids = set(stored_model_ids)
+
+    if provider_id == GOOGLE_ANTIGRAVITY:
         cred_result = await credential_manager.get_valid_credential(
             mode="primary", provider_id=GOOGLE_ANTIGRAVITY
         )
@@ -1020,8 +1073,7 @@ async def fetch_available_models() -> List[Dict[str, Any]]:
                 log.warning(f"Google Antigravity model discovery failed: {exc}")
             finally:
                 await credential_manager.release_credential(current_file, mode="primary")
-
-    if GOOGLE_AI_STUDIO in configured_providers:
+    elif provider_id == GOOGLE_AI_STUDIO:
         cred_result = await credential_manager.get_valid_credential(
             mode="primary", provider_id=GOOGLE_AI_STUDIO
         )
@@ -1045,23 +1097,27 @@ async def fetch_available_models() -> List[Dict[str, Any]]:
             finally:
                 await credential_manager.release_credential(current_file, mode="primary")
 
-    current_timestamp = int(datetime.now(timezone.utc).timestamp())
-    model_list = [
-        model_to_dict(
-            Model(
-                id=model_id,
-                object="model",
-                created=current_timestamp,
-                owned_by="google",
-            )
-        )
-        for model_id in sorted(model_ids)
-    ]
-    log.info(
-        f"[provider] Fetched {len(model_list)} unique models from "
-        f"{len(configured_providers)} active providers."
+    return model_ids
+
+
+async def fetch_configured_provider_models() -> Dict[str, List[str]]:
+    """Return active provider model catalogs with provider provenance."""
+    stored_provider_models = await get_configured_provider_model_ids()
+    provider_ids = sorted(stored_provider_models)
+    discovered = await asyncio.gather(
+        *(
+            fetch_provider_model_ids(provider_id, stored_provider_models[provider_id])
+            for provider_id in provider_ids
+        ),
+        return_exceptions=True,
     )
-    return model_list
+    provider_models: Dict[str, List[str]] = {}
+    for provider_id, result in zip(provider_ids, discovered):
+        if isinstance(result, Exception):
+            log.warning(f"{provider_id} model discovery failed: {result}")
+            result = stored_provider_models[provider_id]
+        provider_models[provider_id] = sorted(result)
+    return provider_models
 
 
 async def fetch_quota_info(access_token: str) -> Dict[str, Any]:

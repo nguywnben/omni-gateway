@@ -202,6 +202,8 @@ Omni Gateway reads configuration from environment variables first, then stored c
 
 Omni Gateway is designed around the standard URL behavior of the official Python SDKs. Configure each client exactly as shown below; the gateway does not require non-standard duplicated path prefixes.
 
+The examples use the virtual model `omway`. Configure its ordered provider-model fallback on the Models page first, or replace it with a concrete model ID.
+
 ### OpenAI Python SDK
 
 Use `/v1` as the OpenAI base URL. The SDK appends `/chat/completions`.
@@ -215,7 +217,7 @@ client = OpenAI(
 )
 
 response = client.chat.completions.create(
-    model="gemini-2.5-flash",
+    model="omway",
     messages=[{"role": "user", "content": "Explain this repository in one paragraph."}],
 )
 ```
@@ -224,7 +226,7 @@ The same client can use the OpenAI Responses API:
 
 ```python
 response = client.responses.create(
-    model="gemini-2.5-flash",
+    model="omway",
     instructions="Be concise.",
     input="Explain this repository in one paragraph.",
 )
@@ -247,7 +249,7 @@ client = Anthropic(
 )
 
 response = client.messages.create(
-    model="gemini-2.5-flash",
+    model="omway",
     max_tokens=1024,
     messages=[{"role": "user", "content": "Draft a commit message."}],
 )
@@ -269,7 +271,7 @@ client = genai.Client(
 )
 
 response = client.models.generate_content(
-    model="gemini-2.5-flash",
+    model="omway",
     contents="Write a small Python function.",
     config=types.GenerateContentConfig(
         system_instruction="You are a helpful assistant.",
@@ -293,6 +295,10 @@ Omni Gateway exposes SDK-compatible routes without a product namespace:
 - `POST /vertex/v1/models/{model}:generateContent`
 
 ## Model Features
+
+The Models page builds the virtual model `omway` from models discovered across enabled provider credentials. Arrange its members in priority order once, then use `omway` from any supported SDK. Omni Gateway balances healthy credentials that support the first model and continues through the configured model order when that model is unavailable. Concrete provider model IDs remain available for clients that need deterministic model selection. Saving an empty selection disables `omway` without affecting provider credentials.
+
+Model discovery is provider-aware: a shared model can be backed by multiple providers, while provider-specific models only use compatible credentials. Refreshing the catalog rechecks current provider availability; unavailable selections remain visible in the configuration until they are restored or removed.
 
 Omni Gateway recognizes feature prefixes and suffixes in model names:
 

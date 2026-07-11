@@ -419,3 +419,8 @@ class AccessCredentialsUpdateRequest(BaseModel):
     current_password: str
     panel_password: Optional[str] = None
     panel_password_confirm: Optional[str] = None
+
+
+class VirtualModelPoolUpdateRequest(BaseModel):
+    selected_models: List[str] = Field(default_factory=list, max_length=64)
+    enabled: bool = True

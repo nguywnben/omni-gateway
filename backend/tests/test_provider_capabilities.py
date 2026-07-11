@@ -13,6 +13,7 @@ if str(BACKEND_DIR) not in sys.path:
 from core.provider_registry import (
     GOOGLE_AI_STUDIO,
     GOOGLE_ANTIGRAVITY,
+    credential_supports_model,
     get_provider_capabilities,
     list_provider_capabilities,
 )
@@ -38,6 +39,28 @@ class ProviderCapabilityTests(unittest.TestCase):
         capabilities = get_provider_capabilities(GOOGLE_ANTIGRAVITY)
 
         self.assertEqual(capabilities.credential_types, ("oauth",))
+
+    def test_credential_model_catalog_restricts_individual_api_keys(self):
+        credential = {
+            "provider": GOOGLE_AI_STUDIO,
+            "credential_type": "api_key",
+            "api_key": "example-key",
+            "model_ids": ["gemini-2.5-flash"],
+        }
+
+        self.assertTrue(credential_supports_model(credential, "gemini-2.5-flash"))
+        self.assertFalse(credential_supports_model(credential, "gemini-2.5-pro"))
+
+    def test_credential_model_catalog_preserves_non_google_namespaces(self):
+        credential = {
+            "provider": "google_ai_studio",
+            "api_key": "test-key",
+            "model_ids": ["models/gemini-2.5-flash"],
+        }
+
+        self.assertFalse(
+            credential_supports_model(credential, "other/gemini-2.5-flash")
+        )
 
 
 if __name__ == "__main__":
