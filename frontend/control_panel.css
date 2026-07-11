@@ -790,10 +790,16 @@ code {
 }
 
 .config-grid {
-    display: grid;
-    grid-template-columns: repeat(12, minmax(0, 1fr));
-    gap: 16px;
-    align-items: start;
+    columns: 3;
+    column-gap: 16px;
+}
+
+.config-grid > .config-group {
+    display: inline-block;
+    width: 100%;
+    margin: 0 0 16px;
+    break-inside: avoid;
+    vertical-align: top;
 }
 
 .config-two-column {
@@ -1635,6 +1641,13 @@ textarea[readonly] {
     background: var(--warning-bg);
     border-color: #ead28a;
     color: var(--warning);
+}
+
+.btn.update-current,
+.btn.update-current:not(:disabled):hover {
+    background: var(--success-bg);
+    border-color: #cce8d2;
+    color: var(--success);
 }
 
 .btn-danger,
@@ -2780,9 +2793,12 @@ textarea[readonly] {
         padding: 32px;
     }
 
-    .config-grid,
     .provider-settings-grid {
         grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .config-grid {
+        columns: 2;
     }
 
     .config-two-column,
@@ -3029,7 +3045,6 @@ textarea[readonly] {
     }
 
     .dashboard-grid,
-    .config-grid,
     .config-two-column,
     .form-grid,
     .grid-split-2,
@@ -3037,6 +3052,14 @@ textarea[readonly] {
     .provider-tools-grid {
         grid-template-columns: minmax(0, 1fr);
         gap: 12px;
+    }
+
+    .config-grid {
+        columns: 1;
+    }
+
+    .config-grid > .config-group {
+        margin-bottom: 12px;
     }
 
     .span-4,

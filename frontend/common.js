@@ -36,9 +36,11 @@ const TRANSLATIONS = {
         "batch_verification_completennsucces": "Batch verification complete.\\n\\nSuccess: {successCount}\\nFailed: {failCount}\\nTotal: {selectedFiles_length}\\n\\nDetailed results:\\n{resultMessages_join___n}",
         "brstrongavailable_projectsstrongbr": "<br><strong>Available projects:</strong><br>",
         "btn_cancel": "Cancel",
+        "btn_clear_credentials": "Clear credentials",
         "btn_close": "Close",
-        "btn_confirm": "Confirm",
+        "btn_configure": "Configure",
         "btn_continue": "Continue",
+        "btn_deduplicate": "Deduplicate",
         "btn_disable_credit": "Disable credit",
         "btn_disable_credit_title": "Disable credit mode for this credential",
         "btn_download": "Download",
@@ -46,6 +48,9 @@ const TRANSLATIONS = {
         "btn_enable_credit_title": "Enable credit mode for this credential",
         "btn_message_test": "Message test",
         "btn_message_test_title": "Test whether this credential is working.",
+        "btn_refresh": "Refresh",
+        "btn_regenerate": "Regenerate",
+        "btn_reset_defaults": "Reset defaults",
         "btn_setup_preview": "Set up Preview",
         "btn_setup_preview_title": "Configure the Preview channel and enable experimental features.",
         "btn_verify_id": "Verify",
@@ -72,11 +77,32 @@ const TRANSLATIONS = {
         "configuration_successful": "Configuration successful.",
         "configuring_preview_channel_for_sel": "Configuring Preview channel for {selectedFiles_length} credentials. Please wait...",
         "configuring_preview_channel_please": "Configuring Preview channel. Please wait...",
-        "confirm_action_title": "Confirm action",
-        "confirm_batch_action": "Are you sure you want to execute {action} on {count} selected credentials?",
+        "confirm_batch_enable": "Enable {count} selected credentials?",
+        "confirm_batch_disable": "Disable {count} selected credentials?",
         "confirm_batch_delete": "Delete {count} selected credentials? Their secrets and pool state will be removed. Historical usage will be retained anonymously. This action cannot be undone.",
+        "confirm_batch_enable_credit": "Enable credit mode for {count} selected credentials?",
+        "confirm_batch_disable_credit": "Disable credit mode for {count} selected credentials?",
+        "confirm_batch_enable_title": "Enable Credentials",
+        "confirm_batch_disable_title": "Disable Credentials",
+        "confirm_batch_delete_title": "Delete Credentials",
+        "confirm_batch_enable_credit_title": "Enable Credit Mode",
+        "confirm_batch_disable_credit_title": "Disable Credit Mode",
         "confirm_delete_cred": "Delete this credential? Its secrets and pool state will be removed. Historical usage will be retained anonymously. This action cannot be undone.",
-        "confirm_regenerate_key": "Are you sure you want to regenerate this API key? Previous key will become invalid immediately.",
+        "confirm_delete_cred_title": "Delete Credential",
+        "confirm_clear_logs": "Clear all persisted runtime logs? This action cannot be undone. New log entries will continue to appear as the service runs.",
+        "confirm_clear_logs_title": "Clear Runtime Logs",
+        "btn_clear_logs": "Clear logs",
+        "confirm_regenerate_key": "Regenerate the API key? The current key will become invalid immediately. This action cannot be undone.",
+        "confirm_regenerate_key_title": "Regenerate API Key",
+        "confirm_verify_credentials_title": "Verify Credentials",
+        "confirm_configure_preview_title": "Configure Preview Channel",
+        "confirm_refresh_emails_title": "Refresh Credential Emails",
+        "confirm_deduplicate_title": "Deduplicate Credentials",
+        "confirm_clear_imported_credentials_title": "Clear Imported Credentials",
+        "confirm_reset_google_ai_studio_title": "Reset Google AI Studio Settings",
+        "confirm_reset_antigravity_title": "Reset Google Antigravity Settings",
+        "confirm_reset_system_config_title": "Reset System Configuration",
+        "confirm_manage_credentials_title": "Manage Credentials",
         "connected": "Connected",
         "connecting": "Connecting...",
         "connection_error": "Connection error",
@@ -1256,15 +1282,49 @@ function createCredsManager(type) {
 
             };
 
+            const confirmationTitles = {
+
+                enable: t('confirm_batch_enable_title'),
+
+                disable: t('confirm_batch_disable_title'),
+
+                delete: t('confirm_batch_delete_title'),
+
+                enable_credit: t('confirm_batch_enable_credit_title'),
+
+                disable_credit: t('confirm_batch_disable_credit_title')
+
+            };
+
+            const confirmationMessages = {
+
+                enable: t('confirm_batch_enable', {count: selectedFiles.length}),
+
+                disable: t('confirm_batch_disable', {count: selectedFiles.length}),
+
+                delete: t('confirm_batch_delete', {count: selectedFiles.length}),
+
+                enable_credit: t('confirm_batch_enable_credit', {count: selectedFiles.length}),
+
+                disable_credit: t('confirm_batch_disable_credit', {count: selectedFiles.length})
+
+            };
+
             const actionLabel = actionNames[action] || action;
 
-            const confirmMsg = action === 'delete'
+            const confirmMsg = confirmationMessages[action]
 
-                ? t('confirm_batch_delete', {count: selectedFiles.length})
+                || `${actionLabel} ${selectedFiles.length} selected credentials?`;
 
-                : t('confirm_batch_action', {action: actionLabel, count: selectedFiles.length});
+            const confirmOptions = {
 
-            if (!(await showConfirmModal(confirmMsg))) return;
+                title: confirmationTitles[action] || t('confirm_manage_credentials_title'),
+
+                confirmLabel: actionLabel
+
+            };
+
+            if (!(await showConfirmModal(confirmMsg, confirmOptions))) return;
 
             try {
 
@@ -1890,7 +1950,10 @@ function copyInputValue(inputId) {
 }
 
 async function regenerateApiKey() {
-    if (!(await showConfirmModal(t('confirm_regenerate_key', 'Are you sure you want to regenerate this API key? Previous key will become invalid immediately.')))) {
+    if (!(await showConfirmModal(t('confirm_regenerate_key'), {
+        title: t('confirm_regenerate_key_title'),
+        confirmLabel: t('btn_regenerate')
+    }))) {
         return;
     }
     try {
@@ -2541,15 +2604,21 @@ function buildCredentialErrorsHtml(filename, data) {
 
 function showConfirmModal(message, options = {}) {
 
+    if (!options.title || !options.confirmLabel) {
+
+        throw new Error('Confirmation modals require a contextual title and confirmation label.');
+
+    }
+
     return new Promise((resolve) => {
 
         const modal = document.createElement('div');
 
         modal.className = 'message-modal-overlay';
 
-        const title = options.title || t('confirm_action_title');
+        const title = options.title;
 
-        const confirmLabel = options.confirmLabel || t('btn_confirm');
+        const confirmLabel = options.confirmLabel;
 
         const cancelLabel = options.cancelLabel || t('btn_cancel');
 
@@ -3079,7 +3148,13 @@ function createCredCard(credInfo, manager) {
 
             if (action === 'delete') {
 
-                if (!(await showConfirmModal(t('confirm_delete_cred')))) return;
+                if (!(await showConfirmModal(t('confirm_delete_cred'), {
+
+                    title: t('confirm_delete_cred_title'),
+
+                    confirmLabel: t('action_delete')
+
+                }))) return;
 
             }
 
@@ -4449,7 +4524,13 @@ function downloadPrimaryCred(filename) {
 
 async function deletePrimaryCred(filename) {
 
-    if (await showConfirmModal(t('confirm_delete_cred'))) {
+    if (await showConfirmModal(t('confirm_delete_cred'), {
+
+        title: t('confirm_delete_cred_title'),
+
+        confirmLabel: t('action_delete')
+
+    })) {
 
         AppState.primaryCreds.action(filename, 'delete');
 
@@ -5249,7 +5330,13 @@ async function batchVerifyProjectIds() {
 
     }
 
-    if (!(await showConfirmModal(t('are_you_sure_you_want_to_batch_veri_dup', {selectedFiles_length: selectedFiles.length})))) {
+    if (!(await showConfirmModal(
+
+        t('are_you_sure_you_want_to_batch_veri_dup', {selectedFiles_length: selectedFiles.length}),
+
+        {title: t('confirm_verify_credentials_title'), confirmLabel: t('btn_verify_id')}
+
+    ))) {
 
         return;
 
@@ -5373,7 +5460,13 @@ async function batchVerifyPrimaryProjectIds() {
 
     }
 
-    if (!(await showConfirmModal(t('are_you_sure_you_want_to_batch_veri', {selectedFiles_length: selectedFiles.length})))) {
+    if (!(await showConfirmModal(
+
+        t('are_you_sure_you_want_to_batch_veri', {selectedFiles_length: selectedFiles.length}),
+
+        {title: t('confirm_verify_credentials_title'), confirmLabel: t('btn_verify_id')}
+
+    ))) {
 
         return;
 
@@ -5497,7 +5590,13 @@ async function batchConfigurePreview() {
 
     }
 
-    if (!(await showConfirmModal(t('are_you_sure_you_want_to_batch_set', {selectedFiles_length: selectedFiles.length})))) {
+    if (!(await showConfirmModal(
+
+        t('are_you_sure_you_want_to_batch_set', {selectedFiles_length: selectedFiles.length}),
+
+        {title: t('confirm_configure_preview_title'), confirmLabel: t('btn_configure')}
+
+    ))) {
 
         return;
 
@@ -5617,7 +5716,13 @@ async function batchConfigurePreview() {
 
 async function refreshAllEmails() {
 
-    if (!(await showConfirmModal(t('are_you_sure_you_want_to_refresh_us')))) return;
+    if (!(await showConfirmModal(t('are_you_sure_you_want_to_refresh_us'), {
+
+        title: t('confirm_refresh_emails_title'),
+
+        confirmLabel: t('btn_refresh')
+
+    }))) return;
 
     try {
 
@@ -5655,7 +5760,13 @@ async function refreshAllEmails() {
 
 async function refreshAllPrimaryEmails() {
 
-    if (!(await showConfirmModal(t('are_you_sure_you_want_to_refresh_us_dup')))) return;
+    if (!(await showConfirmModal(t('are_you_sure_you_want_to_refresh_us_dup'), {
+
+        title: t('confirm_refresh_emails_title'),
+
+        confirmLabel: t('btn_refresh')
+
+    }))) return;
 
     try {
 
@@ -5693,7 +5804,13 @@ async function refreshAllPrimaryEmails() {
 
 async function deduplicateByEmail() {
 
-    if (!(await showConfirmModal(t('are_you_sure_you_want_to_perform_on')))) return;
+    if (!(await showConfirmModal(t('are_you_sure_you_want_to_perform_on'), {
+
+        title: t('confirm_deduplicate_title'),
+
+        confirmLabel: t('btn_deduplicate')
+
+    }))) return;
 
     try {
 
@@ -5747,7 +5864,13 @@ async function deduplicateByEmail() {
 
 async function deduplicatePrimaryByEmail() {
 
-    if (!(await showConfirmModal(t('are_you_sure_you_want_to_deduplicat')))) return;
+    if (!(await showConfirmModal(t('are_you_sure_you_want_to_deduplicat'), {
+
+        title: t('confirm_deduplicate_title'),
+
+        confirmLabel: t('btn_deduplicate')
+
+    }))) return;
 
     try {
 
@@ -6005,6 +6128,16 @@ async function downloadLogs() {
 
 async function clearLogs() {
 
+    const confirmed = await showConfirmModal(t('confirm_clear_logs'), {
+
+        title: t('confirm_clear_logs_title'),
+
+        confirmLabel: t('btn_clear_logs')
+
+    });
+
+    if (!confirmed) return;
+
     try {
 
         const response = await fetch('./api/logs/clear', {
@@ -6030,8 +6163,6 @@ async function clearLogs() {
         }
 
     } catch (error) {
-
-        clearLogsDisplay();
 
         showStatus(t('network_error_while_clearing_logs_e', {error_message: error.message}), 'error');
 
@@ -6191,7 +6322,13 @@ async function loadEnvCredentials() {
 
 async function clearEnvCredentials() {
 
-    if (!(await showConfirmModal(t('are_you_sure_you_want_to_clear_all')))) {
+    if (!(await showConfirmModal(t('are_you_sure_you_want_to_clear_all'), {
+
+        title: t('confirm_clear_imported_credentials_title'),
+
+        confirmLabel: t('btn_clear_credentials')
+
+    }))) {
 
         return;
 
@@ -6285,7 +6422,11 @@ async function saveGoogleAIStudioSettings() {
 
 async function resetGoogleAIStudioSettings() {
     const confirmed = await showConfirmModal(
-        'Reset the Google AI Studio endpoint to its default? Environment-managed values will be preserved.'
+        'Reset the Google AI Studio endpoint to its default? Environment-managed values will be preserved.',
+        {
+            title: t('confirm_reset_google_ai_studio_title'),
+            confirmLabel: t('btn_reset_defaults')
+        }
     );
     if (!confirmed) return;
 
@@ -6542,7 +6683,11 @@ async function saveAntigravitySettings() {
 async function resetAntigravitySettings() {
 
     const confirmed = await showConfirmModal(
-        'Reset Google Antigravity advanced settings to their defaults? Environment-managed values will be preserved.'
+        'Reset Google Antigravity advanced settings to their defaults? Environment-managed values will be preserved.',
+        {
+            title: t('confirm_reset_antigravity_title'),
+            confirmLabel: t('btn_reset_defaults')
+        }
     );
 
     if (!confirmed) return;
@@ -6971,7 +7116,11 @@ async function saveAccessCredentials() {
 async function resetConfig() {
 
     const confirmed = await showConfirmModal(
-        'Reset system configuration to defaults? Access passwords and the generated API key will be preserved.'
+        'Reset system configuration to defaults? Access passwords and the generated API key will be preserved.',
+        {
+            title: t('confirm_reset_system_config_title'),
+            confirmLabel: t('btn_reset_defaults')
+        }
     );
 
     if (!confirmed) return;
@@ -7584,7 +7733,7 @@ async function checkForUpdates() {
 
     }
 
-    checkBtn.classList.remove('update-available');
+    checkBtn.classList.remove('update-available', 'update-current');
 
     const restoreIdleState = () => {
 
@@ -7634,9 +7783,11 @@ async function checkForUpdates() {
 
                 checkBtn.textContent = t('already_up_to_date_dup');
 
+                checkBtn.classList.add('update-current');
+
                 checkBtn._resetTimer = setTimeout(() => {
 
-                    checkBtn.classList.remove('update-available');
+                    checkBtn.classList.remove('update-current');
 
                     checkBtn.textContent = originalText;
 
