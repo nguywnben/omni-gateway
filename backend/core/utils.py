@@ -5,13 +5,13 @@ import time
 from typing import List, Optional
 
 from config import get_panel_password
-from fastapi import Depends, HTTPException, Header, Query, Request, status
+from fastapi import Depends, HTTPException, Header, Query, Request, Response, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 import jwt
 from log import log
 
 # HTTP Bearer security scheme
-security = HTTPBearer()
+security = HTTPBearer(auto_error=False)
 
 # ====================== OAuth Configuration ======================
 
@@ -237,6 +237,7 @@ authenticate_gemini_flexible = authenticate_flexible
 
 PANEL_SESSION_AUDIENCE = "panel"
 PANEL_SESSION_ALGORITHM = "HS256"
+PANEL_SESSION_COOKIE = "panel_session"
 
 
 def _get_panel_session_ttl_seconds() -> int:
@@ -246,6 +247,47 @@ def _get_panel_session_ttl_seconds() -> int:
     except ValueError:
         ttl = 86400
     return max(300, min(ttl, 2592000))
+
+
+def _panel_cookie_is_secure(request: Request) -> bool:
+    configured = os.getenv("PANEL_COOKIE_SECURE", "").strip().lower()
+    if configured in {"1", "true", "yes", "on"}:
+        return True
+    if configured in {"0", "false", "no", "off"}:
+        return False
+    forwarded_proto = request.headers.get("x-forwarded-proto", "")
+    if forwarded_proto:
+        return forwarded_proto.split(",", 1)[0].strip().lower() == "https"
+    return request.url.scheme == "https"
+
+
+def set_panel_session_cookie(
+    response: Response,
+    token: str,
+    request: Request,
+) -> None:
+    """Set the control-panel session as a browser-only cookie."""
+    response.set_cookie(
+        key=PANEL_SESSION_COOKIE,
+        value=token,
+        max_age=_get_panel_session_ttl_seconds(),
+        httponly=True,
+        secure=_panel_cookie_is_secure(request),
+        samesite="lax",
+        path="/",
+    )
+    response.headers["Cache-Control"] = "no-store"
+
+
+def clear_panel_session_cookie(response: Response) -> None:
+    """Expire the control-panel session cookie."""
+    response.delete_cookie(
+        key=PANEL_SESSION_COOKIE,
+        path="/",
+        httponly=True,
+        samesite="lax",
+    )
+    response.headers["Cache-Control"] = "no-store"
 
 
 async def _get_panel_session_secret() -> bytes:
@@ -289,6 +331,14 @@ async def verify_panel_token_value(token: str) -> str:
     return token
 
 
-async def verify_panel_token(credentials: HTTPAuthorizationCredentials = Depends(security)) -> str:
-    """Validate the control-panel bearer session."""
-    return await verify_panel_token_value(credentials.credentials)
+async def verify_panel_token(
+    request: Request,
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(security),
+) -> str:
+    """Validate a cookie session, with Bearer support for legacy clients."""
+    token = request.cookies.get(PANEL_SESSION_COOKIE)
+    if not token and credentials:
+        token = credentials.credentials
+    if not token:
+        raise HTTPException(status_code=401, detail="Authentication required.")
+    return await verify_panel_token_value(token)

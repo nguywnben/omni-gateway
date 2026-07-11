@@ -393,6 +393,7 @@ async def stream_request(
     headers: Optional[Dict[str, str]] = None,
 ):
     """Internal implementation detail."""
+    request_started_at = time.perf_counter()
     model_name = body.get("model", "")
 
 
@@ -404,11 +405,11 @@ async def stream_request(
 
         log.error("[provider stream] No credentials currently available")
         await record_unassigned_api_call_error(
-            status_code=500, mode="primary", model_name=model_name
+            status_code=503, mode="primary", model_name=model_name
         )
         yield Response(
             content=json.dumps({"error": "No credentials are available."}),
-            status_code=500,
+            status_code=503,
             media_type="application/json"
         )
         return
@@ -579,7 +580,11 @@ async def stream_request(
                     mode="primary",
                     model_name=model_name,
                     token_usage=stream_token_usage,
-                    request_metrics=request_metrics,
+                    request_metrics={
+                        **request_metrics,
+                        "latency_ms": round((time.perf_counter() - request_started_at) * 1000),
+                        "retry_count": attempt,
+                    },
                     provider=provider_id,
                 )
                 log.debug(f"[provider stream] Streaming response completed, model: {model_name}")
@@ -618,7 +623,7 @@ async def stream_request(
                         log.error("[provider stream] No credentials or tokens available when retrying")
                         yield Response(
                             content=json.dumps({"error": "No credentials are available."}),
-                            status_code=500,
+                            status_code=503,
                             media_type="application/json"
                         )
                         return
@@ -643,7 +648,7 @@ async def stream_request(
                     if not switched:
                         yield Response(
                             content=json.dumps({"error": "No credentials are available."}),
-                            status_code=500,
+                            status_code=503,
                             media_type="application/json",
                         )
                         return
@@ -656,7 +661,7 @@ async def stream_request(
                 else:
 
                     yield Response(
-                        content=json.dumps({"error": f"Streaming request exception: {str(e)}"}),
+                        content=json.dumps({"error": "The upstream streaming request failed unexpectedly."}),
                         status_code=500,
                         media_type="application/json"
                     )
@@ -679,6 +684,7 @@ async def non_stream_request(
     headers: Optional[Dict[str, str]] = None,
 ) -> Response:
     """Internal implementation detail."""
+    request_started_at = time.perf_counter()
 
     if await get_antigravity_stream_to_nonstream():
         log.debug("[provider] Streaming collection mode for non-streaming requests")
@@ -705,11 +711,11 @@ async def non_stream_request(
 
         log.error("[provider] No credentials currently available")
         await record_unassigned_api_call_error(
-            status_code=500, mode="primary", model_name=model_name
+            status_code=503, mode="primary", model_name=model_name
         )
         return Response(
             content=json.dumps({"error": "No credentials are available."}),
-            status_code=500,
+            status_code=503,
             media_type="application/json"
         )
 
@@ -814,7 +820,7 @@ async def non_stream_request(
                         log.error(f"[provider] Empty response reaches maximum number of retries")
                         return Response(
                             content=json.dumps({"error": "Empty response returned by service"}),
-                            status_code=500,
+                            status_code=503,
                             media_type="application/json"
                         )
                 else:
@@ -827,7 +833,11 @@ async def non_stream_request(
                         model_name=model_name,
                         token_usage=token_usage,
                         status_code=status_code,
-                        request_metrics=request_metrics,
+                        request_metrics={
+                            **request_metrics,
+                            "latency_ms": round((time.perf_counter() - request_started_at) * 1000),
+                            "retry_count": attempt,
+                        },
                         provider=provider_id,
                     )
                     return Response(
@@ -908,7 +918,7 @@ async def non_stream_request(
                         log.error("[provider] No credentials or tokens available when retrying")
                         return Response(
                             content=json.dumps({"error": "No credentials are available."}),
-                            status_code=500,
+                            status_code=503,
                             media_type="application/json"
                         )
                 continue
@@ -943,7 +953,7 @@ async def non_stream_request(
                     return last_error_response
                 else:
                     return Response(
-                        content=json.dumps({"error": f"Non-streaming request exception: {str(e)}"}),
+                        content=json.dumps({"error": "The upstream request failed unexpectedly."}),
                         status_code=500,
                         media_type="application/json"
                     )
@@ -1117,5 +1127,5 @@ async def fetch_quota_info(access_token: str) -> Dict[str, Any]:
         log.error(f"[provider quota] Traceback: {traceback.format_exc()}")
         return {
             "success": False,
-            "error": str(e)
+            "error": "Unable to retrieve provider quota information."
         }

@@ -637,7 +637,7 @@ async def stream_request(
                 recaptcha_token = None
                 continue
             yield Response(
-                content=json.dumps({"error": {"code": 500, "message": str(e), "status": "INTERNAL"}}),
+                content=json.dumps({"error": {"code": 500, "message": "The upstream streaming request failed unexpectedly.", "status": "INTERNAL"}}),
                 status_code=500,
                 media_type="application/json",
             )
@@ -811,7 +811,7 @@ async def non_stream_request(
                 await asyncio.sleep(1)
                 continue
             return Response(
-                content=json.dumps({"error": {"code": 500, "message": str(e), "status": "INTERNAL"}}),
+                content=json.dumps({"error": {"code": 500, "message": "The upstream request failed unexpectedly.", "status": "INTERNAL"}}),
                 status_code=500,
                 media_type="application/json",
             )

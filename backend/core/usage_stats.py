@@ -40,6 +40,8 @@ TOKEN_COLUMNS = {
     "estimated_input_tokens": "INTEGER DEFAULT 0",
     "estimated_tokens_saved": "INTEGER DEFAULT 0",
     "compressed_messages": "INTEGER DEFAULT 0",
+    "latency_ms": "INTEGER DEFAULT 0",
+    "retry_count": "INTEGER DEFAULT 0",
 }
 
 
@@ -102,6 +104,8 @@ def _empty_usage_record(metadata: Dict[str, Any]) -> Dict[str, Any]:
         "estimated_input_tokens": 0,
         "estimated_tokens_saved": 0,
         "compressed_messages": 0,
+        "average_latency_ms": 0,
+        "retry_count": 0,
         "calls_24h": 0,
         "successful_calls_24h": 0,
         "failed_calls_24h": 0,
@@ -113,6 +117,8 @@ def _empty_usage_record(metadata: Dict[str, Any]) -> Dict[str, Any]:
         "estimated_input_tokens_24h": 0,
         "estimated_tokens_saved_24h": 0,
         "compressed_messages_24h": 0,
+        "average_latency_ms_24h": 0,
+        "retry_count_24h": 0,
     }
 
 
@@ -131,6 +137,8 @@ def _usage_record(
     estimated_input_tokens: int,
     estimated_tokens_saved: int,
     compressed_messages: int,
+    total_latency_ms: int,
+    retry_count: int,
 ) -> Dict[str, Any]:
     provider_id = normalize_provider_id(
         existing.get("provider") or provider or GOOGLE_ANTIGRAVITY
@@ -152,6 +160,10 @@ def _usage_record(
         "estimated_input_tokens": estimated_input_tokens,
         "estimated_tokens_saved": estimated_tokens_saved,
         "compressed_messages": compressed_messages,
+        "average_latency_ms": round(total_latency_ms / successful_calls)
+        if successful_calls
+        else 0,
+        "retry_count": retry_count,
     }
     record.update({
         "calls_24h": calls,
@@ -165,6 +177,8 @@ def _usage_record(
         "estimated_input_tokens_24h": estimated_input_tokens,
         "estimated_tokens_saved_24h": estimated_tokens_saved,
         "compressed_messages_24h": compressed_messages,
+        "average_latency_ms_24h": record["average_latency_ms"],
+        "retry_count_24h": retry_count,
     })
     return record
 
@@ -329,9 +343,11 @@ def record_call(
                     reasoning_tokens,
                     estimated_input_tokens,
                     estimated_tokens_saved,
-                    compressed_messages
+                    compressed_messages,
+                    latency_ms,
+                    retry_count
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     filename,
@@ -348,6 +364,8 @@ def record_call(
                     _int_value(request_metrics.get("estimated_input_tokens")),
                     _int_value(request_metrics.get("estimated_tokens_saved")),
                     _int_value(request_metrics.get("compressed_messages")),
+                    _int_value(request_metrics.get("latency_ms")),
+                    _int_value(request_metrics.get("retry_count")),
                 )
             )
             conn.commit()
@@ -503,6 +521,8 @@ async def get_stats_for_period(period: str = "1d") -> Dict[str, Dict[str, Any]]:
                     COALESCE(SUM(estimated_input_tokens), 0),
                     COALESCE(SUM(estimated_tokens_saved), 0),
                     COALESCE(SUM(compressed_messages), 0),
+                    COALESCE(SUM(latency_ms), 0),
+                    COALESCE(SUM(retry_count), 0),
                     COALESCE(MAX(NULLIF(provider, '')), '')
                 FROM usage_logs
                 {where_clause}
@@ -513,7 +533,7 @@ async def get_stats_for_period(period: str = "1d") -> Dict[str, Dict[str, Any]]:
             for row in cursor.fetchall():
                 existing = res.get(row[0], {})
                 if is_deleted_usage_filename(row[0]):
-                    provider_id = normalize_provider_id(row[12] or GOOGLE_ANTIGRAVITY)
+                    provider_id = normalize_provider_id(row[14] or GOOGLE_ANTIGRAVITY)
                     existing = {
                         "user_email": "",
                         "credential_label": "Deleted credential",
@@ -523,7 +543,7 @@ async def get_stats_for_period(period: str = "1d") -> Dict[str, Dict[str, Any]]:
                     }
                 res[row[0]] = _usage_record(
                     existing=existing,
-                    provider=row[12],
+                    provider=row[14],
                     calls=row[1],
                     successful_calls=row[2],
                     failed_calls=row[3],
@@ -535,6 +555,8 @@ async def get_stats_for_period(period: str = "1d") -> Dict[str, Dict[str, Any]]:
                     estimated_input_tokens=row[9],
                     estimated_tokens_saved=row[10],
                     compressed_messages=row[11],
+                    total_latency_ms=row[12],
+                    retry_count=row[13],
                 )
         except Exception as e:
             log.error(f"Failed to fetch usage stats for {normalized_period}: {e}")

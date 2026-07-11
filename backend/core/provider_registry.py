@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+from dataclasses import asdict, dataclass
 from typing import Any, Dict, Optional
 
 
@@ -25,6 +26,46 @@ _PROVIDER_ALIASES = {
 _PROVIDER_NAMES = {
     GOOGLE_ANTIGRAVITY: "Google Antigravity",
     GOOGLE_AI_STUDIO: "Google AI Studio",
+}
+
+
+@dataclass(frozen=True)
+class ProviderCapabilities:
+    """Stable provider contract used by routing and the management API."""
+
+    provider_id: str
+    display_name: str
+    credential_types: tuple[str, ...]
+    model_prefixes: tuple[str, ...]
+    supports_streaming: bool = True
+    supports_tools: bool = True
+
+    def supports_model(self, model_name: Optional[str]) -> bool:
+        if not model_name or not self.model_prefixes:
+            return True
+        normalized = str(model_name).strip().lower().split("/")[-1]
+        return normalized.startswith(self.model_prefixes)
+
+    def to_dict(self) -> Dict[str, Any]:
+        value = asdict(self)
+        value["credential_types"] = list(self.credential_types)
+        value["model_prefixes"] = list(self.model_prefixes)
+        return value
+
+
+_PROVIDER_CAPABILITIES = {
+    GOOGLE_ANTIGRAVITY: ProviderCapabilities(
+        provider_id=GOOGLE_ANTIGRAVITY,
+        display_name=_PROVIDER_NAMES[GOOGLE_ANTIGRAVITY],
+        credential_types=("oauth",),
+        model_prefixes=(),
+    ),
+    GOOGLE_AI_STUDIO: ProviderCapabilities(
+        provider_id=GOOGLE_AI_STUDIO,
+        display_name=_PROVIDER_NAMES[GOOGLE_AI_STUDIO],
+        credential_types=("api_key",),
+        model_prefixes=("gemini-", "gemma-"),
+    ),
 }
 
 
@@ -112,6 +153,19 @@ def get_provider_display_name(provider_id: Any) -> str:
     return _PROVIDER_NAMES.get(normalized, str(provider_id or "Provider"))
 
 
+def get_provider_capabilities(provider_id: Any) -> Optional[ProviderCapabilities]:
+    """Return the declared contract for a known provider."""
+    return _PROVIDER_CAPABILITIES.get(normalize_provider_id(provider_id))
+
+
+def list_provider_capabilities() -> list[Dict[str, Any]]:
+    """Return deterministic provider metadata for management clients."""
+    return [
+        _PROVIDER_CAPABILITIES[provider_id].to_dict()
+        for provider_id in sorted(_PROVIDER_CAPABILITIES)
+    ]
+
+
 def api_key_fingerprint(api_key: str) -> str:
     """Create a stable, non-reversible identifier for an API key."""
     return _short_fingerprint(api_key)
@@ -142,8 +196,5 @@ def credential_supports_model(
     provider_id = get_credential_provider(credential_data)
     if required_provider and provider_id != normalize_provider_id(required_provider):
         return False
-    if not model_name or provider_id != GOOGLE_AI_STUDIO:
-        return True
-
-    normalized_model = str(model_name).strip().lower().split("/")[-1]
-    return normalized_model.startswith(("gemini-", "gemma-"))
+    capabilities = get_provider_capabilities(provider_id)
+    return capabilities.supports_model(model_name) if capabilities else False

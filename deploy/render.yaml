@@ -6,7 +6,7 @@ services:
     dockerContext: .
     plan: free
     region: singapore
-    healthCheckPath: /
+    healthCheckPath: /ready
     envVars:
       - key: PASSWORD
         sync: false

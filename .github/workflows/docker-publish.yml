@@ -1,13 +1,9 @@
 ﻿name: Docker Build and Publish
 
 on:
-  workflow_run:
-    workflows: ["Update Version File"]
-    types:
-      - completed
+  push:
     branches:
       - main
-  push:
     tags:
       - 'v*'
   pull_request:
@@ -22,8 +18,6 @@ env:
 jobs:
   build-and-push:
     runs-on: ubuntu-latest
-    # Run after a successful version workflow, or for non-workflow_run triggers.
-    if: ${{ github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success' }}
     permissions:
       contents: read
       packages: write
@@ -31,9 +25,6 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-        with:
-          # workflow_run needs the latest branch contents, including version metadata.
-          ref: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_branch || github.ref }}
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3

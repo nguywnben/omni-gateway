@@ -31,7 +31,12 @@ from core.models import (
 from core.credential_pool import upsert_credential_by_email
 from core.passwords import hash_password
 from core.storage_adapter import get_storage_adapter
-from core.utils import create_panel_session_token, verify_panel_token
+from core.utils import (
+    clear_panel_session_cookie,
+    create_panel_session_token,
+    set_panel_session_cookie,
+    verify_panel_token,
+)
 from .utils import public_mode_name, validate_mode
 
 
@@ -284,12 +289,13 @@ async def login(payload: LoginRequest, request: Request):
 
         if await verify_password(payload.password):
             _clear_login_failures(client_id)
-            return JSONResponse(
-                content={
-                    "token": await create_panel_session_token(),
-                    "message": "Signed in.",
-                }
+            response = JSONResponse(content={"message": "Signed in."})
+            set_panel_session_cookie(
+                response,
+                await create_panel_session_token(),
+                request,
             )
+            return response
 
         _record_login_failure(client_id)
         raise HTTPException(status_code=401, detail="Incorrect password.")
@@ -311,14 +317,14 @@ async def setup_status():
 
 
 @router.post("/setup")
-async def complete_setup(request: SetupRequest):
+async def complete_setup(payload: SetupRequest, request: Request):
     """Create the first control-panel password when no password exists yet."""
     try:
         if await config.has_password_configured():
             raise HTTPException(status_code=409, detail="Initial setup has already been completed.")
 
-        password = request.password.strip()
-        confirm_password = (request.confirm_password or request.password).strip()
+        password = payload.password.strip()
+        confirm_password = (payload.confirm_password or payload.password).strip()
 
         if len(password) < 8:
             raise HTTPException(status_code=400, detail="Password must be at least 8 characters.")
@@ -331,18 +337,31 @@ async def complete_setup(request: SetupRequest):
 
         await config.reload_config()
 
-        return JSONResponse(
+        response = JSONResponse(
             content={
-                "token": await create_panel_session_token(),
                 "message": "Initial setup completed.",
                 "setup_required": False,
-            }
+            },
         )
+        set_panel_session_cookie(
+            response,
+            await create_panel_session_token(),
+            request,
+        )
+        return response
     except HTTPException:
         raise
     except Exception as e:
         log.error(f"Initial setup failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/logout")
+async def logout():
+    """Expire the browser control-panel session."""
+    response = JSONResponse(content={"message": "Signed out."})
+    clear_panel_session_cookie(response)
+    return response
 
 
 @router.post("/start")

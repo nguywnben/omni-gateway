@@ -1,4 +1,0 @@
-full_hash=9105c896ee223315a353e469494262b2736bb78b
-short_hash=9105c89
-message=feat: polish console settings and action feedback
-date=2026-07-11 11:36:02 +0700

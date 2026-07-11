@@ -24,6 +24,7 @@ from core.credential_manager import credential_manager
 
 # Import all routers
 from core.router.primary.openai import router as primary_openai_router
+from core.router.primary.responses import router as primary_responses_router
 from core.router.primary.gemini import router as primary_gemini_router
 from core.router.primary.anthropic import router as primary_anthropic_router
 from core.router.primary.model_list import router as primary_model_list_router
@@ -32,6 +33,7 @@ from core.router.vertex.openai import router as vertex_openai_router
 from core.router.vertex.model_list import router as vertex_model_list_router
 from core.task_manager import shutdown_all_tasks
 from core.panel import router as panel_router
+from core.health import router as health_router
 from core.keeplive import keepalive_service
 
 
@@ -155,10 +157,21 @@ async def add_security_headers(request, call_next):
         "form-action 'self'; "
         "frame-ancestors 'none'"
     )
+    forwarded_proto = request.headers.get("x-forwarded-proto", "")
+    is_https = request.url.scheme == "https" or (
+        forwarded_proto.split(",", 1)[0].strip().lower() == "https"
+    )
+    if is_https:
+        response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+    if request.url.path.startswith(("/api/", "/v1", "/vertex/")):
+        response.headers.setdefault("Cache-Control", "no-store")
     return response
 
 
 app.include_router(primary_openai_router, prefix="", tags=["OpenAI-compatible API"])
+
+
+app.include_router(primary_responses_router, prefix="", tags=["OpenAI Responses API"])
 
 
 app.include_router(primary_gemini_router, prefix="", tags=["Gemini-compatible API"])
@@ -168,6 +181,9 @@ app.include_router(primary_model_list_router, prefix="", tags=["Model Catalog"])
 
 
 app.include_router(primary_anthropic_router, prefix="", tags=["Anthropic-compatible Messages"])
+
+
+app.include_router(health_router, prefix="")
 
 
 app.include_router(panel_router, prefix="", tags=["Panel Interface"])

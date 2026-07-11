@@ -202,7 +202,7 @@ async def messages(
                 "type": "error",
                 "error": {
                     "type": "api_error",
-                    "message": str(e)
+                    "message": "The upstream response could not be parsed."
                 }
             }
             yield f"data: {json.dumps(error_chunk)}\n\n".encode()

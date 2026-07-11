@@ -46,6 +46,8 @@ class UsageStatsTests(unittest.TestCase):
                         "estimated_input_tokens": 100,
                         "estimated_tokens_saved": 40,
                         "compressed_messages": 6,
+                        "latency_ms": 125,
+                        "retry_count": 2,
                     },
                 )
 
@@ -55,14 +57,14 @@ class UsageStatsTests(unittest.TestCase):
                         """
                         SELECT input_tokens, output_tokens, total_tokens,
                                estimated_input_tokens, estimated_tokens_saved,
-                               compressed_messages
+                               compressed_messages, latency_ms, retry_count
                         FROM usage_logs
                         """
                     ).fetchone()
                 finally:
                     connection.close()
 
-                self.assertEqual(row, (120, 30, 150, 100, 40, 6))
+                self.assertEqual(row, (120, 30, 150, 100, 40, 6, 125, 2))
             finally:
                 usage_stats.db_path = original_db_path
 
@@ -248,6 +250,8 @@ class UsageAggregationTests(unittest.IsolatedAsyncioTestCase):
                         "estimated_input_tokens": 100,
                         "estimated_tokens_saved": 40,
                         "compressed_messages": 6,
+                        "latency_ms": 125,
+                        "retry_count": 2,
                     },
                 )
 
@@ -278,6 +282,10 @@ class UsageAggregationTests(unittest.IsolatedAsyncioTestCase):
                 self.assertEqual(
                     result["credential.json"]["compressed_messages"], 6
                 )
+                self.assertEqual(
+                    result["credential.json"]["average_latency_ms"], 125
+                )
+                self.assertEqual(result["credential.json"]["retry_count"], 2)
             finally:
                 usage_stats.db_path = original_db_path
 

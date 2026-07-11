@@ -351,7 +351,7 @@ async def collect_streaming_response(stream_generator) -> Response:
     except Exception as e:
         log.error(f"[STREAM COLLECTOR] Error collecting stream after {line_count} lines: {e}")
         return Response(
-            content=json.dumps({"error": f"Failed to collect streaming response: {str(e)}."}),
+            content=json.dumps({"error": "Failed to collect the upstream streaming response."}),
             status_code=500,
             media_type="application/json"
         )

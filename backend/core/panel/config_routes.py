@@ -1,6 +1,6 @@
 """Internal implementation detail."""
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse
 
 import config
@@ -10,7 +10,11 @@ from core.keeplive import keepalive_service
 from core.models import AccessCredentialsUpdateRequest, ConfigSaveRequest
 from core.passwords import hash_password
 from core.storage_adapter import get_storage_adapter
-from core.utils import create_panel_session_token, verify_panel_token
+from core.utils import (
+    create_panel_session_token,
+    set_panel_session_cookie,
+    verify_panel_token,
+)
 from .utils import get_env_locked_keys
 
 
@@ -454,17 +458,18 @@ async def save_config(request: ConfigSaveRequest, token: str = Depends(verify_pa
 
 @router.post("/access")
 async def update_access_credentials(
-    request: AccessCredentialsUpdateRequest,
+    payload: AccessCredentialsUpdateRequest,
+    request: Request,
     token: str = Depends(verify_panel_token),
 ):
     """Update the panel password without exposing its current value."""
-    if not await verify_password(request.current_password):
+    if not await verify_password(payload.current_password):
         raise HTTPException(status_code=401, detail="The current console password is incorrect.")
 
     requested_updates = {
         "panel_password": (
-            request.panel_password,
-            request.panel_password_confirm,
+            payload.panel_password,
+            payload.panel_password_confirm,
             "Panel password",
         ),
     }
@@ -501,15 +506,20 @@ async def update_access_credentials(
             await storage_adapter.set_config(key, hash_password(value))
         await config.reload_config()
 
-        response = {
+        response_data = {
             "message": "Console password updated.",
             "updated": sorted(updates),
         }
+        response = JSONResponse(content=response_data)
         if "panel_password" in updates:
-            response["token"] = await create_panel_session_token()
+            set_panel_session_cookie(
+                response,
+                await create_panel_session_token(),
+                request,
+            )
 
         log.info("Control-panel password updated.")
-        return JSONResponse(content=response)
+        return response
     except HTTPException:
         raise
     except Exception as exc:

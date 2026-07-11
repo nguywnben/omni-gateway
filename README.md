@@ -10,7 +10,7 @@ Modern coding workflows often mix clients and providers: OpenAI-compatible tools
 
 - Smart auto-fallback: reserves credentials per request, spreads concurrent traffic, tracks every attempt for fair rotation, and routes around recent failures, cooldowns, rate limits, and exhausted capacity.
 - Token-aware cleanup: normalizes payloads and trims only oversized conversation prefixes at safe turn boundaries while preserving system instructions, tool definitions, and recent context.
-- Format translation: accepts OpenAI chat completions, Gemini native requests, and Anthropic Messages, then translates requests and streaming responses across formats.
+- Format translation: accepts OpenAI Chat Completions and Responses, Gemini native requests, and Anthropic Messages, then translates requests and streaming responses across formats.
 - Credential orchestration: manages OAuth accounts and provider API keys with health state, cooldown tracking, verification, deduplication, and provider-aware fallback.
 - Streaming resilience: supports SSE streaming, pseudo-streaming for clients that require streamed output, and anti-truncation retries for long generations.
 - Control panel: ships with a web console for credentials, logs, configuration, usage, and version information.
@@ -77,7 +77,7 @@ Open the control panel at:
 http://YOUR_SERVER_IP:4283
 ```
 
-On first run, create the console password on the setup screen. No default password is shipped. Passwords managed by the application are stored as salted scrypt hashes; public SDK requests authenticate with the generated `sk-ogw-` API key.
+On first run, create the console password on the setup screen. No default password is shipped. Passwords managed by the application are stored as salted scrypt hashes, control-panel sessions use HttpOnly cookies, and public SDK requests authenticate with the generated `sk-ogw-` API key.
 
 If the server firewall is enabled, allow the gateway port:
 
@@ -158,6 +158,7 @@ Omni Gateway reads configuration from environment variables first, then stored c
 | `PANEL_PASSWORD` | empty until setup | Password for the web control panel. |
 | `PASSWORD` | empty until setup | Legacy fallback password for the web control panel. |
 | `PANEL_SESSION_TTL_SECONDS` | `86400` | Web console session lifetime in seconds. |
+| `PANEL_COOKIE_SECURE` | automatic | Set `true` to require HTTPS-only panel cookies. Leave empty to detect HTTPS through `X-Forwarded-Proto`. |
 | `PANEL_LOGIN_WINDOW_SECONDS` | `300` | Login rate-limit window in seconds. |
 | `PANEL_LOGIN_MAX_ATTEMPTS` | `10` | Failed login attempts allowed per client within the rate-limit window. |
 | `CREDENTIALS_DIR` | `./backend/data/creds` | Credential storage directory. In Docker, persist `/app/backend/data/creds` with a host volume. |
@@ -219,6 +220,20 @@ response = client.chat.completions.create(
 )
 ```
 
+The same client can use the OpenAI Responses API:
+
+```python
+response = client.responses.create(
+    model="gemini-2.5-flash",
+    instructions="Be concise.",
+    input="Explain this repository in one paragraph.",
+)
+
+print(response.output_text)
+```
+
+Responses compatibility supports text, image inputs, non-streaming function tools, and SSE text streaming. OpenAI-hosted built-in tools, stored response history, and streaming function calls are rejected explicitly because Omni Gateway does not execute, persist, or silently discard those OpenAI-specific behaviors.
+
 ### Anthropic Python SDK
 
 Use the gateway origin as the Anthropic base URL. The SDK appends `/v1/messages`.
@@ -267,6 +282,7 @@ response = client.models.generate_content(
 Omni Gateway exposes SDK-compatible routes without a product namespace:
 
 - `POST /v1/chat/completions`
+- `POST /v1/responses`
 - `POST /v1/messages`
 - `GET /v1/models`
 - `GET /v1beta/models`
@@ -379,6 +395,9 @@ git status --short
 - Never commit credential JSON files or `.env`.
 - Use a dedicated `API_KEY` for client integrations and a separate `PANEL_PASSWORD` for console access.
 - Put Omni Gateway behind a reverse proxy with TLS when reachable outside localhost.
+- Configure the reverse proxy to pass `X-Forwarded-Proto`; set `PANEL_COOKIE_SECURE=true` when HTTPS termination is guaranteed.
+- Use `GET /health` for process liveness and `GET /ready` for storage-aware readiness checks.
+- The Docker image starts as root only long enough to repair mounted data-directory ownership, then runs the service as the unprivileged `gateway` user.
 - Set `CORS_ORIGINS` to explicit trusted origins when browser clients need cross-origin access.
 - Keep `/opt/omni-gateway` or your chosen `DATA_DIR` backed up before upgrading or moving servers.
 - Docker image publishing uses the `DOCKERHUB_USERNAME` and `DOCKERHUB_TOKEN` repository secrets for Docker Hub, and the built-in `GITHUB_TOKEN` for GitHub Packages at `ghcr.io/nguywnben/omni-gateway`. Set the optional `IMAGE_NAME` repository variable only when publishing to a custom Docker Hub image name.

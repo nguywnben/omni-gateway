@@ -78,6 +78,26 @@ class OpenAIChatCompletionRequest(BaseModel):
 ChatCompletionRequest = OpenAIChatCompletionRequest
 
 
+class OpenAIResponsesRequest(BaseModel):
+    """Supported subset of the OpenAI Responses create contract."""
+
+    model: str
+    input: Union[str, List[Dict[str, Any]]]
+    instructions: Optional[str] = None
+    stream: bool = False
+    temperature: Optional[float] = Field(None, ge=0.0, le=2.0)
+    top_p: Optional[float] = Field(None, ge=0.0, le=1.0)
+    max_output_tokens: Optional[int] = Field(None, ge=1)
+    tools: Optional[List[Dict[str, Any]]] = None
+    tool_choice: Optional[Union[str, Dict[str, Any]]] = None
+    parallel_tool_calls: bool = True
+    metadata: Optional[Dict[str, str]] = None
+    store: bool = False
+
+    class Config:
+        extra = "allow"
+
+
 class OpenAIChatCompletionChoice(BaseModel):
     index: int
     message: OpenAIChatMessage

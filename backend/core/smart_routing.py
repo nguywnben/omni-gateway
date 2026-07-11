@@ -139,8 +139,7 @@ class SmartCredentialRouter:
             candidates.append((score, filename, retry_after))
 
         ready = [item for item in candidates if item[2] <= now]
-        ranked_pool = ready if ready else candidates
-        return sorted((score, filename) for score, filename, _ in ranked_pool)
+        return sorted((score, filename) for score, filename, _ in ready)
 
     async def _load_candidate_providers(
         self,

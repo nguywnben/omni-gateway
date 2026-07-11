@@ -87,6 +87,34 @@ class SmartCredentialRouterTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(first[0], "a.json")
         self.assertEqual(second[0], "b.json")
 
+    async def test_all_credentials_in_backoff_are_not_reused_immediately(self):
+        now = [100.0]
+        storage = FakeStorageAdapter(
+            {
+                "a.json": credential_state(rotation_order=0),
+                "b.json": credential_state(rotation_order=1),
+            }
+        )
+        router = SmartCredentialRouter(
+            clock=lambda: now[0],
+            base_backoff_seconds=5.0,
+            max_backoff_seconds=30.0,
+        )
+
+        first = await router.acquire(storage, mode="primary", model_name="model-a")
+        await router.complete(first[0], mode="primary", success=False)
+        second = await router.acquire(storage, mode="primary", model_name="model-a")
+        await router.complete(second[0], mode="primary", success=False)
+
+        self.assertIsNone(
+            await router.acquire(storage, mode="primary", model_name="model-a")
+        )
+
+        now[0] = 105.0
+        self.assertIsNotNone(
+            await router.acquire(storage, mode="primary", model_name="model-a")
+        )
+
     async def test_historical_call_count_does_not_flood_a_new_credential(self):
         storage = FakeStorageAdapter(
             {

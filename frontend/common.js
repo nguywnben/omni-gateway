@@ -498,9 +498,7 @@ function navigate(path, pushState = true) {
 
     }
 
-    const savedToken = localStorage.getItem('auth_token') || AppState.authToken;
-
-    const isAuthenticated = !!savedToken;
+    const isAuthenticated = AppState.authenticated;
 
     if (!isAuthenticated) {
 
@@ -655,7 +653,7 @@ function resetConsoleScroll(activeContent = null) {
 
 const AppState = {
 
-    authToken: '',
+    authenticated: false,
 
     setupRequired: false,
 
@@ -683,7 +681,6 @@ const AppState = {
         endpoint: './api/providers/google-ai-studio/credentials/import',
         elementPrefix: 'googleAiStudio',
         credentialType: 'Google AI Studio',
-        removeFunction: 'removeGoogleAiStudioFile',
         timeoutMs: 900000,
         onComplete: () => AppState.primaryCreds.refresh()
     }),
@@ -1404,8 +1401,6 @@ function createUploadManager(type, options = {}) {
 
     const credentialType = options.credentialType || (type === 'primary' ? 'provider' : 'Code Assist');
 
-    const removeFunction = options.removeFunction || (type === 'primary' ? 'removePrimaryFile' : 'removeFile');
-
     return {
 
         type: type,
@@ -1581,19 +1576,22 @@ function createUploadManager(type, options = {}) {
 
                 fileItem.className = 'file-item';
 
-                fileItem.innerHTML = `
+                const fileDetails = document.createElement('div');
+                const fileName = document.createElement('span');
+                fileName.className = 'file-name';
+                fileName.textContent = `${fileIcon} ${file.name}`.trim();
+                const fileSize = document.createElement('span');
+                fileSize.className = 'file-size';
+                fileSize.textContent = `(${formatFileSize(file.size)} ${fileType})`;
+                fileDetails.append(fileName, fileSize);
 
-                    <div>
+                const removeButton = document.createElement('button');
+                removeButton.type = 'button';
+                removeButton.className = 'remove-btn';
+                removeButton.textContent = t('action_delete');
+                removeButton.addEventListener('click', () => this.removeFile(index));
 
-                        <span class="file-name">${fileIcon} ${file.name}</span>
-
-                        <span class="file-size">(${formatFileSize(file.size)}${fileType})</span>
-
-                    </div>
-
-                    <button class="remove-btn" onclick="${removeFunction}(${index})">${t('action_delete')}</button>
-
-                `;
+                fileItem.append(fileDetails, removeButton);
 
                 list.appendChild(fileItem);
 
@@ -1739,8 +1737,6 @@ function createUploadManager(type, options = {}) {
 
                 xhr.open('POST', endpoint);
 
-                xhr.setRequestHeader('Authorization', `Bearer ${AppState.authToken}`);
-
                 xhr.send(formData);
 
             } catch (error) {
@@ -1794,9 +1790,13 @@ function showStatus(message, type = 'info') {
 
         }
 
-        statusSection.innerHTML = `<div class="status ${type}">${displayMessage}</div>`;
-
-        const statusDiv = statusSection.querySelector('.status');
+        const statusDiv = document.createElement('div');
+        const statusType = ['success', 'error', 'warning', 'info'].includes(type)
+            ? type
+            : 'info';
+        statusDiv.className = `status ${statusType}`;
+        statusDiv.textContent = displayMessage;
+        statusSection.replaceChildren(statusDiv);
 
         statusDiv.offsetHeight;
 
@@ -1808,7 +1808,7 @@ function showStatus(message, type = 'info') {
 
             setTimeout(() => {
 
-                statusSection.innerHTML = '';
+                statusSection.replaceChildren();
 
             }, 300);
 
@@ -2800,9 +2800,7 @@ function getAuthHeaders() {
 
     return {
 
-        'Content-Type': 'application/json',
-
-        'Authorization': `Bearer ${AppState.authToken}`
+        'Content-Type': 'application/json'
 
     };
 
@@ -3251,9 +3249,7 @@ async function refreshSetupStatus() {
 
         if (AppState.setupRequired) {
 
-            localStorage.removeItem('auth_token');
-
-            AppState.authToken = '';
+            AppState.authenticated = false;
 
         }
 
@@ -3309,9 +3305,7 @@ async function completeInitialSetup() {
 
             AppState.setupRequired = false;
 
-            AppState.authToken = data.token;
-
-            localStorage.setItem('auth_token', AppState.authToken);
+            AppState.authenticated = true;
 
             showStatus('Initial setup completed.', 'success');
 
@@ -3361,9 +3355,7 @@ async function login() {
 
         if (response.ok) {
 
-            AppState.authToken = data.token;
-
-            localStorage.setItem('auth_token', AppState.authToken);
+            AppState.authenticated = true;
 
             showStatus(t('login_successful_dup'), 'success');
 
@@ -3413,33 +3405,17 @@ async function autoLogin() {
 
     }
 
-    const savedToken = localStorage.getItem('auth_token');
-
-    if (!savedToken) {
-
-        navigate('/login', false);
-
-        return false;
-
-    }
-
-    AppState.authToken = savedToken;
-
     try {
 
         const response = await fetch('./api/config/get', {
 
-            headers: {
-
-                'Content-Type': 'application/json',
-
-                'Authorization': `Bearer ${AppState.authToken}`
-
-            }
+            headers: getAuthHeaders()
 
         });
 
         if (response.ok) {
+
+            AppState.authenticated = true;
 
             // showStatus(t('autologin_successful'), 'success');
 
@@ -3449,9 +3425,7 @@ async function autoLogin() {
 
         } else {
 
-            localStorage.removeItem('auth_token');
-
-            AppState.authToken = '';
+            AppState.authenticated = false;
 
             navigate('/login', false);
 
@@ -3461,9 +3435,7 @@ async function autoLogin() {
 
     } catch (error) {
 
-        localStorage.removeItem('auth_token');
-
-        AppState.authToken = '';
+        AppState.authenticated = false;
 
         navigate('/login', false);
 
@@ -3473,11 +3445,19 @@ async function autoLogin() {
 
 }
 
-function logout() {
+async function logout() {
 
-    localStorage.removeItem('auth_token');
+    try {
 
-    AppState.authToken = '';
+        await fetch('./api/auth/logout', {method: 'POST'});
+
+    } catch (error) {
+
+        console.warn('Failed to notify the server about sign-out.', error);
+
+    }
+
+    AppState.authenticated = false;
 
     showStatus(t('logged_out'), 'info');
 
@@ -4292,7 +4272,10 @@ async function processCallbackUrl() {
 
             showStatus(result.message || t('credentials_fetched_successfully_fr'), 'success');
 
-            document.getElementById('credentialsContent').innerHTML = '<pre>' + JSON.stringify(result.credentials, null, 2) + '</pre>';
+            const credentialsContent = document.getElementById('credentialsContent');
+            const pre = document.createElement('pre');
+            pre.textContent = JSON.stringify(result.credentials, null, 2);
+            credentialsContent.replaceChildren(pre);
 
             document.getElementById('credentialsSection').classList.remove('hidden');
 
@@ -4382,7 +4365,7 @@ function batchAction(action) { AppState.creds.batchAction(action); }
 
 function downloadCred(filename) {
 
-    fetch(`./api/creds/download/${filename}`, { headers: { 'Authorization': `Bearer ${AppState.authToken}` } })
+    fetch(`./api/creds/download/${filename}`)
 
         .then(r => r.ok ? r.blob() : Promise.reject())
 
@@ -4412,11 +4395,7 @@ async function downloadAllCreds() {
 
     try {
 
-        const response = await fetch('./api/creds/download-all', {
-
-            headers: { 'Authorization': `Bearer ${AppState.authToken}` }
-
-        });
+        const response = await fetch('./api/creds/download-all');
 
         if (response.ok) {
 
@@ -4737,7 +4716,6 @@ async function handlePoolImportArchive(event) {
 
         const response = await fetch('./api/creds/import', {
             method: 'POST',
-            headers: { 'Authorization': `Bearer ${AppState.authToken}` },
             body: formData,
             signal: controller.signal,
         });
@@ -4785,8 +4763,6 @@ async function handlePoolImportArchive(event) {
 
 function handleFileSelect(event) { AppState.uploadFiles.handleFileSelect(event); }
 
-function removeFile(index) { AppState.uploadFiles.removeFile(index); }
-
 function clearFiles() { AppState.uploadFiles.clearFiles(); }
 
 function uploadFiles() { AppState.uploadFiles.upload(); }
@@ -4805,8 +4781,6 @@ function handlePrimaryFileDrop(event) {
 
 }
 
-function removePrimaryFile(index) { AppState.primaryUploadFiles.removeFile(index); }
-
 function clearPrimaryFiles() { AppState.primaryUploadFiles.clearFiles(); }
 
 function uploadPrimaryFiles() { AppState.primaryUploadFiles.upload(); }
@@ -4819,10 +4793,6 @@ function handleGoogleAiStudioFileDrop(event) {
     event.preventDefault();
     event.currentTarget.classList.remove('dragover');
     AppState.googleAiStudioUploadFiles.addFiles(Array.from(event.dataTransfer.files));
-}
-
-function removeGoogleAiStudioFile(index) {
-    AppState.googleAiStudioUploadFiles.removeFile(index);
 }
 
 function clearGoogleAiStudioFiles() {
@@ -5966,13 +5936,11 @@ function connectWebSocket() {
 
         const wsUrl = wsPath.replace(/^http/, 'ws');
 
-        const wsUrlWithAuth = `${wsUrl}?token=${encodeURIComponent(AppState.authToken)}`;
-
         document.getElementById('connectionStatusText').textContent = t('connecting');
 
         document.getElementById('logConnectionStatus').className = 'status info';
 
-        AppState.logWebSocket = new WebSocket(wsUrlWithAuth);
+        AppState.logWebSocket = new WebSocket(wsUrl);
 
         AppState.logWebSocket.onopen = () => {
 
@@ -7091,10 +7059,6 @@ async function saveAccessCredentials() {
         const data = await response.json().catch(() => ({}));
         if (!response.ok) {
             throw new Error(data.detail || data.error || t('unknown_error'));
-        }
-        if (data.token) {
-            AppState.authToken = data.token;
-            localStorage.setItem('auth_token', data.token);
         }
         for (const id of [
             'currentConsolePassword',

@@ -10,6 +10,7 @@ from pathlib import Path
 from unittest.mock import AsyncMock, patch
 
 from fastapi import HTTPException
+from starlette.requests import Request
 
 BACKEND_DIR = Path(__file__).resolve().parents[1]
 if str(BACKEND_DIR) not in sys.path:
@@ -34,6 +35,20 @@ class FakeStorageAdapter:
 
     async def set_config(self, key, value):
         self.values[key] = value
+
+
+def build_http_request() -> Request:
+    return Request(
+        {
+            "type": "http",
+            "method": "POST",
+            "scheme": "http",
+            "path": "/api/config/access",
+            "headers": [],
+            "client": ("127.0.0.1", 50000),
+            "server": ("localhost", 4283),
+        }
+    )
 
 
 class ConfigResponseSecurityTests(unittest.TestCase):
@@ -117,7 +132,11 @@ class AccessCredentialUpdateTests(unittest.IsolatedAsyncioTestCase):
             new=AsyncMock(return_value=False),
         ):
             with self.assertRaises(HTTPException) as context:
-                await update_access_credentials(request, token="session")
+                await update_access_credentials(
+                    request,
+                    build_http_request(),
+                    token="session",
+                )
 
         self.assertEqual(context.exception.status_code, 401)
 
@@ -147,7 +166,11 @@ class AccessCredentialUpdateTests(unittest.IsolatedAsyncioTestCase):
                 new=AsyncMock(return_value="replacement-session"),
             ),
         ):
-            response = await update_access_credentials(request, token="session")
+            response = await update_access_credentials(
+                request,
+                build_http_request(),
+                token="session",
+            )
 
         body = json.loads(response.body)
         self.assertTrue(is_password_hash(storage.values["panel_password"]))
@@ -156,9 +179,10 @@ class AccessCredentialUpdateTests(unittest.IsolatedAsyncioTestCase):
                 "new-panel-password", storage.values["panel_password"]
             )
         )
-        self.assertEqual(body["token"], "replacement-session")
         self.assertEqual(body["updated"], ["panel_password"])
         self.assertNotIn("new-panel-password", response.body.decode())
+        self.assertIn("panel_session=replacement-session", response.headers["set-cookie"])
+        self.assertIn("HttpOnly", response.headers["set-cookie"])
 
     async def test_rejects_confirmation_mismatch(self):
         request = AccessCredentialsUpdateRequest(
@@ -172,6 +196,10 @@ class AccessCredentialUpdateTests(unittest.IsolatedAsyncioTestCase):
             new=AsyncMock(return_value=True),
         ):
             with self.assertRaises(HTTPException) as context:
-                await update_access_credentials(request, token="session")
+                await update_access_credentials(
+                    request,
+                    build_http_request(),
+                    token="session",
+                )
 
         self.assertEqual(context.exception.status_code, 400)

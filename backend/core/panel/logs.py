@@ -10,7 +10,7 @@ from starlette.websockets import WebSocketState
 
 from log import log, redact_text
 from paths import DEFAULT_LOG_FILE
-from core.utils import verify_panel_token, verify_panel_token_value
+from core.utils import PANEL_SESSION_COOKIE, verify_panel_token, verify_panel_token_value
 from .utils import ConnectionManager
 
 
@@ -99,7 +99,7 @@ async def download_logs(token: str = Depends(verify_panel_token)):
 @router.websocket("/stream")
 async def websocket_logs(websocket: WebSocket):
     """Internal implementation detail."""
-    token = websocket.query_params.get("token")
+    token = websocket.cookies.get(PANEL_SESSION_COOKIE) or websocket.query_params.get("token")
 
     if not token:
         await websocket.close(code=403, reason="Missing authentication token")

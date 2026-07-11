@@ -1,100 +1,131 @@
-"""Internal implementation detail."""
+"""Runtime build metadata and release update discovery."""
+
+from __future__ import annotations
 
 import os
+import subprocess
+from dataclasses import asdict, dataclass
 
 from fastapi import APIRouter
 from fastapi.responses import JSONResponse
 
 from log import log
-from paths import VERSION_FILE
-
+from paths import PROJECT_ROOT
 
 
 router = APIRouter(prefix="/api/version", tags=["version"])
-DEFAULT_UPDATE_VERSION_URL = "https://raw.githubusercontent.com/nguywnben/omni-gateway/main/backend/version.txt"
+LATEST_COMMIT_URL = "https://api.github.com/repos/nguywnben/omni-gateway/commits/main"
+
+
+@dataclass(frozen=True)
+class BuildMetadata:
+    version: str
+    full_hash: str
+    message: str
+    date: str
+
+
+def _run_git(*arguments: str) -> str:
+    result = subprocess.run(
+        ["git", *arguments],
+        cwd=PROJECT_ROOT,
+        capture_output=True,
+        check=True,
+        text=True,
+        timeout=2,
+    )
+    return result.stdout.strip()
+
+
+def get_build_metadata() -> BuildMetadata:
+    """Resolve immutable container metadata, then source-checkout metadata."""
+    revision = os.getenv("BUILD_REVISION", "").strip()
+    version = os.getenv("BUILD_VERSION", "").strip()
+    build_date = os.getenv("BUILD_DATE", "").strip()
+    if revision or version:
+        display_version = version
+        if version.lower() in {"", "dev", "latest", "main"} and revision:
+            display_version = revision[:7]
+        return BuildMetadata(
+            version=display_version or "development",
+            full_hash="" if revision == "unknown" else revision,
+            message="Container build",
+            date=build_date,
+        )
+
+    try:
+        revision = _run_git("rev-parse", "HEAD")
+        return BuildMetadata(
+            version=revision[:7],
+            full_hash=revision,
+            message=_run_git("log", "-1", "--pretty=%s"),
+            date=_run_git("log", "-1", "--pretty=%cI"),
+        )
+    except (OSError, subprocess.SubprocessError):
+        return BuildMetadata(
+            version="development",
+            full_hash="",
+            message="Development build",
+            date="",
+        )
+
+
+def _remote_metadata(payload: dict) -> BuildMetadata:
+    revision = str(payload.get("sha") or "").strip()
+    commit = payload.get("commit") if isinstance(payload.get("commit"), dict) else {}
+    committer = (
+        commit.get("committer") if isinstance(commit.get("committer"), dict) else {}
+    )
+    message = str(commit.get("message") or "").splitlines()[0]
+    return BuildMetadata(
+        version=revision[:7] or "unknown",
+        full_hash=revision,
+        message=message,
+        date=str(committer.get("date") or ""),
+    )
 
 
 @router.get("/info")
 async def get_version_info(check_update: bool = False):
-    """Internal implementation detail."""
-    try:
+    current = get_build_metadata()
+    response_data = {"success": True, **asdict(current)}
 
-        version_file = VERSION_FILE
-
-        # Read version.txt
-        if not os.path.exists(version_file):
-            return JSONResponse({
-                "success": False,
-                "error": "version.txt file not found"
-            })
-
-        version_data = {}
-        with open(version_file, 'r', encoding='utf-8') as f:
-            for line in f:
-                line = line.strip()
-                if '=' in line:
-                    key, value = line.split('=', 1)
-                    version_data[key] = value
-
-        # Check necessary fields
-        if 'short_hash' not in version_data:
-            return JSONResponse({
-                "success": False,
-                "error": "version.txt format error"
-            })
-
-        response_data = {
-            "success": True,
-            "version": version_data.get('short_hash', 'unknown'),
-            "full_hash": version_data.get('full_hash', ''),
-            "message": version_data.get('message', ''),
-            "date": version_data.get('date', '')
-        }
-
-
-        if check_update:
-            try:
-                from core.httpx_client import get_async
-
-
-                resp = await get_async(DEFAULT_UPDATE_VERSION_URL, timeout=10.0)
-
-                if resp.status_code == 200:
-
-                    remote_version_data = {}
-                    for line in resp.text.strip().split('\n'):
-                        line = line.strip()
-                        if '=' in line:
-                            key, value = line.split('=', 1)
-                            remote_version_data[key] = value
-
-                    latest_hash = remote_version_data.get('full_hash', '')
-                    latest_short_hash = remote_version_data.get('short_hash', '')
-                    current_hash = version_data.get('full_hash', '')
-
-                    has_update = (current_hash != latest_hash) if current_hash and latest_hash else None
-
-                    response_data['check_update'] = True
-                    response_data['has_update'] = has_update
-                    response_data['latest_version'] = latest_short_hash
-                    response_data['latest_hash'] = latest_hash
-                    response_data['latest_message'] = remote_version_data.get('message', '')
-                    response_data['latest_date'] = remote_version_data.get('date', '')
-                else:
-                    # GitHub request failed, but does not affect basic version info
-                    response_data['check_update'] = False
-                    response_data['update_error'] = f"GitHub request failed: {resp.status_code}"
-
-            except Exception as e:
-                log.debug(f"Check for updates failed: {e}")
-                response_data['check_update'] = False
-                response_data['update_error'] = str(e)
-
+    if not check_update:
         return JSONResponse(response_data)
 
-    except Exception as e:
-        log.error(f"Failed to retrieve version information: {e}")
-        return JSONResponse({
-            "success": False,
-            "error": str(e)
-        })
+    try:
+        from core.httpx_client import get_async
+
+        response = await get_async(
+            LATEST_COMMIT_URL,
+            headers={"Accept": "application/vnd.github+json"},
+            timeout=10.0,
+        )
+        if response.status_code != 200:
+            raise RuntimeError(f"GitHub returned HTTP {response.status_code}")
+
+        latest = _remote_metadata(response.json())
+        response_data.update(
+            {
+                "check_update": True,
+                "has_update": (
+                    current.full_hash != latest.full_hash
+                    if current.full_hash and latest.full_hash
+                    else None
+                ),
+                "latest_version": latest.version,
+                "latest_hash": latest.full_hash,
+                "latest_message": latest.message,
+                "latest_date": latest.date,
+            }
+        )
+    except Exception as exc:
+        log.debug(f"Update check failed: {exc}")
+        response_data.update(
+            {
+                "check_update": False,
+                "update_error": "Unable to check for updates.",
+            }
+        )
+
+    return JSONResponse(response_data)

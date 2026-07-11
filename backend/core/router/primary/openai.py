@@ -202,7 +202,7 @@ async def chat_completions(
                 "model": real_model,
                 "choices": [{
                     "index": 0,
-                    "delta": {"content": f"Error: {str(e)}"},
+                    "delta": {"content": "The upstream response could not be parsed."},
                     "finish_reason": "error"
                 }]
             }

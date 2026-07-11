@@ -20,6 +20,7 @@ from core.models import ConfigSaveRequest, GoogleAIStudioCredentialRequest
 from core.provider_registry import (
     GOOGLE_AI_STUDIO,
     api_key_fingerprint,
+    list_provider_capabilities,
 )
 from core.storage_adapter import get_storage_adapter
 from core.utils import verify_panel_token
@@ -64,6 +65,12 @@ BOOLEAN_KEYS = {
     "stream_to_nonstream",
     "switch_credential_enabled",
 }
+
+
+@router.get("/api/providers")
+async def get_provider_catalog(token: str = Depends(verify_panel_token)):
+    """Return provider capabilities without exposing stored credentials."""
+    return JSONResponse(content={"providers": list_provider_capabilities()})
 
 
 async def _current_antigravity_config() -> dict:
