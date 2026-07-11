@@ -700,8 +700,8 @@
                                 <section class="provider-settings-group">
                                     <h3>Protocol Behavior</h3>
                                     <p class="card-copy provider-tool-copy">Tune headers, streaming conversion, and retry credential switching.</p>
-                                    <div class="form-group"><label for="antigravityUserAgent">HTTP User-Agent</label><input type="text" id="antigravityUserAgent"></div>
-                                    <div class="form-group"><label for="antigravityPayloadUserAgent">Payload user agent</label><input type="text" id="antigravityPayloadUserAgent"></div>
+                                    <div class="form-group"><label for="antigravityUserAgent">HTTP User-Agent</label><input type="text" id="antigravityUserAgent" autocomplete="off" autocapitalize="none" spellcheck="false"></div>
+                                    <div class="form-group"><label for="antigravityPayloadUserAgent">Payload user agent</label><input type="text" id="antigravityPayloadUserAgent" autocomplete="off" autocapitalize="none" spellcheck="false"></div>
                                     <label class="switch-row"><input type="checkbox" id="antigravityStreamToNonstream" class="config-checkbox"><span>Collect streaming responses for non-stream clients</span></label>
                                     <label class="switch-row" style="margin-top: 12px;"><input type="checkbox" id="antigravitySwitchCredential" class="config-checkbox"><span>Switch Google Antigravity credentials during retries</span></label>
                                 </section>
@@ -767,13 +767,16 @@
                                 <section class="config-group">
                                     <h2 class="card-title">Console Access</h2>
                                     <p class="card-copy card-title-copy">Change the console password without revealing its current value.</p>
-                                    <div class="access-status-list" aria-label="Password status">
-                                        <div class="access-status-row"><span>Console password</span><strong id="panelPasswordStatus">Configured</strong></div>
-                                    </div>
-                                    <div class="form-group"><label for="currentConsolePassword">Current console password</label><input type="password" id="currentConsolePassword" autocomplete="current-password"></div>
-                                    <div class="form-group"><label for="newPanelPassword">New console password</label><input type="password" id="newPanelPassword" autocomplete="new-password" placeholder="Leave blank to keep unchanged"></div>
-                                    <div class="form-group"><label for="confirmPanelPassword">Confirm console password</label><input type="password" id="confirmPanelPassword" autocomplete="new-password"></div>
-                                    <div class="page-actions"><button type="button" class="btn btn-secondary" id="updateAccessCredentialsBtn" onclick="saveAccessCredentials()">Update password</button></div>
+                                    <form class="access-password-form" autocomplete="on" onsubmit="event.preventDefault(); saveAccessCredentials();">
+                                        <input class="password-manager-identity" type="text" name="username" value="admin" autocomplete="username" tabindex="-1" aria-hidden="true">
+                                        <div class="access-status-list" aria-label="Password status">
+                                            <div class="access-status-row"><span>Console password</span><strong id="panelPasswordStatus">Configured</strong></div>
+                                        </div>
+                                        <div class="form-group"><label for="currentConsolePassword">Current console password</label><input type="password" id="currentConsolePassword" name="current-password" autocomplete="current-password"></div>
+                                        <div class="form-group"><label for="newPanelPassword">New console password</label><input type="password" id="newPanelPassword" name="new-password" autocomplete="new-password" placeholder="Leave blank to keep unchanged"></div>
+                                        <div class="form-group"><label for="confirmPanelPassword">Confirm console password</label><input type="password" id="confirmPanelPassword" name="confirm-password" autocomplete="new-password"></div>
+                                        <div class="page-actions"><button type="submit" class="btn btn-secondary" id="updateAccessCredentialsBtn">Update password</button></div>
+                                    </form>
                                 </section>
 
                                 <section class="config-group">

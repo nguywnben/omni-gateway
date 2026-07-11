@@ -714,6 +714,11 @@ code {
     border-top: 1px solid var(--border);
 }
 
+.access-password-form {
+    position: relative;
+    margin: 0;
+}
+
 .access-status-row {
     display: flex;
     align-items: center;
