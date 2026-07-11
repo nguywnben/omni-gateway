@@ -790,16 +790,17 @@ code {
 }
 
 .config-grid {
-    columns: 3;
-    column-gap: 16px;
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 16px;
+    align-items: start;
 }
 
-.config-grid > .config-group {
-    display: inline-block;
-    width: 100%;
-    margin: 0 0 16px;
-    break-inside: avoid;
-    vertical-align: top;
+.config-column {
+    display: flex;
+    min-width: 0;
+    flex-direction: column;
+    gap: 16px;
 }
 
 .config-two-column {
@@ -2798,7 +2799,12 @@ textarea[readonly] {
     }
 
     .config-grid {
-        columns: 2;
+        grid-template-columns: minmax(0, 1fr);
+        gap: 12px;
+    }
+
+    .config-column {
+        gap: 12px;
     }
 
     .config-two-column,
@@ -3055,11 +3061,12 @@ textarea[readonly] {
     }
 
     .config-grid {
-        columns: 1;
+        grid-template-columns: minmax(0, 1fr);
+        gap: 12px;
     }
 
-    .config-grid > .config-group {
-        margin-bottom: 12px;
+    .config-column {
+        gap: 12px;
     }
 
     .span-4,

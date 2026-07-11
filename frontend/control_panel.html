@@ -736,7 +736,8 @@
                             </div>
 
                             <div class="config-grid">
-                                <section class="config-group span-4">
+                                <div class="config-column">
+                                <section class="config-group">
                                     <h2 class="card-title">Server Access</h2>
                                     <p class="card-copy card-title-copy">Control the network interface used by the service after its next restart.</p>
                                     <div class="form-group"><label for="host">Bind host</label><input type="text" id="host" placeholder="0.0.0.0"></div>
@@ -744,7 +745,26 @@
                                     <p class="field-hint">Listener changes require an application restart. Docker port publishing must be updated separately.</p>
                                 </section>
 
-                                <section class="config-group span-4">
+                                <section class="config-group">
+                                    <h2 class="card-title">Translation and Runtime</h2>
+                                    <p class="card-copy card-title-copy">Adjust compatibility translation and response recovery behavior.</p>
+                                    <label class="switch-row"><input type="checkbox" id="compatibilityModeEnabled" class="config-checkbox"><span>Flatten system instructions for compatibility</span></label>
+                                    <label class="switch-row" style="margin-top: 12px;"><input type="checkbox" id="returnThoughtsToFrontend" class="config-checkbox"><span>Return reasoning content when available</span></label>
+                                    <div class="form-group" style="margin-top: 14px;"><label for="antiTruncationMaxAttempts">Truncation recovery attempts</label><input type="number" id="antiTruncationMaxAttempts" min="1" max="10"></div>
+                                </section>
+
+                                <section class="config-group">
+                                    <h2 class="card-title">Context Optimization</h2>
+                                    <p class="card-copy card-title-copy">Reduce oversized conversation history while preserving system instructions, tool definitions, and recent turns.</p>
+                                    <label class="switch-row"><input type="checkbox" id="tokenCompressionEnabled" class="config-checkbox"><span>Compress oversized conversation history</span></label>
+                                    <div class="form-group" style="margin-top: 14px;"><label for="tokenCompressionThreshold">Compression threshold in tokens</label><input type="number" id="tokenCompressionThreshold" min="128" max="2000000"></div>
+                                    <div class="form-group"><label for="tokenCompressionTarget">Target size in tokens</label><input type="number" id="tokenCompressionTarget" min="64" max="1999999"></div>
+                                    <div class="form-group"><label for="tokenCompressionMinRecentTurns">Recent turns to preserve</label><input type="number" id="tokenCompressionMinRecentTurns" min="1" max="50"></div>
+                                </section>
+                                </div>
+
+                                <div class="config-column">
+                                <section class="config-group">
                                     <h2 class="card-title">Console Access</h2>
                                     <p class="card-copy card-title-copy">Change the console password without revealing its current value.</p>
                                     <div class="access-status-list" aria-label="Password status">
@@ -756,30 +776,7 @@
                                     <div class="page-actions"><button type="button" class="btn btn-secondary" id="updateAccessCredentialsBtn" onclick="saveAccessCredentials()">Update password</button></div>
                                 </section>
 
-                                <section class="config-group span-4">
-                                    <h2 class="card-title">Storage and Proxy</h2>
-                                    <p class="card-copy card-title-copy">Set credential storage and outbound network routing.</p>
-                                    <div class="form-group"><label for="credentialsDir">Credentials directory</label><input type="text" id="credentialsDir"></div>
-                                    <div class="form-group"><label for="proxy">Outbound proxy</label><input type="text" id="proxy" placeholder="http://127.0.0.1:7890"></div>
-                                    <p class="field-hint">Use the proxy when the server cannot reach Google OAuth or provider APIs directly.</p>
-                                    <p class="field-hint">Changing the credentials directory requires an application restart.</p>
-                                </section>
-
-                                <details class="config-group config-advanced-group span-4">
-                                    <summary class="config-advanced-summary">
-                                        <span>
-                                            <strong>Code Assist Compatibility</strong>
-                                            <small>Optional legacy client and endpoint compatibility.</small>
-                                        </span>
-                                    </summary>
-                                    <div class="config-advanced-body">
-                                        <div class="form-group"><label for="codeAssistEndpoint">Code Assist API</label><input type="text" id="codeAssistEndpoint"></div>
-                                        <div class="form-group"><label for="codeAssistClientId">Code Assist client ID</label><input type="text" id="codeAssistClientId" autocomplete="off"></div>
-                                        <div class="form-group"><label for="codeAssistClientSecret">Code Assist client secret</label><input type="text" id="codeAssistClientSecret" autocomplete="off"></div>
-                                    </div>
-                                </details>
-
-                                <section class="config-group span-4">
+                                <section class="config-group">
                                     <h2 class="card-title">Failover Policy</h2>
                                     <p class="card-copy card-title-copy">Define automatic disabling, retries, and alternate credential behavior.</p>
                                     <label class="switch-row"><input type="checkbox" id="autoBanEnabled" class="config-checkbox"><span>Auto-disable credentials for configured error codes</span></label>
@@ -789,59 +786,7 @@
                                     <div class="form-group"><label for="retry429Interval">Retry interval in seconds</label><input type="number" id="retry429Interval" min="0.01" max="10" step="0.01"></div>
                                 </section>
 
-                                <section class="config-group span-4">
-                                    <h2 class="card-title">Routing Policy</h2>
-                                    <p class="card-copy card-title-copy">Balance healthy credentials automatically or prefer one provider while retaining fallback.</p>
-                                    <div class="form-group">
-                                        <label for="routingStrategy">Credential selection</label>
-                                        <select id="routingStrategy" onchange="syncRoutingPolicyControls()">
-                                            <option value="balanced">Balanced</option>
-                                            <option value="priority">Provider priority</option>
-                                        </select>
-                                    </div>
-                                    <div class="form-group">
-                                        <label for="preferredProvider">Preferred provider</label>
-                                        <select id="preferredProvider">
-                                            <option value="">Automatic</option>
-                                            <option value="google_antigravity">Google Antigravity</option>
-                                            <option value="google_ai_studio">Google AI Studio</option>
-                                        </select>
-                                    </div>
-                                    <div class="form-group"><label for="upstreamTimeoutSeconds">Inference timeout in seconds</label><input type="number" id="upstreamTimeoutSeconds" min="5" max="900" step="1"></div>
-                                    <p class="field-hint">If the preferred provider is unavailable or incompatible with a model, routing continues through another healthy provider.</p>
-                                </section>
-
-                                <section class="config-group span-4">
-                                    <h2 class="card-title">Translation and Runtime</h2>
-                                    <p class="card-copy card-title-copy">Adjust compatibility translation and response recovery behavior.</p>
-                                    <label class="switch-row"><input type="checkbox" id="compatibilityModeEnabled" class="config-checkbox"><span>Flatten system instructions for compatibility</span></label>
-                                    <label class="switch-row" style="margin-top: 12px;"><input type="checkbox" id="returnThoughtsToFrontend" class="config-checkbox"><span>Return reasoning content when available</span></label>
-                                    <div class="form-group" style="margin-top: 14px;"><label for="antiTruncationMaxAttempts">Truncation recovery attempts</label><input type="number" id="antiTruncationMaxAttempts" min="1" max="10"></div>
-                                </section>
-
-                                <section class="config-group span-4">
-                                    <h2 class="card-title">Context Optimization</h2>
-                                    <p class="card-copy card-title-copy">Reduce oversized conversation history while preserving system instructions, tool definitions, and recent turns.</p>
-                                    <label class="switch-row"><input type="checkbox" id="tokenCompressionEnabled" class="config-checkbox"><span>Compress oversized conversation history</span></label>
-                                    <div class="form-group" style="margin-top: 14px;"><label for="tokenCompressionThreshold">Compression threshold in tokens</label><input type="number" id="tokenCompressionThreshold" min="128" max="2000000"></div>
-                                    <div class="form-group"><label for="tokenCompressionTarget">Target size in tokens</label><input type="number" id="tokenCompressionTarget" min="64" max="1999999"></div>
-                                    <div class="form-group"><label for="tokenCompressionMinRecentTurns">Recent turns to preserve</label><input type="number" id="tokenCompressionMinRecentTurns" min="1" max="50"></div>
-                                </section>
-
-                                <details class="config-group config-advanced-group span-4">
-                                    <summary class="config-advanced-summary">
-                                        <span>
-                                            <strong>Hosted Keep-Alive</strong>
-                                            <small>Optional periodic requests for hosting platforms that suspend idle services.</small>
-                                        </span>
-                                    </summary>
-                                    <div class="config-advanced-body">
-                                        <div class="form-group"><label for="keepaliveUrl">Keep-alive URL</label><input type="url" id="keepaliveUrl"><button type="button" class="btn btn-secondary btn-small config-inline-action" onclick="autoSetKeepaliveUrl()">Use current URL</button></div>
-                                        <div class="form-group"><label for="keepaliveInterval">Keep-alive interval in seconds</label><input type="number" id="keepaliveInterval" min="5" max="86400"></div>
-                                    </div>
-                                </details>
-
-                                <details class="config-group config-advanced-group span-4">
+                                <details class="config-group config-advanced-group">
                                     <summary class="config-advanced-summary">
                                         <span>
                                             <strong>Runtime Logs</strong>
@@ -864,6 +809,67 @@
                                         <p class="field-hint">Logs rotate automatically when the active file reaches the configured size.</p>
                                     </div>
                                 </details>
+                                </div>
+
+                                <div class="config-column">
+                                <section class="config-group">
+                                    <h2 class="card-title">Storage and Proxy</h2>
+                                    <p class="card-copy card-title-copy">Set credential storage and outbound network routing.</p>
+                                    <div class="form-group"><label for="credentialsDir">Credentials directory</label><input type="text" id="credentialsDir"></div>
+                                    <div class="form-group"><label for="proxy">Outbound proxy</label><input type="text" id="proxy" placeholder="http://127.0.0.1:7890"></div>
+                                    <p class="field-hint">Use the proxy when the server cannot reach Google OAuth or provider APIs directly.</p>
+                                    <p class="field-hint">Changing the credentials directory requires an application restart.</p>
+                                </section>
+
+                                <section class="config-group">
+                                    <h2 class="card-title">Routing Policy</h2>
+                                    <p class="card-copy card-title-copy">Balance healthy credentials automatically or prefer one provider while retaining fallback.</p>
+                                    <div class="form-group">
+                                        <label for="routingStrategy">Credential selection</label>
+                                        <select id="routingStrategy" onchange="syncRoutingPolicyControls()">
+                                            <option value="balanced">Balanced</option>
+                                            <option value="priority">Provider priority</option>
+                                        </select>
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="preferredProvider">Preferred provider</label>
+                                        <select id="preferredProvider">
+                                            <option value="">Automatic</option>
+                                            <option value="google_antigravity">Google Antigravity</option>
+                                            <option value="google_ai_studio">Google AI Studio</option>
+                                        </select>
+                                    </div>
+                                    <div class="form-group"><label for="upstreamTimeoutSeconds">Inference timeout in seconds</label><input type="number" id="upstreamTimeoutSeconds" min="5" max="900" step="1"></div>
+                                    <p class="field-hint">If the preferred provider is unavailable or incompatible with a model, routing continues through another healthy provider.</p>
+                                </section>
+
+                                <details class="config-group config-advanced-group">
+                                    <summary class="config-advanced-summary">
+                                        <span>
+                                            <strong>Code Assist Compatibility</strong>
+                                            <small>Optional legacy client and endpoint compatibility.</small>
+                                        </span>
+                                    </summary>
+                                    <div class="config-advanced-body">
+                                        <div class="form-group"><label for="codeAssistEndpoint">Code Assist API</label><input type="text" id="codeAssistEndpoint"></div>
+                                        <div class="form-group"><label for="codeAssistClientId">Code Assist client ID</label><input type="text" id="codeAssistClientId" autocomplete="off"></div>
+                                        <div class="form-group"><label for="codeAssistClientSecret">Code Assist client secret</label><input type="text" id="codeAssistClientSecret" autocomplete="off"></div>
+                                    </div>
+                                </details>
+
+                                <details class="config-group config-advanced-group">
+                                    <summary class="config-advanced-summary">
+                                        <span>
+                                            <strong>Hosted Keep-Alive</strong>
+                                            <small>Optional periodic requests for hosting platforms that suspend idle services.</small>
+                                        </span>
+                                    </summary>
+                                    <div class="config-advanced-body">
+                                        <div class="form-group"><label for="keepaliveUrl">Keep-alive URL</label><input type="url" id="keepaliveUrl"><button type="button" class="btn btn-secondary btn-small config-inline-action" onclick="autoSetKeepaliveUrl()">Use current URL</button></div>
+                                        <div class="form-group"><label for="keepaliveInterval">Keep-alive interval in seconds</label><input type="number" id="keepaliveInterval" min="5" max="86400"></div>
+                                    </div>
+                                </details>
+                                </div>
                             </div>
                         </div>
                     </div>
