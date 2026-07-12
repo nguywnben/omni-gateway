@@ -30,6 +30,8 @@ All notable user-facing changes are documented in this file. Omni Gateway follow
 - Rejected unsafe credential filenames and expanded log redaction for connection URIs and provider tokens.
 - Removed duplicate Preview-channel creation requests.
 - Removed query-string authentication from the runtime-log WebSocket and enforced same-origin handshakes.
+- Prevented release tags from generating invalid branch-prefixed container tags.
+- Gated GitHub Releases on verified container publication and sourced release notes from this changelog.
 
 ## [0.1.0-beta] - 2026-07-08
 

@@ -36,4 +36,5 @@ Use this checklist when preparing a tagged Omni Gateway release.
 2. Confirm `DEFAULT_APPLICATION_VERSION` matches the release tag.
 3. Rebase on `origin/main` and rerun every automated gate.
 4. Tag the verified commit with an annotated `vX.Y.Z` tag.
-5. Let GitHub Actions publish the container and verify its digest before announcing the release.
+5. Let GitHub Actions publish the container and verify its digest.
+6. Confirm GitHub Actions created the release from the matching changelog section before announcing it.
