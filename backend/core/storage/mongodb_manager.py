@@ -4,7 +4,8 @@ import time
 from typing import Any, Dict, List, Optional
 
 from log import log
-from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorDatabase
+from pymongo import AsyncMongoClient
+from pymongo.asynchronous.database import AsyncDatabase
 
 
 class MongoDBManager:
@@ -25,8 +26,8 @@ class MongoDBManager:
         return model_name.replace(".", "-")
 
     def __init__(self):
-        self._client: Optional[AsyncIOMotorClient] = None
-        self._db: Optional[AsyncIOMotorDatabase] = None
+        self._client: Optional[AsyncMongoClient] = None
+        self._db: Optional[AsyncDatabase] = None
         self._initialized = False
 
         self._config_cache: Dict[str, Any] = {}
@@ -46,7 +47,7 @@ class MongoDBManager:
 
             database_name = os.getenv("MONGODB_DATABASE", "omni_gateway")
 
-            self._client = AsyncIOMotorClient(mongodb_uri)
+            self._client = AsyncMongoClient(mongodb_uri)
             self._db = self._client[database_name]
 
             await self._db.command("ping")
@@ -456,7 +457,7 @@ class MongoDBManager:
             self._redis = None
             self._redis_enabled = False
         if self._client:
-            self._client.close()
+            await self._client.close()
             self._client = None
             self._db = None
         self._initialized = False

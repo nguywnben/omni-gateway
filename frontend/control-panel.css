@@ -189,6 +189,15 @@ code {
     pointer-events: none;
 }
 
+.setup-token-group {
+    display: grid;
+    gap: 12px;
+}
+
+.setup-token-group .field-hint {
+    margin-top: -4px;
+}
+
 .login-footer {
     position: absolute;
     left: 32px;

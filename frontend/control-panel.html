@@ -56,6 +56,11 @@
                 <input type="password" id="setupPassword" name="new-password" placeholder="At least 8 characters" autocomplete="new-password">
                 <label for="setupPasswordConfirm">Confirm password</label>
                 <input type="password" id="setupPasswordConfirm" name="confirm-password" placeholder="Re-enter password" autocomplete="new-password">
+                <div id="setupTokenGroup" class="setup-token-group hidden">
+                    <label for="setupToken">Setup token</label>
+                    <input type="password" id="setupToken" name="setup-token" placeholder="Enter the token from the application logs" autocomplete="off" spellcheck="false">
+                    <p class="field-hint">Remote setup requires the one-time token printed in the container or application logs.</p>
+                </div>
                 <button type="submit" class="btn">Create password</button>
             </form>
         </div>
@@ -1016,7 +1021,12 @@
     </section>
 
     <div id="statusSection"></div>
-    <script src="/frontend/control-panel.js?v=local"></script>
+    <script src="/frontend/js/core.js?v=local"></script>
+    <script src="/frontend/js/ui.js?v=local"></script>
+    <script src="/frontend/js/console.js?v=local"></script>
+    <script src="/frontend/js/credentials.js?v=local"></script>
+    <script src="/frontend/js/settings.js?v=local"></script>
+    <script src="/frontend/js/dashboard.js?v=local"></script>
 </body>
 
 </html>

@@ -9,8 +9,11 @@ services:
     ports:
       - "${HOST_PORT:-4283}:${PORT:-4283}"
     environment:
-      # Password configuration. Leave unset for the first-run web setup screen.
-      # - PANEL_PASSWORD=${PANEL_PASSWORD}
+      # Authentication. Empty values preserve automatic API-key generation and
+      # the first-run web setup flow.
+      - API_KEY=${API_KEY:-}
+      - PANEL_PASSWORD=${PANEL_PASSWORD:-}
+      - SETUP_TOKEN=${SETUP_TOKEN:-}
 
       # Server configuration
       - PORT=${PORT:-4283}
@@ -26,19 +29,21 @@ services:
       # Logging configuration
       - LOG_LEVEL=${LOG_LEVEL:-info}
       - LOG_FILE=${LOG_FILE:-./backend/data/logs/omni-gateway.log}
+      - LOG_MAX_MB=${LOG_MAX_MB:-10}
+      - LOG_BACKUP_COUNT=${LOG_BACKUP_COUNT:-3}
 
-      # Optional: Redis configuration (for distributed storage)
-      # - REDIS_URL=${REDIS_URL}
+      # Optional: Redis-backed cache and session state
+      - REDIS_URL=${REDIS_URL:-}
 
-      # Optional: MongoDB configuration (for distributed storage)
-      # - MONGODB_URI=${MONGODB_URI}
-      # - MONGODB_DATABASE=${MONGODB_DATABASE:-omni_gateway}
+      # Optional: MongoDB storage backend
+      - MONGODB_URI=${MONGODB_URI:-}
+      - MONGODB_DATABASE=${MONGODB_DATABASE:-omni_gateway}
 
-      # Optional: PostgreSQL configuration (for distributed storage)
-      # - POSTGRESQL_URI=${POSTGRESQL_URI}
+      # Optional: PostgreSQL storage backend
+      - POSTGRESQL_URI=${POSTGRESQL_URI:-}
 
       # Optional: Proxy configuration
-      # - PROXY=${PROXY}
+      - PROXY=${PROXY:-}
     volumes:
       - ${DATA_DIR:-/opt/omni-gateway}/creds:/app/backend/data/creds
       - ${DATA_DIR:-/opt/omni-gateway}/logs:/app/backend/data/logs

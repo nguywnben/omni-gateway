@@ -32,8 +32,8 @@ RUN apt-get update && \
     groupadd --gid 10001 gateway && \
     useradd --uid 10001 --gid gateway --create-home --shell /usr/sbin/nologin gateway
 
-COPY requirements.txt ./
-RUN pip install --no-cache-dir -r requirements.txt
+COPY requirements.lock ./
+RUN pip install --no-cache-dir --require-hashes -r requirements.lock
 
 COPY --chown=gateway:gateway backend ./backend
 COPY --chown=gateway:gateway frontend ./frontend

@@ -48,7 +48,7 @@ if (-not (Test-Path -LiteralPath ".venv/Scripts/python.exe")) {
 }
 
 Write-Info "Installing Python dependencies..."
-uv pip install -r requirements.txt
+uv pip install --require-hashes -r requirements.lock
 
 Write-Info "Starting Omni Gateway..."
 & ".venv/Scripts/python.exe" "backend/main.py"

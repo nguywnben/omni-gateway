@@ -16,6 +16,7 @@ Omni Gateway supports Python 3.12 and newer versions covered by CI.
 ```bash
 python -m venv .venv
 source .venv/bin/activate
+python -m pip install --require-hashes -r requirements.lock
 python -m pip install -r requirements-dev.txt
 cp .env.example .env
 python backend/main.py
@@ -26,6 +27,7 @@ On Windows PowerShell:
 ```powershell
 py -3.12 -m venv .venv
 .\.venv\Scripts\Activate.ps1
+python -m pip install --require-hashes -r requirements.lock
 python -m pip install -r requirements-dev.txt
 Copy-Item .env.example .env
 python backend/main.py
@@ -42,7 +44,7 @@ ruff check backend
 ruff format --check backend
 python -m compileall -q backend
 python -m unittest discover -s backend/tests -p 'test_*.py'
-node --check frontend/control-panel.js
+for script in frontend/js/*.js; do node --check "$script"; done
 yamllint --strict .github deploy .yamllint.yml
 bash -n deploy/scripts/*.sh
 python -m pip check
@@ -50,6 +52,21 @@ python -m pip_audit --local --progress-spinner off
 ```
 
 CI repeats these checks on the supported Python matrix and performs an application smoke test.
+
+When `requirements.txt` changes, regenerate the production lock with Python 3.12:
+
+```bash
+pip-compile \
+  --generate-hashes \
+  --resolver=backtracking \
+  --strip-extras \
+  --no-header \
+  --quiet \
+  --output-file=requirements.lock \
+  requirements.txt
+```
+
+Container publication starts only after the full verification matrix and container smoke test succeed.
 
 ## Architecture Rules
 

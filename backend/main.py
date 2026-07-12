@@ -16,6 +16,7 @@ from core.credential_manager import credential_manager
 from core.health import router as health_router
 from core.keep_alive import keep_alive_service
 from core.panel import router as panel_router
+from core.panel.setup_security import get_setup_bootstrap_token
 from core.router.primary.anthropic import router as primary_anthropic_router
 from core.router.primary.gemini import router as primary_gemini_router
 from core.router.primary.model_list import router as primary_model_list_router
@@ -44,6 +45,21 @@ def _parse_csv_env(name: str) -> list[str]:
     return [item.strip() for item in raw.split(",") if item.strip()]
 
 
+def _get_worker_count() -> int:
+    raw_value = os.getenv("WORKERS", "1").strip()
+    try:
+        workers = int(raw_value)
+    except ValueError as exc:
+        raise RuntimeError("WORKERS must be the integer 1.") from exc
+    if workers != 1:
+        raise RuntimeError(
+            "Omni Gateway 0.2.0-beta supports WORKERS=1 only. "
+            "Credential reservations, cooldowns, and usage aggregation are not yet coordinated "
+            "across multiple worker processes."
+        )
+    return workers
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     global global_credential_manager
@@ -61,6 +77,11 @@ async def lifespan(app: FastAPI):
             log_config["backup_count"],
         )
         log.info("Configuration cache initialized.")
+        if not await config.has_password_configured() and not os.getenv("SETUP_TOKEN", "").strip():
+            print(
+                "Remote initial setup token: " + get_setup_bootstrap_token(),
+                flush=True,
+            )
     except Exception as e:
         log.error(f"Failed to initialize the configuration cache: {e}")
 
@@ -137,11 +158,15 @@ async def add_security_headers(request, call_next):
     response = await call_next(request)
     response.headers["X-Content-Type-Options"] = "nosniff"
     response.headers["X-Frame-Options"] = "DENY"
+    response.headers["X-Permitted-Cross-Domain-Policies"] = "none"
     response.headers["Referrer-Policy"] = "no-referrer"
     response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
+    response.headers["Cross-Origin-Opener-Policy"] = "same-origin"
+    response.headers["Origin-Agent-Cluster"] = "?1"
     response.headers["Content-Security-Policy"] = (
         "default-src 'self'; "
-        "script-src 'self' 'unsafe-inline'; "
+        "script-src 'self'; "
+        "script-src-attr 'unsafe-inline'; "
         "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
         "font-src 'self' https://fonts.gstatic.com; "
         "img-src 'self' data:; "
@@ -149,7 +174,9 @@ async def add_security_headers(request, call_next):
         "object-src 'none'; "
         "base-uri 'self'; "
         "form-action 'self'; "
-        "frame-ancestors 'none'"
+        "frame-ancestors 'none'; "
+        "worker-src 'self'; "
+        "manifest-src 'self'"
     )
     forwarded_proto = request.headers.get("x-forwarded-proto", "")
     is_https = request.url.scheme == "https" or (
@@ -206,9 +233,8 @@ async def keepalive() -> Response:
 def main():
     from hypercorn.asyncio import serve
     from hypercorn.config import Config
-    from hypercorn.run import run
 
-    workers = int(os.environ.get("WORKERS", 1))
+    _get_worker_count()
 
     async def _run():
         port = await get_server_port()
@@ -218,8 +244,6 @@ def main():
         log.info("Starting Omni Gateway.")
         log.info("=" * 60)
         log.info(f"Control panel: http://127.0.0.1:{port}")
-        if workers > 1:
-            log.info(f"Workers: {workers}")
         log.info("=" * 60)
 
         config = Config()
@@ -230,28 +254,7 @@ def main():
 
         await serve(app, config)
 
-    if workers == 1:
-        asyncio.run(_run())
-    else:
-        port = int(os.environ.get("PORT", 4283))
-        host = os.environ.get("HOST", "0.0.0.0")
-
-        log.info("=" * 60)
-        log.info("Starting Omni Gateway.")
-        log.info("=" * 60)
-        log.info(f"Control panel: http://127.0.0.1:{port}")
-        log.info(f"Workers: {workers}")
-        log.info("=" * 60)
-
-        config = Config()
-        config.bind = [f"{host}:{port}"]
-        config.accesslog = "-"
-        config.errorlog = "-"
-        config.loglevel = "INFO"
-        config.workers = workers
-        config.application_path = "main:app"
-
-        run(config)
+    asyncio.run(_run())
 
 
 if __name__ == "__main__":

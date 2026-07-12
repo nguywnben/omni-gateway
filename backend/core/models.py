@@ -377,6 +377,7 @@ class LoginRequest(BaseModel):
 class SetupRequest(BaseModel):
     password: str
     confirm_password: Optional[str] = None
+    setup_token: Optional[str] = None
 
 
 class AuthStartRequest(BaseModel):

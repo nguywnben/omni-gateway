@@ -20,7 +20,16 @@ class ControlPanelAssetTests(unittest.TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertRegex(body, r"/frontend/control-panel\.css\?v=\d+")
-        self.assertRegex(body, r"/frontend/control-panel\.js\?v=\d+")
+        for asset in (
+            "core",
+            "ui",
+            "console",
+            "credentials",
+            "settings",
+            "dashboard",
+        ):
+            self.assertRegex(body, rf"/frontend/js/{asset}\.js\?v=\d+")
+        self.assertNotIn("/frontend/control-panel.js", body)
         self.assertNotIn("control_panel", body)
         self.assertNotIn("common.js", body)
 

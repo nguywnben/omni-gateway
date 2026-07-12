@@ -50,7 +50,7 @@ if [ ! -d ".venv" ]; then
 fi
 
 log "Installing Python dependencies..."
-uv pip install -r requirements.txt
+uv pip install --require-hashes -r requirements.lock
 
 log "Starting Omni Gateway..."
 exec .venv/bin/python backend/main.py

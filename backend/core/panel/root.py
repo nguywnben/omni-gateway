@@ -159,22 +159,29 @@ def serve_control_panel():
     try:
         with open(FRONTEND_DIR / "control-panel.html", "r", encoding="utf-8") as f:
             html_content = f.read()
-        asset_version = int(
-            max(
-                (FRONTEND_DIR / "control-panel.css").stat().st_mtime,
-                (FRONTEND_DIR / "control-panel.js").stat().st_mtime,
-            )
+        script_assets = (
+            "js/core.js",
+            "js/ui.js",
+            "js/console.js",
+            "js/credentials.js",
+            "js/settings.js",
+            "js/dashboard.js",
         )
+        asset_paths = (FRONTEND_DIR / "control-panel.css",) + tuple(
+            FRONTEND_DIR / asset for asset in script_assets
+        )
+        asset_version = max(path.stat().st_mtime_ns for path in asset_paths)
         html_content = re.sub(
             r'href="/frontend/control-panel\.css(?:\?v=[^"]*)?"',
             f'href="/frontend/control-panel.css?v={asset_version}"',
             html_content,
         )
-        html_content = re.sub(
-            r'src="/frontend/control-panel\.js(?:\?v=[^"]*)?"',
-            f'src="/frontend/control-panel.js?v={asset_version}"',
-            html_content,
-        )
+        for asset in script_assets:
+            html_content = re.sub(
+                rf'src="/frontend/{re.escape(asset)}(?:\?v=[^"]*)?"',
+                f'src="/frontend/{asset}?v={asset_version}"',
+                html_content,
+            )
         return HTMLResponse(content=html_content)
     except Exception as e:
         log.error(f"Failed to load control panel page: {e}")

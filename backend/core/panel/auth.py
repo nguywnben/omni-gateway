@@ -1,10 +1,4 @@
-import base64
-import binascii
-import json
 import os
-import re
-import time
-from typing import Any, Dict, List
 
 import config
 from core.auth import (
@@ -15,7 +9,6 @@ from core.auth import (
     get_auth_status_by_state,
     verify_password,
 )
-from core.credential_pool import upsert_credential_by_email
 from core.models import (
     AuthCallbackRequest,
     AuthCallbackUrlRequest,
@@ -35,259 +28,17 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import JSONResponse
 from log import log
 
-from .utils import public_mode_name, validate_mode
+from .auth_support import (
+    _assert_login_allowed,
+    _auth_success_content,
+    _clear_login_failures,
+    _client_identity,
+    _record_login_failure,
+)
+from .setup_security import get_setup_access_policy, verify_setup_access
+from .utils import validate_mode
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
-
-ENV_CREDENTIAL_SOURCE = "environment"
-ENV_CREDENTIAL_PATTERN = re.compile(
-    r"^(CREDENTIALS|CODE_ASSIST_CREDENTIALS)"
-    r"(?:_(JSON|B64))?(?:_\d+)?$"
-)
-
-
-def _env_int(name: str, default: int, minimum: int, maximum: int) -> int:
-    try:
-        value = int(os.getenv(name, str(default)))
-    except ValueError:
-        value = default
-    return max(minimum, min(value, maximum))
-
-
-LOGIN_WINDOW_SECONDS = _env_int("PANEL_LOGIN_WINDOW_SECONDS", 300, 30, 3600)
-LOGIN_MAX_ATTEMPTS = _env_int("PANEL_LOGIN_MAX_ATTEMPTS", 10, 3, 100)
-_login_failures: Dict[str, List[float]] = {}
-
-
-def _client_identity(request: Request) -> str:
-    if config.trust_proxy_headers_enabled():
-        forwarded_for = request.headers.get("x-forwarded-for", "")
-        if forwarded_for:
-            return forwarded_for.split(",", 1)[0].strip()
-    return request.client.host if request.client else "unknown"
-
-
-def _recent_failures(client_id: str) -> List[float]:
-    now = time.time()
-    cutoff = now - LOGIN_WINDOW_SECONDS
-    failures = [ts for ts in _login_failures.get(client_id, []) if ts >= cutoff]
-    _login_failures[client_id] = failures
-    return failures
-
-
-def _assert_login_allowed(client_id: str) -> None:
-    if len(_recent_failures(client_id)) >= LOGIN_MAX_ATTEMPTS:
-        raise HTTPException(
-            status_code=429,
-            detail="Too many failed login attempts. Please wait before trying again.",
-        )
-
-
-def _record_login_failure(client_id: str) -> None:
-    failures = _recent_failures(client_id)
-    failures.append(time.time())
-    _login_failures[client_id] = failures
-
-
-def _clear_login_failures(client_id: str) -> None:
-    _login_failures.pop(client_id, None)
-
-
-def _safe_filename(value: str) -> str:
-    name = re.sub(r"[^A-Za-z0-9._-]+", "_", value).strip("._")
-    return name[:120] or "credential"
-
-
-def _credential_mode_from_env_name(env_name: str) -> str:
-    return "code_assist" if env_name.startswith("CODE_ASSIST_CREDENTIALS") else "provider"
-
-
-def _credential_result_message(result: Dict[str, Any]) -> str:
-    action = result.get("credential_action")
-    if action == "replaced":
-        return "Authentication completed. The existing credential was renewed with a later expiry."
-    if action == "skipped":
-        return "Authentication completed, but the credential was not added because the pool already has the same email with an equal or later expiry."
-    return "Authentication completed. Credential saved."
-
-
-def _auth_success_content(result: Dict[str, Any]) -> Dict[str, Any]:
-    return {
-        "credentials": result["credentials"],
-        "file_path": result["file_path"],
-        "message": _credential_result_message(result),
-        "auto_detected_project": result.get("auto_detected_project", False),
-        "credential_saved": result.get("credential_saved", True),
-        "credential_action": result.get("credential_action", "created"),
-        "credential_message": result.get("credential_message"),
-        "email": result.get("email"),
-        "existing_expiry": result.get("existing_expiry"),
-        "incoming_expiry": result.get("incoming_expiry"),
-        "deleted_duplicates": result.get("deleted_duplicates", []),
-    }
-
-
-def _decode_env_credential_payload(env_name: str, raw_value: str) -> Any:
-    value = raw_value.strip()
-    if not value:
-        raise ValueError(f"{env_name} is empty.")
-
-    try:
-        return json.loads(value)
-    except json.JSONDecodeError:
-        pass
-
-    try:
-        padded = value + ("=" * ((4 - len(value) % 4) % 4))
-        decoded = base64.b64decode(padded, validate=True).decode("utf-8")
-        return json.loads(decoded)
-    except (binascii.Error, UnicodeDecodeError, json.JSONDecodeError) as exc:
-        raise ValueError(f"{env_name} must contain JSON or base64-encoded JSON.") from exc
-
-
-def _extract_credential_entries(payload: Any) -> List[Dict[str, Any]]:
-    if isinstance(payload, list):
-        return payload
-
-    if isinstance(payload, dict):
-        credentials = payload.get("credentials")
-        if isinstance(credentials, list):
-            entries = []
-            for item in credentials:
-                if isinstance(item, dict) and isinstance(item.get("credential"), dict):
-                    entry = dict(item)
-                    entry.setdefault("mode", payload.get("mode"))
-                    entries.append(entry)
-                else:
-                    entries.append(
-                        {
-                            "mode": item.get("mode", payload.get("mode"))
-                            if isinstance(item, dict)
-                            else payload.get("mode"),
-                            "filename": item.get("filename") if isinstance(item, dict) else None,
-                            "credential": item,
-                        }
-                    )
-            return entries
-        if isinstance(credentials, dict):
-            return [
-                {
-                    "mode": payload.get("mode"),
-                    "filename": payload.get("filename"),
-                    "credential": credentials,
-                }
-            ]
-        if isinstance(payload.get("credential"), dict):
-            return [payload]
-        return [payload]
-
-    raise ValueError("Credential payload must be a JSON object or array.")
-
-
-def _normalize_env_credential(env_name: str, index: int, entry: Dict[str, Any]) -> Dict[str, Any]:
-    if not isinstance(entry, dict):
-        raise ValueError("Credential entry must be an object.")
-
-    default_mode = _credential_mode_from_env_name(env_name)
-    requested_mode = entry.get("mode")
-    mode = validate_mode(requested_mode or default_mode)
-
-    credential = entry.get("credential") if isinstance(entry.get("credential"), dict) else entry
-    credential_data = dict(credential)
-
-    if not (
-        credential_data.get("token")
-        or credential_data.get("access_token")
-        or credential_data.get("refresh_token")
-    ):
-        raise ValueError("Credential must contain token, access_token, or refresh_token.")
-
-    if credential_data.get("access_token") and not credential_data.get("token"):
-        credential_data["token"] = credential_data["access_token"]
-    if credential_data.get("token") and not credential_data.get("access_token"):
-        credential_data["access_token"] = credential_data["token"]
-    if credential_data.get("quota_project_id") and not credential_data.get("project_id"):
-        credential_data["project_id"] = credential_data["quota_project_id"]
-
-    credential_data["source"] = ENV_CREDENTIAL_SOURCE
-    credential_data["env_var"] = env_name
-    credential_data["env_index"] = index
-
-    filename = entry.get("filename") or credential_data.get("filename")
-    if not filename:
-        project_id = (
-            credential_data.get("project_id")
-            or credential_data.get("quota_project_id")
-            or env_name.lower()
-        )
-        filename = f"env_{public_mode_name(mode)}_{project_id}_{index}.json"
-    filename = _safe_filename(os.path.basename(str(filename)))
-    if not filename.endswith(".json"):
-        filename = f"{filename}.json"
-
-    credential_data.pop("filename", None)
-
-    return {"mode": mode, "filename": filename, "credential": credential_data}
-
-
-def _collect_env_credentials() -> List[Dict[str, Any]]:
-    collected: List[Dict[str, Any]] = []
-    for env_name, raw_value in sorted(os.environ.items()):
-        if not ENV_CREDENTIAL_PATTERN.match(env_name):
-            continue
-
-        payload = _decode_env_credential_payload(env_name, raw_value)
-        entries = _extract_credential_entries(payload)
-        for index, entry in enumerate(entries, start=1):
-            collected.append(_normalize_env_credential(env_name, index, entry))
-
-    return collected
-
-
-async def _list_imported_env_credentials() -> List[Dict[str, str]]:
-    from core.storage_adapter import get_storage_adapter
-
-    storage_adapter = await get_storage_adapter()
-    imported: List[Dict[str, str]] = []
-
-    for mode in ("code_assist", "primary"):
-        for filename in await storage_adapter.list_credentials(mode=mode):
-            credential_data = await storage_adapter.get_credential(filename, mode=mode)
-            if credential_data and credential_data.get("source") == ENV_CREDENTIAL_SOURCE:
-                imported.append(
-                    {
-                        "mode": public_mode_name(mode),
-                        "filename": filename,
-                        "env_var": credential_data.get("env_var", ""),
-                    }
-                )
-
-    return imported
-
-
-def _build_env_status() -> Dict[str, Any]:
-    available_env_vars: Dict[str, Any] = {}
-    for env_name, raw_value in sorted(os.environ.items()):
-        if not ENV_CREDENTIAL_PATTERN.match(env_name):
-            continue
-
-        try:
-            payload = _decode_env_credential_payload(env_name, raw_value)
-            entries = _extract_credential_entries(payload)
-            available_env_vars[env_name] = {
-                "mode": _credential_mode_from_env_name(env_name),
-                "credential_count": len(entries),
-                "valid": True,
-            }
-        except Exception as exc:
-            available_env_vars[env_name] = {
-                "mode": _credential_mode_from_env_name(env_name),
-                "credential_count": 0,
-                "valid": False,
-                "error": str(exc),
-            }
-
-    return available_env_vars
 
 
 @router.post("/login")
@@ -315,17 +66,30 @@ async def login(payload: LoginRequest, request: Request):
         raise
     except Exception as e:
         log.error(f"Login failed: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(
+            status_code=500,
+            detail="Unable to sign in because of an internal service error.",
+        ) from e
 
 
 @router.get("/setup/status")
-async def setup_status():
+async def setup_status(request: Request):
     """Return whether the control panel still needs first-run setup."""
     try:
-        return JSONResponse(content={"setup_required": not await config.has_password_configured()})
+        setup_required = not await config.has_password_configured()
+        policy = get_setup_access_policy(request)
+        return JSONResponse(
+            content={
+                "setup_required": setup_required,
+                "setup_token_required": setup_required and policy.token_required,
+            }
+        )
     except Exception as e:
         log.error(f"Failed to determine setup status: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(
+            status_code=500,
+            detail="Unable to determine the initial setup status.",
+        ) from e
 
 
 @router.post("/setup")
@@ -334,6 +98,8 @@ async def complete_setup(payload: SetupRequest, request: Request):
     try:
         if await config.has_password_configured():
             raise HTTPException(status_code=409, detail="Initial setup has already been completed.")
+
+        verify_setup_access(request, payload.setup_token)
 
         password = payload.password.strip()
         confirm_password = (payload.confirm_password or payload.password).strip()
@@ -365,7 +131,10 @@ async def complete_setup(payload: SetupRequest, request: Request):
         raise
     except Exception as e:
         log.error(f"Initial setup failed: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(
+            status_code=500,
+            detail="Unable to complete initial setup because of an internal service error.",
+        ) from e
 
 
 @router.post("/logout")
@@ -571,158 +340,4 @@ async def reset_api_key(token: str = Depends(verify_panel_token)):
         )
     except Exception as e:
         log.error(f"Failed to reset API key: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@router.get("/env-creds-status")
-async def get_env_credentials_status(token: str = Depends(verify_panel_token)):
-    """Return available environment credential variables and imported env credentials."""
-    try:
-        imported = await _list_imported_env_credentials()
-        return JSONResponse(
-            content={
-                "available_env_vars": _build_env_status(),
-                "auto_load_enabled": False,
-                "existing_env_files_count": len(imported),
-                "existing_env_files": [f"{item['mode']}:{item['filename']}" for item in imported],
-                "existing_env_credentials": imported,
-            }
-        )
-    except Exception as e:
-        log.error(f"Failed to inspect environment credentials: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@router.post("/load-env-creds")
-async def load_env_credentials(token: str = Depends(verify_panel_token)):
-    """Import credentials from supported * environment variables."""
-    try:
-        try:
-            env_credentials = _collect_env_credentials()
-        except ValueError as e:
-            raise HTTPException(status_code=400, detail=str(e)) from e
-
-        if not env_credentials:
-            return JSONResponse(
-                content={
-                    "loaded_count": 0,
-                    "total_count": 0,
-                    "results": [],
-                    "message": "No supported environment credential variables were found.",
-                }
-            )
-
-        results = []
-        loaded_count = 0
-        skipped_count = 0
-
-        for item in env_credentials:
-            filename = item["filename"]
-            mode = item["mode"]
-            try:
-                write_result = await upsert_credential_by_email(
-                    filename, item["credential"], mode=mode
-                )
-                if write_result.get("stored"):
-                    loaded_count += 1
-                    results.append(
-                        {
-                            "filename": write_result.get("filename", filename),
-                            "mode": public_mode_name(mode),
-                            "env_var": item["credential"].get("env_var", ""),
-                            "status": "success",
-                            "action": write_result.get("action"),
-                            "message": write_result.get("message") or "Imported.",
-                        }
-                    )
-                else:
-                    skipped_count += 1
-                    results.append(
-                        {
-                            "filename": write_result.get("filename", filename),
-                            "mode": public_mode_name(mode),
-                            "env_var": item["credential"].get("env_var", ""),
-                            "status": "skipped",
-                            "action": write_result.get("action"),
-                            "message": write_result.get("message") or "Import skipped.",
-                        }
-                    )
-            except Exception as item_error:
-                results.append(
-                    {
-                        "filename": filename,
-                        "mode": public_mode_name(mode),
-                        "status": "error",
-                        "message": str(item_error),
-                    }
-                )
-
-        return JSONResponse(
-            content={
-                "loaded_count": loaded_count,
-                "skipped_count": skipped_count,
-                "total_count": len(env_credentials),
-                "results": results,
-                "message": f"Imported {loaded_count}/{len(env_credentials)} environment credentials; skipped {skipped_count} duplicates.",
-            }
-        )
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        log.error(f"Failed to import environment credentials: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@router.delete("/env-creds")
-async def clear_env_credentials(token: str = Depends(verify_panel_token)):
-    """Delete credentials that were imported from environment variables."""
-    try:
-        from core.storage_adapter import get_storage_adapter
-
-        storage_adapter = await get_storage_adapter()
-        imported = await _list_imported_env_credentials()
-        deleted_count = 0
-        results = []
-
-        for item in imported:
-            filename = item["filename"]
-            mode = validate_mode(item["mode"])
-            try:
-                success = await storage_adapter.delete_credential(filename, mode=mode)
-                if success:
-                    deleted_count += 1
-                    results.append(
-                        {"filename": filename, "mode": public_mode_name(mode), "status": "success"}
-                    )
-                else:
-                    results.append(
-                        {
-                            "filename": filename,
-                            "mode": public_mode_name(mode),
-                            "status": "error",
-                            "message": "Credential was not deleted.",
-                        }
-                    )
-            except Exception as item_error:
-                results.append(
-                    {
-                        "filename": filename,
-                        "mode": public_mode_name(mode),
-                        "status": "error",
-                        "message": str(item_error),
-                    }
-                )
-
-        return JSONResponse(
-            content={
-                "deleted_count": deleted_count,
-                "total_count": len(imported),
-                "results": results,
-                "message": f"Deleted {deleted_count}/{len(imported)} environment credentials.",
-            }
-        )
-
-    except Exception as e:
-        log.error(f"Failed to clear environment credentials: {e}")
         raise HTTPException(status_code=500, detail=str(e))

@@ -5,7 +5,7 @@ from __future__ import annotations
 import os
 import re
 
-DEFAULT_APPLICATION_VERSION = "0.1.0-beta"
+DEFAULT_APPLICATION_VERSION = "0.2.0-beta"
 _SEMANTIC_VERSION = re.compile(r"^v?(\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?)$")
 
 

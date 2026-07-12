@@ -7,6 +7,9 @@ on:
   push:
     branches:
       - main
+    tags:
+      - 'v*'
+  workflow_dispatch:
 
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
@@ -39,10 +42,27 @@ jobs:
           cache: pip
           cache-dependency-path: |
             requirements.txt
+            requirements.lock
             requirements-dev.txt
+
+      - name: Install locked runtime dependencies
+        run: python -m pip install --require-hashes -r requirements.lock
 
       - name: Install development dependencies
         run: python -m pip install -r requirements-dev.txt
+
+      - name: Verify runtime dependency lock
+        if: matrix.python-version == '3.12'
+        run: |
+          pip-compile \
+            --generate-hashes \
+            --resolver=backtracking \
+            --strip-extras \
+            --no-header \
+            --quiet \
+            --output-file=requirements.lock \
+            requirements.txt
+          git diff --exit-code requirements.lock
 
       - name: Verify dependency compatibility
         run: python -m pip check
@@ -68,7 +88,10 @@ jobs:
 
       - name: Validate frontend JavaScript
         if: matrix.python-version == '3.12'
-        run: node --check frontend/control-panel.js
+        run: |
+          for script in frontend/js/*.js; do
+            node --check "$script"
+          done
 
       - name: Validate shell scripts
         if: matrix.python-version == '3.12'
@@ -97,6 +120,7 @@ jobs:
               "/ready",
               "/api/auth/login",
               "/api/auth/keys",
+              "/api/credentials/status",
               "/api/model-catalog",
               "/api/model-pools/omway",
           }
@@ -137,11 +161,9 @@ jobs:
             fi
             sleep 1
           done
-          curl --fail --silent http://127.0.0.1:4283/ready
-          curl --fail --silent http://127.0.0.1:4283/dashboard >/dev/null
+          python backend/tests/runtime_smoke.py --expect-fresh-setup
           curl --fail --silent http://127.0.0.1:4283/frontend/assets/providers/google-antigravity-logo.png >/dev/null
           curl --fail --silent http://127.0.0.1:4283/frontend/assets/providers/google-ai-studio-logo.png >/dev/null
-          curl --fail --silent --compressed http://127.0.0.1:4283/dashboard >/dev/null
 
       - name: Check whitespace
         if: matrix.python-version == '3.12'
@@ -154,3 +176,70 @@ jobs:
             echo "Tracked Python cache artifacts found."
             exit 1
           fi
+
+  container-smoke:
+    name: Container smoke test
+    needs: verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1  # v6
+        with:
+          python-version: "3.12"
+
+      - name: Install smoke-test client
+        run: python -m pip install "httpx==0.28.1"
+
+      - name: Build container image
+        run: docker build --tag omni-gateway:ci --file deploy/Dockerfile .
+
+      - name: Start container
+        run: |
+          docker run --detach \
+            --name omni-gateway-ci \
+            --publish 4283:4283 \
+            --env ENABLE_LOG=0 \
+            --env SETUP_TOKEN=container-smoke-token \
+            omni-gateway:ci
+
+      - name: Verify container runtime
+        run: |
+          trap 'docker logs omni-gateway-ci' ERR
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent http://127.0.0.1:4283/ready >/dev/null; then
+              break
+            fi
+            if [ "$attempt" -eq 30 ]; then
+              docker logs omni-gateway-ci
+              exit 1
+            fi
+            sleep 1
+          done
+          python backend/tests/runtime_smoke.py \
+            --expect-fresh-setup \
+            --setup-token container-smoke-token
+
+      - name: Stop container
+        if: always()
+        run: docker rm --force omni-gateway-ci || true
+
+  publish-container:
+    name: Publish verified container
+    needs:
+      - verify
+      - container-smoke
+    if: ${{ github.event_name != 'pull_request' }}
+    permissions:
+      contents: read
+      packages: write
+    uses: ./.github/workflows/docker-publish.yml
+    secrets: inherit

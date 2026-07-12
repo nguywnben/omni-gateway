@@ -17,7 +17,7 @@ if not exist ".venv\Scripts\python.exe" (
 )
 
 echo [INFO] Installing Python dependencies...
-uv pip install -r requirements.txt
+uv pip install --require-hashes -r requirements.lock
 if errorlevel 1 exit /b 1
 
 echo [INFO] Starting Omni Gateway...

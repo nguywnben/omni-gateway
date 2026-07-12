@@ -14,8 +14,30 @@ LOG_LEVELS = {"debug": 0, "info": 1, "warning": 2, "error": 3, "critical": 4}
 _REDACTION_PATTERNS = [
     (re.compile(r"(?i)(Authorization:\s*Bearer\s+)[A-Za-z0-9._~+/=-]+"), r"\1<redacted>"),
     (re.compile(r"sk-ogw-[A-Za-z0-9._-]+"), "sk-ogw-<redacted>"),
+    (re.compile(r"\bsk-[A-Za-z0-9_-]{16,}"), "sk-<redacted>"),
+    (re.compile(r"\bAIza[0-9A-Za-z_-]{20,}"), "AIza<redacted>"),
+    (re.compile(r"\bya29\.[0-9A-Za-z._-]+"), "ya29.<redacted>"),
+    (re.compile(r"\b1//[0-9A-Za-z._-]+"), "1//<redacted>"),
+    (
+        re.compile(r"\beyJ[0-9A-Za-z_-]{8,}\.[0-9A-Za-z_-]{8,}\.[0-9A-Za-z_-]{8,}"),
+        "<redacted-jwt>",
+    ),
+    (
+        re.compile(r"(?i)\b([a-z][a-z0-9+.-]*://[^/\s:@]+:)[^@\s/]+(@)"),
+        r"\1<redacted>\2",
+    ),
+    (
+        re.compile(r"(?i)([?&](?:access_token|api_key|key|password|token)=)[^&\s]+"),
+        r"\1<redacted>",
+    ),
     (re.compile(r"(?i)(x-api-key['\"]?\s*[:=]\s*['\"]?)[A-Za-z0-9._~+/=-]+"), r"\1<redacted>"),
     (re.compile(r"(?i)(x-goog-api-key['\"]?\s*[:=]\s*['\"]?)[A-Za-z0-9._~+/=-]+"), r"\1<redacted>"),
+    (
+        re.compile(
+            r"(?i)(\b(?:access_token|refresh_token|id_token|client_secret|api_key|password|token)\s*[:=]\s*['\"]?)[^&\s,'\"}]+"
+        ),
+        r"\1<redacted>",
+    ),
     (
         re.compile(
             r"(?i)(['\"](?:access_token|refresh_token|id_token|client_secret|api_key|password|token)['\"]\s*:\s*['\"])[^'\"]+(['\"])",

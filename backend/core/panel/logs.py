@@ -1,6 +1,7 @@
 import asyncio
 import datetime
 import os
+from urllib.parse import urlsplit
 
 from core.utils import PANEL_SESSION_COOKIE, verify_panel_token, verify_panel_token_value
 from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect
@@ -15,6 +16,15 @@ router = APIRouter(prefix="/api/logs", tags=["logs"])
 
 
 manager = ConnectionManager()
+
+
+def _websocket_origin_matches_host(websocket: WebSocket) -> bool:
+    origin = websocket.headers.get("origin", "").strip()
+    host = websocket.headers.get("host", "").strip().lower()
+    if not origin or not host:
+        return False
+    parsed_origin = urlsplit(origin)
+    return parsed_origin.scheme in {"http", "https"} and parsed_origin.netloc.lower() == host
 
 
 def _log_file_size(path: str) -> int | None:
@@ -112,11 +122,16 @@ async def download_logs(token: str = Depends(verify_panel_token)):
 
 @router.websocket("/stream")
 async def websocket_logs(websocket: WebSocket):
-    token = websocket.cookies.get(PANEL_SESSION_COOKIE) or websocket.query_params.get("token")
+    if not _websocket_origin_matches_host(websocket):
+        await websocket.close(code=4403, reason="Origin not allowed")
+        log.warning("WebSocket connection denied: origin not allowed.")
+        return
+
+    token = websocket.cookies.get(PANEL_SESSION_COOKIE)
 
     if not token:
-        await websocket.close(code=403, reason="Missing authentication token")
-        log.warning("WebSocket Connection Denied: Missing Authentication Token")
+        await websocket.close(code=4401, reason="Authentication required")
+        log.warning("WebSocket connection denied: authentication required.")
         return
 
     try:

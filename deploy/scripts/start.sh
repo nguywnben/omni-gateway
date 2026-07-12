@@ -16,7 +16,7 @@ if [ ! -d ".venv" ]; then
 fi
 
 echo "[INFO] Installing Python dependencies..."
-uv pip install -r requirements.txt
+uv pip install --require-hashes -r requirements.lock
 
 echo "[INFO] Starting Omni Gateway..."
 exec .venv/bin/python backend/main.py

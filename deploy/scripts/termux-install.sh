@@ -54,7 +54,7 @@ fi
 
 log "Installing Python dependencies..."
 .venv/bin/python -m pip install --upgrade pip
-.venv/bin/python -m pip install -r requirements.txt
+.venv/bin/python -m pip install --require-hashes -r requirements.lock
 
 log "Starting Omni Gateway with PM2..."
 pm2 start .venv/bin/python --name omni-gateway -- backend/main.py

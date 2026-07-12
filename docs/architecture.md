@@ -1,6 +1,6 @@
 # Architecture
 
-This document describes the current Omni Gateway architecture, its dependency rules, runtime state, and the planned decomposition of the largest modules. It documents boundaries rather than duplicating implementation details.
+This document describes the current Omni Gateway architecture, dependency rules, runtime state, completed module boundaries, and release constraints. It documents boundaries rather than duplicating implementation details.
 
 ## System Context
 
@@ -33,12 +33,14 @@ backend/
     api/                  Provider request orchestration and retry lifecycle
     converter/            Pure request/response format translation
     storage/              Concrete persistence backends
-    panel/                Authenticated management API
+    panel/                Authenticated management API and setup policy
     provider_registry.py  Provider identity and capability metadata
     smart_routing.py      Provider and credential selection policy
     storage_adapter.py    Persistence boundary used by the application
   tests/                   Regression and contract tests
-frontend/                 Browser console and provider assets
+frontend/
+  js/                     Console scripts split by UI responsibility
+  assets/                 Brand and provider assets
 deploy/                   Container and hosting definitions
 docs/                     Architecture and maintained project assets
 ```
@@ -61,40 +63,52 @@ Dependencies should flow inward from HTTP adapters to orchestration and domain p
 
 The default single-instance mode stores credentials, configuration, and usage data under `backend/data/creds`, with logs under `backend/data/logs`. Both locations must be persisted in containers.
 
-`WORKERS=1` is the supported default for local SQLite and file storage. Multiple workers or replicas need a shared database, distributed coordination for reservations/cooldowns, and centralized usage aggregation. MongoDB and PostgreSQL storage adapters are available, but multi-instance operation should be load-tested against the selected backend before production rollout.
+`WORKERS=1` is the only supported process model in `0.2.0-beta`. MongoDB and PostgreSQL can replace local SQLite storage, but shared storage alone does not coordinate reservations, cooldowns, sessions, or usage aggregation across workers. The service rejects `WORKERS` values other than `1` instead of presenting an unsafe scale-out configuration as supported.
 
 The Render Blueprint deliberately uses a paid persistent disk. Free Render services have ephemeral filesystems and are not suitable for durable credential storage.
 
 ## Security Boundaries
 
 - Public inference requests use the generated API key; browser management routes use HttpOnly session cookies.
+- Direct loopback setup remains frictionless. Remote first-run setup requires a bootstrap token from `SETUP_TOKEN` or the application logs.
+- Runtime-log WebSockets require a matching console origin and authenticate only through the HttpOnly session cookie; credentials are never accepted in their URLs.
 - Forwarded client and protocol headers are ignored unless `TRUST_PROXY_HEADERS=true`.
 - Uploaded archives and credentials are validated by provider-specific import paths before persistence.
 - Credential values must never appear in logs, issue reports, filenames, or UI summaries.
 - Cross-origin browser access is disabled unless explicit origins are configured.
 
-## Planned Decomposition
+## Module Decomposition
 
-The following changes should be delivered as separate, regression-tested refactors rather than one rewrite:
+The first decomposition stage is complete:
 
 ```text
-frontend/control-panel.js
-  -> frontend/js/api/
-  -> frontend/js/components/
-  -> frontend/js/pages/
-  -> frontend/js/state/
+frontend/js/
+  core.js                 Localization, shared state, and manager factories
+  ui.js                   Dialogs, result views, and credential-card rendering
+  console.js              Authentication, navigation, model pool, and OAuth flows
+  credentials.js          Credential pool actions and batch operations
+  settings.js             Logs, provider settings, and system configuration
+  dashboard.js            Usage, version, responsive controls, and startup
 
-backend/core/panel/credentials.py
-  -> backend/core/panel/credentials/routes.py
-  -> backend/core/panel/credentials/imports.py
-  -> backend/core/panel/credentials/actions.py
-  -> backend/core/panel/credentials/schemas.py
+backend/core/panel/
+  credentials.py          Credential HTTP routes
+  credential_operations.py Reusable import, dedupe, download, and verification logic
+  auth.py                 Login, setup, OAuth, and API-key routes
+  auth_support.py         Login throttling and response shaping
+  environment_credentials.py Environment credential import routes
+  setup_security.py       Remote first-run bootstrap policy
+```
 
+Further decomposition should happen only with behavior-preserving contract tests:
+
+```text
 backend/core/converter/{openai,anthropic}_to_gemini.py
   -> request.py, response.py, tools.py, streaming.py per format package
 ```
 
-Additional priorities are migrating the deprecated Motor dependency to PyMongo's asynchronous API, replacing repeated broad exception handling with typed boundary errors, auditing dynamic SQL fragments, and introducing a cross-platform dependency lock for deterministic release builds.
+The storage drivers interpolate only table and column identifiers selected from internal allowlists; all credential values remain parameterized. Future storage work should consolidate those safe identifier builders, replace repeated broad exception handling with typed boundary errors, and add live integration suites for PostgreSQL and MongoDB.
+
+Production dependencies are compiled into `requirements.lock` with hashes. `requirements.txt` remains the human-maintained input, and CI rejects stale lock output.
 
 ## Change Policy
 
@@ -103,3 +117,4 @@ Public SDK routes and payload contracts require compatibility tests. Storage sch
 Current decisions:
 
 - [ADR-001: Preserve SDK-Compatible API Boundaries](decisions/001-sdk-compatible-api-boundaries.md)
+- [ADR-002: Secure First Run and Enforce Single-Worker Operation](decisions/002-secure-first-run-and-single-worker.md)

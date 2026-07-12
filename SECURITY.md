@@ -21,9 +21,9 @@ After a fix is available, coordinate public disclosure through the advisory. Cre
 - Use a unique `PANEL_PASSWORD` for the management console.
 - Use a separate `API_KEY` beginning with `sk-ogw-` for client traffic.
 - Keep the service behind TLS when exposed outside localhost.
-- Preconfigure `PANEL_PASSWORD`, or restrict network access until first-run setup is complete, so an untrusted visitor cannot claim a new public deployment.
+- Protect the bootstrap token printed for remote first-run setup, or preconfigure `PANEL_PASSWORD` for non-interactive deployment.
 - Restrict browser cross-origin access with `CORS_ORIGINS`.
-- Trust forwarded headers only when a controlled reverse proxy overwrites them.
-- Keep one worker when using local file and SQLite storage.
+- Preserve `Host` and trust forwarded headers only when a controlled reverse proxy overwrites them.
+- Run exactly one worker and one application replica for `0.2.0-beta`, regardless of storage backend.
 - Never commit `.env`, credential JSON files, database files, or logs.
 - Rotate credentials immediately if GitHub or another scanner reports a public leak.

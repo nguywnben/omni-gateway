@@ -278,7 +278,7 @@ fi
 
 # Sync dependencies
 log_info "Syncing dependencies with uv..."
-if ! uv pip install -r requirements.txt; then
+if ! uv pip install --require-hashes -r requirements.lock; then
     log_error "Failed to sync dependencies"
     exit 1
 fi

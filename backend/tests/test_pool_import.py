@@ -18,11 +18,8 @@ if str(BACKEND_DIR) not in sys.path:
 
 from core.credential_pool import upsert_credential_by_email
 from core.google_ai_studio import GoogleAIStudioValidation
-from core.panel.credentials import (
-    download_all_creds_common,
-    download_cred_file,
-    import_pool_credentials,
-)
+from core.panel.credential_operations import download_all_creds_common
+from core.panel.credentials import download_cred_file, import_pool_credentials
 from core.pool_import import (
     PoolImportError,
     classify_pool_credential,
@@ -390,10 +387,11 @@ class AntigravityDownloadFilenameTests(unittest.IsolatedAsyncioTestCase):
 
         with (
             patch(
-                "core.panel.credentials.get_storage_adapter", new=AsyncMock(return_value=storage)
+                "core.panel.credential_operations.get_storage_adapter",
+                new=AsyncMock(return_value=storage),
             ),
             patch(
-                "core.panel.credentials.deduplicate_credentials_by_account_email",
+                "core.panel.credential_operations.deduplicate_credentials_by_account_email",
                 new=AsyncMock(return_value={"deleted_count": 0}),
             ),
         ):
@@ -415,10 +413,11 @@ class AntigravityDownloadFilenameTests(unittest.IsolatedAsyncioTestCase):
 
         with (
             patch(
-                "core.panel.credentials.get_storage_adapter", new=AsyncMock(return_value=storage)
+                "core.panel.credential_operations.get_storage_adapter",
+                new=AsyncMock(return_value=storage),
             ),
             patch(
-                "core.panel.credentials.deduplicate_credentials_by_account_email",
+                "core.panel.credential_operations.deduplicate_credentials_by_account_email",
                 new=AsyncMock(return_value={"deleted_count": 0}),
             ),
         ):

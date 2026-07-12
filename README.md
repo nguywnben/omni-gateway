@@ -48,7 +48,7 @@ docs/          Architecture notes and maintained project assets
 .github/       CI, dependency automation, and contribution templates
 ```
 
-See [Architecture](docs/architecture.md) for module boundaries, request flow, state ownership, and the planned decomposition of the largest modules.
+See [Architecture](docs/architecture.md) for module boundaries, request flow, state ownership, and current release constraints.
 
 ## Deployment
 
@@ -83,9 +83,11 @@ Open the control panel at:
 http://YOUR_SERVER_IP:4283
 ```
 
-On first run, create the console password on the setup screen. No default password is shipped. Passwords managed by the application are stored as salted scrypt hashes, control-panel sessions use HttpOnly cookies, and public SDK requests authenticate with the generated `sk-ogw-` API key.
+On first run, create the console password on the setup screen. No default password is shipped. A remote browser must also enter the bootstrap token printed by `docker logs omni-gateway`; direct localhost setup does not require it. Set `SETUP_TOKEN` before startup when deployment automation needs a stable bootstrap token.
 
-For an immediately public deployment, preconfigure `PANEL_PASSWORD` or keep port `4283` firewalled until setup is complete. The first successful setup request establishes the console password.
+Passwords managed by the application are stored as salted scrypt hashes, control-panel sessions use HttpOnly cookies, and public SDK requests authenticate with the generated `sk-ogw-` API key. For a non-interactive deployment, preconfigure `PANEL_PASSWORD` and skip the setup screen entirely.
+
+The `0.2.0-beta` container is published for `linux/amd64`. ARM64 publication is intentionally paused until every provider dependency, including the Vertex transport stack, can be built and tested with the same contract.
 
 If the server firewall is enabled, allow the gateway port:
 
@@ -122,6 +124,8 @@ docker compose -f deploy/docker-compose.yml up -d
 
 The included compose file pulls `nguywnben/omni-gateway:latest` and uses `/opt/omni-gateway` by default for persistent host data. Set `DATA_DIR=/custom/path` before running compose if your server uses a different storage location.
 
+Compose forwards `API_KEY`, `PANEL_PASSWORD`, `SETUP_TOKEN`, external storage URIs, and `PROXY` from the shell or a root `.env` file. Leave them empty to retain automatic key generation, first-run setup, local SQLite storage, and direct outbound networking.
+
 ### Local Development
 
 Use the Python workflow when developing or debugging the gateway locally:
@@ -129,6 +133,7 @@ Use the Python workflow when developing or debugging the gateway locally:
 ```bash
 python -m venv .venv
 source .venv/bin/activate
+pip install --require-hashes -r requirements.lock
 pip install -r requirements-dev.txt
 cp .env.example .env
 python backend/main.py
@@ -139,6 +144,7 @@ On Windows PowerShell:
 ```powershell
 py -3.12 -m venv .venv
 .\.venv\Scripts\Activate.ps1
+pip install --require-hashes -r requirements.lock
 pip install -r requirements-dev.txt
 Copy-Item .env.example .env
 python backend/main.py
@@ -161,12 +167,13 @@ Omni Gateway reads configuration from environment variables first, then stored c
 | `HOST` | `0.0.0.0` | Bind address. |
 | `PORT` | `4283` | HTTP port. |
 | `HOST_PORT` | `4283` | Host-side port used only by Docker Compose. |
-| `WORKERS` | `1` | Hypercorn worker count. Keep `1` with local SQLite/file storage; horizontal scaling requires shared storage and coordinated state. |
+| `WORKERS` | `1` | Supported worker count. `0.2.0-beta` rejects other values until reservations, cooldowns, sessions, and usage aggregation are coordinated across processes. |
 | `CORS_ORIGINS` | empty | Comma-separated browser origins allowed to call the API cross-origin. Leave empty for same-origin console usage. |
 | `CORS_ORIGIN_REGEX` | empty | Optional regex for managed dynamic browser origins. |
 | `API_KEY` | generated automatically | Preferred key for public client API requests. Must start with `sk-ogw-`. |
 | `PANEL_PASSWORD` | empty until setup | Password for the web control panel. |
 | `PASSWORD` | empty until setup | Legacy fallback password for the web control panel. |
+| `SETUP_TOKEN` | generated per process | Optional fixed bootstrap token required for remote first-run setup. When omitted, read the generated token from application or container logs. |
 | `PANEL_SESSION_TTL_SECONDS` | `86400` | Web console session lifetime in seconds. |
 | `PANEL_COOKIE_SECURE` | automatic | Set `true` to require HTTPS-only panel cookies. Leave empty to detect HTTPS through `X-Forwarded-Proto`. |
 | `PANEL_LOGIN_WINDOW_SECONDS` | `300` | Login rate-limit window in seconds. |
@@ -328,7 +335,7 @@ Omni Gateway records request volume, success rate, credential attribution, provi
 
 1. Start Omni Gateway.
 2. Open `http://YOUR_SERVER_IP:4283` on a VPS, or `http://127.0.0.1:4283` for local development.
-3. Create the console password on the first-run setup screen, or sign in with `PANEL_PASSWORD` when it is preconfigured.
+3. Create the console password on the first-run setup screen. For remote setup, enter the bootstrap token from the application logs; alternatively preconfigure `PANEL_PASSWORD`.
 4. Add a Google Antigravity account through OAuth, import existing credential files, or validate a Google AI Studio API key.
 5. Verify credentials and watch cooldown/error state in the panel.
 6. Point your coding tool to one of the API surfaces above.
@@ -351,6 +358,8 @@ Google AI Studio batch import accepts JSON files and ZIP archives containing JSO
 
 Every imported key is validated before storage. Duplicate keys within the same import are skipped, existing keys are revalidated and updated, and invalid entries are reported without exposing the key value.
 
+Pool and Google Antigravity imports accept archives up to 10 MB, at most 500 files, individual credential files up to 2 MB, and at most 25 MB of uncompressed data. Google AI Studio uses stricter limits of 2 MB per upload, 200 JSON entries, and 5 MB of uncompressed data.
+
 The Pool page also provides a provider-independent backup workflow. `Download ZIP` exports the active credential pool, and `Import ZIP` restores that archive by identifying each credential as Google Antigravity or Google AI Studio. Google Antigravity accounts retain email-and-expiry deduplication, while Google AI Studio keys are validated and deduplicated by a non-reversible key fingerprint. Unsupported or malformed entries are reported individually without blocking valid credentials in the same archive.
 
 Google Antigravity credentials use `google-antigravity-{account_fingerprint}.json`, where the fingerprint is derived from the normalized account email without exposing it. Google AI Studio credentials use the parallel `google-ai-studio-{key_fingerprint}.json` convention. Legacy `provider_*.json` credentials remain compatible and are exported with canonical names.
@@ -364,7 +373,7 @@ Credential mode names:
 
 Single-instance deployments use SQLite-backed storage in the mounted data directory. On Docker, keep `/app/backend/data/creds` and `/app/backend/data/logs` mounted to durable host paths such as `/opt/omni-gateway/creds` and `/opt/omni-gateway/logs`.
 
-For distributed or multi-instance deployments, configure a shared backend:
+MongoDB or PostgreSQL can replace local SQLite for operational preference or migration testing:
 
 ```bash
 MONGODB_URI=mongodb://localhost:27017
@@ -381,6 +390,8 @@ Redis can be added for cache/session acceleration:
 REDIS_URL=redis://127.0.0.1:6379/0
 ```
 
+External storage does not make the current beta horizontally scalable. Run one worker and one replica until distributed credential reservations, cooldowns, session invalidation, and usage aggregation are implemented.
+
 Environment credential import is available from the control panel. Set one of the following variables to raw JSON or use the matching `_B64` variant for base64-encoded JSON:
 
 ```bash
@@ -395,12 +406,13 @@ The payload can be a single credential object, an array, or `{ "credentials": [.
 This section is for contributors and local debugging. Production deployments should use Docker with persistent host volumes.
 
 ```bash
+python -m pip install --require-hashes -r requirements.lock
 python -m pip install -r requirements-dev.txt
 ruff check backend
 ruff format --check backend
 python -m compileall -q backend
 python -m unittest discover -s backend/tests -p 'test_*.py'
-node --check frontend/control-panel.js
+for script in frontend/js/*.js; do node --check "$script"; done
 yamllint --strict .github deploy .yamllint.yml
 python -m pip_audit --local --progress-spinner off
 ```
@@ -418,14 +430,16 @@ The production baseline is Python 3.12, and CI currently verifies Python 3.12 an
 - Never commit credential JSON files or `.env`.
 - Use a dedicated `API_KEY` for client integrations and a separate `PANEL_PASSWORD` for console access.
 - Put Omni Gateway behind a reverse proxy with TLS when reachable outside localhost.
-- Configure the reverse proxy to pass `X-Forwarded-Proto`; set `PANEL_COOKIE_SECURE=true` when HTTPS termination is guaranteed.
+- Configure the reverse proxy to preserve `Host` and pass `X-Forwarded-Proto`; set `PANEL_COOKIE_SECURE=true` when HTTPS termination is guaranteed.
 - Set `TRUST_PROXY_HEADERS=true` only when the service is reachable exclusively through a trusted proxy that replaces `X-Forwarded-For` and `X-Forwarded-Proto`.
 - Use `GET /health` for process liveness and `GET /ready` for storage-aware readiness checks.
 - The Docker image starts as root only long enough to repair mounted data-directory ownership, then runs the service as the unprivileged `gateway` user.
 - Set `CORS_ORIGINS` to explicit trusted origins when browser clients need cross-origin access.
 - Keep `/opt/omni-gateway` or your chosen `DATA_DIR` backed up before upgrading or moving servers.
 - Docker image publishing uses the `DOCKERHUB_USERNAME` and `DOCKERHUB_TOKEN` repository secrets for Docker Hub, and the built-in `GITHUB_TOKEN` for GitHub Packages at `ghcr.io/nguywnben/omni-gateway`. Set the optional `IMAGE_NAME` repository variable only when publishing to a custom Docker Hub image name.
-- Use MongoDB/PostgreSQL for multi-instance deployments.
+- Keep `WORKERS=1` and one application replica for `0.2.0-beta`; external storage is not a substitute for distributed coordination.
+- Use the canonical `/api/credentials` management routes. Hidden `/api/creds` aliases exist only to ease beta migration.
+- Follow the maintained [release checklist](docs/release-checklist.md) before tagging or promoting an image.
 - Keep log retention and credential rotation policies aligned with your usage limits.
 - Rotate credentials immediately if a repository or platform scanner reports a leaked secret.
 - The Render Blueprint uses a paid service with a persistent disk. Render free services use ephemeral filesystems and are suitable only for disposable evaluation.
