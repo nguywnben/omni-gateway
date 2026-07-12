@@ -1,5 +1,3 @@
-"""Internal implementation detail."""
-
 import asyncio
 import hashlib
 import json
@@ -10,7 +8,6 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Tuple
 
-from fastapi import Response
 from config import (
     get_antigravity_api_url,
     get_antigravity_payload_user_agent,
@@ -22,19 +19,26 @@ from config import (
     get_token_compression_config,
     get_upstream_timeout_seconds,
 )
-from log import log
-
+from core.api.utils import (
+    collect_streaming_response,
+    get_retry_config,
+    handle_error_with_retry,
+    parse_and_log_cooldown,
+    record_api_call_error,
+    record_api_call_success,
+    record_unassigned_api_call_error,
+)
 from core.credential_manager import credential_manager
-from core.httpx_client import get_async, stream_post_async, post_async
 from core.google_ai_studio import (
     build_api_key_headers,
     build_generation_url,
     build_models_url,
     parse_model_ids,
 )
+from core.httpx_client import get_async, post_async, stream_post_async
 from core.provider_registry import (
-    GOOGLE_ANTIGRAVITY,
     GOOGLE_AI_STUDIO,
+    GOOGLE_ANTIGRAVITY,
     get_credential_provider,
 )
 from core.storage_adapter import get_storage_adapter
@@ -47,24 +51,8 @@ from core.usage_stats import (
     extract_token_usage_from_response,
     extract_token_usage_from_stream_chunk,
 )
-
-
-from core.api.utils import (
-    handle_error_with_retry,
-    get_retry_config,
-    record_api_call_success,
-    record_api_call_error,
-    record_unassigned_api_call_error,
-    parse_and_log_cooldown,
-    collect_streaming_response,
-)
-
-
-
-
-
-
-
+from fastapi import Response
+from log import log
 
 SESSION_TTL_SECONDS = 6 * 60 * 60
 MAX_SESSION_STATES = 1024
@@ -90,7 +78,6 @@ class ProviderRequestContext:
     request_metrics: Dict[str, Any]
 
 
-
 _session_states: Dict[str, PrimarySessionState] = {}
 
 
@@ -99,7 +86,6 @@ _redis_checked = False
 
 
 async def _get_redis():
-    """Internal implementation detail."""
     global _redis_client, _redis_checked
     if _redis_checked:
         return _redis_client
@@ -109,6 +95,7 @@ async def _get_redis():
         return None
     try:
         import redis.asyncio as aioredis  # type: ignore
+
         client = aioredis.from_url(redis_url, decode_responses=True)
         await client.ping()
         _redis_client = client
@@ -175,7 +162,9 @@ def _make_new_state(first_user_text: str, now: float) -> PrimarySessionState:
     )
 
 
-async def _get_session_state(request_payload: Dict[str, Any], model: str = "") -> PrimarySessionState:
+async def _get_session_state(
+    request_payload: Dict[str, Any], model: str = ""
+) -> PrimarySessionState:
     now = time.time()
     key = _session_key(request_payload, model)
     first_user_text = _extract_first_user_text(request_payload)
@@ -196,7 +185,6 @@ async def _get_session_state(request_payload: Dict[str, Any], model: str = "") -
             return state
         except Exception as e:
             log.warning(f"[SESSION] Redis error, falling back to memory: {e}")
-
 
     _prune_session_states(now)
     state = _session_states.get(key)
@@ -238,7 +226,6 @@ async def wrap_cli_request(
     project_id: str,
     enable_credit: bool = False,
 ) -> Tuple[Dict[str, Any], str, CompressionResult]:
-    """Internal implementation detail."""
     original_inner = dict(gemini_request)
     state = await _get_session_state(original_inner, model)
     compression_result = compress_gemini_request(
@@ -256,16 +243,12 @@ async def wrap_cli_request(
             f"reason={compression_result.reason}."
         )
 
-
     inner.pop("safetySettings", None)
-
 
     if not inner.get("sessionId"):
         inner["sessionId"] = state.session_id
 
-
     inner["labels"] = _build_labels(model, state.trajectory_id, state.step_index)
-
 
     tool_config = inner.get("toolConfig") or {}
     func_config = tool_config.get("functionCallingConfig") or {}
@@ -288,10 +271,7 @@ async def wrap_cli_request(
     return payload, request_id, compression_result
 
 
-
-
 async def build_primary_headers(access_token: str, model: str = "") -> Dict[str, str]:
-    """Internal implementation detail."""
     return {
         "User-Agent": await get_antigravity_user_agent(),
         "Authorization": f"Bearer {access_token}",
@@ -367,7 +347,6 @@ async def prepare_provider_request(
 
 
 def _is_retryable_status(status_code: int, disable_error_codes: List[int]) -> bool:
-    """Internal implementation detail."""
     return status_code in (429, 503) or status_code in disable_error_codes
 
 
@@ -399,15 +378,12 @@ async def _switch_credential_for_retry(
     return False
 
 
-
-
 async def stream_request(
     body: Dict[str, Any],
     native: bool = False,
     headers: Optional[Dict[str, str]] = None,
     model_candidates: Optional[List[str]] = None,
 ):
-    """Internal implementation detail."""
     request_started_at = time.perf_counter()
     requested_model = str(body.get("model") or "")
     candidates = _normalize_model_candidates(body, model_candidates)
@@ -418,7 +394,6 @@ async def stream_request(
     )
 
     if not route_result:
-
         log.error("[provider stream] No credentials currently available")
         await record_unassigned_api_call_error(
             status_code=503, mode="primary", model_name=requested_model
@@ -426,7 +401,7 @@ async def stream_request(
         yield Response(
             content=json.dumps({"error": "No credentials are available."}),
             status_code=503,
-            media_type="application/json"
+            media_type="application/json",
         )
         return
 
@@ -464,7 +439,6 @@ async def stream_request(
     final_payload = context.payload
     request_metrics = context.request_metrics
 
-
     retry_config = await get_retry_config()
     max_retries = retry_config["max_retries"]
     retry_interval = retry_config["retry_interval"]
@@ -472,7 +446,6 @@ async def stream_request(
 
     DISABLE_ERROR_CODES = await get_auto_disable_error_codes()
     last_error_response = None
-
 
     async def refresh_credential_fast():
         nonlocal model_name, current_file, credential_data, provider_id, request_body
@@ -515,70 +488,87 @@ async def stream_request(
                 headers=auth_headers,
                 timeout=await get_upstream_timeout_seconds(),
             ):
-
                 if isinstance(chunk, Response):
                     status_code = chunk.status_code
                     last_error_response = chunk
 
-
                     error_body = None
                     try:
-                        error_body = chunk.body.decode('utf-8') if isinstance(chunk.body, bytes) else str(chunk.body)
+                        error_body = (
+                            chunk.body.decode("utf-8")
+                            if isinstance(chunk.body, bytes)
+                            else str(chunk.body)
+                        )
                     except Exception:
                         error_body = ""
 
-
                     if _is_retryable_status(status_code, DISABLE_ERROR_CODES):
-                        log.warning(f"[provider stream] streaming request failed (status={status_code}), credential={current_file}, response={error_body[:500] if error_body else 'None'}")
-
+                        log.warning(
+                            f"[provider stream] streaming request failed (status={status_code}), credential={current_file}, response={error_body[:500] if error_body else 'None'}"
+                        )
 
                         cooldown_until = None
                         if (status_code == 429 or status_code == 503) and error_body:
                             try:
-                                cooldown_until = await parse_and_log_cooldown(error_body, mode="primary")
+                                cooldown_until = await parse_and_log_cooldown(
+                                    error_body, mode="primary"
+                                )
                             except Exception:
                                 pass
 
-
                         await record_api_call_error(
-                            credential_manager, current_file, status_code,
-                            cooldown_until, mode="primary", model_name=model_name,
+                            credential_manager,
+                            current_file,
+                            status_code,
+                            cooldown_until,
+                            mode="primary",
+                            model_name=model_name,
                             error_message=error_body,
                             provider=provider_id,
                         )
 
-
                         should_retry = await handle_error_with_retry(
-                            credential_manager, status_code, current_file,
-                            retry_config["retry_enabled"], attempt, max_retries, retry_interval,
-                            mode="primary"
+                            credential_manager,
+                            status_code,
+                            current_file,
+                            retry_config["retry_enabled"],
+                            attempt,
+                            max_retries,
+                            retry_interval,
+                            mode="primary",
                         )
 
                         if should_retry and attempt < max_retries:
                             need_retry = True
                             break
                         else:
-
-                            log.error(f"[provider stream] Maximum number of retries reached or should not be retried, returning original error")
+                            log.error(
+                                "[provider stream] Maximum number of retries reached or should not be retried, returning original error"
+                            )
                             yield chunk
                             return
                     else:
-
-                        log.error(f"[provider stream] streaming request failed with a non-retryable status (status={status_code}), credential={current_file}, response={error_body[:500] if error_body else 'None'}")
+                        log.error(
+                            f"[provider stream] streaming request failed with a non-retryable status (status={status_code}), credential={current_file}, response={error_body[:500] if error_body else 'None'}"
+                        )
                         await record_api_call_error(
-                            credential_manager, current_file, status_code,
-                            None, mode="primary", model_name=model_name,
+                            credential_manager,
+                            current_file,
+                            status_code,
+                            None,
+                            mode="primary",
+                            model_name=model_name,
                             error_message=error_body,
                             provider=provider_id,
                         )
                         yield chunk
                         return
                 else:
-
-
                     if not received_content:
                         received_content = True
-                        log.debug(f"[provider stream] started receiving streaming responses, model: {model_name}")
+                        log.debug(
+                            f"[provider stream] started receiving streaming responses, model: {model_name}"
+                        )
 
                     chunk_token_usage = extract_token_usage_from_stream_chunk(chunk)
                     if any(chunk_token_usage.values()):
@@ -590,7 +580,6 @@ async def stream_request(
                         log.debug(f"[provider stream raw] chunk(str): {chunk}")
 
                     yield chunk
-
 
             if received_content:
                 await record_api_call_success(
@@ -609,11 +598,16 @@ async def stream_request(
                 log.debug(f"[provider stream] Streaming response completed, model: {model_name}")
                 return
             elif not need_retry:
-
-                log.warning(f"[provider stream] received an empty reply with no content, voucher: {current_file}")
+                log.warning(
+                    f"[provider stream] received an empty reply with no content, voucher: {current_file}"
+                )
                 await record_api_call_error(
-                    credential_manager, current_file, 200,
-                    None, mode="primary", model_name=model_name,
+                    credential_manager,
+                    current_file,
+                    200,
+                    None,
+                    mode="primary",
+                    model_name=model_name,
                     error_message="Empty response from API",
                     provider=provider_id,
                 )
@@ -621,17 +615,18 @@ async def stream_request(
                 if attempt < max_retries:
                     need_retry = True
                 else:
-                    log.error(f"[provider stream] Empty response reaches maximum number of retries")
+                    log.error("[provider stream] Empty response reaches maximum number of retries")
                     yield Response(
                         content=json.dumps({"error": "Empty response returned by service"}),
                         status_code=500,
-                        media_type="application/json"
+                        media_type="application/json",
                     )
                     return
 
-
             if need_retry:
-                log.info(f"[provider stream] retrying request (attempt {attempt + 2}/{max_retries + 1}).")
+                log.info(
+                    f"[provider stream] retrying request (attempt {attempt + 2}/{max_retries + 1})."
+                )
 
                 if switch_credential_enabled:
                     switched = await _switch_credential_for_retry(
@@ -639,25 +634,35 @@ async def stream_request(
                         log_prefix="[provider stream]",
                     )
                     if not switched:
-                        log.error("[provider stream] No credentials or tokens available when retrying")
+                        log.error(
+                            "[provider stream] No credentials or tokens available when retrying"
+                        )
                         yield Response(
                             content=json.dumps({"error": "No credentials are available."}),
                             status_code=503,
-                            media_type="application/json"
+                            media_type="application/json",
                         )
                         return
                 continue
 
         except Exception as e:
-            log.error(f"[provider stream] Streaming Request Exception: {e}, Credentials: {current_file}")
+            log.error(
+                f"[provider stream] Streaming Request Exception: {e}, Credentials: {current_file}"
+            )
             await record_api_call_error(
-                credential_manager, current_file, 500,
-                None, mode="primary", model_name=model_name,
+                credential_manager,
+                current_file,
+                500,
+                None,
+                mode="primary",
+                model_name=model_name,
                 error_message=str(e),
                 provider=provider_id,
             )
             if attempt < max_retries:
-                log.info(f"[provider stream] retry after abnormality (attempt {attempt + 2}/{max_retries + 1})...")
+                log.info(
+                    f"[provider stream] retry after abnormality (attempt {attempt + 2}/{max_retries + 1})..."
+                )
                 await asyncio.sleep(retry_interval)
                 if switch_credential_enabled:
                     switched = await _switch_credential_for_retry(
@@ -673,19 +678,18 @@ async def stream_request(
                         return
                 continue
             else:
-
                 log.error(f"[provider stream] all retries failed. Last exception: {e}")
                 if last_error_response:
                     yield last_error_response
                 else:
-
                     yield Response(
-                        content=json.dumps({"error": "The upstream streaming request failed unexpectedly."}),
+                        content=json.dumps(
+                            {"error": "The upstream streaming request failed unexpectedly."}
+                        ),
                         status_code=500,
-                        media_type="application/json"
+                        media_type="application/json",
                     )
                 return
-
 
     log.error("[provider stream] all retries failed.")
     if last_error_response:
@@ -694,7 +698,7 @@ async def stream_request(
         yield Response(
             content=json.dumps({"error": "Request failed after all retries were exhausted."}),
             status_code=429,
-            media_type="application/json"
+            media_type="application/json",
         )
 
 
@@ -703,12 +707,10 @@ async def non_stream_request(
     headers: Optional[Dict[str, str]] = None,
     model_candidates: Optional[List[str]] = None,
 ) -> Response:
-    """Internal implementation detail."""
     request_started_at = time.perf_counter()
 
     if await get_antigravity_stream_to_nonstream():
         log.debug("[provider] Streaming collection mode for non-streaming requests")
-
 
         stream = stream_request(
             body=body,
@@ -717,11 +719,7 @@ async def non_stream_request(
             model_candidates=model_candidates,
         )
 
-
-
-
         return await collect_streaming_response(stream)
-
 
     log.debug("[provider] Direct non-streaming mode enabled")
 
@@ -734,7 +732,6 @@ async def non_stream_request(
     )
 
     if not route_result:
-
         log.error("[provider] No credentials currently available")
         await record_unassigned_api_call_error(
             status_code=503, mode="primary", model_name=requested_model
@@ -742,7 +739,7 @@ async def non_stream_request(
         return Response(
             content=json.dumps({"error": "No credentials are available."}),
             status_code=503,
-            media_type="application/json"
+            media_type="application/json",
         )
 
     model_name, current_file, credential_data = route_result
@@ -778,7 +775,6 @@ async def non_stream_request(
     final_payload = context.payload
     request_metrics = context.request_metrics
 
-
     retry_config = await get_retry_config()
     max_retries = retry_config["max_retries"]
     retry_interval = retry_config["retry_interval"]
@@ -786,7 +782,6 @@ async def non_stream_request(
 
     DISABLE_ERROR_CODES = await get_auto_disable_error_codes()
     last_error_response = None
-
 
     async def refresh_credential_fast():
         nonlocal model_name, current_file, credential_data, provider_id, request_body
@@ -829,16 +824,19 @@ async def non_stream_request(
 
             status_code = response.status_code
 
-
             if status_code == 200:
-
                 if not response.content or len(response.content) == 0:
-                    log.warning(f"[provider] Received 200 response but the content is empty, voucher: {current_file}")
-
+                    log.warning(
+                        f"[provider] Received 200 response but the content is empty, voucher: {current_file}"
+                    )
 
                     await record_api_call_error(
-                        credential_manager, current_file, 200,
-                        None, mode="primary", model_name=model_name,
+                        credential_manager,
+                        current_file,
+                        200,
+                        None,
+                        mode="primary",
+                        model_name=model_name,
                         error_message="Empty response from API",
                         provider=provider_id,
                     )
@@ -846,14 +844,13 @@ async def non_stream_request(
                     if attempt < max_retries:
                         need_retry = True
                     else:
-                        log.error(f"[provider] Empty response reaches maximum number of retries")
+                        log.error("[provider] Empty response reaches maximum number of retries")
                         return Response(
                             content=json.dumps({"error": "Empty response returned by service"}),
                             status_code=503,
-                            media_type="application/json"
+                            media_type="application/json",
                         )
                 else:
-
                     token_usage = extract_token_usage_from_response(response.content)
                     await record_api_call_success(
                         credential_manager,
@@ -870,20 +867,15 @@ async def non_stream_request(
                         provider=provider_id,
                     )
                     return Response(
-                        content=response.content,
-                        status_code=200,
-                        headers=dict(response.headers)
+                        content=response.content, status_code=200, headers=dict(response.headers)
                     )
-
 
             if status_code != 200:
                 last_error_response = Response(
                     content=response.content,
                     status_code=status_code,
-                    headers=dict(response.headers)
+                    headers=dict(response.headers),
                 )
-
-
 
                 error_text = ""
                 try:
@@ -892,48 +884,63 @@ async def non_stream_request(
                     pass
 
                 if _is_retryable_status(status_code, DISABLE_ERROR_CODES):
-                    log.warning(f"[provider] non-streaming request failed (status={status_code}), credential={current_file}, response={error_text[:500] if error_text else 'None'}")
-
+                    log.warning(
+                        f"[provider] non-streaming request failed (status={status_code}), credential={current_file}, response={error_text[:500] if error_text else 'None'}"
+                    )
 
                     cooldown_until = None
                     if (status_code == 429 or status_code == 503) and error_text:
                         try:
-                            cooldown_until = await parse_and_log_cooldown(error_text, mode="primary")
+                            cooldown_until = await parse_and_log_cooldown(
+                                error_text, mode="primary"
+                            )
                         except Exception:
                             pass
 
-
                     await record_api_call_error(
-                        credential_manager, current_file, status_code,
-                        cooldown_until, mode="primary", model_name=model_name,
+                        credential_manager,
+                        current_file,
+                        status_code,
+                        cooldown_until,
+                        mode="primary",
+                        model_name=model_name,
                         error_message=error_text,
                         provider=provider_id,
                     )
 
-
                     should_retry = await handle_error_with_retry(
-                        credential_manager, status_code, current_file,
-                        retry_config["retry_enabled"], attempt, max_retries, retry_interval,
-                        mode="primary"
+                        credential_manager,
+                        status_code,
+                        current_file,
+                        retry_config["retry_enabled"],
+                        attempt,
+                        max_retries,
+                        retry_interval,
+                        mode="primary",
                     )
 
                     if should_retry and attempt < max_retries:
                         need_retry = True
                     else:
-
-                        log.error(f"[provider] Maximum number of retries reached or should not be retried, returning original error")
+                        log.error(
+                            "[provider] Maximum number of retries reached or should not be retried, returning original error"
+                        )
                         return last_error_response
                 else:
-
-                    log.error(f"[provider] non-streaming request failed with a non-retryable status (status={status_code}), credential={current_file}, response={error_text[:500] if error_text else 'None'}")
+                    log.error(
+                        f"[provider] non-streaming request failed with a non-retryable status (status={status_code}), credential={current_file}, response={error_text[:500] if error_text else 'None'}"
+                    )
                     await record_api_call_error(
-                        credential_manager, current_file, status_code,
-                        None, mode="primary", model_name=model_name,
+                        credential_manager,
+                        current_file,
+                        status_code,
+                        None,
+                        mode="primary",
+                        model_name=model_name,
                         error_message=error_text,
                         provider=provider_id,
                     )
                     return last_error_response
-
 
             if need_retry:
                 log.info(f"[provider] retrying request (attempt {attempt + 2}/{max_retries + 1}).")
@@ -948,20 +955,28 @@ async def non_stream_request(
                         return Response(
                             content=json.dumps({"error": "No credentials are available."}),
                             status_code=503,
-                            media_type="application/json"
+                            media_type="application/json",
                         )
                 continue
 
         except Exception as e:
-            log.error(f"[provider] non-streaming request raised an exception: {e}; credential={current_file}")
+            log.error(
+                f"[provider] non-streaming request raised an exception: {e}; credential={current_file}"
+            )
             await record_api_call_error(
-                credential_manager, current_file, 500,
-                None, mode="primary", model_name=model_name,
+                credential_manager,
+                current_file,
+                500,
+                None,
+                mode="primary",
+                model_name=model_name,
                 error_message=str(e),
                 provider=provider_id,
             )
             if attempt < max_retries:
-                log.info(f"[provider] Retry after exception (attempt {attempt + 2}/{max_retries + 1})...")
+                log.info(
+                    f"[provider] Retry after exception (attempt {attempt + 2}/{max_retries + 1})..."
+                )
                 await asyncio.sleep(retry_interval)
                 if switch_credential_enabled:
                     switched = await _switch_credential_for_retry(
@@ -976,7 +991,6 @@ async def non_stream_request(
                         )
                 continue
             else:
-
                 log.error(f"[provider] all retries failed. Last exception: {e}")
                 if last_error_response:
                     return last_error_response
@@ -984,9 +998,8 @@ async def non_stream_request(
                     return Response(
                         content=json.dumps({"error": "The upstream request failed unexpectedly."}),
                         status_code=500,
-                        media_type="application/json"
+                        media_type="application/json",
                     )
-
 
     log.error("[provider] all retries failed.")
     if last_error_response:
@@ -995,10 +1008,8 @@ async def non_stream_request(
         return Response(
             content=json.dumps({"error": "Request failed after all retries were exhausted."}),
             status_code=500,
-            media_type="application/json"
+            media_type="application/json",
         )
-
-
 
 
 async def get_configured_provider_model_ids() -> Dict[str, set[str]]:
@@ -1089,8 +1100,7 @@ async def fetch_provider_model_ids(
                     model_ids.update(parse_model_ids(response.json()))
                 else:
                     log.warning(
-                        "Google AI Studio model discovery failed with HTTP "
-                        f"{response.status_code}."
+                        f"Google AI Studio model discovery failed with HTTP {response.status_code}."
                     )
             except Exception as exc:
                 log.warning(f"Google AI Studio model discovery failed: {exc}")
@@ -1121,7 +1131,6 @@ async def fetch_configured_provider_models() -> Dict[str, List[str]]:
 
 
 async def fetch_quota_info(access_token: str) -> Dict[str, Any]:
-    """Internal implementation detail."""
 
     headers = await build_primary_headers(access_token)
 
@@ -1132,56 +1141,54 @@ async def fetch_quota_info(access_token: str) -> Dict[str, Any]:
             url=f"{primary_url}/v1internal:fetchAvailableModels",
             json={},
             headers=headers,
-            timeout=30.0
+            timeout=30.0,
         )
 
         if response.status_code == 200:
             data = response.json()
-            log.debug(f"[provider quota] Raw response: {json.dumps(data, ensure_ascii=False)[:500]}")
+            log.debug(
+                f"[provider quota] Raw response: {json.dumps(data, ensure_ascii=False)[:500]}"
+            )
 
             quota_info = {}
 
-            if 'models' in data and isinstance(data['models'], dict):
-                for model_id, model_data in data['models'].items():
-                    if isinstance(model_data, dict) and 'quotaInfo' in model_data:
-                        quota = model_data['quotaInfo']
-                        remaining = quota.get('remainingFraction', 0)
-                        reset_time_raw = quota.get('resetTime', '')
+            if "models" in data and isinstance(data["models"], dict):
+                for model_id, model_data in data["models"].items():
+                    if isinstance(model_data, dict) and "quotaInfo" in model_data:
+                        quota = model_data["quotaInfo"]
+                        remaining = quota.get("remainingFraction", 0)
+                        reset_time_raw = quota.get("resetTime", "")
 
-
-                        reset_time_beijing = 'N/A'
+                        reset_time_beijing = "N/A"
                         if reset_time_raw:
                             try:
-                                utc_date = datetime.fromisoformat(reset_time_raw.replace('Z', '+00:00'))
+                                utc_date = datetime.fromisoformat(
+                                    reset_time_raw.replace("Z", "+00:00")
+                                )
 
                                 from datetime import timedelta
+
                                 beijing_date = utc_date + timedelta(hours=8)
-                                reset_time_beijing = beijing_date.strftime('%m-%d %H:%M')
+                                reset_time_beijing = beijing_date.strftime("%m-%d %H:%M")
                             except Exception as e:
                                 log.warning(f"[provider quota] Failed to parse reset time: {e}")
 
                         quota_info[model_id] = {
                             "remaining": remaining,
                             "resetTime": reset_time_beijing,
-                            "resetTimeRaw": reset_time_raw
+                            "resetTimeRaw": reset_time_raw,
                         }
 
-            return {
-                "success": True,
-                "models": quota_info
-            }
+            return {"success": True, "models": quota_info}
         else:
-            log.error(f"[provider quota] Failed to fetch quota ({response.status_code}): {response.text[:500]}")
-            return {
-                "success": False,
-                "error": f"API returned an error: {response.status_code}"
-            }
+            log.error(
+                f"[provider quota] Failed to fetch quota ({response.status_code}): {response.text[:500]}"
+            )
+            return {"success": False, "error": f"API returned an error: {response.status_code}"}
 
     except Exception as e:
         import traceback
+
         log.error(f"[provider quota] Failed to fetch quota: {e}")
         log.error(f"[provider quota] Traceback: {traceback.format_exc()}")
-        return {
-            "success": False,
-            "error": "Unable to retrieve provider quota information."
-        }
+        return {"success": False, "error": "Unable to retrieve provider quota information."}

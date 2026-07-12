@@ -7,7 +7,6 @@ import unittest
 from pathlib import Path
 from unittest.mock import AsyncMock, patch
 
-
 BACKEND_DIR = Path(__file__).resolve().parents[1]
 if str(BACKEND_DIR) not in sys.path:
     sys.path.insert(0, str(BACKEND_DIR))
@@ -27,9 +26,7 @@ class CredentialDeletionTests(unittest.IsolatedAsyncioTestCase):
         }
         manager._storage_adapter.delete_credential.return_value = True
 
-        with patch(
-            "core.credential_manager.retire_credential_usage"
-        ) as retire_usage:
+        with patch("core.credential_manager.retire_credential_usage") as retire_usage:
             deleted = await manager.remove_credential(
                 "google-ai-studio-fingerprint.json",
                 mode="primary",
@@ -51,9 +48,7 @@ class CredentialDeletionTests(unittest.IsolatedAsyncioTestCase):
         }
         manager._storage_adapter.delete_credential.return_value = False
 
-        with patch(
-            "core.credential_manager.retire_credential_usage"
-        ) as retire_usage:
+        with patch("core.credential_manager.retire_credential_usage") as retire_usage:
             deleted = await manager.remove_credential(
                 "google-antigravity-fingerprint.json",
                 mode="primary",

@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import os
 import sys
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from starlette.requests import Request
 from starlette.responses import JSONResponse
@@ -46,16 +48,43 @@ class SecurityHeaderTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(response.headers["cache-control"], "no-store")
         self.assertEqual(response.headers["x-frame-options"], "DENY")
 
-    async def test_https_proxy_requests_receive_hsts(self):
+    async def test_untrusted_forwarded_proto_does_not_enable_hsts(self):
+        async def next_handler(_request):
+            return JSONResponse({"ok": True})
+
+        with patch.dict(os.environ, {"TRUST_PROXY_HEADERS": ""}):
+            response = await add_security_headers(
+                build_request("/health", forwarded_proto="https"),
+                next_handler,
+            )
+
+        self.assertNotIn("strict-transport-security", response.headers)
+
+    async def test_trusted_https_proxy_requests_receive_hsts(self):
+        async def next_handler(_request):
+            return JSONResponse({"ok": True})
+
+        with patch.dict(os.environ, {"TRUST_PROXY_HEADERS": "true"}):
+            response = await add_security_headers(
+                build_request("/health", forwarded_proto="https"),
+                next_handler,
+            )
+
+        self.assertIn("max-age=31536000", response.headers["strict-transport-security"])
+
+    async def test_static_assets_receive_explicit_cache_policy(self):
         async def next_handler(_request):
             return JSONResponse({"ok": True})
 
         response = await add_security_headers(
-            build_request("/health", forwarded_proto="https"),
+            build_request("/frontend/assets/logo.png"),
             next_handler,
         )
 
-        self.assertIn("max-age=31536000", response.headers["strict-transport-security"])
+        self.assertEqual(
+            response.headers["cache-control"],
+            "public, max-age=86400",
+        )
 
 
 if __name__ == "__main__":

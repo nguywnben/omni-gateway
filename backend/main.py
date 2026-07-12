@@ -1,41 +1,38 @@
-"""Internal implementation detail."""
-
 import asyncio
 import os
 import sys
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-
 BACKEND_DIR = Path(__file__).resolve().parent
 if str(BACKEND_DIR) not in sys.path:
     sys.path.insert(0, str(BACKEND_DIR))
 
-from fastapi import FastAPI, Response
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.staticfiles import StaticFiles
-
-from config import get_server_host, get_server_port
-from log import configure_logging, log
-from paths import FRONTEND_DIR
+from app_version import get_application_version
+from config import get_server_host, get_server_port, trust_proxy_headers_enabled
 
 # Import managers and utilities
 from core.credential_manager import credential_manager
+from core.health import router as health_router
+from core.keep_alive import keep_alive_service
+from core.panel import router as panel_router
+from core.router.primary.anthropic import router as primary_anthropic_router
+from core.router.primary.gemini import router as primary_gemini_router
+from core.router.primary.model_list import router as primary_model_list_router
 
 # Import all routers
 from core.router.primary.openai import router as primary_openai_router
 from core.router.primary.responses import router as primary_responses_router
-from core.router.primary.gemini import router as primary_gemini_router
-from core.router.primary.anthropic import router as primary_anthropic_router
-from core.router.primary.model_list import router as primary_model_list_router
 from core.router.vertex.gemini import router as vertex_gemini_router
-from core.router.vertex.openai import router as vertex_openai_router
 from core.router.vertex.model_list import router as vertex_model_list_router
+from core.router.vertex.openai import router as vertex_openai_router
 from core.task_manager import shutdown_all_tasks
-from core.panel import router as panel_router
-from core.health import router as health_router
-from core.keeplive import keepalive_service
-
+from fastapi import FastAPI, Response
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+from log import configure_logging, log
+from paths import FRONTEND_DIR
+from starlette.middleware.gzip import GZipMiddleware
 
 global_credential_manager = None
 
@@ -49,14 +46,13 @@ def _parse_csv_env(name: str) -> list[str]:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Internal implementation detail."""
     global global_credential_manager
 
     log.info("Starting the Omni Gateway service.")
 
-
     try:
         import config
+
         await config.init_config()
         log_config = await config.get_log_config()
         configure_logging(
@@ -68,42 +64,32 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         log.error(f"Failed to initialize the configuration cache: {e}")
 
-
     try:
-
-
         await credential_manager._get_or_create()
         log.info("Credential manager initialized.")
     except Exception as e:
         log.error(f"Credential manager initialization failed: {e}")
         global_credential_manager = None
 
-
-
-
     try:
-        await keepalive_service.start()
+        await keep_alive_service.start()
     except Exception as e:
         log.error(f"Failed to start the keep-alive service: {e}")
 
     yield
 
-
     log.info("Starting Omni Gateway shutdown.")
 
-
     try:
-        await keepalive_service.stop()
+        await keep_alive_service.stop()
     except Exception as e:
         log.error(f"Error while shutting down the keep-alive service: {e}")
-
 
     try:
         await shutdown_all_tasks(timeout=10.0)
         log.info("All asynchronous tasks have been shut down.")
     except Exception as e:
         log.error(f"Error while shutting down asynchronous tasks: {e}")
-
 
     if global_credential_manager:
         try:
@@ -115,11 +101,10 @@ async def lifespan(app: FastAPI):
     log.info("Omni Gateway stopped.")
 
 
-
 app = FastAPI(
     title="Omni Gateway",
     description="Universal AI router with smart auto-fallback, token-aware request cleanup, usage visibility, and seamless format translation.",
-    version="2.0.0",
+    version=get_application_version(),
     lifespan=lifespan,
 )
 
@@ -134,8 +119,17 @@ app.add_middleware(
     allow_origin_regex=cors_origin_regex,
     allow_credentials=cors_allow_credentials,
     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-    allow_headers=["Authorization", "Content-Type", "x-api-key", "x-goog-api-key", "x-anthropic-auth-token", "anthropic-auth-token", "access_token"],
+    allow_headers=[
+        "Authorization",
+        "Content-Type",
+        "x-api-key",
+        "x-goog-api-key",
+        "x-anthropic-auth-token",
+        "anthropic-auth-token",
+        "access_token",
+    ],
 )
+app.add_middleware(GZipMiddleware, minimum_size=1024, compresslevel=5)
 
 
 @app.middleware("http")
@@ -159,11 +153,14 @@ async def add_security_headers(request, call_next):
     )
     forwarded_proto = request.headers.get("x-forwarded-proto", "")
     is_https = request.url.scheme == "https" or (
-        forwarded_proto.split(",", 1)[0].strip().lower() == "https"
+        trust_proxy_headers_enabled()
+        and forwarded_proto.split(",", 1)[0].strip().lower() == "https"
     )
     if is_https:
         response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
-    if request.url.path.startswith(("/api/", "/v1", "/vertex/")):
+    if request.url.path.startswith("/frontend/"):
+        response.headers.setdefault("Cache-Control", "public, max-age=86400")
+    else:
         response.headers.setdefault("Cache-Control", "no-store")
     return response
 
@@ -201,13 +198,12 @@ app.include_router(vertex_model_list_router, prefix="", tags=["Vertex Model List
 app.mount("/frontend", StaticFiles(directory=str(FRONTEND_DIR)), name="frontend")
 
 
-
 @app.head("/keepalive")
 async def keepalive() -> Response:
     return Response(status_code=200)
 
+
 def main():
-    """Internal implementation detail."""
     from hypercorn.asyncio import serve
     from hypercorn.config import Config
     from hypercorn.run import run
@@ -237,7 +233,6 @@ def main():
     if workers == 1:
         asyncio.run(_run())
     else:
-
         port = int(os.environ.get("PORT", 4283))
         host = os.environ.get("HOST", "0.0.0.0")
 

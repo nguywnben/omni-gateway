@@ -19,9 +19,7 @@ class PasswordSecurityTests(unittest.TestCase):
 
         self.assertTrue(is_password_hash(encoded))
         self.assertNotIn("correct horse battery staple", encoded)
-        self.assertTrue(
-            verify_password_value("correct horse battery staple", encoded)
-        )
+        self.assertTrue(verify_password_value("correct horse battery staple", encoded))
         self.assertFalse(verify_password_value("incorrect password", encoded))
 
     def test_plaintext_legacy_values_remain_verifiable_for_migration(self):

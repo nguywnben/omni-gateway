@@ -2,6 +2,8 @@
 
 A universal AI router for coding tools. Omni Gateway provides smart auto-fallback, token-aware request cleanup, usage visibility, and seamless format translation so local agents, IDE assistants, and automation scripts can use free and premium LLM capacity through one stable API surface.
 
+> **Project status:** Beta. The SDK-compatible API is usable today, but storage migrations and configuration compatibility can still change before `1.0.0`. Back up persistent data before upgrading.
+
 ## Why Omni Gateway
 
 Modern coding workflows often mix clients and providers: OpenAI-compatible tools, Gemini-native SDKs, Anthropic-style agents, Google-backed credentials, and experimental model routes. Omni Gateway sits between those clients and model backends so each tool can keep speaking the format it already understands while the gateway handles routing, retries, request cleanup, and response normalization.
@@ -39,10 +41,14 @@ The public API stays stable while provider-specific adapters evolve behind Omni 
 ## Repository Structure
 
 ```text
-backend/     FastAPI entry point, routing core, format translators, storage, authentication
-frontend/    Management console HTML, CSS, and JavaScript
-deploy/      Docker, platform manifests, and install/start scripts
+backend/       FastAPI composition root, routing core, translators, storage, and tests
+frontend/      Management console markup, styles, scripts, and provider assets
+deploy/        Container definitions, platform manifests, and operating-system scripts
+docs/          Architecture notes and maintained project assets
+.github/       CI, dependency automation, and contribution templates
 ```
+
+See [Architecture](docs/architecture.md) for module boundaries, request flow, state ownership, and the planned decomposition of the largest modules.
 
 ## Deployment
 
@@ -78,6 +84,8 @@ http://YOUR_SERVER_IP:4283
 ```
 
 On first run, create the console password on the setup screen. No default password is shipped. Passwords managed by the application are stored as salted scrypt hashes, control-panel sessions use HttpOnly cookies, and public SDK requests authenticate with the generated `sk-ogw-` API key.
+
+For an immediately public deployment, preconfigure `PANEL_PASSWORD` or keep port `4283` firewalled until setup is complete. The first successful setup request establishes the console password.
 
 If the server firewall is enabled, allow the gateway port:
 
@@ -121,7 +129,7 @@ Use the Python workflow when developing or debugging the gateway locally:
 ```bash
 python -m venv .venv
 source .venv/bin/activate
-pip install -r requirements.txt
+pip install -r requirements-dev.txt
 cp .env.example .env
 python backend/main.py
 ```
@@ -131,7 +139,7 @@ On Windows PowerShell:
 ```powershell
 py -3.12 -m venv .venv
 .\.venv\Scripts\Activate.ps1
-pip install -r requirements.txt
+pip install -r requirements-dev.txt
 Copy-Item .env.example .env
 python backend/main.py
 ```
@@ -152,6 +160,8 @@ Omni Gateway reads configuration from environment variables first, then stored c
 | --- | --- | --- |
 | `HOST` | `0.0.0.0` | Bind address. |
 | `PORT` | `4283` | HTTP port. |
+| `HOST_PORT` | `4283` | Host-side port used only by Docker Compose. |
+| `WORKERS` | `1` | Hypercorn worker count. Keep `1` with local SQLite/file storage; horizontal scaling requires shared storage and coordinated state. |
 | `CORS_ORIGINS` | empty | Comma-separated browser origins allowed to call the API cross-origin. Leave empty for same-origin console usage. |
 | `CORS_ORIGIN_REGEX` | empty | Optional regex for managed dynamic browser origins. |
 | `API_KEY` | generated automatically | Preferred key for public client API requests. Must start with `sk-ogw-`. |
@@ -161,6 +171,7 @@ Omni Gateway reads configuration from environment variables first, then stored c
 | `PANEL_COOKIE_SECURE` | automatic | Set `true` to require HTTPS-only panel cookies. Leave empty to detect HTTPS through `X-Forwarded-Proto`. |
 | `PANEL_LOGIN_WINDOW_SECONDS` | `300` | Login rate-limit window in seconds. |
 | `PANEL_LOGIN_MAX_ATTEMPTS` | `10` | Failed login attempts allowed per client within the rate-limit window. |
+| `TRUST_PROXY_HEADERS` | `false` | Accept client/protocol forwarding headers only from a trusted reverse proxy that overwrites them. |
 | `CREDENTIALS_DIR` | `./backend/data/creds` | Credential storage directory. In Docker, persist `/app/backend/data/creds` with a host volume. |
 | `CODE_ASSIST_ENDPOINT` | `https://cloudcode-pa.googleapis.com` | Code Assist backend endpoint. |
 | `API_URL` | `https://daily-cloudcode-pa.googleapis.com` | Provider backend endpoint. |
@@ -384,17 +395,23 @@ The payload can be a single credential object, an array, or `{ "credentials": [.
 This section is for contributors and local debugging. Production deployments should use Docker with persistent host volumes.
 
 ```bash
-pip install -r requirements.txt
-python -m compileall backend
+python -m pip install -r requirements-dev.txt
+ruff check backend
+ruff format --check backend
+python -m compileall -q backend
+python -m unittest discover -s backend/tests -p 'test_*.py'
+node --check frontend/control-panel.js
+yamllint --strict .github deploy .yamllint.yml
+python -m pip_audit --local --progress-spinner off
+```
+
+Start the service after the checks pass:
+
+```bash
 python backend/main.py
 ```
 
-Useful checks:
-
-```bash
-rg -n -i "legacy-string" .
-git status --short
-```
+The production baseline is Python 3.12, and CI currently verifies Python 3.12 and 3.14. See [Contributing](CONTRIBUTING.md) for the pull-request workflow and review expectations.
 
 ## Deployment Notes
 
@@ -402,6 +419,7 @@ git status --short
 - Use a dedicated `API_KEY` for client integrations and a separate `PANEL_PASSWORD` for console access.
 - Put Omni Gateway behind a reverse proxy with TLS when reachable outside localhost.
 - Configure the reverse proxy to pass `X-Forwarded-Proto`; set `PANEL_COOKIE_SECURE=true` when HTTPS termination is guaranteed.
+- Set `TRUST_PROXY_HEADERS=true` only when the service is reachable exclusively through a trusted proxy that replaces `X-Forwarded-For` and `X-Forwarded-Proto`.
 - Use `GET /health` for process liveness and `GET /ready` for storage-aware readiness checks.
 - The Docker image starts as root only long enough to repair mounted data-directory ownership, then runs the service as the unprivileged `gateway` user.
 - Set `CORS_ORIGINS` to explicit trusted origins when browser clients need cross-origin access.
@@ -410,6 +428,14 @@ git status --short
 - Use MongoDB/PostgreSQL for multi-instance deployments.
 - Keep log retention and credential rotation policies aligned with your usage limits.
 - Rotate credentials immediately if a repository or platform scanner reports a leaked secret.
+- The Render Blueprint uses a paid service with a persistent disk. Render free services use ephemeral filesystems and are suitable only for disposable evaluation.
+
+## Community and Project Health
+
+- Read [Contributing](CONTRIBUTING.md) before opening a pull request.
+- Report vulnerabilities through the private process in [Security Policy](SECURITY.md).
+- Review [Changelog](CHANGELOG.md) for release-level changes.
+- Follow the [Code of Conduct](CODE_OF_CONDUCT.md) in all project spaces.
 
 ## License
 

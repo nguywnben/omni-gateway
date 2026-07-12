@@ -1,0 +1,5 @@
+-r requirements.txt
+
+pip-audit==2.10.1
+ruff==0.15.21
+yamllint==1.38.0

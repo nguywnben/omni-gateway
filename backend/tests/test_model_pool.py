@@ -8,11 +8,12 @@ from unittest.mock import AsyncMock, patch
 
 from starlette.responses import Response
 
-
 BACKEND_DIR = Path(__file__).resolve().parents[1]
 if str(BACKEND_DIR) not in sys.path:
     sys.path.insert(0, str(BACKEND_DIR))
 
+from core.api.primary import fetch_provider_model_ids
+from core.credential_manager import CredentialManager
 from core.model_pool import (
     DEFAULT_VIRTUAL_MODEL_ALIAS,
     ModelCatalogService,
@@ -24,8 +25,6 @@ from core.model_pool import (
     resolve_model_request,
     save_virtual_model_pool,
 )
-from core.credential_manager import CredentialManager
-from core.api.primary import fetch_provider_model_ids
 from core.models import ClaudeRequest, GeminiRequest, OpenAIChatCompletionRequest
 from core.router.primary.anthropic import messages as anthropic_messages
 from core.router.primary.gemini import generate_content as gemini_generate_content
@@ -201,18 +200,16 @@ class ModelPoolTests(unittest.IsolatedAsyncioTestCase):
             side_effect=[None, ("credential.json", {"provider": "google_antigravity"})]
         )
 
-        result = await manager.get_valid_model_credential(
-            ["gemini-2.5-pro", "gemini-2.5-flash"]
-        )
+        result = await manager.get_valid_model_credential(["gemini-2.5-pro", "gemini-2.5-flash"])
 
         self.assertEqual(result[0], "gemini-2.5-flash")
         self.assertEqual(result[1], "credential.json")
         self.assertEqual(manager.get_valid_credential.await_count, 2)
 
-    async def test_openai_virtual_model_routes_candidates_and_preserves_alias(self):
+    async def test_openai_virtual_model_routes_hi_prompt_and_preserves_alias(self):
         request = OpenAIChatCompletionRequest(
             model="omway",
-            messages=[{"role": "user", "content": "Hello"}],
+            messages=[{"role": "user", "content": "Hi"}],
         )
         upstream = Response(
             content=json.dumps(

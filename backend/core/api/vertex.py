@@ -1,28 +1,25 @@
-"""Internal implementation detail."""
-
 import asyncio
 import base64
 import json
 import os
-import re
 import random
+import re
 import string
 from typing import Any, Dict, Optional, Tuple
 
+from core.converter.thought_signature import decode_tool_id_and_signature
 from fastapi import Response
 from log import log
-from core.converter.thoughtSignature_fix import decode_tool_id_and_signature
 
 try:
     import wreq
     from wreq.emulation import Emulation
+
     WREQ_AVAILABLE = True
 except ImportError:
     wreq = None
     Emulation = None
     WREQ_AVAILABLE = False
-
-
 
 
 RECAPTCHA_BASE = "https://www.google.com"
@@ -43,6 +40,7 @@ def _get_batch_graphql_url() -> str:
     if not api_key:
         raise RuntimeError("VERTEX_ANON_API_KEY is required for Vertex anonymous routing")
     return f"{BATCH_GRAPHQL_ENDPOINT}?key={api_key}&prettyPrint=false"
+
 
 QUERY_SIGNATURE = "2/l8eCsMMY49imcDQ/lwwXyL8cYtTjxZBF2dNqy69LodY="
 OPERATION_NAME = "StreamGenerateContentAnonymous"
@@ -70,15 +68,17 @@ _QUOTA_KEYWORDS = ("Resource has been exhausted", "quota", "RESOURCE_EXHAUSTED",
 
 
 _SUPPORTED_VAR_FIELDS = [
-    "contents", "tools", "toolConfig", "systemInstruction",
-    "safetySettings", "generationConfig",
+    "contents",
+    "tools",
+    "toolConfig",
+    "systemInstruction",
+    "safetySettings",
+    "generationConfig",
 ]
 
 
 def _random_string(n: int) -> str:
     return "".join(random.choices(string.ascii_lowercase + string.digits, k=n))
-
-
 
 
 def _anchor_headers() -> Dict[str, str]:
@@ -105,7 +105,9 @@ def _anchor_headers() -> Dict[str, str]:
     }
 
 
-def _xhr_headers(content_type: str, accept: str, origin: str, referer: str, site: str) -> Dict[str, str]:
+def _xhr_headers(
+    content_type: str, accept: str, origin: str, referer: str, site: str
+) -> Dict[str, str]:
     h = {
         "sec-ch-ua": SEC_CH_UA,
         "sec-ch-ua-mobile": "?0",
@@ -152,23 +154,44 @@ def _batch_graphql_headers() -> Dict[str, str]:
 
 # ==================== reCAPTCHA ====================
 
+
 async def _fetch_recaptcha_token_once() -> Optional[str]:
-    """Internal implementation detail."""
     if not WREQ_AVAILABLE:
         return None
     try:
         _EMULATION_POOL = [
-            Emulation.Chrome131, Emulation.Chrome132, Emulation.Chrome133,
-            Emulation.Chrome134, Emulation.Chrome135, Emulation.Chrome136,
-            Emulation.Chrome137, Emulation.Chrome138, Emulation.Chrome139,
-            Emulation.Chrome140, Emulation.Chrome141, Emulation.Chrome142,
-            Emulation.Chrome143, Emulation.Chrome144, Emulation.Chrome145,
-            Emulation.Chrome146, Emulation.Chrome147,
-            Emulation.Edge131, Emulation.Edge134, Emulation.Edge135,
-            Emulation.Edge136, Emulation.Edge137, Emulation.Edge138,
-            Emulation.Edge139, Emulation.Edge140, Emulation.Edge141,
-            Emulation.Edge142, Emulation.Edge143, Emulation.Edge144,
-            Emulation.Edge145, Emulation.Edge146, Emulation.Edge147,
+            Emulation.Chrome131,
+            Emulation.Chrome132,
+            Emulation.Chrome133,
+            Emulation.Chrome134,
+            Emulation.Chrome135,
+            Emulation.Chrome136,
+            Emulation.Chrome137,
+            Emulation.Chrome138,
+            Emulation.Chrome139,
+            Emulation.Chrome140,
+            Emulation.Chrome141,
+            Emulation.Chrome142,
+            Emulation.Chrome143,
+            Emulation.Chrome144,
+            Emulation.Chrome145,
+            Emulation.Chrome146,
+            Emulation.Chrome147,
+            Emulation.Edge131,
+            Emulation.Edge134,
+            Emulation.Edge135,
+            Emulation.Edge136,
+            Emulation.Edge137,
+            Emulation.Edge138,
+            Emulation.Edge139,
+            Emulation.Edge140,
+            Emulation.Edge141,
+            Emulation.Edge142,
+            Emulation.Edge143,
+            Emulation.Edge144,
+            Emulation.Edge145,
+            Emulation.Edge146,
+            Emulation.Edge147,
         ]
         emulation = random.choice(_EMULATION_POOL)
 
@@ -192,7 +215,9 @@ async def _fetch_recaptcha_token_once() -> Optional[str]:
         anchor_body = await anchor_resp.text()
         m = _TOKEN_RE.search(anchor_body)
         if not m:
-            log.warning(f"[VERTEX RECAPTCHA] anchor token regex miss, body[:200]={anchor_body[:200]}")
+            log.warning(
+                f"[VERTEX RECAPTCHA] anchor token regex miss, body[:200]={anchor_body[:200]}"
+            )
             return None
         base_token = m.group(1)
 
@@ -230,7 +255,7 @@ async def _fetch_recaptcha_token_once() -> Optional[str]:
         reload_body = await reload_resp.text()
         rm = _RRESP_RE.search(reload_body)
         if not rm:
-            log.warning(f"[VERTEX RECAPTCHA] rresp regex miss in reload response")
+            log.warning("[VERTEX RECAPTCHA] rresp regex miss in reload response")
             return None
 
         return rm.group(1)
@@ -241,7 +266,6 @@ async def _fetch_recaptcha_token_once() -> Optional[str]:
 
 
 async def fetch_recaptcha_token() -> Optional[str]:
-    """Internal implementation detail."""
     for attempt in range(3):
         log.debug(f"[VERTEX RECAPTCHA] attempt {attempt + 1}/3")
         token = await _fetch_recaptcha_token_once()
@@ -253,23 +277,22 @@ async def fetch_recaptcha_token() -> Optional[str]:
     return None
 
 
-
-
 _SKIP_THOUGHT_SENTINEL = "skip_thought_signature_validator"
 _SKIP_THOUGHT_SENTINEL_B64 = base64.b64encode(_SKIP_THOUGHT_SENTINEL.encode()).decode()
 
 
 def _drop_invalid_tool_turns(contents: list) -> list:
-    """Internal implementation detail."""
 
     invalid_indices = set()
     for i, msg in enumerate(contents):
         if not isinstance(msg, dict) or msg.get("role") != "model":
             continue
         parts = msg.get("parts", [])
-        fc_parts = [p for p in parts if isinstance(p, dict) and (
-            "functionCall" in p or "function_call" in p
-        )]
+        fc_parts = [
+            p
+            for p in parts
+            if isinstance(p, dict) and ("functionCall" in p or "function_call" in p)
+        ]
         if not fc_parts:
             continue
         all_empty = all(
@@ -284,7 +307,8 @@ def _drop_invalid_tool_turns(contents: list) -> list:
                 if isinstance(next_msg, dict) and next_msg.get("role") == "user":
                     next_parts = next_msg.get("parts", [])
                     if next_parts and all(
-                        isinstance(p, dict) and ("functionResponse" in p or "function_response" in p)
+                        isinstance(p, dict)
+                        and ("functionResponse" in p or "function_response" in p)
                         for p in next_parts
                     ):
                         invalid_indices.add(i + 1)
@@ -292,19 +316,19 @@ def _drop_invalid_tool_turns(contents: list) -> list:
     if not invalid_indices:
         return contents
     result = [msg for i, msg in enumerate(contents) if i not in invalid_indices]
-    log.debug(f"[vertex] dropped {len(invalid_indices)} invalid tool-turn messages with empty functionCall names.")
+    log.debug(
+        f"[vertex] dropped {len(invalid_indices)} invalid tool-turn messages with empty functionCall names."
+    )
     return result
 
 
 def _fix_thought_signatures(contents: list) -> list:
-    """Internal implementation detail."""
     for msg in contents:
         if not isinstance(msg, dict):
             continue
         for part in msg.get("parts", []):
             if not isinstance(part, dict):
                 continue
-
 
             if "functionResponse" in part or "function_response" in part:
                 part.pop("thoughtSignature", None)
@@ -318,7 +342,6 @@ def _fix_thought_signatures(contents: list) -> list:
 
             if not (has_fc or has_thought or has_sig):
                 continue
-
 
             signature = None
             if has_fc:
@@ -334,7 +357,6 @@ def _fix_thought_signatures(contents: list) -> list:
 
 
 def _fix_function_response_names(contents: list) -> list:
-    """Internal implementation detail."""
 
     fc_names = []
     for msg in contents:
@@ -346,7 +368,6 @@ def _fix_function_response_names(contents: list) -> list:
             fc = part.get("functionCall") or part.get("function_call")
             if isinstance(fc, dict) and fc.get("name"):
                 fc_names.append(fc["name"])
-
 
     name_iter = iter(fc_names)
     for msg in contents:
@@ -362,12 +383,13 @@ def _fix_function_response_names(contents: list) -> list:
 
 
 def _build_variables(model: str, gemini_payload: Dict[str, Any]) -> Dict[str, Any]:
-    """Internal implementation detail."""
     if "contents" in gemini_payload and isinstance(gemini_payload["contents"], list):
         gemini_payload["contents"] = _drop_invalid_tool_turns(gemini_payload["contents"])
         gemini_payload["contents"] = _fix_thought_signatures(gemini_payload["contents"])
         gemini_payload["contents"] = _fix_function_response_names(gemini_payload["contents"])
-    log.debug(f"[VERTEX] contents to upstream: {json.dumps(gemini_payload.get('contents', []), ensure_ascii=False)}")
+    log.debug(
+        f"[VERTEX] contents to upstream: {json.dumps(gemini_payload.get('contents', []), ensure_ascii=False)}"
+    )
     vars_: Dict[str, Any] = {"model": model}
     for field in _SUPPORTED_VAR_FIELDS:
         if field in gemini_payload:
@@ -375,8 +397,9 @@ def _build_variables(model: str, gemini_payload: Dict[str, Any]) -> Dict[str, An
     return vars_
 
 
-def _build_request_payload(model: str, gemini_payload: Dict[str, Any], recaptcha_token: str) -> Dict[str, Any]:
-    """Internal implementation detail."""
+def _build_request_payload(
+    model: str, gemini_payload: Dict[str, Any], recaptcha_token: str
+) -> Dict[str, Any]:
     vars_ = _build_variables(model, gemini_payload)
     vars_["region"] = "global"
     vars_["recaptchaToken"] = recaptcha_token
@@ -396,8 +419,6 @@ def _build_request_payload(model: str, gemini_payload: Dict[str, Any], recaptcha
     }
 
 
-
-
 def _is_auth_error(text: str) -> bool:
     return "Failed to verify action" in text or "The caller does not have permission" in text
 
@@ -407,7 +428,6 @@ def _is_quota_error(text: str) -> bool:
 
 
 def _parse_json_objects(raw_text: str):
-    """Internal implementation detail."""
     i = 0
     while i < len(raw_text):
         start = raw_text.find("{", i)
@@ -435,7 +455,7 @@ def _parse_json_objects(raw_text: str):
                 elif ch == "}":
                     depth -= 1
                     if depth == 0:
-                        json_str = raw_text[start:j + 1]
+                        json_str = raw_text[start : j + 1]
                         try:
                             obj = json.loads(json_str)
                             yield obj, j + 1
@@ -449,7 +469,6 @@ def _parse_json_objects(raw_text: str):
 
 
 def _process_object(obj: Dict[str, Any]) -> Tuple[Optional[Dict[str, Any]], Optional[str], bool]:
-    """Internal implementation detail."""
     results = obj.get("results", [])
     if not isinstance(results, list):
         return None, None, False
@@ -457,7 +476,6 @@ def _process_object(obj: Dict[str, Any]) -> Tuple[Optional[Dict[str, Any]], Opti
     for result in results:
         if not isinstance(result, dict):
             continue
-
 
         errors = result.get("errors", [])
         if errors and isinstance(errors, list):
@@ -496,9 +514,7 @@ def _process_object(obj: Dict[str, Any]) -> Tuple[Optional[Dict[str, Any]], Opti
 
 
 def _clean_part(part: Dict[str, Any]) -> Optional[Dict[str, Any]]:
-    """Internal implementation detail."""
     out: Dict[str, Any] = {}
-
 
     thought = part.get("thought")
     if thought is True:
@@ -508,26 +524,21 @@ def _clean_part(part: Dict[str, Any]) -> Optional[Dict[str, Any]]:
     if part.get("thoughtSignature"):
         out["thoughtSignature"] = part["thoughtSignature"]
 
-
     text = part.get("text")
     if isinstance(text, str) and text:
         out["text"] = text
-
 
     fc = part.get("functionCall")
     if isinstance(fc, dict) and fc.get("name", "").strip():
         out["functionCall"] = fc
 
-
     fr = part.get("functionResponse")
     if isinstance(fr, dict) and fr.get("name", "").strip():
         out["functionResponse"] = fr
 
-
     inline = part.get("inlineData")
     if isinstance(inline, dict) and inline.get("mimeType") and inline.get("data"):
         out["inlineData"] = inline
-
 
     fd = part.get("fileData")
     if isinstance(fd, dict) and fd.get("fileUri"):
@@ -537,7 +548,6 @@ def _clean_part(part: Dict[str, Any]) -> Optional[Dict[str, Any]]:
 
 
 def _extract_chunk(data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
-    """Internal implementation detail."""
     chunk: Dict[str, Any] = {}
 
     if "candidates" in data and data["candidates"] is not None:
@@ -551,7 +561,13 @@ def _extract_chunk(data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
                 if isinstance(content, dict):
                     raw_parts = content.get("parts", [])
                     role = content.get("role") or "model"
-                    clean_parts = [cp for p in raw_parts if isinstance(p, dict) for cp in [_clean_part(p)] if cp]
+                    clean_parts = [
+                        cp
+                        for p in raw_parts
+                        if isinstance(p, dict)
+                        for cp in [_clean_part(p)]
+                        if cp
+                    ]
                     cleaned.append({**cand, "content": {"role": role, "parts": clean_parts}})
                 else:
                     cleaned.append(cand)
@@ -575,13 +591,10 @@ def _get_finish_reason(chunk: Dict[str, Any]) -> str:
     return ""
 
 
-
-
 async def stream_request(
     body: Dict[str, Any],
     native: bool = False,
 ):
-    """Internal implementation detail."""
     if not WREQ_AVAILABLE:
         yield Response(
             content='{"error":{"code":503,"message":"wreq not installed, vertex channel unavailable","status":"UNAVAILABLE"}}',
@@ -607,7 +620,15 @@ async def stream_request(
         if not recaptcha_token:
             if attempt >= max_retries:
                 yield Response(
-                    content=json.dumps({"error": {"code": 401, "message": "Could not fetch reCAPTCHA token", "status": "UNAUTHENTICATED"}}),
+                    content=json.dumps(
+                        {
+                            "error": {
+                                "code": 401,
+                                "message": "Could not fetch reCAPTCHA token",
+                                "status": "UNAUTHENTICATED",
+                            }
+                        }
+                    ),
                     status_code=401,
                     media_type="application/json",
                 )
@@ -637,7 +658,15 @@ async def stream_request(
                 recaptcha_token = None
                 continue
             yield Response(
-                content=json.dumps({"error": {"code": 500, "message": "The upstream streaming request failed unexpectedly.", "status": "INTERNAL"}}),
+                content=json.dumps(
+                    {
+                        "error": {
+                            "code": 500,
+                            "message": "The upstream streaming request failed unexpectedly.",
+                            "status": "INTERNAL",
+                        }
+                    }
+                ),
                 status_code=500,
                 media_type="application/json",
             )
@@ -688,7 +717,6 @@ async def stream_request(
             )
             return
 
-
         try:
             async with resp:
                 async with resp.stream() as streamer:
@@ -727,7 +755,9 @@ async def stream_request(
                             if auth_retry or need_retry or quota_retry:
                                 break
 
-                            buffer = text[last_end:].encode("utf-8") if last_end < len(text) else b""
+                            buffer = (
+                                text[last_end:].encode("utf-8") if last_end < len(text) else b""
+                            )
         except Exception as e:
             log.error(f"[VERTEX STREAM] stream read error: {e}")
             if not content_yielded and attempt < max_retries:
@@ -749,7 +779,6 @@ async def stream_request(
             continue
 
         if not content_yielded and not need_retry:
-
             if attempt < max_retries:
                 recaptcha_token = None
                 await asyncio.sleep(1)
@@ -757,9 +786,10 @@ async def stream_request(
 
         break
 
-
     yield Response(
-        content=json.dumps({"error": {"code": 500, "message": "All retries exhausted", "status": "INTERNAL"}}),
+        content=json.dumps(
+            {"error": {"code": 500, "message": "All retries exhausted", "status": "INTERNAL"}}
+        ),
         status_code=500,
         media_type="application/json",
     )
@@ -768,7 +798,6 @@ async def stream_request(
 async def non_stream_request(
     body: Dict[str, Any],
 ) -> Response:
-    """Internal implementation detail."""
     if not WREQ_AVAILABLE:
         return Response(
             content='{"error":{"code":503,"message":"wreq not installed, vertex channel unavailable","status":"UNAVAILABLE"}}',
@@ -788,7 +817,15 @@ async def non_stream_request(
         if not recaptcha_token:
             if attempt >= max_retries:
                 return Response(
-                    content=json.dumps({"error": {"code": 401, "message": "Could not fetch reCAPTCHA token", "status": "UNAUTHENTICATED"}}),
+                    content=json.dumps(
+                        {
+                            "error": {
+                                "code": 401,
+                                "message": "Could not fetch reCAPTCHA token",
+                                "status": "UNAUTHENTICATED",
+                            }
+                        }
+                    ),
                     status_code=401,
                     media_type="application/json",
                 )
@@ -811,7 +848,15 @@ async def non_stream_request(
                 await asyncio.sleep(1)
                 continue
             return Response(
-                content=json.dumps({"error": {"code": 500, "message": "The upstream request failed unexpectedly.", "status": "INTERNAL"}}),
+                content=json.dumps(
+                    {
+                        "error": {
+                            "code": 500,
+                            "message": "The upstream request failed unexpectedly.",
+                            "status": "INTERNAL",
+                        }
+                    }
+                ),
                 status_code=500,
                 media_type="application/json",
             )
@@ -840,7 +885,6 @@ async def non_stream_request(
                 media_type="application/json",
             )
 
-
         result = _build_non_stream_response(raw_text)
         if result is None:
             log.error(f"[vertex non-stream] failed to parse upstream response: {raw_text[:300]}")
@@ -848,7 +892,15 @@ async def non_stream_request(
                 await asyncio.sleep(1)
                 continue
             return Response(
-                content=json.dumps({"error": {"code": 500, "message": "Failed to parse upstream response.", "status": "INTERNAL"}}),
+                content=json.dumps(
+                    {
+                        "error": {
+                            "code": 500,
+                            "message": "Failed to parse upstream response.",
+                            "status": "INTERNAL",
+                        }
+                    }
+                ),
                 status_code=500,
                 media_type="application/json",
             )
@@ -858,7 +910,15 @@ async def non_stream_request(
                 await asyncio.sleep(1)
                 continue
             return Response(
-                content=json.dumps({"error": {"code": 401, "message": result["auth_error"], "status": "UNAUTHENTICATED"}}),
+                content=json.dumps(
+                    {
+                        "error": {
+                            "code": 401,
+                            "message": result["auth_error"],
+                            "status": "UNAUTHENTICATED",
+                        }
+                    }
+                ),
                 status_code=401,
                 media_type="application/json",
             )
@@ -868,7 +928,15 @@ async def non_stream_request(
                 log.warning(f"[VERTEX NON-STREAM] upstream 429, retry {attempt + 1}/{max_retries}")
                 continue
             return Response(
-                content=json.dumps({"error": {"code": 429, "message": result["quota_error"], "status": "RESOURCE_EXHAUSTED"}}),
+                content=json.dumps(
+                    {
+                        "error": {
+                            "code": 429,
+                            "message": result["quota_error"],
+                            "status": "RESOURCE_EXHAUSTED",
+                        }
+                    }
+                ),
                 status_code=429,
                 media_type="application/json",
             )
@@ -880,14 +948,15 @@ async def non_stream_request(
         )
 
     return Response(
-        content=json.dumps({"error": {"code": 500, "message": "All retries exhausted", "status": "INTERNAL"}}),
+        content=json.dumps(
+            {"error": {"code": 500, "message": "All retries exhausted", "status": "INTERNAL"}}
+        ),
         status_code=500,
         media_type="application/json",
     )
 
 
 def _build_non_stream_response(raw_text: str) -> Optional[Dict[str, Any]]:
-    """Internal implementation detail."""
     all_parts: list = []
     finish_reason = ""
     usage_metadata: Dict[str, Any] = {}
@@ -980,7 +1049,6 @@ def _build_non_stream_response(raw_text: str) -> Optional[Dict[str, Any]]:
 
 
 def _accumulate_parts(data: Dict[str, Any], all_parts: list) -> None:
-    """Internal implementation detail."""
     candidates = data.get("candidates", [])
     if not isinstance(candidates, list):
         return
@@ -994,8 +1062,6 @@ def _accumulate_parts(data: Dict[str, Any], all_parts: list) -> None:
         if isinstance(parts, list):
             for p in parts:
                 if isinstance(p, dict) and any(
-                    v not in (None, "", {}, [])
-                    for k, v in p.items()
-                    if k != "thought"
+                    v not in (None, "", {}, []) for k, v in p.items() if k != "thought"
                 ):
                     all_parts.append(p)

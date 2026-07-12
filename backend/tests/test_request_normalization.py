@@ -7,13 +7,13 @@ import unittest
 from pathlib import Path
 from unittest.mock import AsyncMock, patch
 
-
 BACKEND_DIR = Path(__file__).resolve().parents[1]
 if str(BACKEND_DIR) not in sys.path:
     sys.path.insert(0, str(BACKEND_DIR))
 
-from core.converter.gemini_fix import normalize_gemini_request
 from core.api.primary import PrimarySessionState, prepare_provider_request, wrap_cli_request
+from core.converter.anthropic_to_gemini import clean_json_schema
+from core.converter.gemini_fix import normalize_gemini_request
 
 
 def request_payload(generation_config):
@@ -25,6 +25,11 @@ def request_payload(generation_config):
 
 
 class RequestNormalizationTests(unittest.IsolatedAsyncioTestCase):
+    async def test_nullable_anthropic_schema_preserves_nullability(self):
+        normalized = clean_json_schema({"type": ["string", "null"]})
+
+        self.assertEqual(normalized, {"type": "string", "nullable": True})
+
     async def test_client_output_limit_is_preserved(self):
         normalized = await normalize_gemini_request(
             request_payload({"maxOutputTokens": 256}), mode="primary"
@@ -110,9 +115,7 @@ class RequestNormalizationTests(unittest.IsolatedAsyncioTestCase):
                 ),
             ),
         ):
-            context = await prepare_provider_request(
-                credential, body, streaming=False
-            )
+            context = await prepare_provider_request(credential, body, streaming=False)
 
         self.assertEqual(context.provider_id, "google_ai_studio")
         self.assertEqual(
@@ -120,9 +123,7 @@ class RequestNormalizationTests(unittest.IsolatedAsyncioTestCase):
             "https://generativelanguage.googleapis.com/v1beta/models/"
             "gemini-2.5-flash:generateContent",
         )
-        self.assertEqual(
-            context.headers["x-goog-api-key"], "example-google-key-value"
-        )
+        self.assertEqual(context.headers["x-goog-api-key"], "example-google-key-value")
         self.assertNotIn("Authorization", context.headers)
         self.assertNotIn("sessionId", context.payload)
         self.assertNotIn("labels", context.payload)

@@ -1,16 +1,12 @@
-"""Internal implementation detail."""
-
 import os
 import time
 from collections import deque
 from typing import Set
 
-from fastapi import HTTPException, WebSocket
-from starlette.websockets import WebSocketState
-
 import config
+from fastapi import HTTPException, WebSocket
 from log import log
-
+from starlette.websockets import WebSocketState
 
 # =============================================================================
 
@@ -29,14 +25,15 @@ class ConnectionManager:
 
         self._auto_cleanup()
 
-
         if len(self.active_connections) >= self.max_connections:
             await websocket.close(code=1008, reason="Too many connections")
             return False
 
         await websocket.accept()
         self.active_connections.append(websocket)
-        log.debug(f"WebSocket connection established, current connections: {len(self.active_connections)}")
+        log.debug(
+            f"WebSocket connection established, current connections: {len(self.active_connections)}"
+        )
         return True
 
     def disconnect(self, websocket: WebSocket):
@@ -45,7 +42,9 @@ class ConnectionManager:
             self.active_connections.remove(websocket)
         except ValueError:
             pass
-        log.debug(f"WebSocket disconnected, number of current connections: {len(self.active_connections)}")
+        log.debug(
+            f"WebSocket disconnected, number of current connections: {len(self.active_connections)}"
+        )
 
     async def send_personal_message(self, message: str, websocket: WebSocket):
         try:
@@ -62,19 +61,16 @@ class ConnectionManager:
             except Exception:
                 dead_connections.append(conn)
 
-
         for dead_conn in dead_connections:
             self.disconnect(dead_conn)
 
     def _auto_cleanup(self):
-        """Internal implementation detail."""
         current_time = time.time()
         if current_time - self._last_cleanup > self._cleanup_interval:
             self.cleanup_dead_connections()
             self._last_cleanup = current_time
 
     def cleanup_dead_connections(self):
-        """Internal implementation detail."""
         original_count = len(self.active_connections)
 
         alive_connections = deque(
@@ -90,7 +86,9 @@ class ConnectionManager:
         self.active_connections = alive_connections
         cleaned = original_count - len(self.active_connections)
         if cleaned > 0:
-            log.debug(f"Cleaned up {cleaned} dead connections, remaining connections: {len(self.active_connections)}")
+            log.debug(
+                f"Cleaned up {cleaned} dead connections, remaining connections: {len(self.active_connections)}"
+            )
 
 
 # =============================================================================
@@ -99,7 +97,6 @@ class ConnectionManager:
 
 
 def is_mobile_user_agent(user_agent: str) -> bool:
-    """Internal implementation detail."""
     if not user_agent:
         return False
 
@@ -139,7 +136,7 @@ def validate_mode(mode: str = "code_assist") -> str:
     if normalized not in ["code_assist", "primary"]:
         raise HTTPException(
             status_code=400,
-            detail=f"Invalid mode parameter: '{mode}'. Only 'code_assist' or 'provider' are supported."
+            detail=f"Invalid mode parameter: '{mode}'. Only 'code_assist' or 'provider' are supported.",
         )
     return normalized
 
@@ -150,9 +147,7 @@ def public_mode_name(mode: str = "code_assist") -> str:
 
 
 def get_env_locked_keys() -> Set:
-    """Internal implementation detail."""
     env_locked_keys = set()
-
 
     for env_key, config_key in config.ENV_MAPPINGS.items():
         if os.getenv(env_key):

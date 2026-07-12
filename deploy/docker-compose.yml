@@ -4,22 +4,24 @@ services:
     pull_policy: always
     container_name: omni-gateway
     restart: unless-stopped
+    init: true
+    read_only: true
     ports:
-      - "${PORT:-4283}:${PORT:-4283}"
+      - "${HOST_PORT:-4283}:${PORT:-4283}"
     environment:
       # Password configuration. Leave unset for the first-run web setup screen.
-      # - PASSWORD=${PASSWORD}
-      # - API_PASSWORD=${API_PASSWORD:-your_api_password}
-      # - PANEL_PASSWORD=${PANEL_PASSWORD:-your_panel_password}
+      # - PANEL_PASSWORD=${PANEL_PASSWORD}
 
       # Server configuration
       - PORT=${PORT:-4283}
       - HOST=${HOST:-0.0.0.0}
+      - WORKERS=${WORKERS:-1}
       - CORS_ORIGINS=${CORS_ORIGINS:-}
       - PANEL_SESSION_TTL_SECONDS=${PANEL_SESSION_TTL_SECONDS:-86400}
       - PANEL_COOKIE_SECURE=${PANEL_COOKIE_SECURE:-}
       - PANEL_LOGIN_WINDOW_SECONDS=${PANEL_LOGIN_WINDOW_SECONDS:-300}
       - PANEL_LOGIN_MAX_ATTEMPTS=${PANEL_LOGIN_MAX_ATTEMPTS:-10}
+      - TRUST_PROXY_HEADERS=${TRUST_PROXY_HEADERS:-false}
 
       # Logging configuration
       - LOG_LEVEL=${LOG_LEVEL:-info}
@@ -40,10 +42,22 @@ services:
     volumes:
       - ${DATA_DIR:-/opt/omni-gateway}/creds:/app/backend/data/creds
       - ${DATA_DIR:-/opt/omni-gateway}/logs:/app/backend/data/logs
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=64m
+    security_opt:
+      - no-new-privileges:true
+    stop_grace_period: 30s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     healthcheck:
       test:
         - CMD-SHELL
-        - "python -c \"import os, urllib.request; port = os.getenv('PORT', '4283'); urllib.request.urlopen(f'http://127.0.0.1:{port}/ready', timeout=3)\""
+        - >-
+          python -c "import os, urllib.request; port = os.getenv('PORT', '4283');
+          urllib.request.urlopen(f'http://127.0.0.1:{port}/ready', timeout=3)"
       interval: 30s
       timeout: 5s
       retries: 3

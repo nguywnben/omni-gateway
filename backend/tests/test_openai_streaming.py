@@ -7,12 +7,11 @@ import sys
 import unittest
 from pathlib import Path
 
-
 BACKEND_DIR = Path(__file__).resolve().parents[1]
 if str(BACKEND_DIR) not in sys.path:
     sys.path.insert(0, str(BACKEND_DIR))
 
-from core.converter.openai2gemini import convert_gemini_to_openai_stream
+from core.converter.openai_to_gemini import convert_gemini_to_openai_stream
 
 
 def convert_chunk(candidate: dict) -> dict:

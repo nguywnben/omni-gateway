@@ -8,6 +8,9 @@ ARG REVISION="unknown"
 LABEL org.opencontainers.image.title="Omni Gateway" \
       org.opencontainers.image.description="Universal AI router for coding tools" \
       org.opencontainers.image.source="https://github.com/nguywnben/omni-gateway" \
+      org.opencontainers.image.url="https://github.com/nguywnben/omni-gateway" \
+      org.opencontainers.image.documentation="https://github.com/nguywnben/omni-gateway#readme" \
+      org.opencontainers.image.licenses="MIT" \
       org.opencontainers.image.created="${BUILD_DATE}" \
       org.opencontainers.image.version="${VERSION}" \
       org.opencontainers.image.revision="${REVISION}"
@@ -42,6 +45,7 @@ RUN chmod 0755 /usr/local/bin/omni-gateway-entrypoint && \
     chown -R gateway:gateway /app
 
 EXPOSE 4283
+STOPSIGNAL SIGTERM
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
     CMD python -c "import os, urllib.request; port = os.getenv('PORT', '4283'); urllib.request.urlopen(f'http://127.0.0.1:{port}/ready', timeout=3).read()" || exit 1

@@ -1,18 +1,18 @@
-# Credential files - should never be committed
-*.json
-!package.json
-!package-lock.json
-!tsconfig.json
-*.toml
-!pyproject.toml
+# Runtime credentials and application data
 creds/
+credentials/
 backend/data/
+credentials*.json
+*_credentials.json
+google-antigravity-*.json
+google-ai-studio-*.json
 CLAUDE.md
 GEMINI.md
-.kiro
+.kiro/
 
 # Local agent workspace files
 .agents/
+/skills-lock.json
 
 # Databases
 *.db
@@ -39,12 +39,9 @@ GEMINI.md
 *.token
 id_rsa
 id_ed25519
-*credentials*
-*secret*
+secrets/
 
 # Python
-uv.lock
-.python-version
 __pycache__/
 *.py[cod]
 *$py.class
@@ -150,7 +147,3 @@ backend/logs/
 *.bak
 tmp/
 temp/
-
-tools/
-aicode/
-gcli2api-master/

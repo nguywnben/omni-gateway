@@ -58,9 +58,7 @@ class ProviderCapabilityTests(unittest.TestCase):
             "model_ids": ["models/gemini-2.5-flash"],
         }
 
-        self.assertFalse(
-            credential_supports_model(credential, "other/gemini-2.5-flash")
-        )
+        self.assertFalse(credential_supports_model(credential, "other/gemini-2.5-flash"))
 
 
 if __name__ == "__main__":

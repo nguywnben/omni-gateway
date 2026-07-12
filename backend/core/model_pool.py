@@ -10,7 +10,6 @@ from typing import Any, Awaitable, Callable, Iterable, Mapping, Optional, Sequen
 
 from core.storage_adapter import get_storage_adapter
 
-
 DEFAULT_VIRTUAL_MODEL_ALIAS = "omway"
 MODEL_POOL_CONFIG_KEY = "virtual_model_pool"
 MODEL_CATALOG_TTL_SECONDS = 60.0

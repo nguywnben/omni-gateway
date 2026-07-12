@@ -3,7 +3,9 @@ kind: Template
 metadata:
   name: omni-gateway
 spec:
-  description: "A universal AI router for coding tools with smart auto-fallback, token-aware request cleanup, usage visibility, and seamless format translation."
+  description: >-
+    A universal AI router for coding tools with smart auto-fallback,
+    token-aware request cleanup, usage visibility, and seamless format translation.
   tags:
     - ai
     - api
@@ -11,10 +13,10 @@ spec:
     - gemini
     - openai
   variables:
-    - key: PASSWORD
+    - key: PANEL_PASSWORD
       type: STRING
-      name: Access password
-      description: Password used for API and control panel access.
+      name: Console password
+      description: Password used to access the Omni Gateway control panel.
     - key: DOMAIN
       type: DOMAIN
       name: Domain
@@ -30,7 +32,7 @@ spec:
     Anthropic-compatible, and native backend formats.
 
     After deployment, open your assigned domain, sign in with the configured
-    password, and add credentials from the control panel.
+    console password, and add credentials from the control panel.
   services:
     - name: omni-gateway
       template: PREBUILT
@@ -44,14 +46,18 @@ spec:
             port: 4283
             type: HTTP
         env:
-          PASSWORD:
-            default: ${PASSWORD}
+          PANEL_PASSWORD:
+            default: ${PANEL_PASSWORD}
           PORT:
             default: "4283"
           HOST:
             default: "0.0.0.0"
+          PANEL_COOKIE_SECURE:
+            default: "true"
+          TRUST_PROXY_HEADERS:
+            default: "true"
           DOMAIN:
             default: ${DOMAIN}
         volumes:
-          - id: creds
-            dir: /app/backend/data/creds
+          - id: data
+            dir: /app/backend/data

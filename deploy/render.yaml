@@ -4,13 +4,26 @@ services:
     runtime: docker
     dockerfilePath: ./deploy/Dockerfile
     dockerContext: .
-    plan: free
+    # Persistent credentials require a paid instance with an attached disk.
+    plan: starter
     region: singapore
     healthCheckPath: /ready
     envVars:
-      - key: PASSWORD
+      - key: PANEL_PASSWORD
         sync: false
       - key: HOST
         value: 0.0.0.0
       - key: PORT
         value: "10000"
+      - key: PANEL_COOKIE_SECURE
+        value: "true"
+      - key: TRUST_PROXY_HEADERS
+        value: "true"
+      - key: CREDENTIALS_DIR
+        value: /app/backend/data/creds
+      - key: LOG_FILE
+        value: /app/backend/data/logs/omni-gateway.log
+    disk:
+      name: omni-gateway-data
+      mountPath: /app/backend/data
+      sizeGB: 1

@@ -19,6 +19,28 @@ body:
           required: true
 
   - type: input
+    id: version
+    attributes:
+      label: Version
+      description: Provide the release, container tag, or commit hash.
+      placeholder: "v0.1.0-beta or 629337c"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: deployment
+    attributes:
+      label: Deployment
+      options:
+        - Docker
+        - Local Python environment
+        - Render
+        - Zeabur
+        - Other
+    validations:
+      required: true
+
+  - type: input
     id: channel
     attributes:
       label: Route or provider mode
@@ -34,7 +56,7 @@ body:
       description: The requested model name.
       placeholder: "gemini-2.5-flash"
     validations:
-      required: true
+      required: false
 
   - type: dropdown
     id: format
@@ -45,6 +67,8 @@ body:
         - OpenAI-compatible
         - Gemini native
         - Anthropic Messages
+        - Management console
+        - Not applicable
         - Other
     validations:
       required: true

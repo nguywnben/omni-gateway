@@ -4,10 +4,10 @@ import secrets
 import time
 from typing import List, Optional
 
-from config import get_panel_password
-from fastapi import Depends, HTTPException, Header, Query, Request, Response, status
-from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 import jwt
+from config import get_panel_password, trust_proxy_headers_enabled
+from fastapi import Depends, Header, HTTPException, Query, Request, Response, status
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from log import log
 
 # HTTP Bearer security scheme
@@ -20,8 +20,8 @@ CODE_ASSIST_PLATFORM = os.getenv("CODE_ASSIST_PLATFORM", "win32")
 CODE_ASSIST_ARCH = os.getenv("CODE_ASSIST_ARCH", "x64")
 CODE_ASSIST_SURFACE = os.getenv("CODE_ASSIST_SURFACE", "cloud-shell")
 
+
 def get_code_assist_user_agent(model: str = "") -> str:
-    """Internal implementation detail."""
     if model:
         return f"Code Assist/{CODE_ASSIST_VERSION}/{model} ({CODE_ASSIST_PLATFORM}; {CODE_ASSIST_ARCH}; {CODE_ASSIST_SURFACE})"
     return f"Code Assist/{CODE_ASSIST_VERSION} ({CODE_ASSIST_PLATFORM}; {CODE_ASSIST_ARCH}; {CODE_ASSIST_SURFACE})"
@@ -37,11 +37,11 @@ CODE_ASSIST_SCOPES = [
 ]
 
 SCOPES = [
-    'https://www.googleapis.com/auth/cloud-platform',
-    'https://www.googleapis.com/auth/userinfo.email',
-    'https://www.googleapis.com/auth/userinfo.profile',
-    'https://www.googleapis.com/auth/cclog',
-    'https://www.googleapis.com/auth/experimentsandconfigs'
+    "https://www.googleapis.com/auth/cloud-platform",
+    "https://www.googleapis.com/auth/userinfo.email",
+    "https://www.googleapis.com/auth/userinfo.profile",
+    "https://www.googleapis.com/auth/cclog",
+    "https://www.googleapis.com/auth/experimentsandconfigs",
 ]
 
 
@@ -56,11 +56,12 @@ BASE_MODELS = [
     "gemini-2.5-flash",
     "gemini-3-flash-preview",
     "gemini-3.1-pro-preview",
-    "gemini-3.1-flash-lite"
+    "gemini-3.1-flash-lite",
 ]
 
 
 # ====================== Model Helper Functions ======================
+
 
 def is_fake_streaming_model(model_name: str) -> bool:
     """Check if model name indicates fake streaming should be used."""
@@ -94,43 +95,33 @@ def get_available_models(router_type: str = "openai") -> List[str]:
     models = []
 
     for base_model in BASE_MODELS:
-
         models.append(base_model)
-
 
         models.append(f"fake-streaming/{base_model}")
 
-
         models.append(f"streaming-anti-truncation/{base_model}")
 
-
         thinking_suffixes = []
-
 
         if "gemini-2.5" in base_model:
             thinking_suffixes = ["-max", "-high", "-medium", "-low", "-minimal"]
 
         elif "gemini-3" in base_model:
             if "flash" in base_model:
-
                 thinking_suffixes = ["-high", "-medium", "-low", "-minimal"]
             elif "pro" in base_model:
-
                 thinking_suffixes = ["-low"]
 
         search_suffix = "-search"
-
 
         for thinking_suffix in thinking_suffixes:
             models.append(f"{base_model}{thinking_suffix}")
             models.append(f"fake-streaming/{base_model}{thinking_suffix}")
             models.append(f"streaming-anti-truncation/{base_model}{thinking_suffix}")
 
-
         models.append(f"{base_model}{search_suffix}")
         models.append(f"fake-streaming/{base_model}{search_suffix}")
         models.append(f"streaming-anti-truncation/{base_model}{search_suffix}")
-
 
         for thinking_suffix in thinking_suffixes:
             combined_suffix = f"{thinking_suffix}{search_suffix}"
@@ -143,6 +134,7 @@ def get_available_models(router_type: str = "openai") -> List[str]:
 
 # ====================== Authentication Functions ======================
 
+
 async def authenticate_flexible(
     request: Request,
     authorization: Optional[str] = Header(None),
@@ -151,42 +143,34 @@ async def authenticate_flexible(
     x_goog_api_key: Optional[str] = Header(None, alias="x-goog-api-key"),
     x_anthropic_auth_token: Optional[str] = Header(None, alias="x-anthropic-auth-token"),
     anthropic_auth_token: Optional[str] = Header(None, alias="anthropic-auth-token"),
-    key: Optional[str] = Query(None)
+    key: Optional[str] = Query(None),
 ) -> str:
-    """Internal implementation detail."""
     token = None
     auth_method = None
-
 
     if key:
         token = key
         auth_method = "URL parameter 'key'"
 
-
     elif x_goog_api_key:
         token = x_goog_api_key
         auth_method = "x-goog-api-key header"
-
 
     elif x_anthropic_auth_token:
         token = x_anthropic_auth_token
         auth_method = "x-anthropic-auth-token header"
 
-
     elif anthropic_auth_token:
         token = anthropic_auth_token
         auth_method = "anthropic-auth-token header"
-
 
     elif x_api_key:
         token = x_api_key
         auth_method = "x-api-key header"
 
-
     elif access_token:
         token = access_token
         auth_method = "access_token header"
-
 
     elif authorization:
         if not authorization.startswith("Bearer "):
@@ -198,7 +182,6 @@ async def authenticate_flexible(
         token = authorization[7:]
         auth_method = "Authorization Bearer header"
 
-
     if not token:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -206,27 +189,28 @@ async def authenticate_flexible(
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-
     from config import API_KEY_PREFIX, get_api_key
+
     api_key = await get_api_key()
 
     if not token.startswith(API_KEY_PREFIX):
         log.debug(f"Authentication failed using {auth_method}: invalid API key prefix")
         raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail=f"API key must start with {API_KEY_PREFIX}"
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=f"API key must start with {API_KEY_PREFIX}",
+            headers={"WWW-Authenticate": "Bearer"},
         )
 
     if not secrets.compare_digest(token, api_key):
         log.debug(f"Authentication failed using {auth_method}")
         raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Invalid API key."
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid API key.",
+            headers={"WWW-Authenticate": "Bearer"},
         )
 
     log.debug(f"Authentication successful using {auth_method}")
     return token
-
 
 
 authenticate_bearer = authenticate_flexible
@@ -256,7 +240,7 @@ def _panel_cookie_is_secure(request: Request) -> bool:
     if configured in {"0", "false", "no", "off"}:
         return False
     forwarded_proto = request.headers.get("x-forwarded-proto", "")
-    if forwarded_proto:
+    if forwarded_proto and trust_proxy_headers_enabled():
         return forwarded_proto.split(",", 1)[0].strip().lower() == "https"
     return request.url.scheme == "https"
 

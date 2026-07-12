@@ -2,8 +2,7 @@ import unittest
 from html.parser import HTMLParser
 from pathlib import Path
 
-
-FRONTEND_HTML = Path(__file__).parents[2] / "frontend" / "control_panel.html"
+FRONTEND_HTML = Path(__file__).parents[2] / "frontend" / "control-panel.html"
 
 
 class FormControlParser(HTMLParser):
@@ -39,9 +38,7 @@ class FrontendPasswordFormTests(unittest.TestCase):
 
     def find_control(self, control_id):
         return next(
-            control
-            for control in self.controls
-            if control["attributes"].get("id") == control_id
+            control for control in self.controls if control["attributes"].get("id") == control_id
         )
 
     def test_console_password_fields_are_scoped_to_the_admin_form(self):

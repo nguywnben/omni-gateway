@@ -8,13 +8,12 @@ from collections import deque
 from dataclasses import dataclass
 from typing import Any, Callable, Deque, Dict, Optional, Tuple
 
-from log import log
 from core.provider_registry import (
     credential_supports_model,
     get_credential_provider,
     normalize_provider_id,
 )
-
+from log import log
 
 CredentialResult = Tuple[str, Dict[str, Any]]
 CredentialKey = Tuple[str, str]
@@ -42,17 +41,13 @@ class SmartCredentialRouter:
         self._lease_ttl_seconds = max(1.0, float(lease_ttl_seconds))
         self._state_cache_ttl_seconds = max(0.0, float(state_cache_ttl_seconds))
         self._base_backoff_seconds = max(0.0, float(base_backoff_seconds))
-        self._max_backoff_seconds = max(
-            self._base_backoff_seconds, float(max_backoff_seconds)
-        )
+        self._max_backoff_seconds = max(self._base_backoff_seconds, float(max_backoff_seconds))
         self._lock = asyncio.Lock()
         self._leases: Dict[CredentialKey, Deque[float]] = {}
         self._failures: Dict[CredentialKey, FailurePenalty] = {}
         self._last_selected: Dict[CredentialKey, float] = {}
         self._providers: Dict[CredentialKey, str] = {}
-        self._state_cache: Dict[
-            str, Tuple[float, Dict[str, Dict[str, Any]]]
-        ] = {}
+        self._state_cache: Dict[str, Tuple[float, Dict[str, Dict[str, Any]]]] = {}
 
     def _prune_expired_leases(self, now: float) -> None:
         expires_before = now - self._lease_ttl_seconds
@@ -66,9 +61,7 @@ class SmartCredentialRouter:
             self._leases.pop(key, None)
 
     @staticmethod
-    def _is_model_available(
-        state: Dict[str, Any], model_name: Optional[str], now: float
-    ) -> bool:
+    def _is_model_available(state: Dict[str, Any], model_name: Optional[str], now: float) -> bool:
         if not model_name:
             return True
         cooldowns = state.get("model_cooldowns") or {}
@@ -112,9 +105,7 @@ class SmartCredentialRouter:
             key = (mode, filename)
             provider_penalty = 0
             if routing_strategy == "priority" and preferred_provider:
-                provider_penalty = int(
-                    self._providers.get(key) != preferred_provider
-                )
+                provider_penalty = int(self._providers.get(key) != preferred_provider)
             failure = self._failures.get(key)
             retry_after = failure.retry_after if failure else 0.0
             consecutive_failures = failure.consecutive_failures if failure else 0
@@ -153,9 +144,7 @@ class SmartCredentialRouter:
             key = (mode, filename)
             if key in self._providers:
                 continue
-            credential_data = await storage_adapter.get_credential(
-                filename, mode=mode
-            )
+            credential_data = await storage_adapter.get_credential(filename, mode=mode)
             if credential_data:
                 self._providers[key] = get_credential_provider(credential_data)
 
@@ -182,16 +171,12 @@ class SmartCredentialRouter:
                     now + self._state_cache_ttl_seconds,
                     states,
                 )
-            await self._load_candidate_providers(
-                storage_adapter, states, mode=mode
-            )
+            await self._load_candidate_providers(storage_adapter, states, mode=mode)
             normalized_strategy = (
                 "priority" if str(routing_strategy).lower() == "priority" else "balanced"
             )
             normalized_preferred_provider = (
-                normalize_provider_id(preferred_provider)
-                if preferred_provider
-                else None
+                normalize_provider_id(preferred_provider) if preferred_provider else None
             )
             ranked = self._rank_candidates(
                 states,
@@ -203,9 +188,7 @@ class SmartCredentialRouter:
             )
 
             for score, filename in ranked:
-                credential_data = await storage_adapter.get_credential(
-                    filename, mode=mode
-                )
+                credential_data = await storage_adapter.get_credential(filename, mode=mode)
                 if not credential_data:
                     continue
                 if not credential_supports_model(

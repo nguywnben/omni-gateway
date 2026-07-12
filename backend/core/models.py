@@ -3,10 +3,8 @@ from typing import Any, Dict, List, Optional, Union
 from pydantic import BaseModel, Field
 
 
-
 def model_to_dict(model: BaseModel) -> Dict[str, Any]:
-    """Internal implementation detail."""
-    if hasattr(model, 'model_dump'):
+    if hasattr(model, "model_dump"):
         # Pydantic v2
         return model.model_dump(exclude_none=True)
     else:
@@ -72,7 +70,6 @@ class OpenAIChatCompletionRequest(BaseModel):
 
     class Config:
         extra = "allow"  # Allow additional fields not explicitly defined
-
 
 
 ChatCompletionRequest = OpenAIChatCompletionRequest
@@ -158,8 +155,9 @@ class GeminiSystemInstruction(BaseModel):
 
 
 class GeminiImageConfig(BaseModel):
-    """Internal implementation detail."""
-    aspect_ratio: Optional[str] = None  # "1:1", "2:3", "3:2", "3:4", "4:3", "4:5", "5:4", "9:16", "16:9", "21:9"
+    aspect_ratio: Optional[str] = (
+        None  # "1:1", "2:3", "3:2", "3:4", "4:3", "4:5", "5:4", "9:16", "16:9", "21:9"
+    )
     image_size: Optional[str] = None  # "1K", "2K", "4K"
 
 

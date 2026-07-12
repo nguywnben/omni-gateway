@@ -16,9 +16,8 @@ BACKEND_DIR = Path(__file__).resolve().parents[1]
 if str(BACKEND_DIR) not in sys.path:
     sys.path.insert(0, str(BACKEND_DIR))
 
-from core.models import AccessCredentialsUpdateRequest
 import config
-from core.passwords import is_password_hash, verify_password_value
+from core.models import AccessCredentialsUpdateRequest
 from core.panel.config_routes import (
     ACCESS_SECRET_KEYS,
     ALLOWED_CONFIG_KEYS,
@@ -27,6 +26,7 @@ from core.panel.config_routes import (
     _redact_access_secrets,
     update_access_credentials,
 )
+from core.passwords import is_password_hash, verify_password_value
 
 
 class FakeStorageAdapter:
@@ -175,9 +175,7 @@ class AccessCredentialUpdateTests(unittest.IsolatedAsyncioTestCase):
         body = json.loads(response.body)
         self.assertTrue(is_password_hash(storage.values["panel_password"]))
         self.assertTrue(
-            verify_password_value(
-                "new-panel-password", storage.values["panel_password"]
-            )
+            verify_password_value("new-panel-password", storage.values["panel_password"])
         )
         self.assertEqual(body["updated"], ["panel_password"])
         self.assertNotIn("new-panel-password", response.body.decode())

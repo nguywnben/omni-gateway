@@ -6,7 +6,6 @@ import sys
 import unittest
 from pathlib import Path
 
-
 BACKEND_DIR = Path(__file__).resolve().parents[1]
 if str(BACKEND_DIR) not in sys.path:
     sys.path.insert(0, str(BACKEND_DIR))
@@ -110,9 +109,7 @@ class TokenCompressionTests(unittest.TestCase):
             ],
         }
 
-        self.assertGreater(
-            estimate_input_tokens(structured), estimate_input_tokens(plain)
-        )
+        self.assertGreater(estimate_input_tokens(structured), estimate_input_tokens(plain))
 
 
 if __name__ == "__main__":

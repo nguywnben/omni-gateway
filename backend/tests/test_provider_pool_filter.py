@@ -9,12 +9,11 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
-
 BACKEND_DIR = Path(__file__).resolve().parents[1]
 if str(BACKEND_DIR) not in sys.path:
     sys.path.insert(0, str(BACKEND_DIR))
 
-from core.panel.creds import get_creds_status_common
+from core.panel.credentials import get_creds_status_common
 
 
 class ProviderPoolFilterTests(unittest.IsolatedAsyncioTestCase):
@@ -67,11 +66,11 @@ class ProviderPoolFilterTests(unittest.IsolatedAsyncioTestCase):
 
         with (
             patch(
-                "core.panel.creds.deduplicate_credentials_by_account_email",
+                "core.panel.credentials.deduplicate_credentials_by_account_email",
                 new=AsyncMock(return_value={"deleted_count": 0}),
             ),
             patch(
-                "core.panel.creds.get_storage_adapter",
+                "core.panel.credentials.get_storage_adapter",
                 new=AsyncMock(return_value=adapter),
             ),
         ):

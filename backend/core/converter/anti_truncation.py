@@ -1,14 +1,10 @@
-"""Internal implementation detail."""
-
 import io
 import json
 import re
 from typing import Any, AsyncGenerator, Dict, List, Tuple
 
 from fastapi.responses import StreamingResponse
-
 from log import log
-
 
 DONE_MARKER = "[done]"
 CONTINUATION_PROMPT = f"""Please continue from exactly where the previous response was truncated.
@@ -24,8 +20,8 @@ Continue now:"""
 
 REGEX_REPLACEMENTS: List[Tuple[str, str, str]] = []
 
+
 def apply_regex_replacements(text: str) -> str:
-    """Internal implementation detail."""
     if not text:
         return text
 
@@ -34,9 +30,7 @@ def apply_regex_replacements(text: str) -> str:
 
     for rule_name, pattern, replacement in REGEX_REPLACEMENTS:
         try:
-
             regex = re.compile(pattern, re.IGNORECASE)
-
 
             new_text, count = regex.subn(replacement, processed_text)
 
@@ -56,13 +50,11 @@ def apply_regex_replacements(text: str) -> str:
 
 
 def apply_regex_replacements_to_payload(payload: Dict[str, Any]) -> Dict[str, Any]:
-    """Internal implementation detail."""
     if not REGEX_REPLACEMENTS:
         return payload
 
     modified_payload = payload.copy()
     request_data = modified_payload.get("request", {})
-
 
     contents = request_data.get("contents", [])
     if contents:
@@ -93,18 +85,15 @@ def apply_regex_replacements_to_payload(payload: Dict[str, Any]) -> Dict[str, An
 
 
 def apply_anti_truncation(payload: Dict[str, Any]) -> Dict[str, Any]:
-    """Internal implementation detail."""
 
     modified_payload = apply_regex_replacements_to_payload(payload)
     request_data = modified_payload.get("request", {})
-
 
     system_instruction = request_data.get("systemInstruction", {})
     if not system_instruction:
         system_instruction = {"parts": []}
     elif "parts" not in system_instruction:
         system_instruction["parts"] = []
-
 
     anti_truncation_instruction = {
         "text": f"""Strictly follow this completion rule:
@@ -124,7 +113,6 @@ More answer content...
 The marker must be alone on the final line with no extra characters before it."""
     }
 
-
     has_done_instruction = any(
         part.get("text", "").find(DONE_MARKER) != -1
         for part in system_instruction["parts"]
@@ -142,7 +130,6 @@ The marker must be alone on the final line with no extra characters before it.""
 
 
 class AntiTruncationStreamProcessor:
-    """Internal implementation detail."""
     def __init__(
         self,
         original_request_func,
@@ -159,38 +146,30 @@ class AntiTruncationStreamProcessor:
         self.current_attempt = 0
 
     def _get_collected_text(self) -> str:
-        """Internal implementation detail."""
         return self.collected_content.getvalue()
 
     def _append_content(self, content: str):
-        """Internal implementation detail."""
         if content:
             self.collected_content.write(content)
 
     def _clear_content(self):
-        """Internal implementation detail."""
         self.collected_content.close()
         self.collected_content = io.StringIO()
 
     async def process_stream(self) -> AsyncGenerator[bytes, None]:
-        """Internal implementation detail."""
         while self.current_attempt < self.max_attempts:
             self.current_attempt += 1
-
 
             current_payload = self._build_current_payload()
 
             log.debug(f"Anti-truncation attempt {self.current_attempt}/{self.max_attempts}")
 
-
             try:
                 response = await self.original_request_func(current_payload)
 
                 if not isinstance(response, StreamingResponse):
-
                     yield await self._handle_non_streaming_response(response)
                     return
-
 
                 chunk_buffer = io.StringIO()
                 found_done_marker = False
@@ -200,13 +179,17 @@ class AntiTruncationStreamProcessor:
                         yield line
                         continue
 
-
                     from fastapi import Response as FastAPIResponse
+
                     if isinstance(line, FastAPIResponse):
-                        log.error(f"Anti-truncation: Received Response object from stream (status={line.status_code}), treating as error")
+                        log.error(
+                            f"Anti-truncation: Received Response object from stream (status={line.status_code}), treating as error"
+                        )
                         error_chunk = {
                             "error": {
-                                "message": line.body.decode('utf-8', errors='ignore') if hasattr(line, 'body') and line.body else "Upstream error",
+                                "message": line.body.decode("utf-8", errors="ignore")
+                                if hasattr(line, "body") and line.body
+                                else "Upstream error",
                                 "type": "api_error",
                                 "code": line.status_code,
                             }
@@ -215,22 +198,17 @@ class AntiTruncationStreamProcessor:
                         yield b"data: [DONE]\n\n"
                         return
 
-
                     if isinstance(line, bytes):
-
-                        line_str = line.decode('utf-8', errors='ignore').strip()
+                        line_str = line.decode("utf-8", errors="ignore").strip()
                     else:
                         line_str = str(line).strip()
-
 
                     if not line_str:
                         yield line
                         continue
 
-
                     if line_str.startswith("data: "):
                         payload_str = line_str[6:]
-
 
                         if payload_str.strip() == "[DONE]":
                             if found_done_marker:
@@ -245,50 +223,49 @@ class AntiTruncationStreamProcessor:
 
                                 break
 
-
                         try:
                             data = json.loads(payload_str)
                             content = self._extract_content_from_chunk(data)
 
-                            log.debug(f"Anti-truncation: Extracted content: {repr(content[:100] if content else '')}")
+                            log.debug(
+                                f"Anti-truncation: Extracted content: {repr(content[:100] if content else '')}"
+                            )
 
                             if content:
                                 chunk_buffer.write(content)
 
-
                                 has_marker = self._check_done_marker_in_chunk_content(content)
-                                log.debug(f"Anti-truncation: Check done marker result: {has_marker}, DONE_MARKER='{DONE_MARKER}'")
+                                log.debug(
+                                    f"Anti-truncation: Check done marker result: {has_marker}, DONE_MARKER='{DONE_MARKER}'"
+                                )
                                 if has_marker:
                                     found_done_marker = True
-                                    log.debug(f"Anti-truncation: Found [done] marker in chunk, content: {content[:200]}")
-
+                                    log.debug(
+                                        f"Anti-truncation: Found [done] marker in chunk, content: {content[:200]}"
+                                    )
 
                             cleaned_line = self._remove_done_marker_from_line(line, line_str, data)
                             yield cleaned_line
 
                         except (json.JSONDecodeError, ValueError):
-
                             yield line
                             continue
                     else:
-
                         yield line
-
 
                 chunk_text = chunk_buffer.getvalue()
                 if chunk_text:
                     self._append_content(chunk_text)
                 chunk_buffer.close()
 
-                log.debug(f"Anti-truncation: After processing stream, found_done_marker={found_done_marker}")
-
+                log.debug(
+                    f"Anti-truncation: After processing stream, found_done_marker={found_done_marker}"
+                )
 
                 if found_done_marker:
-
                     self._clear_content()
                     yield b"data: [DONE]\n\n"
                     return
-
 
                 if not found_done_marker:
                     accumulated_text = self._get_collected_text()
@@ -298,7 +275,6 @@ class AntiTruncationStreamProcessor:
                         self._clear_content()
                         yield b"data: [DONE]\n\n"
                         return
-
 
                 if self.current_attempt < self.max_attempts:
                     accumulated_text = self._get_collected_text()
@@ -313,7 +289,6 @@ class AntiTruncationStreamProcessor:
 
                     continue
                 else:
-
                     log.warning("Anti-truncation: Max attempts reached, ending stream")
 
                     self._clear_content()
@@ -323,7 +298,6 @@ class AntiTruncationStreamProcessor:
             except Exception as e:
                 log.error(f"Anti-truncation error in attempt {self.current_attempt}: {str(e)}")
                 if self.current_attempt >= self.max_attempts:
-
                     error_chunk = {
                         "error": {
                             "message": f"Anti-truncation failed: {str(e)}",
@@ -335,52 +309,44 @@ class AntiTruncationStreamProcessor:
                     yield b"data: [DONE]\n\n"
                     return
 
-
-
         log.error("Anti-truncation: All attempts failed")
 
         self._clear_content()
         yield b"data: [DONE]\n\n"
 
     def _build_current_payload(self) -> Dict[str, Any]:
-        """Internal implementation detail."""
         if self.current_attempt == 1:
-
             return self.base_payload
-
 
         continuation_payload = self.base_payload.copy()
         request_data = continuation_payload.get("request", {})
 
-
         contents = request_data.get("contents", [])
         new_contents = contents.copy()
-
 
         accumulated_text = self._get_collected_text()
         if accumulated_text:
             new_contents.append({"role": "model", "parts": [{"text": accumulated_text}]})
 
-
         if self.enable_prefill_mode:
-            log.debug("Anti-truncation: Using prefill continuation mode (no user continuation prompt)")
+            log.debug(
+                "Anti-truncation: Using prefill continuation mode (no user continuation prompt)"
+            )
             request_data["contents"] = new_contents
             continuation_payload["request"] = request_data
             return continuation_payload
-
 
         content_summary = ""
         if accumulated_text:
             if len(accumulated_text) > 200:
                 content_summary = (
-                    f'\n\nEarlier output was approximately {len(accumulated_text)} characters. '
+                    f"\n\nEarlier output was approximately {len(accumulated_text)} characters. "
                     f'It ended with:\n"...{accumulated_text[-100:]}"'
                 )
             else:
                 content_summary = f'\n\nEarlier output was:\n"{accumulated_text}"'
 
         detailed_continuation_prompt = f"""{CONTINUATION_PROMPT}{content_summary}"""
-
 
         continuation_message = {"role": "user", "parts": [{"text": detailed_continuation_prompt}]}
         new_contents.append(continuation_message)
@@ -391,13 +357,10 @@ class AntiTruncationStreamProcessor:
         return continuation_payload
 
     def _extract_content_from_chunk(self, data: Dict[str, Any]) -> str:
-        """Internal implementation detail."""
         content = ""
-
 
         if "response" in data:
             data = data["response"]
-
 
         if "candidates" in data:
             for candidate in data["candidates"]:
@@ -406,7 +369,6 @@ class AntiTruncationStreamProcessor:
                     for part in parts:
                         if "text" in part:
                             content += part["text"]
-
 
         elif "choices" in data:
             for choice in data["choices"]:
@@ -418,12 +380,12 @@ class AntiTruncationStreamProcessor:
         return content
 
     async def _handle_non_streaming_response(self, response) -> bytes:
-        """Internal implementation detail."""
         while True:
             try:
-
                 if isinstance(response, StreamingResponse):
-                    log.error("Anti-truncation: Received StreamingResponse in non-streaming handler - this should not happen")
+                    log.error(
+                        "Anti-truncation: Received StreamingResponse in non-streaming handler - this should not happen"
+                    )
 
                     chunks = []
                     async for chunk in response.body_iterator:
@@ -432,7 +394,9 @@ class AntiTruncationStreamProcessor:
 
                 elif hasattr(response, "body"):
                     content = (
-                        response.body.decode() if isinstance(response.body, bytes) else response.body
+                        response.body.decode()
+                        if isinstance(response.body, bytes)
+                        else response.body
                     )
                 elif hasattr(response, "content"):
                     content = (
@@ -443,7 +407,6 @@ class AntiTruncationStreamProcessor:
                 else:
                     log.error(f"Anti-truncation: Unknown response type: {type(response)}")
                     content = str(response)
-
 
                 if not content or not content.strip():
                     log.error("Anti-truncation: Received empty response content")
@@ -457,36 +420,30 @@ class AntiTruncationStreamProcessor:
                         }
                     ).encode()
 
-
                 try:
                     response_data = json.loads(content)
                 except json.JSONDecodeError as json_err:
-                    log.error(f"Anti-truncation: Failed to parse JSON response: {json_err}, content: {content[:200]}")
+                    log.error(
+                        f"Anti-truncation: Failed to parse JSON response: {json_err}, content: {content[:200]}"
+                    )
 
                     return content.encode() if isinstance(content, str) else content
-
 
                 text_content = self._extract_content_from_response(response_data)
                 has_done_marker = self._check_done_marker_in_text(text_content)
 
                 if has_done_marker or self.current_attempt >= self.max_attempts:
-
                     return content.encode() if isinstance(content, str) else content
-
 
                 if text_content:
                     self._append_content(text_content)
 
                 log.info("Anti-truncation: Non-streaming response needs continuation")
 
-
                 self.current_attempt += 1
-
 
                 next_payload = self._build_current_payload()
                 response = await self.original_request_func(next_payload)
-
-
 
             except Exception as e:
                 log.error(f"Anti-truncation non-streaming error: {str(e)}")
@@ -501,25 +458,19 @@ class AntiTruncationStreamProcessor:
                 ).encode()
 
     def _check_done_marker_in_text(self, text: str) -> bool:
-        """Internal implementation detail."""
         if not text:
             return False
-
 
         return DONE_MARKER in text
 
     def _check_done_marker_in_chunk_content(self, content: str) -> bool:
-        """Internal implementation detail."""
         return self._check_done_marker_in_text(content)
 
     def _extract_content_from_response(self, data: Dict[str, Any]) -> str:
-        """Internal implementation detail."""
         content = ""
-
 
         if "response" in data:
             data = data["response"]
-
 
         if "candidates" in data:
             for candidate in data["candidates"]:
@@ -529,7 +480,6 @@ class AntiTruncationStreamProcessor:
                         if "text" in part:
                             content += part["text"]
 
-
         elif "choices" in data:
             for choice in data["choices"]:
                 if "message" in choice and "content" in choice["message"]:
@@ -537,24 +487,23 @@ class AntiTruncationStreamProcessor:
 
         return content
 
-    def _remove_done_marker_from_line(self, line: bytes, line_str: str, data: Dict[str, Any]) -> bytes:
-        """Internal implementation detail."""
+    def _remove_done_marker_from_line(
+        self, line: bytes, line_str: str, data: Dict[str, Any]
+    ) -> bytes:
         try:
-
             if "[done]" not in line_str.lower():
                 return line
 
-            log.info(f"Anti-truncation: Attempting to remove [done] marker from line")
+            log.info("Anti-truncation: Attempting to remove [done] marker from line")
             log.debug(f"Anti-truncation: Original line (first 200 chars): {line_str[:200]}")
-
 
             done_pattern = re.compile(r"\s*\[done\]\s*", re.IGNORECASE)
 
-
             has_response_wrapper = "response" in data
-            log.debug(f"Anti-truncation: has_response_wrapper={has_response_wrapper}, data keys={list(data.keys())}")
+            log.debug(
+                f"Anti-truncation: has_response_wrapper={has_response_wrapper}, data keys={list(data.keys())}"
+            )
             if has_response_wrapper:
-
                 inner_data = data["response"]
             else:
                 inner_data = data
@@ -563,9 +512,8 @@ class AntiTruncationStreamProcessor:
 
             log.debug(f"Anti-truncation: inner_data keys={list(inner_data.keys())}")
 
-
             if "candidates" in inner_data:
-                log.info(f"Anti-truncation: Processing Gemini format to remove [done] marker")
+                log.info("Anti-truncation: Processing Gemini format to remove [done] marker")
                 modified_inner = inner_data.copy()
                 modified_inner["candidates"] = []
 
@@ -586,7 +534,9 @@ class AntiTruncationStreamProcessor:
                                     if is_last_candidate:
                                         modified_part["text"] = done_pattern.sub("", part["text"])
                                         if "[done]" in original_text.lower():
-                                            log.debug(f"Anti-truncation: Removed [done] from text: '{original_text[:100]}' -> '{modified_part['text'][:100]}'")
+                                            log.debug(
+                                                f"Anti-truncation: Removed [done] from text: '{original_text[:100]}' -> '{modified_part['text'][:100]}'"
+                                            )
                                     modified_parts.append(modified_part)
                                 else:
                                     modified_parts.append(part)
@@ -594,19 +544,18 @@ class AntiTruncationStreamProcessor:
                         modified_candidate["content"] = modified_content
                     modified_inner["candidates"].append(modified_candidate)
 
-
                 if has_response_wrapper:
                     modified_data = data.copy()
                     modified_data["response"] = modified_inner
                 else:
                     modified_data = modified_inner
 
-
                 json_str = json.dumps(modified_data, separators=(",", ":"), ensure_ascii=False)
                 result = f"data: {json_str}\n\n".encode("utf-8")
-                log.debug(f"Anti-truncation: Modified line (first 200 chars): {result.decode('utf-8', errors='ignore')[:200]}")
+                log.debug(
+                    f"Anti-truncation: Modified line (first 200 chars): {result.decode('utf-8', errors='ignore')[:200]}"
+                )
                 return result
-
 
             elif "choices" in inner_data:
                 modified_inner = inner_data.copy()
@@ -620,10 +569,11 @@ class AntiTruncationStreamProcessor:
                         modified_choice["delta"] = modified_delta
                     elif "message" in choice and "content" in choice["message"]:
                         modified_message = choice["message"].copy()
-                        modified_message["content"] = done_pattern.sub("", choice["message"]["content"])
+                        modified_message["content"] = done_pattern.sub(
+                            "", choice["message"]["content"]
+                        )
                         modified_choice["message"] = modified_message
                     modified_inner["choices"].append(modified_choice)
-
 
                 if has_response_wrapper:
                     modified_data = data.copy()
@@ -631,10 +581,8 @@ class AntiTruncationStreamProcessor:
                 else:
                     modified_data = modified_inner
 
-
                 json_str = json.dumps(modified_data, separators=(",", ":"), ensure_ascii=False)
                 return f"data: {json_str}\n\n".encode("utf-8")
-
 
             return line
 
@@ -649,11 +597,8 @@ async def apply_anti_truncation_to_stream(
     max_attempts: int = 3,
     enable_prefill_mode: bool = False,
 ) -> StreamingResponse:
-    """Internal implementation detail."""
-
 
     anti_truncation_payload = apply_anti_truncation(payload)
-
 
     processor = AntiTruncationStreamProcessor(
         lambda p: request_func(p),
@@ -662,10 +607,8 @@ async def apply_anti_truncation_to_stream(
         enable_prefill_mode,
     )
 
-
     return StreamingResponse(processor.process_stream(), media_type="text/event-stream")
 
 
 def is_anti_truncation_enabled(request_data: Dict[str, Any]) -> bool:
-    """Internal implementation detail."""
     return request_data.get("enable_anti_truncation", False)

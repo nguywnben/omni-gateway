@@ -6,7 +6,6 @@ import hashlib
 from dataclasses import asdict, dataclass
 from typing import Any, Dict, Optional
 
-
 GOOGLE_ANTIGRAVITY = "google_antigravity"
 GOOGLE_AI_STUDIO = "google_ai_studio"
 
@@ -83,13 +82,11 @@ def antigravity_account_fingerprint(
 ) -> str:
     """Create a stable, non-reversible Antigravity account identifier."""
     data = credential_data or {}
-    normalized_email = str(
-        email
-        or data.get("user_email")
-        or data.get("email")
-        or data.get("account_email")
-        or ""
-    ).strip().lower()
+    normalized_email = (
+        str(email or data.get("user_email") or data.get("email") or data.get("account_email") or "")
+        .strip()
+        .lower()
+    )
     if normalized_email:
         return _short_fingerprint(normalized_email)
 
@@ -125,7 +122,7 @@ def canonicalize_antigravity_credential_filename(
 
     basename = str(filename or "").replace("\\", "/").rsplit("/", 1)[-1].lower()
     if basename.startswith("google-antigravity-") and basename.endswith(".json"):
-        suffix = basename[len("google-antigravity-"):-5]
+        suffix = basename[len("google-antigravity-") : -5]
         if len(suffix) == 16 and all(character in "0123456789abcdef" for character in suffix):
             return basename
     return build_antigravity_credential_filename(data)

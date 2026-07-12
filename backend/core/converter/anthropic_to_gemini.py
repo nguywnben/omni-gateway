@@ -1,4 +1,3 @@
-"""Internal implementation detail."""
 from __future__ import annotations
 
 import json
@@ -6,16 +5,15 @@ import os
 import uuid
 from typing import Any, AsyncIterator, Dict, List, Optional
 
-from fastapi import Response
-from log import log
-from core.converter.utils import merge_system_messages
-
-from core.converter.thoughtSignature_fix import (
+from core.converter.thought_signature import (
+    SKIP_THOUGHT_SIGNATURE_VALIDATOR,
     decode_tool_id_and_signature,
     is_internal_placeholder_text,
     is_skip_thought_signature_placeholder,
-    SKIP_THOUGHT_SIGNATURE_VALIDATOR,
 )
+from core.converter.utils import merge_system_messages
+from fastapi import Response
+from log import log
 
 DEFAULT_TEMPERATURE = 0.4
 _DEBUG_TRUE = {"1", "true", "yes", "on"}
@@ -28,8 +26,7 @@ _DEBUG_TRUE = {"1", "true", "yes", "on"}
 MIN_SIGNATURE_LENGTH = 10
 
 
-def has_valid_thoughtsignature(block: Dict[str, Any]) -> bool:
-    """Internal implementation detail."""
+def has_valid_thought_signature(block: Dict[str, Any]) -> bool:
     if not isinstance(block, dict):
         return True
 
@@ -40,19 +37,20 @@ def has_valid_thoughtsignature(block: Dict[str, Any]) -> bool:
     thinking = block.get("thinking", "")
     thoughtsignature = block.get("thoughtSignature")
 
-
     if not thinking and thoughtsignature is not None:
         return True
 
-
-    if thoughtsignature and isinstance(thoughtsignature, str) and len(thoughtsignature) >= MIN_SIGNATURE_LENGTH:
+    if (
+        thoughtsignature
+        and isinstance(thoughtsignature, str)
+        and len(thoughtsignature) >= MIN_SIGNATURE_LENGTH
+    ):
         return True
 
     return False
 
 
 def sanitize_thinking_block(block: Dict[str, Any]) -> Dict[str, Any]:
-    """Internal implementation detail."""
     if not isinstance(block, dict):
         return block
 
@@ -60,11 +58,7 @@ def sanitize_thinking_block(block: Dict[str, Any]) -> Dict[str, Any]:
     if block_type not in ("thinking", "redacted_thinking"):
         return block
 
-
-    sanitized: Dict[str, Any] = {
-        "type": block_type,
-        "thinking": block.get("thinking", "")
-    }
+    sanitized: Dict[str, Any] = {"type": block_type, "thinking": block.get("thinking", "")}
 
     thoughtsignature = block.get("thoughtSignature")
     if thoughtsignature:
@@ -74,10 +68,8 @@ def sanitize_thinking_block(block: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def remove_trailing_unsigned_thinking(blocks: List[Dict[str, Any]]) -> None:
-    """Internal implementation detail."""
     if not blocks:
         return
-
 
     end_index = len(blocks)
     for i in range(len(blocks) - 1, -1, -1):
@@ -87,7 +79,7 @@ def remove_trailing_unsigned_thinking(blocks: List[Dict[str, Any]]) -> None:
 
         block_type = block.get("type")
         if block_type in ("thinking", "redacted_thinking"):
-            if not has_valid_thoughtsignature(block):
+            if not has_valid_thought_signature(block):
                 end_index = i
             else:
                 break
@@ -101,11 +93,9 @@ def remove_trailing_unsigned_thinking(blocks: List[Dict[str, Any]]) -> None:
 
 
 def filter_invalid_thinking_blocks(messages: List[Dict[str, Any]]) -> None:
-    """Internal implementation detail."""
     total_filtered = 0
 
     for msg in messages:
-
         role = msg.get("role", "")
         if role not in ("assistant", "model"):
             continue
@@ -127,13 +117,9 @@ def filter_invalid_thinking_blocks(messages: List[Dict[str, Any]]) -> None:
                 new_blocks.append(block)
                 continue
 
-
-
-            if has_valid_thoughtsignature(block):
-
+            if has_valid_thought_signature(block):
                 new_blocks.append(sanitize_thinking_block(block))
             else:
-
                 thinking_text = block.get("thinking", "")
                 if thinking_text and str(thinking_text).strip():
                     log.info(
@@ -142,12 +128,13 @@ def filter_invalid_thinking_blocks(messages: List[Dict[str, Any]]) -> None:
                     )
                     new_blocks.append({"type": "text", "text": thinking_text})
                 else:
-                    log.debug("[Claude-Handler] Dropping empty thinking block with invalid thoughtSignature")
+                    log.debug(
+                        "[Claude-Handler] Dropping empty thinking block with invalid thoughtSignature"
+                    )
 
         msg["content"] = new_blocks
         filtered_count = original_len - len(new_blocks)
         total_filtered += filtered_count
-
 
         if not new_blocks:
             msg["content"] = [{"type": "text", "text": ""}]
@@ -162,7 +149,6 @@ def filter_invalid_thinking_blocks(messages: List[Dict[str, Any]]) -> None:
 
 
 def _anthropic_debug_enabled() -> bool:
-    """Internal implementation detail."""
     return str(os.getenv("ANTHROPIC_DEBUG", "true")).strip().lower() in _DEBUG_TRUE
 
 
@@ -190,7 +176,6 @@ def _anthropic_usage_from_metadata(usage_metadata: Any) -> Dict[str, int]:
 
 
 def _is_non_whitespace_text(value: Any) -> bool:
-    """Internal implementation detail."""
     if value is None:
         return False
     try:
@@ -200,7 +185,6 @@ def _is_non_whitespace_text(value: Any) -> bool:
 
 
 def _remove_nulls_for_tool_input(value: Any) -> Any:
-    """Internal implementation detail."""
     if isinstance(value, dict):
         cleaned: Dict[str, Any] = {}
         for k, v in value.items():
@@ -219,23 +203,45 @@ def _remove_nulls_for_tool_input(value: Any) -> Any:
 
     return value
 
+
 # ============================================================================
 
 # ============================================================================
+
 
 def clean_json_schema(schema: Any) -> Any:
-    """Internal implementation detail."""
     if not isinstance(schema, dict):
         return schema
 
-
     unsupported_keys = {
-        "$schema", "$id", "$ref", "$defs", "definitions", "title",
-        "example", "examples", "readOnly", "writeOnly", "default",
-        "exclusiveMaximum", "exclusiveMinimum", "oneOf", "anyOf", "allOf",
-        "const", "additionalItems", "contains", "patternProperties",
-        "dependencies", "propertyNames", "if", "then", "else",
-        "contentEncoding", "contentMediaType", "nullable",
+        "$schema",
+        "$id",
+        "$ref",
+        "$defs",
+        "definitions",
+        "title",
+        "example",
+        "examples",
+        "readOnly",
+        "writeOnly",
+        "default",
+        "exclusiveMaximum",
+        "exclusiveMinimum",
+        "oneOf",
+        "anyOf",
+        "allOf",
+        "const",
+        "additionalItems",
+        "contains",
+        "patternProperties",
+        "dependencies",
+        "propertyNames",
+        "if",
+        "then",
+        "else",
+        "contentEncoding",
+        "contentMediaType",
+        "nullable",
     }
 
     validation_fields = {
@@ -270,6 +276,8 @@ def clean_json_schema(schema: Any) -> Any:
             ]
 
             cleaned[key] = non_null_types[0] if non_null_types else "string"
+            if has_null:
+                cleaned["nullable"] = True
             continue
 
         if key == "description" and validations:
@@ -277,21 +285,19 @@ def clean_json_schema(schema: Any) -> Any:
         elif isinstance(value, dict):
             cleaned[key] = clean_json_schema(value)
         elif isinstance(value, list):
-            cleaned[key] = [clean_json_schema(item) if isinstance(item, dict) else item for item in value]
+            cleaned[key] = [
+                clean_json_schema(item) if isinstance(item, dict) else item for item in value
+            ]
         else:
             cleaned[key] = value
 
     if validations and "description" not in cleaned:
         cleaned["description"] = f"Validation: {', '.join(validations)}"
 
-
     if "properties" in cleaned and "type" not in cleaned:
         cleaned["type"] = "object"
 
-    if (
-        isinstance(schema.get("properties"), dict)
-        and isinstance(cleaned.get("required"), list)
-    ):
+    if isinstance(schema.get("properties"), dict) and isinstance(cleaned.get("required"), list):
         nullable_fields = {
             name
             for name, prop in schema["properties"].items()
@@ -301,8 +307,7 @@ def clean_json_schema(schema: Any) -> Any:
         }
         if nullable_fields:
             cleaned["required"] = [
-                item for item in cleaned["required"]
-                if item not in nullable_fields
+                item for item in cleaned["required"] if item not in nullable_fields
             ]
             if not cleaned["required"]:
                 cleaned.pop("required", None)
@@ -314,8 +319,10 @@ def clean_json_schema(schema: Any) -> Any:
 
 # ============================================================================
 
-def convert_tools(anthropic_tools: Optional[List[Dict[str, Any]]]) -> Optional[List[Dict[str, Any]]]:
-    """Internal implementation detail."""
+
+def convert_tools(
+    anthropic_tools: Optional[List[Dict[str, Any]]],
+) -> Optional[List[Dict[str, Any]]]:
     if not anthropic_tools:
         return None
 
@@ -345,8 +352,8 @@ def convert_tools(anthropic_tools: Optional[List[Dict[str, Any]]]) -> Optional[L
 
 # ============================================================================
 
+
 def _extract_tool_result_output(content: Any) -> str:
-    """Internal implementation detail."""
     if isinstance(content, list):
         if not content:
             return ""
@@ -360,14 +367,9 @@ def _extract_tool_result_output(content: Any) -> str:
 
 
 def convert_messages_to_contents(
-    messages: List[Dict[str, Any]],
-    *,
-    include_thinking: bool = True
+    messages: List[Dict[str, Any]], *, include_thinking: bool = True
 ) -> List[Dict[str, Any]]:
-    """Internal implementation detail."""
     contents: List[Dict[str, Any]] = []
-
-
 
     tool_use_info: Dict[str, tuple[str, Optional[str]]] = {}
     for msg in messages:
@@ -378,18 +380,17 @@ def convert_messages_to_contents(
                     encoded_tool_id = item.get("id")
                     tool_name = item.get("name")
                     if encoded_tool_id and tool_name:
-
-                        original_id, thoughtsignature = decode_tool_id_and_signature(encoded_tool_id)
+                        original_id, thoughtsignature = decode_tool_id_and_signature(
+                            encoded_tool_id
+                        )
 
                         tool_use_info[str(encoded_tool_id)] = (tool_name, thoughtsignature)
 
     for msg in messages:
         role = msg.get("role", "user")
 
-
         if role == "system":
             continue
-
 
         gemini_role = "model" if role in ("assistant", "model") else "user"
         raw_content = msg.get("content", "")
@@ -407,8 +408,6 @@ def convert_messages_to_contents(
 
                 item_type = item.get("type")
                 if item_type == "thinking":
-
-
                     continue
                 elif item_type == "redacted_thinking":
                     continue
@@ -446,13 +445,10 @@ def convert_messages_to_contents(
                     output = _extract_tool_result_output(item.get("content"))
                     encoded_tool_use_id = item.get("tool_use_id") or ""
 
-
                     original_tool_use_id, _ = decode_tool_id_and_signature(encoded_tool_use_id)
-
 
                     func_name = item.get("name")
                     if not func_name and encoded_tool_use_id:
-
                         tool_info = tool_use_info.get(str(encoded_tool_use_id))
                         if tool_info:
                             func_name = tool_info[0]
@@ -483,7 +479,6 @@ def convert_messages_to_contents(
 
 
 def reorganize_tool_messages(contents: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-    """Internal implementation detail."""
     tool_results: Dict[str, Dict[str, Any]] = {}
 
     for msg in contents:
@@ -529,8 +524,8 @@ def reorganize_tool_messages(contents: List[Dict[str, Any]]) -> List[Dict[str, A
 
 # ============================================================================
 
+
 def convert_tool_choice_to_tool_config(tool_choice: Any) -> Optional[Dict[str, Any]]:
-    """Internal implementation detail."""
     if not tool_choice:
         return None
 
@@ -551,7 +546,6 @@ def convert_tool_choice_to_tool_config(tool_choice: Any) -> Optional[Dict[str, A
                     }
                 }
 
-
     return None
 
 
@@ -559,8 +553,8 @@ def convert_tool_choice_to_tool_config(tool_choice: Any) -> Optional[Dict[str, A
 
 # ============================================================================
 
+
 def build_generation_config(payload: Dict[str, Any]) -> Dict[str, Any]:
-    """Internal implementation detail."""
     config: Dict[str, Any] = {
         "topP": 1,
         "candidateCount": 1,
@@ -588,48 +582,39 @@ def build_generation_config(payload: Dict[str, Any]) -> Dict[str, Any]:
     if max_tokens is not None:
         config["maxOutputTokens"] = max_tokens
 
-
     thinking = payload.get("thinking")
     is_plan_mode = False
     if thinking and isinstance(thinking, dict):
         thinking_type = thinking.get("type")
         budget_tokens = thinking.get("budget_tokens")
 
-
         if thinking_type == "enabled":
             is_plan_mode = True
             thinking_config: Dict[str, Any] = {}
 
-
             if budget_tokens is not None:
                 thinking_config["thinkingBudget"] = budget_tokens
             else:
-
                 thinking_config["thinkingBudget"] = 48000
-
 
             thinking_config["includeThoughts"] = True
 
             config["thinkingConfig"] = thinking_config
-            log.info(f"[ANTHROPIC2GEMINI] Extended thinking enabled with budget: {thinking_config['thinkingBudget']}")
+            log.info(
+                f"[ANTHROPIC2GEMINI] Extended thinking enabled with budget: {thinking_config['thinkingBudget']}"
+            )
         elif thinking_type == "disabled":
-
-            config["thinkingConfig"] = {
-                "includeThoughts": False
-            }
+            config["thinkingConfig"] = {"includeThoughts": False}
             log.info("[ANTHROPIC2GEMINI] Extended thinking explicitly disabled")
 
     stop_sequences = payload.get("stop_sequences")
     if isinstance(stop_sequences, list) and stop_sequences:
         config["stopSequences"] = config["stopSequences"] + [str(s) for s in stop_sequences]
     elif is_plan_mode:
-
-
         config["stopSequences"] = []
-        log.info("[ANTHROPIC2GEMINI] Plan mode: cleared default stop sequences to prevent premature stopping")
-
-
-
+        log.info(
+            "[ANTHROPIC2GEMINI] Plan mode: cleared default stop sequences to prevent premature stopping"
+        )
 
     return config
 
@@ -638,27 +623,20 @@ def build_generation_config(payload: Dict[str, Any]) -> Dict[str, Any]:
 
 # ============================================================================
 
+
 async def anthropic_to_gemini_request(payload: Dict[str, Any]) -> Dict[str, Any]:
-    """Internal implementation detail."""
 
     payload = await merge_system_messages(payload)
-
 
     messages = payload.get("messages") or []
     if not isinstance(messages, list):
         messages = []
 
-
-
     filter_invalid_thinking_blocks(messages)
-
 
     generation_config = build_generation_config(payload)
 
-
     contents = convert_messages_to_contents(messages, include_thinking=True)
-
-
 
     for content in contents:
         role = content.get("role", "")
@@ -669,18 +647,14 @@ async def anthropic_to_gemini_request(payload: Dict[str, Any]) -> Dict[str, Any]
 
     contents = reorganize_tool_messages(contents)
 
-
     tools = convert_tools(payload.get("tools"))
 
-
     tool_config = convert_tool_choice_to_tool_config(payload.get("tool_choice"))
-
 
     gemini_request = {
         "contents": contents,
         "generationConfig": generation_config,
     }
-
 
     if "systemInstruction" in payload:
         gemini_request["systemInstruction"] = payload["systemInstruction"]
@@ -688,10 +662,8 @@ async def anthropic_to_gemini_request(payload: Dict[str, Any]) -> Dict[str, Any]
     if tools:
         gemini_request["tools"] = tools
 
-
     if tool_config:
         gemini_request["toolConfig"] = tool_config
-
 
     if "size" in payload and payload["size"]:
         gemini_request["size"] = payload["size"]
@@ -700,25 +672,19 @@ async def anthropic_to_gemini_request(payload: Dict[str, Any]) -> Dict[str, Any]
 
 
 def gemini_to_anthropic_response(
-    gemini_response: Dict[str, Any],
-    model: str,
-    status_code: int = 200
+    gemini_response: Dict[str, Any], model: str, status_code: int = 200
 ) -> Dict[str, Any]:
-    """Internal implementation detail."""
 
     if not (200 <= status_code < 300):
         return gemini_response
-
 
     if "response" in gemini_response:
         response_data = gemini_response["response"]
     else:
         response_data = gemini_response
 
-
     candidate = response_data.get("candidates", [{}])[0] or {}
     parts = candidate.get("content", {}).get("parts", []) or []
-
 
     usage_metadata = {}
     if "usageMetadata" in response_data:
@@ -726,14 +692,12 @@ def gemini_to_anthropic_response(
     elif "usageMetadata" in candidate:
         usage_metadata = candidate["usageMetadata"]
 
-
     content = []
     has_tool_use = False
 
     for part in parts:
         if not isinstance(part, dict):
             continue
-
 
         if part.get("thought") is True:
             if is_skip_thought_signature_placeholder(part):
@@ -744,7 +708,6 @@ def gemini_to_anthropic_response(
 
             block: Dict[str, Any] = {"type": "thinking", "thinking": str(thinking_text)}
 
-
             thoughtsignature = part.get("thoughtSignature")
             if thoughtsignature:
                 block["thoughtSignature"] = thoughtsignature
@@ -752,17 +715,12 @@ def gemini_to_anthropic_response(
             content.append(block)
             continue
 
-
         if "text" in part:
             text = part.get("text", "")
-            if (
-                is_skip_thought_signature_placeholder(part)
-                or is_internal_placeholder_text(text)
-            ):
+            if is_skip_thought_signature_placeholder(part) or is_internal_placeholder_text(text):
                 continue
             content.append({"type": "text", "text": text})
             continue
-
 
         if "functionCall" in part:
             has_tool_use = True
@@ -778,7 +736,6 @@ def gemini_to_anthropic_response(
             )
             continue
 
-
         if "inlineData" in part:
             inline = part.get("inlineData", {}) or {}
             content.append(
@@ -793,22 +750,16 @@ def gemini_to_anthropic_response(
             )
             continue
 
-
     finish_reason = candidate.get("finishReason")
-
-
 
     if has_tool_use and finish_reason == "STOP":
         stop_reason = "tool_use"
     elif finish_reason == "MAX_TOKENS":
         stop_reason = "max_tokens"
     else:
-
         stop_reason = "end_turn"
 
-
     usage = _anthropic_usage_from_metadata(usage_metadata)
-
 
     message_id = f"msg_{uuid.uuid4().hex}"
 
@@ -825,17 +776,13 @@ def gemini_to_anthropic_response(
 
 
 async def gemini_stream_to_anthropic_stream(
-    gemini_stream: AsyncIterator[bytes],
-    model: str,
-    status_code: int = 200
+    gemini_stream: AsyncIterator[bytes], model: str, status_code: int = 200
 ) -> AsyncIterator[bytes]:
-    """Internal implementation detail."""
 
     if not (200 <= status_code < 300):
         async for chunk in gemini_stream:
             yield chunk
         return
-
 
     message_id = f"msg_{uuid.uuid4().hex}"
     message_start_sent = False
@@ -849,12 +796,10 @@ async def gemini_stream_to_anthropic_stream(
     finish_reason: Optional[str] = None
 
     def _sse_event(event: str, data: Dict[str, Any]) -> bytes:
-        """Internal implementation detail."""
         payload = json.dumps(data, ensure_ascii=False, separators=(",", ":"))
         return f"event: {event}\ndata: {payload}\n\n".encode("utf-8")
 
     def _close_block() -> Optional[bytes]:
-        """Internal implementation detail."""
         nonlocal current_block_type
         if current_block_type is None:
             return None
@@ -871,39 +816,40 @@ async def gemini_stream_to_anthropic_stream(
             usage["cache_read_input_tokens"] = cached_input_tokens
         return usage
 
-
     try:
         async for chunk in gemini_stream:
-
             if isinstance(chunk, Response):
-                log.warning(f"[GEMINI_TO_ANTHROPIC] Response object received, status code: {chunk.status_code}, forwarding error directly")
+                log.warning(
+                    f"[GEMINI_TO_ANTHROPIC] Response object received, status code: {chunk.status_code}, forwarding error directly"
+                )
 
-                error_content = chunk.body if isinstance(chunk.body, bytes) else chunk.body.encode('utf-8')
+                error_content = (
+                    chunk.body if isinstance(chunk.body, bytes) else chunk.body.encode("utf-8")
+                )
                 yield error_content
                 return
 
-
             log.debug(f"[GEMINI_TO_ANTHROPIC] Raw chunk: {chunk[:200] if chunk else b''}")
 
-
             if not chunk or not chunk.startswith(b"data: "):
-                log.debug(f"[GEMINI_TO_ANTHROPIC] Skipping chunk (not SSE format or empty)")
+                log.debug("[GEMINI_TO_ANTHROPIC] Skipping chunk (not SSE format or empty)")
                 continue
 
             raw = chunk[6:].strip()
             if raw == b"[DONE]":
-                log.debug(f"[GEMINI_TO_ANTHROPIC] Received [DONE] marker")
+                log.debug("[GEMINI_TO_ANTHROPIC] Received [DONE] marker")
                 break
 
             log.debug(f"[GEMINI_TO_ANTHROPIC] Parsing JSON: {raw[:200]}")
 
             try:
-                data = json.loads(raw.decode('utf-8', errors='ignore'))
-                log.debug(f"[GEMINI_TO_ANTHROPIC] Parsed data: {json.dumps(data, ensure_ascii=False)[:300]}")
+                data = json.loads(raw.decode("utf-8", errors="ignore"))
+                log.debug(
+                    f"[GEMINI_TO_ANTHROPIC] Parsed data: {json.dumps(data, ensure_ascii=False)[:300]}"
+                )
             except Exception as e:
                 log.warning(f"[GEMINI_TO_ANTHROPIC] JSON parse error: {e}")
                 continue
-
 
             if "response" in data:
                 response = data["response"]
@@ -912,7 +858,6 @@ async def gemini_stream_to_anthropic_stream(
 
             candidate = (response.get("candidates", []) or [{}])[0] or {}
             parts = (candidate.get("content", {}) or {}).get("parts", []) or []
-
 
             if "usageMetadata" in response:
                 usage = response["usageMetadata"]
@@ -928,7 +873,6 @@ async def gemini_stream_to_anthropic_stream(
                             int(usage.get("promptTokenCount", 0) or 0) - cached_input_tokens,
                             0,
                         )
-
 
             if not message_start_sent:
                 message_start_sent = True
@@ -949,18 +893,15 @@ async def gemini_stream_to_anthropic_stream(
                     },
                 )
 
-
             for part in parts:
                 if not isinstance(part, dict):
                     continue
-
 
                 if part.get("thought") is True:
                     if is_skip_thought_signature_placeholder(part):
                         continue
                     thinking_text = part.get("text", "")
                     thoughtsignature = part.get("thoughtSignature")
-
 
                     if current_block_type != "thinking":
                         close_evt = _close_block()
@@ -983,7 +924,6 @@ async def gemini_stream_to_anthropic_stream(
                             },
                         )
                     elif thoughtsignature and thoughtsignature != current_thinking_signature:
-
                         close_evt = _close_block()
                         if close_evt:
                             yield close_evt
@@ -1005,7 +945,6 @@ async def gemini_stream_to_anthropic_stream(
                             },
                         )
 
-
                     if thinking_text:
                         yield _sse_event(
                             "content_block_delta",
@@ -1017,11 +956,9 @@ async def gemini_stream_to_anthropic_stream(
                         )
                     continue
 
-
                 if "text" in part:
-                    if (
-                        is_skip_thought_signature_placeholder(part)
-                        or is_internal_placeholder_text(part.get("text"))
+                    if is_skip_thought_signature_placeholder(part) or is_internal_placeholder_text(
+                        part.get("text")
                     ):
                         continue
                     text = part.get("text", "")
@@ -1056,7 +993,6 @@ async def gemini_stream_to_anthropic_stream(
                         )
                     continue
 
-
                 if "functionCall" in part:
                     close_evt = _close_block()
                     if close_evt:
@@ -1076,7 +1012,6 @@ async def gemini_stream_to_anthropic_stream(
                         )
 
                     current_block_index += 1
-
 
                     yield _sse_event(
                         "content_block_start",
@@ -1107,31 +1042,26 @@ async def gemini_stream_to_anthropic_stream(
                         {"type": "content_block_stop", "index": current_block_index},
                     )
 
-
                     if _anthropic_debug_enabled():
-                        log.info(f"[ANTHROPIC] [tool_use] tool call block closed: index = {current_block_index}")
+                        log.info(
+                            f"[ANTHROPIC] [tool_use] tool call block closed: index = {current_block_index}"
+                        )
 
                     continue
-
 
             if candidate.get("finishReason"):
                 finish_reason = candidate.get("finishReason")
                 break
 
-
         close_evt = _close_block()
         if close_evt:
             yield close_evt
-
-
-
 
         if has_tool_use and finish_reason == "STOP":
             stop_reason = "tool_use"
         elif finish_reason == "MAX_TOKENS":
             stop_reason = "max_tokens"
         else:
-
             stop_reason = "end_turn"
 
         if _anthropic_debug_enabled():
@@ -1140,7 +1070,6 @@ async def gemini_stream_to_anthropic_stream(
                 f"has_tool_use={has_tool_use}, finish_reason={finish_reason}, "
                 f"input_tokens={input_tokens}, output_tokens={output_tokens}"
             )
-
 
         yield _sse_event(
             "message_delta",

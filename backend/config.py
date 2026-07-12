@@ -1,9 +1,10 @@
-"""Internal implementation detail."""
-
 import os
 from typing import Any, Optional
 
-from paths import DEFAULT_CREDENTIALS_DIR
+from dotenv import load_dotenv
+from paths import DEFAULT_CREDENTIALS_DIR, PROJECT_ROOT
+
+load_dotenv(PROJECT_ROOT / ".env", override=False)
 
 
 _config_cache: dict[str, Any] = {}
@@ -14,16 +15,18 @@ _config_initialized = False
 
 AUTO_DISABLE_ERROR_CODES = [403]
 API_KEY_PREFIX = "sk-ogw-"
-DEFAULT_CODE_ASSIST_CLIENT_ID = "681255809395-oo8ft2oprdrnp9e3aqf6av3hmdib135j.apps.googleusercontent.com"
+DEFAULT_CODE_ASSIST_CLIENT_ID = (
+    "681255809395-oo8ft2oprdrnp9e3aqf6av3hmdib135j.apps.googleusercontent.com"
+)
 DEFAULT_CODE_ASSIST_CLIENT_SECRET = "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"
-DEFAULT_ANTIGRAVITY_CLIENT_ID = "1071006060591-tmhssin2h21lcre235vtolojh4g403ep.apps.googleusercontent.com"
+DEFAULT_ANTIGRAVITY_CLIENT_ID = (
+    "1071006060591-tmhssin2h21lcre235vtolojh4g403ep.apps.googleusercontent.com"
+)
 DEFAULT_ANTIGRAVITY_CLIENT_SECRET = "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"
 DEFAULT_ANTIGRAVITY_API_URL = "https://daily-cloudcode-pa.googleapis.com"
 DEFAULT_ANTIGRAVITY_USER_AGENT = "antigravity/cli/1.0.1 windows/amd64"
 DEFAULT_ANTIGRAVITY_PAYLOAD_USER_AGENT = "antigravity"
 DEFAULT_GOOGLE_AI_STUDIO_API_URL = "https://generativelanguage.googleapis.com"
-
-
 
 
 ENV_MAPPINGS = {
@@ -82,10 +85,7 @@ ENV_MAPPINGS = {
 }
 
 
-
-
 async def init_config():
-    """Internal implementation detail."""
     global _config_cache, _config_initialized
 
     if _config_initialized:
@@ -93,27 +93,25 @@ async def init_config():
 
     try:
         from core.storage_adapter import get_storage_adapter
+
         storage_adapter = await get_storage_adapter()
         _config_cache = await storage_adapter.get_all_config()
         _config_initialized = True
     except Exception:
-
         _config_cache = {}
         _config_initialized = True
 
 
 async def reload_config():
-    """Internal implementation detail."""
     global _config_cache, _config_initialized
 
     try:
         from core.storage_adapter import get_storage_adapter
+
         storage_adapter = await get_storage_adapter()
 
-
-        if hasattr(storage_adapter._backend, 'reload_config_cache'):
+        if hasattr(storage_adapter._backend, "reload_config_cache"):
             await storage_adapter._backend.reload_config_cache()
-
 
         _config_cache = await storage_adapter.get_all_config()
         _config_initialized = True
@@ -122,8 +120,17 @@ async def reload_config():
 
 
 def _get_cached_config(key: str, default: Any = None) -> Any:
-    """Internal implementation detail."""
     return _config_cache.get(key, default)
+
+
+def trust_proxy_headers_enabled() -> bool:
+    """Return whether forwarding headers from a trusted reverse proxy are accepted."""
+    return os.getenv("TRUST_PROXY_HEADERS", "").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
 
 
 async def get_config_value(key: str, default: Any = None, env_var: Optional[str] = None) -> Any:
@@ -268,9 +275,7 @@ def _coerce_bounded_int(value: Any, default: int, minimum: int, maximum: int) ->
 async def get_token_compression_config() -> dict[str, Any]:
     """Return validated settings for bounded conversation-history compression."""
     enabled = _coerce_bool(
-        await get_config_value(
-            "token_compression_enabled", True, "TOKEN_COMPRESSION_ENABLED"
-        ),
+        await get_config_value("token_compression_enabled", True, "TOKEN_COMPRESSION_ENABLED"),
         True,
     )
     threshold = _coerce_bounded_int(
@@ -282,9 +287,7 @@ async def get_token_compression_config() -> dict[str, Any]:
         2_000_000,
     )
     target = _coerce_bounded_int(
-        await get_config_value(
-            "token_compression_target", 24_000, "TOKEN_COMPRESSION_TARGET"
-        ),
+        await get_config_value("token_compression_target", 24_000, "TOKEN_COMPRESSION_TARGET"),
         24_000,
         64,
         1_999_999,
@@ -311,21 +314,23 @@ async def get_token_compression_config() -> dict[str, Any]:
 
 async def get_routing_policy() -> dict[str, str]:
     """Return the cross-provider credential selection policy."""
-    strategy = str(
-        await get_config_value(
-            "routing_strategy", "balanced", "ROUTING_STRATEGY"
+    strategy = (
+        str(
+            await get_config_value("routing_strategy", "balanced", "ROUTING_STRATEGY") or "balanced"
         )
-        or "balanced"
-    ).strip().lower()
+        .strip()
+        .lower()
+    )
     if strategy not in {"balanced", "priority"}:
         strategy = "balanced"
 
-    preferred_provider = str(
-        await get_config_value(
-            "preferred_provider", "", "PREFERRED_PROVIDER"
-        )
-        or ""
-    ).strip().lower().replace("-", "_").replace(" ", "_")
+    preferred_provider = (
+        str(await get_config_value("preferred_provider", "", "PREFERRED_PROVIDER") or "")
+        .strip()
+        .lower()
+        .replace("-", "_")
+        .replace(" ", "_")
+    )
     return {
         "strategy": strategy,
         "preferred_provider": preferred_provider,
@@ -346,9 +351,7 @@ async def get_upstream_timeout_seconds() -> float:
 
 async def get_log_config() -> dict[str, Any]:
     """Return validated runtime log level and file retention settings."""
-    level = str(
-        await get_config_value("log_level", "info", "LOG_LEVEL") or "info"
-    ).strip().lower()
+    level = str(await get_config_value("log_level", "info", "LOG_LEVEL") or "info").strip().lower()
     if level not in {"debug", "info", "warning", "error", "critical"}:
         level = "info"
 
@@ -414,7 +417,6 @@ async def get_panel_password() -> str:
     if panel_password is not None:
         return str(panel_password)
 
-
     return str(await get_config_value("password", "", "PASSWORD") or "")
 
 
@@ -463,7 +465,6 @@ async def get_code_assist_endpoint() -> str:
 
 
 async def get_compatibility_mode_enabled() -> bool:
-    """Internal implementation detail."""
     env_value = os.getenv("COMPATIBILITY_MODE")
     if env_value:
         return env_value.lower() in ("true", "1", "yes", "on")
@@ -472,7 +473,6 @@ async def get_compatibility_mode_enabled() -> bool:
 
 
 async def get_return_thoughts_to_frontend() -> bool:
-    """Internal implementation detail."""
     env_value = os.getenv("RETURN_THOUGHTS_TO_FRONTEND")
     if env_value:
         return env_value.lower() in ("true", "1", "yes", "on")
@@ -481,7 +481,6 @@ async def get_return_thoughts_to_frontend() -> bool:
 
 
 async def get_stream_to_nonstream() -> bool:
-    """Internal implementation detail."""
     env_value = os.getenv("ANTIGRAVITY_STREAM2NOSTREAM") or os.getenv("STREAM_TO_NONSTREAM")
     if env_value:
         return env_value.lower() in ("true", "1", "yes", "on")
@@ -495,7 +494,6 @@ async def get_antigravity_stream_to_nonstream() -> bool:
 
 
 async def get_switch_credential_enabled() -> bool:
-    """Internal implementation detail."""
     env_value = os.getenv("ANTIGRAVITY_SWITCH_CREDENTIAL") or os.getenv("SWITCH_CREDENTIAL_ENABLED")
     if env_value:
         return env_value.lower() in ("true", "1", "yes", "on")
@@ -509,7 +507,6 @@ async def get_antigravity_switch_credential_enabled() -> bool:
 
 
 async def get_oauth_proxy_url() -> str:
-    """Internal implementation detail."""
     env_value = os.getenv("OAUTH_URL") or os.getenv("OAUTH_PROXY_URL")
     if env_value:
         return env_value
@@ -518,7 +515,6 @@ async def get_oauth_proxy_url() -> str:
 
 
 async def get_googleapis_proxy_url() -> str:
-    """Internal implementation detail."""
     env_value = os.getenv("GOOGLE_APIS_URL") or os.getenv("GOOGLEAPIS_PROXY_URL")
     if env_value:
         return env_value
@@ -527,7 +523,6 @@ async def get_googleapis_proxy_url() -> str:
 
 
 async def get_resource_manager_api_url() -> str:
-    """Internal implementation detail."""
     env_value = os.getenv("RESOURCE_MANAGER_URL") or os.getenv("RESOURCE_MANAGER_API_URL")
     if env_value:
         return env_value
@@ -541,7 +536,6 @@ async def get_resource_manager_api_url() -> str:
 
 
 async def get_service_usage_api_url() -> str:
-    """Internal implementation detail."""
     env_value = os.getenv("SERVICE_USAGE_URL") or os.getenv("SERVICE_USAGE_API_URL")
     if env_value:
         return env_value
@@ -550,7 +544,6 @@ async def get_service_usage_api_url() -> str:
 
 
 async def get_api_url() -> str:
-    """Internal implementation detail."""
     env_value = os.getenv("ANTIGRAVITY_API_URL") or os.getenv("API_URL")
     if env_value:
         return env_value
@@ -635,8 +628,7 @@ async def get_antigravity_oauth_client_config() -> tuple[str, str]:
     )
     if not client_id:
         client_id = str(
-            await get_config_value("client_id", DEFAULT_ANTIGRAVITY_CLIENT_ID, "CLIENT_ID")
-            or ""
+            await get_config_value("client_id", DEFAULT_ANTIGRAVITY_CLIENT_ID, "CLIENT_ID") or ""
         )
 
     client_secret = str(
@@ -661,12 +653,10 @@ async def get_antigravity_oauth_client_config() -> tuple[str, str]:
 
 
 async def get_keepalive_url() -> str:
-    """Internal implementation detail."""
     return str(await get_config_value("keepalive_url", "", "KEEPALIVE_URL"))
 
 
 async def get_keepalive_interval() -> int:
-    """Internal implementation detail."""
     env_value = os.getenv("KEEPALIVE_INTERVAL")
     if env_value:
         try:
@@ -678,7 +668,6 @@ async def get_keepalive_interval() -> int:
 
 
 async def get_api_key() -> str:
-    """Internal implementation detail."""
     from core.storage_adapter import get_storage_adapter
 
     env_key = os.getenv("API_KEY", "").strip()
@@ -691,6 +680,7 @@ async def get_api_key() -> str:
     key = await get_config_value("api_key")
     if not key or not str(key).startswith(API_KEY_PREFIX):
         import secrets
+
         key = f"{API_KEY_PREFIX}{secrets.token_hex(20)}"
         await storage_adapter.set_config("api_key", key)
         # Update cache

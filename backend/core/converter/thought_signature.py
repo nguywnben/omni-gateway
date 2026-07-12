@@ -1,8 +1,4 @@
-"""Internal implementation detail."""
-
 from typing import Any, Mapping, Optional, Tuple
-
-
 
 THOUGHT_SIGNATURE_SEPARATOR = "__thought__"
 SKIP_THOUGHT_SIGNATURE_VALIDATOR = "skip_thought_signature_validator"
@@ -27,14 +23,12 @@ def is_skip_thought_signature_placeholder(part: Mapping[str, Any]) -> bool:
 
 
 def encode_tool_id_with_signature(tool_id: str, signature: Optional[str]) -> str:
-    """Internal implementation detail."""
     if not signature:
         return tool_id
     return f"{tool_id}{THOUGHT_SIGNATURE_SEPARATOR}{signature}"
 
 
 def decode_tool_id_and_signature(encoded_id: str) -> Tuple[str, Optional[str]]:
-    """Internal implementation detail."""
     if not encoded_id or THOUGHT_SIGNATURE_SEPARATOR not in encoded_id:
         return encoded_id, None
     parts = encoded_id.split(THOUGHT_SIGNATURE_SEPARATOR, 1)

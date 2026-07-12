@@ -2,12 +2,10 @@
 
 from __future__ import annotations
 
+from core.storage_adapter import get_storage_adapter
 from fastapi import APIRouter
 from fastapi.responses import JSONResponse
-
-from core.storage_adapter import get_storage_adapter
 from log import log
-
 
 router = APIRouter(tags=["Health"])
 

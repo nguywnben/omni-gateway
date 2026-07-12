@@ -1,18 +1,13 @@
-"""Internal implementation detail."""
-
 import json
 import os
 import time
 from typing import Any, Dict, List, Optional
 
-from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorDatabase
-
 from log import log
+from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorDatabase
 
 
 class MongoDBManager:
-    """Internal implementation detail."""
-
     STATE_FIELDS = {
         "error_codes",
         "error_messages",
@@ -27,7 +22,6 @@ class MongoDBManager:
 
     @staticmethod
     def _escape_model_name(model_name: str) -> str:
-        """Internal implementation detail."""
         return model_name.replace(".", "-")
 
     def __init__(self):
@@ -35,16 +29,13 @@ class MongoDBManager:
         self._db: Optional[AsyncIOMotorDatabase] = None
         self._initialized = False
 
-
         self._config_cache: Dict[str, Any] = {}
         self._config_loaded = False
-
 
         self._redis = None
         self._redis_enabled: bool = False
 
     async def initialize(self) -> None:
-        """Internal implementation detail."""
         if self._initialized:
             return
 
@@ -58,18 +49,14 @@ class MongoDBManager:
             self._client = AsyncIOMotorClient(mongodb_uri)
             self._db = self._client[database_name]
 
-
             await self._db.command("ping")
 
-
             await self._create_indexes()
-
 
             await self._load_config_cache()
 
             self._initialized = True
             log.info(f"MongoDB storage initialized (database: {database_name})")
-
 
             await self._init_redis()
 
@@ -78,62 +65,40 @@ class MongoDBManager:
             raise
 
     async def _create_indexes(self):
-        """Internal implementation detail."""
-        from pymongo import IndexModel, ASCENDING
+        from pymongo import ASCENDING, IndexModel
 
         credentials_collection = self._db["credentials"]
         primary_credentials_collection = self._db["primary_credentials"]
 
-
         code_assist_indexes = [
-
             IndexModel([("filename", ASCENDING)], unique=True, name="idx_filename_unique"),
-
-
-
             IndexModel(
                 [("disabled", ASCENDING), ("rotation_order", ASCENDING)],
-                name="idx_disabled_rotation"
+                name="idx_disabled_rotation",
             ),
-
-
             IndexModel([("error_codes", ASCENDING)], name="idx_error_codes"),
-
-
             IndexModel([("user_email", ASCENDING)], name="idx_user_email"),
         ]
-
 
         primary_indexes = [
-
             IndexModel([("filename", ASCENDING)], unique=True, name="idx_filename_unique"),
-
-
-
             IndexModel(
                 [("disabled", ASCENDING), ("rotation_order", ASCENDING)],
-                name="idx_disabled_rotation"
+                name="idx_disabled_rotation",
             ),
-
-
             IndexModel([("error_codes", ASCENDING)], name="idx_error_codes"),
-
-
             IndexModel([("user_email", ASCENDING)], name="idx_user_email"),
         ]
-
 
         try:
             await credentials_collection.create_indexes(code_assist_indexes)
             await primary_credentials_collection.create_indexes(primary_indexes)
             log.debug("MongoDB indexes created.")
         except Exception as e:
-
             if "already exists" not in str(e).lower():
                 log.warning(f"Index creation warning: {e}")
 
     async def _load_config_cache(self):
-        """Internal implementation detail."""
         if self._config_loaded:
             return
 
@@ -151,10 +116,7 @@ class MongoDBManager:
             log.error(f"Error loading config cache: {e}")
             self._config_cache = {}
 
-
-
     async def _init_redis(self) -> None:
-        """Internal implementation detail."""
         redis_url = os.getenv("REDIS_URL")
         if not redis_url:
             return
@@ -171,8 +133,8 @@ class MongoDBManager:
             self._redis_enabled = True
             log.info("Redis connected, rebuilding credential pool cache...")
 
-
             import asyncio
+
             await asyncio.gather(
                 self._rebuild_redis_cache("code_assist"),
                 self._rebuild_redis_cache("primary"),
@@ -184,34 +146,32 @@ class MongoDBManager:
             self._redis = None
             self._redis_enabled = False
 
-
-
     def _rk_avail(self, mode: str) -> str:
-        """Internal implementation detail."""
         return f"code_assist:avail:{mode}"
 
     def _rk_tier(self, mode: str, tier: str) -> str:
-        """Internal implementation detail."""
         return f"code_assist:tier:{mode}:{tier}"
 
     def _rk_preview(self, mode: str) -> str:
-        """Internal implementation detail."""
         return f"code_assist:preview:{mode}"
 
     def _rk_cd(self, mode: str, filename: str, escaped_model: str) -> str:
-        """Internal implementation detail."""
         return f"code_assist:cd:{mode}:{filename}:{escaped_model}"
 
-
-
     async def _rebuild_redis_cache(self, mode: str) -> None:
-        """Internal implementation detail."""
         if not self._redis:
             return
         try:
             collection = self._db[self._get_collection_name(mode)]
 
-            projection: Dict[str, Any] = {"filename": 1, "disabled": 1, "model_cooldowns": 1, "tier": 1, "preview": 1, "_id": 0}
+            projection: Dict[str, Any] = {
+                "filename": 1,
+                "disabled": 1,
+                "model_cooldowns": 1,
+                "tier": 1,
+                "preview": 1,
+                "_id": 0,
+            }
 
             avail: List[str] = []
             tier_buckets: Dict[str, List[str]] = {}  # tier -> [filename, ...]
@@ -224,18 +184,18 @@ class MongoDBManager:
                     filename = doc["filename"]
                     avail.append(filename)
 
-
                     tier = doc.get("tier") or "pro"
                     tier_buckets.setdefault(tier, []).append(filename)
-
 
                     if mode == "code_assist" and doc.get("preview", True):
                         preview_members.append(filename)
 
-
                     model_cooldowns = doc.get("model_cooldowns") or {}
                     for escaped_model, cooldown_until in model_cooldowns.items():
-                        if isinstance(cooldown_until, (int, float)) and cooldown_until > current_time:
+                        if (
+                            isinstance(cooldown_until, (int, float))
+                            and cooldown_until > current_time
+                        ):
                             ttl = int(cooldown_until - current_time)
                             if ttl > 0:
                                 cd_key = self._rk_cd(mode, filename, escaped_model)
@@ -250,7 +210,6 @@ class MongoDBManager:
                 pipe.sadd(tmp_avail, *avail)
             await pipe.execute()
 
-
             pipe2 = self._redis.pipeline()
             if avail:
                 pipe2.rename(tmp_avail, self._rk_avail(mode))
@@ -258,7 +217,6 @@ class MongoDBManager:
                 pipe2.delete(self._rk_avail(mode))
                 pipe2.delete(tmp_avail)
             await pipe2.execute()
-
 
             all_tiers = ("free", "pro", "ultra")
             pipe3 = self._redis.pipeline()
@@ -283,7 +241,6 @@ class MongoDBManager:
                     pipe4.delete(tmp_tier_key)
             await pipe4.execute()
 
-
             preview_key = self._rk_preview(mode)
             tmp_preview_key = preview_key + ":tmp"
             pipe5 = self._redis.pipeline()
@@ -298,7 +255,6 @@ class MongoDBManager:
                 pipe6.delete(preview_key)
                 pipe6.delete(tmp_preview_key)
             await pipe6.execute()
-
 
             if cooldown_entries:
                 pipe7 = self._redis.pipeline()
@@ -315,8 +271,9 @@ class MongoDBManager:
         except Exception as e:
             log.warning(f"Redis rebuild cache error [{mode}]: {e}")
 
-    async def _redis_add_cred(self, mode: str, filename: str, tier: str = "pro", preview: bool = True) -> None:
-        """Internal implementation detail."""
+    async def _redis_add_cred(
+        self, mode: str, filename: str, tier: str = "pro", preview: bool = True
+    ) -> None:
         if not self._redis_enabled:
             return
         try:
@@ -329,8 +286,9 @@ class MongoDBManager:
         except Exception as e:
             log.warning(f"Redis add_cred error: {e}")
 
-    async def _redis_remove_cred(self, mode: str, filename: str, tier: Optional[str] = None) -> None:
-        """Internal implementation detail."""
+    async def _redis_remove_cred(
+        self, mode: str, filename: str, tier: Optional[str] = None
+    ) -> None:
         if not self._redis_enabled:
             return
         try:
@@ -339,7 +297,6 @@ class MongoDBManager:
             if tier:
                 pipe.srem(self._rk_tier(mode, tier), filename)
             else:
-
                 for t in ("free", "pro", "ultra"):
                     pipe.srem(self._rk_tier(mode, t), filename)
             pipe.srem(self._rk_preview(mode), filename)
@@ -347,8 +304,9 @@ class MongoDBManager:
         except Exception as e:
             log.warning(f"Redis remove_cred error: {e}")
 
-    async def _redis_sync_cred(self, mode: str, filename: str, disabled: bool, tier: str = "pro", preview: bool = True) -> None:
-        """Internal implementation detail."""
+    async def _redis_sync_cred(
+        self, mode: str, filename: str, disabled: bool, tier: str = "pro", preview: bool = True
+    ) -> None:
         if not self._redis_enabled:
             return
         try:
@@ -401,27 +359,32 @@ class MongoDBManager:
         return normalized_candidates[0]
 
     async def _get_next_available_from_redis(
-        self, mode: str, model_name: Optional[str], exclude_free_tier: bool = False, preview_only: bool = False
+        self,
+        mode: str,
+        model_name: Optional[str],
+        exclude_free_tier: bool = False,
+        preview_only: bool = False,
     ) -> Optional[tuple]:
-        """Internal implementation detail."""
         try:
-
             if preview_only and exclude_free_tier:
-
                 preview_set = await self._redis.smembers(self._rk_preview(mode))
                 pro_members = await self._redis.smembers(self._rk_tier(mode, "pro"))
                 ultra_members = await self._redis.smembers(self._rk_tier(mode, "ultra"))
                 non_free = pro_members | ultra_members
                 all_candidates = list(preview_set & non_free)
                 if not all_candidates:
-                    log.debug(f"[Redis MISS] mode={mode} preview+non-free: no candidates, fallback to MongoDB")
+                    log.debug(
+                        f"[Redis MISS] mode={mode} preview+non-free: no candidates, fallback to MongoDB"
+                    )
                     return None
                 candidates = sorted(all_candidates)
             elif preview_only:
                 preview_key = self._rk_preview(mode)
                 preview_size = await self._redis.scard(preview_key)
                 if preview_size == 0:
-                    log.debug(f"[Redis MISS] mode={mode} preview_only: pool empty, fallback to MongoDB")
+                    log.debug(
+                        f"[Redis MISS] mode={mode} preview_only: pool empty, fallback to MongoDB"
+                    )
                     return None
                 sample_size = min(preview_size, 10)
                 candidates = await self._redis.srandmember(preview_key, sample_size)
@@ -432,20 +395,23 @@ class MongoDBManager:
                 ultra_members = await self._redis.smembers(self._rk_tier(mode, "ultra"))
                 all_candidates = list(pro_members | ultra_members)
                 if not all_candidates:
-                    log.debug(f"[Redis MISS] mode={mode} exclude_free: no non-free creds, fallback to MongoDB")
+                    log.debug(
+                        f"[Redis MISS] mode={mode} exclude_free: no non-free creds, fallback to MongoDB"
+                    )
                     return None
                 candidates = sorted(all_candidates)
             else:
                 pool_key = self._rk_avail(mode)
                 pool_size = await self._redis.scard(pool_key)
                 if pool_size == 0:
-                    log.debug(f"[Redis MISS] mode={mode} pool_key={pool_key}: pool empty, fallback to MongoDB")
+                    log.debug(
+                        f"[Redis MISS] mode={mode} pool_key={pool_key}: pool empty, fallback to MongoDB"
+                    )
                     return None
                 sample_size = min(pool_size, 10)
                 candidates = await self._redis.srandmember(pool_key, sample_size)
                 if not candidates:
                     return None
-
 
             if model_name:
                 escaped = self._escape_model_name(model_name)
@@ -465,7 +431,9 @@ class MongoDBManager:
                     log.debug(f"[Redis HIT] mode={mode} model={model_name} -> {filename}")
                     return filename, credential_data
 
-                log.debug(f"[Redis MISS] mode={mode} model={model_name}: all {len(candidates)} candidates in cooldown, fallback to MongoDB")
+                log.debug(
+                    f"[Redis MISS] mode={mode} model={model_name}: all {len(candidates)} candidates in cooldown, fallback to MongoDB"
+                )
                 return None
             else:
                 filename = await self._choose_best_redis_candidate(mode, candidates)
@@ -483,7 +451,6 @@ class MongoDBManager:
             return None
 
     async def close(self) -> None:
-        """Internal implementation detail."""
         if self._redis:
             await self._redis.aclose()
             self._redis = None
@@ -496,12 +463,10 @@ class MongoDBManager:
         log.debug("MongoDB storage closed")
 
     def _ensure_initialized(self):
-        """Internal implementation detail."""
         if not self._initialized:
             raise RuntimeError("MongoDB manager not initialized")
 
     def _get_collection_name(self, mode: str) -> str:
-        """Internal implementation detail."""
         if mode == "primary":
             return "primary_credentials"
         elif mode == "code_assist":
@@ -509,14 +474,10 @@ class MongoDBManager:
         else:
             raise ValueError(f"Invalid mode: {mode}. Must be 'code_assist' or 'primary'")
 
-
-
     async def get_next_available_credential(
         self, mode: str = "code_assist", model_name: Optional[str] = None
     ) -> Optional[tuple[str, Dict[str, Any]]]:
-        """Internal implementation detail."""
         self._ensure_initialized()
-
 
         if self._redis_enabled:
             model_lower = model_name.lower() if model_name else ""
@@ -535,13 +496,10 @@ class MongoDBManager:
             collection = self._db[collection_name]
             current_time = time.time()
 
-
             match_query: Dict[str, Any] = {"disabled": False}
-
 
             if mode == "code_assist" and model_name and "preview" in model_name.lower():
                 match_query["preview"] = True
-
 
             if model_name:
                 escaped_model_name = self._escape_model_name(model_name)
@@ -551,12 +509,12 @@ class MongoDBManager:
                     {field: {"$lte": current_time}},
                 ]
 
-
             projection = {"filename": 1, "credential_data": 1, "enable_credit": 1, "_id": 0}
             docs = await (
-                collection
-                .find(match_query, projection)
-                .sort([("call_count", 1), ("last_success", 1), ("rotation_order", 1), ("filename", 1)])
+                collection.find(match_query, projection)
+                .sort(
+                    [("call_count", 1), ("last_success", 1), ("rotation_order", 1), ("filename", 1)]
+                )
                 .limit(1)
                 .to_list(1)
             )
@@ -571,11 +529,12 @@ class MongoDBManager:
             return None
 
         except Exception as e:
-            log.error(f"Error getting next available credential (mode={mode}, model_name={model_name}): {e}")
+            log.error(
+                f"Error getting next available credential (mode={mode}, model_name={model_name}): {e}"
+            )
             return None
 
     async def get_available_credentials_list(self, mode: str = "code_assist") -> List[str]:
-        """Internal implementation detail."""
         self._ensure_initialized()
 
         try:
@@ -585,7 +544,7 @@ class MongoDBManager:
             pipeline = [
                 {"$match": {"disabled": False}},
                 {"$sort": {"rotation_order": 1}},
-                {"$project": {"filename": 1, "_id": 0}}
+                {"$project": {"filename": 1, "_id": 0}},
             ]
 
             docs = await collection.aggregate(pipeline).to_list(length=None)
@@ -595,12 +554,10 @@ class MongoDBManager:
             log.error(f"Error getting available credentials list (mode={mode}): {e}")
             return []
 
-
-
-    async def store_credential(self, filename: str, credential_data: Dict[str, Any], mode: str = "code_assist") -> bool:
-        """Internal implementation detail."""
+    async def store_credential(
+        self, filename: str, credential_data: Dict[str, Any], mode: str = "code_assist"
+    ) -> bool:
         self._ensure_initialized()
-
 
         filename = os.path.basename(filename)
 
@@ -609,11 +566,6 @@ class MongoDBManager:
             collection = self._db[collection_name]
             current_ts = time.time()
 
-
-
-
-
-
             result = await collection.update_one(
                 {"filename": filename},
                 {
@@ -621,20 +573,17 @@ class MongoDBManager:
                         "credential_data": credential_data,
                         "updated_at": current_ts,
                     }
-                }
+                },
             )
 
-
             if result.matched_count == 0:
-
                 pipeline = [
                     {"$group": {"_id": None, "max_order": {"$max": "$rotation_order"}}},
-                    {"$project": {"_id": 0, "next_order": {"$add": ["$max_order", 1]}}}
+                    {"$project": {"_id": 0, "next_order": {"$add": ["$max_order", 1]}}},
                 ]
 
                 result_list = await collection.aggregate(pipeline).to_list(length=1)
                 next_order = result_list[0]["next_order"] if result_list else 0
-
 
                 try:
                     new_credential = {
@@ -661,12 +610,15 @@ class MongoDBManager:
 
                     await self._redis_add_cred(mode, filename)
                 except Exception as insert_error:
-
                     if "duplicate key" in str(insert_error).lower():
-
                         await collection.update_one(
                             {"filename": filename},
-                            {"$set": {"credential_data": credential_data, "updated_at": current_ts}}
+                            {
+                                "$set": {
+                                    "credential_data": credential_data,
+                                    "updated_at": current_ts,
+                                }
+                            },
                         )
                     else:
                         raise
@@ -678,10 +630,10 @@ class MongoDBManager:
             log.error(f"Error storing credential {filename}: {e}")
             return False
 
-    async def get_credential(self, filename: str, mode: str = "code_assist") -> Optional[Dict[str, Any]]:
-        """Internal implementation detail."""
+    async def get_credential(
+        self, filename: str, mode: str = "code_assist"
+    ) -> Optional[Dict[str, Any]]:
         self._ensure_initialized()
-
 
         filename = os.path.basename(filename)
 
@@ -689,10 +641,8 @@ class MongoDBManager:
             collection_name = self._get_collection_name(mode)
             collection = self._db[collection_name]
 
-
             doc = await collection.find_one(
-                {"filename": filename},
-                {"credential_data": 1, "_id": 0}
+                {"filename": filename}, {"credential_data": 1, "_id": 0}
             )
             if doc:
                 return doc.get("credential_data")
@@ -704,18 +654,13 @@ class MongoDBManager:
             return None
 
     async def list_credentials(self, mode: str = "code_assist") -> List[str]:
-        """Internal implementation detail."""
         self._ensure_initialized()
 
         try:
             collection_name = self._get_collection_name(mode)
             collection = self._db[collection_name]
 
-
-            pipeline = [
-                {"$sort": {"rotation_order": 1}},
-                {"$project": {"filename": 1, "_id": 0}}
-            ]
+            pipeline = [{"$sort": {"rotation_order": 1}}, {"$project": {"filename": 1, "_id": 0}}]
 
             docs = await collection.aggregate(pipeline).to_list(length=None)
             return [doc["filename"] for doc in docs]
@@ -725,9 +670,7 @@ class MongoDBManager:
             return []
 
     async def delete_credential(self, filename: str, mode: str = "code_assist") -> bool:
-        """Internal implementation detail."""
         self._ensure_initialized()
-
 
         filename = os.path.basename(filename)
 
@@ -735,12 +678,10 @@ class MongoDBManager:
             collection_name = self._get_collection_name(mode)
             collection = self._db[collection_name]
 
-
             result = await collection.delete_one({"filename": filename})
             deleted_count = result.deleted_count
 
             if deleted_count > 0:
-
                 await self._redis_remove_cred(mode, filename)
                 log.debug(f"Deleted {deleted_count} credentials: {filename} (mode={mode}).")
                 return True
@@ -753,29 +694,18 @@ class MongoDBManager:
             return False
 
     async def get_duplicate_credentials_by_email(self, mode: str = "code_assist") -> Dict[str, Any]:
-        """Internal implementation detail."""
         self._ensure_initialized()
 
         try:
             collection_name = self._get_collection_name(mode)
             collection = self._db[collection_name]
 
-
             pipeline = [
-                {
-                    "$project": {
-                        "filename": 1,
-                        "user_email": 1,
-                        "_id": 0
-                    }
-                },
-                {
-                    "$sort": {"filename": 1}
-                }
+                {"$project": {"filename": 1, "user_email": 1, "_id": 0}},
+                {"$sort": {"filename": 1}},
             ]
 
             docs = await collection.aggregate(pipeline).to_list(length=None)
-
 
             email_to_files = {}
             no_email_files = []
@@ -791,19 +721,19 @@ class MongoDBManager:
                 else:
                     no_email_files.append(filename)
 
-
             duplicate_groups = []
             total_duplicate_count = 0
 
             for email, files in email_to_files.items():
                 if len(files) > 1:
-
-                    duplicate_groups.append({
-                        "email": email,
-                        "kept_file": files[0],
-                        "duplicate_files": files[1:],
-                        "duplicate_count": len(files) - 1,
-                    })
+                    duplicate_groups.append(
+                        {
+                            "email": email,
+                            "kept_file": files[0],
+                            "duplicate_files": files[1:],
+                            "duplicate_count": len(files) - 1,
+                        }
+                    )
                     total_duplicate_count += len(files) - 1
 
             return {
@@ -831,9 +761,7 @@ class MongoDBManager:
     async def update_credential_state(
         self, filename: str, state_updates: Dict[str, Any], mode: str = "code_assist"
     ) -> bool:
-        """Internal implementation detail."""
         self._ensure_initialized()
-
 
         filename = os.path.basename(filename)
 
@@ -841,10 +769,7 @@ class MongoDBManager:
             collection_name = self._get_collection_name(mode)
             collection = self._db[collection_name]
 
-
-            valid_updates = {
-                k: v for k, v in state_updates.items() if k in self.STATE_FIELDS
-            }
+            valid_updates = {k: v for k, v in state_updates.items() if k in self.STATE_FIELDS}
 
             if mode != "primary":
                 valid_updates.pop("enable_credit", None)
@@ -854,28 +779,23 @@ class MongoDBManager:
 
             valid_updates["updated_at"] = time.time()
 
-
-            result = await collection.update_one(
-                {"filename": filename}, {"$set": valid_updates}
-            )
+            result = await collection.update_one({"filename": filename}, {"$set": valid_updates})
             updated_count = result.modified_count + result.matched_count
-
 
             if self._redis_enabled and "disabled" in valid_updates:
                 if valid_updates["disabled"]:
-
                     await self._redis_remove_cred(mode, filename)
                 else:
-
                     doc = await collection.find_one(
                         {"filename": filename},
                         projection={"tier": 1, "preview": 1, "_id": 0},
                     )
                     tier_val = (doc or {}).get("tier", "pro") or "pro"
                     preview_val = (doc or {}).get("preview", True)
-                    await self._redis_sync_cred(mode, filename, disabled=False, tier=tier_val, preview=preview_val)
+                    await self._redis_sync_cred(
+                        mode, filename, disabled=False, tier=tier_val, preview=preview_val
+                    )
             elif self._redis_enabled and ("tier" in valid_updates or "preview" in valid_updates):
-
                 doc = await collection.find_one(
                     {"filename": filename},
                     projection={"disabled": 1, "tier": 1, "preview": 1, "_id": 0},
@@ -883,7 +803,9 @@ class MongoDBManager:
                 if doc and not doc.get("disabled", False):
                     tier_val = doc.get("tier", "pro") or "pro"
                     preview_val = doc.get("preview", True)
-                    await self._redis_sync_cred(mode, filename, disabled=False, tier=tier_val, preview=preview_val)
+                    await self._redis_sync_cred(
+                        mode, filename, disabled=False, tier=tier_val, preview=preview_val
+                    )
 
             return updated_count > 0
 
@@ -891,10 +813,10 @@ class MongoDBManager:
             log.error(f"Error updating credential state {filename}: {e}")
             return False
 
-    async def get_credential_state(self, filename: str, mode: str = "code_assist") -> Dict[str, Any]:
-        """Internal implementation detail."""
+    async def get_credential_state(
+        self, filename: str, mode: str = "code_assist"
+    ) -> Dict[str, Any]:
         self._ensure_initialized()
-
 
         filename = os.path.basename(filename)
 
@@ -903,7 +825,6 @@ class MongoDBManager:
             collection = self._db[collection_name]
             current_time = time.time()
 
-
             doc = await collection.find_one({"filename": filename})
 
             if doc:
@@ -911,7 +832,8 @@ class MongoDBManager:
 
                 if model_cooldowns:
                     model_cooldowns = {
-                        k: v for k, v in model_cooldowns.items()
+                        k: v
+                        for k, v in model_cooldowns.items()
                         if isinstance(v, (int, float)) and v > current_time
                     }
 
@@ -929,7 +851,6 @@ class MongoDBManager:
                 if mode == "primary":
                     state["enable_credit"] = doc.get("enable_credit", False)
                 return state
-
 
             default_state = {
                 "disabled": False,
@@ -950,14 +871,14 @@ class MongoDBManager:
             log.error(f"Error getting credential state {filename}: {e}")
             return {}
 
-    async def get_all_credential_states(self, mode: str = "code_assist") -> Dict[str, Dict[str, Any]]:
-        """Internal implementation detail."""
+    async def get_all_credential_states(
+        self, mode: str = "code_assist"
+    ) -> Dict[str, Dict[str, Any]]:
         self._ensure_initialized()
 
         try:
             collection_name = self._get_collection_name(mode)
             collection = self._db[collection_name]
-
 
             projection = {
                 "filename": 1,
@@ -971,7 +892,7 @@ class MongoDBManager:
                 "enable_credit": 1,
                 "call_count": 1,
                 "rotation_order": 1,
-                "_id": 0
+                "_id": 0,
             }
 
             cursor = collection.find({}, projection=projection)
@@ -983,10 +904,10 @@ class MongoDBManager:
                 filename = doc["filename"]
                 model_cooldowns = doc.get("model_cooldowns", {})
 
-
                 if model_cooldowns:
                     model_cooldowns = {
-                        k: v for k, v in model_cooldowns.items()
+                        k: v
+                        for k, v in model_cooldowns.items()
                         if isinstance(v, (int, float)) and v > current_time
                     }
 
@@ -1020,16 +941,13 @@ class MongoDBManager:
         error_code_filter: Optional[str] = None,
         cooldown_filter: Optional[str] = None,
         preview_filter: Optional[str] = None,
-        tier_filter: Optional[str] = None
+        tier_filter: Optional[str] = None,
     ) -> Dict[str, Any]:
-        """Internal implementation detail."""
         self._ensure_initialized()
 
         try:
-
             collection_name = self._get_collection_name(mode)
             collection = self._db[collection_name]
-
 
             query = {}
             if status_filter == "enabled":
@@ -1037,10 +955,8 @@ class MongoDBManager:
             elif status_filter == "disabled":
                 query["disabled"] = True
 
-
             if error_code_filter and str(error_code_filter).strip().lower() != "all":
                 if str(error_code_filter).strip().lower() == "none":
-
                     query["$or"] = [
                         {"error_codes": {"$exists": False}},
                         {"error_codes": None},
@@ -1056,16 +972,8 @@ class MongoDBManager:
                         pass
                     query["error_codes"] = {"$in": query_values}
 
-
             global_stats = {"total": 0, "normal": 0, "disabled": 0}
-            stats_pipeline = [
-                {
-                    "$group": {
-                        "_id": "$disabled",
-                        "count": {"$sum": 1}
-                    }
-                }
-            ]
+            stats_pipeline = [{"$group": {"_id": "$disabled", "count": {"$sum": 1}}}]
 
             stats_result = await collection.aggregate(stats_pipeline).to_list(length=10)
             for item in stats_result:
@@ -1075,7 +983,6 @@ class MongoDBManager:
                     global_stats["disabled"] = count
                 else:
                     global_stats["normal"] = count
-
 
             projection = {
                 "filename": 1,
@@ -1088,7 +995,7 @@ class MongoDBManager:
                 "preview": 1,
                 "tier": 1,
                 "enable_credit": 1,
-                "_id": 0
+                "_id": 0,
             }
 
             cursor = collection.find(query, projection=projection).sort("rotation_order", 1)
@@ -1099,11 +1006,11 @@ class MongoDBManager:
             async for doc in cursor:
                 model_cooldowns = doc.get("model_cooldowns", {})
 
-
                 active_cooldowns = {}
                 if model_cooldowns:
                     active_cooldowns = {
-                        k: v for k, v in model_cooldowns.items()
+                        k: v
+                        for k, v in model_cooldowns.items()
                         if isinstance(v, (int, float)) and v > current_time
                     }
 
@@ -1129,28 +1036,22 @@ class MongoDBManager:
                     if preview_filter == "no_preview" and preview_value:
                         continue
 
-
                 if tier_filter and tier_filter in ("free", "pro", "ultra"):
                     if summary["tier"] != tier_filter:
                         continue
 
-
                 if cooldown_filter == "in_cooldown":
-
                     if active_cooldowns:
                         all_summaries.append(summary)
                 elif cooldown_filter == "no_cooldown":
-
                     if not active_cooldowns:
                         all_summaries.append(summary)
                 else:
-
                     all_summaries.append(summary)
-
 
             total_count = len(all_summaries)
             if limit is not None:
-                summaries = all_summaries[offset:offset + limit]
+                summaries = all_summaries[offset : offset + limit]
             else:
                 summaries = all_summaries[offset:]
 
@@ -1172,18 +1073,13 @@ class MongoDBManager:
                 "stats": {"total": 0, "normal": 0, "disabled": 0},
             }
 
-
-
     def _rk_config(self, key: str) -> str:
-        """Internal implementation detail."""
         return f"code_assist:config:{key}"
 
     def _rk_config_all(self) -> str:
-        """Internal implementation detail."""
         return "code_assist:config"
 
     async def _load_config_to_redis(self) -> None:
-        """Internal implementation detail."""
         if not self._redis_enabled:
             return
         try:
@@ -1202,7 +1098,6 @@ class MongoDBManager:
             log.warning(f"Failed to sync config to Redis: {e}")
 
     async def set_config(self, key: str, value: Any) -> bool:
-        """Internal implementation detail."""
         self._ensure_initialized()
 
         try:
@@ -1228,7 +1123,6 @@ class MongoDBManager:
             return False
 
     async def reload_config_cache(self):
-        """Internal implementation detail."""
         self._ensure_initialized()
         if self._redis_enabled:
             await self._load_config_to_redis()
@@ -1238,7 +1132,6 @@ class MongoDBManager:
         log.info("Config cache reloaded from database")
 
     async def get_config(self, key: str, default: Any = None) -> Any:
-        """Internal implementation detail."""
         self._ensure_initialized()
 
         if self._redis_enabled:
@@ -1254,7 +1147,6 @@ class MongoDBManager:
         return self._config_cache.get(key, default)
 
     async def get_all_config(self) -> Dict[str, Any]:
-        """Internal implementation detail."""
         self._ensure_initialized()
 
         if self._redis_enabled:
@@ -1268,7 +1160,6 @@ class MongoDBManager:
         return self._config_cache.copy()
 
     async def delete_config(self, key: str) -> bool:
-        """Internal implementation detail."""
         self._ensure_initialized()
 
         try:
@@ -1289,10 +1180,10 @@ class MongoDBManager:
             log.error(f"Error deleting config {key}: {e}")
             return False
 
-    async def get_credential_errors(self, filename: str, mode: str = "code_assist") -> Dict[str, Any]:
-        """Internal implementation detail."""
+    async def get_credential_errors(
+        self, filename: str, mode: str = "code_assist"
+    ) -> Dict[str, Any]:
         self._ensure_initialized()
-
 
         filename = os.path.basename(filename)
 
@@ -1300,10 +1191,8 @@ class MongoDBManager:
             collection_name = self._get_collection_name(mode)
             collection = self._db[collection_name]
 
-
             doc = await collection.find_one(
-                {"filename": filename},
-                {"error_codes": 1, "error_messages": 1, "_id": 0}
+                {"filename": filename}, {"error_codes": 1, "error_messages": 1, "_id": 0}
             )
 
             if doc:
@@ -1313,7 +1202,6 @@ class MongoDBManager:
                     "error_messages": doc.get("error_messages", []),
                 }
 
-
             return {
                 "filename": filename,
                 "error_codes": [],
@@ -1322,25 +1210,16 @@ class MongoDBManager:
 
         except Exception as e:
             log.error(f"Error getting credential errors {filename}: {e}")
-            return {
-                "filename": filename,
-                "error_codes": [],
-                "error_messages": [],
-                "error": str(e)
-            }
-
-
+            return {"filename": filename, "error_codes": [], "error_messages": [], "error": str(e)}
 
     async def set_model_cooldown(
         self,
         filename: str,
         model_name: str,
         cooldown_until: Optional[float],
-        mode: str = "code_assist"
+        mode: str = "code_assist",
     ) -> bool:
-        """Internal implementation detail."""
         self._ensure_initialized()
-
 
         filename = os.path.basename(filename)
 
@@ -1348,35 +1227,30 @@ class MongoDBManager:
             collection_name = self._get_collection_name(mode)
             collection = self._db[collection_name]
 
-
             escaped_model_name = self._escape_model_name(model_name)
 
-
             if cooldown_until is None:
-
                 result = await collection.update_one(
                     {"filename": filename},
                     {
                         "$unset": {f"model_cooldowns.{escaped_model_name}": ""},
-                        "$set": {"updated_at": time.time()}
-                    }
+                        "$set": {"updated_at": time.time()},
+                    },
                 )
             else:
-
                 result = await collection.update_one(
                     {"filename": filename},
                     {
                         "$set": {
                             f"model_cooldowns.{escaped_model_name}": cooldown_until,
-                            "updated_at": time.time()
+                            "updated_at": time.time(),
                         }
-                    }
+                    },
                 )
 
             if result.matched_count == 0:
                 log.warning(f"Credential {filename} not found")
                 return False
-
 
             if self._redis_enabled:
                 cd_key = self._rk_cd(mode, filename, escaped_model_name)
@@ -1387,22 +1261,18 @@ class MongoDBManager:
                     if ttl > 0:
                         await self._redis.setex(cd_key, ttl, str(cooldown_until))
                     else:
-
                         await self._redis.delete(cd_key)
 
-            log.debug(f"Set model cooldown: {filename}, model_name={model_name}, cooldown_until={cooldown_until}")
+            log.debug(
+                f"Set model cooldown: {filename}, model_name={model_name}, cooldown_until={cooldown_until}"
+            )
             return True
 
         except Exception as e:
             log.error(f"Error setting model cooldown for {filename}: {e}")
             return False
 
-    async def clear_all_model_cooldowns(
-        self,
-        filename: str,
-        mode: str = "code_assist"
-    ) -> bool:
-        """Internal implementation detail."""
+    async def clear_all_model_cooldowns(self, filename: str, mode: str = "code_assist") -> bool:
         self._ensure_initialized()
 
         filename = os.path.basename(filename)
@@ -1412,8 +1282,7 @@ class MongoDBManager:
             collection = self._db[collection_name]
 
             doc = await collection.find_one(
-                {"filename": filename},
-                {"model_cooldowns": 1, "_id": 0}
+                {"filename": filename}, {"model_cooldowns": 1, "_id": 0}
             )
             if not doc:
                 log.warning(f"Credential {filename} not found")
@@ -1428,11 +1297,14 @@ class MongoDBManager:
                         "model_cooldowns": {},
                         "updated_at": time.time(),
                     }
-                }
+                },
             )
 
             if self._redis_enabled and isinstance(model_cooldowns, dict) and model_cooldowns:
-                redis_keys = [self._rk_cd(mode, filename, escaped_model) for escaped_model in model_cooldowns.keys()]
+                redis_keys = [
+                    self._rk_cd(mode, filename, escaped_model)
+                    for escaped_model in model_cooldowns.keys()
+                ]
                 await self._redis.delete(*redis_keys)
 
             log.debug(f"Cleared all model cooldowns: {filename} (mode={mode})")
@@ -1443,12 +1315,8 @@ class MongoDBManager:
             return False
 
     async def record_success(
-        self,
-        filename: str,
-        model_name: Optional[str] = None,
-        mode: str = "code_assist"
+        self, filename: str, model_name: Optional[str] = None, mode: str = "code_assist"
     ) -> None:
-        """Internal implementation detail."""
         self._ensure_initialized()
         filename = os.path.basename(filename)
 
@@ -1457,23 +1325,24 @@ class MongoDBManager:
             collection = self._db[collection_name]
             now = time.time()
 
-
             await collection.update_one(
                 {"filename": filename},
-                {"$set": {
-                    "last_success": now,
-                    "error_codes": [],
-                    "error_messages": {},
-                    "updated_at": now,
-                }, "$inc": {"call_count": 1}}
+                {
+                    "$set": {
+                        "last_success": now,
+                        "error_codes": [],
+                        "error_messages": {},
+                        "updated_at": now,
+                    },
+                    "$inc": {"call_count": 1},
+                },
             )
-
 
             if model_name:
                 escaped = self._escape_model_name(model_name)
                 await collection.update_one(
                     {"filename": filename, f"model_cooldowns.{escaped}": {"$exists": True}},
-                    {"$unset": {f"model_cooldowns.{escaped}": ""}, "$set": {"updated_at": now}}
+                    {"$unset": {f"model_cooldowns.{escaped}": ""}, "$set": {"updated_at": now}},
                 )
 
                 if self._redis_enabled:
@@ -1482,9 +1351,7 @@ class MongoDBManager:
         except Exception as e:
             log.error(f"Error recording success for {filename}: {e}")
 
-    async def record_failure(
-        self, filename: str, mode: str = "code_assist"
-    ) -> None:
+    async def record_failure(self, filename: str, mode: str = "code_assist") -> None:
         """Count failed attempts so routing fairness includes all upstream traffic."""
         self._ensure_initialized()
         filename = os.path.basename(filename)

@@ -7,7 +7,6 @@ from typing import Any, Dict, List
 from urllib.parse import quote
 
 import httpx
-
 from config import get_google_ai_studio_api_url
 from core.httpx_client import get_async
 from core.provider_registry import GOOGLE_AI_STUDIO, normalize_provider_id

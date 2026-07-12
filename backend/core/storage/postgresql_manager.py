@@ -1,5 +1,3 @@
-"""Internal implementation detail."""
-
 import asyncio
 import json
 import os
@@ -7,13 +5,10 @@ import time
 from typing import Any, Dict, List, Optional, Tuple
 
 import asyncpg
-
 from log import log
 
 
-class PSQLManager:
-    """Internal implementation detail."""
-
+class PostgreSQLManager:
     STATE_FIELDS = {
         "error_codes",
         "error_messages",
@@ -32,12 +27,10 @@ class PSQLManager:
         self._initialized = False
         self._lock = asyncio.Lock()
 
-
         self._config_cache: Dict[str, Any] = {}
         self._config_loaded = False
 
     async def initialize(self) -> None:
-        """Internal implementation detail."""
         if self._initialized:
             return
 
@@ -69,7 +62,6 @@ class PSQLManager:
                 raise
 
     async def _create_tables(self, conn: asyncpg.Connection) -> None:
-        """Internal implementation detail."""
         await conn.execute("""
             CREATE TABLE IF NOT EXISTS credentials (
                 id SERIAL PRIMARY KEY,
@@ -126,7 +118,6 @@ class PSQLManager:
             )
         """)
 
-
         await conn.execute("""
             CREATE INDEX IF NOT EXISTS idx_disabled ON credentials(disabled)
         """)
@@ -143,7 +134,6 @@ class PSQLManager:
         log.debug("PostgreSQL tables and indexes created")
 
     async def _ensure_schema_compatibility(self, conn: asyncpg.Connection) -> None:
-        """Internal implementation detail."""
         required_columns = {
             "credentials": [
                 ("disabled", "INTEGER DEFAULT 0"),
@@ -177,10 +167,13 @@ class PSQLManager:
 
         try:
             for table_name, columns in required_columns.items():
-                rows = await conn.fetch("""
+                rows = await conn.fetch(
+                    """
                     SELECT column_name FROM information_schema.columns
                     WHERE table_name = $1
-                """, table_name)
+                """,
+                    table_name,
+                )
                 existing = {r["column_name"] for r in rows}
 
                 for col_name, col_def in columns:
@@ -196,7 +189,6 @@ class PSQLManager:
             log.error(f"Error ensuring schema compatibility: {e}")
 
     async def _load_config_cache(self) -> None:
-        """Internal implementation detail."""
         if self._config_loaded:
             return
 
@@ -218,7 +210,6 @@ class PSQLManager:
             self._config_cache = {}
 
     async def close(self) -> None:
-        """Internal implementation detail."""
         if self._pool:
             await self._pool.close()
             self._pool = None
@@ -237,12 +228,9 @@ class PSQLManager:
         else:
             raise ValueError(f"Invalid mode: {mode}. Must be 'code_assist' or 'primary'")
 
-
-
     async def get_next_available_credential(
         self, mode: str = "code_assist", model_name: Optional[str] = None
     ) -> Optional[Tuple[str, Dict[str, Any]]]:
-        """Internal implementation detail."""
         self._ensure_initialized()
 
         try:
@@ -318,11 +306,12 @@ class PSQLManager:
                     return None
 
         except Exception as e:
-            log.error(f"Error getting next available credential (mode={mode}, model_name={model_name}): {e}")
+            log.error(
+                f"Error getting next available credential (mode={mode}, model_name={model_name}): {e}"
+            )
             return None
 
     async def get_available_credentials_list(self) -> List[str]:
-        """Internal implementation detail."""
         self._ensure_initialized()
 
         try:
@@ -337,10 +326,9 @@ class PSQLManager:
             log.error(f"Error getting available credentials list: {e}")
             return []
 
-
-
-    async def store_credential(self, filename: str, credential_data: Dict[str, Any], mode: str = "code_assist") -> bool:
-        """Internal implementation detail."""
+    async def store_credential(
+        self, filename: str, credential_data: Dict[str, Any], mode: str = "code_assist"
+    ) -> bool:
         self._ensure_initialized()
         filename = os.path.basename(filename)
 
@@ -359,7 +347,8 @@ class PSQLManager:
                             updated_at = EXTRACT(EPOCH FROM NOW())
                         WHERE filename = $2
                         """,
-                        json.dumps(credential_data), filename
+                        json.dumps(credential_data),
+                        filename,
                     )
                 else:
                     row = await conn.fetchrow(
@@ -372,7 +361,10 @@ class PSQLManager:
                         (filename, credential_data, rotation_order, last_success)
                         VALUES ($1, $2, $3, $4)
                         """,
-                        filename, json.dumps(credential_data), next_order, time.time()
+                        filename,
+                        json.dumps(credential_data),
+                        next_order,
+                        time.time(),
                     )
 
             log.debug(f"Stored credential: {filename} (mode={mode})")
@@ -382,8 +374,9 @@ class PSQLManager:
             log.error(f"Error storing credential {filename}: {e}")
             return False
 
-    async def get_credential(self, filename: str, mode: str = "code_assist") -> Optional[Dict[str, Any]]:
-        """Internal implementation detail."""
+    async def get_credential(
+        self, filename: str, mode: str = "code_assist"
+    ) -> Optional[Dict[str, Any]]:
         self._ensure_initialized()
         filename = os.path.basename(filename)
 
@@ -401,7 +394,6 @@ class PSQLManager:
             return None
 
     async def list_credentials(self, mode: str = "code_assist") -> List[str]:
-        """Internal implementation detail."""
         self._ensure_initialized()
 
         try:
@@ -416,7 +408,6 @@ class PSQLManager:
             return []
 
     async def delete_credential(self, filename: str, mode: str = "code_assist") -> bool:
-        """Internal implementation detail."""
         self._ensure_initialized()
         filename = os.path.basename(filename)
 
@@ -440,14 +431,17 @@ class PSQLManager:
             log.error(f"Error deleting credential {filename}: {e}")
             return False
 
-    async def update_credential_state(self, filename: str, state_updates: Dict[str, Any], mode: str = "code_assist") -> bool:
-        """Internal implementation detail."""
+    async def update_credential_state(
+        self, filename: str, state_updates: Dict[str, Any], mode: str = "code_assist"
+    ) -> bool:
         self._ensure_initialized()
         filename = os.path.basename(filename)
 
         try:
             table_name = self._get_table_name(mode)
-            log.debug(f"[DB] update_credential_state: filename={filename}, updates={state_updates}, mode={mode}")
+            log.debug(
+                f"[DB] update_credential_state: filename={filename}, updates={state_updates}, mode={mode}"
+            )
 
             set_clauses = []
             values = []
@@ -468,12 +462,12 @@ class PSQLManager:
             if not set_clauses:
                 return True
 
-            set_clauses.append(f"updated_at = EXTRACT(EPOCH FROM NOW())")
+            set_clauses.append("updated_at = EXTRACT(EPOCH FROM NOW())")
             values.append(filename)
 
             sql = f"""
                 UPDATE {table_name}
-                SET {', '.join(set_clauses)}
+                SET {", ".join(set_clauses)}
                 WHERE filename = ${idx}
             """
 
@@ -487,8 +481,9 @@ class PSQLManager:
             log.error(f"[DB] Error updating credential state {filename}: {e}")
             return False
 
-    async def get_credential_state(self, filename: str, mode: str = "code_assist") -> Dict[str, Any]:
-        """Internal implementation detail."""
+    async def get_credential_state(
+        self, filename: str, mode: str = "code_assist"
+    ) -> Dict[str, Any]:
         self._ensure_initialized()
         filename = os.path.basename(filename)
 
@@ -496,11 +491,14 @@ class PSQLManager:
             table_name = self._get_table_name(mode)
             async with self._pool.acquire() as conn:
                 if mode == "code_assist":
-                    row = await conn.fetchrow(f"""
+                    row = await conn.fetchrow(
+                        f"""
                         SELECT disabled, error_codes, last_success, user_email, model_cooldowns,
                                preview, tier, call_count, rotation_order
                         FROM {table_name} WHERE filename = $1
-                    """, filename)
+                    """,
+                        filename,
+                    )
 
                     if row:
                         return {
@@ -527,11 +525,14 @@ class PSQLManager:
                         "rotation_order": 0,
                     }
                 else:
-                    row = await conn.fetchrow(f"""
+                    row = await conn.fetchrow(
+                        f"""
                         SELECT disabled, error_codes, last_success, user_email, model_cooldowns,
                                tier, enable_credit, call_count, rotation_order
                         FROM {table_name} WHERE filename = $1
-                    """, filename)
+                    """,
+                        filename,
+                    )
 
                     if row:
                         return {
@@ -541,7 +542,9 @@ class PSQLManager:
                             "user_email": row["user_email"],
                             "model_cooldowns": json.loads(row["model_cooldowns"] or "{}"),
                             "tier": row["tier"] if row["tier"] is not None else "pro",
-                            "enable_credit": bool(row["enable_credit"]) if row["enable_credit"] is not None else False,
+                            "enable_credit": bool(row["enable_credit"])
+                            if row["enable_credit"] is not None
+                            else False,
                             "call_count": row["call_count"] or 0,
                             "rotation_order": row["rotation_order"] or 0,
                         }
@@ -562,8 +565,9 @@ class PSQLManager:
             log.error(f"Error getting credential state {filename}: {e}")
             return {}
 
-    async def get_all_credential_states(self, mode: str = "code_assist") -> Dict[str, Dict[str, Any]]:
-        """Internal implementation detail."""
+    async def get_all_credential_states(
+        self, mode: str = "code_assist"
+    ) -> Dict[str, Dict[str, Any]]:
         self._ensure_initialized()
 
         try:
@@ -583,7 +587,9 @@ class PSQLManager:
                     for row in rows:
                         model_cooldowns = json.loads(row["model_cooldowns"] or "{}")
                         if model_cooldowns:
-                            model_cooldowns = {k: v for k, v in model_cooldowns.items() if v > current_time}
+                            model_cooldowns = {
+                                k: v for k, v in model_cooldowns.items() if v > current_time
+                            }
 
                         states[row["filename"]] = {
                             "disabled": bool(row["disabled"]),
@@ -609,7 +615,9 @@ class PSQLManager:
                     for row in rows:
                         model_cooldowns = json.loads(row["model_cooldowns"] or "{}")
                         if model_cooldowns:
-                            model_cooldowns = {k: v for k, v in model_cooldowns.items() if v > current_time}
+                            model_cooldowns = {
+                                k: v for k, v in model_cooldowns.items() if v > current_time
+                            }
 
                         states[row["filename"]] = {
                             "disabled": bool(row["disabled"]),
@@ -618,7 +626,9 @@ class PSQLManager:
                             "user_email": row["user_email"],
                             "model_cooldowns": model_cooldowns,
                             "tier": row["tier"] if row["tier"] is not None else "pro",
-                            "enable_credit": bool(row["enable_credit"]) if row["enable_credit"] is not None else False,
+                            "enable_credit": bool(row["enable_credit"])
+                            if row["enable_credit"] is not None
+                            else False,
                             "call_count": row["call_count"] or 0,
                             "rotation_order": row["rotation_order"] or 0,
                         }
@@ -637,9 +647,8 @@ class PSQLManager:
         error_code_filter: Optional[str] = None,
         cooldown_filter: Optional[str] = None,
         preview_filter: Optional[str] = None,
-        tier_filter: Optional[str] = None
+        tier_filter: Optional[str] = None,
     ) -> Dict[str, Any]:
-        """Internal implementation detail."""
         self._ensure_initialized()
 
         try:
@@ -647,7 +656,6 @@ class PSQLManager:
             current_time = time.time()
 
             async with self._pool.acquire() as conn:
-
                 stats_rows = await conn.fetch(
                     f"SELECT disabled, COUNT(*) AS cnt FROM {table_name} GROUP BY disabled"
                 )
@@ -659,7 +667,6 @@ class PSQLManager:
                     else:
                         global_stats["normal"] = r["cnt"]
 
-
                 where_clauses = []
                 if status_filter == "enabled":
                     where_clauses.append("disabled = 0")
@@ -667,7 +674,6 @@ class PSQLManager:
                     where_clauses.append("disabled = 1")
 
                 where_clause = ("WHERE " + " AND ".join(where_clauses)) if where_clauses else ""
-
 
                 if mode == "code_assist":
                     all_rows = await conn.fetch(f"""
@@ -686,7 +692,6 @@ class PSQLManager:
                         ORDER BY rotation_order
                     """)
 
-
                 filter_value = None
                 filter_int = None
                 filter_none = False
@@ -704,9 +709,10 @@ class PSQLManager:
                 for row in all_rows:
                     error_codes_json = row["error_codes"] or "[]"
                     model_cooldowns = json.loads(row["model_cooldowns"] or "{}")
-                    active_cooldowns = {k: v for k, v in model_cooldowns.items() if v > current_time}
+                    active_cooldowns = {
+                        k: v for k, v in model_cooldowns.items() if v > current_time
+                    }
                     error_codes = json.loads(error_codes_json)
-
 
                     if filter_none:
                         if error_codes:
@@ -740,7 +746,9 @@ class PSQLManager:
                     }
 
                     if mode == "code_assist":
-                        summary["preview"] = bool(row["preview"]) if row["preview"] is not None else True
+                        summary["preview"] = (
+                            bool(row["preview"]) if row["preview"] is not None else True
+                        )
 
                         if preview_filter:
                             preview_value = summary.get("preview", True)
@@ -749,7 +757,11 @@ class PSQLManager:
                             elif preview_filter == "no_preview" and preview_value:
                                 continue
                     else:
-                        summary["enable_credit"] = bool(row["enable_credit"]) if row["enable_credit"] is not None else False
+                        summary["enable_credit"] = (
+                            bool(row["enable_credit"])
+                            if row["enable_credit"] is not None
+                            else False
+                        )
 
                     if tier_filter and tier_filter in ("free", "pro", "ultra"):
                         if summary["tier"] != tier_filter:
@@ -766,7 +778,7 @@ class PSQLManager:
 
                 total_count = len(all_summaries)
                 if limit is not None:
-                    summaries = all_summaries[offset:offset + limit]
+                    summaries = all_summaries[offset : offset + limit]
                 else:
                     summaries = all_summaries[offset:]
 
@@ -789,7 +801,6 @@ class PSQLManager:
             }
 
     async def get_duplicate_credentials_by_email(self, mode: str = "code_assist") -> Dict[str, Any]:
-        """Internal implementation detail."""
         self._ensure_initialized()
 
         try:
@@ -812,12 +823,14 @@ class PSQLManager:
             total_duplicate_count = 0
             for email, files in email_to_files.items():
                 if len(files) > 1:
-                    duplicate_groups.append({
-                        "email": email,
-                        "kept_file": files[0],
-                        "duplicate_files": files[1:],
-                        "duplicate_count": len(files) - 1,
-                    })
+                    duplicate_groups.append(
+                        {
+                            "email": email,
+                            "kept_file": files[0],
+                            "duplicate_files": files[1:],
+                            "duplicate_count": len(files) - 1,
+                        }
+                    )
                     total_duplicate_count += len(files) - 1
 
             return {
@@ -842,21 +855,22 @@ class PSQLManager:
                 "total_count": 0,
             }
 
-
-
     async def set_config(self, key: str, value: Any) -> bool:
-        """Internal implementation detail."""
         self._ensure_initialized()
 
         try:
             async with self._pool.acquire() as conn:
-                await conn.execute("""
+                await conn.execute(
+                    """
                     INSERT INTO config (key, value, updated_at)
                     VALUES ($1, $2, EXTRACT(EPOCH FROM NOW()))
                     ON CONFLICT (key) DO UPDATE
                         SET value = EXCLUDED.value,
                             updated_at = EXCLUDED.updated_at
-                """, key, json.dumps(value))
+                """,
+                    key,
+                    json.dumps(value),
+                )
 
             self._config_cache[key] = value
             return True
@@ -866,24 +880,20 @@ class PSQLManager:
             return False
 
     async def reload_config_cache(self) -> None:
-        """Internal implementation detail."""
         self._ensure_initialized()
         self._config_loaded = False
         await self._load_config_cache()
         log.info("Config cache reloaded from database")
 
     async def get_config(self, key: str, default: Any = None) -> Any:
-        """Internal implementation detail."""
         self._ensure_initialized()
         return self._config_cache.get(key, default)
 
     async def get_all_config(self) -> Dict[str, Any]:
-        """Internal implementation detail."""
         self._ensure_initialized()
         return self._config_cache.copy()
 
     async def delete_config(self, key: str) -> bool:
-        """Internal implementation detail."""
         self._ensure_initialized()
 
         try:
@@ -897,8 +907,9 @@ class PSQLManager:
             log.error(f"Error deleting config {key}: {e}")
             return False
 
-    async def get_credential_errors(self, filename: str, mode: str = "code_assist") -> Dict[str, Any]:
-        """Internal implementation detail."""
+    async def get_credential_errors(
+        self, filename: str, mode: str = "code_assist"
+    ) -> Dict[str, Any]:
         self._ensure_initialized()
         filename = os.path.basename(filename)
 
@@ -907,7 +918,7 @@ class PSQLManager:
             async with self._pool.acquire() as conn:
                 row = await conn.fetchrow(
                     f"SELECT error_codes, error_messages FROM {table_name} WHERE filename = $1",
-                    filename
+                    filename,
                 )
 
             if row:
@@ -923,16 +934,13 @@ class PSQLManager:
             log.error(f"Error getting credential errors {filename}: {e}")
             return {"filename": filename, "error_codes": [], "error_messages": [], "error": str(e)}
 
-
-
     async def set_model_cooldown(
         self,
         filename: str,
         model_name: str,
         cooldown_until: Optional[float],
-        mode: str = "code_assist"
+        mode: str = "code_assist",
     ) -> bool:
-        """Internal implementation detail."""
         self._ensure_initialized()
         filename = os.path.basename(filename)
 
@@ -961,22 +969,20 @@ class PSQLManager:
                         updated_at = EXTRACT(EPOCH FROM NOW())
                     WHERE filename = $2
                     """,
-                    json.dumps(model_cooldowns), filename
+                    json.dumps(model_cooldowns),
+                    filename,
                 )
 
-            log.debug(f"Set model cooldown: {filename}, model_name={model_name}, cooldown_until={cooldown_until}")
+            log.debug(
+                f"Set model cooldown: {filename}, model_name={model_name}, cooldown_until={cooldown_until}"
+            )
             return True
 
         except Exception as e:
             log.error(f"Error setting model cooldown for {filename}: {e}")
             return False
 
-    async def clear_all_model_cooldowns(
-        self,
-        filename: str,
-        mode: str = "code_assist"
-    ) -> bool:
-        """Internal implementation detail."""
+    async def clear_all_model_cooldowns(self, filename: str, mode: str = "code_assist") -> bool:
         self._ensure_initialized()
         filename = os.path.basename(filename)
 
@@ -1006,19 +1012,16 @@ class PSQLManager:
             return False
 
     async def record_success(
-        self,
-        filename: str,
-        model_name: Optional[str] = None,
-        mode: str = "code_assist"
+        self, filename: str, model_name: Optional[str] = None, mode: str = "code_assist"
     ) -> None:
-        """Internal implementation detail."""
         self._ensure_initialized()
         filename = os.path.basename(filename)
 
         try:
             table_name = self._get_table_name(mode)
             async with self._pool.acquire() as conn:
-                await conn.execute(f"""
+                await conn.execute(
+                    f"""
                     UPDATE {table_name}
                     SET last_success = EXTRACT(EPOCH FROM NOW()),
                         call_count = COALESCE(call_count, 0) + 1,
@@ -1026,7 +1029,9 @@ class PSQLManager:
                         error_messages = '{{}}',
                         updated_at = EXTRACT(EPOCH FROM NOW())
                     WHERE filename = $1
-                """, filename)
+                """,
+                    filename,
+                )
 
                 if model_name:
                     row = await conn.fetchrow(
@@ -1042,15 +1047,14 @@ class PSQLManager:
                                 SET model_cooldowns = $1, updated_at = EXTRACT(EPOCH FROM NOW())
                                 WHERE filename = $2
                                 """,
-                                json.dumps(cooldowns), filename
+                                json.dumps(cooldowns),
+                                filename,
                             )
 
         except Exception as e:
             log.error(f"Error recording success for {filename}: {e}")
 
-    async def record_failure(
-        self, filename: str, mode: str = "code_assist"
-    ) -> None:
+    async def record_failure(self, filename: str, mode: str = "code_assist") -> None:
         """Count failed attempts so routing fairness includes all upstream traffic."""
         self._ensure_initialized()
         filename = os.path.basename(filename)

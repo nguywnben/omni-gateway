@@ -15,9 +15,10 @@ def _estimate_value(value: Any) -> int:
         return _string_tokens(value)
     if isinstance(value, dict):
         image_cost = 300 if value.get("type") == "image" or "inlineData" in value else 0
-        return image_cost + 2 + sum(
-            _string_tokens(str(key)) + _estimate_value(item)
-            for key, item in value.items()
+        return (
+            image_cost
+            + 2
+            + sum(_string_tokens(str(key)) + _estimate_value(item) for key, item in value.items())
         )
     if isinstance(value, list):
         return 1 + len(value) + sum(_estimate_value(item) for item in value)

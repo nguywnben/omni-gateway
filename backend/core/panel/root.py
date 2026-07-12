@@ -1,15 +1,13 @@
 """Root routes for the management console."""
 
-from html import escape
 import re
-
-from fastapi import APIRouter, HTTPException, Request
-from fastapi.responses import HTMLResponse
+from html import escape
 
 from core.auth import accept_oauth_callback
+from fastapi import APIRouter, HTTPException, Request
+from fastapi.responses import HTMLResponse
 from log import log
 from paths import FRONTEND_DIR
-
 
 router = APIRouter(tags=["root"])
 
@@ -113,7 +111,7 @@ def _oauth_callback_page(success: bool, title: str, message: str) -> HTMLRespons
     return HTMLResponse(content=html, status_code=200 if success else 400)
 
 
-@router.get("/callback", response_class=HTMLResponse)
+@router.get("/callback", response_class=HTMLResponse, include_in_schema=False)
 async def serve_oauth_callback(request: Request):
     """Render the OAuth callback result page."""
     code = request.query_params.get("code")
@@ -142,37 +140,39 @@ async def serve_oauth_callback(request: Request):
     )
 
 
-@router.get("/", response_class=HTMLResponse)
-@router.get("/login", response_class=HTMLResponse)
-@router.get("/setup", response_class=HTMLResponse)
-@router.get("/dashboard", response_class=HTMLResponse)
-@router.get("/code_assist", response_class=HTMLResponse)
-@router.get("/pool", response_class=HTMLResponse)
-@router.get("/models", response_class=HTMLResponse)
-@router.get("/providers", response_class=HTMLResponse)
-@router.get("/provider", response_class=HTMLResponse)
-@router.get("/oauth", response_class=HTMLResponse)
-@router.get("/upload", response_class=HTMLResponse)
-@router.get("/config", response_class=HTMLResponse)
-@router.get("/logs", response_class=HTMLResponse)
-@router.get("/about", response_class=HTMLResponse)
-async def serve_control_panel():
+@router.get("/", response_class=HTMLResponse, include_in_schema=False)
+@router.get("/login", response_class=HTMLResponse, include_in_schema=False)
+@router.get("/setup", response_class=HTMLResponse, include_in_schema=False)
+@router.get("/dashboard", response_class=HTMLResponse, include_in_schema=False)
+@router.get("/code_assist", response_class=HTMLResponse, include_in_schema=False)
+@router.get("/pool", response_class=HTMLResponse, include_in_schema=False)
+@router.get("/models", response_class=HTMLResponse, include_in_schema=False)
+@router.get("/providers", response_class=HTMLResponse, include_in_schema=False)
+@router.get("/provider", response_class=HTMLResponse, include_in_schema=False)
+@router.get("/oauth", response_class=HTMLResponse, include_in_schema=False)
+@router.get("/upload", response_class=HTMLResponse, include_in_schema=False)
+@router.get("/config", response_class=HTMLResponse, include_in_schema=False)
+@router.get("/logs", response_class=HTMLResponse, include_in_schema=False)
+@router.get("/about", response_class=HTMLResponse, include_in_schema=False)
+def serve_control_panel():
     """Serve the single responsive console entry point for public app routes."""
     try:
-        with open(FRONTEND_DIR / "control_panel.html", "r", encoding="utf-8") as f:
+        with open(FRONTEND_DIR / "control-panel.html", "r", encoding="utf-8") as f:
             html_content = f.read()
-        asset_version = int(max(
-            (FRONTEND_DIR / "control_panel.css").stat().st_mtime,
-            (FRONTEND_DIR / "common.js").stat().st_mtime,
-        ))
+        asset_version = int(
+            max(
+                (FRONTEND_DIR / "control-panel.css").stat().st_mtime,
+                (FRONTEND_DIR / "control-panel.js").stat().st_mtime,
+            )
+        )
         html_content = re.sub(
-            r'href="/frontend/control_panel\.css(?:\?v=[^"]*)?"',
-            f'href="/frontend/control_panel.css?v={asset_version}"',
+            r'href="/frontend/control-panel\.css(?:\?v=[^"]*)?"',
+            f'href="/frontend/control-panel.css?v={asset_version}"',
             html_content,
         )
         html_content = re.sub(
-            r'src="/frontend/common\.js(?:\?v=[^"]*)?"',
-            f'src="/frontend/common.js?v={asset_version}"',
+            r'src="/frontend/control-panel\.js(?:\?v=[^"]*)?"',
+            f'src="/frontend/control-panel.js?v={asset_version}"',
             html_content,
         )
         return HTMLResponse(content=html_content)

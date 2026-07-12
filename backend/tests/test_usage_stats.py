@@ -9,7 +9,6 @@ import unittest
 from pathlib import Path
 from unittest.mock import AsyncMock, patch
 
-
 BACKEND_DIR = Path(__file__).resolve().parents[1]
 if str(BACKEND_DIR) not in sys.path:
     sys.path.insert(0, str(BACKEND_DIR))
@@ -105,9 +104,7 @@ class UsageAggregationTests(unittest.IsolatedAsyncioTestCase):
                 ):
                     result = await usage_stats.get_stats_for_period("all")
 
-                deleted_filename = usage_stats.deleted_usage_filename(
-                    "google_ai_studio"
-                )
+                deleted_filename = usage_stats.deleted_usage_filename("google_ai_studio")
                 self.assertEqual(list(result), [deleted_filename])
                 self.assertEqual(result[deleted_filename]["credential_label"], "Deleted credential")
                 self.assertEqual(result[deleted_filename]["user_email"], "")
@@ -151,9 +148,7 @@ class UsageAggregationTests(unittest.IsolatedAsyncioTestCase):
 
                 self.assertEqual(result[filename]["calls"], 0)
                 self.assertEqual(result[filename]["user_email"], "readded@example.com")
-                deleted_filename = usage_stats.deleted_usage_filename(
-                    "google_antigravity"
-                )
+                deleted_filename = usage_stats.deleted_usage_filename("google_antigravity")
                 self.assertEqual(result[deleted_filename]["calls"], 1)
                 self.assertTrue(result[deleted_filename]["is_deleted"])
             finally:
@@ -189,9 +184,7 @@ class UsageAggregationTests(unittest.IsolatedAsyncioTestCase):
                 ):
                     result = await usage_stats.get_stats_for_period("all")
 
-                deleted_filename = usage_stats.deleted_usage_filename(
-                    "google_antigravity"
-                )
+                deleted_filename = usage_stats.deleted_usage_filename("google_antigravity")
                 self.assertEqual(list(result), [deleted_filename])
                 self.assertEqual(result[deleted_filename]["calls"], 2)
             finally:
@@ -276,15 +269,9 @@ class UsageAggregationTests(unittest.IsolatedAsyncioTestCase):
                 ):
                     result = await usage_stats.get_stats_for_period("all")
 
-                self.assertEqual(
-                    result["credential.json"]["estimated_tokens_saved"], 40
-                )
-                self.assertEqual(
-                    result["credential.json"]["compressed_messages"], 6
-                )
-                self.assertEqual(
-                    result["credential.json"]["average_latency_ms"], 125
-                )
+                self.assertEqual(result["credential.json"]["estimated_tokens_saved"], 40)
+                self.assertEqual(result["credential.json"]["compressed_messages"], 6)
+                self.assertEqual(result["credential.json"]["average_latency_ms"], 125)
                 self.assertEqual(result["credential.json"]["retry_count"], 2)
             finally:
                 usage_stats.db_path = original_db_path

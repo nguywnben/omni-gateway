@@ -1,22 +1,24 @@
-import os
 import json
+import os
 import sqlite3
 import threading
 import time
+from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from log import log
-from paths import DEFAULT_CREDENTIALS_DIR
 from core.provider_registry import (
     GOOGLE_ANTIGRAVITY,
     get_credential_provider,
     get_provider_display_name,
     normalize_provider_id,
 )
-
+from log import log
+from paths import DEFAULT_CREDENTIALS_DIR
 
 db_lock = threading.Lock()
-db_path = str(DEFAULT_CREDENTIALS_DIR / "usage_stats.db")
+db_path = str(
+    Path(os.getenv("CREDENTIALS_DIR", str(DEFAULT_CREDENTIALS_DIR))).expanduser() / "usage_stats.db"
+)
 UNASSIGNED_USAGE_FILENAME = "__gateway_unassigned__.json"
 DELETED_USAGE_PREFIX = "__deleted_credential__"
 USAGE_PERIODS = {
@@ -62,8 +64,7 @@ def deleted_usage_filename(provider: Any) -> str:
     """Return the anonymous history bucket for a deleted provider credential."""
     provider_id = normalize_provider_id(provider or GOOGLE_ANTIGRAVITY)
     safe_provider_id = "".join(
-        character if character.isalnum() or character == "_" else "_"
-        for character in provider_id
+        character if character.isalnum() or character == "_" else "_" for character in provider_id
     ).strip("_")
     return f"{DELETED_USAGE_PREFIX}{safe_provider_id or 'unknown'}.json"
 
@@ -140,9 +141,7 @@ def _usage_record(
     total_latency_ms: int,
     retry_count: int,
 ) -> Dict[str, Any]:
-    provider_id = normalize_provider_id(
-        existing.get("provider") or provider or GOOGLE_ANTIGRAVITY
-    )
+    provider_id = normalize_provider_id(existing.get("provider") or provider or GOOGLE_ANTIGRAVITY)
     record = {
         "user_email": existing.get("user_email", ""),
         "credential_label": existing.get("credential_label", ""),
@@ -160,26 +159,26 @@ def _usage_record(
         "estimated_input_tokens": estimated_input_tokens,
         "estimated_tokens_saved": estimated_tokens_saved,
         "compressed_messages": compressed_messages,
-        "average_latency_ms": round(total_latency_ms / successful_calls)
-        if successful_calls
-        else 0,
+        "average_latency_ms": round(total_latency_ms / successful_calls) if successful_calls else 0,
         "retry_count": retry_count,
     }
-    record.update({
-        "calls_24h": calls,
-        "successful_calls_24h": successful_calls,
-        "failed_calls_24h": failed_calls,
-        "input_tokens_24h": input_tokens,
-        "output_tokens_24h": output_tokens,
-        "total_tokens_24h": total_tokens,
-        "cached_tokens_24h": cached_tokens,
-        "reasoning_tokens_24h": reasoning_tokens,
-        "estimated_input_tokens_24h": estimated_input_tokens,
-        "estimated_tokens_saved_24h": estimated_tokens_saved,
-        "compressed_messages_24h": compressed_messages,
-        "average_latency_ms_24h": record["average_latency_ms"],
-        "retry_count_24h": retry_count,
-    })
+    record.update(
+        {
+            "calls_24h": calls,
+            "successful_calls_24h": successful_calls,
+            "failed_calls_24h": failed_calls,
+            "input_tokens_24h": input_tokens,
+            "output_tokens_24h": output_tokens,
+            "total_tokens_24h": total_tokens,
+            "cached_tokens_24h": cached_tokens,
+            "reasoning_tokens_24h": reasoning_tokens,
+            "estimated_input_tokens_24h": estimated_input_tokens,
+            "estimated_tokens_saved_24h": estimated_tokens_saved,
+            "compressed_messages_24h": compressed_messages,
+            "average_latency_ms_24h": record["average_latency_ms"],
+            "retry_count_24h": retry_count,
+        }
+    )
     return record
 
 
@@ -192,7 +191,9 @@ def normalize_token_usage(usage: Optional[Dict[str, Any]]) -> Dict[str, int]:
         usage.get("promptTokenCount", usage.get("input_tokens", usage.get("prompt_tokens")))
     )
     output_tokens = _int_value(
-        usage.get("candidatesTokenCount", usage.get("output_tokens", usage.get("completion_tokens")))
+        usage.get(
+            "candidatesTokenCount", usage.get("output_tokens", usage.get("completion_tokens"))
+        )
     )
     cached_tokens = _int_value(
         usage.get(
@@ -366,7 +367,7 @@ def record_call(
                     _int_value(request_metrics.get("compressed_messages")),
                     _int_value(request_metrics.get("latency_ms")),
                     _int_value(request_metrics.get("retry_count")),
-                )
+                ),
             )
             conn.commit()
         except Exception as e:
@@ -414,7 +415,9 @@ async def get_credential_counts() -> Dict[str, int]:
         from core.storage_adapter import get_storage_adapter
 
         storage_adapter = await get_storage_adapter()
-        provider_summary = await storage_adapter._backend.get_credentials_summary(limit=None, mode="primary")
+        provider_summary = await storage_adapter._backend.get_credentials_summary(
+            limit=None, mode="primary"
+        )
         summary_stats = provider_summary.get("stats") or {}
 
         filenames = set()
@@ -447,7 +450,9 @@ async def get_credential_usage_metadata() -> Dict[str, Dict[str, str]]:
         from core.storage_adapter import get_storage_adapter
 
         storage_adapter = await get_storage_adapter()
-        provider_summary = await storage_adapter._backend.get_credentials_summary(limit=None, mode="primary")
+        provider_summary = await storage_adapter._backend.get_credentials_summary(
+            limit=None, mode="primary"
+        )
 
         metadata: Dict[str, Dict[str, str]] = {}
         for item in provider_summary.get("items", []):
@@ -476,7 +481,9 @@ async def get_all_credential_filenames() -> List[str]:
         from core.storage_adapter import get_storage_adapter
 
         storage_adapter = await get_storage_adapter()
-        provider_summary = await storage_adapter._backend.get_credentials_summary(limit=None, mode="primary")
+        provider_summary = await storage_adapter._backend.get_credentials_summary(
+            limit=None, mode="primary"
+        )
 
         filenames = set()
         for item in provider_summary.get("items", []):

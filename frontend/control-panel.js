@@ -2857,7 +2857,7 @@ function getCredentialProviderMeta(credInfo, managerType) {
         return {
             id: 'google_ai_studio',
             name: t('provider_google_ai_studio'),
-            logo: '/frontend/assets/google-ai-studio-logo.png'
+            logo: '/frontend/assets/providers/google-ai-studio-logo.png'
         };
 
     }
@@ -2867,7 +2867,7 @@ function getCredentialProviderMeta(credInfo, managerType) {
         return {
             id: 'google_antigravity',
             name: t('provider_antigravity'),
-            logo: '/frontend/assets/antigravity-logo.png'
+            logo: '/frontend/assets/providers/google-antigravity-logo.png'
         };
 
     }
@@ -3670,11 +3670,11 @@ function triggerTabDataLoad(tabName) {
 const MODEL_PROVIDER_META = {
     google_antigravity: {
         name: 'Google Antigravity',
-        logo: '/frontend/assets/antigravity-logo.png'
+        logo: '/frontend/assets/providers/google-antigravity-logo.png'
     },
     google_ai_studio: {
         name: 'Google AI Studio',
-        logo: '/frontend/assets/google-ai-studio-logo.png'
+        logo: '/frontend/assets/providers/google-ai-studio-logo.png'
     }
 };
 

@@ -7,7 +7,6 @@ import unittest
 from pathlib import Path
 from typing import Any, Dict
 
-
 BACKEND_DIR = Path(__file__).resolve().parents[1]
 if str(BACKEND_DIR) not in sys.path:
     sys.path.insert(0, str(BACKEND_DIR))
@@ -20,8 +19,7 @@ class FakeStorageAdapter:
         self.states = states
         self.state_reads = 0
         self.credentials = {
-            filename: {"token": f"token-{filename}", "project_id": filename}
-            for filename in states
+            filename: {"token": f"token-{filename}", "project_id": filename} for filename in states
         }
 
     async def get_all_credential_states(self, mode: str = "primary"):
@@ -106,14 +104,10 @@ class SmartCredentialRouterTests(unittest.IsolatedAsyncioTestCase):
         second = await router.acquire(storage, mode="primary", model_name="model-a")
         await router.complete(second[0], mode="primary", success=False)
 
-        self.assertIsNone(
-            await router.acquire(storage, mode="primary", model_name="model-a")
-        )
+        self.assertIsNone(await router.acquire(storage, mode="primary", model_name="model-a"))
 
         now[0] = 105.0
-        self.assertIsNotNone(
-            await router.acquire(storage, mode="primary", model_name="model-a")
-        )
+        self.assertIsNotNone(await router.acquire(storage, mode="primary", model_name="model-a"))
 
     async def test_historical_call_count_does_not_flood_a_new_credential(self):
         storage = FakeStorageAdapter(
@@ -121,16 +115,12 @@ class SmartCredentialRouterTests(unittest.IsolatedAsyncioTestCase):
                 "established.json": credential_state(
                     call_count=1000, last_success=10.0, rotation_order=0
                 ),
-                "new.json": credential_state(
-                    call_count=0, last_success=20.0, rotation_order=1
-                ),
+                "new.json": credential_state(call_count=0, last_success=20.0, rotation_order=1),
             }
         )
         router = SmartCredentialRouter(clock=lambda: 100.0)
 
-        result = await router.acquire(
-            storage, mode="primary", model_name="model-a"
-        )
+        result = await router.acquire(storage, mode="primary", model_name="model-a")
 
         self.assertEqual(result[0], "established.json")
 
@@ -177,9 +167,7 @@ class SmartCredentialRouterTests(unittest.IsolatedAsyncioTestCase):
         )
         router = SmartCredentialRouter(clock=lambda: 100.0)
 
-        result = await router.acquire(
-            storage, mode="code_assist", model_name="model-preview"
-        )
+        result = await router.acquire(storage, mode="code_assist", model_name="model-preview")
 
         self.assertEqual(result[0], "preview.json")
 
@@ -202,9 +190,7 @@ class SmartCredentialRouterTests(unittest.IsolatedAsyncioTestCase):
         }
         router = SmartCredentialRouter(clock=lambda: 100.0)
 
-        result = await router.acquire(
-            storage, mode="primary", model_name="claude-sonnet-4-6"
-        )
+        result = await router.acquire(storage, mode="primary", model_name="claude-sonnet-4-6")
 
         self.assertEqual(result[0], "antigravity.json")
 

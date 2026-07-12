@@ -1,8 +1,5 @@
 """Management API for the dynamic model catalog and virtual model pool."""
 
-from fastapi import APIRouter, Depends, HTTPException, Query
-from fastapi.responses import JSONResponse
-
 from core.model_pool import (
     DEFAULT_VIRTUAL_MODEL_ALIAS,
     ModelPoolError,
@@ -12,8 +9,9 @@ from core.model_pool import (
 )
 from core.models import VirtualModelPoolUpdateRequest
 from core.utils import verify_panel_token
+from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import JSONResponse
 from log import log
-
 
 router = APIRouter(tags=["model-pools"])
 
@@ -47,8 +45,7 @@ async def get_model_catalog(
                     "available_models": sum(bool(entry["available"]) for entry in catalog),
                     "selected_models": len(pool["selected_models"]),
                     "unavailable_selected_models": sum(
-                        model_id not in catalog_ids
-                        for model_id in pool["selected_models"]
+                        model_id not in catalog_ids for model_id in pool["selected_models"]
                     ),
                 },
             }

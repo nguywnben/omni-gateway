@@ -1,11 +1,8 @@
-"""Internal implementation detail."""
 import json
 from typing import Any, Dict, Optional
 
+from core.converter.thought_signature import SKIP_THOUGHT_SIGNATURE_VALIDATOR
 from log import log
-from core.converter.thoughtSignature_fix import SKIP_THOUGHT_SIGNATURE_VALIDATOR
-
-
 
 # ====================== Model Configuration ======================
 
@@ -25,6 +22,7 @@ LITE_SAFETY_SETTINGS = [
     {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE"},
     {"category": "HARM_CATEGORY_CIVIC_INTEGRITY", "threshold": "BLOCK_NONE"},
 ]
+
 
 def _append_schema_hint(schema: Dict[str, Any], hint: str) -> None:
     """Move fragile validation details into description instead of sending them raw."""
@@ -107,9 +105,7 @@ def _clean_parameters_json_schema(
         type_value = result["type"]
         if isinstance(type_value, list):
             non_null_types = [
-                str(t).lower()
-                for t in type_value
-                if isinstance(t, str) and t.lower() != "null"
+                str(t).lower() for t in type_value if isinstance(t, str) and t.lower() != "null"
             ]
             if non_null_types:
                 result["type"] = non_null_types[0]
@@ -131,9 +127,9 @@ def _clean_parameters_json_schema(
         union_key = "anyOf" if "anyOf" in result else "oneOf"
         union_items = result.get(union_key) or []
         cleaned_items = [
-            item for item in (
-                _clean_parameters_json_schema(item, root_schema, visited)
-                for item in union_items
+            item
+            for item in (
+                _clean_parameters_json_schema(item, root_schema, visited) for item in union_items
             )
             if isinstance(item, dict)
         ]
@@ -148,13 +144,16 @@ def _clean_parameters_json_schema(
         else:
             preferred = next(
                 (
-                    item for item in cleaned_items
+                    item
+                    for item in cleaned_items
                     if item.get("type") in ("object", "array") or item.get("properties")
                 ),
                 None,
             )
             if preferred is None:
-                preferred = next((item for item in cleaned_items if item.get("type") or item.get("enum")), None)
+                preferred = next(
+                    (item for item in cleaned_items if item.get("type") or item.get("enum")), None
+                )
             if preferred:
                 original_description = result.get("description")
                 result.update(preferred)
@@ -175,8 +174,16 @@ def _clean_parameters_json_schema(
             result["items"] = _clean_parameters_json_schema(items, root_schema, visited)
 
     validation_keys = {
-        "default", "minLength", "maxLength", "minimum", "maximum",
-        "minItems", "maxItems", "pattern", "format", "uniqueItems",
+        "default",
+        "minLength",
+        "maxLength",
+        "minimum",
+        "maximum",
+        "minItems",
+        "maxItems",
+        "pattern",
+        "format",
+        "uniqueItems",
     }
     for key in list(result.keys()):
         if key in validation_keys:
@@ -185,12 +192,36 @@ def _clean_parameters_json_schema(
                 _append_schema_hint(result, f"{key}: {json.dumps(value, ensure_ascii=False)}")
 
     unsupported_keys = {
-        "title", "$schema", "$id", "$ref", "ref", "strict", "nullable",
-        "exclusiveMaximum", "exclusiveMinimum", "additionalProperties",
-        "allOf", "anyOf", "oneOf", "$defs", "definitions", "example",
-        "examples", "readOnly", "writeOnly", "const", "additionalItems",
-        "contains", "patternProperties", "dependencies", "propertyNames",
-        "if", "then", "else", "contentEncoding", "contentMediaType",
+        "title",
+        "$schema",
+        "$id",
+        "$ref",
+        "ref",
+        "strict",
+        "nullable",
+        "exclusiveMaximum",
+        "exclusiveMinimum",
+        "additionalProperties",
+        "allOf",
+        "anyOf",
+        "oneOf",
+        "$defs",
+        "definitions",
+        "example",
+        "examples",
+        "readOnly",
+        "writeOnly",
+        "const",
+        "additionalItems",
+        "contains",
+        "patternProperties",
+        "dependencies",
+        "propertyNames",
+        "if",
+        "then",
+        "else",
+        "contentEncoding",
+        "contentMediaType",
     }
     for key in list(result.keys()):
         if key in unsupported_keys or key.startswith("x-"):
@@ -202,22 +233,24 @@ def _clean_parameters_json_schema(
         for prop_name, prop_schema in result["properties"].items():
             if isinstance(prop_schema, dict):
                 prop_type = prop_schema.get("type")
-                if (
-                    prop_schema.get("nullable") is True
-                    or (
-                        isinstance(prop_type, list)
-                        and any(str(t).lower() == "null" for t in prop_type)
-                    )
+                if prop_schema.get("nullable") is True or (
+                    isinstance(prop_type, list) and any(str(t).lower() == "null" for t in prop_type)
                 ):
                     nullable_props.add(prop_name)
-            cleaned_props[prop_name] = _clean_parameters_json_schema(prop_schema, root_schema, visited)
+            cleaned_props[prop_name] = _clean_parameters_json_schema(
+                prop_schema, root_schema, visited
+            )
         result["properties"] = cleaned_props
 
     if "properties" in result and "type" not in result:
         result["type"] = "object"
 
     if isinstance(result.get("required"), list):
-        prop_names = set(result.get("properties", {}).keys()) if isinstance(result.get("properties"), dict) else None
+        prop_names = (
+            set(result.get("properties", {}).keys())
+            if isinstance(result.get("properties"), dict)
+            else None
+        )
         required = []
         for item in result["required"]:
             if not isinstance(item, str):
@@ -268,7 +301,9 @@ def _normalize_tools_for_internal_api(tools: Any) -> Any:
                 normalized_declaration.pop("parameters", None)
                 normalized_declaration.pop("parameters_json_schema", None)
                 if schema not in (None, {}, []):
-                    normalized_declaration["parametersJsonSchema"] = _clean_parameters_json_schema(schema)
+                    normalized_declaration["parametersJsonSchema"] = _clean_parameters_json_schema(
+                        schema
+                    )
                 else:
                     normalized_declaration.pop("parametersJsonSchema", None)
 
@@ -350,13 +385,20 @@ def _normalize_part_thought_signature(part: Dict[str, Any], model_name: str) -> 
 
 
 SUPPORTED_ASPECT_RATIOS = [
-    (1, 1), (2, 3), (3, 2), (3, 4), (4, 3),
-    (4, 5), (5, 4), (9, 16), (16, 9), (21, 9),
+    (1, 1),
+    (2, 3),
+    (3, 2),
+    (3, 4),
+    (4, 3),
+    (4, 5),
+    (5, 4),
+    (9, 16),
+    (16, 9),
+    (21, 9),
 ]
 
 
 def _parse_size_to_image_config(size_str: str) -> Dict[str, str]:
-    """Internal implementation detail."""
     import re
 
     config = {}
@@ -371,7 +413,6 @@ def _parse_size_to_image_config(size_str: str) -> Dict[str, str]:
     if width <= 0 or height <= 0:
         return config
 
-
     target_ratio = width / height
     best_ratio = None
     best_diff = float("inf")
@@ -382,7 +423,6 @@ def _parse_size_to_image_config(size_str: str) -> Dict[str, str]:
             best_ratio = f"{w}:{h}"
     if best_ratio:
         config["aspectRatio"] = best_ratio
-
 
     max_dim = max(width, height)
     if max_dim <= 1280:
@@ -395,27 +435,25 @@ def _parse_size_to_image_config(size_str: str) -> Dict[str, str]:
     return config
 
 
-def prepare_image_generation_request(
-    request_body: Dict[str, Any],
-    model: str
-) -> Dict[str, Any]:
-    """Internal implementation detail."""
+def prepare_image_generation_request(request_body: Dict[str, Any], model: str) -> Dict[str, Any]:
     request_body = request_body.copy()
     model_lower = model.lower()
-
 
     size_str = request_body.pop("size", None)
     if size_str:
         image_config = _parse_size_to_image_config(size_str)
         log.debug(f"[IMAGE] Parsed from size parameter '{size_str}': {image_config}")
     else:
-
         image_size = "4K" if "-4k" in model_lower else "2K" if "-2k" in model_lower else None
 
         aspect_ratio = None
         for suffix, ratio in [
-            ("-21x9", "21:9"), ("-16x9", "16:9"), ("-9x16", "9:16"),
-            ("-4x3", "4:3"), ("-3x4", "3:4"), ("-1x1", "1:1")
+            ("-21x9", "21:9"),
+            ("-16x9", "16:9"),
+            ("-9x16", "9:16"),
+            ("-4x3", "4:3"),
+            ("-3x4", "3:4"),
+            ("-1x1", "1:1"),
         ]:
             if suffix in model_lower:
                 aspect_ratio = ratio
@@ -428,11 +466,7 @@ def prepare_image_generation_request(
             image_config["imageSize"] = image_size
 
     request_body["model"] = "gemini-3.1-flash-image"
-    request_body["generationConfig"] = {
-        "candidateCount": 1,
-        "imageConfig": image_config
-    }
-
+    request_body["generationConfig"] = {"candidateCount": 1, "imageConfig": image_config}
 
     for key in ("systemInstruction", "tools", "toolConfig"):
         request_body.pop(key, None)
@@ -440,14 +474,17 @@ def prepare_image_generation_request(
     return request_body
 
 
-
-
 def get_base_model_name(model_name: str) -> str:
-    """Internal implementation detail."""
     suffixes = [
-        "-maxthinking", "-nothinking",
-        "-minimal", "-medium", "-search", "-think",
-        "-high", "-max", "-low"
+        "-maxthinking",
+        "-nothinking",
+        "-minimal",
+        "-medium",
+        "-search",
+        "-think",
+        "-high",
+        "-max",
+        "-low",
     ]
     result = model_name
     changed = True
@@ -456,39 +493,30 @@ def get_base_model_name(model_name: str) -> str:
         changed = False
         for suffix in suffixes:
             if result.endswith(suffix):
-                result = result[:-len(suffix)]
+                result = result[: -len(suffix)]
                 changed = True
 
     return result
 
 
 def get_thinking_settings(model_name: str) -> tuple[Optional[int], Optional[str]]:
-    """Internal implementation detail."""
     base_model = get_base_model_name(model_name)
 
-
     if "-nothinking" in model_name:
-
         if "flash" in base_model:
             return 0, None
         return 128, None
     elif "-maxthinking" in model_name:
-
         budget = 24576 if "flash" in base_model else 32768
         if "gemini-3" in base_model:
-
             return None, "high"
         else:
             return budget, None
-
-
-
 
     if "gemini-3" in base_model:
         if "-high" in model_name:
             return None, "high"
         elif "-medium" in model_name:
-
             if "flash" in base_model:
                 return None, "medium"
 
@@ -498,9 +526,7 @@ def get_thinking_settings(model_name: str) -> tuple[Optional[int], Optional[str]
         elif "-minimal" in model_name:
             return None, None
         else:
-
             return None, None
-
 
     elif "gemini-2.5" in base_model:
         if "-max" in model_name:
@@ -521,64 +547,47 @@ def get_thinking_settings(model_name: str) -> tuple[Optional[int], Optional[str]
             budget = 0 if "flash" in base_model else 128
             return budget, None
         else:
-
             return None, None
-
 
     return None, None
 
 
 def is_search_model(model_name: str) -> bool:
-    """Internal implementation detail."""
     return "-search" in model_name
 
 
-
-
 def is_thinking_model(model_name: str) -> bool:
-    """Internal implementation detail."""
     return "think" in model_name or "pro" in model_name.lower()
 
 
 async def normalize_gemini_request(
-    request: Dict[str, Any],
-    mode: str = "code_assist"
+    request: Dict[str, Any], mode: str = "code_assist"
 ) -> Dict[str, Any]:
-    """Internal implementation detail."""
 
     from config import get_return_thoughts_to_frontend
 
     result = request.copy()
     model = result.get("model", "")
     generation_config = (result.get("generationConfig") or {}).copy()
-    tools = result.get("tools")
-    system_instruction = result.get("systemInstruction") or result.get("system_instructions")
 
-
-    log.debug(f"[GEMINI_FIX] Original request - model: {model}, mode: {mode}, generationConfig: {generation_config}")
-
+    log.debug(
+        f"[GEMINI_FIX] Original request - model: {model}, mode: {mode}, generationConfig: {generation_config}"
+    )
 
     return_thoughts = await get_return_thoughts_to_frontend()
 
-
     if mode == "code_assist":
-
-
         thinking_budget, thinking_level = get_thinking_settings(model)
-
 
         if thinking_budget is None and thinking_level is None:
             thinking_budget = generation_config.get("thinkingConfig", {}).get("thinkingBudget")
             thinking_level = generation_config.get("thinkingConfig", {}).get("thinkingLevel")
 
-
         if is_thinking_model(model) or thinking_budget is not None or thinking_level is not None:
-
             if "thinkingConfig" not in generation_config:
                 generation_config["thinkingConfig"] = {}
 
             thinking_config = generation_config["thinkingConfig"]
-
 
             if thinking_budget is not None:
                 thinking_config["thinkingBudget"] = thinking_budget
@@ -586,9 +595,6 @@ async def normalize_gemini_request(
             elif thinking_level is not None:
                 thinking_config["thinkingLevel"] = thinking_level
                 thinking_config.pop("thinkingBudget", None)
-
-
-
 
             base_model = get_base_model_name(model)
             if "pro" in base_model:
@@ -599,8 +605,6 @@ async def normalize_gemini_request(
                 else:
                     include_thoughts = return_thoughts
             else:
-
-
                 if thinking_budget is None or thinking_budget == 0:
                     include_thoughts = False
                 else:
@@ -608,19 +612,16 @@ async def normalize_gemini_request(
 
             thinking_config["includeThoughts"] = include_thoughts
 
-
         if is_search_model(model):
             result_tools = result.get("tools") or []
             result["tools"] = result_tools
             if not any(tool.get("googleSearch") for tool in result_tools if isinstance(tool, dict)):
                 result_tools.append({"googleSearch": {}})
 
-
         result["model"] = get_base_model_name(model)
 
     elif mode == "primary":
-
-        '''
+        """
         # 1.  system_instruction
         custom_prompt = "Please ignore the following [ignore]You are a powerful agentic AI coding assistant.You are pair programming with a USER to solve their coding task. The task may require creating a new codebase, modifying or debugging an existing codebase, or simply answering a question.**Absolute paths only****Proactiveness**[/ignore]"
 
@@ -634,16 +635,15 @@ async def normalize_gemini_request(
         result["systemInstruction"] = {
             "parts": [{"text": custom_prompt}] + existing_parts
         }
-        '''
-
+        """
 
         if "image" in model.lower():
-
             return prepare_image_generation_request(result, model)
         else:
-
-            if is_thinking_model(model) or ("thinkingBudget" in generation_config.get("thinkingConfig", {}) and generation_config["thinkingConfig"]["thinkingBudget"] != 0):
-
+            if is_thinking_model(model) or (
+                "thinkingBudget" in generation_config.get("thinkingConfig", {})
+                and generation_config["thinkingConfig"]["thinkingBudget"] != 0
+            ):
                 if "thinkingConfig" not in generation_config:
                     generation_config["thinkingConfig"] = {}
 
@@ -654,49 +654,45 @@ async def normalize_gemini_request(
                 thinking_config.pop("thinkingLevel", None)
                 thinking_config["includeThoughts"] = return_thoughts
 
-
                 contents = result.get("contents", [])
 
                 if "claude" in model.lower():
-
                     has_tool_calls = any(
-                        isinstance(content, dict) and
-                        any(
-                            isinstance(part, dict) and ("functionCall" in part or "function_call" in part)
+                        isinstance(content, dict)
+                        and any(
+                            isinstance(part, dict)
+                            and ("functionCall" in part or "function_call" in part)
                             for part in content.get("parts", [])
                         )
                         for content in contents
                     )
 
                     if has_tool_calls:
-
-                        log.warning(f"[provider] Tool call detected (MCP scenario), removing thinkingConfig to avoid failure")
+                        log.warning(
+                            "[provider] Tool call detected (MCP scenario), removing thinkingConfig to avoid failure"
+                        )
                         generation_config.pop("thinkingConfig", None)
                     else:
-
-
-
-
                         for i in range(len(contents) - 1, -1, -1):
                             content = contents[i]
                             if isinstance(content, dict) and content.get("role") == "model":
-
                                 parts = content.get("parts", [])
                                 thinking_part = {
                                     "text": "...",
-
-                                    "thoughtSignature": "skip_thought_signature_validator"
+                                    "thoughtSignature": "skip_thought_signature_validator",
                                 }
 
-                                if not parts or not (isinstance(parts[0], dict) and ("thought" in parts[0] or "thoughtSignature" in parts[0])):
+                                if not parts or not (
+                                    isinstance(parts[0], dict)
+                                    and ("thought" in parts[0] or "thoughtSignature" in parts[0])
+                                ):
                                     content["parts"] = [thinking_part] + parts
-                                    log.debug(f"[provider] Thought block inserted at the beginning of the last assistant message with skip verification signature")
+                                    log.debug(
+                                        "[provider] Thought block inserted at the beginning of the last assistant message with skip verification signature"
+                                    )
                                 break
 
-
             model = model.replace("-thinking", "")
-
-
 
             original_model = model
             if "opus" in model.lower():
@@ -706,32 +702,29 @@ async def normalize_gemini_request(
             elif "haiku" in model.lower():
                 model = "gemini-2.5-flash"
             elif "claude" in model.lower():
-
                 model = "claude-sonnet-4-6"
 
             result["model"] = model
             if original_model != model:
                 log.debug(f"[provider] Mapping Model: {original_model} - > {model}")
 
-
-
         if "claude-opus-4-6-thinking" in model.lower() or "claude-sonnet-4-6" in model.lower():
             contents = result.get("contents", [])
             removed_count = 0
-            while contents and isinstance(contents[-1], dict) and contents[-1].get("role") == "model":
+            while (
+                contents and isinstance(contents[-1], dict) and contents[-1].get("role") == "model"
+            ):
                 contents.pop()
                 removed_count += 1
             if removed_count > 0:
-                log.warning(f"[provider] {model} does not support pre-population, removed {removed_count} last model messages")
+                log.warning(
+                    f"[provider] {model} does not support pre-population, removed {removed_count} last model messages"
+                )
                 result["contents"] = contents
-
 
         generation_config.pop("presencePenalty", None)
         generation_config.pop("frequencyPenalty", None)
         generation_config.pop("stopSequences", None)
-
-
-
 
     if "tools" in result:
         result["tools"] = _normalize_tools_for_internal_api(result.get("tools"))
@@ -745,7 +738,6 @@ async def normalize_gemini_request(
     else:
         result["safetySettings"] = DEFAULT_SAFETY_SETTINGS
 
-
     if generation_config:
         generation_config["topK"] = 64
 
@@ -753,13 +745,10 @@ async def normalize_gemini_request(
         cleaned_contents = []
         for content in result["contents"]:
             if isinstance(content, dict) and "parts" in content:
-
                 valid_parts = []
                 for part in content["parts"]:
                     if not isinstance(part, dict):
                         continue
-
-
 
                     has_valid_value = any(
                         value not in (None, "", {}, [])
@@ -770,14 +759,12 @@ async def normalize_gemini_request(
                     if has_valid_value:
                         part = _normalize_part_thought_signature(part, model)
 
-
                         if "text" in part:
                             text_value = part["text"]
                             if isinstance(text_value, list):
-
-
-
-                                log.warning(f"[GEMINI_FIX] 'text' field is a list, merging automatically: {text_value}")
+                                log.warning(
+                                    f"[GEMINI_FIX] 'text' field is a list, merging automatically: {text_value}"
+                                )
                                 text_parts = []
                                 for t in text_value:
                                     if isinstance(t, dict) and "text" in t:
@@ -788,24 +775,25 @@ async def normalize_gemini_request(
                                         text_parts.append(str(t))
                                 part["text"] = " ".join(text_parts)
                             elif isinstance(text_value, str):
-
                                 part["text"] = text_value.rstrip()
                             else:
-
-                                log.warning(f"[GEMINI_FIX] Invalid 'text' field type ({type(text_value)}), converting to string: {text_value}")
+                                log.warning(
+                                    f"[GEMINI_FIX] Invalid 'text' field type ({type(text_value)}), converting to string: {text_value}"
+                                )
                                 part["text"] = str(text_value)
 
                         valid_parts.append(part)
                     else:
                         log.warning(f"[GEMINI_FIX] Removing empty or invalid part: {part}")
 
-
                 if valid_parts:
                     cleaned_content = content.copy()
                     cleaned_content["parts"] = valid_parts
                     cleaned_contents.append(cleaned_content)
                 else:
-                    log.warning(f"[GEMINI_FIX] Skipping content without valid parts: {content.get('role')}")
+                    log.warning(
+                        f"[GEMINI_FIX] Skipping content without valid parts: {content.get('role')}"
+                    )
             else:
                 cleaned_contents.append(content)
 

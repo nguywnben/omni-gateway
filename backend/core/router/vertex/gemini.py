@@ -1,15 +1,10 @@
-"""Internal implementation detail."""
-
-from fastapi import APIRouter, Depends, HTTPException, Path, Request
-from fastapi.responses import JSONResponse
-
-from log import log
-from core.utils import authenticate_gemini_flexible
 from core.models import GeminiRequest, model_to_dict
-from core.router.hi_check import is_health_check_request, create_health_check_response
 from core.router.stream_passthrough import build_streaming_response_or_error
 from core.token_estimator import estimate_input_tokens
-
+from core.utils import authenticate_gemini_flexible
+from fastapi import APIRouter, Depends, HTTPException, Path, Request
+from fastapi.responses import JSONResponse
+from log import log
 
 router = APIRouter()
 
@@ -21,17 +16,14 @@ async def generate_content(
     model: str = Path(..., description="Model name"),
     api_key: str = Depends(authenticate_gemini_flexible),
 ):
-    """Internal implementation detail."""
     log.debug(f"[VERTEX ROUTER] Non-streaming request for model: {model}")
 
     normalized_dict = model_to_dict(gemini_request)
 
-    if is_health_check_request(normalized_dict, format="gemini"):
-        return JSONResponse(content=create_health_check_response(format="gemini"))
-
     normalized_dict["model"] = model
 
     from core.converter.gemini_fix import normalize_gemini_request
+
     normalized_dict = await normalize_gemini_request(normalized_dict, mode="vertex")
 
     api_request = {
@@ -40,6 +32,7 @@ async def generate_content(
     }
 
     from core.api.vertex import non_stream_request
+
     response = await non_stream_request(body=api_request)
 
     return response
@@ -52,15 +45,14 @@ async def stream_generate_content(
     model: str = Path(..., description="Model name"),
     api_key: str = Depends(authenticate_gemini_flexible),
 ):
-    """Internal implementation detail."""
     log.debug(f"[VERTEX ROUTER] Streaming request for model: {model}")
 
     normalized_dict = model_to_dict(gemini_request)
     normalized_dict["model"] = model
 
     async def stream_generator():
-        from core.converter.gemini_fix import normalize_gemini_request
         from core.api.vertex import stream_request
+        from core.converter.gemini_fix import normalize_gemini_request
         from fastapi import Response
 
         normalized_req = await normalize_gemini_request(normalized_dict.copy(), mode="vertex")
@@ -86,7 +78,6 @@ async def count_tokens(
     request: Request = None,
     api_key: str = Depends(authenticate_gemini_flexible),
 ):
-    """Internal implementation detail."""
     try:
         request_data = await request.json()
     except Exception as e:

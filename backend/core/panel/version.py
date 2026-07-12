@@ -8,10 +8,8 @@ from dataclasses import asdict, dataclass
 
 from fastapi import APIRouter
 from fastapi.responses import JSONResponse
-
 from log import log
 from paths import PROJECT_ROOT
-
 
 router = APIRouter(prefix="/api/version", tags=["version"])
 LATEST_COMMIT_URL = "https://api.github.com/repos/nguywnben/omni-gateway/commits/main"
@@ -73,9 +71,7 @@ def get_build_metadata() -> BuildMetadata:
 def _remote_metadata(payload: dict) -> BuildMetadata:
     revision = str(payload.get("sha") or "").strip()
     commit = payload.get("commit") if isinstance(payload.get("commit"), dict) else {}
-    committer = (
-        commit.get("committer") if isinstance(commit.get("committer"), dict) else {}
-    )
+    committer = commit.get("committer") if isinstance(commit.get("committer"), dict) else {}
     message = str(commit.get("message") or "").splitlines()[0]
     return BuildMetadata(
         version=revision[:7] or "unknown",

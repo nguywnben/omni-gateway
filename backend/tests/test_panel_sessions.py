@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import sys
 import unittest
 from pathlib import Path
@@ -16,6 +17,7 @@ BACKEND_DIR = Path(__file__).resolve().parents[1]
 if str(BACKEND_DIR) not in sys.path:
     sys.path.insert(0, str(BACKEND_DIR))
 
+from core.panel.auth import _client_identity
 from core.utils import (
     PANEL_SESSION_COOKIE,
     clear_panel_session_cookie,
@@ -24,10 +26,21 @@ from core.utils import (
 )
 
 
-def build_request(*, cookie: str = "", scheme: str = "http") -> Request:
+def build_request(
+    *,
+    cookie: str = "",
+    scheme: str = "http",
+    forwarded_for: str = "",
+    forwarded_proto: str = "",
+    client_host: str = "127.0.0.1",
+) -> Request:
     headers = []
     if cookie:
         headers.append((b"cookie", cookie.encode("ascii")))
+    if forwarded_for:
+        headers.append((b"x-forwarded-for", forwarded_for.encode("ascii")))
+    if forwarded_proto:
+        headers.append((b"x-forwarded-proto", forwarded_proto.encode("ascii")))
     return Request(
         {
             "type": "http",
@@ -35,7 +48,7 @@ def build_request(*, cookie: str = "", scheme: str = "http") -> Request:
             "scheme": scheme,
             "path": "/api/config/get",
             "headers": headers,
-            "client": ("127.0.0.1", 50000),
+            "client": (client_host, 50000),
             "server": ("localhost", 4283),
         }
     )
@@ -61,6 +74,31 @@ class PanelSessionCookieTests(unittest.IsolatedAsyncioTestCase):
             "signed-session",
             build_request(scheme="https"),
         )
+
+        self.assertIn("Secure", response.headers["set-cookie"])
+
+    async def test_untrusted_forwarded_proto_does_not_set_secure_cookie(self):
+        response = JSONResponse({"success": True})
+
+        with patch.dict(os.environ, {}, clear=False):
+            os.environ.pop("TRUST_PROXY_HEADERS", None)
+            set_panel_session_cookie(
+                response,
+                "signed-session",
+                build_request(forwarded_proto="https"),
+            )
+
+        self.assertNotIn("Secure", response.headers["set-cookie"])
+
+    async def test_trusted_forwarded_proto_sets_secure_cookie(self):
+        response = JSONResponse({"success": True})
+
+        with patch.dict(os.environ, {"TRUST_PROXY_HEADERS": "true"}):
+            set_panel_session_cookie(
+                response,
+                "signed-session",
+                build_request(forwarded_proto="https"),
+            )
 
         self.assertIn("Secure", response.headers["set-cookie"])
 
@@ -104,3 +142,24 @@ class PanelSessionCookieTests(unittest.IsolatedAsyncioTestCase):
         cookie = response.headers["set-cookie"]
         self.assertIn(f"{PANEL_SESSION_COOKIE}=", cookie)
         self.assertIn("Max-Age=0", cookie)
+
+
+class ClientIdentityTests(unittest.TestCase):
+    def test_forwarded_address_is_ignored_by_default(self):
+        request = build_request(
+            forwarded_for="198.51.100.20",
+            client_host="192.0.2.10",
+        )
+
+        with patch.dict(os.environ, {}, clear=False):
+            os.environ.pop("TRUST_PROXY_HEADERS", None)
+            self.assertEqual(_client_identity(request), "192.0.2.10")
+
+    def test_forwarded_address_can_be_enabled_for_a_trusted_proxy(self):
+        request = build_request(
+            forwarded_for="198.51.100.20, 192.0.2.10",
+            client_host="192.0.2.10",
+        )
+
+        with patch.dict(os.environ, {"TRUST_PROXY_HEADERS": "true"}):
+            self.assertEqual(_client_identity(request), "198.51.100.20")

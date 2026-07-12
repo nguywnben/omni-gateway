@@ -1,0 +1,13 @@
+[tool.ruff]
+required-version = ">=0.15.21"
+target-version = "py312"
+line-length = 100
+extend-exclude = ["backend/data"]
+
+[tool.ruff.lint]
+select = ["ASYNC", "E4", "E7", "E9", "F", "I"]
+ignore = ["ASYNC109"]
+
+[tool.ruff.lint.per-file-ignores]
+"backend/main.py" = ["E402"]
+"backend/tests/*.py" = ["E402"]

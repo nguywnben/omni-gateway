@@ -5,11 +5,7 @@ import json
 import zipfile
 from typing import List, Tuple
 
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
-from fastapi.responses import JSONResponse
-
 import config
-from core.provider_store import store_google_ai_studio_credential
 from core.google_ai_studio import (
     GoogleAIStudioError,
     normalize_api_base_url,
@@ -22,12 +18,14 @@ from core.provider_registry import (
     api_key_fingerprint,
     list_provider_capabilities,
 )
+from core.provider_store import store_google_ai_studio_credential
 from core.storage_adapter import get_storage_adapter
 from core.utils import verify_panel_token
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from fastapi.responses import JSONResponse
 from log import log
 
 from .utils import get_env_locked_keys
-
 
 router = APIRouter(tags=["provider-settings"])
 
@@ -107,7 +105,9 @@ async def get_antigravity_config(token: str = Depends(verify_panel_token)):
 
 
 @router.post("/api/providers/antigravity/config")
-async def save_antigravity_config(request: ConfigSaveRequest, token: str = Depends(verify_panel_token)):
+async def save_antigravity_config(
+    request: ConfigSaveRequest, token: str = Depends(verify_panel_token)
+):
     """Save Google Antigravity provider settings from the provider setup UI."""
     try:
         new_config = request.config or {}
@@ -120,11 +120,15 @@ async def save_antigravity_config(request: ConfigSaveRequest, token: str = Depen
 
         for key in STRING_KEYS & set(new_config):
             if not isinstance(new_config[key], str):
-                raise HTTPException(status_code=400, detail=f"Google Antigravity setting '{key}' must be a string.")
+                raise HTTPException(
+                    status_code=400, detail=f"Google Antigravity setting '{key}' must be a string."
+                )
 
         for key in BOOLEAN_KEYS & set(new_config):
             if not isinstance(new_config[key], bool):
-                raise HTTPException(status_code=400, detail=f"Google Antigravity setting '{key}' must be a boolean.")
+                raise HTTPException(
+                    status_code=400, detail=f"Google Antigravity setting '{key}' must be a boolean."
+                )
 
         env_locked = get_env_locked_keys() & ANTIGRAVITY_CONFIG_KEYS
         storage_adapter = await get_storage_adapter()
@@ -213,9 +217,7 @@ async def save_google_ai_studio_config(
         )
 
     try:
-        api_url = normalize_api_base_url(
-            str(new_config.get("google_ai_studio_api_url") or "")
-        )
+        api_url = normalize_api_base_url(str(new_config.get("google_ai_studio_api_url") or ""))
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 

@@ -21,9 +21,13 @@ from core.google_ai_studio import (
     GoogleAIStudioValidation,
     build_api_key_headers,
     build_generation_url,
-    parse_model_ids,
     parse_api_key_import_payload,
+    parse_model_ids,
     validate_api_key,
+)
+from core.panel.provider_settings import (
+    _extract_ai_studio_import_file,
+    import_google_ai_studio_credentials,
 )
 from core.provider_registry import (
     GOOGLE_AI_STUDIO,
@@ -32,10 +36,6 @@ from core.provider_registry import (
     credential_supports_model,
     get_credential_provider,
     get_static_credential_identity,
-)
-from core.panel.provider_settings import (
-    _extract_ai_studio_import_file,
-    import_google_ai_studio_credentials,
 )
 
 
@@ -59,9 +59,7 @@ class GoogleAIStudioImportPayloadTests(unittest.TestCase):
 
     def test_parses_mixed_key_array(self):
         self.assertEqual(
-            parse_api_key_import_payload(
-                ["first-key", {"api_key": "second-key"}]
-            ),
+            parse_api_key_import_payload(["first-key", {"api_key": "second-key"}]),
             ["first-key", "second-key"],
         )
 
@@ -129,9 +127,7 @@ class GoogleAIStudioImportArchiveTests(unittest.IsolatedAsyncioTestCase):
         second_key = "example-google-key-value-two"
         upload = UploadFile(
             filename="keys.json",
-            file=io.BytesIO(
-                json.dumps({"api_keys": [first_key, first_key, second_key]}).encode()
-            ),
+            file=io.BytesIO(json.dumps({"api_keys": [first_key, first_key, second_key]}).encode()),
         )
         validation = GoogleAIStudioValidation(model_ids=["gemini-test"])
 

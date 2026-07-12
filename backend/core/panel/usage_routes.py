@@ -1,11 +1,16 @@
+from core.usage_stats import (
+    UNASSIGNED_USAGE_FILENAME,
+    get_credential_counts,
+    get_stats_for_period,
+    get_usage_period_metadata,
+    normalize_usage_period,
+)
+from core.utils import verify_panel_token
 from fastapi import APIRouter, Depends, Query
 from fastapi.responses import JSONResponse
 
-from core.utils import verify_panel_token
-from core.usage_stats import UNASSIGNED_USAGE_FILENAME
-from .usage import get_credential_counts, get_stats_for_period, get_usage_period_metadata, normalize_usage_period
-
 router = APIRouter(prefix="/api/usage", tags=["usage"])
+
 
 @router.get("/stats")
 async def get_usage_stats(period: str = Query("1d"), token: str = Depends(verify_panel_token)):
@@ -20,6 +25,7 @@ async def get_usage_stats(period: str = Query("1d"), token: str = Depends(verify
     except Exception as e:
         return JSONResponse(status_code=500, content={"success": False, "detail": str(e)})
 
+
 @router.get("/aggregated")
 async def get_aggregated_stats(period: str = Query("1d"), token: str = Depends(verify_panel_token)):
     try:
@@ -29,7 +35,8 @@ async def get_aggregated_stats(period: str = Query("1d"), token: str = Depends(v
         successful_calls = sum(item.get("successful_calls", 0) for item in usage_data.values())
         failed_calls = sum(item.get("failed_calls", 0) for item in usage_data.values())
         assigned_usage_data = {
-            filename: item for filename, item in usage_data.items()
+            filename: item
+            for filename, item in usage_data.items()
             if filename != UNASSIGNED_USAGE_FILENAME
         }
         assigned_calls = sum(item["calls"] for item in assigned_usage_data.values())
@@ -86,8 +93,8 @@ async def get_aggregated_stats(period: str = Query("1d"), token: str = Depends(v
                 "estimated_input_tokens_24h": estimated_input_tokens,
                 "estimated_tokens_saved_24h": estimated_tokens_saved,
                 "compressed_messages_24h": compressed_messages,
-                "avg_tokens_per_successful_request": avg_tokens
-            }
+                "avg_tokens_per_successful_request": avg_tokens,
+            },
         }
     except Exception as e:
         return JSONResponse(status_code=500, content={"success": False, "detail": str(e)})

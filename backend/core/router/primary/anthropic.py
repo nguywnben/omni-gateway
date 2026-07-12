@@ -1,82 +1,36 @@
-"""Internal implementation detail."""
-
-import sys
-from pathlib import Path
-
-
-project_root = Path(__file__).resolve().parent.parent.parent.parent
-if str(project_root) not in sys.path:
-    sys.path.insert(0, str(project_root))
-
-
-import asyncio
 import json
 
-
-from fastapi import APIRouter, Depends, HTTPException, Request
-from fastapi.responses import JSONResponse, StreamingResponse
-
-
 from config import get_anti_truncation_max_attempts
-from log import log
-
-
-from core.utils import (
-    get_base_model_from_feature_model,
-    is_anti_truncation_model,
-    is_fake_streaming_model,
-    authenticate_bearer,
-)
-
-
 from core.converter.fake_stream import (
-    parse_response_for_fake_stream,
     build_anthropic_fake_stream_chunks,
-    create_anthropic_heartbeat_chunk,
+    parse_response_for_fake_stream,
 )
-
-
-from core.router.hi_check import is_health_check_request, create_health_check_response
+from core.model_pool import ModelPoolError, resolve_model_request
+from core.models import ClaudeRequest, model_to_dict
 from core.router.stream_passthrough import (
     build_streaming_response_or_error,
     prepend_async_item,
     read_first_async_item,
 )
-
-
-from core.models import ClaudeRequest, model_to_dict
-from core.model_pool import ModelPoolError, resolve_model_request
-
-
-from core.task_manager import create_managed_task
-
-
 from core.token_estimator import estimate_input_tokens
-
-
-
+from core.utils import (
+    authenticate_bearer,
+    get_base_model_from_feature_model,
+    is_anti_truncation_model,
+    is_fake_streaming_model,
+)
+from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi.responses import JSONResponse, StreamingResponse
+from log import log
 
 router = APIRouter()
 
 
-
-
 @router.post("/v1/messages")
-async def messages(
-    claude_request: ClaudeRequest,
-    _token: str = Depends(authenticate_bearer)
-):
-    """Internal implementation detail."""
+async def messages(claude_request: ClaudeRequest, _token: str = Depends(authenticate_bearer)):
     log.debug(f"[provider anthropic] Request for model: {claude_request.model}")
 
-
     normalized_dict = model_to_dict(claude_request)
-
-
-    if is_health_check_request(normalized_dict, format="anthropic"):
-        response = create_health_check_response(format="anthropic")
-        return JSONResponse(content=response)
-
 
     use_fake_streaming = is_fake_streaming_model(claude_request.model)
     use_anti_truncation = is_anti_truncation_model(claude_request.model)
@@ -89,50 +43,47 @@ async def messages(
     real_model = model_candidates[0]
     response_model = model_resolution.response_model
 
-
     is_streaming = claude_request.stream
 
-
     if use_anti_truncation and not is_streaming:
-        log.warning("Anti-truncation feature is only effective during streaming; this setting will be ignored for non-streaming requests")
-
+        log.warning(
+            "Anti-truncation feature is only effective during streaming; this setting will be ignored for non-streaming requests"
+        )
 
     normalized_dict["model"] = real_model
 
+    from core.converter.anthropic_to_gemini import anthropic_to_gemini_request
 
-    from core.converter.anthropic2gemini import anthropic_to_gemini_request
     gemini_dict = await anthropic_to_gemini_request(normalized_dict)
-
 
     gemini_dict["model"] = real_model
 
-
     from core.converter.gemini_fix import normalize_gemini_request
+
     gemini_dict = await normalize_gemini_request(gemini_dict, mode="primary")
 
-
-    api_request = {
-        "model": gemini_dict.pop("model"),
-        "request": gemini_dict
-    }
-
+    api_request = {"model": gemini_dict.pop("model"), "request": gemini_dict}
 
     if not is_streaming:
-
         from core.api.primary import non_stream_request
+
         response = await non_stream_request(
             body=api_request,
             model_candidates=model_candidates,
         )
 
-
         status_code = getattr(response, "status_code", 200)
 
-
         if hasattr(response, "body"):
-            response_body = response.body.decode() if isinstance(response.body, bytes) else response.body
+            response_body = (
+                response.body.decode() if isinstance(response.body, bytes) else response.body
+            )
         elif hasattr(response, "content"):
-            response_body = response.content.decode() if isinstance(response.content, bytes) else response.content
+            response_body = (
+                response.content.decode()
+                if isinstance(response.content, bytes)
+                else response.content
+            )
         else:
             response_body = str(response)
 
@@ -142,18 +93,13 @@ async def messages(
             log.error(f"Failed to parse Gemini response: {e}")
             raise HTTPException(status_code=500, detail="Response parsing failed.")
 
+        from core.converter.anthropic_to_gemini import gemini_to_anthropic_response
 
-        from core.converter.anthropic2gemini import gemini_to_anthropic_response
         anthropic_response = gemini_to_anthropic_response(
-            gemini_response,
-            response_model,
-            status_code
+            gemini_response, response_model, status_code
         )
 
         return JSONResponse(content=anthropic_response, status_code=status_code)
-
-
-
 
     async def fake_stream_generator():
         from core.api.primary import non_stream_request
@@ -163,17 +109,21 @@ async def messages(
             model_candidates=model_candidates,
         )
 
-
         if hasattr(response, "status_code") and response.status_code != 200:
             log.error(f"Fake streaming got error response: status={response.status_code}")
             yield response
             return
 
-
         if hasattr(response, "body"):
-            response_body = response.body.decode() if isinstance(response.body, bytes) else response.body
+            response_body = (
+                response.body.decode() if isinstance(response.body, bytes) else response.body
+            )
         elif hasattr(response, "content"):
-            response_body = response.content.decode() if isinstance(response.content, bytes) else response.content
+            response_body = (
+                response.content.decode()
+                if isinstance(response.content, bytes)
+                else response.content
+            )
         else:
             response_body = str(response)
 
@@ -181,32 +131,32 @@ async def messages(
             gemini_response = json.loads(response_body)
             log.debug(f"Anthropic fake stream Gemini response: {gemini_response}")
 
-
             if "error" in gemini_response:
                 log.error(f"Fake streaming got error in response body: {gemini_response['error']}")
 
-                from core.converter.anthropic2gemini import gemini_to_anthropic_response
-                anthropic_error = gemini_to_anthropic_response(
-                    gemini_response,
-                    response_model,
-                    200
-                )
+                from core.converter.anthropic_to_gemini import gemini_to_anthropic_response
+
+                anthropic_error = gemini_to_anthropic_response(gemini_response, response_model, 200)
                 yield f"data: {json.dumps(anthropic_error)}\n\n".encode()
                 yield "data: [DONE]\n\n".encode()
                 return
 
-
-            content, reasoning_content, finish_reason, images = parse_response_for_fake_stream(gemini_response)
+            content, reasoning_content, finish_reason, images = parse_response_for_fake_stream(
+                gemini_response
+            )
 
             log.debug(f"Anthropic extracted content: {content}")
-            log.debug(f"Anthropic extracted reasoning: {reasoning_content[:100] if reasoning_content else 'None'}...")
+            log.debug(
+                f"Anthropic extracted reasoning: {reasoning_content[:100] if reasoning_content else 'None'}..."
+            )
             log.debug(f"Anthropic extracted images count: {len(images)}")
 
-
-            chunks = build_anthropic_fake_stream_chunks(content, reasoning_content, finish_reason, response_model, images)
+            chunks = build_anthropic_fake_stream_chunks(
+                content, reasoning_content, finish_reason, response_model, images
+            )
             for idx, chunk in enumerate(chunks):
                 chunk_json = json.dumps(chunk)
-                log.debug(f"[FAKE_STREAM] Yielding chunk #{idx+1}: {chunk_json[:200]}")
+                log.debug(f"[FAKE_STREAM] Yielding chunk #{idx + 1}: {chunk_json[:200]}")
                 yield f"data: {chunk_json}\n\n".encode()
 
         except Exception as e:
@@ -216,23 +166,23 @@ async def messages(
                 "type": "error",
                 "error": {
                     "type": "api_error",
-                    "message": "The upstream response could not be parsed."
-                }
+                    "message": "The upstream response could not be parsed.",
+                },
             }
             yield f"data: {json.dumps(error_chunk)}\n\n".encode()
 
         yield "data: [DONE]\n\n".encode()
 
-
     async def anti_truncation_generator():
-        from core.converter.anti_truncation import AntiTruncationStreamProcessor
         from core.api.primary import stream_request
-        from core.converter.anti_truncation import apply_anti_truncation
-        from core.converter.anthropic2gemini import gemini_stream_to_anthropic_stream
+        from core.converter.anthropic_to_gemini import gemini_stream_to_anthropic_stream
+        from core.converter.anti_truncation import (
+            AntiTruncationStreamProcessor,
+            apply_anti_truncation,
+        )
         from fastapi import Response
 
         max_attempts = await get_anti_truncation_max_attempts()
-
 
         anti_truncation_payload = apply_anti_truncation(api_request)
 
@@ -266,7 +216,6 @@ async def messages(
                 )
             return StreamingResponse(stream_gen, media_type="text/event-stream")
 
-
         processor = AntiTruncationStreamProcessor(
             stream_request_wrapper,
             anti_truncation_payload,
@@ -274,29 +223,23 @@ async def messages(
             enable_prefill_mode=("claude" not in str(api_request.get("model", "")).lower()),
         )
 
-
         async def bytes_wrapper():
             async for chunk in processor.process_stream():
                 if isinstance(chunk, str):
-                    yield chunk.encode('utf-8')
+                    yield chunk.encode("utf-8")
                 else:
                     yield chunk
 
-
         async for anthropic_chunk in gemini_stream_to_anthropic_stream(
-            bytes_wrapper(),
-            response_model,
-            200
+            bytes_wrapper(), response_model, 200
         ):
             if anthropic_chunk:
                 yield anthropic_chunk
 
-
     async def normal_stream_generator():
         from core.api.primary import stream_request
+        from core.converter.anthropic_to_gemini import gemini_stream_to_anthropic_stream
         from fastapi import Response
-        from core.converter.anthropic2gemini import gemini_stream_to_anthropic_stream
-
 
         stream_gen = stream_request(
             body=api_request,
@@ -312,42 +255,39 @@ async def messages(
             yield first_chunk
             return
 
-
         async def gemini_chunk_wrapper():
             async for chunk in prepend_async_item(first_chunk, stream_gen):
-
                 if isinstance(chunk, Response):
-
                     try:
-                        error_content = chunk.body if isinstance(chunk.body, bytes) else (chunk.body or b'').encode('utf-8')
-                        gemini_error = json.loads(error_content.decode('utf-8'))
-                        from core.converter.anthropic2gemini import gemini_to_anthropic_response
-                        anthropic_error = gemini_to_anthropic_response(
-                            gemini_error,
-                            response_model,
-                            chunk.status_code
+                        error_content = (
+                            chunk.body
+                            if isinstance(chunk.body, bytes)
+                            else (chunk.body or b"").encode("utf-8")
                         )
-                        yield f"data: {json.dumps(anthropic_error)}\n\n".encode('utf-8')
+                        gemini_error = json.loads(error_content.decode("utf-8"))
+                        from core.converter.anthropic_to_gemini import gemini_to_anthropic_response
+
+                        anthropic_error = gemini_to_anthropic_response(
+                            gemini_error, response_model, chunk.status_code
+                        )
+                        yield f"data: {json.dumps(anthropic_error)}\n\n".encode("utf-8")
                     except Exception:
-                        yield f"data: {json.dumps({'type': 'error', 'error': {'type': 'api_error', 'message': 'Stream error'}})}\n\n".encode('utf-8')
+                        yield f"data: {json.dumps({'type': 'error', 'error': {'type': 'api_error', 'message': 'Stream error'}})}\n\n".encode(
+                            "utf-8"
+                        )
                     yield b"data: [DONE]\n\n"
                     return
                 else:
-
                     if isinstance(chunk, str):
-                        yield chunk.encode('utf-8')
+                        yield chunk.encode("utf-8")
                     else:
                         yield chunk
 
-
         async for anthropic_chunk in gemini_stream_to_anthropic_stream(
-            gemini_chunk_wrapper(),
-            response_model,
-            200
+            gemini_chunk_wrapper(), response_model, 200
         ):
             if anthropic_chunk:
                 yield anthropic_chunk
-
 
     if use_fake_streaming:
         return await build_streaming_response_or_error(fake_stream_generator())
@@ -359,29 +299,43 @@ async def messages(
 
 
 @router.post("/v1/messages/count_tokens")
-async def count_tokens(
-    request: Request,
-    _token: str = Depends(authenticate_bearer)
-):
-    """Internal implementation detail."""
+async def count_tokens(request: Request, _token: str = Depends(authenticate_bearer)):
     try:
         payload = await request.json()
     except Exception as e:
         return JSONResponse(
             status_code=400,
-            content={"type": "error", "error": {"type": "invalid_request_error", "message": f"JSON parsing failed: {str(e)}."}}
+            content={
+                "type": "error",
+                "error": {
+                    "type": "invalid_request_error",
+                    "message": f"JSON parsing failed: {str(e)}.",
+                },
+            },
         )
 
     if not isinstance(payload, dict):
         return JSONResponse(
             status_code=400,
-            content={"type": "error", "error": {"type": "invalid_request_error", "message": "Request body must be a JSON object."}}
+            content={
+                "type": "error",
+                "error": {
+                    "type": "invalid_request_error",
+                    "message": "Request body must be a JSON object.",
+                },
+            },
         )
 
     if not payload.get("model") or not isinstance(payload.get("messages"), list):
         return JSONResponse(
             status_code=400,
-            content={"type": "error", "error": {"type": "invalid_request_error", "message": "Missing required fields: model and messages."}}
+            content={
+                "type": "error",
+                "error": {
+                    "type": "invalid_request_error",
+                    "message": "Missing required fields: model and messages.",
+                },
+            },
         )
 
     try:
@@ -409,7 +363,6 @@ async def count_tokens(
         f"model={payload.get('model')}, messages={len(payload.get('messages') or [])}, "
         f"thinking_present={thinking_present}, thinking={thinking_summary}, ua={user_agent}"
     )
-
 
     input_tokens = 0
     try:

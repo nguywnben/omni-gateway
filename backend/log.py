@@ -1,15 +1,12 @@
-"""Internal implementation detail."""
-
+import atexit
 import os
 import re
 import sys
 import threading
-from datetime import datetime
 from collections import deque
-import atexit
+from datetime import datetime
 
 from paths import DEFAULT_LOG_FILE
-
 
 LOG_LEVELS = {"debug": 0, "info": 1, "warning": 2, "error": 3, "critical": 4}
 
@@ -45,7 +42,6 @@ _log_file_handle = None
 # -----------------------------------------------------------------
 
 
-
 # -----------------------------------------------------------------
 _log_deque: deque = deque()
 _deque_condition = threading.Condition(threading.Lock())
@@ -64,7 +60,6 @@ _log_enabled: bool = True
 
 
 def _refresh_config():
-    """Internal implementation detail."""
     global _cached_log_level, _cached_log_file, _log_enabled
     global _log_max_bytes, _log_backup_count
     level = os.getenv("LOG_LEVEL", "info").lower()
@@ -93,6 +88,7 @@ def _get_log_file_path() -> str:
 
 # -----------------------------------------------------------------
 
+
 def _close_log_file():
     global _log_file_handle
     if _log_file_handle is not None:
@@ -109,7 +105,6 @@ def _open_log_file(mode: str = "a") -> bool:
     global _log_file_handle, _file_writing_disabled, _disable_reason
     _close_log_file()
     try:
-
         log_dir = os.path.dirname(os.path.abspath(_cached_log_file))
         if log_dir:
             os.makedirs(log_dir, exist_ok=True)
@@ -127,13 +122,12 @@ def _open_log_file(mode: str = "a") -> bool:
 
 
 def _clear_log_file():
-    """Internal implementation detail."""
     global _file_writing_disabled, _disable_reason
     try:
         log_dir = os.path.dirname(os.path.abspath(_cached_log_file))
         if log_dir:
             os.makedirs(log_dir, exist_ok=True)
-        with open(_cached_log_file, "w", encoding="utf-8") as f:
+        with open(_cached_log_file, "w", encoding="utf-8"):
             pass
         _open_log_file("a")
     except (PermissionError, OSError, IOError) as e:
@@ -188,11 +182,9 @@ def _log_writer_worker():
     last_flush_time = 0.0
 
     while True:
-
         with _deque_condition:
             if not _log_deque and _writer_running:
                 _deque_condition.wait(timeout=_FLUSH_INTERVAL)
-
 
             batch = []
             for _ in range(_BATCH_SIZE):
@@ -202,7 +194,6 @@ def _log_writer_worker():
                     break
 
         if batch and not _file_writing_disabled:
-
             chunk = "\n".join(batch) + "\n"
             try:
                 _rotate_log_file_if_needed(len(chunk.encode("utf-8")))
@@ -218,7 +209,6 @@ def _log_writer_worker():
                 except Exception:
                     pass
 
-
         now = _now_ts()
         if now - last_flush_time >= _FLUSH_INTERVAL:
             if _log_file_handle is not None:
@@ -228,10 +218,8 @@ def _log_writer_worker():
                     pass
             last_flush_time = now
 
-
         if not _writer_running and not _log_deque:
             break
-
 
     if _log_file_handle is not None:
         try:
@@ -243,6 +231,7 @@ def _log_writer_worker():
 
 def _now_ts() -> float:
     import time
+
     return time.monotonic()
 
 
@@ -292,6 +281,7 @@ def _write_to_file(message: str):
 
 # -----------------------------------------------------------------
 
+
 def _log(level: str, message: str):
 
     if not _log_enabled:
@@ -302,7 +292,6 @@ def _log(level: str, message: str):
     if level_val is None:
         print(f"Warning: Unknown log level '{level}'", file=sys.stderr)
         return
-
 
     if level_val < _cached_log_level:
         return
@@ -319,7 +308,6 @@ def _log(level: str, message: str):
 
 
 def set_log_level(level: str):
-    """Internal implementation detail."""
     global _cached_log_level
     level = level.lower()
     if level not in LOG_LEVELS:
@@ -338,7 +326,6 @@ def configure_logging(level: str, max_mb: int, backup_count: int) -> None:
 
 
 class Logger:
-    """Internal implementation detail."""
     def __call__(self, level: str, message: str):
         _log(level, message)
 
@@ -368,12 +355,10 @@ class Logger:
         return _get_log_file_path()
 
     def close(self):
-        """Internal implementation detail."""
         _stop_writer_thread()
 
     def get_queue_size(self) -> int:
         return len(_log_deque)
-
 
 
 log = Logger()

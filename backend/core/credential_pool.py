@@ -6,7 +6,6 @@ import time
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
-from log import log
 from core.provider_registry import (
     GOOGLE_ANTIGRAVITY,
     canonicalize_antigravity_credential_filename,
@@ -14,7 +13,7 @@ from core.provider_registry import (
     get_static_credential_identity,
 )
 from core.storage_adapter import get_storage_adapter
-
+from log import log
 
 _POOL_LOCKS: Dict[str, asyncio.Lock] = {
     "code_assist": asyncio.Lock(),
@@ -105,8 +104,12 @@ def _best_expiry_key(item: Dict[str, Any]) -> tuple[datetime, int]:
     )
 
 
-async def _find_unique_filename(storage_adapter, requested_filename: str, credential_data: Dict[str, Any], mode: str) -> str:
-    filename = _safe_filename(requested_filename, normalize_project_id(credential_data) or "credential")
+async def _find_unique_filename(
+    storage_adapter, requested_filename: str, credential_data: Dict[str, Any], mode: str
+) -> str:
+    filename = _safe_filename(
+        requested_filename, normalize_project_id(credential_data) or "credential"
+    )
     stem, ext = os.path.splitext(filename)
     if not ext:
         ext = ".json"
@@ -116,7 +119,9 @@ async def _find_unique_filename(storage_adapter, requested_filename: str, creden
         return filename
 
     existing_data = await storage_adapter.get_credential(filename, mode=mode)
-    if get_known_credential_email(existing_data or {}) == get_known_credential_email(credential_data):
+    if get_known_credential_email(existing_data or {}) == get_known_credential_email(
+        credential_data
+    ):
         return filename
 
     index = 2
@@ -127,7 +132,9 @@ async def _find_unique_filename(storage_adapter, requested_filename: str, creden
         index += 1
 
 
-async def _get_existing_email(storage_adapter, filename: str, credential_data: Dict[str, Any], mode: str) -> str:
+async def _get_existing_email(
+    storage_adapter, filename: str, credential_data: Dict[str, Any], mode: str
+) -> str:
     try:
         state = await storage_adapter.get_credential_state(filename, mode=mode)
         email = normalize_credential_email(state.get("user_email"))
@@ -138,7 +145,9 @@ async def _get_existing_email(storage_adapter, filename: str, credential_data: D
     return get_known_credential_email(credential_data)
 
 
-async def _store_with_email_state(storage_adapter, filename: str, credential_data: Dict[str, Any], email: str, mode: str) -> None:
+async def _store_with_email_state(
+    storage_adapter, filename: str, credential_data: Dict[str, Any], email: str, mode: str
+) -> None:
     success = await storage_adapter.store_credential(filename, credential_data, mode=mode)
     if not success:
         raise RuntimeError("Storage adapter rejected the credential.")
@@ -155,8 +164,7 @@ async def upsert_credential_by_email(
     storage_adapter = await get_storage_adapter()
     mode = _normalize_mode(mode)
     is_antigravity = (
-        mode == "primary"
-        and get_credential_provider(credential_data) == GOOGLE_ANTIGRAVITY
+        mode == "primary" and get_credential_provider(credential_data) == GOOGLE_ANTIGRAVITY
     )
     lock = _POOL_LOCKS[mode]
 
@@ -167,9 +175,7 @@ async def upsert_credential_by_email(
             for index, existing_filename in enumerate(
                 await storage_adapter.list_credentials(mode=mode)
             ):
-                existing_data = await storage_adapter.get_credential(
-                    existing_filename, mode=mode
-                )
+                existing_data = await storage_adapter.get_credential(existing_filename, mode=mode)
                 if get_static_credential_identity(existing_data or {}) == static_identity:
                     matches.append(
                         {
@@ -199,9 +205,7 @@ async def upsert_credential_by_email(
             keep_filename = keep["filename"]
             if keep["data"].get("created_at") and not credential_data.get("created_at"):
                 credential_data["created_at"] = keep["data"]["created_at"]
-            await _store_with_email_state(
-                storage_adapter, keep_filename, credential_data, "", mode
-            )
+            await _store_with_email_state(storage_adapter, keep_filename, credential_data, "", mode)
             deleted_duplicates = []
             for item in matches:
                 if item["filename"] == keep_filename:
@@ -232,8 +236,12 @@ async def upsert_credential_by_email(
             )
 
         if not email:
-            target_filename = await _find_unique_filename(storage_adapter, filename, credential_data, mode)
-            await _store_with_email_state(storage_adapter, target_filename, credential_data, "", mode)
+            target_filename = await _find_unique_filename(
+                storage_adapter, filename, credential_data, mode
+            )
+            await _store_with_email_state(
+                storage_adapter, target_filename, credential_data, "", mode
+            )
             return {
                 "action": "created",
                 "stored": True,
@@ -243,9 +251,13 @@ async def upsert_credential_by_email(
             }
 
         matches: List[Dict[str, Any]] = []
-        for index, existing_filename in enumerate(await storage_adapter.list_credentials(mode=mode)):
+        for index, existing_filename in enumerate(
+            await storage_adapter.list_credentials(mode=mode)
+        ):
             existing_data = await storage_adapter.get_credential(existing_filename, mode=mode)
-            existing_email = await _get_existing_email(storage_adapter, existing_filename, existing_data or {}, mode)
+            existing_email = await _get_existing_email(
+                storage_adapter, existing_filename, existing_data or {}, mode
+            )
             if existing_email == email:
                 matches.append(
                     {
@@ -257,8 +269,12 @@ async def upsert_credential_by_email(
                 )
 
         if not matches:
-            target_filename = await _find_unique_filename(storage_adapter, filename, credential_data, mode)
-            await _store_with_email_state(storage_adapter, target_filename, credential_data, email, mode)
+            target_filename = await _find_unique_filename(
+                storage_adapter, filename, credential_data, mode
+            )
+            await _store_with_email_state(
+                storage_adapter, target_filename, credential_data, email, mode
+            )
             return {
                 "action": "created",
                 "stored": True,
@@ -273,7 +289,9 @@ async def upsert_credential_by_email(
         deleted_duplicates = []
 
         if _is_incoming_newer(incoming_expiry, best_existing["expiry"]):
-            await _store_with_email_state(storage_adapter, keep_filename, credential_data, email, mode)
+            await _store_with_email_state(
+                storage_adapter, keep_filename, credential_data, email, mode
+            )
 
             for item in matches:
                 if item["filename"] == keep_filename:
@@ -281,14 +299,18 @@ async def upsert_credential_by_email(
                 if await storage_adapter.delete_credential(item["filename"], mode=mode):
                     deleted_duplicates.append(item["filename"])
 
-            log.info(f"Replaced credential for email={email} with a later expiry. Kept filename={keep_filename}.")
+            log.info(
+                f"Replaced credential for email={email} with a later expiry. Kept filename={keep_filename}."
+            )
             return {
                 "action": "replaced",
                 "stored": True,
                 "filename": keep_filename,
                 "email": email,
                 "incoming_expiry": incoming_expiry.isoformat() if incoming_expiry else None,
-                "existing_expiry": best_existing["expiry"].isoformat() if best_existing["expiry"] else None,
+                "existing_expiry": best_existing["expiry"].isoformat()
+                if best_existing["expiry"]
+                else None,
                 "deleted_duplicates": deleted_duplicates,
                 "message": "Credential replaced because the new expiry is later.",
             }
@@ -305,7 +327,9 @@ async def upsert_credential_by_email(
             "filename": keep_filename,
             "email": email,
             "incoming_expiry": incoming_expiry.isoformat() if incoming_expiry else None,
-            "existing_expiry": best_existing["expiry"].isoformat() if best_existing["expiry"] else None,
+            "existing_expiry": best_existing["expiry"].isoformat()
+            if best_existing["expiry"]
+            else None,
             "deleted_duplicates": deleted_duplicates,
             "message": "Credential was not added because the pool already has the same email with an equal or later expiry.",
         }
@@ -375,17 +399,14 @@ async def deduplicate_credentials_by_account_email(mode: str = "code_assist") ->
 
         if deleted_count:
             log.info(
-                f"Deduplicated {deleted_count} credentials in the {mode} pool "
-                "by account identity."
+                f"Deduplicated {deleted_count} credentials in the {mode} pool by account identity."
             )
 
         return {
             "deleted_count": deleted_count,
             "kept_count": total_count - deleted_count,
             "total_count": total_count,
-            "unique_emails_count": sum(
-                1 for identity in grouped if identity.startswith("email:")
-            ),
+            "unique_emails_count": sum(1 for identity in grouped if identity.startswith("email:")),
             "unique_identities_count": len(grouped),
             "no_email_count": no_email_count,
             "duplicate_groups": groups,

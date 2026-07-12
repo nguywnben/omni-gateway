@@ -1,35 +1,22 @@
-"""Internal implementation detail."""
-
 from typing import List
 
 from core.models import Model, ModelList
 
-def create_openai_model_list(
-    model_ids: List[str],
-    owned_by: str = "google"
-) -> ModelList:
-    """Internal implementation detail."""
+
+def create_openai_model_list(model_ids: List[str], owned_by: str = "google") -> ModelList:
     from datetime import datetime, timezone
+
     current_timestamp = int(datetime.now(timezone.utc).timestamp())
 
     models = [
-        Model(
-            id=model_id,
-            object='model',
-            created=current_timestamp,
-            owned_by=owned_by
-        )
+        Model(id=model_id, object="model", created=current_timestamp, owned_by=owned_by)
         for model_id in model_ids
     ]
 
     return ModelList(data=models)
 
 
-def create_gemini_model_list(
-    model_ids: List[str],
-    base_name_extractor=None
-) -> dict:
-    """Internal implementation detail."""
+def create_gemini_model_list(model_ids: List[str], base_name_extractor=None) -> dict:
     gemini_models = []
 
     for model_id in model_ids:

@@ -10,16 +10,19 @@ import zipfile
 from pathlib import Path
 from unittest.mock import AsyncMock, patch
 
-from fastapi import UploadFile
-from fastapi import HTTPException
-
+from fastapi import HTTPException, UploadFile
 
 BACKEND_DIR = Path(__file__).resolve().parents[1]
 if str(BACKEND_DIR) not in sys.path:
     sys.path.insert(0, str(BACKEND_DIR))
 
-from core.google_ai_studio import GoogleAIStudioValidation
 from core.credential_pool import upsert_credential_by_email
+from core.google_ai_studio import GoogleAIStudioValidation
+from core.panel.credentials import (
+    download_all_creds_common,
+    download_cred_file,
+    import_pool_credentials,
+)
 from core.pool_import import (
     PoolImportError,
     classify_pool_credential,
@@ -32,11 +35,6 @@ from core.provider_registry import (
     antigravity_account_fingerprint,
     build_antigravity_credential_filename,
     canonicalize_antigravity_credential_filename,
-)
-from core.panel.creds import (
-    download_all_creds_common,
-    download_cred_file,
-    import_pool_credentials,
 )
 
 
@@ -77,9 +75,7 @@ class PoolCredentialClassificationTests(unittest.TestCase):
 
     def test_rejects_payload_that_conflicts_with_explicit_provider(self):
         with self.assertRaisesRegex(PoolImportError, "valid API key credential"):
-            classify_pool_credential(
-                {"provider": "google_ai_studio", "refresh_token": "refresh"}
-            )
+            classify_pool_credential({"provider": "google_ai_studio", "refresh_token": "refresh"})
 
     def test_builds_canonical_antigravity_filename(self):
         self.assertEqual(
@@ -146,7 +142,10 @@ class PoolArchiveExtractionTests(unittest.IsolatedAsyncioTestCase):
             [candidate["provider"] for candidate in candidates],
             [GOOGLE_ANTIGRAVITY, GOOGLE_AI_STUDIO],
         )
-        self.assertEqual([candidate["filename"] for candidate in candidates], ["antigravity.json", "ai-studio.json"])
+        self.assertEqual(
+            [candidate["filename"] for candidate in candidates],
+            ["antigravity.json", "ai-studio.json"],
+        )
         self.assertEqual(errors, [])
 
     async def test_retains_valid_entries_and_reports_unsafe_or_invalid_entries(self):
@@ -350,7 +349,7 @@ class PoolImportRouteTests(unittest.IsolatedAsyncioTestCase):
         }
 
         with patch(
-            "core.panel.creds.restore_pool_archive",
+            "core.panel.credentials.restore_pool_archive",
             new=AsyncMock(return_value=expected),
         ):
             response = await import_pool_credentials(archive=archive, token="test")
@@ -361,7 +360,7 @@ class PoolImportRouteTests(unittest.IsolatedAsyncioTestCase):
         archive = upload_archive([])
 
         with patch(
-            "core.panel.creds.restore_pool_archive",
+            "core.panel.credentials.restore_pool_archive",
             new=AsyncMock(side_effect=PoolImportError("Invalid archive.")),
         ):
             with self.assertRaises(HTTPException) as context:
@@ -390,9 +389,11 @@ class AntigravityDownloadFilenameTests(unittest.IsolatedAsyncioTestCase):
         storage.get_credential.return_value = self.credential
 
         with (
-            patch("core.panel.creds.get_storage_adapter", new=AsyncMock(return_value=storage)),
             patch(
-                "core.panel.creds.deduplicate_credentials_by_account_email",
+                "core.panel.credentials.get_storage_adapter", new=AsyncMock(return_value=storage)
+            ),
+            patch(
+                "core.panel.credentials.deduplicate_credentials_by_account_email",
                 new=AsyncMock(return_value={"deleted_count": 0}),
             ),
         ):
@@ -413,9 +414,11 @@ class AntigravityDownloadFilenameTests(unittest.IsolatedAsyncioTestCase):
         ]
 
         with (
-            patch("core.panel.creds.get_storage_adapter", new=AsyncMock(return_value=storage)),
             patch(
-                "core.panel.creds.deduplicate_credentials_by_account_email",
+                "core.panel.credentials.get_storage_adapter", new=AsyncMock(return_value=storage)
+            ),
+            patch(
+                "core.panel.credentials.deduplicate_credentials_by_account_email",
                 new=AsyncMock(return_value={"deleted_count": 0}),
             ),
         ):
@@ -435,7 +438,7 @@ class AntigravityDownloadFilenameTests(unittest.IsolatedAsyncioTestCase):
         storage.get_credential.return_value = self.credential
 
         with patch(
-            "core.panel.creds.get_storage_adapter",
+            "core.panel.credentials.get_storage_adapter",
             new=AsyncMock(return_value=storage),
         ):
             response = await download_cred_file(

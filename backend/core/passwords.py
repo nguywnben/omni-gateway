@@ -7,7 +7,6 @@ import binascii
 import hashlib
 import secrets
 
-
 PASSWORD_HASH_SCHEME = "scrypt"
 SCRYPT_N = 2**14
 SCRYPT_R = 8

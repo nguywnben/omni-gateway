@@ -8,9 +8,18 @@ on:
     branches:
       - main
 
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   verify:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.12", "3.14"]
     env:
       PYTHONDONTWRITEBYTECODE: "1"
       ENABLE_LOG: "0"
@@ -19,39 +28,57 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6
+        with:
+          persist-credentials: false
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1  # v6
         with:
-          python-version: "3.12"
+          python-version: ${{ matrix.python-version }}
           cache: pip
+          cache-dependency-path: |
+            requirements.txt
+            requirements-dev.txt
 
-      - name: Install runtime dependencies
-        run: python -m pip install -r requirements.txt
+      - name: Install development dependencies
+        run: python -m pip install -r requirements-dev.txt
 
       - name: Verify dependency compatibility
         run: python -m pip check
 
-      - name: Parse backend modules
-        run: |
-          python - <<'PY'
-          import ast
-          from pathlib import Path
+      - name: Audit Python dependencies
+        if: matrix.python-version == '3.12'
+        run: python -m pip_audit --local --progress-spinner off
 
-          files = list(Path("backend").rglob("*.py"))
-          for file in files:
-              ast.parse(file.read_text(encoding="utf-8"), filename=str(file))
-          print(f"Parsed {len(files)} backend Python files.")
-          PY
+      - name: Lint backend modules
+        if: matrix.python-version == '3.12'
+        run: ruff check backend
+
+      - name: Check backend formatting
+        if: matrix.python-version == '3.12'
+        run: ruff format --check backend
+
+      - name: Lint repository YAML
+        if: matrix.python-version == '3.12'
+        run: yamllint --strict .github deploy .yamllint.yml
+
+      - name: Compile backend modules
+        run: python -m compileall -q backend
 
       - name: Validate frontend JavaScript
-        run: node --check frontend/common.js
+        if: matrix.python-version == '3.12'
+        run: node --check frontend/control-panel.js
+
+      - name: Validate shell scripts
+        if: matrix.python-version == '3.12'
+        run: bash -n deploy/scripts/*.sh
 
       - name: Run unit tests
         run: python -m unittest discover -s backend/tests -p 'test_*.py'
 
       - name: Verify route contracts
+        if: matrix.python-version == '3.12'
         run: |
           python - <<'PY'
           import sys
@@ -72,8 +99,6 @@ jobs:
               "/api/auth/keys",
               "/api/model-catalog",
               "/api/model-pools/omway",
-              "/models",
-              "/provider",
           }
           missing = sorted(required - paths)
           forbidden_prefixes = tuple(
@@ -86,10 +111,15 @@ jobs:
               raise SystemExit(f"Missing route(s): {missing}")
           if forbidden:
               raise SystemExit(f"Forbidden branded route(s): {forbidden}")
+          ui_paths = {"/", "/dashboard", "/models", "/pool", "/providers"}
+          exposed_ui_paths = sorted(ui_paths & paths)
+          if exposed_ui_paths:
+              raise SystemExit(f"UI route(s) leaked into OpenAPI: {exposed_ui_paths}")
           print("Route contract verified.")
           PY
 
       - name: Smoke test the application
+        if: matrix.python-version == '3.12'
         env:
           CREDENTIALS_DIR: /tmp/omni-gateway-ci/creds
           LOG_FILE: /tmp/omni-gateway-ci/logs/runtime.log
@@ -108,13 +138,19 @@ jobs:
             sleep 1
           done
           curl --fail --silent http://127.0.0.1:4283/ready
+          curl --fail --silent http://127.0.0.1:4283/dashboard >/dev/null
+          curl --fail --silent http://127.0.0.1:4283/frontend/assets/providers/google-antigravity-logo.png >/dev/null
+          curl --fail --silent http://127.0.0.1:4283/frontend/assets/providers/google-ai-studio-logo.png >/dev/null
+          curl --fail --silent --compressed http://127.0.0.1:4283/dashboard >/dev/null
 
       - name: Check whitespace
+        if: matrix.python-version == '3.12'
         run: git diff --check
 
-      - name: Check generated Python artifacts
+      - name: Check tracked generated Python artifacts
+        if: matrix.python-version == '3.12'
         run: |
-          if find backend frontend deploy -name '__pycache__' -o -name '*.pyc' | grep -q .; then
-            echo "Generated Python cache artifacts found."
+          if git ls-files | grep -E '(^|/)__pycache__/|\.pyc$' >/dev/null; then
+            echo "Tracked Python cache artifacts found."
             exit 1
           fi

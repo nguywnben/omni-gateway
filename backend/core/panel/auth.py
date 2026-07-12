@@ -1,5 +1,3 @@
-"""Internal implementation detail."""
-
 import base64
 import binascii
 import json
@@ -8,27 +6,23 @@ import re
 import time
 from typing import Any, Dict, List
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request
-from fastapi.responses import JSONResponse
-
 import config
-from log import log
 from core.auth import (
     asyncio_complete_auth_flow,
     complete_auth_flow_from_callback_url,
     create_auth_url,
-    get_auth_status_by_state,
     get_auth_status,
+    get_auth_status_by_state,
     verify_password,
 )
+from core.credential_pool import upsert_credential_by_email
 from core.models import (
-    LoginRequest,
-    SetupRequest,
-    AuthStartRequest,
     AuthCallbackRequest,
     AuthCallbackUrlRequest,
+    AuthStartRequest,
+    LoginRequest,
+    SetupRequest,
 )
-from core.credential_pool import upsert_credential_by_email
 from core.passwords import hash_password
 from core.storage_adapter import get_storage_adapter
 from core.utils import (
@@ -37,9 +31,11 @@ from core.utils import (
     set_panel_session_cookie,
     verify_panel_token,
 )
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi.responses import JSONResponse
+from log import log
+
 from .utils import public_mode_name, validate_mode
-
-
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
@@ -64,9 +60,10 @@ _login_failures: Dict[str, List[float]] = {}
 
 
 def _client_identity(request: Request) -> str:
-    forwarded_for = request.headers.get("x-forwarded-for", "")
-    if forwarded_for:
-        return forwarded_for.split(",", 1)[0].strip()
+    if config.trust_proxy_headers_enabled():
+        forwarded_for = request.headers.get("x-forwarded-for", "")
+        if forwarded_for:
+            return forwarded_for.split(",", 1)[0].strip()
     return request.client.host if request.client else "unknown"
 
 
@@ -164,14 +161,22 @@ def _extract_credential_entries(payload: Any) -> List[Dict[str, Any]]:
                 else:
                     entries.append(
                         {
-                            "mode": item.get("mode", payload.get("mode")) if isinstance(item, dict) else payload.get("mode"),
+                            "mode": item.get("mode", payload.get("mode"))
+                            if isinstance(item, dict)
+                            else payload.get("mode"),
                             "filename": item.get("filename") if isinstance(item, dict) else None,
                             "credential": item,
                         }
                     )
             return entries
         if isinstance(credentials, dict):
-            return [{"mode": payload.get("mode"), "filename": payload.get("filename"), "credential": credentials}]
+            return [
+                {
+                    "mode": payload.get("mode"),
+                    "filename": payload.get("filename"),
+                    "credential": credentials,
+                }
+            ]
         if isinstance(payload.get("credential"), dict):
             return [payload]
         return [payload]
@@ -190,7 +195,11 @@ def _normalize_env_credential(env_name: str, index: int, entry: Dict[str, Any]) 
     credential = entry.get("credential") if isinstance(entry.get("credential"), dict) else entry
     credential_data = dict(credential)
 
-    if not (credential_data.get("token") or credential_data.get("access_token") or credential_data.get("refresh_token")):
+    if not (
+        credential_data.get("token")
+        or credential_data.get("access_token")
+        or credential_data.get("refresh_token")
+    ):
         raise ValueError("Credential must contain token, access_token, or refresh_token.")
 
     if credential_data.get("access_token") and not credential_data.get("token"):
@@ -206,7 +215,11 @@ def _normalize_env_credential(env_name: str, index: int, entry: Dict[str, Any]) 
 
     filename = entry.get("filename") or credential_data.get("filename")
     if not filename:
-        project_id = credential_data.get("project_id") or credential_data.get("quota_project_id") or env_name.lower()
+        project_id = (
+            credential_data.get("project_id")
+            or credential_data.get("quota_project_id")
+            or env_name.lower()
+        )
         filename = f"env_{public_mode_name(mode)}_{project_id}_{index}.json"
     filename = _safe_filename(os.path.basename(str(filename)))
     if not filename.endswith(".json"):
@@ -279,7 +292,6 @@ def _build_env_status() -> Dict[str, Any]:
 
 @router.post("/login")
 async def login(payload: LoginRequest, request: Request):
-    """Internal implementation detail."""
     try:
         if not await config.has_password_configured():
             raise HTTPException(status_code=428, detail="Initial setup is required before login.")
@@ -366,13 +378,10 @@ async def logout():
 
 @router.post("/start")
 async def start_auth(request: AuthStartRequest, token: str = Depends(verify_panel_token)):
-    """Internal implementation detail."""
     try:
-
         project_id = request.project_id
         if not project_id:
             log.info("No Project ID was provided; auto-detection will be used.")
-
 
         user_session = token if token else None
         mode = validate_mode(request.mode)
@@ -406,11 +415,8 @@ async def start_auth(request: AuthStartRequest, token: str = Depends(verify_pane
 
 @router.post("/callback")
 async def auth_callback(request: AuthCallbackRequest, token: str = Depends(verify_panel_token)):
-    """Internal implementation detail."""
     try:
-
         project_id = request.project_id
-
 
         user_session = token if token else None
 
@@ -419,20 +425,14 @@ async def auth_callback(request: AuthCallbackRequest, token: str = Depends(verif
         )
 
         if result["success"]:
-
-            return JSONResponse(
-                content=_auth_success_content(result)
-            )
+            return JSONResponse(content=_auth_success_content(result))
         else:
-
             if result.get("requires_manual_project_id"):
-
                 return JSONResponse(
                     status_code=400,
                     content={"error": result["error"], "requires_manual_project_id": True},
                 )
             elif result.get("requires_project_selection"):
-
                 return JSONResponse(
                     status_code=400,
                     content={
@@ -452,25 +452,20 @@ async def auth_callback(request: AuthCallbackRequest, token: str = Depends(verif
 
 
 @router.post("/callback-url")
-async def auth_callback_url(request: AuthCallbackUrlRequest, token: str = Depends(verify_panel_token)):
-    """Internal implementation detail."""
+async def auth_callback_url(
+    request: AuthCallbackUrlRequest, token: str = Depends(verify_panel_token)
+):
     try:
-
         if not request.callback_url or not request.callback_url.startswith(("http://", "https://")):
             raise HTTPException(status_code=400, detail="Please provide a valid callback URL.")
-
 
         result = await complete_auth_flow_from_callback_url(
             request.callback_url, request.project_id, mode=validate_mode(request.mode)
         )
 
         if result["success"]:
-
-            return JSONResponse(
-                content=_auth_success_content(result)
-            )
+            return JSONResponse(content=_auth_success_content(result))
         else:
-
             if result.get("requires_manual_project_id"):
                 return JSONResponse(
                     status_code=400,
@@ -497,7 +492,6 @@ async def auth_callback_url(request: AuthCallbackUrlRequest, token: str = Depend
 
 @router.get("/status/{project_id}")
 async def check_auth_status(project_id: str, token: str = Depends(verify_panel_token)):
-    """Internal implementation detail."""
     try:
         if not project_id:
             raise HTTPException(status_code=400, detail="Project ID cannot be empty.")
@@ -525,16 +519,18 @@ async def check_auth_flow_status(
 
 @router.get("/keys")
 async def get_api_keys(token: str = Depends(verify_panel_token)):
-    """Internal implementation detail."""
     try:
         from config import get_api_key
+
         api_key = await get_api_key()
         managed_by_env = bool(os.getenv("API_KEY", "").strip())
-        return JSONResponse(content={
-            "success": True,
-            "api_key": api_key,
-            "managed_by_env": managed_by_env,
-        })
+        return JSONResponse(
+            content={
+                "success": True,
+                "api_key": api_key,
+                "managed_by_env": managed_by_env,
+            }
+        )
     except Exception as e:
         log.error(f"Failed to get API key: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -542,11 +538,11 @@ async def get_api_keys(token: str = Depends(verify_panel_token)):
 
 @router.post("/keys/reset")
 async def reset_api_key(token: str = Depends(verify_panel_token)):
-    """Internal implementation detail."""
     try:
         import secrets
-        from core.storage_adapter import get_storage_adapter
+
         from config import API_KEY_PREFIX, _config_cache
+        from core.storage_adapter import get_storage_adapter
 
         env_key = os.getenv("API_KEY", "").strip()
         if env_key:
@@ -566,11 +562,13 @@ async def reset_api_key(token: str = Depends(verify_panel_token)):
         await storage_adapter.set_config("api_key", new_key)
         _config_cache["api_key"] = new_key
 
-        return JSONResponse(content={
-            "success": True,
-            "api_key": new_key,
-            "managed_by_env": False,
-        })
+        return JSONResponse(
+            content={
+                "success": True,
+                "api_key": new_key,
+                "managed_by_env": False,
+            }
+        )
     except Exception as e:
         log.error(f"Failed to reset API key: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -614,8 +612,6 @@ async def load_env_credentials(token: str = Depends(verify_panel_token)):
                 }
             )
 
-        from core.storage_adapter import get_storage_adapter
-
         results = []
         loaded_count = 0
         skipped_count = 0
@@ -624,7 +620,9 @@ async def load_env_credentials(token: str = Depends(verify_panel_token)):
             filename = item["filename"]
             mode = item["mode"]
             try:
-                write_result = await upsert_credential_by_email(filename, item["credential"], mode=mode)
+                write_result = await upsert_credential_by_email(
+                    filename, item["credential"], mode=mode
+                )
                 if write_result.get("stored"):
                     loaded_count += 1
                     results.append(
@@ -694,7 +692,9 @@ async def clear_env_credentials(token: str = Depends(verify_panel_token)):
                 success = await storage_adapter.delete_credential(filename, mode=mode)
                 if success:
                     deleted_count += 1
-                    results.append({"filename": filename, "mode": public_mode_name(mode), "status": "success"})
+                    results.append(
+                        {"filename": filename, "mode": public_mode_name(mode), "status": "success"}
+                    )
                 else:
                     results.append(
                         {

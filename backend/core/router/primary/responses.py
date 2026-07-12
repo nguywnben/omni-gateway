@@ -5,10 +5,7 @@ from __future__ import annotations
 import json
 import time
 import uuid
-from typing import Any, AsyncIterator, Dict, Iterable, List
-
-from fastapi import APIRouter, Depends, HTTPException
-from fastapi.responses import JSONResponse, StreamingResponse
+from typing import Any, AsyncIterator, Dict, List
 
 from core.models import (
     OpenAIChatCompletionRequest,
@@ -17,7 +14,8 @@ from core.models import (
 )
 from core.router.primary.openai import chat_completions
 from core.utils import authenticate_bearer
-
+from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import JSONResponse, StreamingResponse
 
 router = APIRouter()
 
@@ -142,7 +140,9 @@ def _response_usage(chat_usage: Dict[str, Any]) -> Dict[str, Any]:
     return {
         "input_tokens": input_tokens,
         "input_tokens_details": {
-            "cached_tokens": int(chat_usage.get("prompt_tokens_details", {}).get("cached_tokens") or 0)
+            "cached_tokens": int(
+                chat_usage.get("prompt_tokens_details", {}).get("cached_tokens") or 0
+            )
         },
         "output_tokens": output_tokens,
         "output_tokens_details": {
@@ -194,9 +194,7 @@ def chat_to_responses_response(
     chat: Dict[str, Any], request: OpenAIResponsesRequest
 ) -> Dict[str, Any]:
     created_at = int(chat.get("created") or time.time())
-    response_id = str(chat.get("id") or f"resp_{uuid.uuid4().hex}").replace(
-        "chatcmpl-", "resp_"
-    )
+    response_id = str(chat.get("id") or f"resp_{uuid.uuid4().hex}").replace("chatcmpl-", "resp_")
     choices = chat.get("choices") or []
     message = choices[0].get("message", {}) if choices else {}
     output: List[Dict[str, Any]] = []

@@ -1,5 +1,3 @@
-"""Internal implementation detail."""
-
 import asyncio
 import io
 import json
@@ -8,50 +6,60 @@ import time
 import zipfile
 from typing import Any, List
 
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, Response
-from fastapi.responses import JSONResponse
-
-from log import log
-from core.credential_pool import (
-    deduplicate_credentials_by_account_email,
-    get_known_credential_email,
-    parse_credential_expiry,
-    resolve_credential_email,
-)
-from core.credential_manager import credential_manager
-from core.models import (
-    CredFileActionRequest,
-    CredFileBatchActionRequest
-)
-from core.storage_adapter import get_storage_adapter
-from core.utils import verify_panel_token, CODE_ASSIST_USER_AGENT
-from core.api.primary import fetch_quota_info
-from core.google_ai_studio import (
-    GoogleAIStudioError,
-    build_api_key_headers,
-    build_generation_url,
-    validate_api_key,
-)
-from core.google_oauth_api import Credentials, fetch_project_id_and_tier, get_user_projects, select_default_project, enable_required_apis
-from core.provider_registry import (
-    GOOGLE_ANTIGRAVITY,
-    GOOGLE_AI_STUDIO,
-    canonicalize_antigravity_credential_filename,
-    get_credential_provider,
-    normalize_provider_id,
-)
-from core.pool_import import PoolImportError, restore_pool_archive
 from config import (
     get_antigravity_api_url,
     get_antigravity_user_agent,
     get_code_assist_endpoint,
     get_google_ai_studio_api_url,
 )
+from core.api.primary import fetch_quota_info
+from core.credential_manager import credential_manager
+from core.credential_pool import (
+    deduplicate_credentials_by_account_email,
+    get_known_credential_email,
+    parse_credential_expiry,
+    resolve_credential_email,
+)
+from core.google_ai_studio import (
+    GoogleAIStudioError,
+    build_api_key_headers,
+    build_generation_url,
+    validate_api_key,
+)
+from core.google_oauth_api import (
+    Credentials,
+    enable_required_apis,
+    fetch_project_id_and_tier,
+    get_user_projects,
+    select_default_project,
+)
+from core.models import CredFileActionRequest, CredFileBatchActionRequest
+from core.pool_import import PoolImportError, restore_pool_archive
+from core.provider_registry import (
+    GOOGLE_AI_STUDIO,
+    GOOGLE_ANTIGRAVITY,
+    canonicalize_antigravity_credential_filename,
+    get_credential_provider,
+    normalize_provider_id,
+)
+from core.storage_adapter import get_storage_adapter
+from core.utils import CODE_ASSIST_USER_AGENT, verify_panel_token
+from fastapi import APIRouter, Depends, File, HTTPException, Response, UploadFile
+from fastapi.responses import JSONResponse
+from log import log
+
 from .utils import validate_mode
 
-
-
 router = APIRouter(prefix="/api/creds", tags=["credentials"])
+
+
+def _local_file_metadata(path: str) -> dict[str, float | int]:
+    """Return local file metadata without blocking the async request path."""
+    try:
+        stat = os.stat(path)
+    except FileNotFoundError:
+        return {}
+    return {"size": stat.st_size, "modified_time": stat.st_mtime}
 
 
 # =============================================================================
@@ -60,30 +68,26 @@ router = APIRouter(prefix="/api/creds", tags=["credentials"])
 
 
 async def extract_json_files_from_zip(zip_file: UploadFile) -> List[dict]:
-    """Internal implementation detail."""
     try:
-
         zip_content = await zip_file.read()
-
-
 
         files_data = []
 
         with zipfile.ZipFile(io.BytesIO(zip_content), "r") as zip_ref:
-
             file_list = zip_ref.namelist()
             json_files = [
                 f for f in file_list if f.endswith(".json") and not f.startswith("__MACOSX/")
             ]
 
             if not json_files:
-                raise HTTPException(status_code=400, detail="No JSON files were found in the ZIP archive.")
+                raise HTTPException(
+                    status_code=400, detail="No JSON files were found in the ZIP archive."
+                )
 
             log.info(f"Found {len(json_files)} JSON files in ZIP archive {zip_file.filename}.")
 
             for json_filename in json_files:
                 try:
-
                     with zip_ref.open(json_filename) as json_file:
                         content = json_file.read()
 
@@ -92,7 +96,6 @@ async def extract_json_files_from_zip(zip_file: UploadFile) -> List[dict]:
                         except UnicodeDecodeError:
                             log.warning(f"Skipping file with encoding error: {json_filename}")
                             continue
-
 
                         filename = os.path.basename(json_filename)
                         files_data.append({"filename": filename, "content": content_str})
@@ -116,11 +119,12 @@ async def clear_all_model_cooldowns_for_credential(
     filename: str,
     mode: str,
 ) -> None:
-    """Internal implementation detail."""
     try:
         cleared = await storage_adapter._backend.clear_all_model_cooldowns(filename, mode=mode)
         if not cleared:
-            log.warning(f"Failed to clear model cooldowns or credential does not exist: {filename} (mode={mode})")
+            log.warning(
+                f"Failed to clear model cooldowns or credential does not exist: {filename} (mode={mode})"
+            )
     except Exception as e:
         log.warning(f"Failed to clear model cooldowns for {filename} (mode={mode}): {e}")
 
@@ -206,28 +210,27 @@ async def _prepare_upload_candidates(files_data: List[dict]) -> tuple[List[dict]
 async def upload_credentials_common(
     files: List[UploadFile], mode: str = "code_assist"
 ) -> JSONResponse:
-    """Internal implementation detail."""
     mode = validate_mode(mode)
 
     if not files:
         raise HTTPException(status_code=400, detail="Please select files to upload.")
 
-
     if len(files) > 100:
         raise HTTPException(
-            status_code=400, detail=f"Too many files. A maximum of 100 files is supported; current count: {len(files)}."
+            status_code=400,
+            detail=f"Too many files. A maximum of 100 files is supported; current count: {len(files)}.",
         )
 
     files_data = []
     for file in files:
-
         if file.filename.endswith(".zip"):
             zip_files_data = await extract_json_files_from_zip(file)
             files_data.extend(zip_files_data)
-            log.info(f"Extracted {len(zip_files_data)} JSON files from ZIP archive {file.filename}.")
+            log.info(
+                f"Extracted {len(zip_files_data)} JSON files from ZIP archive {file.filename}."
+            )
 
         elif file.filename.endswith(".json"):
-
             content_chunks = []
             while True:
                 chunk = await file.read(8192)
@@ -246,7 +249,8 @@ async def upload_credentials_common(
             files_data.append({"filename": file.filename, "content": content_str})
         else:
             raise HTTPException(
-                status_code=400, detail=f"File format '{file.filename}' is not supported. Only JSON and ZIP files are supported."
+                status_code=400,
+                detail=f"File format '{file.filename}' is not supported. Only JSON and ZIP files are supported.",
             )
 
     upload_candidates, preprocessed_results = await _prepare_upload_candidates(files_data)
@@ -266,11 +270,14 @@ async def upload_credentials_common(
                 filename = os.path.basename(filename)
                 credential_data = file_data["credential_data"]
 
-
                 if mode == "primary":
-                    write_result = await credential_manager.add_primary_credential(filename, credential_data)
+                    write_result = await credential_manager.add_primary_credential(
+                        filename, credential_data
+                    )
                 else:
-                    write_result = await credential_manager.add_credential(filename, credential_data)
+                    write_result = await credential_manager.add_credential(
+                        filename, credential_data
+                    )
 
                 stored = write_result.get("stored", False)
                 action = write_result.get("action", "created")
@@ -283,7 +290,8 @@ async def upload_credentials_common(
                     "status": status,
                     "action": action,
                     "email": write_result.get("email"),
-                    "message": write_result.get("message") or ("Credential imported." if stored else "Credential skipped."),
+                    "message": write_result.get("message")
+                    or ("Credential imported." if stored else "Credential skipped."),
                 }
 
             except Exception as e:
@@ -343,16 +351,22 @@ async def upload_credentials_common(
             }
         )
     else:
-        raise HTTPException(status_code=400, detail=f"No {mode_label} credential files were imported.")
+        raise HTTPException(
+            status_code=400, detail=f"No {mode_label} credential files were imported."
+        )
 
 
 async def get_creds_status_common(
-    offset: int, limit: int, status_filter: str, mode: str = "code_assist",
-    error_code_filter: str = None, cooldown_filter: str = None,
-    preview_filter: str = None, tier_filter: str = None,
+    offset: int,
+    limit: int,
+    status_filter: str,
+    mode: str = "code_assist",
+    error_code_filter: str = None,
+    cooldown_filter: str = None,
+    preview_filter: str = None,
+    tier_filter: str = None,
     provider_filter: str = None,
 ) -> JSONResponse:
-    """Internal implementation detail."""
     mode = validate_mode(mode)
 
     if offset < 0:
@@ -360,11 +374,17 @@ async def get_creds_status_common(
     if limit not in [20, 50, 100, 200, 500, 1000]:
         raise HTTPException(status_code=400, detail="Limit must be 20, 50, 100, 200, 500, or 1000.")
     if status_filter not in ["all", "enabled", "disabled"]:
-        raise HTTPException(status_code=400, detail="Status filter must be all, enabled, or disabled.")
+        raise HTTPException(
+            status_code=400, detail="Status filter must be all, enabled, or disabled."
+        )
     if cooldown_filter and cooldown_filter not in ["all", "in_cooldown", "no_cooldown"]:
-        raise HTTPException(status_code=400, detail="Cooldown filter must be all, in_cooldown, or no_cooldown.")
+        raise HTTPException(
+            status_code=400, detail="Cooldown filter must be all, in_cooldown, or no_cooldown."
+        )
     if preview_filter and preview_filter not in ["all", "preview", "no_preview"]:
-        raise HTTPException(status_code=400, detail="Preview filter must be all, preview, or no_preview.")
+        raise HTTPException(
+            status_code=400, detail="Preview filter must be all, preview, or no_preview."
+        )
     if tier_filter and tier_filter not in ["all", "free", "pro", "ultra"]:
         raise HTTPException(status_code=400, detail="Tier filter must be all, free, pro, or ultra.")
 
@@ -380,13 +400,11 @@ async def get_creds_status_common(
                 detail="Provider filter must be all, google_antigravity, or google_ai_studio.",
             )
 
-
     dedupe_result = await deduplicate_credentials_by_account_email(mode=mode)
 
     storage_adapter = await get_storage_adapter()
     backend_info = await storage_adapter.get_backend_info()
     backend_type = backend_info.get("backend_type", "unknown")
-
 
     filter_by_provider = normalized_provider_filter != "all"
     result = await storage_adapter._backend.get_credentials_summary(
@@ -394,10 +412,12 @@ async def get_creds_status_common(
         limit=None if filter_by_provider else limit,
         status_filter=status_filter,
         mode=mode,
-        error_code_filter=error_code_filter if error_code_filter and error_code_filter != "all" else None,
+        error_code_filter=error_code_filter
+        if error_code_filter and error_code_filter != "all"
+        else None,
         cooldown_filter=cooldown_filter if cooldown_filter and cooldown_filter != "all" else None,
         preview_filter=preview_filter if preview_filter and preview_filter != "all" else None,
-        tier_filter=tier_filter if tier_filter and tier_filter != "all" else None
+        tier_filter=tier_filter if tier_filter and tier_filter != "all" else None,
     )
 
     matching_creds = []
@@ -430,7 +450,7 @@ async def get_creds_status_common(
 
     if filter_by_provider:
         total_count = len(matching_creds)
-        creds_list = matching_creds[offset:offset + limit]
+        creds_list = matching_creds[offset : offset + limit]
         stats = {
             "total": total_count,
             "normal": sum(1 for item in matching_creds if not item["disabled"]),
@@ -441,16 +461,18 @@ async def get_creds_status_common(
         creds_list = matching_creds
         stats = result.get("stats", {"total": 0, "normal": 0, "disabled": 0})
 
-    return JSONResponse(content={
-        "items": creds_list,
-        "total": total_count,
-        "offset": offset,
-        "limit": limit,
-        "has_more": (offset + limit) < total_count,
-        "stats": stats,
-        "provider_filter": normalized_provider_filter,
-        "deduplicated_count": dedupe_result.get("deleted_count", 0),
-    })
+    return JSONResponse(
+        content={
+            "items": creds_list,
+            "total": total_count,
+            "offset": offset,
+            "limit": limit,
+            "has_more": (offset + limit) < total_count,
+            "stats": stats,
+            "provider_filter": normalized_provider_filter,
+            "deduplicated_count": dedupe_result.get("deleted_count", 0),
+        }
+    )
 
 
 async def _get_download_filename(
@@ -478,7 +500,6 @@ async def _get_download_filename(
 
 
 async def download_all_creds_common(mode: str = "code_assist") -> Response:
-    """Internal implementation detail."""
     mode = validate_mode(mode)
     zip_filename = "provider_credentials.zip" if mode == "primary" else "credentials.zip"
 
@@ -488,7 +509,9 @@ async def download_all_creds_common(mode: str = "code_assist") -> Response:
     credential_filenames = await storage_adapter.list_credentials(mode=mode)
 
     if not credential_filenames:
-        raise HTTPException(status_code=404, detail="No credential files are available to download.")
+        raise HTTPException(
+            status_code=404, detail="No credential files are available to download."
+        )
 
     log.info(f"Packaging {len(credential_filenames)} {mode} credential files.")
 
@@ -536,7 +559,6 @@ async def download_all_creds_common(mode: str = "code_assist") -> Response:
 
 
 async def fetch_user_email_common(filename: str, mode: str = "code_assist") -> JSONResponse:
-    """Internal implementation detail."""
     mode = validate_mode(mode)
 
     filename_only = os.path.basename(filename)
@@ -589,36 +611,44 @@ async def refresh_all_user_emails_common(mode: str = "code_assist") -> JSONRespo
 
             if cached_email:
                 skipped_count += 1
-                results.append({
-                    "filename": os.path.basename(filename),
-                    "user_email": cached_email,
-                    "success": True,
-                    "skipped": True,
-                })
+                results.append(
+                    {
+                        "filename": os.path.basename(filename),
+                        "user_email": cached_email,
+                        "success": True,
+                        "skipped": True,
+                    }
+                )
                 continue
 
             email = await credential_manager.get_or_fetch_user_email(filename, mode=mode)
             if email:
                 success_count += 1
-                results.append({
-                    "filename": os.path.basename(filename),
-                    "user_email": email,
-                    "success": True,
-                })
+                results.append(
+                    {
+                        "filename": os.path.basename(filename),
+                        "user_email": email,
+                        "success": True,
+                    }
+                )
             else:
-                results.append({
+                results.append(
+                    {
+                        "filename": os.path.basename(filename),
+                        "user_email": None,
+                        "success": False,
+                        "error": "Unable to retrieve email.",
+                    }
+                )
+        except Exception as e:
+            results.append(
+                {
                     "filename": os.path.basename(filename),
                     "user_email": None,
                     "success": False,
-                "error": "Unable to retrieve email.",
-                })
-        except Exception as e:
-            results.append({
-                "filename": os.path.basename(filename),
-                "user_email": None,
-                "success": False,
-                "error": str(e),
-            })
+                    "error": str(e),
+                }
+            )
 
     total_count = len(all_states)
     return JSONResponse(
@@ -661,8 +691,12 @@ async def deduplicate_credentials_by_email_common(mode: str = "code_assist") -> 
             {
                 "email": group["email"],
                 "kept_file": os.path.basename(group["kept_file"]),
-                "deleted_files": [os.path.basename(filename) for filename in group.get("deleted_files", [])],
-                "duplicate_count": group.get("duplicate_count", len(group.get("deleted_files", []))),
+                "deleted_files": [
+                    os.path.basename(filename) for filename in group.get("deleted_files", [])
+                ],
+                "duplicate_count": group.get(
+                    "duplicate_count", len(group.get("deleted_files", []))
+                ),
             }
             for group in duplicate_groups
         ]
@@ -689,21 +723,19 @@ async def deduplicate_credentials_by_email_common(mode: str = "code_assist") -> 
                 "kept_count": 0,
                 "total_count": 0,
                 "message": f"Deduplication failed: {str(e)}",
-            }
+            },
         )
 
 
-async def verify_credential_project_common(filename: str, mode: str = "code_assist") -> JSONResponse:
-    """Internal implementation detail."""
+async def verify_credential_project_common(
+    filename: str, mode: str = "code_assist"
+) -> JSONResponse:
     mode = validate_mode(mode)
-
 
     if not filename.endswith(".json"):
         raise HTTPException(status_code=400, detail="Invalid file name.")
 
-
     storage_adapter = await get_storage_adapter()
-
 
     credential_data = await storage_adapter.get_credential(filename, mode=mode)
     if not credential_data:
@@ -744,18 +776,14 @@ async def verify_credential_project_common(filename: str, mode: str = "code_assi
             }
         )
 
-
     credentials = Credentials.from_dict(credential_data)
 
-
     token_refreshed = await credentials.refresh_if_needed()
-
 
     if token_refreshed:
         log.info(f"Token automatically refreshed: {filename} (mode = {mode})")
         credential_data = credentials.to_dict()
         await storage_adapter.store_credential(filename, credential_data, mode=mode)
-
 
     if mode == "primary":
         api_base_url = await get_antigravity_api_url()
@@ -767,7 +795,6 @@ async def verify_credential_project_common(filename: str, mode: str = "code_assi
             include_credits=True,
         )
     else:
-
         credit_amount = None
         subscription_tier = None
         user_projects = await get_user_projects(credentials)
@@ -792,29 +819,25 @@ async def verify_credential_project_common(filename: str, mode: str = "code_assi
     if project_id or subscription_tier:
         await storage_adapter.store_credential(filename, credential_data, mode=mode)
 
-
-        state_update = {
-            "disabled": False,
-            "error_codes": []
-        }
-
+        state_update = {"disabled": False, "error_codes": []}
 
         state_update["tier"] = subscription_tier
-
 
         if mode == "code_assist":
             state_update["preview"] = True
 
         await storage_adapter.update_credential_state(filename, state_update, mode=mode)
 
-        log.info(f"Verified {mode} credential: {filename}. Project ID: {project_id}. Tier: {subscription_tier}. Disabled status removed and error codes cleared.")
+        log.info(
+            f"Verified {mode} credential: {filename}. Project ID: {project_id}. Tier: {subscription_tier}. Disabled status removed and error codes cleared."
+        )
 
         response_data = {
             "success": True,
             "filename": filename,
             "project_id": project_id,
             "subscription_tier": subscription_tier,
-            "message": "Verification complete. Project ID was updated, the credential was re-enabled, and recorded error codes were cleared."
+            "message": "Verification complete. Project ID was updated, the credential was re-enabled, and recorded error codes were cleared.",
         }
 
         if mode == "primary" and credit_amount is not None:
@@ -827,8 +850,8 @@ async def verify_credential_project_common(filename: str, mode: str = "code_assi
             content={
                 "success": False,
                 "filename": filename,
-                "message": "Verification failed. Unable to retrieve a Project ID. Check whether the credential is still valid."
-            }
+                "message": "Verification failed. Unable to retrieve a Project ID. Check whether the credential is still valid.",
+            },
         )
 
 
@@ -841,9 +864,8 @@ async def verify_credential_project_common(filename: str, mode: str = "code_assi
 async def upload_credentials(
     files: List[UploadFile] = File(...),
     token: str = Depends(verify_panel_token),
-    mode: str = "code_assist"
+    mode: str = "code_assist",
 ):
-    """Internal implementation detail."""
     try:
         mode = validate_mode(mode)
         return await upload_credentials_common(files, mode=mode)
@@ -865,13 +887,15 @@ async def get_creds_status(
     preview_filter: str = "all",
     tier_filter: str = "all",
     provider_filter: str = "all",
-    mode: str = "code_assist"
+    mode: str = "code_assist",
 ):
-    """Internal implementation detail."""
     try:
         mode = validate_mode(mode)
         return await get_creds_status_common(
-            offset, limit, status_filter, mode=mode,
+            offset,
+            limit,
+            status_filter,
+            mode=mode,
             error_code_filter=error_code_filter,
             cooldown_filter=cooldown_filter,
             preview_filter=preview_filter,
@@ -887,28 +911,21 @@ async def get_creds_status(
 
 @router.get("/detail/{filename}")
 async def get_cred_detail(
-    filename: str,
-    token: str = Depends(verify_panel_token),
-    mode: str = "code_assist"
+    filename: str, token: str = Depends(verify_panel_token), mode: str = "code_assist"
 ):
-    """Internal implementation detail."""
     try:
         mode = validate_mode(mode)
 
         if not filename.endswith(".json"):
             raise HTTPException(status_code=400, detail="Invalid file name.")
 
-
-
         storage_adapter = await get_storage_adapter()
         backend_info = await storage_adapter.get_backend_info()
         backend_type = backend_info.get("backend_type", "unknown")
 
-
         credential_data = await storage_adapter.get_credential(filename, mode=mode)
         if not credential_data:
             raise HTTPException(status_code=404, detail="Credential does not exist")
-
 
         file_status = await storage_adapter.get_credential_state(filename, mode=mode)
         if not file_status:
@@ -933,11 +950,8 @@ async def get_cred_detail(
         else:
             result["enable_credit"] = file_status.get("enable_credit", False)
 
-        if backend_type == "file" and os.path.exists(filename):
-            result.update({
-                "size": os.path.getsize(filename),
-                "modified_time": os.path.getmtime(filename),
-            })
+        if backend_type == "file":
+            result.update(await asyncio.to_thread(_local_file_metadata, filename))
 
         return JSONResponse(content=result)
 
@@ -952,9 +966,8 @@ async def get_cred_detail(
 async def creds_action(
     request: CredFileActionRequest,
     token: str = Depends(verify_panel_token),
-    mode: str = "code_assist"
+    mode: str = "code_assist",
 ):
-    """Internal implementation detail."""
     try:
         mode = validate_mode(mode)
 
@@ -965,18 +978,13 @@ async def creds_action(
 
         log.info(f"Performing action '{action}' on file: {filename} (mode={mode})")
 
-
         if not filename.endswith(".json"):
             log.error(f"Invalid filename: {filename} (not a .json file)")
             raise HTTPException(status_code=400, detail=f"Invalid file name: {filename}")
 
-
         storage_adapter = await get_storage_adapter()
 
-
-
         if action != "delete":
-
             credential_data = await storage_adapter.get_credential(filename, mode=mode)
             if not credential_data:
                 log.error(f"Credential not found: {filename} (mode={mode})")
@@ -988,10 +996,15 @@ async def creds_action(
             log.info(f"[WebRoute] set_cred_disabled result: {result}")
             if result:
                 log.info(f"Web request: credential {filename} enabled (mode = {mode}).")
-                return JSONResponse(content={"message": f"Enabled credential {os.path.basename(filename)}."})
+                return JSONResponse(
+                    content={"message": f"Enabled credential {os.path.basename(filename)}."}
+                )
             else:
                 log.error(f"Web request: File {filename} enable failed (mode = {mode})")
-                raise HTTPException(status_code=500, detail="Failed to enable the credential. It may no longer exist.")
+                raise HTTPException(
+                    status_code=500,
+                    detail="Failed to enable the credential. It may no longer exist.",
+                )
 
         elif action == "disable":
             log.info(f"Web request: Disable file {filename} (mode = {mode})")
@@ -999,10 +1012,15 @@ async def creds_action(
             log.info(f"[WebRoute] set_cred_disabled result: {result}")
             if result:
                 log.info(f"Web request: credential {filename} disabled (mode = {mode}).")
-                return JSONResponse(content={"message": f"Disabled credential {os.path.basename(filename)}."})
+                return JSONResponse(
+                    content={"message": f"Disabled credential {os.path.basename(filename)}."}
+                )
             else:
                 log.error(f"Web request: file {filename} disable failed (mode = {mode})")
-                raise HTTPException(status_code=500, detail="Failed to disable the credential. It may no longer exist.")
+                raise HTTPException(
+                    status_code=500,
+                    detail="Failed to disable the credential. It may no longer exist.",
+                )
 
         elif action == "delete":
             try:
@@ -1022,7 +1040,9 @@ async def creds_action(
                     raise HTTPException(status_code=500, detail="Failed to delete the credential.")
             except Exception as e:
                 log.error(f"Error deleting credential {filename}: {e}")
-                raise HTTPException(status_code=500, detail=f"Failed to delete the credential: {str(e)}")
+                raise HTTPException(
+                    status_code=500, detail=f"Failed to delete the credential: {str(e)}"
+                )
 
         elif action == "enable_credit":
             if mode != "primary" or get_credential_provider(credential_data) != GOOGLE_ANTIGRAVITY:
@@ -1035,8 +1055,13 @@ async def creds_action(
             )
             if updated:
                 await clear_all_model_cooldowns_for_credential(storage_adapter, filename, mode)
-                return JSONResponse(content={"message": f"Enabled credit mode for {os.path.basename(filename)}."})
-            raise HTTPException(status_code=500, detail="Failed to enable credit mode. The credential may no longer exist.")
+                return JSONResponse(
+                    content={"message": f"Enabled credit mode for {os.path.basename(filename)}."}
+                )
+            raise HTTPException(
+                status_code=500,
+                detail="Failed to enable credit mode. The credential may no longer exist.",
+            )
 
         elif action == "disable_credit":
             if mode != "primary" or get_credential_provider(credential_data) != GOOGLE_ANTIGRAVITY:
@@ -1049,8 +1074,13 @@ async def creds_action(
             )
             if updated:
                 await clear_all_model_cooldowns_for_credential(storage_adapter, filename, mode)
-                return JSONResponse(content={"message": f"Disabled credit mode for {os.path.basename(filename)}."})
-            raise HTTPException(status_code=500, detail="Failed to disable credit mode. The credential may no longer exist.")
+                return JSONResponse(
+                    content={"message": f"Disabled credit mode for {os.path.basename(filename)}."}
+                )
+            raise HTTPException(
+                status_code=500,
+                detail="Failed to disable credit mode. The credential may no longer exist.",
+            )
 
         else:
             raise HTTPException(status_code=400, detail="Invalid credential action.")
@@ -1066,9 +1096,8 @@ async def creds_action(
 async def creds_batch_action(
     request: CredFileBatchActionRequest,
     token: str = Depends(verify_panel_token),
-    mode: str = "code_assist"
+    mode: str = "code_assist",
 ):
-    """Internal implementation detail."""
     try:
         mode = validate_mode(mode)
 
@@ -1076,7 +1105,10 @@ async def creds_batch_action(
         filenames = request.filenames
 
         if not filenames:
-            raise HTTPException(status_code=400, detail="Select at least one credential file before running a batch action.")
+            raise HTTPException(
+                status_code=400,
+                detail="Select at least one credential file before running a batch action.",
+            )
 
         log.info(f"Performing batch operation on {len(filenames)} files with action: {action}")
 
@@ -1111,7 +1143,9 @@ async def creds_batch_action(
 
                 elif action == "delete":
                     try:
-                        delete_success = await credential_manager.remove_credential(filename, mode=mode)
+                        delete_success = await credential_manager.remove_credential(
+                            filename, mode=mode
+                        )
                         if delete_success:
                             success_count += 1
                             log.info(f"Deleted credential from batch: {filename}.")
@@ -1122,7 +1156,10 @@ async def creds_batch_action(
                         errors.append(f"{filename}: delete failed - {str(e)}")
                         continue
                 elif action == "enable_credit":
-                    if mode != "primary" or get_credential_provider(credential_data) != GOOGLE_ANTIGRAVITY:
+                    if (
+                        mode != "primary"
+                        or get_credential_provider(credential_data) != GOOGLE_ANTIGRAVITY
+                    ):
                         errors.append(
                             f"{filename}: credit mode is only available for Google Antigravity credentials"
                         )
@@ -1131,13 +1168,18 @@ async def creds_batch_action(
                         filename, {"enable_credit": True}, mode=mode
                     )
                     if updated:
-                        await clear_all_model_cooldowns_for_credential(storage_adapter, filename, mode)
+                        await clear_all_model_cooldowns_for_credential(
+                            storage_adapter, filename, mode
+                        )
                         success_count += 1
                     else:
                         errors.append(f"{filename}: failed to enable credit mode")
                         continue
                 elif action == "disable_credit":
-                    if mode != "primary" or get_credential_provider(credential_data) != GOOGLE_ANTIGRAVITY:
+                    if (
+                        mode != "primary"
+                        or get_credential_provider(credential_data) != GOOGLE_ANTIGRAVITY
+                    ):
                         errors.append(
                             f"{filename}: credit mode is only available for Google Antigravity credentials"
                         )
@@ -1146,7 +1188,9 @@ async def creds_batch_action(
                         filename, {"enable_credit": False}, mode=mode
                     )
                     if updated:
-                        await clear_all_model_cooldowns_for_credential(storage_adapter, filename, mode)
+                        await clear_all_model_cooldowns_for_credential(
+                            storage_adapter, filename, mode
+                        )
                         success_count += 1
                     else:
                         errors.append(f"{filename}: failed to disable credit mode")
@@ -1185,25 +1229,19 @@ async def creds_batch_action(
 
 @router.get("/download/{filename}")
 async def download_cred_file(
-    filename: str,
-    token: str = Depends(verify_panel_token),
-    mode: str = "code_assist"
+    filename: str, token: str = Depends(verify_panel_token), mode: str = "code_assist"
 ):
-    """Internal implementation detail."""
     try:
         mode = validate_mode(mode)
 
         if not filename.endswith(".json"):
             raise HTTPException(status_code=404, detail="Invalid file name.")
 
-
         storage_adapter = await get_storage_adapter()
-
 
         credential_data = await storage_adapter.get_credential(filename, mode=mode)
         if not credential_data:
             raise HTTPException(status_code=404, detail="Credential file does not exist.")
-
 
         content = json.dumps(credential_data, ensure_ascii=False, indent=2)
         download_filename = await _get_download_filename(
@@ -1230,11 +1268,8 @@ async def download_cred_file(
 
 @router.post("/fetch-email/{filename}")
 async def fetch_user_email(
-    filename: str,
-    token: str = Depends(verify_panel_token),
-    mode: str = "code_assist"
+    filename: str, token: str = Depends(verify_panel_token), mode: str = "code_assist"
 ):
-    """Internal implementation detail."""
     try:
         mode = validate_mode(mode)
         return await fetch_user_email_common(filename, mode=mode)
@@ -1247,10 +1282,8 @@ async def fetch_user_email(
 
 @router.post("/refresh-all-emails")
 async def refresh_all_user_emails(
-    token: str = Depends(verify_panel_token),
-    mode: str = "code_assist"
+    token: str = Depends(verify_panel_token), mode: str = "code_assist"
 ):
-    """Internal implementation detail."""
     try:
         mode = validate_mode(mode)
         return await refresh_all_user_emails_common(mode=mode)
@@ -1261,10 +1294,8 @@ async def refresh_all_user_emails(
 
 @router.post("/deduplicate-by-email")
 async def deduplicate_credentials_by_email(
-    token: str = Depends(verify_panel_token),
-    mode: str = "code_assist"
+    token: str = Depends(verify_panel_token), mode: str = "code_assist"
 ):
-    """Internal implementation detail."""
     try:
         mode = validate_mode(mode)
         return await deduplicate_credentials_by_email_common(mode=mode)
@@ -1274,11 +1305,7 @@ async def deduplicate_credentials_by_email(
 
 
 @router.get("/download-all")
-async def download_all_creds(
-    token: str = Depends(verify_panel_token),
-    mode: str = "code_assist"
-):
-    """Internal implementation detail."""
+async def download_all_creds(token: str = Depends(verify_panel_token), mode: str = "code_assist"):
     try:
         mode = validate_mode(mode)
         return await download_all_creds_common(mode=mode)
@@ -1306,11 +1333,8 @@ async def import_pool_credentials(
 
 @router.post("/verify-project/{filename}")
 async def verify_credential_project(
-    filename: str,
-    token: str = Depends(verify_panel_token),
-    mode: str = "code_assist"
+    filename: str, token: str = Depends(verify_panel_token), mode: str = "code_assist"
 ):
-    """Internal implementation detail."""
     try:
         mode = validate_mode(mode)
         return await verify_credential_project_common(filename, mode=mode)
@@ -1323,27 +1347,21 @@ async def verify_credential_project(
 
 @router.get("/errors/{filename}")
 async def get_credential_errors(
-    filename: str,
-    token: str = Depends(verify_panel_token),
-    mode: str = "code_assist"
+    filename: str, token: str = Depends(verify_panel_token), mode: str = "code_assist"
 ):
-    """Internal implementation detail."""
     try:
         mode = validate_mode(mode)
-
 
         if not filename.endswith(".json"):
             raise HTTPException(status_code=400, detail="Invalid file name.")
 
         storage_adapter = await get_storage_adapter()
 
-
-        if not hasattr(storage_adapter._backend, 'get_credential_errors'):
+        if not hasattr(storage_adapter._backend, "get_credential_errors"):
             raise HTTPException(
                 status_code=501,
-            detail="The current storage backend does not support retrieving credential error messages."
+                detail="The current storage backend does not support retrieving credential error messages.",
             )
-
 
         error_info = await storage_adapter._backend.get_credential_errors(filename, mode=mode)
 
@@ -1358,20 +1376,15 @@ async def get_credential_errors(
 
 @router.get("/quota/{filename}")
 async def get_credential_quota(
-    filename: str,
-    token: str = Depends(verify_panel_token),
-    mode: str = "provider"
+    filename: str, token: str = Depends(verify_panel_token), mode: str = "provider"
 ):
-    """Internal implementation detail."""
     try:
         mode = validate_mode(mode)
 
         if not filename.endswith(".json"):
             raise HTTPException(status_code=400, detail="Invalid file name.")
 
-
         storage_adapter = await get_storage_adapter()
-
 
         credential_data = await storage_adapter.get_credential(filename, mode=mode)
         if not credential_data:
@@ -1393,14 +1406,11 @@ async def get_credential_quota(
                 }
             )
 
-
         from core.google_oauth_api import Credentials
 
         creds = Credentials.from_dict(credential_data)
 
-
         await creds.refresh_if_needed()
-
 
         updated_data = creds.to_dict()
         if updated_data != credential_data:
@@ -1408,28 +1418,30 @@ async def get_credential_quota(
             await storage_adapter.store_credential(filename, updated_data, mode=mode)
             credential_data = updated_data
 
-
         access_token = credential_data.get("access_token") or credential_data.get("token")
         if not access_token:
-            raise HTTPException(status_code=400, detail="Credential does not contain an access token.")
-
+            raise HTTPException(
+                status_code=400, detail="Credential does not contain an access token."
+            )
 
         quota_info = await fetch_quota_info(access_token)
 
         if quota_info.get("success"):
-            return JSONResponse(content={
-                "success": True,
-                "filename": filename,
-                "models": quota_info.get("models", {})
-            })
+            return JSONResponse(
+                content={
+                    "success": True,
+                    "filename": filename,
+                    "models": quota_info.get("models", {}),
+                }
+            )
         else:
             return JSONResponse(
                 status_code=400,
                 content={
                     "success": False,
                     "filename": filename,
-                    "error": quota_info.get("error", "Unknown error.")
-                }
+                    "error": quota_info.get("error", "Unknown error."),
+                },
             )
 
     except HTTPException:
@@ -1441,32 +1453,25 @@ async def get_credential_quota(
 
 @router.post("/configure-preview/{filename}")
 async def configure_preview_channel(
-    filename: str,
-    token: str = Depends(verify_panel_token),
-    mode: str = "code_assist"
+    filename: str, token: str = Depends(verify_panel_token), mode: str = "code_assist"
 ):
-    """Internal implementation detail."""
     try:
         mode = validate_mode(mode)
-
 
         if mode != "code_assist":
             raise HTTPException(
                 status_code=400,
-                detail="The Preview channel can only be configured for Code Assist credentials."
+                detail="The Preview channel can only be configured for Code Assist credentials.",
             )
-
 
         if not filename.endswith(".json"):
             raise HTTPException(status_code=400, detail="Invalid file name.")
 
         storage_adapter = await get_storage_adapter()
 
-
         credential_data = await storage_adapter.get_credential(filename, mode=mode)
         if not credential_data:
             raise HTTPException(status_code=404, detail="Credential does not exist.")
-
 
         credentials = Credentials.from_dict(credential_data)
         token_refreshed = await credentials.refresh_if_needed()
@@ -1476,34 +1481,29 @@ async def configure_preview_channel(
             credential_data = credentials.to_dict()
             await storage_adapter.store_credential(filename, credential_data, mode=mode)
 
-
         access_token = credential_data.get("access_token") or credential_data.get("token")
         project_id = credential_data.get("project_id", "")
 
         if not access_token:
-            raise HTTPException(status_code=400, detail="Credential does not contain an access token.")
+            raise HTTPException(
+                status_code=400, detail="Credential does not contain an access token."
+            )
         if not project_id:
             raise HTTPException(status_code=400, detail="Credential does not contain a Project ID.")
 
-
-
-
-
-        from core.httpx_client import post_async
         import uuid
 
+        from core.httpx_client import post_async
 
         setting_id = f"preview-setting-{uuid.uuid4().hex[:8]}"
         binding_id = f"preview-binding-{uuid.uuid4().hex[:8]}"
 
-        base_url = f"https://cloudaicompanion.googleapis.com/v1/projects/{project_id}/locations/global"
-        headers = {
-            "Authorization": f"Bearer {access_token}",
-            "Content-Type": "application/json"
-        }
+        base_url = (
+            f"https://cloudaicompanion.googleapis.com/v1/projects/{project_id}/locations/global"
+        )
+        headers = {"Authorization": f"Bearer {access_token}", "Content-Type": "application/json"}
 
         log.info(f"Starting configuration of preview channel: {filename} (project_id={project_id})")
-
 
         setting_url = f"{base_url}/releaseChannelSettings"
         setting_response = await post_async(
@@ -1511,30 +1511,24 @@ async def configure_preview_channel(
             json={"release_channel": "EXPERIMENTAL"},
             headers=headers,
             params={"release_channel_setting_id": setting_id},
-            timeout=30.0
+            timeout=30.0,
         )
 
         setting_status = setting_response.status_code
 
-
-
-
-
-        from core.httpx_client import post_async, get_async
         import uuid
 
+        from core.httpx_client import get_async, post_async
 
         setting_id = f"preview-setting-{uuid.uuid4().hex[:8]}"
         binding_id = f"preview-binding-{uuid.uuid4().hex[:8]}"
 
-        base_url = f"https://cloudaicompanion.googleapis.com/v1/projects/{project_id}/locations/global"
-        headers = {
-            "Authorization": f"Bearer {access_token}",
-            "Content-Type": "application/json"
-        }
+        base_url = (
+            f"https://cloudaicompanion.googleapis.com/v1/projects/{project_id}/locations/global"
+        )
+        headers = {"Authorization": f"Bearer {access_token}", "Content-Type": "application/json"}
 
         log.info(f"Starting configuration of preview channel: {filename} (project_id={project_id})")
-
 
         setting_url = f"{base_url}/releaseChannelSettings"
         setting_response = await post_async(
@@ -1542,7 +1536,7 @@ async def configure_preview_channel(
             json={"release_channel": "EXPERIMENTAL"},
             headers=headers,
             params={"release_channel_setting_id": setting_id},
-            timeout=30.0
+            timeout=30.0,
         )
 
         setting_status = setting_response.status_code
@@ -1550,13 +1544,10 @@ async def configure_preview_channel(
         if setting_status == 200 or setting_status == 201:
             log.info(f"Step 1/2: Release channel setting created (setting_id={setting_id}).")
         elif setting_status == 409:
-
-            log.info("Step 1/2: Release channel setting already exists; retrieving the existing setting ID.")
-            list_response = await get_async(
-                url=setting_url,
-                headers=headers,
-                timeout=30.0
+            log.info(
+                "Step 1/2: Release channel setting already exists; retrieving the existing setting ID."
             )
+            list_response = await get_async(url=setting_url, headers=headers, timeout=30.0)
             if list_response.status_code == 200:
                 try:
                     list_data = list_response.json()
@@ -1566,15 +1557,22 @@ async def configure_preview_channel(
                         setting_id = existing_name.split("/")[-1]
                         log.info(f"Step 1/2: Retrieved existing setting_id={setting_id}")
                     else:
-                        log.warning("Step 1/2: the list response was empty; keeping the generated setting ID.")
+                        log.warning(
+                            "Step 1/2: the list response was empty; keeping the generated setting ID."
+                        )
                 except Exception as e:
-                    log.warning(f"Step 1/2: failed to parse the list response: {e}. Keeping the generated setting ID.")
+                    log.warning(
+                        f"Step 1/2: failed to parse the list response: {e}. Keeping the generated setting ID."
+                    )
             else:
-                log.warning(f"Step 1/2: list request failed (status={list_response.status_code}); keeping the generated setting ID.")
+                log.warning(
+                    f"Step 1/2: list request failed (status={list_response.status_code}); keeping the generated setting ID."
+                )
         else:
-
-            error_text = setting_response.text if hasattr(setting_response, 'text') else ""
-            log.error(f"Step 1/2 failed: {filename} - Status: {setting_status}, Error: {error_text}")
+            error_text = setting_response.text if hasattr(setting_response, "text") else ""
+            log.error(
+                f"Step 1/2 failed: {filename} - Status: {setting_status}, Error: {error_text}"
+            )
 
             return JSONResponse(
                 status_code=setting_status,
@@ -1584,58 +1582,61 @@ async def configure_preview_channel(
                     "preview": False,
                     "message": f"Failed to create Release Channel Setting: HTTP {setting_status}",
                     "error": error_text,
-                    "step": "create_setting"
-                }
+                    "step": "create_setting",
+                },
             )
 
         # Step 2: Create Setting Binding (bind to project)
         binding_url = f"{base_url}/releaseChannelSettings/{setting_id}/settingBindings"
         binding_response = await post_async(
             url=binding_url,
-            json={
-                "target": f"projects/{project_id}",
-                "product": "GEMINI_CODE_ASSIST"
-            },
+            json={"target": f"projects/{project_id}", "product": "GEMINI_CODE_ASSIST"},
             headers=headers,
             params={"setting_binding_id": binding_id},
-            timeout=30.0
+            timeout=30.0,
         )
 
         binding_status = binding_response.status_code
 
         if binding_status == 200 or binding_status == 201:
-            await storage_adapter.update_credential_state(filename, {
-                "preview": True
-            }, mode=mode)
+            await storage_adapter.update_credential_state(filename, {"preview": True}, mode=mode)
 
-            log.info(f"Step 2/2: Setting binding created. Preview channel configuration completed for {filename}.")
+            log.info(
+                f"Step 2/2: Setting binding created. Preview channel configuration completed for {filename}."
+            )
 
-            return JSONResponse(content={
-                "success": True,
-                "filename": filename,
-                "preview": True,
-                "message": "Preview channel configured, and Preview mode is now enabled.",
-                "setting_id": setting_id,
-                "binding_id": binding_id
-            })
+            return JSONResponse(
+                content={
+                    "success": True,
+                    "filename": filename,
+                    "preview": True,
+                    "message": "Preview channel configured, and Preview mode is now enabled.",
+                    "setting_id": setting_id,
+                    "binding_id": binding_id,
+                }
+            )
         elif binding_status == 409:
             # Binding already exists, meaning it was configured already
-            await storage_adapter.update_credential_state(filename, {
-                "preview": True
-            }, mode=mode)
+            await storage_adapter.update_credential_state(filename, {"preview": True}, mode=mode)
 
-            log.info(f"Step 2/2: Setting Binding already exists - Preview channel is configured: {filename}")
+            log.info(
+                f"Step 2/2: Setting Binding already exists - Preview channel is configured: {filename}"
+            )
 
-            return JSONResponse(content={
-                "success": True,
-                "filename": filename,
-                "preview": True,
-                "message": "Preview channel configuration already exists, and preview mode is enabled."
-            })
+            return JSONResponse(
+                content={
+                    "success": True,
+                    "filename": filename,
+                    "preview": True,
+                    "message": "Preview channel configuration already exists, and preview mode is enabled.",
+                }
+            )
         else:
             # Step 2 failed
-            error_text = binding_response.text if hasattr(binding_response, 'text') else ""
-            log.error(f"Step 2/2 failed: {filename} - Status: {binding_status}, Error: {error_text}")
+            error_text = binding_response.text if hasattr(binding_response, "text") else ""
+            log.error(
+                f"Step 2/2 failed: {filename} - Status: {binding_status}, Error: {error_text}"
+            )
 
             return JSONResponse(
                 status_code=binding_status,
@@ -1645,8 +1646,8 @@ async def configure_preview_channel(
                     "preview": False,
                     "message": f"Failed to create Setting Binding: HTTP {binding_status}",
                     "error": error_text,
-                    "step": "create_binding"
-                }
+                    "step": "create_binding",
+                },
             )
 
     except HTTPException:
@@ -1658,27 +1659,22 @@ async def configure_preview_channel(
 
 @router.post("/test/{filename}")
 async def test_credential(
-    filename: str,
-    mode: str = "code_assist",
-    _token: str = Depends(verify_panel_token)
+    filename: str, mode: str = "code_assist", _token: str = Depends(verify_panel_token)
 ):
-    """Internal implementation detail."""
     try:
         mode = validate_mode(mode)
-
 
         if not filename.endswith(".json"):
             raise HTTPException(status_code=400, detail="Invalid file name.")
 
         storage_adapter = await get_storage_adapter()
 
-
         credential_data = await storage_adapter.get_credential(filename, mode=mode)
         if not credential_data:
             raise HTTPException(status_code=404, detail="Credential does not exist.")
 
-
         from core.httpx_client import post_async
+
         provider_id = get_credential_provider(credential_data)
         available_models = credential_data.get("model_ids") or []
         test_model = (
@@ -1689,7 +1685,7 @@ async def test_credential(
 
         test_request = {
             "contents": [{"role": "user", "parts": [{"text": "hi"}]}],
-            "generationConfig": {"maxOutputTokens": 1}
+            "generationConfig": {"maxOutputTokens": 1},
         }
 
         if mode == "primary" and provider_id == GOOGLE_AI_STUDIO:
@@ -1725,6 +1721,7 @@ async def test_credential(
         if mode == "primary" and provider_id != GOOGLE_AI_STUDIO:
             api_base_url = await get_antigravity_api_url()
             from core.api.primary import build_primary_headers
+
             headers = await build_primary_headers(access_token, test_model)
             request_body = {
                 "model": test_model,
@@ -1746,26 +1743,21 @@ async def test_credential(
             }
             request_url = f"{api_base_url}/v1internal:generateContent"
 
-
         response = await post_async(
-            url=request_url,
-            json=request_body,
-            headers=headers,
-            timeout=30.0
+            url=request_url, json=request_body, headers=headers, timeout=30.0
         )
-
 
         status_code = response.status_code
 
         if status_code == 200 or status_code == 429:
-            log.info(f"Credential test successful: {filename} (mode={mode}, model={test_model}, status={status_code})")
+            log.info(
+                f"Credential test successful: {filename} (mode={mode}, model={test_model}, status={status_code})"
+            )
 
             if status_code == 200:
-                await storage_adapter.update_credential_state(filename, {
-                    "error_codes": [],
-                    "error_messages": {}
-                }, mode=mode)
-
+                await storage_adapter.update_credential_state(
+                    filename, {"error_codes": [], "error_messages": {}}, mode=mode
+                )
 
                 if mode == "code_assist":
                     preview_model = "gemini-3-flash-preview"
@@ -1779,33 +1771,35 @@ async def test_credential(
                                 "project": project_id,
                                 "request": {
                                     "contents": [{"role": "user", "parts": [{"text": "hi"}]}],
-                                    "generationConfig": {"maxOutputTokens": 1}
-                                }
+                                    "generationConfig": {"maxOutputTokens": 1},
+                                },
                             },
                             headers=headers,
-                            timeout=30.0
+                            timeout=30.0,
                         )
 
                         preview_status = preview_response.status_code
 
                         if preview_status == 200 or preview_status == 429:
-
-                            log.info(f"Preview model test passed: {filename} (status = {preview_status}).")
-                            await storage_adapter.update_credential_state(filename, {
-                                "preview": True
-                            }, mode=mode)
+                            log.info(
+                                f"Preview model test passed: {filename} (status = {preview_status})."
+                            )
+                            await storage_adapter.update_credential_state(
+                                filename, {"preview": True}, mode=mode
+                            )
                         elif preview_status == 404:
-
-                            log.warning(f"Preview model is not supported for {filename} (status = 404)")
-                            await storage_adapter.update_credential_state(filename, {
-                                "preview": False
-                            }, mode=mode)
+                            log.warning(
+                                f"Preview model is not supported for {filename} (status = 404)"
+                            )
+                            await storage_adapter.update_credential_state(
+                                filename, {"preview": False}, mode=mode
+                            )
                         else:
-
-                            log.warning(f"Preview model test failed: {filename} (status = {preview_status})")
+                            log.warning(
+                                f"Preview model test failed: {filename} (status = {preview_status})"
+                            )
                     except Exception as e:
                         log.error(f"Preview model test failed for {filename}: {e}")
-
 
             message = (
                 "Credential is valid, but the upstream provider is currently rate limited."
@@ -1821,33 +1815,34 @@ async def test_credential(
                     "filename": filename,
                     "provider": provider_id,
                     "model": test_model,
-                }
+                },
             )
         else:
             log.warning(f"Credential test failed: {filename} (mode={mode}, status={status_code})")
 
             try:
-                error_text = response.text if hasattr(response, 'text') else ""
+                error_text = response.text if hasattr(response, "text") else ""
 
-
-                log.error(f"Credential test error details - file: {filename}, mode: {mode}, status code: {status_code}, error: {error_text}")
-
+                log.error(
+                    f"Credential test error details - file: {filename}, mode: {mode}, status code: {status_code}, error: {error_text}"
+                )
 
                 error_codes = [status_code]
-                error_messages = {str(status_code): error_text if error_text else f"HTTP {status_code}"}
+                error_messages = {
+                    str(status_code): error_text if error_text else f"HTTP {status_code}"
+                }
 
-
-                await storage_adapter.update_credential_state(filename, {
-                    "error_codes": error_codes,
-                    "error_messages": error_messages
-                }, mode=mode)
+                await storage_adapter.update_credential_state(
+                    filename,
+                    {"error_codes": error_codes, "error_messages": error_messages},
+                    mode=mode,
+                )
 
                 log.info(f"Saved test error info: {filename} - error code {status_code}")
             except Exception as e:
                 log.error(f"Failed to save test error message: {e}")
 
-
-        error_text = response.text if hasattr(response, 'text') else ""
+        error_text = response.text if hasattr(response, "text") else ""
 
         return JSONResponse(
             status_code=status_code,
@@ -1856,8 +1851,8 @@ async def test_credential(
                 "status_code": status_code,
                 "message": f"Test failed: HTTP {status_code}",
                 "error": error_text,
-                "filename": filename
-            }
+                "filename": filename,
+            },
         )
 
     except HTTPException:
@@ -1873,5 +1868,5 @@ async def test_credential(
                 "error": str(e),
                 "detail": f"Test failed: {str(e)}",
                 "filename": filename,
-            }
+            },
         )

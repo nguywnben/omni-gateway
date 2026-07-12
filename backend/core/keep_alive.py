@@ -1,20 +1,16 @@
-"""Internal implementation detail."""
-
 import asyncio
 from typing import Optional
 
 from config import get_keepalive_interval, get_keepalive_url
-from log import log
 from core.httpx_client import get_async
+from log import log
 
 
 class KeepAliveService:
-    """Internal implementation detail."""
     def __init__(self):
         self._task: Optional[asyncio.Task] = None
 
     async def _run(self, url: str, interval: int):
-        """Internal implementation detail."""
         log.info(f"[KeepAlive] Keep-alive task started, URL={url}, interval={interval}s")
         while True:
             try:
@@ -31,9 +27,7 @@ class KeepAliveService:
                 raise
 
     async def start(self):
-        """Internal implementation detail."""
         if self._task and not self._task.done():
-
             return
 
         url = await get_keepalive_url()
@@ -44,15 +38,16 @@ class KeepAliveService:
             return
 
         if interval <= 0:
-            log.warning(f"[KeepAlive] Invalid keep-alive interval ({interval}), service will not start")
+            log.warning(
+                f"[KeepAlive] Invalid keep-alive interval ({interval}), service will not start"
+            )
             return
 
         self._task = asyncio.create_task(
-            self._run(url.strip(), interval), name="keepalive_service"
+            self._run(url.strip(), interval), name="keep_alive_service"
         )
 
     async def stop(self):
-        """Internal implementation detail."""
         if self._task and not self._task.done():
             self._task.cancel()
             try:
@@ -63,15 +58,12 @@ class KeepAliveService:
         self._task = None
 
     async def restart(self):
-        """Internal implementation detail."""
         await self.stop()
         await self.start()
 
     @property
     def is_running(self) -> bool:
-        """Internal implementation detail."""
         return self._task is not None and not self._task.done()
 
 
-
-keepalive_service = KeepAliveService()
+keep_alive_service = KeepAliveService()

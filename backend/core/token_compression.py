@@ -55,8 +55,7 @@ def _contains_function_response(content: Any) -> bool:
     if not isinstance(parts, list):
         return False
     return any(
-        isinstance(part, dict)
-        and ("functionResponse" in part or "function_response" in part)
+        isinstance(part, dict) and ("functionResponse" in part or "function_response" in part)
         for part in parts
     )
 
@@ -96,16 +95,12 @@ def compress_gemini_request(
     if not isinstance(contents, list) or len(contents) < 2:
         return _unchanged_result(request, original_estimate, "no_history")
 
-    safe_starts = [
-        index for index, content in enumerate(contents) if _is_safe_turn_start(content)
-    ]
+    safe_starts = [index for index, content in enumerate(contents) if _is_safe_turn_start(content)]
     if len(safe_starts) <= settings.min_recent_turns:
         return _unchanged_result(request, original_estimate, "minimum_history")
 
     latest_allowed_cut = safe_starts[-settings.min_recent_turns]
-    cut_candidates = [
-        index for index in safe_starts[1:] if index <= latest_allowed_cut
-    ]
+    cut_candidates = [index for index in safe_starts[1:] if index <= latest_allowed_cut]
     if not cut_candidates:
         return _unchanged_result(request, original_estimate, "no_safe_boundary")
 

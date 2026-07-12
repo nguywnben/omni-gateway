@@ -1,5 +1,3 @@
-"""Internal implementation detail."""
-
 import asyncio
 import json
 import os
@@ -9,44 +7,33 @@ from log import log
 
 
 class StorageBackend(Protocol):
-    """Internal implementation detail."""
-    async def initialize(self) -> None:
-        """Internal implementation detail."""
-        ...
+    async def initialize(self) -> None: ...
 
-    async def close(self) -> None:
-        """Internal implementation detail."""
-        ...
+    async def close(self) -> None: ...
 
+    async def store_credential(
+        self, filename: str, credential_data: Dict[str, Any], mode: str = "code_assist"
+    ) -> bool: ...
 
-    async def store_credential(self, filename: str, credential_data: Dict[str, Any], mode: str = "code_assist") -> bool:
-        """Internal implementation detail."""
-        ...
+    async def get_credential(
+        self, filename: str, mode: str = "code_assist"
+    ) -> Optional[Dict[str, Any]]: ...
 
-    async def get_credential(self, filename: str, mode: str = "code_assist") -> Optional[Dict[str, Any]]:
-        """Internal implementation detail."""
-        ...
+    async def list_credentials(self, mode: str = "code_assist") -> List[str]: ...
 
-    async def list_credentials(self, mode: str = "code_assist") -> List[str]:
-        """Internal implementation detail."""
-        ...
+    async def delete_credential(self, filename: str, mode: str = "code_assist") -> bool: ...
 
-    async def delete_credential(self, filename: str, mode: str = "code_assist") -> bool:
-        """Internal implementation detail."""
-        ...
+    async def update_credential_state(
+        self, filename: str, state_updates: Dict[str, Any], mode: str = "code_assist"
+    ) -> bool: ...
 
+    async def get_credential_state(
+        self, filename: str, mode: str = "code_assist"
+    ) -> Dict[str, Any]: ...
 
-    async def update_credential_state(self, filename: str, state_updates: Dict[str, Any], mode: str = "code_assist") -> bool:
-        """Internal implementation detail."""
-        ...
-
-    async def get_credential_state(self, filename: str, mode: str = "code_assist") -> Dict[str, Any]:
-        """Internal implementation detail."""
-        ...
-
-    async def get_all_credential_states(self, mode: str = "code_assist") -> Dict[str, Dict[str, Any]]:
-        """Internal implementation detail."""
-        ...
+    async def get_all_credential_states(
+        self, mode: str = "code_assist"
+    ) -> Dict[str, Dict[str, Any]]: ...
 
     async def record_success(
         self,
@@ -57,53 +44,38 @@ class StorageBackend(Protocol):
         """Record a completed provider attempt."""
         ...
 
-    async def record_failure(
-        self, filename: str, mode: str = "code_assist"
-    ) -> None:
+    async def record_failure(self, filename: str, mode: str = "code_assist") -> None:
         """Record a failed provider attempt for fair routing."""
         ...
 
+    async def set_config(self, key: str, value: Any) -> bool: ...
 
-    async def set_config(self, key: str, value: Any) -> bool:
-        """Internal implementation detail."""
-        ...
+    async def get_config(self, key: str, default: Any = None) -> Any: ...
 
-    async def get_config(self, key: str, default: Any = None) -> Any:
-        """Internal implementation detail."""
-        ...
+    async def get_all_config(self) -> Dict[str, Any]: ...
 
-    async def get_all_config(self) -> Dict[str, Any]:
-        """Internal implementation detail."""
-        ...
-
-    async def delete_config(self, key: str) -> bool:
-        """Internal implementation detail."""
-        ...
+    async def delete_config(self, key: str) -> bool: ...
 
 
 class StorageAdapter:
-    """Internal implementation detail."""
     def __init__(self):
         self._backend: Optional["StorageBackend"] = None
         self._initialized = False
         self._lock = asyncio.Lock()
 
     async def initialize(self) -> None:
-        """Internal implementation detail."""
         async with self._lock:
             if self._initialized:
                 return
-
 
             postgresql_uri = os.getenv("POSTGRESQL_URI", "")
             mongodb_uri = os.getenv("MONGODB_URI", "")
 
             if postgresql_uri:
-
                 try:
-                    from .storage.psql_manager import PSQLManager
+                    from .storage.postgresql_manager import PostgreSQLManager
 
-                    self._backend = PSQLManager()
+                    self._backend = PostgreSQLManager()
                     await self._backend.initialize()
                     log.info("Using PostgreSQL storage backend")
                 except Exception as e:
@@ -120,7 +92,6 @@ class StorageAdapter:
                         log.error(f"Failed to initialize SQLite backend: {e2}")
                         raise RuntimeError("No storage backend available") from e2
             elif not mongodb_uri:
-
                 try:
                     from .storage.sqlite_manager import SQLiteManager
 
@@ -131,7 +102,6 @@ class StorageAdapter:
                     log.error(f"Failed to initialize SQLite backend: {e}")
                     raise RuntimeError("No storage backend available") from e
             else:
-
                 try:
                     from .storage.mongodb_manager import MongoDBManager
 
@@ -155,82 +125,70 @@ class StorageAdapter:
             self._initialized = True
 
     async def close(self) -> None:
-        """Internal implementation detail."""
         if self._backend:
             await self._backend.close()
             self._backend = None
             self._initialized = False
 
     def _ensure_initialized(self):
-        """Internal implementation detail."""
         if not self._initialized or not self._backend:
             raise RuntimeError("Storage adapter not initialized")
 
-
-
-    async def store_credential(self, filename: str, credential_data: Dict[str, Any], mode: str = "code_assist") -> bool:
-        """Internal implementation detail."""
+    async def store_credential(
+        self, filename: str, credential_data: Dict[str, Any], mode: str = "code_assist"
+    ) -> bool:
         self._ensure_initialized()
         return await self._backend.store_credential(filename, credential_data, mode)
 
-    async def get_credential(self, filename: str, mode: str = "code_assist") -> Optional[Dict[str, Any]]:
-        """Internal implementation detail."""
+    async def get_credential(
+        self, filename: str, mode: str = "code_assist"
+    ) -> Optional[Dict[str, Any]]:
         self._ensure_initialized()
         return await self._backend.get_credential(filename, mode)
 
     async def list_credentials(self, mode: str = "code_assist") -> List[str]:
-        """Internal implementation detail."""
         self._ensure_initialized()
         return await self._backend.list_credentials(mode)
 
     async def delete_credential(self, filename: str, mode: str = "code_assist") -> bool:
-        """Internal implementation detail."""
         self._ensure_initialized()
         return await self._backend.delete_credential(filename, mode)
 
-
-
-    async def update_credential_state(self, filename: str, state_updates: Dict[str, Any], mode: str = "code_assist") -> bool:
-        """Internal implementation detail."""
+    async def update_credential_state(
+        self, filename: str, state_updates: Dict[str, Any], mode: str = "code_assist"
+    ) -> bool:
         self._ensure_initialized()
         return await self._backend.update_credential_state(filename, state_updates, mode)
 
-    async def get_credential_state(self, filename: str, mode: str = "code_assist") -> Dict[str, Any]:
-        """Internal implementation detail."""
+    async def get_credential_state(
+        self, filename: str, mode: str = "code_assist"
+    ) -> Dict[str, Any]:
         self._ensure_initialized()
         return await self._backend.get_credential_state(filename, mode)
 
-    async def get_all_credential_states(self, mode: str = "code_assist") -> Dict[str, Dict[str, Any]]:
-        """Internal implementation detail."""
+    async def get_all_credential_states(
+        self, mode: str = "code_assist"
+    ) -> Dict[str, Dict[str, Any]]:
         self._ensure_initialized()
         return await self._backend.get_all_credential_states(mode)
 
-
-
     async def set_config(self, key: str, value: Any) -> bool:
-        """Internal implementation detail."""
         self._ensure_initialized()
         return await self._backend.set_config(key, value)
 
     async def get_config(self, key: str, default: Any = None) -> Any:
-        """Internal implementation detail."""
         self._ensure_initialized()
         return await self._backend.get_config(key, default)
 
     async def get_all_config(self) -> Dict[str, Any]:
-        """Internal implementation detail."""
         self._ensure_initialized()
         return await self._backend.get_all_config()
 
     async def delete_config(self, key: str) -> bool:
-        """Internal implementation detail."""
         self._ensure_initialized()
         return await self._backend.delete_config(key)
 
-
-
     async def export_credential_to_json(self, filename: str, output_path: str = None) -> bool:
-        """Internal implementation detail."""
         self._ensure_initialized()
         if hasattr(self._backend, "export_credential_to_json"):
             return await self._backend.export_credential_to_json(filename, output_path)
@@ -252,7 +210,6 @@ class StorageAdapter:
             return False
 
     async def import_credential_from_json(self, json_path: str, filename: str = None) -> bool:
-        """Internal implementation detail."""
         self._ensure_initialized()
         if hasattr(self._backend, "import_credential_from_json"):
             return await self._backend.import_credential_from_json(json_path, filename)
@@ -273,28 +230,28 @@ class StorageAdapter:
             return False
 
     def get_backend_type(self) -> str:
-        """Internal implementation detail."""
         if not self._backend:
             return "none"
-
 
         backend_class_name = self._backend.__class__.__name__
         if "SQLite" in backend_class_name or "sqlite" in backend_class_name.lower():
             return "sqlite"
         elif "MongoDB" in backend_class_name or "mongo" in backend_class_name.lower():
             return "mongodb"
-        elif "PSQL" in backend_class_name or "Postgres" in backend_class_name or "psql" in backend_class_name.lower():
+        elif (
+            "PSQL" in backend_class_name
+            or "Postgres" in backend_class_name
+            or "psql" in backend_class_name.lower()
+        ):
             return "postgresql"
         else:
             return "unknown"
 
     async def get_backend_info(self) -> Dict[str, Any]:
-        """Internal implementation detail."""
         self._ensure_initialized()
 
         backend_type = self.get_backend_type()
         info = {"backend_type": backend_type, "initialized": self._initialized}
-
 
         if hasattr(self._backend, "get_database_info"):
             try:
@@ -314,7 +271,9 @@ class StorageAdapter:
             elif backend_type == "mongodb":
                 info.update(
                     {
-                        "database_name": getattr(self._backend, "_db", {}).name if hasattr(self._backend, "_db") else None,
+                        "database_name": getattr(self._backend, "_db", {}).name
+                        if hasattr(self._backend, "_db")
+                        else None,
                     }
                 )
             elif backend_type == "postgresql":
@@ -327,12 +286,10 @@ class StorageAdapter:
         return info
 
 
-
 _storage_adapter: Optional[StorageAdapter] = None
 
 
 async def get_storage_adapter() -> StorageAdapter:
-    """Internal implementation detail."""
     global _storage_adapter
 
     if _storage_adapter is None:
@@ -343,7 +300,6 @@ async def get_storage_adapter() -> StorageAdapter:
 
 
 async def close_storage_adapter():
-    """Internal implementation detail."""
     global _storage_adapter
 
     if _storage_adapter:

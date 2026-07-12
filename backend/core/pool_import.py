@@ -9,21 +9,19 @@ import zipfile
 from pathlib import PurePosixPath
 from typing import Any, Dict, List, Tuple
 
-from fastapi import UploadFile
-
-from log import log
 from core.credential_manager import credential_manager
 from core.google_ai_studio import GoogleAIStudioError, validate_api_key
-from core.provider_store import store_google_ai_studio_credential
 from core.provider_registry import (
     GOOGLE_AI_STUDIO,
     GOOGLE_ANTIGRAVITY,
+    api_key_fingerprint,
     canonicalize_antigravity_credential_filename,
     get_provider_display_name,
-    api_key_fingerprint,
     normalize_provider_id,
 )
-
+from core.provider_store import store_google_ai_studio_credential
+from fastapi import UploadFile
+from log import log
 
 MAX_POOL_ARCHIVE_BYTES = 10 * 1024 * 1024
 MAX_POOL_ARCHIVE_ENTRIES = 500
@@ -102,7 +100,9 @@ async def extract_pool_archive(
     upload: UploadFile,
 ) -> Tuple[List[Dict[str, Any]], List[Dict[str, str]]]:
     """Read a bounded ZIP archive in memory and classify each credential."""
-    upload_name = PurePosixPath(str(upload.filename or "provider_credentials.zip").replace("\\", "/")).name
+    upload_name = PurePosixPath(
+        str(upload.filename or "provider_credentials.zip").replace("\\", "/")
+    ).name
     if not upload_name.lower().endswith(".zip"):
         raise PoolImportError("Pool restore accepts one ZIP archive.")
 
@@ -196,9 +196,8 @@ async def _restore_antigravity(candidate: Dict[str, Any]) -> Dict[str, Any]:
         "action": action,
         "filename": result.get("filename", filename),
         "label": result.get("email") or "Google Antigravity account",
-        "message": result.get("message") or (
-            "Credential restored to the pool." if stored else "Credential was already current."
-        ),
+        "message": result.get("message")
+        or ("Credential restored to the pool." if stored else "Credential was already current."),
     }
 
 
@@ -309,7 +308,9 @@ async def restore_pool_archive(upload: UploadFile) -> Dict[str, Any]:
         for action in ("created", "updated", "replaced")
     )
     skipped_count = sum(provider["skipped"] for provider in providers.values())
-    error_count = sum(provider["failed"] for provider in providers.values()) + len(extraction_errors)
+    error_count = sum(provider["failed"] for provider in providers.values()) + len(
+        extraction_errors
+    )
     total_count = len(candidates) + len(extraction_errors)
     message = (
         f"Pool restore complete: imported {uploaded_count}, skipped {skipped_count}, "

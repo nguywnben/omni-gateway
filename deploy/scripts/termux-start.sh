@@ -12,7 +12,7 @@ fi
 
 echo "[INFO] Installing Python dependencies..."
 .venv/bin/python -m pip install --upgrade pip
-.venv/bin/python -m pip install -r deploy/requirements-termux.txt
+.venv/bin/python -m pip install -r requirements.txt
 
 if command -v pm2 >/dev/null 2>&1; then
     echo "[INFO] Starting Omni Gateway with PM2..."

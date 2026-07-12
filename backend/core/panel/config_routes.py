@@ -1,12 +1,6 @@
-"""Internal implementation detail."""
-
-from fastapi import APIRouter, Depends, HTTPException, Request
-from fastapi.responses import JSONResponse
-
 import config
-from log import configure_logging, log
 from core.auth import verify_password
-from core.keeplive import keepalive_service
+from core.keep_alive import keep_alive_service
 from core.models import AccessCredentialsUpdateRequest, ConfigSaveRequest
 from core.passwords import hash_password
 from core.storage_adapter import get_storage_adapter
@@ -15,9 +9,11 @@ from core.utils import (
     set_panel_session_cookie,
     verify_panel_token,
 )
+from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi.responses import JSONResponse
+from log import configure_logging, log
+
 from .utils import get_env_locked_keys
-
-
 
 router = APIRouter(prefix="/api/config", tags=["config"])
 
@@ -38,9 +34,7 @@ PROVIDER_SPECIFIC_CONFIG_KEYS = {
     "google_ai_studio_api_url",
 }
 ALLOWED_CONFIG_KEYS = (
-    set(config.ENV_MAPPINGS.values())
-    - ACCESS_SECRET_KEYS
-    - PROVIDER_SPECIFIC_CONFIG_KEYS
+    set(config.ENV_MAPPINGS.values()) - ACCESS_SECRET_KEYS - PROVIDER_SPECIFIC_CONFIG_KEYS
 )
 DEFAULT_BACKED_CONFIG_KEYS = {
     "code_assist_client_id",
@@ -106,39 +100,38 @@ def _classify_config_updates(keys) -> dict:
 
 @router.get("/get")
 async def get_config(token: str = Depends(verify_panel_token)):
-    """Internal implementation detail."""
     try:
-
-
-
         current_config = {}
-
 
         current_config["code_assist_endpoint"] = await config.get_code_assist_endpoint()
         current_config["credentials_dir"] = await config.get_credentials_dir()
         current_config["proxy"] = await config.get_proxy_config() or ""
 
-
-        code_assist_client_id, code_assist_client_secret = await config.get_code_assist_oauth_client_config()
+        (
+            code_assist_client_id,
+            code_assist_client_secret,
+        ) = await config.get_code_assist_oauth_client_config()
         current_config["code_assist_client_id"] = code_assist_client_id
         current_config["code_assist_client_secret"] = code_assist_client_secret
 
-
         current_config["auto_disable_enabled"] = await config.get_auto_disable_enabled()
         current_config["auto_disable_error_codes"] = await config.get_auto_disable_error_codes()
-
 
         current_config["retry_429_max_retries"] = await config.get_retry_429_max_retries()
         current_config["retry_429_enabled"] = await config.get_retry_429_enabled()
         current_config["retry_429_interval"] = await config.get_retry_429_interval()
 
-        current_config["anti_truncation_max_attempts"] = await config.get_anti_truncation_max_attempts()
+        current_config[
+            "anti_truncation_max_attempts"
+        ] = await config.get_anti_truncation_max_attempts()
 
         compression_config = await config.get_token_compression_config()
         current_config["token_compression_enabled"] = compression_config["enabled"]
         current_config["token_compression_threshold"] = compression_config["threshold_tokens"]
         current_config["token_compression_target"] = compression_config["target_tokens"]
-        current_config["token_compression_min_recent_turns"] = compression_config["min_recent_turns"]
+        current_config["token_compression_min_recent_turns"] = compression_config[
+            "min_recent_turns"
+        ]
 
         routing_policy = await config.get_routing_policy()
         current_config["routing_strategy"] = routing_policy["strategy"]
@@ -150,32 +143,29 @@ async def get_config(token: str = Depends(verify_panel_token)):
         current_config["log_max_mb"] = log_config["max_mb"]
         current_config["log_backup_count"] = log_config["backup_count"]
 
-
         current_config["compatibility_mode_enabled"] = await config.get_compatibility_mode_enabled()
 
-
-        current_config["return_thoughts_to_frontend"] = await config.get_return_thoughts_to_frontend()
-
+        current_config[
+            "return_thoughts_to_frontend"
+        ] = await config.get_return_thoughts_to_frontend()
 
         current_config["keepalive_url"] = await config.get_keepalive_url()
         current_config["keepalive_interval"] = await config.get_keepalive_interval()
-
 
         current_config["host"] = await config.get_server_host()
         current_config["port"] = await config.get_server_port()
         current_config["panel_password"] = await config.get_panel_password()
         current_config["password"] = await config.get_server_password()
 
-
         storage_adapter = await get_storage_adapter()
         storage_config = await storage_adapter.get_all_config()
 
-
         env_locked_keys = get_env_locked_keys()
 
-
         for key, value in storage_config.items():
-            if key in DEFAULT_BACKED_CONFIG_KEYS and (value is None or (isinstance(value, str) and not value.strip())):
+            if key in DEFAULT_BACKED_CONFIG_KEYS and (
+                value is None or (isinstance(value, str) and not value.strip())
+            ):
                 continue
             if key in ALLOWED_CONFIG_KEYS and key not in env_locked_keys:
                 current_config[key] = value
@@ -194,9 +184,7 @@ async def get_config(token: str = Depends(verify_panel_token)):
 
 @router.post("/save")
 async def save_config(request: ConfigSaveRequest, token: str = Depends(verify_panel_token)):
-    """Internal implementation detail."""
     try:
-
         new_config = request.config
 
         log.debug(f"Received configuration data: {list(new_config.keys())}")
@@ -214,26 +202,34 @@ async def save_config(request: ConfigSaveRequest, token: str = Depends(verify_pa
                 detail=f"Unsupported configuration key(s): {', '.join(unknown_keys)}",
             )
 
-
         if "retry_429_max_retries" in new_config:
             if (
                 not isinstance(new_config["retry_429_max_retries"], int)
                 or new_config["retry_429_max_retries"] < 0
             ):
-                raise HTTPException(status_code=400, detail="Maximum 429 retries must be an integer greater than or equal to 0.")
+                raise HTTPException(
+                    status_code=400,
+                    detail="Maximum 429 retries must be an integer greater than or equal to 0.",
+                )
 
         if "retry_429_enabled" in new_config:
             if not isinstance(new_config["retry_429_enabled"], bool):
-                raise HTTPException(status_code=400, detail="The 429 retry switch must be a boolean.")
-
+                raise HTTPException(
+                    status_code=400, detail="The 429 retry switch must be a boolean."
+                )
 
         if "retry_429_interval" in new_config:
             try:
                 interval = float(new_config["retry_429_interval"])
                 if interval < 0.01 or interval > 10:
-                    raise HTTPException(status_code=400, detail="The 429 retry interval must be between 0.01 and 10 seconds.")
+                    raise HTTPException(
+                        status_code=400,
+                        detail="The 429 retry interval must be between 0.01 and 10 seconds.",
+                    )
             except (ValueError, TypeError):
-                raise HTTPException(status_code=400, detail="The 429 retry interval must be a valid number.")
+                raise HTTPException(
+                    status_code=400, detail="The 429 retry interval must be a valid number."
+                )
 
         if "anti_truncation_max_attempts" in new_config:
             if (
@@ -242,7 +238,8 @@ async def save_config(request: ConfigSaveRequest, token: str = Depends(verify_pa
                 or new_config["anti_truncation_max_attempts"] > 10
             ):
                 raise HTTPException(
-                    status_code=400, detail="Anti-truncation recovery attempts must be an integer between 1 and 10."
+                    status_code=400,
+                    detail="Anti-truncation recovery attempts must be an integer between 1 and 10.",
                 )
 
         if "token_compression_enabled" in new_config:
@@ -323,9 +320,7 @@ async def save_config(request: ConfigSaveRequest, token: str = Depends(verify_pa
             new_config["upstream_timeout_seconds"] = upstream_timeout
 
         if "log_level" in new_config:
-            if new_config["log_level"] not in {
-                "debug", "info", "warning", "error", "critical"
-            }:
+            if new_config["log_level"] not in {"debug", "info", "warning", "error", "critical"}:
                 raise HTTPException(
                     status_code=400,
                     detail="Log level must be debug, info, warning, error, or critical.",
@@ -337,7 +332,12 @@ async def save_config(request: ConfigSaveRequest, token: str = Depends(verify_pa
             if key not in new_config:
                 continue
             value = new_config[key]
-            if not isinstance(value, int) or isinstance(value, bool) or value < minimum or value > maximum:
+            if (
+                not isinstance(value, int)
+                or isinstance(value, bool)
+                or value < minimum
+                or value > maximum
+            ):
                 raise HTTPException(
                     status_code=400,
                     detail=f"{label} must be an integer between {minimum} and {maximum}.",
@@ -345,20 +345,27 @@ async def save_config(request: ConfigSaveRequest, token: str = Depends(verify_pa
 
         if "compatibility_mode_enabled" in new_config:
             if not isinstance(new_config["compatibility_mode_enabled"], bool):
-                raise HTTPException(status_code=400, detail="The compatibility mode switch must be a boolean.")
+                raise HTTPException(
+                    status_code=400, detail="The compatibility mode switch must be a boolean."
+                )
 
         if "return_thoughts_to_frontend" in new_config:
             if not isinstance(new_config["return_thoughts_to_frontend"], bool):
-                raise HTTPException(status_code=400, detail="The reasoning content switch must be a boolean.")
+                raise HTTPException(
+                    status_code=400, detail="The reasoning content switch must be a boolean."
+                )
 
         if "stream_to_nonstream" in new_config:
             if not isinstance(new_config["stream_to_nonstream"], bool):
-                raise HTTPException(status_code=400, detail="The stream-to-non-stream switch must be a boolean.")
+                raise HTTPException(
+                    status_code=400, detail="The stream-to-non-stream switch must be a boolean."
+                )
 
         if "switch_credential_enabled" in new_config:
             if not isinstance(new_config["switch_credential_enabled"], bool):
-                raise HTTPException(status_code=400, detail="The credential switching setting must be a boolean.")
-
+                raise HTTPException(
+                    status_code=400, detail="The credential switching setting must be a boolean."
+                )
 
         if "keepalive_url" in new_config:
             if not isinstance(new_config["keepalive_url"], str):
@@ -368,10 +375,15 @@ async def save_config(request: ConfigSaveRequest, token: str = Depends(verify_pa
             try:
                 interval = int(new_config["keepalive_interval"])
                 if interval < 5 or interval > 86400:
-                    raise HTTPException(status_code=400, detail="Keep-alive interval must be between 5 and 86400 seconds.")
+                    raise HTTPException(
+                        status_code=400,
+                        detail="Keep-alive interval must be between 5 and 86400 seconds.",
+                    )
                 new_config["keepalive_interval"] = interval
             except (ValueError, TypeError):
-                raise HTTPException(status_code=400, detail="Keep-alive interval must be a valid integer.")
+                raise HTTPException(
+                    status_code=400, detail="Keep-alive interval must be a valid integer."
+                )
 
         if "host" in new_config:
             if not isinstance(new_config["host"], str) or not new_config["host"].strip():
@@ -383,11 +395,15 @@ async def save_config(request: ConfigSaveRequest, token: str = Depends(verify_pa
                 or new_config["port"] < 1
                 or new_config["port"] > 65535
             ):
-                raise HTTPException(status_code=400, detail="Port number must be an integer between 1 and 65535.")
+                raise HTTPException(
+                    status_code=400, detail="Port number must be an integer between 1 and 65535."
+                )
 
         if "panel_password" in new_config:
             if not isinstance(new_config["panel_password"], str):
-                raise HTTPException(status_code=400, detail="Control panel password must be a string.")
+                raise HTTPException(
+                    status_code=400, detail="Control panel password must be a string."
+                )
 
         if "password" in new_config:
             if not isinstance(new_config["password"], str):
@@ -403,11 +419,11 @@ async def save_config(request: ConfigSaveRequest, token: str = Depends(verify_pa
         }
         for key in oauth_client_keys & set(new_config):
             if not isinstance(new_config[key], str):
-                raise HTTPException(status_code=400, detail=f"Configuration value '{key}' must be a string.")
-
+                raise HTTPException(
+                    status_code=400, detail=f"Configuration value '{key}' must be a string."
+                )
 
         env_locked_keys = get_env_locked_keys()
-
 
         storage_adapter = await get_storage_adapter()
         saved_config = {}
@@ -416,14 +432,12 @@ async def save_config(request: ConfigSaveRequest, token: str = Depends(verify_pa
                 await storage_adapter.set_config(key, value)
                 saved_config[key] = value
 
-
         await config.reload_config()
-
 
         keepalive_keys = {"keepalive_url", "keepalive_interval"}
         if keepalive_keys & set(new_config.keys()):
             try:
-                await keepalive_service.restart()
+                await keep_alive_service.restart()
             except Exception as e:
                 log.warning(f"Failed to restart keep-alive service: {e}")
 
@@ -543,7 +557,7 @@ async def reset_config(token: str = Depends(verify_panel_token)):
         await config.reload_config()
 
         try:
-            await keepalive_service.restart()
+            await keep_alive_service.restart()
         except Exception as e:
             log.warning(f"Failed to restart keep-alive service after configuration reset: {e}")
 
