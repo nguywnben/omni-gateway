@@ -8,6 +8,8 @@ from typing import Any, Dict, Optional
 
 GOOGLE_ANTIGRAVITY = "google_antigravity"
 GOOGLE_AI_STUDIO = "google_ai_studio"
+MAX_DECLARED_MODELS = 500
+MAX_MODEL_ID_LENGTH = 256
 
 _PROVIDER_ALIASES = {
     "primary": GOOGLE_ANTIGRAVITY,
@@ -184,6 +186,34 @@ def is_api_key_credential(credential_data: Optional[Dict[str, Any]]) -> bool:
     return bool(data.get("credential_type") == "api_key" and data.get("api_key"))
 
 
+def get_declared_credential_models(
+    credential_data: Optional[Dict[str, Any]],
+) -> list[str]:
+    """Return safe, normalized model IDs declared by a credential."""
+    declared_models = (credential_data or {}).get("model_ids")
+    if not isinstance(declared_models, list):
+        return []
+
+    normalized_models = []
+    seen = set()
+    for value in declared_models:
+        if not isinstance(value, str):
+            continue
+        model_id = value.strip().removeprefix("models/")
+        if (
+            not model_id
+            or len(model_id) > MAX_MODEL_ID_LENGTH
+            or not model_id.isprintable()
+            or model_id in seen
+        ):
+            continue
+        seen.add(model_id)
+        normalized_models.append(model_id)
+        if len(normalized_models) >= MAX_DECLARED_MODELS:
+            break
+    return normalized_models
+
+
 def credential_supports_model(
     credential_data: Dict[str, Any],
     model_name: Optional[str],
@@ -196,13 +226,8 @@ def credential_supports_model(
     capabilities = get_provider_capabilities(provider_id)
     if not capabilities or not capabilities.supports_model(model_name):
         return False
-    declared_models = credential_data.get("model_ids")
-    if model_name and isinstance(declared_models, list) and declared_models:
+    declared_models = get_declared_credential_models(credential_data)
+    if model_name and declared_models:
         normalized_model = str(model_name).strip().removeprefix("models/")
-        normalized_declared = {
-            str(value).strip().removeprefix("models/")
-            for value in declared_models
-            if str(value).strip()
-        }
-        return normalized_model in normalized_declared
+        return normalized_model in declared_models
     return True

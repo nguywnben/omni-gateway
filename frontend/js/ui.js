@@ -319,6 +319,8 @@ function showMessageModal(title, message, type = 'info', options = {}) {
 
     document.body.appendChild(modal);
 
+    return modal;
+
 }
 
 function normalizeDialogMessage(message) {
@@ -447,6 +449,7 @@ function buildCredentialTestErrorHtml(filename, data, response) {
         [t('table_filename'), filename],
         ['Code', httpCode],
         [t('credential_status_label').replace(':', ''), statusText],
+        data.model ? ['Model', data.model] : null,
         reason ? ['Reason', reason] : null,
         permission ? ['Permission', permission] : null,
         resource ? ['Resource', resource] : null,
@@ -457,7 +460,7 @@ function buildCredentialTestErrorHtml(filename, data, response) {
         : '';
 
     return buildApiResultHtml({
-        intro: 'The message test did not complete successfully. Review the provider status and raw error response below.',
+        intro: 'The selected model test did not complete successfully. Review the provider status and error response below.',
         rows: summaryRows,
         summaryLabel: 'Failure summary',
         extraHtml: troubleshooterHtml,
@@ -477,7 +480,7 @@ function buildCredentialTestResultHtml(filename, data, response, options = {}) {
     return buildApiResultHtml({
         intro: isRateLimited
             ? 'The credential responded, but the provider reported a temporary rate limit. The router can continue with another available credential.'
-            : 'The credential completed a live message test successfully.',
+            : 'The credential completed a live model test successfully.',
         rows: [
             ['Result', isRateLimited ? 'Rate limited' : 'Successful'],
             [t('table_filename'), filename],
@@ -579,6 +582,146 @@ function buildCredentialContentHtml(filename, content) {
             </div>
         </div>
     `;
+
+}
+
+function buildCredentialModelsHtml(context) {
+
+    const modelIds = Array.isArray(context.modelIds) ? context.modelIds : [];
+    const rows = renderMessageResultRows([
+        ['Provider', context.providerName || t('provider_google_ai_studio')],
+        ['Available models', modelIds.length],
+    ]);
+    const modelButtons = modelIds.map((modelId) => `
+        <button type="button" class="credential-model-item" data-credential-model="${escapeAttribute(modelId)}" title="Copy model ID">
+            ${escapeHtml(modelId)}
+        </button>
+    `).join('');
+
+    return `
+        <div class="message-result-panel credential-model-panel">
+            <div class="message-result-intro">These models are currently reported as available for this credential.</div>
+            <div class="message-result-section">
+                <div class="message-result-section-title">Credential summary</div>
+                <div class="message-result-summary">${rows}</div>
+            </div>
+            <div class="message-result-section">
+                <div class="message-result-section-title">Model IDs</div>
+                <input type="search" class="credential-model-search" placeholder="Filter models" aria-label="Filter available models" autocomplete="off">
+                <div class="credential-model-list">${modelButtons}</div>
+                <div class="modal-empty-state credential-model-empty hidden">No models match this filter.</div>
+            </div>
+        </div>
+    `;
+
+}
+
+async function showCredentialModels(pathId) {
+
+    showStatus('Loading available models...', 'info');
+
+    try {
+        const context = await loadCredentialModelOptions(pathId);
+        const modelIds = context.modelIds;
+        if (modelIds.length === 0) {
+            showMessageModal('Available Models', 'No model information is available for this credential.', 'info');
+            return;
+        }
+
+        const modal = showMessageModal(
+            'Available Models',
+            buildCredentialModelsHtml({ ...context, modelIds }),
+            'info',
+            { html: true }
+        );
+        const search = modal.querySelector('.credential-model-search');
+        const items = Array.from(modal.querySelectorAll('[data-credential-model]'));
+        const emptyState = modal.querySelector('.credential-model-empty');
+
+        items.forEach((item) => {
+            item.addEventListener('click', () => {
+                copyTextWithStatus(item.getAttribute('data-credential-model'));
+            });
+        });
+
+        search?.addEventListener('input', () => {
+            const query = search.value.trim().toLowerCase();
+            let visibleCount = 0;
+            items.forEach((item) => {
+                const visible = item.textContent.toLowerCase().includes(query);
+                item.hidden = !visible;
+                if (visible) visibleCount += 1;
+            });
+            if (emptyState) emptyState.classList.toggle('hidden', visibleCount > 0);
+        });
+
+    } catch (error) {
+        const message = error.message || 'Unable to load available models.';
+        showStatus(message, 'error');
+        showMessageModal('Available Models', message, 'error');
+    }
+
+}
+
+async function loadCredentialModelOptions(pathId) {
+
+    const context = getCredentialModalContext(pathId, AppState.primaryCreds);
+    const { filename, manager } = context;
+    if (!filename || !manager) throw new Error('Credential information is unavailable.');
+
+    const response = await fetch(
+        `${manager.getEndpoint('models')}/${encodeURIComponent(filename)}?${manager.getModeParam()}`,
+        { headers: getAuthHeaders() }
+    );
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+        throw new Error(data.detail || data.error || 'Unable to load available models.');
+    }
+
+    return {
+        ...context,
+        modelIds: Array.isArray(data.model_ids) ? data.model_ids : [],
+    };
+
+}
+
+async function showCredentialModelTest(pathId) {
+
+    showStatus('Loading available models...', 'info');
+
+    try {
+        const context = await loadCredentialModelOptions(pathId);
+        if (context.modelIds.length === 0) {
+            showMessageModal(
+                'Model Test',
+                'No models are currently available for this credential.',
+                'info'
+            );
+            return;
+        }
+
+        const account = context.accountLabel ? ` for ${context.accountLabel}` : '';
+        await showModelTestModal(
+            `Select a model to test with the ${context.providerName} credential${account}. The test sends a minimal generation request to the provider.`,
+            {
+                title: 'Test Model',
+                label: 'Model',
+                placeholder: 'Select a model',
+                confirmLabel: 'Test',
+                options: context.modelIds.map((modelId) => ({ value: modelId, label: modelId })),
+                onTest: async (model) => {
+                    if (context.manager.type === 'primary') {
+                        return testPrimaryCredential(context.filename, model);
+                    }
+                    return testCredential(context.filename, model);
+                },
+            }
+        );
+    } catch (error) {
+        const message = error.message || 'Unable to load available models.';
+        showStatus(message, 'error');
+        showMessageModal('Model Test', message, 'error');
+    }
 
 }
 
@@ -1044,6 +1187,153 @@ function showPromptModal(message, options = {}) {
 
 }
 
+function showModelTestModal(message, options = {}) {
+
+    return new Promise((resolve) => {
+
+        const modal = document.createElement('div');
+        modal.className = 'message-modal-overlay';
+
+        const title = options.title || 'Test Model';
+        const confirmLabel = options.confirmLabel || 'Test';
+        const cancelLabel = options.cancelLabel || t('btn_cancel');
+        const label = options.label || 'Model';
+        const placeholder = options.placeholder || 'Select a model';
+        const choices = Array.isArray(options.options) ? options.options : [];
+        const optionHtml = choices.map((choice) => `
+            <option value="${escapeAttribute(choice.value)}">${escapeHtml(choice.label)}</option>
+        `).join('');
+        const selectionHtml = `
+            <div class="message-modal-prompt-copy">${renderDialogMessage(message)}</div>
+            <label class="message-modal-field">
+                <span class="message-modal-field-label">${escapeHtml(label)}</span>
+                <select class="message-modal-input" data-dialog-select>
+                    <option value="" selected disabled>${escapeHtml(placeholder)}</option>
+                    ${optionHtml}
+                </select>
+            </label>
+            <div class="model-test-progress hidden" data-model-test-progress role="status" aria-live="polite"></div>
+        `;
+
+        modal.innerHTML = `
+            <div class="message-modal prompt model-test-modal" role="dialog" aria-modal="true" aria-label="${escapeAttribute(title)}">
+                <div class="message-modal-header">
+                    <h3>${escapeHtml(title)}</h3>
+                </div>
+                <div class="message-modal-body"></div>
+                <div class="message-modal-footer"></div>
+            </div>
+        `;
+
+        const dialog = modal.querySelector('.message-modal');
+        const body = modal.querySelector('.message-modal-body');
+        const footer = modal.querySelector('.message-modal-footer');
+        let settled = false;
+        let running = false;
+
+        const close = () => {
+            if (settled) return;
+            settled = true;
+            document.removeEventListener('keydown', escHandler);
+            modal.remove();
+            resolve();
+        };
+
+        const renderSelection = () => {
+            running = false;
+            dialog.className = 'message-modal prompt model-test-modal';
+            body.removeAttribute('aria-busy');
+            body.innerHTML = selectionHtml;
+            footer.innerHTML = `
+                <button type="button" class="message-modal-btn" data-dialog-cancel>${escapeHtml(cancelLabel)}</button>
+                <button type="button" class="message-modal-btn message-modal-btn-primary" data-dialog-confirm disabled>${escapeHtml(confirmLabel)}</button>
+            `;
+
+            const select = body.querySelector('[data-dialog-select]');
+            const confirm = footer.querySelector('[data-dialog-confirm]');
+            select?.addEventListener('change', () => {
+                if (confirm) confirm.disabled = !select.value;
+            });
+        };
+
+        const renderResult = (result) => {
+            const safeType = String(result?.type || 'info').replace(/[^\w-]/g, '') || 'info';
+            running = false;
+            dialog.className = `message-modal informational model-test-modal ${safeType}`;
+            body.removeAttribute('aria-busy');
+            body.innerHTML = String(result?.html || '');
+            footer.innerHTML = `
+                <button type="button" class="message-modal-btn" data-dialog-close>${escapeHtml(t('btn_close'))}</button>
+                <button type="button" class="message-modal-btn message-modal-btn-primary" data-dialog-retry>${escapeHtml(t('btn_test_another_model'))}</button>
+            `;
+        };
+
+        const runTest = async () => {
+            if (running) return;
+
+            const select = body.querySelector('[data-dialog-select]');
+            const confirm = footer.querySelector('[data-dialog-confirm]');
+            const progress = body.querySelector('[data-model-test-progress]');
+            const model = select?.value || '';
+            if (!model || typeof options.onTest !== 'function') return;
+
+            running = true;
+            body.setAttribute('aria-busy', 'true');
+            select.disabled = true;
+            if (confirm) {
+                confirm.disabled = true;
+                confirm.textContent = t('testing_short');
+            }
+            if (progress) {
+                progress.textContent = t('testing_selected_model', {model});
+                progress.classList.remove('hidden');
+            }
+
+            try {
+                const result = await options.onTest(model);
+                if (!settled) renderResult(result);
+            } catch (error) {
+                if (settled) return;
+                const errorMessage = error?.message || 'The selected model test could not be completed.';
+                renderResult({
+                    type: 'error',
+                    html: buildApiResultHtml({
+                        intro: 'The selected model test could not be completed.',
+                        rows: [
+                            ['Result', 'Failed'],
+                            ['Model', model],
+                        ],
+                        summaryLabel: 'Failure summary',
+                        note: errorMessage,
+                    }),
+                });
+            }
+        };
+
+        const escHandler = (event) => {
+            if (event.key === 'Escape') close();
+        };
+
+        modal.addEventListener('click', (event) => {
+            if (event.target === modal || event.target.closest('[data-dialog-cancel], [data-dialog-close]')) {
+                close();
+                return;
+            }
+            if (event.target.closest('[data-dialog-retry]')) {
+                renderSelection();
+                return;
+            }
+            if (event.target.closest('[data-dialog-confirm]')) runTest();
+        });
+
+        document.addEventListener('keydown', escHandler);
+        document.body.appendChild(modal);
+        renderSelection();
+
+    });
+
+}
+
 function getAuthHeaders() {
 
     return {
@@ -1240,11 +1530,11 @@ function createCredCard(credInfo, manager) {
 
         if (credInfo.enable_credit) {
 
-            statusBadges += `<span class="status-badge credit-on" title="${t('credit_enabled_title')}">Credit: ON</span>`;
+            statusBadges += `<span class="status-badge credit-on" title="${t('credit_enabled_title')}">Credits: ON</span>`;
 
         } else {
 
-            statusBadges += `<span class="status-badge credit-off" title="${t('credit_disabled_title')}">Credit: OFF</span>`;
+            statusBadges += `<span class="status-badge credit-off" title="${t('credit_disabled_title')}">Credits: OFF</span>`;
 
         }
 
@@ -1306,7 +1596,9 @@ function createCredCard(credInfo, manager) {
         filename,
         managerType,
         email: credInfo.user_email || '',
+        accountLabel: credInfo.user_email || credInfo.credential_label || '',
         providerName: providerMeta.name,
+        modelCount: Number.isFinite(Number(credInfo.model_count)) ? Number(credInfo.model_count) : 0,
     };
 
     const shouldAutoLoadQuota = managerType === 'primary' && !isGoogleAIStudio && !AppState.quotaPreviewCache[filename];
@@ -1327,9 +1619,11 @@ function createCredCard(credInfo, manager) {
 
         }
 
-        <button type="button" class="cred-btn view" data-credential-command="view">${t('btn_view_content')}</button>
+        <button type="button" class="cred-btn view" data-credential-command="view" title="${escapeAttribute(t('btn_view_content_title'))}">${t('btn_view_content')}</button>
 
         <button type="button" class="cred-btn download" data-credential-command="download">${t('btn_download')}</button>
+
+        ${isGoogleAIStudio && Number(credInfo.model_count) > 0 ? `<button type="button" class="cred-btn" data-credential-command="models" title="${escapeAttribute(t('btn_view_models_title'))}">${t('btn_view_models')}</button>` : ''}
 
         ${managerType === 'primary' && !isGoogleAIStudio ? `<button type="button" class="cred-btn" data-credential-command="quota" title="${escapeAttribute(t('btn_view_quota_title'))}">${t('btn_view_quota')}</button>` : ''}
 
@@ -1345,7 +1639,7 @@ function createCredCard(credInfo, manager) {
 
         <button type="button" class="cred-btn" data-credential-command="verify" title="${escapeAttribute(t('btn_verify_id_title'))}">${t('btn_verify_id')}</button>
 
-        <button type="button" class="cred-btn" data-credential-command="test" title="${escapeAttribute(t('btn_message_test_title'))}">${t('btn_message_test')}</button>
+        <button type="button" class="cred-btn" data-credential-command="test" title="${escapeAttribute(t('btn_test_model_title'))}">${t('btn_test_model')}</button>
 
         <button type="button" class="cred-btn" data-credential-command="errors" title="${escapeAttribute(t('btn_view_errors_title'))}">${t('btn_view_errors')}</button>
 
@@ -1426,14 +1720,14 @@ function createCredCard(credInfo, manager) {
                 else downloadCred(filename);
             }
             if (command === 'quota') await togglePrimaryQuotaDetails(pathId);
+            if (command === 'models') await showCredentialModels(pathId);
             if (command === 'preview') await configurePreviewChannel(filename);
             if (command === 'verify') {
                 if (managerType === 'primary') await verifyPrimaryProjectId(filename);
                 else await verifyProjectId(filename);
             }
             if (command === 'test') {
-                if (managerType === 'primary') await testPrimaryCredential(filename);
-                else await testCredential(filename);
+                await showCredentialModelTest(pathId);
             }
             if (command === 'errors') await toggleErrorDetailsCommon(pathId, manager);
 
@@ -1488,7 +1782,7 @@ async function toggleCredDetailsCommon(pathId, manager) {
 
         if (response.ok && data.content) {
 
-            showMessageModal('Credential Content', buildCredentialContentHtml(filename, data.content), 'info', {html: true});
+            showMessageModal('Credential Details', buildCredentialContentHtml(filename, data.content), 'info', {html: true});
 
         } else {
 
@@ -1496,7 +1790,7 @@ async function toggleCredDetailsCommon(pathId, manager) {
 
             showStatus(`${t('unable_to_load_file_content')} ${errorMsg}`, 'error');
 
-            showMessageModal('Credential Content', `${t('unable_to_load_file_content')} ${errorMsg}`, 'error');
+            showMessageModal('Credential Details', `${t('unable_to_load_file_content')} ${errorMsg}`, 'error');
 
         }
 
@@ -1506,7 +1800,7 @@ async function toggleCredDetailsCommon(pathId, manager) {
 
         showStatus(errorMsg, 'error');
 
-        showMessageModal('Credential Content', errorMsg, 'error');
+        showMessageModal('Credential Details', errorMsg, 'error');
 
     }
 

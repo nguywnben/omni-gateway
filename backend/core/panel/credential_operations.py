@@ -39,6 +39,7 @@ from core.provider_registry import (
     GOOGLE_ANTIGRAVITY,
     canonicalize_antigravity_credential_filename,
     get_credential_provider,
+    get_declared_credential_models,
     normalize_provider_id,
 )
 from core.storage_adapter import get_storage_adapter
@@ -492,6 +493,7 @@ async def get_creds_status_common(
             "credential_label": credential_data.get("credential_label"),
             "credential_type": credential_data.get("credential_type", "oauth"),
             "provider": provider_id,
+            "model_count": len(get_declared_credential_models(credential_data)),
             "disabled": summary["disabled"],
             "error_codes": summary["error_codes"],
             "last_success": summary["last_success"],

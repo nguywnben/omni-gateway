@@ -600,17 +600,19 @@ async function verifyPrimaryProjectId(filename) {
 
 }
 
-async function testCredential(filename) {
+async function testCredential(filename, model) {
 
     try {
 
-        showStatus(t('testing_credentials_please_wait'), 'info');
+        showStatus(t('testing_model_please_wait'), 'info');
 
         const response = await fetch(`./api/credentials/test/${encodeURIComponent(filename)}`, {
 
             method: 'POST',
 
-            headers: getAuthHeaders()
+            headers: getAuthHeaders(),
+
+            body: JSON.stringify({ model })
 
         });
 
@@ -625,9 +627,12 @@ async function testCredential(filename) {
 
             showStatus(isRateLimited ? t('credential_rate_limited') : t('test_successful'), isRateLimited ? 'warning' : 'success');
 
-            showMessageModal('Message Test', resultHtml, isRateLimited ? 'info' : 'success', {html: true});
-
             await AppState.creds.refresh();
+
+            return {
+                html: resultHtml,
+                type: isRateLimited ? 'info' : 'success'
+            };
 
         }
 
@@ -637,7 +642,10 @@ async function testCredential(filename) {
 
             showStatus(`Test failed: ${data.message || `${t('error_code_prefix')} ${data.status_code || response.status}`}`, 'error');
 
-            showMessageModal('Message Test', errorDetails, 'error', {html: true});
+            return {
+                html: errorDetails,
+                type: 'error'
+            };
 
         }
 
@@ -647,23 +655,37 @@ async function testCredential(filename) {
 
         showStatus(errorMsg, 'error');
 
-        showMessageModal('Message Test', errorMsg, 'error');
+        return {
+            type: 'error',
+            html: buildApiResultHtml({
+                intro: 'The selected model test could not be completed.',
+                rows: [
+                    ['Result', 'Failed'],
+                    [t('table_filename'), filename],
+                    ['Model', model],
+                ],
+                summaryLabel: 'Failure summary',
+                note: errorMsg,
+            })
+        };
 
     }
 
 }
 
-async function testPrimaryCredential(filename) {
+async function testPrimaryCredential(filename, model) {
 
     try {
 
-        showStatus(t('testing_primary_credentials_ple'), 'info');
+        showStatus(t('testing_model_please_wait'), 'info');
 
         const response = await fetch(`./api/credentials/test/${encodeURIComponent(filename)}?mode=provider`, {
 
             method: 'POST',
 
-            headers: getAuthHeaders()
+            headers: getAuthHeaders(),
+
+            body: JSON.stringify({ model })
 
         });
 
@@ -678,9 +700,12 @@ async function testPrimaryCredential(filename) {
 
             showStatus(isRateLimited ? t('credential_rate_limited') : t('test_successful'), isRateLimited ? 'warning' : 'success');
 
-            showMessageModal('Message Test', resultHtml, isRateLimited ? 'info' : 'success', {html: true});
-
             await AppState.primaryCreds.refresh();
+
+            return {
+                html: resultHtml,
+                type: isRateLimited ? 'info' : 'success'
+            };
 
         }
 
@@ -690,7 +715,10 @@ async function testPrimaryCredential(filename) {
 
             showStatus(`Test failed: ${data.message || `${t('error_code_prefix')} ${data.status_code || response.status}`}`, 'error');
 
-            showMessageModal('Message Test', errorDetails, 'error', {html: true});
+            return {
+                html: errorDetails,
+                type: 'error'
+            };
 
         }
 
@@ -700,7 +728,19 @@ async function testPrimaryCredential(filename) {
 
         showStatus(errorMsg, 'error');
 
-        showMessageModal('Message Test', errorMsg, 'error');
+        return {
+            type: 'error',
+            html: buildApiResultHtml({
+                intro: 'The selected model test could not be completed.',
+                rows: [
+                    ['Result', 'Failed'],
+                    [t('table_filename'), filename],
+                    ['Model', model],
+                ],
+                summaryLabel: 'Failure summary',
+                note: errorMsg,
+            })
+        };
 
     }
 
@@ -979,7 +1019,7 @@ async function batchVerifyProjectIds() {
 
         t('are_you_sure_you_want_to_batch_veri_dup', {selectedFiles_length: selectedFiles.length}),
 
-        {title: t('confirm_verify_credentials_title'), confirmLabel: t('btn_verify_id')}
+        {title: t('confirm_verify_credentials_title'), confirmLabel: t('btn_verify_credentials')}
 
     ))) {
 
@@ -1109,7 +1149,7 @@ async function batchVerifyPrimaryProjectIds() {
 
         t('are_you_sure_you_want_to_batch_veri', {selectedFiles_length: selectedFiles.length}),
 
-        {title: t('confirm_verify_credentials_title'), confirmLabel: t('btn_verify_id')}
+        {title: t('confirm_verify_credentials_title'), confirmLabel: t('btn_verify_credentials')}
 
     ))) {
 
