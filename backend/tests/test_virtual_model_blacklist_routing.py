@@ -1,0 +1,309 @@
+"""Virtual-model fallback behavior after provider-scoped 404 responses."""
+
+from __future__ import annotations
+
+import sys
+import unittest
+from pathlib import Path
+from unittest.mock import AsyncMock, patch
+
+BACKEND_DIR = Path(__file__).resolve().parents[1]
+if str(BACKEND_DIR) not in sys.path:
+    sys.path.insert(0, str(BACKEND_DIR))
+
+from core.api.primary import ProviderRequestContext, non_stream_request, stream_request
+from fastapi import Response
+
+
+class FakeUpstreamResponse:
+    def __init__(self, status_code: int, content: bytes):
+        self.status_code = status_code
+        self.content = content
+        self.text = content.decode("utf-8")
+        self.headers = {"content-type": "application/json"}
+
+
+class VirtualModelBlacklistRoutingTests(unittest.IsolatedAsyncioTestCase):
+    async def test_virtual_route_blacklists_404_and_tries_the_next_model(self):
+        first_credential = {
+            "provider": "google_ai_studio",
+            "credential_type": "api_key",
+            "api_key": "example-key",
+        }
+        second_credential = {
+            "provider": "google_antigravity",
+            "token": "example-token",
+            "project_id": "example-project",
+        }
+        first_context = ProviderRequestContext(
+            provider_id="google_ai_studio",
+            target_url="https://first.invalid",
+            headers={},
+            payload={"model": "gemini-retired"},
+            request_metrics={},
+        )
+        second_context = ProviderRequestContext(
+            provider_id="google_antigravity",
+            target_url="https://second.invalid",
+            headers={},
+            payload={"model": "claude-sonnet-4-6"},
+            request_metrics={},
+        )
+
+        with (
+            patch(
+                "core.api.primary.get_antigravity_stream_to_nonstream",
+                AsyncMock(return_value=False),
+            ),
+            patch(
+                "core.api.primary.credential_manager.get_valid_model_credential",
+                AsyncMock(
+                    side_effect=[
+                        ("gemini-retired", "first.json", first_credential),
+                        ("claude-sonnet-4-6", "second.json", second_credential),
+                    ]
+                ),
+            ) as route_mock,
+            patch(
+                "core.api.primary.prepare_provider_request",
+                AsyncMock(side_effect=[first_context, second_context]),
+            ),
+            patch(
+                "core.api.primary.get_retry_config",
+                AsyncMock(
+                    return_value={
+                        "retry_enabled": True,
+                        "max_retries": 1,
+                        "retry_interval": 0,
+                    }
+                ),
+            ),
+            patch(
+                "core.api.primary.get_antigravity_switch_credential_enabled",
+                AsyncMock(return_value=False),
+            ),
+            patch(
+                "core.api.primary.get_auto_disable_error_codes",
+                AsyncMock(return_value=[]),
+            ),
+            patch(
+                "core.api.primary.get_upstream_timeout_seconds",
+                AsyncMock(return_value=30),
+            ),
+            patch(
+                "core.api.primary.post_async",
+                AsyncMock(
+                    side_effect=[
+                        FakeUpstreamResponse(404, b'{"error":"model not found"}'),
+                        FakeUpstreamResponse(503, b'{"error":"temporarily unavailable"}'),
+                        FakeUpstreamResponse(200, b'{"response":"ok"}'),
+                    ]
+                ),
+            ) as upstream_mock,
+            patch(
+                "core.api.primary.record_model_not_found",
+                AsyncMock(),
+            ) as blacklist_mock,
+            patch(
+                "core.api.primary.record_model_route_miss",
+                AsyncMock(),
+            ) as route_miss_mock,
+            patch(
+                "core.api.primary.record_api_call_success",
+                AsyncMock(),
+            ),
+            patch("core.api.primary.record_api_call_error", AsyncMock()),
+        ):
+            response = await non_stream_request(
+                body={"model": "gemini-retired", "request": {}},
+                model_candidates=["gemini-retired", "claude-sonnet-4-6"],
+                model_routing=True,
+            )
+
+        self.assertEqual(response.status_code, 200)
+        blacklist_mock.assert_awaited_once_with("google_ai_studio", "gemini-retired")
+        route_miss_mock.assert_awaited_once()
+        self.assertEqual(route_mock.await_count, 2)
+        self.assertEqual(upstream_mock.await_count, 3)
+        for call in route_mock.await_args_list:
+            self.assertTrue(call.kwargs["respect_model_blacklist"])
+        self.assertEqual(
+            route_mock.await_args.kwargs["excluded_provider_models"],
+            {("google_ai_studio", "gemini-retired")},
+        )
+
+    async def test_direct_model_404_is_not_added_to_virtual_route_blacklist(self):
+        credential = {
+            "provider": "google_ai_studio",
+            "credential_type": "api_key",
+            "api_key": "example-key",
+        }
+        context = ProviderRequestContext(
+            provider_id="google_ai_studio",
+            target_url="https://first.invalid",
+            headers={},
+            payload={"model": "gemini-retired"},
+            request_metrics={},
+        )
+
+        with (
+            patch(
+                "core.api.primary.get_antigravity_stream_to_nonstream",
+                AsyncMock(return_value=False),
+            ),
+            patch(
+                "core.api.primary.credential_manager.get_valid_model_credential",
+                AsyncMock(return_value=("gemini-retired", "first.json", credential)),
+            ) as route_mock,
+            patch(
+                "core.api.primary.prepare_provider_request",
+                AsyncMock(return_value=context),
+            ),
+            patch(
+                "core.api.primary.get_retry_config",
+                AsyncMock(
+                    return_value={
+                        "retry_enabled": False,
+                        "max_retries": 0,
+                        "retry_interval": 0,
+                    }
+                ),
+            ),
+            patch(
+                "core.api.primary.get_antigravity_switch_credential_enabled",
+                AsyncMock(return_value=False),
+            ),
+            patch(
+                "core.api.primary.get_auto_disable_error_codes",
+                AsyncMock(return_value=[]),
+            ),
+            patch(
+                "core.api.primary.get_upstream_timeout_seconds",
+                AsyncMock(return_value=30),
+            ),
+            patch(
+                "core.api.primary.post_async",
+                AsyncMock(return_value=FakeUpstreamResponse(404, b'{"error":"model not found"}')),
+            ),
+            patch("core.api.primary.record_model_not_found", AsyncMock()) as blacklist_mock,
+            patch("core.api.primary.record_model_route_miss", AsyncMock()) as route_miss_mock,
+            patch("core.api.primary.record_api_call_error", AsyncMock()),
+        ):
+            response = await non_stream_request(
+                body={"model": "gemini-retired", "request": {}},
+                model_routing=False,
+            )
+
+        self.assertEqual(response.status_code, 404)
+        blacklist_mock.assert_not_awaited()
+        route_miss_mock.assert_not_awaited()
+        self.assertFalse(route_mock.await_args.kwargs["respect_model_blacklist"])
+
+    async def test_virtual_stream_blacklists_404_and_continues_with_next_model(self):
+        credentials = [
+            {
+                "provider": "google_ai_studio",
+                "credential_type": "api_key",
+                "api_key": "example-key",
+            },
+            {
+                "provider": "google_antigravity",
+                "token": "example-token",
+                "project_id": "example-project",
+            },
+        ]
+        contexts = [
+            ProviderRequestContext(
+                provider_id="google_ai_studio",
+                target_url="https://first.invalid",
+                headers={},
+                payload={"model": "gemini-retired"},
+                request_metrics={},
+            ),
+            ProviderRequestContext(
+                provider_id="google_antigravity",
+                target_url="https://second.invalid",
+                headers={},
+                payload={"model": "claude-sonnet-4-6"},
+                request_metrics={},
+            ),
+        ]
+        stream_calls = 0
+
+        def fake_stream_post_async(**_kwargs):
+            nonlocal stream_calls
+            stream_calls += 1
+
+            async def chunks():
+                if stream_calls == 1:
+                    yield Response(
+                        content=b'{"error":"model not found"}',
+                        status_code=404,
+                        media_type="application/json",
+                    )
+                else:
+                    yield b'data: {"response":"ok"}\n\n'
+
+            return chunks()
+
+        with (
+            patch(
+                "core.api.primary.credential_manager.get_valid_model_credential",
+                AsyncMock(
+                    side_effect=[
+                        ("gemini-retired", "first.json", credentials[0]),
+                        ("claude-sonnet-4-6", "second.json", credentials[1]),
+                    ]
+                ),
+            ) as route_mock,
+            patch(
+                "core.api.primary.prepare_provider_request",
+                AsyncMock(side_effect=contexts),
+            ),
+            patch(
+                "core.api.primary.get_retry_config",
+                AsyncMock(
+                    return_value={
+                        "retry_enabled": False,
+                        "max_retries": 0,
+                        "retry_interval": 0,
+                    }
+                ),
+            ),
+            patch(
+                "core.api.primary.get_antigravity_switch_credential_enabled",
+                AsyncMock(return_value=False),
+            ),
+            patch(
+                "core.api.primary.get_auto_disable_error_codes",
+                AsyncMock(return_value=[]),
+            ),
+            patch(
+                "core.api.primary.get_upstream_timeout_seconds",
+                AsyncMock(return_value=30),
+            ),
+            patch("core.api.primary.stream_post_async", side_effect=fake_stream_post_async),
+            patch("core.api.primary.record_model_not_found", AsyncMock()) as blacklist_mock,
+            patch("core.api.primary.record_model_route_miss", AsyncMock()),
+            patch("core.api.primary.record_api_call_success", AsyncMock()),
+        ):
+            chunks = [
+                chunk
+                async for chunk in stream_request(
+                    body={"model": "gemini-retired", "request": {}},
+                    model_candidates=["gemini-retired", "claude-sonnet-4-6"],
+                    model_routing=True,
+                )
+            ]
+
+        self.assertEqual(chunks, [b'data: {"response":"ok"}\n\n'])
+        blacklist_mock.assert_awaited_once_with("google_ai_studio", "gemini-retired")
+        self.assertEqual(route_mock.await_count, 2)
+        self.assertEqual(
+            route_mock.await_args.kwargs["excluded_provider_models"],
+            {("google_ai_studio", "gemini-retired")},
+        )
+
+
+if __name__ == "__main__":
+    unittest.main()

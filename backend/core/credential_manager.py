@@ -1,9 +1,10 @@
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Set, Tuple
 
 from config import get_routing_policy
 from core.credential_pool import upsert_credential_by_email
 from core.google_oauth_api import Credentials
+from core.model_blacklist import get_model_blacklist_pairs
 from core.provider_registry import get_credential_provider, is_api_key_credential
 from core.smart_routing import SmartCredentialRouter
 from core.storage_adapter import get_storage_adapter
@@ -40,6 +41,7 @@ class CredentialManager:
         mode: str = "code_assist",
         model_name: Optional[str] = None,
         provider_id: Optional[str] = None,
+        excluded_provider_models: Optional[Set[Tuple[str, str]]] = None,
     ) -> Optional[Tuple[str, Dict[str, Any]]]:
         await self._ensure_initialized()
 
@@ -57,6 +59,7 @@ class CredentialManager:
                 provider_id=provider_id,
                 routing_strategy=routing_policy["strategy"],
                 preferred_provider=routing_policy["preferred_provider"],
+                excluded_provider_models=excluded_provider_models,
             )
 
             if not result:
@@ -92,8 +95,13 @@ class CredentialManager:
         model_names,
         *,
         mode: str = "primary",
+        respect_model_blacklist: bool = False,
+        excluded_provider_models: Optional[Set[Tuple[str, str]]] = None,
     ) -> Optional[Tuple[str, str, Dict[str, Any]]]:
         """Return the first routable model and credential in priority order."""
+        route_exclusions = set(excluded_provider_models or ())
+        if respect_model_blacklist:
+            route_exclusions.update(await get_model_blacklist_pairs())
         seen = set()
         for value in model_names or ():
             model_name = str(value or "").strip()
@@ -103,6 +111,7 @@ class CredentialManager:
             credential = await self.get_valid_credential(
                 mode=mode,
                 model_name=model_name,
+                excluded_provider_models=route_exclusions,
             )
             if credential:
                 filename, credential_data = credential

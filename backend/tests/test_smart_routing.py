@@ -295,6 +295,36 @@ class SmartCredentialRouterTests(unittest.IsolatedAsyncioTestCase):
         self.assertIsNone(first)
         self.assertEqual(second[0], "ai-studio.json")
 
+    async def test_provider_model_blacklist_keeps_other_provider_routes_available(self):
+        storage = FakeStorageAdapter(
+            {
+                "ai-studio.json": credential_state(rotation_order=0),
+                "antigravity.json": credential_state(rotation_order=1),
+            }
+        )
+        storage.credentials["ai-studio.json"] = {
+            "provider": "google_ai_studio",
+            "credential_type": "api_key",
+            "api_key": "example-key",
+        }
+        storage.credentials["antigravity.json"] = {
+            "provider": "google_antigravity",
+            "token": "access-token",
+            "project_id": "project",
+        }
+        router = SmartCredentialRouter(clock=lambda: 100.0)
+
+        result = await router.acquire(
+            storage,
+            mode="primary",
+            model_name="gemini-2.5-flash",
+            excluded_provider_models={
+                ("google_ai_studio", "gemini-2.5-flash"),
+            },
+        )
+
+        self.assertEqual(result[0], "antigravity.json")
+
 
 if __name__ == "__main__":
     unittest.main()

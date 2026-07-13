@@ -6,7 +6,7 @@ import asyncio
 import time
 from collections import deque
 from dataclasses import dataclass
-from typing import Any, Callable, Deque, Dict, Optional, Tuple
+from typing import Any, Callable, Deque, Dict, Optional, Set, Tuple
 
 from core.provider_registry import (
     credential_supports_model,
@@ -88,6 +88,7 @@ class SmartCredentialRouter:
         model_name: Optional[str],
         routing_strategy: str,
         preferred_provider: Optional[str],
+        excluded_provider_models: Set[Tuple[str, str]],
         now: float,
     ) -> list[tuple[tuple[Any, ...], str]]:
         candidates = []
@@ -103,6 +104,8 @@ class SmartCredentialRouter:
                 continue
 
             key = (mode, filename)
+            if model_name and (self._providers.get(key), model_name) in excluded_provider_models:
+                continue
             provider_penalty = 0
             if routing_strategy == "priority" and preferred_provider:
                 provider_penalty = int(self._providers.get(key) != preferred_provider)
@@ -157,6 +160,7 @@ class SmartCredentialRouter:
         provider_id: Optional[str] = None,
         routing_strategy: str = "balanced",
         preferred_provider: Optional[str] = None,
+        excluded_provider_models: Optional[Set[Tuple[str, str]]] = None,
     ) -> Optional[CredentialResult]:
         """Reserve and return the best currently available credential."""
         async with self._lock:
@@ -178,12 +182,18 @@ class SmartCredentialRouter:
             normalized_preferred_provider = (
                 normalize_provider_id(preferred_provider) if preferred_provider else None
             )
+            normalized_exclusions = {
+                (normalize_provider_id(excluded_provider), str(excluded_model).strip())
+                for excluded_provider, excluded_model in (excluded_provider_models or set())
+                if str(excluded_provider or "").strip() and str(excluded_model or "").strip()
+            }
             ranked = self._rank_candidates(
                 states,
                 mode=mode,
                 model_name=model_name,
                 routing_strategy=normalized_strategy,
                 preferred_provider=normalized_preferred_provider,
+                excluded_provider_models=normalized_exclusions,
                 now=now,
             )
 

@@ -733,6 +733,8 @@ const AppState = {
 
     modelCatalog: [],
 
+    modelBlacklist: [],
+
     selectedModels: [],
 
     modelPoolEnabled: true,

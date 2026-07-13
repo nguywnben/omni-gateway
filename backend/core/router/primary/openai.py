@@ -72,6 +72,7 @@ async def chat_completions(
         response = await non_stream_request(
             body=api_request,
             model_candidates=model_candidates,
+            model_routing=model_resolution.is_virtual,
         )
 
         status_code = getattr(response, "status_code", 200)
@@ -109,6 +110,7 @@ async def chat_completions(
         response = await non_stream_request(
             body=api_request,
             model_candidates=model_candidates,
+            model_routing=model_resolution.is_virtual,
         )
 
         if hasattr(response, "status_code") and response.status_code != 200:
@@ -199,6 +201,7 @@ async def chat_completions(
             body=anti_truncation_payload,
             native=False,
             model_candidates=model_candidates,
+            model_routing=model_resolution.is_virtual,
         )
         try:
             first_chunk = await read_first_async_item(first_attempt_stream)
@@ -222,6 +225,7 @@ async def chat_completions(
                     body=payload,
                     native=False,
                     model_candidates=model_candidates,
+                    model_routing=model_resolution.is_virtual,
                 )
 
             return StreamingResponse(stream_gen, media_type="text/event-stream")
@@ -277,6 +281,7 @@ async def chat_completions(
             body=api_request,
             native=False,
             model_candidates=model_candidates,
+            model_routing=model_resolution.is_virtual,
         )
         try:
             first_chunk = await read_first_async_item(stream_gen)

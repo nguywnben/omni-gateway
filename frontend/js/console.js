@@ -466,6 +466,8 @@ function modelCatalogEntry(modelId) {
     return AppState.modelCatalog.find(entry => entry.model_id === modelId) || {
         model_id: modelId,
         providers: [],
+        routable_providers: [],
+        blacklisted_providers: [],
         available: false
     };
 }
@@ -514,6 +516,165 @@ function updateModelPoolSummary() {
     }
 }
 
+function formatModelBlacklistTime(timestamp) {
+    const date = new Date(Number(timestamp || 0) * 1000);
+    if (Number.isNaN(date.getTime())) return 'Unknown time';
+    return new Intl.DateTimeFormat('en', {
+        dateStyle: 'medium',
+        timeStyle: 'short'
+    }).format(date);
+}
+
+function renderModelBlacklist() {
+    const list = document.getElementById('modelBlacklistList');
+    const count = document.getElementById('modelBlacklistCount');
+    const clearButton = document.getElementById('clearModelBlacklistBtn');
+    if (!list) return;
+
+    const entries = Array.isArray(AppState.modelBlacklist) ? AppState.modelBlacklist : [];
+    if (count) count.textContent = `${entries.length} ${entries.length === 1 ? 'route' : 'routes'}`;
+    if (clearButton) clearButton.classList.toggle('hidden', entries.length === 0);
+    list.replaceChildren();
+
+    if (entries.length === 0) {
+        const empty = document.createElement('div');
+        empty.className = 'model-empty-state';
+        empty.textContent = 'No model routes are blacklisted.';
+        list.appendChild(empty);
+        return;
+    }
+
+    entries.forEach(entry => {
+        const item = document.createElement('div');
+        item.className = 'model-blacklist-item';
+
+        const details = document.createElement('div');
+        details.className = 'model-blacklist-details';
+        const identity = document.createElement('div');
+        identity.className = 'model-blacklist-identity';
+        const model = document.createElement('strong');
+        model.textContent = entry.model_id;
+        const providerBadges = document.createElement('div');
+        providerBadges.className = 'model-provider-badges';
+        const providerMeta = modelProviderMeta(entry.provider_id);
+        const providerBadge = document.createElement('span');
+        providerBadge.className = 'model-provider-badge unavailable';
+        if (providerMeta.logo) {
+            const logo = document.createElement('img');
+            logo.src = providerMeta.logo;
+            logo.alt = '';
+            providerBadge.appendChild(logo);
+        }
+        providerBadge.appendChild(document.createTextNode(providerMeta.name));
+        providerBadges.appendChild(providerBadge);
+        identity.append(model, providerBadges);
+
+        const metadata = document.createElement('div');
+        metadata.className = 'model-blacklist-meta';
+        const status = document.createElement('span');
+        status.textContent = 'HTTP 404';
+        const occurrences = document.createElement('span');
+        const failureCount = Math.max(1, Number(entry.failure_count || 1));
+        occurrences.textContent = `${failureCount} ${failureCount === 1 ? 'occurrence' : 'occurrences'}`;
+        const lastSeen = document.createElement('span');
+        lastSeen.textContent = `Last seen ${formatModelBlacklistTime(entry.last_seen_at)}`;
+        metadata.append(status, occurrences, lastSeen);
+        details.append(identity, metadata);
+
+        const removeButton = document.createElement('button');
+        removeButton.type = 'button';
+        removeButton.className = 'btn btn-secondary btn-small';
+        removeButton.textContent = 'Remove';
+        removeButton.title = 'Restore this provider-model route';
+        removeButton.addEventListener('click', () => removeModelBlacklistEntry(
+            entry.provider_id,
+            entry.model_id,
+            removeButton
+        ));
+        item.append(details, removeButton);
+        list.appendChild(item);
+    });
+}
+
+function restoreModelRoutesLocally(restoredEntries) {
+    const restoredKeys = new Set(
+        restoredEntries.map(entry => `${entry.provider_id}\u0000${entry.model_id}`)
+    );
+    AppState.modelBlacklist = AppState.modelBlacklist.filter(entry => (
+        !restoredKeys.has(`${entry.provider_id}\u0000${entry.model_id}`)
+    ));
+    AppState.modelCatalog = AppState.modelCatalog.map(entry => {
+        const restoredProviders = new Set(
+            restoredEntries
+                .filter(value => value.model_id === entry.model_id)
+                .map(value => value.provider_id)
+        );
+        if (restoredProviders.size === 0) return entry;
+        const blacklistedProviders = (entry.blacklisted_providers || [])
+            .filter(value => !restoredProviders.has(value));
+        const routableProviders = (entry.providers || [])
+            .filter(value => !blacklistedProviders.includes(value));
+        return {
+            ...entry,
+            blacklisted_providers: blacklistedProviders,
+            routable_providers: routableProviders,
+            available: routableProviders.length > 0
+        };
+    });
+    renderSelectedModels();
+    renderModelCatalog();
+    renderModelBlacklist();
+}
+
+function restoreModelRouteLocally(providerId, modelId) {
+    restoreModelRoutesLocally([{ provider_id: providerId, model_id: modelId }]);
+}
+
+async function removeModelBlacklistEntry(providerId, modelId, button) {
+    if (button) button.disabled = true;
+    try {
+        const response = await fetch(
+            `./api/model-blacklist/${encodeURIComponent(providerId)}/models/${encodeURIComponent(modelId)}`,
+            { method: 'DELETE', headers: getAuthHeaders() }
+        );
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(data.detail || data.error || 'Unknown error');
+        restoreModelRouteLocally(providerId, modelId);
+        showStatus(data.message || 'Model route removed from blacklist.', 'success');
+    } catch (error) {
+        showStatus(`Failed to remove the model route: ${error.message}`, 'error');
+        if (button) button.disabled = false;
+    }
+}
+
+async function clearModelBlacklist() {
+    const confirmed = await showConfirmModal(
+        'Restore every provider-model route currently excluded after an upstream 404 response?',
+        {
+            title: 'Clear Model Blacklist',
+            confirmLabel: 'Clear all'
+        }
+    );
+    if (!confirmed) return;
+
+    const button = document.getElementById('clearModelBlacklistBtn');
+    if (button) button.disabled = true;
+    try {
+        const response = await fetch('./api/model-blacklist', {
+            method: 'DELETE',
+            headers: getAuthHeaders()
+        });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(data.detail || data.error || 'Unknown error');
+        restoreModelRoutesLocally([...AppState.modelBlacklist]);
+        showStatus(data.message || 'Model blacklist cleared.', 'success');
+    } catch (error) {
+        showStatus(`Failed to clear the model blacklist: ${error.message}`, 'error');
+    } finally {
+        if (button) button.disabled = false;
+    }
+}
+
 function createModelOrderButton(label, symbol, disabled, handler) {
     const button = document.createElement('button');
     button.type = 'button';
@@ -555,7 +716,7 @@ function renderSelectedModels() {
         name.textContent = modelId;
         const providers = document.createElement('div');
         providers.className = 'model-provider-badges';
-        appendModelProviderBadges(providers, entry.providers);
+        appendModelProviderBadges(providers, entry.routable_providers || entry.providers);
         details.append(name, providers);
 
         const actions = document.createElement('div');
@@ -609,7 +770,7 @@ function renderModelCatalog() {
         name.textContent = entry.model_id;
         const providers = document.createElement('div');
         providers.className = 'model-provider-badges';
-        appendModelProviderBadges(providers, entry.providers);
+        appendModelProviderBadges(providers, entry.routable_providers || entry.providers);
         details.append(name, providers);
         label.append(checkbox, details);
         list.appendChild(label);
@@ -656,12 +817,14 @@ async function loadModelCatalog(forceRefresh = false) {
         const data = await response.json().catch(() => ({}));
         if (!response.ok) throw new Error(data.detail || data.error || 'Unknown error');
         AppState.modelCatalog = Array.isArray(data.catalog) ? data.catalog : [];
+        AppState.modelBlacklist = Array.isArray(data.blacklist) ? data.blacklist : [];
         AppState.selectedModels = Array.isArray(data.pool?.selected_models)
             ? [...data.pool.selected_models]
             : [];
         AppState.modelPoolEnabled = data.pool?.enabled !== false;
         renderSelectedModels();
         renderModelCatalog();
+        renderModelBlacklist();
         if (workspace) workspace.classList.remove('hidden');
         if (forceRefresh) showStatus('Provider model catalog refreshed.', 'success');
     } catch (error) {
