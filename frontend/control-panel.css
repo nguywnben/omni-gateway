@@ -700,7 +700,7 @@ code {
     margin-bottom: 4px;
 }
 
-.model-catalog-search {
+.model-catalog-heading input.model-catalog-search {
     width: min(220px, 45%);
     min-height: 40px;
 }
@@ -2059,70 +2059,6 @@ textarea[readonly] {
     margin-bottom: 0;
 }
 
-.pool-tools {
-    position: relative;
-    margin-left: auto;
-}
-
-.pool-tools summary {
-    min-height: 32px;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    padding: 6px 11px;
-    border: 1px solid var(--border);
-    border-radius: var(--radius);
-    background: var(--surface);
-    color: var(--text-muted);
-    cursor: pointer;
-    font-size: 12px;
-    font-weight: 650;
-    list-style: none;
-}
-
-.pool-tools summary::-webkit-details-marker {
-    display: none;
-}
-
-.pool-tools summary:hover {
-    background: var(--control-hover);
-    border-color: var(--control-hover-border);
-    color: var(--text);
-}
-
-.pool-tools-menu {
-    position: absolute;
-    top: calc(100% + 6px);
-    right: 0;
-    z-index: 20;
-    min-width: 168px;
-    display: grid;
-    gap: 6px;
-    padding: 8px;
-    border: 1px solid var(--border);
-    border-radius: var(--radius);
-    background: var(--surface);
-}
-
-.pool-tool-btn {
-    min-height: 32px;
-    width: 100%;
-    padding: 6px 10px;
-    border: 1px solid var(--border);
-    border-radius: var(--radius);
-    background: var(--surface);
-    color: var(--text);
-    cursor: pointer;
-    font-size: 12px;
-    font-weight: 650;
-    text-align: left;
-}
-
-.pool-tool-btn:hover {
-    background: var(--control-hover);
-    border-color: var(--control-hover-border);
-}
-
 .selected-count,
 .pagination-info {
     color: var(--text-muted);
@@ -3475,10 +3411,6 @@ textarea[readonly] {
         flex-direction: column;
     }
 
-    .model-catalog-search {
-        width: 100%;
-    }
-
     .config-grid {
         grid-template-columns: minmax(0, 1fr);
         gap: 12px;
@@ -3631,21 +3563,6 @@ textarea[readonly] {
     #logsTab .switch-row {
         min-height: 44px;
         align-items: center;
-    }
-
-    .pool-tools {
-        width: 100%;
-        margin-left: 0;
-    }
-
-    .pool-tools summary {
-        width: 100%;
-        min-height: 44px;
-    }
-
-    .pool-tools-menu {
-        position: static;
-        margin-top: 6px;
     }
 
     .creds-grid,

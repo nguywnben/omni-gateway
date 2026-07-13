@@ -1443,50 +1443,6 @@ async function refreshAllEmails() {
 
 }
 
-async function refreshAllPrimaryEmails() {
-
-    if (!(await showConfirmModal(t('are_you_sure_you_want_to_refresh_us_dup'), {
-
-        title: t('confirm_refresh_emails_title'),
-
-        confirmLabel: t('btn_refresh')
-
-    }))) return;
-
-    try {
-
-        showStatus(t('refreshing_all_user_emails'), 'info');
-
-        const response = await fetch('./api/credentials/refresh-all-emails?mode=provider', {
-
-            method: 'POST',
-
-            headers: getAuthHeaders()
-
-        });
-
-        const data = await response.json();
-
-        if (response.ok) {
-
-            showStatus(t('email_refresh_complete_successfully', {data_success_count: data.success_count, data_total_count: data.total_count}), 'success');
-
-            await AppState.primaryCreds.refresh();
-
-        } else {
-
-            showStatus(data.message || t('failed_to_refresh_emails'), 'error');
-
-        }
-
-    } catch (error) {
-
-        showStatus(t('email_refresh_network_error_errorme', {error_message: error.message}), 'error');
-
-    }
-
-}
-
 async function deduplicateByEmail() {
 
     if (!(await showConfirmModal(t('are_you_sure_you_want_to_perform_on'), {
@@ -1518,66 +1474,6 @@ async function deduplicateByEmail() {
             showStatus(msg, 'success');
 
             await AppState.creds.refresh();
-
-            if (data.duplicate_groups && data.duplicate_groups.length > 0) {
-
-                let details = t('deduplication_detailsnn');
-
-                data.duplicate_groups.forEach(group => {
-
-                    details += t('email_groupemailnkeep_groupkept_fil', {group_email: group.email, group_kept_file: group.kept_file, group_deleted_files_join: group.deleted_files.join(', ')});
-
-                });
-
-                showMessageModal(t('deduplication_details_title'), details, 'info');
-
-            }
-
-        } else {
-
-            showStatus(data.message || t('deduplication_failed'), 'error');
-
-        }
-
-    } catch (error) {
-
-        showStatus(t('deduplication_network_error_errorme', {error_message: error.message}), 'error');
-
-    }
-
-}
-
-async function deduplicatePrimaryByEmail() {
-
-    if (!(await showConfirmModal(t('are_you_sure_you_want_to_deduplicat'), {
-
-        title: t('confirm_deduplicate_title'),
-
-        confirmLabel: t('btn_deduplicate')
-
-    }))) return;
-
-    try {
-
-        showStatus(t('oneclick_credential_deduplication_i'), 'info');
-
-        const response = await fetch('./api/credentials/deduplicate-by-email?mode=provider', {
-
-            method: 'POST',
-
-            headers: getAuthHeaders()
-
-        });
-
-        const data = await response.json();
-
-        if (response.ok) {
-
-            const msg = t('deduplication_complete_deleted_data', {data_deleted_count: data.deleted_count, data_kept_count: data.kept_count, data_unique_emails_count: data.unique_emails_count});
-
-            showStatus(msg, 'success');
-
-            await AppState.primaryCreds.refresh();
 
             if (data.duplicate_groups && data.duplicate_groups.length > 0) {
 

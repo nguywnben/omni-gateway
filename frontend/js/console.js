@@ -306,38 +306,6 @@ function initTabSlider() {
 
 document.addEventListener('DOMContentLoaded', initTabSlider);
 
-function initPoolToolsMenu() {
-
-    document.addEventListener('click', (event) => {
-
-        document.querySelectorAll('.pool-tools[open]').forEach((menu) => {
-
-            if (!menu.contains(event.target)) {
-
-                menu.removeAttribute('open');
-
-            }
-
-        });
-
-    });
-
-    document.addEventListener('keydown', (event) => {
-
-        if (event.key !== 'Escape') return;
-
-        document.querySelectorAll('.pool-tools[open]').forEach((menu) => {
-
-            menu.removeAttribute('open');
-
-        });
-
-    });
-
-}
-
-document.addEventListener('DOMContentLoaded', initPoolToolsMenu);
-
 window.addEventListener('resize', () => {
 
     const activeTab = document.querySelector('.tab.active');
