@@ -1,5 +1,9 @@
 from typing import Any, AsyncIterator
 
+from core.router.protocol_errors import (
+    ProtocolName,
+    adapt_protocol_error_response,
+)
 from fastapi import Response
 from fastapi.responses import StreamingResponse
 
@@ -19,6 +23,7 @@ async def read_first_async_item(iterator: AsyncIterator[Any]) -> Any:
 async def build_streaming_response_or_error(
     iterator: AsyncIterator[Any],
     media_type: str = "text/event-stream",
+    error_protocol: ProtocolName | None = None,
 ):
     """
     Prefetch the first async item so router code can return an upstream error
@@ -30,6 +35,8 @@ async def build_streaming_response_or_error(
         return Response(status_code=204)
 
     if isinstance(first_item, Response):
+        if error_protocol:
+            return adapt_protocol_error_response(first_item, error_protocol)
         return first_item
 
     return StreamingResponse(

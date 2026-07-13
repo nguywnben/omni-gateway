@@ -68,8 +68,13 @@ class StorageAdapter:
             if self._initialized:
                 return
 
-            postgresql_uri = os.getenv("POSTGRESQL_URI", "")
-            mongodb_uri = os.getenv("MONGODB_URI", "")
+            postgresql_uri = os.getenv("POSTGRESQL_URI", "").strip()
+            mongodb_uri = os.getenv("MONGODB_URI", "").strip()
+
+            if postgresql_uri and mongodb_uri:
+                raise RuntimeError(
+                    "Configure only one external storage backend: POSTGRESQL_URI or MONGODB_URI."
+                )
 
             if postgresql_uri:
                 try:
@@ -80,17 +85,17 @@ class StorageAdapter:
                     log.info("Using PostgreSQL storage backend")
                 except Exception as e:
                     log.error(f"Failed to initialize PostgreSQL backend: {e}")
-
-                    log.info("Falling back to SQLite storage backend")
-                    try:
-                        from .storage.sqlite_manager import SQLiteManager
-
-                        self._backend = SQLiteManager()
-                        await self._backend.initialize()
-                        log.info("Using SQLite storage backend (fallback)")
-                    except Exception as e2:
-                        log.error(f"Failed to initialize SQLite backend: {e2}")
-                        raise RuntimeError("No storage backend available") from e2
+                    if self._backend:
+                        try:
+                            await self._backend.close()
+                        except Exception:
+                            log.warning(
+                                "Failed to clean up the PostgreSQL backend after startup failure."
+                            )
+                    self._backend = None
+                    raise RuntimeError(
+                        "The configured PostgreSQL storage backend is unavailable."
+                    ) from e
             elif not mongodb_uri:
                 try:
                     from .storage.sqlite_manager import SQLiteManager
@@ -110,17 +115,17 @@ class StorageAdapter:
                     log.info("Using MongoDB storage backend")
                 except Exception as e:
                     log.error(f"Failed to initialize MongoDB backend: {e}")
-
-                    log.info("Falling back to SQLite storage backend")
-                    try:
-                        from .storage.sqlite_manager import SQLiteManager
-
-                        self._backend = SQLiteManager()
-                        await self._backend.initialize()
-                        log.info("Using SQLite storage backend (fallback)")
-                    except Exception as e2:
-                        log.error(f"Failed to initialize SQLite backend: {e2}")
-                        raise RuntimeError("No storage backend available") from e2
+                    if self._backend:
+                        try:
+                            await self._backend.close()
+                        except Exception:
+                            log.warning(
+                                "Failed to clean up the MongoDB backend after startup failure."
+                            )
+                    self._backend = None
+                    raise RuntimeError(
+                        "The configured MongoDB storage backend is unavailable."
+                    ) from e
 
             self._initialized = True
 
@@ -287,14 +292,18 @@ class StorageAdapter:
 
 
 _storage_adapter: Optional[StorageAdapter] = None
+_storage_adapter_lock = asyncio.Lock()
 
 
 async def get_storage_adapter() -> StorageAdapter:
     global _storage_adapter
 
     if _storage_adapter is None:
-        _storage_adapter = StorageAdapter()
-        await _storage_adapter.initialize()
+        async with _storage_adapter_lock:
+            if _storage_adapter is None:
+                adapter = StorageAdapter()
+                await adapter.initialize()
+                _storage_adapter = adapter
 
     return _storage_adapter
 
@@ -302,6 +311,7 @@ async def get_storage_adapter() -> StorageAdapter:
 async def close_storage_adapter():
     global _storage_adapter
 
-    if _storage_adapter:
-        await _storage_adapter.close()
-        _storage_adapter = None
+    async with _storage_adapter_lock:
+        if _storage_adapter:
+            await _storage_adapter.close()
+            _storage_adapter = None

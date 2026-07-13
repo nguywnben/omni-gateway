@@ -7,6 +7,7 @@ from core.converter.fake_stream import (
 )
 from core.model_pool import ModelPoolError, resolve_model_request
 from core.models import GeminiRequest, model_to_dict
+from core.router.protocol_errors import adapt_protocol_error_response
 from core.router.stream_passthrough import (
     build_streaming_response_or_error,
     prepend_async_item,
@@ -65,6 +66,9 @@ async def generate_content(
         model_candidates=model_candidates,
         model_routing=model_resolution.is_virtual,
     )
+
+    if response.status_code >= 400:
+        return adapt_protocol_error_response(response, "gemini")
 
     try:
         if response.status_code == 200:
@@ -337,25 +341,33 @@ async def stream_generate_content(
                     yield chunk
 
     if use_fake_streaming:
-        return await build_streaming_response_or_error(fake_stream_generator())
+        return await build_streaming_response_or_error(
+            fake_stream_generator(), error_protocol="gemini"
+        )
     elif use_anti_truncation:
         log.info("Enabling anti-truncation streaming feature")
-        return await build_streaming_response_or_error(anti_truncation_generator())
+        return await build_streaming_response_or_error(
+            anti_truncation_generator(), error_protocol="gemini"
+        )
     else:
-        return await build_streaming_response_or_error(normal_stream_generator())
+        return await build_streaming_response_or_error(
+            normal_stream_generator(), error_protocol="gemini"
+        )
 
 
 @router.post("/v1beta/models/{model:path}:countTokens")
 async def count_tokens(
-    request: Request = None,
-    api_key: str = Depends(authenticate_gemini_flexible),
+    request: Request,
+    _api_key: str = Depends(authenticate_gemini_flexible),
 ):
-
     try:
         request_data = await request.json()
-    except Exception as e:
-        log.error(f"Failed to parse JSON request: {e}")
-        raise HTTPException(status_code=400, detail=f"Invalid JSON: {str(e)}")
+    except Exception as exc:
+        log.debug(f"Failed to parse count-tokens JSON request: {exc}")
+        raise HTTPException(
+            status_code=400,
+            detail="The request body must contain valid JSON.",
+        ) from exc
 
     payload = request_data.get("generateContentRequest", request_data)
     return JSONResponse(content={"totalTokens": estimate_input_tokens(payload)})

@@ -8,6 +8,9 @@ from core.usage_stats import (
 from core.utils import verify_panel_token
 from fastapi import APIRouter, Depends, Query
 from fastapi.responses import JSONResponse
+from log import log
+
+from .utils import INTERNAL_SERVER_ERROR_DETAIL
 
 router = APIRouter(prefix="/api/usage", tags=["usage"])
 
@@ -22,8 +25,12 @@ async def get_usage_stats(period: str = Query("1d"), token: str = Depends(verify
             "period": get_usage_period_metadata(normalized_period),
             "data": data,
         }
-    except Exception as e:
-        return JSONResponse(status_code=500, content={"success": False, "detail": str(e)})
+    except Exception as exc:
+        log.error(f"Failed to retrieve usage statistics: {exc}")
+        return JSONResponse(
+            status_code=500,
+            content={"success": False, "detail": INTERNAL_SERVER_ERROR_DETAIL},
+        )
 
 
 @router.get("/aggregated")
@@ -96,5 +103,9 @@ async def get_aggregated_stats(period: str = Query("1d"), token: str = Depends(v
                 "avg_tokens_per_successful_request": avg_tokens,
             },
         }
-    except Exception as e:
-        return JSONResponse(status_code=500, content={"success": False, "detail": str(e)})
+    except Exception as exc:
+        log.error(f"Failed to aggregate usage statistics: {exc}")
+        return JSONResponse(
+            status_code=500,
+            content={"success": False, "detail": INTERNAL_SERVER_ERROR_DETAIL},
+        )

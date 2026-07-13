@@ -1,3 +1,4 @@
+import asyncio
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Set, Tuple
 
@@ -525,20 +526,28 @@ class CredentialManager:
 
 
 class _CredentialManagerSingleton:
-    _instance: Optional[CredentialManager] = None
-    _lock = None
-
     def __init__(self):
-        self._manager = None
+        self._instance: Optional[CredentialManager] = None
+        self._lock = asyncio.Lock()
 
     async def _get_or_create(self) -> CredentialManager:
         if self._instance is None:
-            if self._instance is None:
-                self._instance = CredentialManager()
-                await self._instance.initialize()
-                log.debug("CredentialManager singleton initialized")
+            async with self._lock:
+                if self._instance is None:
+                    manager = CredentialManager()
+                    await manager.initialize()
+                    self._instance = manager
+                    log.debug("CredentialManager singleton initialized")
 
         return self._instance
+
+    async def close(self) -> None:
+        """Close and clear the process-local manager instance."""
+        async with self._lock:
+            if self._instance is None:
+                return
+            await self._instance.close()
+            self._instance = None
 
     def __getattr__(self, name):
         async def _async_wrapper(*args, **kwargs):

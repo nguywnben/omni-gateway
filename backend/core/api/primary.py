@@ -1080,7 +1080,7 @@ async def non_stream_request(
                     if not switched:
                         return Response(
                             content=json.dumps({"error": "No credentials are available."}),
-                            status_code=500,
+                            status_code=503,
                             media_type="application/json",
                         )
                 continue

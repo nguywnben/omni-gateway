@@ -2,7 +2,7 @@
 
 A universal AI router for coding tools. Omni Gateway provides smart auto-fallback, token-aware request cleanup, usage visibility, and seamless format translation so local agents, IDE assistants, and automation scripts can use free and premium LLM capacity through one stable API surface.
 
-> **Project status:** Beta. The SDK-compatible API is usable today, but storage migrations and configuration compatibility can still change before `1.0.0`. Back up persistent data before upgrading.
+> **Project status:** Stable. Version `1.0.0` establishes the supported SDK routes, canonical management routes, configuration names, and single-instance runtime contract. Future compatibility changes follow Semantic Versioning.
 
 ## Why Omni Gateway
 
@@ -72,10 +72,10 @@ sudo docker run -d \
   -p 4283:4283 \
   -v /opt/omni-gateway/creds:/app/backend/data/creds \
   -v /opt/omni-gateway/logs:/app/backend/data/logs \
-  nguywnben/omni-gateway:latest
+  nguywnben/omni-gateway:1.0.0
 ```
 
-The same image is also published to GitHub Packages as `ghcr.io/nguywnben/omni-gateway:latest`.
+The same release is published to GitHub Packages as `ghcr.io/nguywnben/omni-gateway:1.0.0`. The `latest` tag tracks the newest stable release; `edge` tracks verified but unreleased builds from `main`. Pin a version tag or digest when reproducible deployment matters.
 
 Open the control panel at:
 
@@ -87,7 +87,7 @@ On first run, create the console password on the setup screen. No default passwo
 
 Passwords managed by the application are stored as salted scrypt hashes, control-panel sessions use HttpOnly cookies, and public SDK requests authenticate with the generated `sk-ogw-` API key. For a non-interactive deployment, preconfigure `PANEL_PASSWORD` and skip the setup screen entirely.
 
-The `0.2.0-beta` container is published for `linux/amd64`. ARM64 publication is intentionally paused until every provider dependency, including the Vertex transport stack, can be built and tested with the same contract.
+The `1.0.0` container is published for `linux/amd64`. ARM64 publication is intentionally paused until every provider dependency, including the Vertex transport stack, can be built and tested with the same contract.
 
 If the server firewall is enabled, allow the gateway port:
 
@@ -101,7 +101,7 @@ View logs:
 sudo docker logs -f omni-gateway
 ```
 
-Update to the latest image:
+Update to the newest stable image:
 
 ```bash
 sudo docker pull nguywnben/omni-gateway:latest
@@ -122,7 +122,7 @@ sudo mkdir -p /opt/omni-gateway/creds /opt/omni-gateway/logs
 docker compose -f deploy/docker-compose.yml up -d
 ```
 
-The included compose file pulls `nguywnben/omni-gateway:latest` and uses `/opt/omni-gateway` by default for persistent host data. Set `DATA_DIR=/custom/path` before running compose if your server uses a different storage location.
+The included compose file pulls `nguywnben/omni-gateway:latest` and uses `/opt/omni-gateway` by default for persistent host data. Set `IMAGE=nguywnben/omni-gateway:1.0.0` to pin this release, and set `DATA_DIR=/custom/path` when the server uses a different storage location.
 
 Compose forwards `API_KEY`, `PANEL_PASSWORD`, `SETUP_TOKEN`, external storage URIs, and `PROXY` from the shell or a root `.env` file. Leave them empty to retain automatic key generation, first-run setup, local SQLite storage, and direct outbound networking.
 
@@ -167,21 +167,22 @@ Omni Gateway reads configuration from environment variables first, then stored c
 | `HOST` | `0.0.0.0` | Bind address. |
 | `PORT` | `4283` | HTTP port. |
 | `HOST_PORT` | `4283` | Host-side port used only by Docker Compose. |
-| `WORKERS` | `1` | Supported worker count. `0.2.0-beta` rejects other values until reservations, cooldowns, sessions, and usage aggregation are coordinated across processes. |
+| `WORKERS` | `1` | Supported worker count for 1.x. Other values are rejected until reservations, cooldowns, sessions, and usage aggregation are coordinated across processes. |
 | `CORS_ORIGINS` | empty | Comma-separated browser origins allowed to call the API cross-origin. Leave empty for same-origin console usage. |
 | `CORS_ORIGIN_REGEX` | empty | Optional regex for managed dynamic browser origins. |
 | `API_KEY` | generated automatically | Preferred key for public client API requests. Must start with `sk-ogw-`. |
 | `PANEL_PASSWORD` | empty until setup | Password for the web control panel. |
-| `PASSWORD` | empty until setup | Legacy fallback password for the web control panel. |
 | `SETUP_TOKEN` | generated per process | Optional fixed bootstrap token required for remote first-run setup. When omitted, read the generated token from application or container logs. |
 | `PANEL_SESSION_TTL_SECONDS` | `86400` | Web console session lifetime in seconds. |
 | `PANEL_COOKIE_SECURE` | automatic | Set `true` to require HTTPS-only panel cookies. Leave empty to detect HTTPS through `X-Forwarded-Proto`. |
 | `PANEL_LOGIN_WINDOW_SECONDS` | `300` | Login rate-limit window in seconds. |
 | `PANEL_LOGIN_MAX_ATTEMPTS` | `10` | Failed login attempts allowed per client within the rate-limit window. |
+| `PANEL_LOGIN_MAX_TRACKED_CLIENTS` | `10000` | Maximum client addresses retained by the in-memory login limiter. |
+| `MAX_REQUEST_BODY_MB` | `64` | Maximum HTTP request body size in MiB. Oversized SDK requests return the native protocol error envelope. |
 | `TRUST_PROXY_HEADERS` | `false` | Accept client/protocol forwarding headers only from a trusted reverse proxy that overwrites them. |
 | `CREDENTIALS_DIR` | `./backend/data/creds` | Credential storage directory. In Docker, persist `/app/backend/data/creds` with a host volume. |
 | `CODE_ASSIST_ENDPOINT` | `https://cloudcode-pa.googleapis.com` | Code Assist backend endpoint. |
-| `API_URL` | `https://daily-cloudcode-pa.googleapis.com` | Provider backend endpoint. |
+| `ANTIGRAVITY_API_URL` | `https://daily-cloudcode-pa.googleapis.com` | Google Antigravity backend endpoint. |
 | `PROXY` | empty | Optional HTTP, HTTPS, or SOCKS proxy. |
 | `RETRY_429_ENABLED` | `true` | Retry rate-limited requests. |
 | `RETRY_429_MAX_RETRIES` | `5` | Maximum rate-limit retry attempts. |
@@ -205,11 +206,8 @@ Omni Gateway reads configuration from environment variables first, then stored c
 | `CODE_ASSIST_CLIENT_SECRET` | bundled desktop client | Optional override for the Code Assist OAuth client secret. |
 | `ANTIGRAVITY_CLIENT_ID` | bundled desktop client | Optional override for the Google Antigravity OAuth client ID. It can also be managed from the Providers page. |
 | `ANTIGRAVITY_CLIENT_SECRET` | bundled desktop client | Optional override for the Google Antigravity OAuth client secret. Configure it through env or the Providers page when the upstream client changes. |
-| `CLIENT_ID` | empty | Optional legacy-compatible fallback for provider OAuth override. |
-| `CLIENT_SECRET` | empty | Optional legacy-compatible fallback for provider OAuth override. |
-| `ANTIGRAVITY_API_URL` / `API_URL` | `https://daily-cloudcode-pa.googleapis.com` | Optional Google Antigravity upstream endpoint override. |
 | `GOOGLE_AI_STUDIO_API_URL` | `https://generativelanguage.googleapis.com` | Optional Google AI Studio Generative Language API endpoint override. |
-| `USER_AGENT` / `ANTIGRAVITY_USER_AGENT` | `antigravity/cli/1.0.1 windows/amd64` | Optional Google Antigravity protocol User-Agent override. |
+| `ANTIGRAVITY_USER_AGENT` | `antigravity/cli/1.0.1 windows/amd64` | Optional Google Antigravity protocol User-Agent override. |
 | `ANTIGRAVITY_PAYLOAD_USER_AGENT` | `antigravity` | Optional payload-level Google Antigravity userAgent override. |
 | `LOG_LEVEL` | `info` | Runtime log level. |
 | `LOG_MAX_MB` | `10` | Maximum active log file size before rotation. |
@@ -312,6 +310,8 @@ Omni Gateway exposes SDK-compatible routes without a product namespace:
 - `POST /vertex/v1/chat/completions`
 - `POST /vertex/v1/models/{model}:generateContent`
 
+Authentication, request-validation, routing, upstream, and pre-stream failures use the native error envelope for the selected SDK surface. Every HTTP response includes `X-Request-ID`; clients may supply a safe identifier in that header for end-to-end correlation. Rate-limited and temporarily unavailable responses preserve `Retry-After` when the upstream provides it.
+
 ## Model Features
 
 The Models page builds the virtual model `omway` from models discovered across enabled provider credentials. Arrange its members in priority order once, then use `omway` from any supported SDK. Omni Gateway balances healthy credentials that support the first model and continues through the configured model order when that model is unavailable. Concrete provider model IDs remain available for clients that need deterministic model selection. Saving an empty selection disables `omway` without affecting provider credentials.
@@ -390,7 +390,7 @@ Redis can be added for cache/session acceleration:
 REDIS_URL=redis://127.0.0.1:6379/0
 ```
 
-External storage does not make the current beta horizontally scalable. Run one worker and one replica until distributed credential reservations, cooldowns, session invalidation, and usage aggregation are implemented.
+External storage does not make the 1.x runtime horizontally scalable. Run one worker and one replica until distributed credential reservations, cooldowns, session invalidation, and usage aggregation are implemented. Configure either MongoDB or PostgreSQL, not both; an explicit external-database initialization failure stops startup rather than silently falling back to SQLite.
 
 Environment credential import is available from the control panel. Set one of the following variables to raw JSON or use the matching `_B64` variant for base64-encoded JSON:
 
@@ -411,7 +411,7 @@ python -m pip install -r requirements-dev.txt
 ruff check backend
 ruff format --check backend
 python -m compileall -q backend
-python -m unittest discover -s backend/tests -p 'test_*.py'
+python -m backend.tests
 for script in frontend/js/*.js; do node --check "$script"; done
 yamllint --strict .github deploy .yamllint.yml
 python -m pip_audit --local --progress-spinner off
@@ -429,6 +429,7 @@ The production baseline is Python 3.12, and CI currently verifies Python 3.12 an
 
 - Never commit credential JSON files or `.env`.
 - Use a dedicated `API_KEY` for client integrations and a separate `PANEL_PASSWORD` for console access.
+- Restrict access to the persistent credential volume or external database and enable platform-level encryption at rest; provider tokens must remain retrievable by the router.
 - Put Omni Gateway behind a reverse proxy with TLS when reachable outside localhost.
 - Configure the reverse proxy to preserve `Host` and pass `X-Forwarded-Proto`; set `PANEL_COOKIE_SECURE=true` when HTTPS termination is guaranteed.
 - Set `TRUST_PROXY_HEADERS=true` only when the service is reachable exclusively through a trusted proxy that replaces `X-Forwarded-For` and `X-Forwarded-Proto`.
@@ -437,8 +438,9 @@ The production baseline is Python 3.12, and CI currently verifies Python 3.12 an
 - Set `CORS_ORIGINS` to explicit trusted origins when browser clients need cross-origin access.
 - Keep `/opt/omni-gateway` or your chosen `DATA_DIR` backed up before upgrading or moving servers.
 - Docker image publishing uses the `DOCKERHUB_USERNAME` and `DOCKERHUB_TOKEN` repository secrets for Docker Hub, and the built-in `GITHUB_TOKEN` for GitHub Packages at `ghcr.io/nguywnben/omni-gateway`. Set the optional `IMAGE_NAME` repository variable only when publishing to a custom Docker Hub image name.
-- Keep `WORKERS=1` and one application replica for `0.2.0-beta`; external storage is not a substitute for distributed coordination.
-- Use the canonical `/api/credentials` management routes. Hidden `/api/creds` aliases exist only to ease beta migration.
+- Keep `WORKERS=1` and one application replica for the 1.x series; external storage is not a substitute for distributed coordination.
+- Use the canonical `/api/credentials` management routes. The beta `/api/creds` aliases were removed in 1.0.0.
+- Follow [Upgrading to 1.0](docs/upgrading-to-1.0.md) before migrating a beta deployment.
 - Follow the maintained [release checklist](docs/release-checklist.md) before tagging or promoting an image.
 - Keep log retention and credential rotation policies aligned with your usage limits.
 - Rotate credentials immediately if a repository or platform scanner reports a leaked secret.

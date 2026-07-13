@@ -19,10 +19,12 @@ from core.models import (
 from core.passwords import hash_password
 from core.storage_adapter import get_storage_adapter
 from core.utils import (
+    PANEL_SESSION_COOKIE,
     clear_panel_session_cookie,
     create_panel_session_token,
     set_panel_session_cookie,
     verify_panel_token,
+    verify_panel_token_value,
 )
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import JSONResponse
@@ -36,7 +38,7 @@ from .auth_support import (
     _record_login_failure,
 )
 from .setup_security import get_setup_access_policy, verify_setup_access
-from .utils import validate_mode
+from .utils import internal_server_error, validate_mode
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
@@ -78,10 +80,19 @@ async def setup_status(request: Request):
     try:
         setup_required = not await config.has_password_configured()
         policy = get_setup_access_policy(request)
+        authenticated = False
+        session_token = request.cookies.get(PANEL_SESSION_COOKIE)
+        if session_token and not setup_required:
+            try:
+                await verify_panel_token_value(session_token)
+                authenticated = True
+            except HTTPException:
+                authenticated = False
         return JSONResponse(
             content={
                 "setup_required": setup_required,
                 "setup_token_required": setup_required and policy.token_required,
+                "authenticated": authenticated,
             }
         )
     except Exception as e:
@@ -179,7 +190,7 @@ async def start_auth(request: AuthStartRequest, token: str = Depends(verify_pane
         raise
     except Exception as e:
         log.error(f"Failed to start authentication flow: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise internal_server_error() from e
 
 
 @router.post("/callback")
@@ -217,7 +228,7 @@ async def auth_callback(request: AuthCallbackRequest, token: str = Depends(verif
         raise
     except Exception as e:
         log.error(f"Failed to process authentication callback: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise internal_server_error() from e
 
 
 @router.post("/callback-url")
@@ -256,7 +267,7 @@ async def auth_callback_url(
         raise
     except Exception as e:
         log.error(f"Failed to handle authentication from callback URL: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise internal_server_error() from e
 
 
 @router.get("/status/{project_id}")
@@ -270,7 +281,7 @@ async def check_auth_status(project_id: str, token: str = Depends(verify_panel_t
 
     except Exception as e:
         log.error(f"Failed to check authentication status: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise internal_server_error() from e
 
 
 @router.get("/status")
@@ -283,7 +294,7 @@ async def check_auth_flow_status(
         return JSONResponse(content=get_auth_status_by_state(state, token))
     except Exception as e:
         log.error(f"Failed to check authentication flow status: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise internal_server_error() from e
 
 
 @router.get("/keys")
@@ -302,7 +313,7 @@ async def get_api_keys(token: str = Depends(verify_panel_token)):
         )
     except Exception as e:
         log.error(f"Failed to get API key: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise internal_server_error() from e
 
 
 @router.post("/keys/reset")
@@ -340,4 +351,4 @@ async def reset_api_key(token: str = Depends(verify_panel_token)):
         )
     except Exception as e:
         log.error(f"Failed to reset API key: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise internal_server_error() from e

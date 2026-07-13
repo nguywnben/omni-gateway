@@ -458,9 +458,7 @@ function handlePrimaryFileDrop(event) {
 
     event.preventDefault();
 
-    event.currentTarget.style.borderColor = '#007bff';
-
-    event.currentTarget.style.backgroundColor = '#f8f9fa';
+    event.currentTarget.classList.remove('dragover');
 
     AppState.primaryUploadFiles.addFiles(Array.from(event.dataTransfer.files));
 

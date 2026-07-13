@@ -25,7 +25,7 @@ from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from fastapi.responses import JSONResponse
 from log import log
 
-from .utils import get_env_locked_keys
+from .utils import get_env_locked_keys, internal_server_error
 
 router = APIRouter(tags=["provider-settings"])
 
@@ -36,7 +36,7 @@ MAX_AI_STUDIO_IMPORT_ENTRIES = 200
 ANTIGRAVITY_CONFIG_KEYS = {
     "antigravity_client_id",
     "antigravity_client_secret",
-    "api_url",
+    "antigravity_api_url",
     "oauth_url",
     "google_apis_url",
     "resource_manager_url",
@@ -50,7 +50,7 @@ ANTIGRAVITY_CONFIG_KEYS = {
 STRING_KEYS = {
     "antigravity_client_id",
     "antigravity_client_secret",
-    "api_url",
+    "antigravity_api_url",
     "oauth_url",
     "google_apis_url",
     "resource_manager_url",
@@ -76,7 +76,7 @@ async def _current_antigravity_config() -> dict:
     return {
         "antigravity_client_id": client_id,
         "antigravity_client_secret": client_secret,
-        "api_url": await config.get_antigravity_api_url(),
+        "antigravity_api_url": await config.get_antigravity_api_url(),
         "oauth_url": await config.get_oauth_proxy_url(),
         "google_apis_url": await config.get_googleapis_proxy_url(),
         "resource_manager_url": await config.get_resource_manager_api_url(),
@@ -101,7 +101,7 @@ async def get_antigravity_config(token: str = Depends(verify_panel_token)):
         )
     except Exception as e:
         log.error(f"Failed to retrieve Google Antigravity configuration: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise internal_server_error() from e
 
 
 @router.post("/api/providers/antigravity/config")
@@ -153,7 +153,7 @@ async def save_antigravity_config(
         raise
     except Exception as e:
         log.error(f"Failed to save Google Antigravity configuration: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise internal_server_error() from e
 
 
 @router.post("/api/providers/antigravity/config/reset")
@@ -180,7 +180,7 @@ async def reset_antigravity_config(token: str = Depends(verify_panel_token)):
         )
     except Exception as e:
         log.error(f"Failed to reset Google Antigravity configuration: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise internal_server_error() from e
 
 
 GOOGLE_AI_STUDIO_CONFIG_KEYS = {"google_ai_studio_api_url"}

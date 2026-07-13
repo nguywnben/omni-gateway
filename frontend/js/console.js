@@ -10,6 +10,8 @@ async function refreshSetupStatus() {
 
         AppState.setupRequired = Boolean(data.setup_required);
 
+        AppState.authenticated = Boolean(data.authenticated);
+
         const setupTokenGroup = document.getElementById('setupTokenGroup');
 
         if (setupTokenGroup) {
@@ -186,43 +188,17 @@ async function autoLogin() {
 
     }
 
-    try {
+    if (AppState.authenticated) {
 
-        const response = await fetch('./api/config/get', {
+        navigate(window.location.pathname, false);
 
-            headers: getAuthHeaders()
-
-        });
-
-        if (response.ok) {
-
-            AppState.authenticated = true;
-
-            // showStatus(t('autologin_successful'), 'success');
-
-            navigate(window.location.pathname, false);
-
-            return true;
-
-        } else {
-
-            AppState.authenticated = false;
-
-            navigate('/login', false);
-
-            return false;
-
-        }
-
-    } catch (error) {
-
-        AppState.authenticated = false;
-
-        navigate('/login', false);
-
-        return false;
+        return true;
 
     }
+
+    navigate('/login', false);
+
+    return false;
 
 }
 
@@ -305,6 +281,109 @@ function initTabSlider() {
 }
 
 document.addEventListener('DOMContentLoaded', initTabSlider);
+
+function initStaticUiBindings() {
+    const clickHandlers = {
+        'toggle-mobile-menu': () => toggleMobileMenu(),
+        'switch-tab': (element) => switchTab(element.dataset.tab),
+        logout: () => logout(),
+        'copy-api-key': () => copyInputValue('apiKey'),
+        'toggle-api-key': () => toggleApiKeyVisibility(),
+        'regenerate-api-key': () => regenerateApiKey(),
+        'copy-url': (element) => cpUrl(element),
+        'refresh-pool': () => refreshPrimaryCredsList(),
+        'select-pool-archive': () => selectPoolImportArchive(),
+        'download-pool': () => downloadAllPrimaryCreds(),
+        'batch-primary': (element) => batchPrimaryAction(element.dataset.batchAction),
+        'batch-verify-primary': () => batchVerifyPrimaryProjectIds(),
+        'change-primary-page': (element) => changePrimaryPage(Number(element.dataset.pageDelta)),
+        'refresh-model-catalog': () => loadModelCatalog(true),
+        'save-model-pool': () => saveModelPool(),
+        'clear-model-blacklist': () => clearModelBlacklist(),
+        'select-provider': (element) => selectProviderWorkspace(element.dataset.provider),
+        'select-ai-studio-files': () => document.getElementById('googleAiStudioFileInput')?.click(),
+        'upload-ai-studio-files': () => uploadGoogleAiStudioFiles(),
+        'clear-ai-studio-files': () => clearGoogleAiStudioFiles(),
+        'save-ai-studio-settings': () => saveGoogleAIStudioSettings(),
+        'reset-ai-studio-settings': () => resetGoogleAIStudioSettings(),
+        'copy-primary-auth-url': () => cpUrl(document.getElementById('primaryAuthUrl')),
+        'get-primary-credentials': () => getPrimaryCredentials(),
+        'download-primary-credentials': () => downloadPrimaryCredentials(),
+        'select-primary-files': () => document.getElementById('primaryFileInput')?.click(),
+        'upload-primary-files': () => uploadPrimaryFiles(),
+        'clear-primary-files': () => clearPrimaryFiles(),
+        'save-antigravity-settings': () => saveAntigravitySettings(),
+        'reset-antigravity-settings': () => resetAntigravitySettings(),
+        'save-config': () => saveConfig(),
+        'reset-config': () => resetConfig(),
+        'set-current-keepalive-url': () => autoSetKeepaliveUrl(),
+        'download-logs': () => downloadLogs(),
+        'clear-logs': () => clearLogs(),
+        'check-updates': () => checkForUpdates()
+    };
+    const changeHandlers = {
+        'usage-period': (element) => setUsagePeriod(element.value),
+        'pool-archive': (_element, event) => handlePoolImportArchive(event),
+        'select-all-primary': () => toggleSelectAllPrimary(),
+        'primary-filter': () => applyPrimaryStatusFilter(),
+        'primary-page-size': () => changePrimaryPageSize(),
+        'ai-studio-files': (_element, event) => handleGoogleAiStudioFileSelect(event),
+        'primary-files': (_element, event) => handlePrimaryFileSelect(event),
+        'routing-strategy': () => syncRoutingPolicyControls(),
+        'log-level': () => filterLogs()
+    };
+
+    document.addEventListener('click', (event) => {
+        const element = event.target.closest('[data-ui-action]');
+        if (!element) return;
+        const handler = clickHandlers[element.dataset.uiAction];
+        if (handler) handler(element, event);
+    });
+
+    document.addEventListener('change', (event) => {
+        const element = event.target.closest('[data-ui-change]');
+        if (!element) return;
+        const handler = changeHandlers[element.dataset.uiChange];
+        if (handler) handler(element, event);
+    });
+
+    document.addEventListener('input', (event) => {
+        if (event.target.matches('[data-ui-input="model-catalog-search"]')) {
+            renderModelCatalog();
+        }
+    });
+
+    document.getElementById('loginForm')?.addEventListener('submit', (event) => {
+        event.preventDefault();
+        login();
+    });
+    document.getElementById('setupForm')?.addEventListener('submit', (event) => {
+        event.preventDefault();
+        completeInitialSetup();
+    });
+    document.getElementById('googleAiStudioCredentialForm')?.addEventListener('submit', addGoogleAIStudioCredential);
+    document.getElementById('accessPasswordForm')?.addEventListener('submit', (event) => {
+        event.preventDefault();
+        saveAccessCredentials();
+    });
+
+    document.getElementById('apiKey')?.addEventListener('mousedown', (event) => event.preventDefault());
+
+    for (const [areaId, dropHandler] of [
+        ['googleAiStudioUploadArea', handleGoogleAiStudioFileDrop],
+        ['primaryUploadArea', handlePrimaryFileDrop]
+    ]) {
+        const area = document.getElementById(areaId);
+        area?.addEventListener('dragover', (event) => {
+            event.preventDefault();
+            area.classList.add('dragover');
+        });
+        area?.addEventListener('dragleave', () => area.classList.remove('dragover'));
+        area?.addEventListener('drop', dropHandler);
+    }
+}
+
+document.addEventListener('DOMContentLoaded', initStaticUiBindings);
 
 window.addEventListener('resize', () => {
 

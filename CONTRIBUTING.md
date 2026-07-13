@@ -43,7 +43,7 @@ Run the complete local quality gate before opening a pull request:
 ruff check backend
 ruff format --check backend
 python -m compileall -q backend
-python -m unittest discover -s backend/tests -p 'test_*.py'
+python -m backend.tests
 for script in frontend/js/*.js; do node --check "$script"; done
 yamllint --strict .github deploy .yamllint.yml
 bash -n deploy/scripts/*.sh

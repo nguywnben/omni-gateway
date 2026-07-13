@@ -63,7 +63,7 @@ Dependencies should flow inward from HTTP adapters to orchestration and domain p
 
 The default single-instance mode stores credentials, configuration, and usage data under `backend/data/creds`, with logs under `backend/data/logs`. Both locations must be persisted in containers.
 
-`WORKERS=1` is the only supported process model in `0.2.0-beta`. MongoDB and PostgreSQL can replace local SQLite storage, but shared storage alone does not coordinate reservations, cooldowns, sessions, or usage aggregation across workers. The service rejects `WORKERS` values other than `1` instead of presenting an unsafe scale-out configuration as supported.
+`WORKERS=1` and one application replica are the supported process model for the 1.x series. MongoDB and PostgreSQL can replace local SQLite storage, but shared storage alone does not coordinate reservations, cooldowns, sessions, or usage aggregation across workers. The service rejects `WORKERS` values other than `1` instead of presenting an unsafe scale-out configuration as supported.
 
 The Render Blueprint deliberately uses a paid persistent disk. Free Render services have ephemeral filesystems and are not suitable for durable credential storage.
 
@@ -74,7 +74,9 @@ The Render Blueprint deliberately uses a paid persistent disk. Free Render servi
 - Runtime-log WebSockets require a matching console origin and authenticate only through the HttpOnly session cookie; credentials are never accepted in their URLs.
 - Forwarded client and protocol headers are ignored unless `TRUST_PROXY_HEADERS=true`.
 - Uploaded archives and credentials are validated by provider-specific import paths before persistence.
+- Fixed-length and chunked HTTP bodies are bounded before application parsers allocate request data.
 - Credential values must never appear in logs, issue reports, filenames, or UI summaries.
+- Provider tokens remain retrievable for upstream calls, so the deployment boundary must protect storage with least-privilege access and platform-level encryption at rest.
 - Cross-origin browser access is disabled unless explicit origins are configured.
 
 ## Module Decomposition

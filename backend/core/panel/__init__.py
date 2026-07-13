@@ -22,11 +22,6 @@ def create_router() -> APIRouter:
     router.include_router(auth.router)
     router.include_router(environment_credentials.router)
     router.include_router(credentials.router, prefix="/api/credentials")
-    router.include_router(
-        credentials.router,
-        prefix="/api/creds",
-        include_in_schema=False,
-    )
     router.include_router(config_routes.router)
     router.include_router(logs.router)
     router.include_router(version.router)
