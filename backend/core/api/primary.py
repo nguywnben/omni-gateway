@@ -26,6 +26,7 @@ from core.api.utils import (
     parse_and_log_cooldown,
     record_api_call_error,
     record_api_call_success,
+    record_model_route_miss,
     record_unassigned_api_call_error,
 )
 from core.credential_manager import credential_manager
@@ -36,6 +37,7 @@ from core.google_ai_studio import (
     parse_model_ids,
 )
 from core.httpx_client import get_async, post_async, stream_post_async
+from core.model_blacklist import record_model_not_found
 from core.provider_registry import (
     GOOGLE_AI_STUDIO,
     GOOGLE_ANTIGRAVITY,
@@ -57,6 +59,7 @@ from log import log
 SESSION_TTL_SECONDS = 6 * 60 * 60
 MAX_SESSION_STATES = 1024
 _REDIS_KEY_PREFIX = "primary:session:"
+MAX_MODEL_ROUTE_ATTEMPTS = 128
 
 
 @dataclass
@@ -378,19 +381,40 @@ async def _switch_credential_for_retry(
     return False
 
 
+async def _exclude_missing_model_route(
+    *,
+    route_exclusions: set[tuple[str, str]],
+    provider_id: str,
+    model_name: str,
+) -> None:
+    """Exclude a 404 route immediately and persist it when storage is available."""
+    route_exclusions.add((provider_id, model_name))
+    try:
+        await record_model_not_found(provider_id, model_name)
+    except Exception as exc:
+        log.error(
+            "Model route blacklist persistence failed "
+            f"(provider={provider_id}, model={model_name}): {exc}"
+        )
+
+
 async def stream_request(
     body: Dict[str, Any],
     native: bool = False,
     headers: Optional[Dict[str, str]] = None,
     model_candidates: Optional[List[str]] = None,
+    model_routing: bool = False,
 ):
     request_started_at = time.perf_counter()
     requested_model = str(body.get("model") or "")
     candidates = _normalize_model_candidates(body, model_candidates)
+    route_exclusions: set[tuple[str, str]] = set()
 
     route_result = await credential_manager.get_valid_model_credential(
         candidates,
         mode="primary",
+        respect_model_blacklist=model_routing,
+        excluded_provider_models=route_exclusions,
     )
 
     if not route_result:
@@ -446,6 +470,7 @@ async def stream_request(
 
     DISABLE_ERROR_CODES = await get_auto_disable_error_codes()
     last_error_response = None
+    retry_attempt = 0
 
     async def refresh_credential_fast():
         nonlocal model_name, current_file, credential_data, provider_id, request_body
@@ -453,6 +478,8 @@ async def stream_request(
         route_result = await credential_manager.get_valid_model_credential(
             candidates,
             mode="primary",
+            respect_model_blacklist=model_routing,
+            excluded_provider_models=route_exclusions,
         )
         if not route_result:
             return None
@@ -475,10 +502,12 @@ async def stream_request(
         request_metrics = new_context.request_metrics
         return True
 
-    for attempt in range(max_retries + 1):
+    attempt_limit = max_retries + (MAX_MODEL_ROUTE_ATTEMPTS if model_routing else 0)
+    for attempt in range(attempt_limit + 1):
         received_content = False
         stream_token_usage: Dict[str, int] = {}
         need_retry = False
+        model_route_retry = False
 
         try:
             async for chunk in stream_post_async(
@@ -502,7 +531,28 @@ async def stream_request(
                     except Exception:
                         error_body = ""
 
-                    if _is_retryable_status(status_code, DISABLE_ERROR_CODES):
+                    if model_routing and status_code == 404:
+                        log.warning(
+                            f"[provider stream] model route not found; blacklisting provider={provider_id}, model={model_name}."
+                        )
+                        await _exclude_missing_model_route(
+                            route_exclusions=route_exclusions,
+                            provider_id=provider_id,
+                            model_name=model_name,
+                        )
+                        await record_model_route_miss(
+                            credential_manager,
+                            current_file,
+                            model_name=model_name,
+                            provider=provider_id,
+                        )
+                        if attempt < attempt_limit:
+                            need_retry = True
+                            model_route_retry = True
+                            break
+                        yield chunk
+                        return
+                    elif _is_retryable_status(status_code, DISABLE_ERROR_CODES):
                         log.warning(
                             f"[provider stream] streaming request failed (status={status_code}), credential={current_file}, response={error_body[:500] if error_body else 'None'}"
                         )
@@ -532,13 +582,14 @@ async def stream_request(
                             status_code,
                             current_file,
                             retry_config["retry_enabled"],
-                            attempt,
+                            retry_attempt,
                             max_retries,
                             retry_interval,
                             mode="primary",
                         )
 
-                        if should_retry and attempt < max_retries:
+                        if should_retry:
+                            retry_attempt += 1
                             need_retry = True
                             break
                         else:
@@ -612,7 +663,8 @@ async def stream_request(
                     provider=provider_id,
                 )
 
-                if attempt < max_retries:
+                if retry_attempt < max_retries:
+                    retry_attempt += 1
                     need_retry = True
                 else:
                     log.error("[provider stream] Empty response reaches maximum number of retries")
@@ -624,11 +676,15 @@ async def stream_request(
                     return
 
             if need_retry:
-                log.info(
-                    f"[provider stream] retrying request (attempt {attempt + 2}/{max_retries + 1})."
-                )
+                if model_route_retry:
+                    log.info("[provider stream] Trying the next virtual-model route.")
+                else:
+                    log.info(
+                        "[provider stream] retrying request "
+                        f"(attempt {retry_attempt + 1}/{max_retries + 1})."
+                    )
 
-                if switch_credential_enabled:
+                if model_route_retry or switch_credential_enabled:
                     switched = await _switch_credential_for_retry(
                         refresh_credential_fast=refresh_credential_fast,
                         log_prefix="[provider stream]",
@@ -637,6 +693,9 @@ async def stream_request(
                         log.error(
                             "[provider stream] No credentials or tokens available when retrying"
                         )
+                        if model_route_retry and last_error_response is not None:
+                            yield last_error_response
+                            return
                         yield Response(
                             content=json.dumps({"error": "No credentials are available."}),
                             status_code=503,
@@ -659,9 +718,11 @@ async def stream_request(
                 error_message=str(e),
                 provider=provider_id,
             )
-            if attempt < max_retries:
+            if retry_attempt < max_retries:
+                retry_attempt += 1
                 log.info(
-                    f"[provider stream] retry after abnormality (attempt {attempt + 2}/{max_retries + 1})..."
+                    "[provider stream] retry after abnormality "
+                    f"(attempt {retry_attempt + 1}/{max_retries + 1})..."
                 )
                 await asyncio.sleep(retry_interval)
                 if switch_credential_enabled:
@@ -706,6 +767,7 @@ async def non_stream_request(
     body: Dict[str, Any],
     headers: Optional[Dict[str, str]] = None,
     model_candidates: Optional[List[str]] = None,
+    model_routing: bool = False,
 ) -> Response:
     request_started_at = time.perf_counter()
 
@@ -717,6 +779,7 @@ async def non_stream_request(
             native=False,
             headers=headers,
             model_candidates=model_candidates,
+            model_routing=model_routing,
         )
 
         return await collect_streaming_response(stream)
@@ -725,10 +788,13 @@ async def non_stream_request(
 
     requested_model = str(body.get("model") or "")
     candidates = _normalize_model_candidates(body, model_candidates)
+    route_exclusions: set[tuple[str, str]] = set()
 
     route_result = await credential_manager.get_valid_model_credential(
         candidates,
         mode="primary",
+        respect_model_blacklist=model_routing,
+        excluded_provider_models=route_exclusions,
     )
 
     if not route_result:
@@ -782,6 +848,7 @@ async def non_stream_request(
 
     DISABLE_ERROR_CODES = await get_auto_disable_error_codes()
     last_error_response = None
+    retry_attempt = 0
 
     async def refresh_credential_fast():
         nonlocal model_name, current_file, credential_data, provider_id, request_body
@@ -789,6 +856,8 @@ async def non_stream_request(
         route_result = await credential_manager.get_valid_model_credential(
             candidates,
             mode="primary",
+            respect_model_blacklist=model_routing,
+            excluded_provider_models=route_exclusions,
         )
         if not route_result:
             return None
@@ -811,7 +880,8 @@ async def non_stream_request(
         request_metrics = new_context.request_metrics
         return True
 
-    for attempt in range(max_retries + 1):
+    attempt_limit = max_retries + (MAX_MODEL_ROUTE_ATTEMPTS if model_routing else 0)
+    for attempt in range(attempt_limit + 1):
         need_retry = False
 
         try:
@@ -841,7 +911,8 @@ async def non_stream_request(
                         provider=provider_id,
                     )
 
-                    if attempt < max_retries:
+                    if retry_attempt < max_retries:
+                        retry_attempt += 1
                         need_retry = True
                     else:
                         log.error("[provider] Empty response reaches maximum number of retries")
@@ -883,7 +954,25 @@ async def non_stream_request(
                 except Exception:
                     pass
 
-                if _is_retryable_status(status_code, DISABLE_ERROR_CODES):
+                if model_routing and status_code == 404:
+                    log.warning(
+                        f"[provider] model route not found; blacklisting provider={provider_id}, model={model_name}."
+                    )
+                    await _exclude_missing_model_route(
+                        route_exclusions=route_exclusions,
+                        provider_id=provider_id,
+                        model_name=model_name,
+                    )
+                    await record_model_route_miss(
+                        credential_manager,
+                        current_file,
+                        model_name=model_name,
+                        provider=provider_id,
+                    )
+                    if attempt < attempt_limit and await refresh_credential_fast():
+                        continue
+                    return last_error_response
+                elif _is_retryable_status(status_code, DISABLE_ERROR_CODES):
                     log.warning(
                         f"[provider] non-streaming request failed (status={status_code}), credential={current_file}, response={error_text[:500] if error_text else 'None'}"
                     )
@@ -913,13 +1002,14 @@ async def non_stream_request(
                         status_code,
                         current_file,
                         retry_config["retry_enabled"],
-                        attempt,
+                        retry_attempt,
                         max_retries,
                         retry_interval,
                         mode="primary",
                     )
 
-                    if should_retry and attempt < max_retries:
+                    if should_retry:
+                        retry_attempt += 1
                         need_retry = True
                     else:
                         log.error(
@@ -943,7 +1033,9 @@ async def non_stream_request(
                     return last_error_response
 
             if need_retry:
-                log.info(f"[provider] retrying request (attempt {attempt + 2}/{max_retries + 1}).")
+                log.info(
+                    f"[provider] retrying request (attempt {retry_attempt + 1}/{max_retries + 1})."
+                )
 
                 if switch_credential_enabled:
                     switched = await _switch_credential_for_retry(
@@ -973,9 +1065,11 @@ async def non_stream_request(
                 error_message=str(e),
                 provider=provider_id,
             )
-            if attempt < max_retries:
+            if retry_attempt < max_retries:
+                retry_attempt += 1
                 log.info(
-                    f"[provider] Retry after exception (attempt {attempt + 2}/{max_retries + 1})..."
+                    "[provider] Retry after exception "
+                    f"(attempt {retry_attempt + 1}/{max_retries + 1})..."
                 )
                 await asyncio.sleep(retry_interval)
                 if switch_credential_enabled:
@@ -986,7 +1080,7 @@ async def non_stream_request(
                     if not switched:
                         return Response(
                             content=json.dumps({"error": "No credentials are available."}),
-                            status_code=500,
+                            status_code=503,
                             media_type="application/json",
                         )
                 continue

@@ -12,7 +12,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import JSONResponse
 from log import log
 
-from .utils import public_mode_name, validate_mode
+from .utils import internal_server_error, public_mode_name, validate_mode
 
 router = APIRouter(prefix="/api/auth", tags=["environment-credentials"])
 
@@ -210,7 +210,7 @@ async def get_env_credentials_status(token: str = Depends(verify_panel_token)):
         )
     except Exception as e:
         log.error(f"Failed to inspect environment credentials: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise internal_server_error() from e
 
 
 @router.post("/load-env-creds")
@@ -291,7 +291,7 @@ async def load_env_credentials(token: str = Depends(verify_panel_token)):
         raise
     except Exception as e:
         log.error(f"Failed to import environment credentials: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise internal_server_error() from e
 
 
 @router.delete("/env-creds")
@@ -345,4 +345,4 @@ async def clear_env_credentials(token: str = Depends(verify_panel_token)):
 
     except Exception as e:
         log.error(f"Failed to clear environment credentials: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise internal_server_error() from e

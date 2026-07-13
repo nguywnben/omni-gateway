@@ -11,7 +11,7 @@ An unconfigured instance previously allowed the first browser that reached the s
 
 Direct setup through a loopback client and loopback host remains token-free. Every remote setup request must present a bootstrap token. Operators can configure `SETUP_TOKEN`; otherwise the process generates a high-entropy token and prints it to the application or container logs. The token is useful only while no console password exists.
 
-The `0.2.0-beta` runtime accepts exactly one worker. MongoDB and PostgreSQL remain optional storage backends, but they do not imply horizontal-scaling support. A future multi-worker design must provide distributed credential reservations, cooldown state, session invalidation, and centralized usage aggregation before this restriction is relaxed.
+The 1.x runtime accepts exactly one worker and one application replica. MongoDB and PostgreSQL remain optional storage backends, but they do not imply horizontal-scaling support. A future multi-worker design must provide distributed credential reservations, cooldown state, session invalidation, and centralized usage aggregation before this restriction is relaxed.
 
 ## Consequences
 

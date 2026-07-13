@@ -23,7 +23,7 @@ body:
     attributes:
       label: Version
       description: Provide the release, container tag, or commit hash.
-      placeholder: "v0.2.0-beta or 629337c"
+      placeholder: "v1.0.0 or 629337c"
     validations:
       required: true
 
@@ -77,9 +77,11 @@ body:
     id: error-content
     attributes:
       label: Error output
-      description: Paste complete logs, status codes, stack traces, or response bodies.
+      description: >-
+        Paste the relevant logs, status codes, stack traces, or response bodies
+        after removing credentials, tokens, personal data, and private host details.
       placeholder: |
-        Paste the full error output here.
+        Paste the sanitized error output here.
       render: shell
     validations:
       required: true

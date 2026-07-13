@@ -39,6 +39,7 @@ from core.provider_registry import (
     GOOGLE_ANTIGRAVITY,
     canonicalize_antigravity_credential_filename,
     get_credential_provider,
+    get_declared_credential_models,
     normalize_provider_id,
 )
 from core.storage_adapter import get_storage_adapter
@@ -46,7 +47,7 @@ from fastapi import HTTPException, Response, UploadFile
 from fastapi.responses import JSONResponse
 from log import log
 
-from .utils import validate_credential_filename, validate_mode
+from .utils import INTERNAL_SERVER_ERROR_DETAIL, validate_credential_filename, validate_mode
 
 
 def _zip_entry_is_symlink(entry: zipfile.ZipInfo) -> bool:
@@ -353,11 +354,11 @@ async def upload_credentials_common(
                     or ("Credential imported." if stored else "Credential skipped."),
                 }
 
-            except Exception as e:
+            except Exception:
                 return {
                     "filename": file_data["filename"],
                     "status": "error",
-                    "message": f"Processing failed: {str(e)}.",
+                    "message": "Credential processing failed.",
                 }
 
         log.info(f"Starting concurrent processing for {len(batch_files)} {mode} files.")
@@ -373,7 +374,7 @@ async def upload_credentials_common(
                     {
                         "filename": "unknown",
                         "status": "error",
-                        "message": f"Processing exception: {str(result)}.",
+                        "message": "Credential processing failed.",
                     }
                 )
             else:
@@ -492,6 +493,7 @@ async def get_creds_status_common(
             "credential_label": credential_data.get("credential_label"),
             "credential_type": credential_data.get("credential_type", "oauth"),
             "provider": provider_id,
+            "model_count": len(get_declared_credential_models(credential_data)),
             "disabled": summary["disabled"],
             "error_codes": summary["error_codes"],
             "last_success": summary["last_success"],
@@ -697,13 +699,13 @@ async def refresh_all_user_emails_common(mode: str = "code_assist") -> JSONRespo
                         "error": "Unable to retrieve email.",
                     }
                 )
-        except Exception as e:
+        except Exception:
             results.append(
                 {
                     "filename": os.path.basename(filename),
                     "user_email": None,
                     "success": False,
-                    "error": str(e),
+                    "error": "Unable to retrieve email.",
                 }
             )
 
@@ -779,7 +781,7 @@ async def deduplicate_credentials_by_email_common(mode: str = "code_assist") -> 
                 "deleted_count": 0,
                 "kept_count": 0,
                 "total_count": 0,
-                "message": f"Deduplication failed: {str(e)}",
+                "message": INTERNAL_SERVER_ERROR_DETAIL,
             },
         )
 

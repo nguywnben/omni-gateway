@@ -400,6 +400,10 @@ class GoogleAIStudioCredentialRequest(BaseModel):
     api_key: str
 
 
+class CredentialModelTestRequest(BaseModel):
+    model: str = Field(min_length=1, max_length=200)
+
+
 class CredFileActionRequest(BaseModel):
     filename: str
     action: str  # enable, disable, delete

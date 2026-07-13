@@ -206,6 +206,39 @@ class ModelPoolTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result[1], "credential.json")
         self.assertEqual(manager.get_valid_credential.await_count, 2)
 
+    async def test_credential_manager_applies_persistent_blacklist_to_virtual_routes(self):
+        manager = CredentialManager()
+        manager.get_valid_credential = AsyncMock(
+            return_value=(
+                "credential.json",
+                {"provider": "google_antigravity"},
+            )
+        )
+
+        with patch(
+            "core.credential_manager.get_model_blacklist_pairs",
+            AsyncMock(
+                return_value={
+                    ("google_ai_studio", "gemini-retired"),
+                }
+            ),
+        ):
+            await manager.get_valid_model_credential(
+                ["gemini-retired", "claude-sonnet-4-6"],
+                respect_model_blacklist=True,
+                excluded_provider_models={
+                    ("google_antigravity", "claude-sonnet-4-6"),
+                },
+            )
+
+        self.assertEqual(
+            manager.get_valid_credential.await_args.kwargs["excluded_provider_models"],
+            {
+                ("google_ai_studio", "gemini-retired"),
+                ("google_antigravity", "claude-sonnet-4-6"),
+            },
+        )
+
     async def test_openai_virtual_model_routes_hi_prompt_and_preserves_alias(self):
         request = OpenAIChatCompletionRequest(
             model="omway",

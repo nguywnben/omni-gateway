@@ -1,7 +1,9 @@
+import asyncio
 import os
 from typing import Any, Optional
 
 from dotenv import load_dotenv
+from log import log
 from paths import DEFAULT_CREDENTIALS_DIR, PROJECT_ROOT
 
 load_dotenv(PROJECT_ROOT / ".env", override=False)
@@ -9,6 +11,20 @@ load_dotenv(PROJECT_ROOT / ".env", override=False)
 
 _config_cache: dict[str, Any] = {}
 _config_initialized = False
+_config_lock = asyncio.Lock()
+
+LEGACY_ENV_RENAMES = {
+    "API_URL": "ANTIGRAVITY_API_URL",
+    "USER_AGENT": "ANTIGRAVITY_USER_AGENT",
+    "CLIENT_ID": "ANTIGRAVITY_CLIENT_ID",
+    "CLIENT_SECRET": "ANTIGRAVITY_CLIENT_SECRET",
+    "OAUTH_PROXY_URL": "OAUTH_URL",
+    "GOOGLEAPIS_PROXY_URL": "GOOGLE_APIS_URL",
+    "RESOURCE_MANAGER_API_URL": "RESOURCE_MANAGER_URL",
+    "SERVICE_USAGE_API_URL": "SERVICE_USAGE_URL",
+    "ANTIGRAVITY_STREAM2NOSTREAM": "STREAM_TO_NONSTREAM",
+    "ANTIGRAVITY_SWITCH_CREDENTIAL": "SWITCH_CREDENTIAL_ENABLED",
+}
 
 # Client Configuration
 
@@ -34,25 +50,17 @@ ENV_MAPPINGS = {
     "CREDENTIALS_DIR": "credentials_dir",
     "PROXY": "proxy",
     "OAUTH_URL": "oauth_url",
-    "OAUTH_PROXY_URL": "oauth_url",
     "GOOGLE_APIS_URL": "google_apis_url",
-    "GOOGLEAPIS_PROXY_URL": "google_apis_url",
     "RESOURCE_MANAGER_URL": "resource_manager_url",
-    "RESOURCE_MANAGER_API_URL": "resource_manager_url",
     "SERVICE_USAGE_URL": "service_usage_url",
-    "SERVICE_USAGE_API_URL": "service_usage_url",
-    "API_URL": "api_url",
-    "ANTIGRAVITY_API_URL": "api_url",
+    "ANTIGRAVITY_API_URL": "antigravity_api_url",
     "GOOGLE_AI_STUDIO_API_URL": "google_ai_studio_api_url",
     "CODE_ASSIST_CLIENT_ID": "code_assist_client_id",
     "CODE_ASSIST_CLIENT_SECRET": "code_assist_client_secret",
     "ANTIGRAVITY_CLIENT_ID": "antigravity_client_id",
     "ANTIGRAVITY_CLIENT_SECRET": "antigravity_client_secret",
     "ANTIGRAVITY_USER_AGENT": "antigravity_user_agent",
-    "USER_AGENT": "antigravity_user_agent",
     "ANTIGRAVITY_PAYLOAD_USER_AGENT": "antigravity_payload_user_agent",
-    "CLIENT_ID": "client_id",
-    "CLIENT_SECRET": "client_secret",
     "AUTO_DISABLE": "auto_disable_enabled",
     "AUTO_DISABLE_ERROR_CODES": "auto_disable_error_codes",
     "RETRY_429_MAX_RETRIES": "retry_429_max_retries",
@@ -72,14 +80,11 @@ ENV_MAPPINGS = {
     "COMPATIBILITY_MODE": "compatibility_mode_enabled",
     "RETURN_THOUGHTS_TO_FRONTEND": "return_thoughts_to_frontend",
     "STREAM_TO_NONSTREAM": "stream_to_nonstream",
-    "ANTIGRAVITY_STREAM2NOSTREAM": "stream_to_nonstream",
     "SWITCH_CREDENTIAL_ENABLED": "switch_credential_enabled",
-    "ANTIGRAVITY_SWITCH_CREDENTIAL": "switch_credential_enabled",
     "HOST": "host",
     "PORT": "port",
     "API_KEY": "api_key",
     "PANEL_PASSWORD": "panel_password",
-    "PASSWORD": "password",
     "KEEPALIVE_URL": "keepalive_url",
     "KEEPALIVE_INTERVAL": "keepalive_interval",
 }
@@ -91,21 +96,77 @@ async def init_config():
     if _config_initialized:
         return
 
-    try:
-        from core.storage_adapter import get_storage_adapter
+    async with _config_lock:
+        if _config_initialized:
+            return
+        if os.getenv("PASSWORD") and not os.getenv("PANEL_PASSWORD"):
+            raise RuntimeError(
+                "PASSWORD is no longer supported. Rename it to PANEL_PASSWORD before startup."
+            )
 
-        storage_adapter = await get_storage_adapter()
-        _config_cache = await storage_adapter.get_all_config()
-        _config_initialized = True
-    except Exception:
-        _config_cache = {}
-        _config_initialized = True
+        for legacy_name, replacement in LEGACY_ENV_RENAMES.items():
+            if os.getenv(legacy_name) and not os.getenv(replacement):
+                log.warning(
+                    f"Ignoring removed environment variable {legacy_name}; "
+                    f"rename it to {replacement}."
+                )
+
+        try:
+            from core.storage_adapter import get_storage_adapter
+
+            storage_adapter = await get_storage_adapter()
+            values = await storage_adapter.get_all_config()
+
+            stored_migrations = {
+                "password": "panel_password",
+                "client_id": "antigravity_client_id",
+                "client_secret": "antigravity_client_secret",
+                "api_url": "antigravity_api_url",
+            }
+            migrated = False
+            for legacy_key, canonical_key in stored_migrations.items():
+                legacy_value = values.get(legacy_key)
+                if legacy_value and not values.get(canonical_key):
+                    saved = await storage_adapter.set_config(canonical_key, legacy_value)
+                    if not saved:
+                        raise RuntimeError(
+                            "Failed to migrate legacy configuration key "
+                            f"{legacy_key} to {canonical_key}."
+                        )
+                    log.info(f"Migrated legacy configuration key {legacy_key} to {canonical_key}.")
+                    migrated = True
+
+            legacy_keys = [
+                key
+                for key in (
+                    "password",
+                    "api_password",
+                    "client_id",
+                    "client_secret",
+                    "api_url",
+                )
+                if key in values
+            ]
+            for key in legacy_keys:
+                deleted = await storage_adapter.delete_config(key)
+                if not deleted:
+                    raise RuntimeError(f"Failed to remove legacy configuration key: {key}.")
+
+            if migrated or legacy_keys:
+                values = await storage_adapter.get_all_config()
+
+            _config_cache = values
+            _config_initialized = True
+        except Exception:
+            _config_cache = {}
+            _config_initialized = False
+            raise
 
 
 async def reload_config():
     global _config_cache, _config_initialized
 
-    try:
+    async with _config_lock:
         from core.storage_adapter import get_storage_adapter
 
         storage_adapter = await get_storage_adapter()
@@ -113,10 +174,9 @@ async def reload_config():
         if hasattr(storage_adapter._backend, "reload_config_cache"):
             await storage_adapter._backend.reload_config_cache()
 
-        _config_cache = await storage_adapter.get_all_config()
+        values = await storage_adapter.get_all_config()
+        _config_cache = values
         _config_initialized = True
-    except Exception:
-        pass
 
 
 def _get_cached_config(key: str, default: Any = None) -> Any:
@@ -156,12 +216,10 @@ async def has_password_configured() -> bool:
     if not _config_initialized:
         await init_config()
 
-    password_env_vars = ("PANEL_PASSWORD", "PASSWORD")
-    if any(os.getenv(name) for name in password_env_vars):
+    if os.getenv("PANEL_PASSWORD"):
         return True
 
-    password_keys = ("panel_password", "password")
-    return any(bool(_get_cached_config(key)) for key in password_keys)
+    return bool(_get_cached_config("panel_password"))
 
 
 # Configuration getters - all async
@@ -412,23 +470,7 @@ async def get_panel_password() -> str:
     Database config key: panel_password
     Default: Empty string until the first-run setup creates a password.
     """
-    # Prefer PANEL_PASSWORD before falling back to PASSWORD.
-    panel_password = await get_config_value("panel_password", None, "PANEL_PASSWORD")
-    if panel_password is not None:
-        return str(panel_password)
-
-    return str(await get_config_value("password", "", "PASSWORD") or "")
-
-
-async def get_server_password() -> str:
-    """
-    Get the legacy shared password setting (deprecated, use get_panel_password).
-
-    Environment variable: PASSWORD
-    Database config key: password
-    Default: empty until first-run setup.
-    """
-    return str(await get_config_value("password", "", "PASSWORD") or "")
+    return str(await get_config_value("panel_password", "", "PANEL_PASSWORD") or "")
 
 
 async def get_credentials_dir() -> str:
@@ -481,7 +523,7 @@ async def get_return_thoughts_to_frontend() -> bool:
 
 
 async def get_stream_to_nonstream() -> bool:
-    env_value = os.getenv("ANTIGRAVITY_STREAM2NOSTREAM") or os.getenv("STREAM_TO_NONSTREAM")
+    env_value = os.getenv("STREAM_TO_NONSTREAM")
     if env_value:
         return env_value.lower() in ("true", "1", "yes", "on")
 
@@ -494,7 +536,7 @@ async def get_antigravity_stream_to_nonstream() -> bool:
 
 
 async def get_switch_credential_enabled() -> bool:
-    env_value = os.getenv("ANTIGRAVITY_SWITCH_CREDENTIAL") or os.getenv("SWITCH_CREDENTIAL_ENABLED")
+    env_value = os.getenv("SWITCH_CREDENTIAL_ENABLED")
     if env_value:
         return env_value.lower() in ("true", "1", "yes", "on")
 
@@ -507,7 +549,7 @@ async def get_antigravity_switch_credential_enabled() -> bool:
 
 
 async def get_oauth_proxy_url() -> str:
-    env_value = os.getenv("OAUTH_URL") or os.getenv("OAUTH_PROXY_URL")
+    env_value = os.getenv("OAUTH_URL")
     if env_value:
         return env_value
 
@@ -515,7 +557,7 @@ async def get_oauth_proxy_url() -> str:
 
 
 async def get_googleapis_proxy_url() -> str:
-    env_value = os.getenv("GOOGLE_APIS_URL") or os.getenv("GOOGLEAPIS_PROXY_URL")
+    env_value = os.getenv("GOOGLE_APIS_URL")
     if env_value:
         return env_value
 
@@ -523,7 +565,7 @@ async def get_googleapis_proxy_url() -> str:
 
 
 async def get_resource_manager_api_url() -> str:
-    env_value = os.getenv("RESOURCE_MANAGER_URL") or os.getenv("RESOURCE_MANAGER_API_URL")
+    env_value = os.getenv("RESOURCE_MANAGER_URL")
     if env_value:
         return env_value
 
@@ -536,24 +578,20 @@ async def get_resource_manager_api_url() -> str:
 
 
 async def get_service_usage_api_url() -> str:
-    env_value = os.getenv("SERVICE_USAGE_URL") or os.getenv("SERVICE_USAGE_API_URL")
+    env_value = os.getenv("SERVICE_USAGE_URL")
     if env_value:
         return env_value
 
     return str(await get_config_value("service_usage_url", "https://serviceusage.googleapis.com"))
 
 
-async def get_api_url() -> str:
-    env_value = os.getenv("ANTIGRAVITY_API_URL") or os.getenv("API_URL")
+async def get_antigravity_api_url() -> str:
+    """Return the Antigravity upstream API endpoint."""
+    env_value = os.getenv("ANTIGRAVITY_API_URL")
     if env_value:
         return env_value
 
-    return str(await get_config_value("api_url", DEFAULT_ANTIGRAVITY_API_URL))
-
-
-async def get_antigravity_api_url() -> str:
-    """Return the Antigravity upstream API endpoint."""
-    return await get_api_url()
+    return str(await get_config_value("antigravity_api_url", DEFAULT_ANTIGRAVITY_API_URL))
 
 
 async def get_google_ai_studio_api_url() -> str:
@@ -570,7 +608,7 @@ async def get_google_ai_studio_api_url() -> str:
 
 async def get_antigravity_user_agent() -> str:
     """Return the Antigravity CLI user agent."""
-    env_value = os.getenv("ANTIGRAVITY_USER_AGENT") or os.getenv("USER_AGENT")
+    env_value = os.getenv("ANTIGRAVITY_USER_AGENT")
     if env_value:
         return env_value
 
@@ -621,33 +659,20 @@ async def get_antigravity_oauth_client_config() -> tuple[str, str]:
     client_id = str(
         await get_config_value(
             "antigravity_client_id",
-            "",
+            DEFAULT_ANTIGRAVITY_CLIENT_ID,
             "ANTIGRAVITY_CLIENT_ID",
         )
-        or ""
+        or DEFAULT_ANTIGRAVITY_CLIENT_ID
     )
-    if not client_id:
-        client_id = str(
-            await get_config_value("client_id", DEFAULT_ANTIGRAVITY_CLIENT_ID, "CLIENT_ID") or ""
-        )
 
     client_secret = str(
         await get_config_value(
             "antigravity_client_secret",
-            None,
+            DEFAULT_ANTIGRAVITY_CLIENT_SECRET,
             "ANTIGRAVITY_CLIENT_SECRET",
         )
-        or ""
+        or DEFAULT_ANTIGRAVITY_CLIENT_SECRET
     )
-    if not client_secret:
-        client_secret = str(
-            await get_config_value(
-                "client_secret",
-                DEFAULT_ANTIGRAVITY_CLIENT_SECRET,
-                "CLIENT_SECRET",
-            )
-            or DEFAULT_ANTIGRAVITY_CLIENT_SECRET
-        )
 
     return client_id, client_secret
 

@@ -71,7 +71,7 @@ def run_smoke(base_url: str, expect_fresh_setup: bool, setup_token: str = "") ->
         require_status(canonical_credentials, 200, "Canonical credential route")
 
         legacy_credentials = client.get("/api/creds/status?mode=provider")
-        require_status(legacy_credentials, 200, "Transitional credential route")
+        require_status(legacy_credentials, 404, "Removed beta credential route")
 
         invalid_inference = client.post(
             "/v1/chat/completions",
@@ -82,6 +82,11 @@ def run_smoke(base_url: str, expect_fresh_setup: bool, setup_token: str = "") ->
             },
         )
         require_status(invalid_inference, 401, "Invalid API key rejection")
+        invalid_payload = invalid_inference.json()
+        if invalid_payload.get("error", {}).get("type") != "authentication_error":
+            raise RuntimeError("OpenAI authentication errors do not use the stable SDK schema.")
+        if not invalid_inference.headers.get("x-request-id"):
+            raise RuntimeError("Inference responses must include X-Request-ID.")
 
         logout = client.post("/api/auth/logout")
         require_status(logout, 200, "Logout")

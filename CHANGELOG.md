@@ -1,8 +1,41 @@
 # Changelog
 
-All notable user-facing changes are documented in this file. Omni Gateway follows [Semantic Versioning](https://semver.org/) while allowing breaking changes during the `0.x` beta series.
+All notable user-facing changes are documented in this file. Omni Gateway follows [Semantic Versioning](https://semver.org/). The historical `0.x` beta series allowed breaking changes; compatibility changes after `1.0.0` require an appropriate major version.
 
 ## [Unreleased]
+
+## [1.0.0] - 2026-07-13
+
+### Added
+
+- Added provider-aware model discovery, credential model testing, virtual `omway` routing, and a manageable blacklist for unavailable virtual-model routes.
+- Added Google AI Studio API-key credentials, JSON/ZIP import, model catalog discovery, credential backup restoration, and provider-specific pool views.
+- Added stable OpenAI, Anthropic, and Google GenAI error envelopes across authentication, validation, upstream, and pre-stream failures.
+- Added bounded request identifiers through `X-Request-ID` for client-side correlation.
+- Added a configurable global request-body ceiling for fixed-length and chunked SDK requests.
+- Added release-based update discovery that compares semantic versions against the latest published GitHub Release.
+- Added first-class architecture, upgrade, security, contribution, and release-checklist documentation for the stable series.
+
+### Changed
+
+- Declared the SDK-compatible routes and canonical `/api/credentials` management routes as the 1.x compatibility baseline.
+- Hardened configuration, credential-manager, and storage initialization so partial failures stop startup instead of exposing a split or misleading runtime state.
+- Made explicit MongoDB or PostgreSQL configuration fail closed when unavailable, and rejected simultaneous external database selections.
+- Moved default-branch container builds to the `edge` channel; `latest` now advances only for verified stable version tags.
+- Pinned the official Python container base image by digest while retaining Dependabot updates.
+- Removed inline browser event handlers and tightened the management console content-security policy.
+- Improved first-run authentication state, bounded login-rate-limit memory, same-origin session enforcement, provider-error redaction, and shutdown cleanup.
+
+### Removed
+
+- Removed the beta `/api/creds` route aliases; integrations must use `/api/credentials`.
+- Removed the ambiguous `PASSWORD`, `CLIENT_ID`, `CLIENT_SECRET`, `API_URL`, and other beta environment aliases in favor of the documented canonical names.
+
+### Fixed
+
+- Standardized "no credentials available" as `503 Service Unavailable` so SDK retry behavior is correct.
+- Prevented startup races when initializing configuration, credential managers, and storage adapters.
+- Prevented unauthenticated console startup probes from generating expected `401` errors in the browser console.
 
 ## [0.2.0-beta] - 2026-07-12
 
@@ -41,6 +74,7 @@ All notable user-facing changes are documented in this file. Omni Gateway follow
 - Provider credential pool, virtual model routing, context optimization, usage visibility, and the management console.
 - Docker Hub and GitHub Container Registry publishing.
 
-[Unreleased]: https://github.com/nguywnben/omni-gateway/compare/v0.2.0-beta...HEAD
+[Unreleased]: https://github.com/nguywnben/omni-gateway/compare/v1.0.0...HEAD
+[1.0.0]: https://github.com/nguywnben/omni-gateway/compare/v0.2.0-beta...v1.0.0
 [0.2.0-beta]: https://github.com/nguywnben/omni-gateway/compare/v0.1.0-beta...v0.2.0-beta
 [0.1.0-beta]: https://github.com/nguywnben/omni-gateway/releases/tag/v0.1.0-beta

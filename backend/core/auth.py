@@ -930,12 +930,7 @@ async def verify_password(password: str) -> bool:
     if not correct_password:
         return False
     is_valid = verify_password_value(password, correct_password)
-    if (
-        is_valid
-        and not is_password_hash(correct_password)
-        and not os.getenv("PANEL_PASSWORD")
-        and not os.getenv("PASSWORD")
-    ):
+    if is_valid and not is_password_hash(correct_password) and not os.getenv("PANEL_PASSWORD"):
         try:
             storage_adapter = await get_storage_adapter()
             await storage_adapter.set_config("panel_password", hash_password(password))

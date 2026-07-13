@@ -4,16 +4,19 @@ from __future__ import annotations
 
 import sqlite3
 import sys
-import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import AsyncMock, patch
 
 BACKEND_DIR = Path(__file__).resolve().parents[1]
+TESTS_DIR = Path(__file__).resolve().parent
 if str(BACKEND_DIR) not in sys.path:
     sys.path.insert(0, str(BACKEND_DIR))
+if str(TESTS_DIR) not in sys.path:
+    sys.path.insert(0, str(TESTS_DIR))
 
 from core import usage_stats
+from support import workspace_temp_directory
 
 
 class UsageStatsTests(unittest.TestCase):
@@ -29,7 +32,7 @@ class UsageStatsTests(unittest.TestCase):
 
     def test_record_call_persists_provider_and_compression_metrics(self):
         original_db_path = usage_stats.db_path
-        with tempfile.TemporaryDirectory(dir=Path(__file__).parent) as temp_dir:
+        with workspace_temp_directory() as temp_dir:
             try:
                 usage_stats.db_path = str(Path(temp_dir) / "usage.db")
                 usage_stats.record_call(
@@ -71,7 +74,7 @@ class UsageStatsTests(unittest.TestCase):
 class UsageAggregationTests(unittest.IsolatedAsyncioTestCase):
     async def test_deleted_credential_usage_is_retained_anonymously(self):
         original_db_path = usage_stats.db_path
-        with tempfile.TemporaryDirectory(dir=Path(__file__).parent) as temp_dir:
+        with workspace_temp_directory() as temp_dir:
             try:
                 usage_stats.db_path = str(Path(temp_dir) / "usage.db")
                 usage_stats.record_call(
@@ -117,7 +120,7 @@ class UsageAggregationTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_readded_credential_does_not_reclaim_deleted_history(self):
         original_db_path = usage_stats.db_path
-        with tempfile.TemporaryDirectory(dir=Path(__file__).parent) as temp_dir:
+        with workspace_temp_directory() as temp_dir:
             try:
                 usage_stats.db_path = str(Path(temp_dir) / "usage.db")
                 filename = "google-antigravity-account.json"
@@ -156,7 +159,7 @@ class UsageAggregationTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_deleted_credentials_are_aggregated_by_provider(self):
         original_db_path = usage_stats.db_path
-        with tempfile.TemporaryDirectory(dir=Path(__file__).parent) as temp_dir:
+        with workspace_temp_directory() as temp_dir:
             try:
                 usage_stats.db_path = str(Path(temp_dir) / "usage.db")
                 usage_stats.record_call("account-a.json", provider="google_antigravity")
@@ -192,7 +195,7 @@ class UsageAggregationTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_usage_records_return_stable_provider_identity(self):
         original_db_path = usage_stats.db_path
-        with tempfile.TemporaryDirectory(dir=Path(__file__).parent) as temp_dir:
+        with workspace_temp_directory() as temp_dir:
             try:
                 usage_stats.db_path = str(Path(temp_dir) / "usage.db")
                 usage_stats.record_call(
@@ -234,7 +237,7 @@ class UsageAggregationTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_period_aggregation_returns_compression_metrics(self):
         original_db_path = usage_stats.db_path
-        with tempfile.TemporaryDirectory(dir=Path(__file__).parent) as temp_dir:
+        with workspace_temp_directory() as temp_dir:
             try:
                 usage_stats.db_path = str(Path(temp_dir) / "usage.db")
                 usage_stats.record_call(

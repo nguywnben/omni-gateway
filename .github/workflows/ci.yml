@@ -26,6 +26,7 @@ jobs:
     env:
       PYTHONDONTWRITEBYTECODE: "1"
       ENABLE_LOG: "0"
+      CREDENTIALS_DIR: /tmp/omni-gateway-tests/credentials
     permissions:
       contents: read
 
@@ -98,7 +99,7 @@ jobs:
         run: bash -n deploy/scripts/*.sh
 
       - name: Run unit tests
-        run: python -m unittest discover -s backend/tests -p 'test_*.py'
+        run: python -m backend.tests
 
       - name: Verify route contracts
         if: matrix.python-version == '3.12'
@@ -267,9 +268,20 @@ jobs:
         run: |
           python - <<'PY'
           import os
+          import sys
           from pathlib import Path
 
           version = os.environ["RELEASE_TAG"].removeprefix("v")
+          sys.path.insert(0, "backend")
+          from app_version import DEFAULT_APPLICATION_VERSION
+
+          if version != DEFAULT_APPLICATION_VERSION:
+              raise SystemExit(
+                  "Release tag version "
+                  f"{version} does not match DEFAULT_APPLICATION_VERSION "
+                  f"{DEFAULT_APPLICATION_VERSION}."
+              )
+
           lines = Path("CHANGELOG.md").read_text(encoding="utf-8").splitlines()
           heading = f"## [{version}]"
 

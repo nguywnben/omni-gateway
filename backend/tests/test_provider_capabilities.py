@@ -14,6 +14,7 @@ from core.provider_registry import (
     GOOGLE_AI_STUDIO,
     GOOGLE_ANTIGRAVITY,
     credential_supports_model,
+    get_declared_credential_models,
     get_provider_capabilities,
     list_provider_capabilities,
 )
@@ -59,6 +60,22 @@ class ProviderCapabilityTests(unittest.TestCase):
         }
 
         self.assertFalse(credential_supports_model(credential, "other/gemini-2.5-flash"))
+
+    def test_declared_model_catalog_is_normalized_and_deduplicated(self):
+        credential = {
+            "model_ids": [
+                " models/gemini-2.5-flash ",
+                "gemini-2.5-flash",
+                "gemini-2.5-pro",
+                "",
+                None,
+            ]
+        }
+
+        self.assertEqual(
+            get_declared_credential_models(credential),
+            ["gemini-2.5-flash", "gemini-2.5-pro"],
+        )
 
 
 if __name__ == "__main__":

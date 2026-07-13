@@ -17,12 +17,18 @@ from core.google_ai_studio import (
 from core.google_oauth_api import (
     Credentials,
 )
-from core.models import CredFileActionRequest, CredFileBatchActionRequest
+from core.model_pool import ModelPoolError, model_catalog_service, normalize_model_id
+from core.models import (
+    CredentialModelTestRequest,
+    CredFileActionRequest,
+    CredFileBatchActionRequest,
+)
 from core.pool_import import PoolImportError, restore_pool_archive
 from core.provider_registry import (
     GOOGLE_AI_STUDIO,
     GOOGLE_ANTIGRAVITY,
     get_credential_provider,
+    get_declared_credential_models,
 )
 from core.storage_adapter import get_storage_adapter
 from core.utils import CODE_ASSIST_USER_AGENT, verify_panel_token
@@ -41,9 +47,25 @@ from .credential_operations import (
     upload_credentials_common,
     verify_credential_project_common,
 )
-from .utils import validate_credential_filename, validate_mode
+from .utils import (
+    internal_server_error,
+    public_error_detail,
+    validate_credential_filename,
+    validate_mode,
+)
 
 router = APIRouter(tags=["credentials"])
+
+
+async def _get_available_credential_models(credential_data: dict) -> list[str]:
+    """Return models that can be selected for one credential test."""
+    declared_models = get_declared_credential_models(credential_data)
+    if declared_models:
+        return declared_models
+
+    provider_id = get_credential_provider(credential_data)
+    catalog = await model_catalog_service.get_catalog()
+    return [entry.model_id for entry in catalog if provider_id in entry.providers]
 
 
 @router.post("/upload")
@@ -59,7 +81,7 @@ async def upload_credentials(
         raise
     except Exception as e:
         log.error(f"Batch upload failed: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise internal_server_error() from e
 
 
 @router.get("/status")
@@ -92,7 +114,42 @@ async def get_creds_status(
         raise
     except Exception as e:
         log.error(f"Failed to retrieve credential status: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise internal_server_error() from e
+
+
+@router.get("/models/{filename}")
+async def get_credential_models(
+    filename: str,
+    token: str = Depends(verify_panel_token),
+    mode: str = "primary",
+):
+    """Return public model metadata for one credential without exposing secrets."""
+    try:
+        mode = validate_mode(mode)
+        filename = validate_credential_filename(filename)
+        storage_adapter = await get_storage_adapter()
+        credential_data = await storage_adapter.get_credential(filename, mode=mode)
+        if not credential_data:
+            raise HTTPException(status_code=404, detail="Credential does not exist.")
+
+        model_ids = await _get_available_credential_models(credential_data)
+        return JSONResponse(
+            content={
+                "success": True,
+                "filename": filename,
+                "provider": get_credential_provider(credential_data),
+                "model_count": len(model_ids),
+                "model_ids": model_ids,
+            }
+        )
+    except HTTPException:
+        raise
+    except Exception as exc:
+        log.error(f"Failed to retrieve credential models: {exc}")
+        raise HTTPException(
+            status_code=500,
+            detail="Unable to retrieve credential models.",
+        ) from exc
 
 
 @router.get("/detail/{filename}")
@@ -140,7 +197,7 @@ async def get_cred_detail(
         raise
     except Exception as e:
         log.error(f"Failed to retrieve credential details {filename}: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise internal_server_error() from e
 
 
 @router.post("/action")
@@ -217,9 +274,7 @@ async def creds_action(
                     raise HTTPException(status_code=500, detail="Failed to delete the credential.")
             except Exception as e:
                 log.error(f"Error deleting credential {filename}: {e}")
-                raise HTTPException(
-                    status_code=500, detail=f"Failed to delete the credential: {str(e)}"
-                )
+                raise internal_server_error() from e
 
         elif action == "enable_credit":
             if mode != "primary" or get_credential_provider(credential_data) != GOOGLE_ANTIGRAVITY:
@@ -266,7 +321,7 @@ async def creds_action(
         raise
     except Exception as e:
         log.error(f"Credential file operation failed: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise internal_server_error() from e
 
 
 @router.post("/batch-action")
@@ -330,8 +385,8 @@ async def creds_batch_action(
                         else:
                             errors.append(f"{filename}: delete failed")
                             continue
-                    except Exception as e:
-                        errors.append(f"{filename}: delete failed - {str(e)}")
+                    except Exception:
+                        errors.append(f"{filename}: delete failed")
                         continue
                 elif action == "enable_credit":
                     if (
@@ -379,7 +434,7 @@ async def creds_batch_action(
 
             except Exception as e:
                 log.error(f"Error processing {filename}: {e}")
-                errors.append(f"{filename}: processing failed - {str(e)}")
+                errors.append(f"{filename}: processing failed")
                 continue
 
         # Build response message
@@ -402,7 +457,7 @@ async def creds_batch_action(
         raise
     except Exception as e:
         log.error(f"Batch credential file operation failed: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise internal_server_error() from e
 
 
 @router.get("/download/{filename}")
@@ -439,7 +494,7 @@ async def download_cred_file(
         raise
     except Exception as e:
         log.error(f"Failed to download credential file: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise internal_server_error() from e
 
 
 @router.post("/fetch-email/{filename}")
@@ -453,7 +508,7 @@ async def fetch_user_email(
         raise
     except Exception as e:
         log.error(f"Failed to retrieve user email: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise internal_server_error() from e
 
 
 @router.post("/refresh-all-emails")
@@ -465,7 +520,7 @@ async def refresh_all_user_emails(
         return await refresh_all_user_emails_common(mode=mode)
     except Exception as e:
         log.error(f"Failed to retrieve user emails in batch: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise internal_server_error() from e
 
 
 @router.post("/deduplicate-by-email")
@@ -477,7 +532,7 @@ async def deduplicate_credentials_by_email(
         return await deduplicate_credentials_by_email_common(mode=mode)
     except Exception as e:
         log.error(f"Failed to deduplicate credentials in batch: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise internal_server_error() from e
 
 
 @router.get("/download-all")
@@ -489,7 +544,7 @@ async def download_all_creds(token: str = Depends(verify_panel_token), mode: str
         raise
     except Exception as e:
         log.error(f"Failed to download package: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise internal_server_error() from e
 
 
 @router.post("/import")
@@ -518,7 +573,7 @@ async def verify_credential_project(
         raise
     except Exception as e:
         log.error(f"Failed to verify credential Project ID {filename}: {e}")
-        raise HTTPException(status_code=500, detail=f"Validation failed: {str(e)}")
+        raise internal_server_error() from e
 
 
 @router.get("/errors/{filename}")
@@ -545,7 +600,7 @@ async def get_credential_errors(
         raise
     except Exception as e:
         log.error(f"Failed to retrieve credential error information {filename}: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise internal_server_error() from e
 
 
 @router.get("/quota/{filename}")
@@ -620,7 +675,7 @@ async def get_credential_quota(
         raise
     except Exception as e:
         log.error(f"Failed to retrieve credential quota {filename}: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to retrieve quota details: {str(e)}")
+        raise internal_server_error() from e
 
 
 @router.post("/configure-preview/{filename}")
@@ -715,7 +770,9 @@ async def configure_preview_channel(
                     f"Step 1/2: list request failed (status={list_response.status_code}); keeping the generated setting ID."
                 )
         else:
-            error_text = setting_response.text if hasattr(setting_response, "text") else ""
+            error_text = public_error_detail(
+                setting_response.text if hasattr(setting_response, "text") else ""
+            )
             log.error(
                 f"Step 1/2 failed: {filename} - Status: {setting_status}, Error: {error_text}"
             )
@@ -779,7 +836,9 @@ async def configure_preview_channel(
             )
         else:
             # Step 2 failed
-            error_text = binding_response.text if hasattr(binding_response, "text") else ""
+            error_text = public_error_detail(
+                binding_response.text if hasattr(binding_response, "text") else ""
+            )
             log.error(
                 f"Step 2/2 failed: {filename} - Status: {binding_status}, Error: {error_text}"
             )
@@ -800,12 +859,15 @@ async def configure_preview_channel(
         raise
     except Exception as e:
         log.error(f"Failed to configure preview channel {filename}: {e}")
-        raise HTTPException(status_code=500, detail=f"Configuration failed: {str(e)}")
+        raise internal_server_error() from e
 
 
 @router.post("/test/{filename}")
 async def test_credential(
-    filename: str, mode: str = "code_assist", _token: str = Depends(verify_panel_token)
+    filename: str,
+    request: CredentialModelTestRequest,
+    mode: str = "code_assist",
+    _token: str = Depends(verify_panel_token),
 ):
     try:
         mode = validate_mode(mode)
@@ -821,12 +883,22 @@ async def test_credential(
         from core.httpx_client import post_async
 
         provider_id = get_credential_provider(credential_data)
-        available_models = credential_data.get("model_ids") or []
-        test_model = (
-            "gemini-2.5-flash"
-            if "gemini-2.5-flash" in available_models or not available_models
-            else str(available_models[0])
-        )
+        try:
+            test_model = normalize_model_id(request.model)
+        except ModelPoolError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+        available_models = await _get_available_credential_models(credential_data)
+        if not available_models:
+            raise HTTPException(
+                status_code=409,
+                detail="No models are currently available for this credential.",
+            )
+        if test_model not in available_models:
+            raise HTTPException(
+                status_code=400,
+                detail="The selected model is not available for this credential.",
+            )
 
         test_request = {
             "contents": [{"role": "user", "parts": [{"text": "hi"}]}],
@@ -966,7 +1038,7 @@ async def test_credential(
             log.warning(f"Credential test failed: {filename} (mode={mode}, status={status_code})")
 
             try:
-                error_text = response.text if hasattr(response, "text") else ""
+                error_text = public_error_detail(response.text if hasattr(response, "text") else "")
 
                 log.error(
                     f"Credential test error details - file: {filename}, mode: {mode}, status code: {status_code}, error: {error_text}"
@@ -987,7 +1059,7 @@ async def test_credential(
             except Exception as e:
                 log.error(f"Failed to save test error message: {e}")
 
-        error_text = response.text if hasattr(response, "text") else ""
+        error_text = public_error_detail(response.text if hasattr(response, "text") else "")
 
         return JSONResponse(
             status_code=status_code,
@@ -997,6 +1069,7 @@ async def test_credential(
                 "message": f"Test failed: HTTP {status_code}",
                 "error": error_text,
                 "filename": filename,
+                "model": test_model,
             },
         )
 
@@ -1010,8 +1083,8 @@ async def test_credential(
                 "success": False,
                 "status_code": 500,
                 "message": "Test failed.",
-                "error": str(e),
-                "detail": f"Test failed: {str(e)}",
+                "error": public_error_detail(e, "Credential testing failed."),
+                "detail": public_error_detail(e, "Credential testing failed."),
                 "filename": filename,
             },
         )

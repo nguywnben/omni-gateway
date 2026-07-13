@@ -10,7 +10,7 @@ from log import log, redact_text
 from paths import DEFAULT_LOG_FILE
 from starlette.websockets import WebSocketState
 
-from .utils import ConnectionManager
+from .utils import ConnectionManager, internal_server_error
 
 router = APIRouter(prefix="/api/logs", tags=["logs"])
 
@@ -76,13 +76,13 @@ async def clear_logs(token: str = Depends(verify_panel_token)):
                 )
             except Exception as e:
                 log.error(f"Failed to clear log file: {e}")
-                raise HTTPException(status_code=500, detail=f"Failed to clear log file: {str(e)}")
+                raise internal_server_error() from e
         else:
             return JSONResponse(content={"message": "Log file does not exist."})
 
     except Exception as e:
         log.error(f"Failed to clear log file: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to clear log file: {str(e)}")
+        raise internal_server_error() from e
 
 
 @router.get("/download")
@@ -117,7 +117,7 @@ async def download_logs(token: str = Depends(verify_panel_token)):
         raise
     except Exception as e:
         log.error(f"Failed to download log file: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to download log file: {str(e)}")
+        raise internal_server_error() from e
 
 
 @router.websocket("/stream")

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import re
 import subprocess
 from dataclasses import asdict, dataclass
 
@@ -12,7 +13,8 @@ from log import log
 from paths import PROJECT_ROOT
 
 router = APIRouter(prefix="/api/version", tags=["version"])
-LATEST_COMMIT_URL = "https://api.github.com/repos/nguywnben/omni-gateway/commits/main"
+LATEST_RELEASE_URL = "https://api.github.com/repos/nguywnben/omni-gateway/releases/latest"
+_SEMVER_PATTERN = re.compile(r"^v?(\d+)\.(\d+)\.(\d+)(?:-([0-9A-Za-z.-]+))?(?:\+[0-9A-Za-z.-]+)?$")
 
 
 @dataclass(frozen=True)
@@ -68,17 +70,61 @@ def get_build_metadata() -> BuildMetadata:
         )
 
 
-def _remote_metadata(payload: dict) -> BuildMetadata:
-    revision = str(payload.get("sha") or "").strip()
-    commit = payload.get("commit") if isinstance(payload.get("commit"), dict) else {}
-    committer = commit.get("committer") if isinstance(commit.get("committer"), dict) else {}
-    message = str(commit.get("message") or "").splitlines()[0]
-    return BuildMetadata(
-        version=revision[:7] or "unknown",
-        full_hash=revision,
-        message=message,
-        date=str(committer.get("date") or ""),
+def _release_metadata(payload: dict) -> BuildMetadata:
+    version = str(payload.get("tag_name") or "").strip().removeprefix("v")
+    name = str(payload.get("name") or "").strip()
+    body_line = next(
+        (line.strip() for line in str(payload.get("body") or "").splitlines() if line.strip()),
+        "",
     )
+    return BuildMetadata(
+        version=version or "unknown",
+        full_hash="",
+        message=name or body_line or "Release available",
+        date=str(payload.get("published_at") or ""),
+    )
+
+
+def _parse_semver(value: str) -> tuple[tuple[int, int, int], tuple[str, ...] | None] | None:
+    match = _SEMVER_PATTERN.fullmatch(value.strip())
+    if not match:
+        return None
+    core = tuple(int(part) for part in match.groups()[:3])
+    prerelease = tuple(match.group(4).split(".")) if match.group(4) else None
+    return core, prerelease
+
+
+def _compare_prerelease(left: tuple[str, ...], right: tuple[str, ...]) -> int:
+    for left_part, right_part in zip(left, right):
+        if left_part == right_part:
+            continue
+        left_numeric = left_part.isdigit()
+        right_numeric = right_part.isdigit()
+        if left_numeric and right_numeric:
+            return 1 if int(left_part) > int(right_part) else -1
+        if left_numeric != right_numeric:
+            return -1 if left_numeric else 1
+        return 1 if left_part > right_part else -1
+    if len(left) == len(right):
+        return 0
+    return 1 if len(left) > len(right) else -1
+
+
+def is_newer_release(latest: str, current: str) -> bool | None:
+    """Compare semantic release versions, returning None for development builds."""
+    latest_version = _parse_semver(latest)
+    current_version = _parse_semver(current)
+    if latest_version is None or current_version is None:
+        return None
+    latest_core, latest_prerelease = latest_version
+    current_core, current_prerelease = current_version
+    if latest_core != current_core:
+        return latest_core > current_core
+    if latest_prerelease is None:
+        return current_prerelease is not None
+    if current_prerelease is None:
+        return False
+    return _compare_prerelease(latest_prerelease, current_prerelease) > 0
 
 
 @router.get("/info")
@@ -93,24 +139,23 @@ async def get_version_info(check_update: bool = False):
         from core.httpx_client import get_async
 
         response = await get_async(
-            LATEST_COMMIT_URL,
-            headers={"Accept": "application/vnd.github+json"},
+            LATEST_RELEASE_URL,
+            headers={
+                "Accept": "application/vnd.github+json",
+                "X-GitHub-Api-Version": "2022-11-28",
+            },
             timeout=10.0,
         )
         if response.status_code != 200:
             raise RuntimeError(f"GitHub returned HTTP {response.status_code}")
 
-        latest = _remote_metadata(response.json())
+        latest = _release_metadata(response.json())
         response_data.update(
             {
                 "check_update": True,
-                "has_update": (
-                    current.full_hash != latest.full_hash
-                    if current.full_hash and latest.full_hash
-                    else None
-                ),
+                "has_update": is_newer_release(latest.version, current.version),
                 "latest_version": latest.version,
-                "latest_hash": latest.full_hash,
+                "latest_url": str(response.json().get("html_url") or ""),
                 "latest_message": latest.message,
                 "latest_date": latest.date,
             }

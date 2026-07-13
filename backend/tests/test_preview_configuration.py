@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import sys
 import unittest
 from pathlib import Path
@@ -49,6 +50,41 @@ class PreviewConfigurationTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(post.await_count, 2)
         self.assertIn("releaseChannelSettings", post.await_args_list[0].kwargs["url"])
         self.assertIn("settingBindings", post.await_args_list[1].kwargs["url"])
+
+    async def test_provider_error_response_redacts_api_keys(self):
+        storage = AsyncMock()
+        storage.get_credential.return_value = {
+            "access_token": "access-token",
+            "project_id": "project-id",
+        }
+        credentials = MagicMock()
+        credentials.refresh_if_needed = AsyncMock(return_value=False)
+        api_key = "AIza" + ("A" * 32)
+        post = AsyncMock(
+            return_value=SimpleNamespace(
+                status_code=400,
+                text=json.dumps({"error": "invalid", "api_key": api_key}),
+            )
+        )
+
+        with (
+            patch(
+                "core.panel.credentials.get_storage_adapter",
+                new=AsyncMock(return_value=storage),
+            ),
+            patch("core.panel.credentials.Credentials.from_dict", return_value=credentials),
+            patch("core.httpx_client.post_async", new=post),
+        ):
+            response = await configure_preview_channel(
+                "credential.json",
+                token="session",
+                mode="code_assist",
+            )
+
+        payload = json.loads(response.body)
+        self.assertEqual(response.status_code, 400)
+        self.assertNotIn(api_key, payload["error"])
+        self.assertIn("<redacted>", payload["error"])
 
 
 if __name__ == "__main__":

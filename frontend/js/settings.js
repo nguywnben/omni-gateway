@@ -572,7 +572,7 @@ async function addGoogleAIStudioCredential(event) {
 const ANTIGRAVITY_CONFIG_FIELD_KEYS = {
     antigravityOauthClientId: 'antigravity_client_id',
     antigravityOauthClientSecret: 'antigravity_client_secret',
-    antigravityApiUrl: 'api_url',
+    antigravityApiUrl: 'antigravity_api_url',
     antigravityOauthUrl: 'oauth_url',
     antigravityGoogleApisUrl: 'google_apis_url',
     antigravityResourceManagerUrl: 'resource_manager_url',
@@ -637,7 +637,7 @@ function populateAntigravitySettings() {
 
     setAntigravityConfigField('antigravityOauthClientSecret', c.antigravity_client_secret || '');
 
-    setAntigravityConfigField('antigravityApiUrl', c.api_url || '');
+    setAntigravityConfigField('antigravityApiUrl', c.antigravity_api_url || '');
 
     setAntigravityConfigField('antigravityOauthUrl', c.oauth_url || '');
 
@@ -709,7 +709,7 @@ async function saveAntigravitySettings() {
         const config = {
             antigravity_client_id: getValue('antigravityOauthClientId'),
             antigravity_client_secret: getValue('antigravityOauthClientSecret'),
-            api_url: getValue('antigravityApiUrl'),
+            antigravity_api_url: getValue('antigravityApiUrl'),
             oauth_url: getValue('antigravityOauthUrl'),
             google_apis_url: getValue('antigravityGoogleApisUrl'),
             resource_manager_url: getValue('antigravityResourceManagerUrl'),

@@ -144,6 +144,30 @@ async def record_api_call_error(
         )
 
 
+async def record_model_route_miss(
+    credential_manager: CredentialManager,
+    credential_name: str,
+    *,
+    model_name: str,
+    provider: str,
+) -> None:
+    """Record an unsupported provider-model route without penalizing its credential."""
+    try:
+        await asyncio.to_thread(
+            record_call,
+            credential_name,
+            model=model_name,
+            provider=provider,
+            status_code=404,
+            success=False,
+            token_usage=None,
+        )
+    except Exception as exc:
+        log.error(f"Failed to record model route miss for {credential_name}: {exc}")
+    finally:
+        await credential_manager.release_credential(credential_name, mode="primary")
+
+
 async def record_unassigned_api_call_error(
     *,
     status_code: int = 500,

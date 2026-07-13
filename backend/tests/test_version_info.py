@@ -12,7 +12,7 @@ BACKEND_DIR = Path(__file__).resolve().parents[1]
 if str(BACKEND_DIR) not in sys.path:
     sys.path.insert(0, str(BACKEND_DIR))
 
-from core.panel.version import get_version_info
+from core.panel.version import get_version_info, is_newer_release
 
 
 class FakeResponse:
@@ -30,7 +30,7 @@ class VersionInfoTests(unittest.IsolatedAsyncioTestCase):
             "os.environ",
             {
                 "BUILD_REVISION": "abcdef1234567890",
-                "BUILD_VERSION": "0.2.0",
+                "BUILD_VERSION": "1.0.0",
                 "BUILD_DATE": "2026-07-11T10:00:00Z",
             },
             clear=False,
@@ -39,25 +39,25 @@ class VersionInfoTests(unittest.IsolatedAsyncioTestCase):
 
         body = json.loads(response.body)
         self.assertTrue(body["success"])
-        self.assertEqual(body["version"], "0.2.0")
+        self.assertEqual(body["version"], "1.0.0")
         self.assertEqual(body["full_hash"], "abcdef1234567890")
         self.assertEqual(body["date"], "2026-07-11T10:00:00Z")
 
-    async def test_update_check_uses_the_public_commit_api(self):
+    async def test_update_check_uses_the_latest_public_release(self):
         remote = FakeResponse(
             200,
             {
-                "sha": "fedcba9876543210",
-                "commit": {
-                    "message": "Release hardening\n\nDetails",
-                    "committer": {"date": "2026-07-11T12:00:00Z"},
-                },
+                "tag_name": "v1.1.0",
+                "name": "Omni Gateway 1.1.0",
+                "body": "Release hardening.\n\nDetails.",
+                "published_at": "2026-08-11T12:00:00Z",
+                "html_url": "https://github.com/nguywnben/omni-gateway/releases/tag/v1.1.0",
             },
         )
         with (
             patch.dict(
                 "os.environ",
-                {"BUILD_REVISION": "abcdef1234567890", "BUILD_VERSION": "0.2.0"},
+                {"BUILD_REVISION": "abcdef1234567890", "BUILD_VERSION": "1.0.0"},
                 clear=False,
             ),
             patch("core.httpx_client.get_async", new=AsyncMock(return_value=remote)) as get,
@@ -67,13 +67,24 @@ class VersionInfoTests(unittest.IsolatedAsyncioTestCase):
         body = json.loads(response.body)
         self.assertTrue(body["check_update"])
         self.assertTrue(body["has_update"])
-        self.assertEqual(body["latest_version"], "fedcba9")
-        self.assertEqual(body["latest_message"], "Release hardening")
+        self.assertEqual(body["latest_version"], "1.1.0")
+        self.assertEqual(body["latest_message"], "Omni Gateway 1.1.0")
+        self.assertEqual(
+            body["latest_url"],
+            "https://github.com/nguywnben/omni-gateway/releases/tag/v1.1.0",
+        )
         requested_url = get.await_args.args[0]
         self.assertEqual(
             requested_url,
-            "https://api.github.com/repos/nguywnben/omni-gateway/commits/main",
+            "https://api.github.com/repos/nguywnben/omni-gateway/releases/latest",
         )
+
+    def test_semantic_release_comparison_handles_stable_and_prerelease_versions(self):
+        self.assertTrue(is_newer_release("1.0.0", "1.0.0-beta"))
+        self.assertTrue(is_newer_release("1.1.0", "1.0.9"))
+        self.assertFalse(is_newer_release("1.0.0-beta.2", "1.0.0-beta.10"))
+        self.assertFalse(is_newer_release("1.0.0", "1.0.0"))
+        self.assertIsNone(is_newer_release("1.0.0", "abcdef1"))
 
     async def test_branch_builds_display_the_revision_instead_of_main(self):
         with patch.dict(
@@ -92,7 +103,7 @@ class VersionInfoTests(unittest.IsolatedAsyncioTestCase):
         with (
             patch.dict(
                 "os.environ",
-                {"BUILD_REVISION": "abcdef1234567890", "BUILD_VERSION": "0.2.0"},
+                {"BUILD_REVISION": "abcdef1234567890", "BUILD_VERSION": "1.0.0"},
                 clear=False,
             ),
             patch(

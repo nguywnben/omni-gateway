@@ -635,8 +635,13 @@ code {
 }
 
 .model-pool-card,
-.model-catalog-card {
+.model-catalog-card,
+.model-blacklist-card {
     min-width: 0;
+}
+
+.model-blacklist-card {
+    grid-column: 1 / -1;
 }
 
 .model-pool-heading,
@@ -695,7 +700,7 @@ code {
     margin-bottom: 4px;
 }
 
-.model-catalog-search {
+.model-catalog-heading input.model-catalog-search {
     width: min(220px, 45%);
     min-height: 40px;
 }
@@ -801,6 +806,96 @@ code {
 .model-catalog-list {
     max-height: 620px;
     overflow-y: auto;
+}
+
+.model-blacklist-heading {
+    align-items: flex-start;
+}
+
+.model-blacklist-heading .card-title {
+    margin-bottom: 4px;
+}
+
+.model-blacklist-heading > div:first-child {
+    max-width: 760px;
+}
+
+.model-blacklist-actions {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 8px;
+    flex: 0 0 auto;
+}
+
+.model-blacklist-actions .status-badge {
+    width: auto;
+    min-width: 68px;
+}
+
+.model-blacklist-list {
+    border-top: 1px solid var(--border);
+}
+
+.model-blacklist-item {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 16px;
+    min-height: 68px;
+    padding: 11px 2px;
+    border-bottom: 1px solid var(--border);
+}
+
+.model-blacklist-details {
+    min-width: 0;
+    display: grid;
+    gap: 7px;
+}
+
+.model-blacklist-identity,
+.model-blacklist-meta {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.model-blacklist-identity strong {
+    overflow-wrap: anywhere;
+    font-size: 13px;
+    line-height: 1.35;
+}
+
+.model-blacklist-meta {
+    color: var(--text-muted);
+    font-size: 12px;
+    line-height: 1.4;
+}
+
+.model-blacklist-meta span + span::before {
+    content: "\00b7";
+    margin-right: 8px;
+    color: var(--text-soft);
+}
+
+@media (max-width: 640px) {
+    .model-blacklist-heading {
+        display: grid;
+    }
+
+    .model-blacklist-actions {
+        justify-content: flex-start;
+    }
+
+    .model-blacklist-item {
+        grid-template-columns: minmax(0, 1fr);
+        gap: 10px;
+    }
+
+    .model-blacklist-item > .btn {
+        width: 100%;
+    }
 }
 
 .model-catalog-item {
@@ -1698,10 +1793,6 @@ label {
     margin-bottom: 7px;
 }
 
-.form-group > label {
-    pointer-events: none;
-}
-
 input[type="text"],
 input[type="password"],
 input[type="number"],
@@ -1968,70 +2059,6 @@ textarea[readonly] {
     margin-bottom: 0;
 }
 
-.pool-tools {
-    position: relative;
-    margin-left: auto;
-}
-
-.pool-tools summary {
-    min-height: 32px;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    padding: 6px 11px;
-    border: 1px solid var(--border);
-    border-radius: var(--radius);
-    background: var(--surface);
-    color: var(--text-muted);
-    cursor: pointer;
-    font-size: 12px;
-    font-weight: 650;
-    list-style: none;
-}
-
-.pool-tools summary::-webkit-details-marker {
-    display: none;
-}
-
-.pool-tools summary:hover {
-    background: var(--control-hover);
-    border-color: var(--control-hover-border);
-    color: var(--text);
-}
-
-.pool-tools-menu {
-    position: absolute;
-    top: calc(100% + 6px);
-    right: 0;
-    z-index: 20;
-    min-width: 168px;
-    display: grid;
-    gap: 6px;
-    padding: 8px;
-    border: 1px solid var(--border);
-    border-radius: var(--radius);
-    background: var(--surface);
-}
-
-.pool-tool-btn {
-    min-height: 32px;
-    width: 100%;
-    padding: 6px 10px;
-    border: 1px solid var(--border);
-    border-radius: var(--radius);
-    background: var(--surface);
-    color: var(--text);
-    cursor: pointer;
-    font-size: 12px;
-    font-weight: 650;
-    text-align: left;
-}
-
-.pool-tool-btn:hover {
-    background: var(--control-hover);
-    border-color: var(--control-hover-border);
-}
-
 .selected-count,
 .pagination-info {
     color: var(--text-muted);
@@ -2070,7 +2097,6 @@ textarea[readonly] {
 .filter-group label {
     margin: 0;
     white-space: nowrap;
-    pointer-events: none;
 }
 
 .filter-select,
@@ -2653,6 +2679,10 @@ textarea[readonly] {
     width: min(100%, 560px);
 }
 
+.message-modal.model-test-modal {
+    width: min(100%, 720px);
+}
+
 .message-modal-header,
 .message-modal-footer {
     flex: 0 0 auto;
@@ -2805,6 +2835,39 @@ textarea[readonly] {
     color: var(--text-muted);
     font-size: 13px;
     line-height: 1.5;
+}
+
+.credential-model-search {
+    width: 100%;
+    min-height: 40px;
+}
+
+.credential-model-list {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+    min-width: 0;
+}
+
+.credential-model-item {
+    min-width: 0;
+    min-height: 40px;
+    padding: 9px 11px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--bg-subtle);
+    color: var(--text);
+    font: inherit;
+    font-size: 12px;
+    line-height: 1.4;
+    text-align: left;
+    overflow-wrap: anywhere;
+    cursor: pointer;
+}
+
+.credential-model-item:hover {
+    background: var(--control-hover);
+    border-color: var(--control-hover-border);
 }
 
 .message-result-actions {
@@ -3030,6 +3093,37 @@ textarea[readonly] {
 .message-modal-input {
     margin-top: 2px;
     width: 100%;
+}
+
+.message-modal-field {
+    display: grid;
+    gap: 8px;
+}
+
+.message-modal-field-label {
+    color: var(--text);
+    font-size: 13px;
+    font-weight: 680;
+    line-height: 1.3;
+}
+
+.model-test-progress {
+    margin-top: 14px;
+    padding: 10px 12px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--bg-subtle);
+    color: var(--text-muted);
+    font-size: 13px;
+    line-height: 1.45;
+}
+
+.message-modal-btn:disabled,
+.message-modal-btn:disabled:hover {
+    background: var(--bg-muted);
+    border-color: var(--border);
+    color: var(--text-soft);
+    cursor: not-allowed;
 }
 
 @media (max-width: 1080px) {
@@ -3317,10 +3411,6 @@ textarea[readonly] {
         flex-direction: column;
     }
 
-    .model-catalog-search {
-        width: 100%;
-    }
-
     .config-grid {
         grid-template-columns: minmax(0, 1fr);
         gap: 12px;
@@ -3475,21 +3565,6 @@ textarea[readonly] {
         align-items: center;
     }
 
-    .pool-tools {
-        width: 100%;
-        margin-left: 0;
-    }
-
-    .pool-tools summary {
-        width: 100%;
-        min-height: 44px;
-    }
-
-    .pool-tools-menu {
-        position: static;
-        margin-top: 6px;
-    }
-
     .creds-grid,
     .credential-provider-grid,
     .skeleton-list {
@@ -3528,6 +3603,14 @@ textarea[readonly] {
     }
 
     .cred-actions .cred-btn {
+        min-height: 44px;
+    }
+
+    .credential-model-list {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    .credential-model-item {
         min-height: 44px;
     }
 

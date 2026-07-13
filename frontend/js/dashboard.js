@@ -488,7 +488,7 @@ function updateCooldownDisplays() {
 
                         const timeDisplay = formatCooldownTime(remaining).replace(/s$/, '').replace(/ /g, '');
 
-                        badge.innerHTML = `Cooldown ${shortModel}: ${timeDisplay}`;
+                        badge.textContent = `Cooldown ${shortModel}: ${timeDisplay}`;
 
                     }
 

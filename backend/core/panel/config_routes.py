@@ -13,7 +13,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse
 from log import configure_logging, log
 
-from .utils import get_env_locked_keys
+from .utils import get_env_locked_keys, internal_server_error
 
 router = APIRouter(prefix="/api/config", tags=["config"])
 
@@ -22,7 +22,7 @@ RESTART_REQUIRED_CONFIG_KEYS = {"host", "port", "credentials_dir"}
 PROVIDER_SPECIFIC_CONFIG_KEYS = {
     "antigravity_client_id",
     "antigravity_client_secret",
-    "api_url",
+    "antigravity_api_url",
     "oauth_url",
     "google_apis_url",
     "resource_manager_url",
@@ -71,19 +71,14 @@ RESETTABLE_CONFIG_KEYS = {
 }
 PRESERVED_RESET_KEYS = {
     "api_key",
-    "api_password",
     "panel_password",
-    "password",
 }
 
 
 def _redact_access_secrets(current_config: dict) -> dict:
     """Return control-panel configuration without reusable access secrets."""
     public_config = dict(current_config)
-    legacy_password = bool(public_config.get("password"))
-    public_config["panel_password_configured"] = bool(
-        public_config.get("panel_password") or legacy_password
-    )
+    public_config["panel_password_configured"] = bool(public_config.get("panel_password"))
     for key in ACCESS_SECRET_KEYS:
         public_config.pop(key, None)
     return public_config
@@ -155,7 +150,6 @@ async def get_config(token: str = Depends(verify_panel_token)):
         current_config["host"] = await config.get_server_host()
         current_config["port"] = await config.get_server_port()
         current_config["panel_password"] = await config.get_panel_password()
-        current_config["password"] = await config.get_server_password()
 
         storage_adapter = await get_storage_adapter()
         storage_config = await storage_adapter.get_all_config()
@@ -179,7 +173,7 @@ async def get_config(token: str = Depends(verify_panel_token)):
 
     except Exception as e:
         log.error(f"Failed to retrieve configuration: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise internal_server_error() from e
 
 
 @router.post("/save")
@@ -399,25 +393,11 @@ async def save_config(request: ConfigSaveRequest, token: str = Depends(verify_pa
                     status_code=400, detail="Port number must be an integer between 1 and 65535."
                 )
 
-        if "panel_password" in new_config:
-            if not isinstance(new_config["panel_password"], str):
-                raise HTTPException(
-                    status_code=400, detail="Control panel password must be a string."
-                )
-
-        if "password" in new_config:
-            if not isinstance(new_config["password"], str):
-                raise HTTPException(status_code=400, detail="Access password must be a string.")
-
-        oauth_client_keys = {
+        code_assist_client_keys = {
             "code_assist_client_id",
             "code_assist_client_secret",
-            "antigravity_client_id",
-            "antigravity_client_secret",
-            "client_id",
-            "client_secret",
         }
-        for key in oauth_client_keys & set(new_config):
+        for key in code_assist_client_keys & set(new_config):
             if not isinstance(new_config[key], str):
                 raise HTTPException(
                     status_code=400, detail=f"Configuration value '{key}' must be a string."
@@ -467,7 +447,7 @@ async def save_config(request: ConfigSaveRequest, token: str = Depends(verify_pa
         raise
     except Exception as e:
         log.error(f"Failed to save configuration: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise internal_server_error() from e
 
 
 @router.post("/access")
@@ -580,4 +560,4 @@ async def reset_config(token: str = Depends(verify_panel_token)):
 
     except Exception as e:
         log.error(f"Failed to reset configuration: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise internal_server_error() from e

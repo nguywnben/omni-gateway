@@ -50,7 +50,7 @@ class SecurityHeaderTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(response.headers["cross-origin-opener-policy"], "same-origin")
         csp = response.headers["content-security-policy"]
         self.assertIn("script-src 'self';", csp)
-        self.assertIn("script-src-attr 'unsafe-inline';", csp)
+        self.assertIn("script-src-attr 'none';", csp)
         self.assertNotIn("script-src 'self' 'unsafe-inline'", csp)
 
     async def test_untrusted_forwarded_proto_does_not_enable_hsts(self):

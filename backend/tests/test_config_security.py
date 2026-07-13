@@ -90,6 +90,14 @@ class ConfigResponseSecurityTests(unittest.TestCase):
 
 
 class RuntimePolicyConfigTests(unittest.IsolatedAsyncioTestCase):
+    def setUp(self):
+        self.cache_patch = patch.object(config, "_config_cache", {})
+        self.initialized_patch = patch.object(config, "_config_initialized", True)
+        self.cache_patch.start()
+        self.initialized_patch.start()
+        self.addCleanup(self.initialized_patch.stop)
+        self.addCleanup(self.cache_patch.stop)
+
     async def test_upstream_timeout_is_bounded(self):
         with patch.dict(os.environ, {"UPSTREAM_TIMEOUT_SECONDS": "1"}):
             self.assertEqual(await config.get_upstream_timeout_seconds(), 5.0)
