@@ -110,6 +110,19 @@ class ControlPanelAssetTests(unittest.TestCase):
         self.assertNotIn("Open xAI authorization", body)
         self.assertNotIn("Open xAI authorization", settings_script)
 
+    def test_credential_verification_uses_provider_neutral_route(self):
+        core_script = (BACKEND_DIR.parent / "frontend" / "js" / "core.js").read_text(
+            encoding="utf-8"
+        )
+        credential_script = (BACKEND_DIR.parent / "frontend" / "js" / "credentials.js").read_text(
+            encoding="utf-8"
+        )
+
+        self.assertIn("./api/credentials/verify", core_script)
+        self.assertIn("./api/credentials/verify/", credential_script)
+        self.assertNotIn("./api/credentials/verify-project", core_script)
+        self.assertNotIn("./api/credentials/verify-project", credential_script)
+
 
 if __name__ == "__main__":
     unittest.main()

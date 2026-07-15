@@ -1,4 +1,4 @@
-"""Secure mixed-provider credential pool archive restore."""
+"""Secure mixed-provider credential pool archive import."""
 
 from __future__ import annotations
 
@@ -73,7 +73,9 @@ def classify_pool_credential(payload: Any) -> str:
         if provider_id == GOOGLE_ANTIGRAVITY and not _is_antigravity_payload(payload):
             raise PoolImportError("Google Antigravity payload is missing required OAuth fields.")
         if provider_id == XAI and not _is_xai_payload(payload):
-            raise PoolImportError("xAI payload is not a valid OAuth or API key credential.")
+            raise PoolImportError(
+                "Credential payload is not a valid Grok OAuth or xAI Console API key credential."
+            )
         return provider_id
 
     if _is_ai_studio_payload(payload):
@@ -117,11 +119,11 @@ async def extract_pool_archive(
         str(upload.filename or "provider_credentials.zip").replace("\\", "/")
     ).name
     if not upload_name.lower().endswith(".zip"):
-        raise PoolImportError("Pool restore accepts one ZIP archive.")
+        raise PoolImportError("Pool import accepts one ZIP archive.")
 
     content = await upload.read(MAX_POOL_ARCHIVE_BYTES + 1)
     if len(content) > MAX_POOL_ARCHIVE_BYTES:
-        raise PoolImportError("Pool archive exceeds the 10 MB upload limit.")
+        raise PoolImportError("Pool archive exceeds the 10 MB import limit.")
 
     try:
         archive = zipfile.ZipFile(io.BytesIO(content))
@@ -210,7 +212,7 @@ async def _restore_antigravity(candidate: Dict[str, Any]) -> Dict[str, Any]:
         "filename": result.get("filename", filename),
         "label": result.get("email") or "Google Antigravity account",
         "message": result.get("message")
-        or ("Credential restored to the pool." if stored else "Credential was already current."),
+        or ("Credential imported into the pool." if stored else "Credential was already current."),
     }
 
 
@@ -233,13 +235,13 @@ async def _restore_ai_studio(candidate: Dict[str, Any]) -> Dict[str, Any]:
         "message": (
             "Existing API key was revalidated and updated."
             if action == "updated"
-            else "API key was validated and restored to the pool."
+            else "API key was validated and imported into the pool."
         ),
     }
 
 
 async def restore_xai_credential(candidate: Dict[str, Any]) -> Dict[str, Any]:
-    """Validate and restore one Grok or xAI Console credential without returning secrets."""
+    """Validate and import one Grok or xAI Console credential without returning secrets."""
     payload = dict(candidate["payload"])
     payload["provider"] = XAI
     if str(payload.get("credential_type") or "").lower() == "api_key":
@@ -256,7 +258,7 @@ async def restore_xai_credential(candidate: Dict[str, Any]) -> Dict[str, Any]:
             "filename": stored["filename"],
             "label": stored.get("label") or "xAI Console API key",
             "model_count": validation.model_count,
-            "message": "xAI Console API key validated and restored to the pool.",
+            "message": "xAI Console API key validated and imported into the pool.",
         }
 
     identity = str(
@@ -278,12 +280,12 @@ async def restore_xai_credential(candidate: Dict[str, Any]) -> Dict[str, Any]:
         "label": payload.get("credential_label")
         or payload.get("user_email")
         or "Grok OAuth account",
-        "message": result.get("message") or "Grok OAuth credential restored to the pool.",
+        "message": result.get("message") or "Grok OAuth credential imported into the pool.",
     }
 
 
 async def restore_pool_archive(upload: UploadFile) -> Dict[str, Any]:
-    """Restore supported credentials and return a secret-free per-file report."""
+    """Import supported credentials and return a secret-free per-file report."""
     candidates, results = await extract_pool_archive(upload)
     providers = {
         provider_id: _empty_provider_result(provider_id)
@@ -352,7 +354,7 @@ async def restore_pool_archive(upload: UploadFile) -> Dict[str, Any]:
         except Exception as exc:
             provider_result["failed"] += 1
             log.error(
-                "Failed to restore pool credential %s for provider %s: %s",
+                "Failed to import pool credential %s for provider %s: %s",
                 candidate["source_filename"],
                 provider_id,
                 exc,
@@ -363,7 +365,7 @@ async def restore_pool_archive(upload: UploadFile) -> Dict[str, Any]:
                     "source_filename": candidate["source_filename"],
                     "provider": provider_id,
                     "provider_name": provider_result["provider_name"],
-                    "message": "Credential could not be restored.",
+                    "message": "Credential could not be imported.",
                 }
             )
 
@@ -378,9 +380,10 @@ async def restore_pool_archive(upload: UploadFile) -> Dict[str, Any]:
         extraction_errors
     )
     total_count = len(candidates) + len(extraction_errors)
+    credential_label = "credential file" if total_count == 1 else "credential files"
     message = (
-        f"Pool restore complete: imported {uploaded_count}, skipped {skipped_count}, "
-        f"and failed {error_count} across {total_count} credential files."
+        f"Pool import completed: imported {uploaded_count}, skipped {skipped_count}, "
+        f"and failed {error_count} across {total_count} {credential_label}."
     )
     return {
         "success": error_count == 0,

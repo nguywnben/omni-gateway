@@ -405,8 +405,10 @@ async def deduplicate_credentials_by_account_email(mode: str = "code_assist") ->
             )
 
         if deleted_count:
+            credential_label = "credential" if deleted_count == 1 else "credentials"
             log.info(
-                f"Deduplicated {deleted_count} credentials in the {mode} pool by account identity."
+                f"Deduplicated {deleted_count} {credential_label} in the {mode} pool "
+                "by account identity."
             )
 
         return {

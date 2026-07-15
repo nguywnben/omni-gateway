@@ -286,7 +286,7 @@ function buildPoolImportResultHtml(data) {
                                     <div class="usage-provider-logo" aria-hidden="true">${logo}</div>
                                     <div>
                                         <div class="usage-provider-name">${escapeHtml(providerMeta.name)}</div>
-                                        <div class="usage-provider-meta">Credential restore</div>
+                                        <div class="usage-provider-meta">Credential import</div>
                                     </div>
                                 </div>
                                 <dl class="usage-provider-metrics">
@@ -343,7 +343,7 @@ function buildPoolImportResultHtml(data) {
         <div class="message-result-panel">
             <div class="message-result-intro">The archive was inspected and each credential was routed through its provider-specific validation and duplicate checks.</div>
             <div class="message-result-section">
-                <div class="message-result-section-title">Restore Summary</div>
+                <div class="message-result-section-title">Import Summary</div>
                 <div class="message-result-summary pool-import-summary">${renderMessageResultRows([
                     ['Credential files', Number(data.total_count || 0)],
                     ['Imported', Number(data.uploaded_count || 0)],
@@ -375,7 +375,7 @@ async function handlePoolImportArchive(event) {
 
     if (archive.size > 10 * 1024 * 1024) {
 
-        showStatus('Pool archive exceeds the 10 MB upload limit.', 'error');
+        showStatus('Pool archive exceeds the 10 MB import limit.', 'error');
         input.value = '';
         return;
 
@@ -408,7 +408,7 @@ async function handlePoolImportArchive(event) {
 
         if (!response.ok) {
 
-            throw new Error(data.detail || data.error || `Pool restore failed with HTTP ${response.status}.`);
+            throw new Error(data.detail || data.error || `Pool import failed with HTTP ${response.status}.`);
 
         }
 
@@ -418,7 +418,7 @@ async function handlePoolImportArchive(event) {
                 ? 'info'
                 : 'success';
 
-        showStatus(data.message || 'Pool archive restored.', variant);
+        showStatus(data.message || 'Pool archive imported.', variant);
         showMessageModal('Pool Import', buildPoolImportResultHtml(data), variant, { html: true });
         await AppState.primaryCreds.refresh();
         refreshUsageStats();
@@ -426,7 +426,7 @@ async function handlePoolImportArchive(event) {
     } catch (error) {
 
         const message = error.name === 'AbortError'
-            ? 'Pool restore timed out while validating provider credentials.'
+            ? 'Pool import timed out while validating provider credentials.'
             : error.message;
         showStatus(message, 'error');
         showMessageModal('Pool Import', message, 'error');
@@ -522,13 +522,13 @@ function uploadXaiConsoleFiles() {
     AppState.xaiConsoleUploadFiles.upload();
 }
 
-async function verifyProjectId(filename) {
+async function verifyCredential(filename) {
 
     try {
 
         showStatus(t('verifying_project_id_please_wait'), 'info');
 
-        const response = await fetch(`./api/credentials/verify-project/${encodeURIComponent(filename)}`, {
+        const response = await fetch(`./api/credentials/verify/${encodeURIComponent(filename)}`, {
 
             method: 'POST',
 
@@ -540,17 +540,7 @@ async function verifyProjectId(filename) {
 
         if (response.ok && data.success) {
 
-            const tierLine = data.subscription_tier ? `\nTier: ${data.subscription_tier}` : '';
-
-            const creditLine = data.credit_amount !== undefined && data.credit_amount !== null
-
-                ? t('ncredit_datacredit_amount', {data_credit_amount: data.credit_amount})
-
-                : '';
-
-            const successMsg = t('validation_successfulnnfile_filenam', {filename: filename, data_project_id: data.project_id, tierLine: tierLine, creditLine: creditLine, data_message: data.message});
-
-            showStatus(successMsg.replace(/\n/g, '<br>'), 'success');
+            showStatus(data.message || 'Credential verified.', 'success');
 
             showMessageModal('Credential Verification', buildCredentialVerificationHtml(filename, data), 'success', {html: true});
 
@@ -560,7 +550,7 @@ async function verifyProjectId(filename) {
 
             const errorMsg = data.message || t('verification_failed');
 
-            showStatus(` ${errorMsg}`, 'error');
+            showStatus(errorMsg, 'error');
 
             showMessageModal('Credential Verification', t('verification_failednnerrormsg', {errorMsg: errorMsg}), 'error');
 
@@ -570,21 +560,21 @@ async function verifyProjectId(filename) {
 
         const errorMsg = t('verification_failed_errormessage', {error_message: error.message});
 
-        showStatus(` ${errorMsg}`, 'error');
+        showStatus(errorMsg, 'error');
 
-        showMessageModal('Credential Verification', ` ${errorMsg}`, 'error');
+        showMessageModal('Credential Verification', errorMsg, 'error');
 
     }
 
 }
 
-async function verifyPrimaryProjectId(filename) {
+async function verifyProviderCredential(filename) {
 
     try {
 
         showStatus(t('verifying_primary_project_id_pl'), 'info');
 
-        const response = await fetch(`./api/credentials/verify-project/${encodeURIComponent(filename)}?mode=provider`, {
+        const response = await fetch(`./api/credentials/verify/${encodeURIComponent(filename)}?mode=provider`, {
 
             method: 'POST',
 
@@ -596,17 +586,7 @@ async function verifyPrimaryProjectId(filename) {
 
         if (response.ok && data.success) {
 
-            const tierLine = data.subscription_tier ? `\nTier: ${data.subscription_tier}` : '';
-
-            const creditLine = data.credit_amount !== undefined && data.credit_amount !== null
-
-                ? t('ncredit_datacredit_amount', {data_credit_amount: data.credit_amount})
-
-                : '';
-
-            const successMsg = t('validation_successfulnnfile_filenam', {filename: filename, data_project_id: data.project_id, tierLine: tierLine, creditLine: creditLine, data_message: data.message});
-
-            showStatus(successMsg.replace(/\n/g, '<br>'), 'success');
+            showStatus(data.message || 'Credential verified.', 'success');
 
             showMessageModal('Credential Verification', buildCredentialVerificationHtml(filename, data), 'success', {html: true});
 
@@ -616,7 +596,7 @@ async function verifyPrimaryProjectId(filename) {
 
             const errorMsg = data.message || t('verification_failed');
 
-            showStatus(` ${errorMsg}`, 'error');
+            showStatus(errorMsg, 'error');
 
             showMessageModal('Credential Verification', t('verification_failednnerrormsg', {errorMsg: errorMsg}), 'error');
 
@@ -626,9 +606,9 @@ async function verifyPrimaryProjectId(filename) {
 
         const errorMsg = t('verification_failed_errormessage', {error_message: error.message});
 
-        showStatus(` ${errorMsg}`, 'error');
+        showStatus(errorMsg, 'error');
 
-        showMessageModal('Credential Verification', ` ${errorMsg}`, 'error');
+        showMessageModal('Credential Verification', errorMsg, 'error');
 
     }
 
@@ -674,7 +654,7 @@ async function testCredential(filename, model) {
 
             const errorDetails = buildCredentialTestErrorHtml(filename, data, response);
 
-            showStatus(`Test failed: ${data.message || `${t('error_code_prefix')} ${data.status_code || response.status}`}`, 'error');
+            showStatus(`Test failed: ${data.message || `${t('http_code_prefix')} ${data.status_code || response.status}`}`, 'error');
 
             return {
                 html: errorDetails,
@@ -747,7 +727,7 @@ async function testPrimaryCredential(filename, model) {
 
             const errorDetails = buildCredentialTestErrorHtml(filename, data, response);
 
-            showStatus(`Test failed: ${data.message || `${t('error_code_prefix')} ${data.status_code || response.status}`}`, 'error');
+            showStatus(`Test failed: ${data.message || `${t('http_code_prefix')} ${data.status_code || response.status}`}`, 'error');
 
             return {
                 html: errorDetails,
@@ -1035,7 +1015,35 @@ function highlightHttpLinks(text) {
 
 }
 
-async function batchVerifyProjectIds() {
+function formatBatchVerificationResult(result) {
+
+    if (!result.success) return `${result.filename}: ${result.error || 'Verification failed.'}`;
+
+    const details = [];
+
+    if (result.projectId) details.push(`Project ID ${result.projectId}`);
+
+    if (Number.isFinite(Number(result.modelCount))) {
+
+        const modelCount = Number(result.modelCount);
+
+        details.push(`${modelCount} available model${modelCount === 1 ? '' : 's'}`);
+
+    }
+
+    if (result.creditAmount !== undefined && result.creditAmount !== null) {
+
+        details.push(`${t('credits_label')}: ${result.creditAmount}`);
+
+    }
+
+    if (details.length === 0) details.push(result.message || 'Verified');
+
+    return `${result.filename}: ${details.join(', ')}`;
+
+}
+
+async function batchVerifyCredentials() {
 
     const selectedFiles = Array.from(AppState.creds.selectedFiles);
 
@@ -1051,7 +1059,9 @@ async function batchVerifyProjectIds() {
 
     if (!(await showConfirmModal(
 
-        t('are_you_sure_you_want_to_batch_veri_dup', {selectedFiles_length: selectedFiles.length}),
+        t('are_you_sure_you_want_to_batch_veri_dup', {
+            credentials: formatCountLabel(selectedFiles.length, 'credential')
+        }),
 
         {title: t('confirm_verify_credentials_title'), confirmLabel: t('btn_verify_credentials')}
 
@@ -1061,13 +1071,15 @@ async function batchVerifyProjectIds() {
 
     }
 
-    showStatus(t('parallel_verifying_selectedfileslen', {selectedFiles_length: selectedFiles.length}), 'info');
+    showStatus(t('parallel_verifying_selectedfileslen', {
+        credentials: formatCountLabel(selectedFiles.length, 'credential')
+    }), 'info');
 
     const promises = selectedFiles.map(async (filename) => {
 
         try {
 
-            const response = await fetch(`./api/credentials/verify-project/${encodeURIComponent(filename)}`, {
+            const response = await fetch(`./api/credentials/verify/${encodeURIComponent(filename)}`, {
 
                 method: 'POST',
 
@@ -1088,6 +1100,8 @@ async function batchVerifyProjectIds() {
                     projectId: data.project_id,
 
                     creditAmount: data.credit_amount,
+
+                    modelCount: data.model_count,
 
                     message: data.message
 
@@ -1121,19 +1135,13 @@ async function batchVerifyProjectIds() {
 
             successCount++;
 
-            const creditSuffix = result.creditAmount !== undefined && result.creditAmount !== null
-
-                ? ` (${t('credits_label')}: ${result.creditAmount})`
-
-                : '';
-
-            resultMessages.push(` ${result.filename}: ${result.projectId}${creditSuffix}`);
+            resultMessages.push(formatBatchVerificationResult(result));
 
         } else {
 
             failCount++;
 
-            resultMessages.push(` ${result.filename}: ${result.error}`);
+            resultMessages.push(formatBatchVerificationResult(result));
 
         }
 
@@ -1145,13 +1153,17 @@ async function batchVerifyProjectIds() {
 
     if (failCount === 0) {
 
-        showStatus(t('all_verifications_successful_succes', {successCount: successCount, selectedFiles_length: selectedFiles.length}), 'success');
+        showStatus(t('all_verifications_successful_succes', {
+            credentials: `${successCount}/${selectedFiles.length} ${selectedFiles.length === 1 ? 'credential' : 'credentials'}`
+        }), 'success');
 
         showMessageModal('Batch Verification', summary, 'success');
 
     } else if (successCount === 0) {
 
-        showStatus(t('all_verifications_failed_failed_fai', {failCount: failCount, selectedFiles_length: selectedFiles.length}), 'error');
+        showStatus(t('all_verifications_failed_failed_fai', {
+            credentials: formatCountLabel(selectedFiles.length, 'credential')
+        }), 'error');
 
         showMessageModal('Batch Verification', summary, 'error');
 
@@ -1165,7 +1177,7 @@ async function batchVerifyProjectIds() {
 
 }
 
-async function batchVerifyPrimaryProjectIds() {
+async function batchVerifyProviderCredentials() {
 
     const selectedFiles = Array.from(AppState.primaryCreds.selectedFiles);
 
@@ -1181,7 +1193,9 @@ async function batchVerifyPrimaryProjectIds() {
 
     if (!(await showConfirmModal(
 
-        t('are_you_sure_you_want_to_batch_veri', {selectedFiles_length: selectedFiles.length}),
+        t('are_you_sure_you_want_to_batch_veri', {
+            credentials: formatCountLabel(selectedFiles.length, 'provider credential')
+        }),
 
         {title: t('confirm_verify_credentials_title'), confirmLabel: t('btn_verify_credentials')}
 
@@ -1191,13 +1205,15 @@ async function batchVerifyPrimaryProjectIds() {
 
     }
 
-    showStatus(t('parallel_testing_selectedfileslengt', {selectedFiles_length: selectedFiles.length}), 'info');
+    showStatus(t('parallel_testing_selectedfileslengt', {
+        credentials: formatCountLabel(selectedFiles.length, 'provider credential')
+    }), 'info');
 
     const promises = selectedFiles.map(async (filename) => {
 
         try {
 
-            const response = await fetch(`./api/credentials/verify-project/${encodeURIComponent(filename)}?mode=provider`, {
+            const response = await fetch(`./api/credentials/verify/${encodeURIComponent(filename)}?mode=provider`, {
 
                 method: 'POST',
 
@@ -1218,6 +1234,8 @@ async function batchVerifyPrimaryProjectIds() {
                     projectId: data.project_id,
 
                     creditAmount: data.credit_amount,
+
+                    modelCount: data.model_count,
 
                     message: data.message
 
@@ -1251,19 +1269,13 @@ async function batchVerifyPrimaryProjectIds() {
 
             successCount++;
 
-            const creditSuffix = result.creditAmount !== undefined && result.creditAmount !== null
-
-                ? ` (${t('credits_label')}: ${result.creditAmount})`
-
-                : '';
-
-            resultMessages.push(` ${result.filename}: ${result.projectId}${creditSuffix}`);
+            resultMessages.push(formatBatchVerificationResult(result));
 
         } else {
 
             failCount++;
 
-            resultMessages.push(` ${result.filename}: ${result.error}`);
+            resultMessages.push(formatBatchVerificationResult(result));
 
         }
 
@@ -1275,13 +1287,17 @@ async function batchVerifyPrimaryProjectIds() {
 
     if (failCount === 0) {
 
-        showStatus(t('all_verifications_successful_verifi', {successCount: successCount, selectedFiles_length: selectedFiles.length}), 'success');
+        showStatus(t('all_verifications_successful_verifi', {
+            credentials: `${successCount}/${selectedFiles.length} ${selectedFiles.length === 1 ? 'provider credential' : 'provider credentials'}`
+        }), 'success');
 
         showMessageModal('Provider Batch Verification', summary, 'success');
 
     } else if (successCount === 0) {
 
-        showStatus(t('verification_failed_for_all_failed', {failCount: failCount, selectedFiles_length: selectedFiles.length}), 'error');
+        showStatus(t('verification_failed_for_all_failed', {
+            credentials: formatCountLabel(selectedFiles.length, 'provider credential')
+        }), 'error');
 
         showMessageModal('Provider Batch Verification', summary, 'error');
 
@@ -1311,7 +1327,9 @@ async function batchConfigurePreview() {
 
     if (!(await showConfirmModal(
 
-        t('are_you_sure_you_want_to_batch_set', {selectedFiles_length: selectedFiles.length}),
+        t('are_you_sure_you_want_to_batch_set', {
+            credentials: formatCountLabel(selectedFiles.length, 'credential')
+        }),
 
         {title: t('confirm_configure_preview_title'), confirmLabel: t('btn_configure')}
 
@@ -1321,7 +1339,9 @@ async function batchConfigurePreview() {
 
     }
 
-    showStatus(t('configuring_preview_channel_for_sel', {selectedFiles_length: selectedFiles.length}), 'info');
+    showStatus(t('configuring_preview_channel_for_sel', {
+        credentials: formatCountLabel(selectedFiles.length, 'credential')
+    }), 'info');
 
     const promises = selectedFiles.map(async (filename) => {
 
@@ -1413,13 +1433,21 @@ async function batchConfigurePreview() {
 
     if (failCount === 0) {
 
-        showStatus(t('all_configured_successfully_preview', {successCount: successCount, selectedFiles_length: selectedFiles.length}), 'success');
+        showStatus(t('all_configured_successfully_preview', {
+            successCount: successCount,
+            selectedFiles_length: selectedFiles.length,
+            credential_noun: selectedFiles.length === 1 ? 'credential' : 'credentials'
+        }), 'success');
 
         showMessageModal(t('bulk_preview_channel_configuration'), summary, 'success');
 
     } else if (successCount === 0) {
 
-        showStatus(t('configuration_failed_for_all_failed', {failCount: failCount, selectedFiles_length: selectedFiles.length}), 'error');
+        showStatus(t('configuration_failed_for_all_failed', {
+            failCount: failCount,
+            selectedFiles_length: selectedFiles.length,
+            credential_noun: selectedFiles.length === 1 ? 'credential' : 'credentials'
+        }), 'error');
 
         showMessageModal(t('bulk_preview_channel_configuration'), summary, 'error');
 
@@ -1459,7 +1487,11 @@ async function refreshAllEmails() {
 
         if (response.ok) {
 
-            showStatus(t('email_refresh_complete_successfully', {data_success_count: data.success_count, data_total_count: data.total_count}), 'success');
+            showStatus(t('email_refresh_complete_successfully', {
+                data_success_count: data.success_count,
+                data_total_count: data.total_count,
+                address_noun: Number(data.success_count) === 1 ? 'email address' : 'email addresses'
+            }), 'success');
 
             await AppState.creds.refresh();
 
@@ -1503,7 +1535,11 @@ async function deduplicateByEmail() {
 
         if (response.ok) {
 
-            const msg = t('deduplication_complete_deleted_data', {data_deleted_count: data.deleted_count, data_kept_count: data.kept_count, data_unique_emails_count: data.unique_emails_count});
+            const msg = t('deduplication_complete_deleted_data', {
+                deleted: formatCountLabel(data.deleted_count, 'duplicate credential'),
+                kept: formatCountLabel(data.kept_count, 'credential'),
+                emails: formatCountLabel(data.unique_emails_count, 'unique email address')
+            });
 
             showStatus(msg, 'success');
 

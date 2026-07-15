@@ -364,7 +364,10 @@ async def save_xai_config(
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     if not normalized["xai_client_id"] or not normalized["xai_user_agent"]:
-        raise HTTPException(status_code=400, detail="xAI client ID and user agent cannot be empty.")
+        raise HTTPException(
+            status_code=400,
+            detail="Grok OAuth client ID and xAI HTTP User-Agent cannot be empty.",
+        )
     storage_adapter = await get_storage_adapter()
     for key, value in normalized.items():
         if key not in env_locked and key in new_config:
@@ -372,7 +375,7 @@ async def save_xai_config(
     await config.reload_config()
     return JSONResponse(
         content={
-            "message": "xAI provider settings saved.",
+            "message": "xAI settings saved.",
             "config": await _current_xai_config(),
             "env_locked": sorted(env_locked),
         }
@@ -386,7 +389,10 @@ async def reset_xai_config(
 ):
     normalized_scope = str(scope or "").strip().lower()
     if normalized_scope and normalized_scope not in XAI_CONFIG_SCOPES:
-        raise HTTPException(status_code=400, detail="xAI setting scope must be oauth or api.")
+        raise HTTPException(
+            status_code=400,
+            detail="xAI setting scope must be 'oauth' or 'api'.",
+        )
 
     env_locked = get_env_locked_keys() & XAI_CONFIG_KEYS
     storage_adapter = await get_storage_adapter()
@@ -396,7 +402,7 @@ async def reset_xai_config(
     await config.reload_config()
     scope_label = {
         "oauth": "Grok settings",
-        "api": "xAI Console settings",
+        "api": "xAI transport settings",
     }.get(normalized_scope, "xAI settings")
     return JSONResponse(
         content={
@@ -654,8 +660,8 @@ async def import_google_ai_studio_credentials(
     error_count = sum(1 for item in results if item.get("status") == "error")
     uploaded_count = created_count + updated_count
     message = (
-        f"Import complete: added {created_count}, updated {updated_count}, "
-        f"skipped {skipped_count}, and failed {error_count}."
+        f"Import completed. Results: {created_count} added, {updated_count} updated, "
+        f"{skipped_count} skipped, and {error_count} failed."
     )
     return JSONResponse(
         content={
@@ -683,7 +689,7 @@ def _parse_xai_import_document(content: bytes, source_name: str) -> Dict[str, An
     except PoolImportError as exc:
         raise ValueError(f"{source_name}: {exc}") from exc
     if provider_id != XAI:
-        raise ValueError(f"{source_name} does not contain an xAI credential.")
+        raise ValueError(f"{source_name} does not contain a Grok or xAI Console credential.")
 
     return {
         "source_filename": source_name,
@@ -783,12 +789,12 @@ async def import_xai_credentials(
     credential_type: str = "",
     token: str = Depends(verify_panel_token),
 ):
-    """Import bounded xAI OAuth or API key credentials from JSON and ZIP files."""
+    """Import bounded Grok OAuth or xAI Console API key credentials."""
     normalized_type = str(credential_type or "").strip().lower()
     if normalized_type not in {"", "oauth", "api_key"}:
         raise HTTPException(
             status_code=400,
-            detail="xAI credential type must be oauth or api_key.",
+            detail="Credential type must be 'oauth' or 'api_key'.",
         )
     if not files:
         raise HTTPException(status_code=400, detail="Select at least one import file.")
@@ -809,7 +815,7 @@ async def import_xai_credentials(
                     expected_label = (
                         "Grok OAuth credential"
                         if normalized_type == "oauth"
-                        else "xAI Console API key credential"
+                        else "xAI Console API key"
                     )
                     results.append(
                         {
@@ -848,7 +854,7 @@ async def import_xai_credentials(
                     "status": "skipped",
                     "action": "skipped",
                     "source_filename": candidate["source_filename"],
-                    "message": "Duplicate xAI credential in this import was skipped.",
+                    "message": "A duplicate provider credential in this import was skipped.",
                 }
             )
             continue
@@ -869,7 +875,7 @@ async def import_xai_credentials(
                     "filename": restored.get("filename", candidate["filename"]),
                     "source_filename": candidate["source_filename"],
                     "model_count": restored.get("model_count"),
-                    "message": restored.get("message") or "xAI credential imported.",
+                    "message": restored.get("message") or "Provider credential imported.",
                 }
             )
         except XaiError as exc:
@@ -881,20 +887,20 @@ async def import_xai_credentials(
                 }
             )
         except Exception as exc:
-            log.error(f"Failed to import an xAI credential: {exc}")
+            log.error(f"Failed to import a Grok or xAI Console credential: {exc}")
             results.append(
                 {
                     "status": "error",
                     "source_filename": candidate["source_filename"],
-                    "message": "The xAI credential could not be stored.",
+                    "message": "The provider credential could not be stored.",
                 }
             )
 
     error_count = sum(1 for item in results if item.get("status") == "error")
     uploaded_count = counts["created"] + counts["updated"] + counts["replaced"]
     message = (
-        f"Import complete: added {counts['created']}, updated {counts['updated']}, "
-        f"renewed {counts['replaced']}, skipped {counts['skipped']}, and failed {error_count}."
+        f"Import completed. Results: {counts['created']} added, {counts['updated']} updated, "
+        f"{counts['replaced']} renewed, {counts['skipped']} skipped, and {error_count} failed."
     )
     return JSONResponse(
         content={

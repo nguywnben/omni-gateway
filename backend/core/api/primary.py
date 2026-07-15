@@ -325,7 +325,7 @@ async def prepare_provider_request(
             or credential_data.get("token")
         )
         if not access_token:
-            raise ValueError("xAI credential does not contain an access token or API key.")
+            raise ValueError("Provider credential does not contain an access token or API key.")
         compression_result = compress_gemini_request(
             dict(inner_request),
             CompressionSettings(**await get_token_compression_config()),

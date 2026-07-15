@@ -67,10 +67,10 @@ def normalize_xai_issuer(value: str) -> str:
     normalized = str(value or "").strip().rstrip("/")
     parsed = urlparse(normalized)
     if parsed.scheme != "https" or not parsed.hostname:
-        raise ValueError("xAI OAuth issuer must use HTTPS.")
+        raise ValueError("Grok OAuth issuer must use HTTPS.")
     host = parsed.hostname.lower()
     if host != "x.ai" and not host.endswith(".x.ai"):
-        raise ValueError("xAI OAuth issuer must use an x.ai host.")
+        raise ValueError("Grok OAuth issuer must use an x.ai host.")
     return normalized
 
 
@@ -78,13 +78,13 @@ def _validate_discovered_endpoint(value: Any, label: str) -> str:
     try:
         return normalize_xai_issuer(str(value or ""))
     except ValueError as exc:
-        raise XaiError(f"xAI OAuth discovery returned an invalid {label}.", 502) from exc
+        raise XaiError(f"Grok OAuth discovery returned an invalid {label}.", 502) from exc
 
 
 def build_xai_headers(access_token: str, user_agent: str = "") -> Dict[str, str]:
     token = str(access_token or "").strip()
     if not token:
-        raise ValueError("xAI credential does not contain an access token or API key.")
+        raise ValueError("Provider credential does not contain an access token or API key.")
     headers = {
         "Authorization": f"Bearer {token}",
         "Content-Type": "application/json",
@@ -249,11 +249,11 @@ async def _exchange_xai_token(data: Dict[str, str], token_endpoint: str) -> Dict
     except (httpx.HTTPError, OSError) as exc:
         raise XaiError("Unable to reach the Grok OAuth token endpoint.", 502) from exc
     if response.status_code != 200:
-        raise XaiError("xAI did not accept the OAuth authorization response.")
+        raise XaiError("Grok did not accept the OAuth authorization response.")
     try:
         payload = response.json()
     except ValueError as exc:
-        raise XaiError("xAI returned an invalid OAuth token response.", 502) from exc
+        raise XaiError("Grok returned an invalid OAuth token response.", 502) from exc
     if not payload.get("access_token"):
         raise XaiError("Grok OAuth token response did not include an access token.", 502)
     return payload
@@ -263,7 +263,7 @@ async def complete_xai_oauth(callback_url: str) -> Dict[str, Any]:
     _prune_oauth_flows()
     parsed = urlparse(str(callback_url or "").strip())
     if parsed.scheme not in {"http", "https"} or not parsed.netloc:
-        raise XaiError("Enter the complete xAI callback URL.")
+        raise XaiError("Enter the complete Grok callback URL.")
     params = parse_qs(parsed.query)
     state = str((params.get("state") or [""])[0]).strip()
     code = str((params.get("code") or [""])[0]).strip()
@@ -274,7 +274,7 @@ async def complete_xai_oauth(callback_url: str) -> Dict[str, Any]:
     if not state or not flow:
         raise XaiError("The Grok OAuth session was not found or has expired.")
     if not code:
-        raise XaiError("The xAI callback URL does not contain an authorization code.")
+        raise XaiError("The Grok callback URL does not contain an authorization code.")
     tokens = await _exchange_xai_token(
         {
             "grant_type": "authorization_code",
@@ -304,7 +304,7 @@ async def complete_xai_oauth(callback_url: str) -> Dict[str, Any]:
         "token_uri": flow["token_endpoint"],
         "expiry": expiry.isoformat(),
         "user_email": identity,
-        "credential_label": identity or f"OAuth account {fingerprint[:8]}",
+        "credential_label": identity or f"Grok account {fingerprint[:8]}",
         "account_fingerprint": fingerprint,
         "model_ids": model_ids,
         "created_at": datetime.now(timezone.utc).isoformat(),

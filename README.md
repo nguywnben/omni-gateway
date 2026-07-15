@@ -2,7 +2,7 @@
 
 A universal AI router for coding tools. Omni Gateway provides smart auto-fallback, token-aware request cleanup, usage visibility, and seamless format translation so local agents, IDE assistants, and automation scripts can use free and premium LLM capacity through one stable API surface.
 
-> **Project status:** Stable. Version `1.0.0` establishes the supported SDK routes, canonical management routes, configuration names, and single-instance runtime contract. Future compatibility changes follow Semantic Versioning.
+> **Project status:** Stable. Version `1.1.0` expands the supported provider pool with Grok OAuth and xAI Console API keys while preserving the stable SDK routes, canonical management routes, configuration names, and single-instance runtime contract established in `1.0.0`.
 
 ## Why Omni Gateway
 
@@ -72,10 +72,10 @@ sudo docker run -d \
   -p 4283:4283 \
   -v /opt/omni-gateway/creds:/app/backend/data/creds \
   -v /opt/omni-gateway/logs:/app/backend/data/logs \
-  nguywnben/omni-gateway:1.0.0
+  nguywnben/omni-gateway:1.1.0
 ```
 
-The same release is published to GitHub Packages as `ghcr.io/nguywnben/omni-gateway:1.0.0`. The `latest` tag tracks the newest stable release; `edge` tracks verified but unreleased builds from `main`. Pin a version tag or digest when reproducible deployment matters.
+The same release is published to GitHub Packages as `ghcr.io/nguywnben/omni-gateway:1.1.0`. The `latest` tag tracks the newest stable release; `edge` tracks verified but unreleased builds from `main`. Pin a version tag or digest when reproducible deployment matters.
 
 Open the control panel at:
 
@@ -87,7 +87,7 @@ On first run, create the console password on the setup screen. No default passwo
 
 Passwords managed by the application are stored as salted scrypt hashes, control-panel sessions use HttpOnly cookies, and public SDK requests authenticate with the generated `sk-ogw-` API key. For a non-interactive deployment, preconfigure `PANEL_PASSWORD` and skip the setup screen entirely.
 
-The `1.0.0` container is published for `linux/amd64`. ARM64 publication is intentionally paused until every provider dependency, including the Vertex transport stack, can be built and tested with the same contract.
+The `1.1.0` container is published for `linux/amd64`. ARM64 publication is intentionally paused until every provider dependency, including the Vertex transport stack, can be built and tested with the same contract.
 
 If the server firewall is enabled, allow the gateway port:
 
@@ -122,7 +122,7 @@ sudo mkdir -p /opt/omni-gateway/creds /opt/omni-gateway/logs
 docker compose -f deploy/docker-compose.yml up -d
 ```
 
-The included compose file pulls `nguywnben/omni-gateway:latest` and uses `/opt/omni-gateway` by default for persistent host data. Set `IMAGE=nguywnben/omni-gateway:1.0.0` to pin this release, and set `DATA_DIR=/custom/path` when the server uses a different storage location.
+The included compose file pulls `nguywnben/omni-gateway:latest` and uses `/opt/omni-gateway` by default for persistent host data. Set `IMAGE=nguywnben/omni-gateway:1.1.0` to pin this release, and set `DATA_DIR=/custom/path` when the server uses a different storage location.
 
 Compose forwards `API_KEY`, `PANEL_PASSWORD`, `SETUP_TOKEN`, external storage URIs, and `PROXY` from the shell or a root `.env` file. Leave them empty to retain automatic key generation, first-run setup, local SQLite storage, and direct outbound networking.
 
@@ -207,10 +207,10 @@ Omni Gateway reads configuration from environment variables first, then stored c
 | `ANTIGRAVITY_CLIENT_ID` | bundled desktop client | Optional override for the Google Antigravity OAuth client ID. It can also be managed from the Providers page. |
 | `ANTIGRAVITY_CLIENT_SECRET` | bundled desktop client | Optional override for the Google Antigravity OAuth client secret. Configure it through env or the Providers page when the upstream client changes. |
 | `GOOGLE_AI_STUDIO_API_URL` | `https://generativelanguage.googleapis.com` | Optional Google AI Studio Generative Language API endpoint override. |
-| `XAI_API_URL` | `https://api.x.ai/v1` | Optional xAI inference and model-catalog endpoint override. It can also be managed from the Providers page. |
-| `XAI_OAUTH_ISSUER` | `https://auth.x.ai` | Optional xAI OAuth issuer override. Only HTTPS hosts under `x.ai` are accepted by the console. |
-| `XAI_CLIENT_ID` | bundled public client | Optional override for the xAI PKCE OAuth client ID. |
-| `XAI_USER_AGENT` | `grok-cli/omni-gateway` | Optional xAI OAuth and API transport User-Agent override. |
+| `XAI_API_URL` | `https://api.x.ai/v1` | Optional shared inference and model-catalog endpoint override for Grok OAuth accounts and xAI Console API keys. It can also be managed from the Providers page. |
+| `XAI_OAUTH_ISSUER` | `https://auth.x.ai` | Optional Grok OAuth issuer override. Only HTTPS hosts under `x.ai` are accepted by the console. |
+| `XAI_CLIENT_ID` | bundled public client | Optional override for the Grok PKCE OAuth client ID. |
+| `XAI_USER_AGENT` | `grok-cli/omni-gateway` | Optional shared HTTP User-Agent override for Grok OAuth and xAI Console API requests. |
 | `ANTIGRAVITY_USER_AGENT` | `antigravity/cli/1.0.1 windows/amd64` | Optional Google Antigravity protocol User-Agent override. |
 | `ANTIGRAVITY_PAYLOAD_USER_AGENT` | `antigravity` | Optional payload-level Google Antigravity userAgent override. |
 | `LOG_LEVEL` | `info` | Runtime log level. |
@@ -340,11 +340,11 @@ Omni Gateway records request volume, success rate, credential attribution, provi
 1. Start Omni Gateway.
 2. Open `http://YOUR_SERVER_IP:4283` on a VPS, or `http://127.0.0.1:4283` for local development.
 3. Create the console password on the first-run setup screen. For remote setup, enter the bootstrap token from the application logs; alternatively preconfigure `PANEL_PASSWORD`.
-4. Add a Google Antigravity account, Google AI Studio API key, xAI OAuth account, or xAI API key from the Providers page.
+4. Add a Google Antigravity account, Google AI Studio API key, Grok OAuth account, or xAI Console API key from the Providers page.
 5. Verify credentials and watch cooldown/error state in the panel.
 6. Point your coding tool to one of the API surfaces above.
 
-When adding Google Antigravity credentials, Google redirects the browser to `http://localhost:4283/callback` after sign-in. On a local machine, Omni Gateway shows an OAuth success page. On a VPS, that `localhost` address belongs to the user's browser machine, so the page may not load; copy the full URL from the browser address bar, return to the Providers page, paste it into `Callback URL`, and click `Save credentials`.
+When adding a Google Antigravity credential, Google redirects the browser to `http://localhost:4283/callback` after sign-in. On a local machine, Omni Gateway shows an OAuth success page. On a VPS, that `localhost` address belongs to the user's browser machine, so the page may not load; copy the full URL from the browser address bar, return to the Providers page, paste it into `Callback URL`, and click `Save credential`.
 
 Google AI Studio uses API-key authentication instead of OAuth. Add a key from the Providers page; Omni Gateway validates it against Google's model catalog, stores it as a provider credential, and routes compatible Gemini or Gemma requests through it. The smart router can fall back between AI Studio and Google Antigravity for shared Gemini models while keeping provider-specific models on compatible credentials.
 
@@ -364,7 +364,7 @@ Every imported key is validated before storage. Duplicate keys within the same i
 
 Grok supports PKCE OAuth credentials, while xAI Console supports API keys. xAI Console keys are validated against the xAI model catalog before storage. For Grok OAuth, Omni Gateway generates an authorization link that redirects to `http://127.0.0.1:56121/callback`; after authorization, copy the complete callback URL from the browser and paste it into the Grok OAuth form. Access tokens are refreshed automatically when a refresh token is available, and both credential types expose only the Grok models declared by their current catalog.
 
-Pool and Google Antigravity imports accept archives up to 10 MB, at most 500 files, individual credential files up to 2 MB, and at most 25 MB of uncompressed data. Google AI Studio uses stricter limits of 2 MB per upload, 200 JSON entries, and 5 MB of uncompressed data.
+Pool imports and Google Antigravity batch imports accept archives up to 10 MB, at most 500 files, individual credential files up to 2 MB, and at most 25 MB of uncompressed data. Google AI Studio uses stricter limits of 2 MB per imported file, 200 JSON entries, and 5 MB of uncompressed data.
 
 The Pool page also provides a provider-independent backup workflow. `Download ZIP` exports the active credential pool, and `Import ZIP` restores that archive by identifying each credential as Google Antigravity, Google AI Studio, Grok, or xAI Console. OAuth accounts retain provider-scoped email-and-expiry deduplication, while API keys are validated and deduplicated by a provider-scoped, non-reversible key fingerprint. Unsupported or malformed entries are reported individually without blocking valid credentials in the same archive.
 

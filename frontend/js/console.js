@@ -295,7 +295,7 @@ function initStaticUiBindings() {
         'select-pool-archive': () => selectPoolImportArchive(),
         'download-pool': () => downloadAllPrimaryCreds(),
         'batch-primary': (element) => batchPrimaryAction(element.dataset.batchAction),
-        'batch-verify-primary': () => batchVerifyPrimaryProjectIds(),
+        'batch-verify-primary': () => batchVerifyProviderCredentials(),
         'change-primary-page': (element) => changePrimaryPage(Number(element.dataset.pageDelta)),
         'refresh-model-catalog': () => loadModelCatalog(true),
         'save-model-pool': () => saveModelPool(),

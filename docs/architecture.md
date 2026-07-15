@@ -34,7 +34,7 @@ backend/
     converter/            Pure request/response format translation
     storage/              Concrete persistence backends
     panel/                Authenticated management API and setup policy
-    xai.py                Grok OAuth, xAI model discovery, and transport translation
+    xai.py                Grok OAuth, xAI Console model discovery, and transport translation
     provider_registry.py  Provider identity and capability metadata
     smart_routing.py      Provider and credential selection policy
     storage_adapter.py    Persistence boundary used by the application
@@ -74,7 +74,7 @@ The Render Blueprint deliberately uses a paid persistent disk. Free Render servi
 - Direct loopback setup remains frictionless. Remote first-run setup requires a bootstrap token from `SETUP_TOKEN` or the application logs.
 - Runtime-log WebSockets require a matching console origin and authenticate only through the HttpOnly session cookie; credentials are never accepted in their URLs.
 - Forwarded client and protocol headers are ignored unless `TRUST_PROXY_HEADERS=true`.
-- Uploaded archives and credentials are validated by provider-specific import paths before persistence.
+- Imported archives and credentials are validated by provider-specific paths before persistence.
 - Fixed-length and chunked HTTP bodies are bounded before application parsers allocate request data.
 - Credential values must never appear in logs, issue reports, filenames, or UI summaries.
 - Provider tokens remain retrievable for upstream calls, so the deployment boundary must protect storage with least-privilege access and platform-level encryption at rest.

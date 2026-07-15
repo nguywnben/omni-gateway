@@ -96,7 +96,7 @@ def _cleanup_auth_flow_server(state: str):
                 port = flow_data_to_clean.get("callback_port")
                 async_shutdown_server(server, port)
         except Exception as e:
-            log.debug(f"Failed to shut down OAuth callback server for state {state}: {e}")
+            log.debug(f"Failed to shut down an OAuth callback server: {e}")
         del auth_flows[state]
 
 
@@ -129,7 +129,7 @@ auth_flows = {}
 
 def accept_oauth_callback(code: Optional[str], state: Optional[str]) -> tuple[bool, str]:
     """Record an OAuth callback code for an active authorization flow."""
-    log.info(f"Received OAuth callback for state {state or '<missing>'}.")
+    log.info("Received an OAuth callback.")
     if not code or not state:
         return False, "The OAuth callback is missing a code or state parameter."
     if state not in auth_flows:
@@ -137,7 +137,7 @@ def accept_oauth_callback(code: Optional[str], state: Optional[str]) -> tuple[bo
 
     auth_flows[state]["code"] = code
     auth_flows[state]["completed"] = True
-    log.info(f"OAuth callback accepted for state {state}.")
+    log.info("OAuth callback accepted.")
     return True, "OAuth authentication successful."
 
 
@@ -235,7 +235,7 @@ async def create_auth_url(
         if mode == "primary":
             client_id, client_secret = await get_antigravity_oauth_client_config()
             scopes = SCOPES
-            missing_config_error = "Antigravity OAuth client configuration is unavailable."
+            missing_config_error = "Google Antigravity OAuth client configuration is unavailable."
         else:
             client_id, client_secret = await get_code_assist_oauth_client_config()
             scopes = CODE_ASSIST_SCOPES
@@ -290,9 +290,9 @@ async def create_auth_url(
                     port = old_flow.get("callback_port")
                     async_shutdown_server(server, port)
             except Exception as e:
-                log.warning(f"Failed to cleanup old auth flow {oldest_state}: {e}")
+                log.warning(f"Failed to clean up the oldest OAuth flow: {e}")
             del auth_flows[oldest_state]
-            log.debug(f"Removed oldest auth flow: {oldest_state}")
+            log.debug("Removed the oldest OAuth flow.")
         auth_flows[state] = {
             "flow": flow,
             "project_id": project_id,
@@ -308,7 +308,7 @@ async def create_auth_url(
             "mode": mode,
         }
         cleanup_expired_flows()
-        log.info(f"Created OAuth flow {state} using mode {mode}.")
+        log.info(f"Created an OAuth flow in {mode} mode.")
         log.debug(f"OAuth redirect URI: {callback_url}")
         log.debug(f"OAuth auto project detection: {project_id is None}")
         return {
@@ -327,7 +327,7 @@ async def create_auth_url(
 
 def wait_for_callback_sync(state: str, timeout: int = 300) -> Optional[str]:
     if state not in auth_flows:
-        log.error(f"OAuth flow {state} was not found while waiting for callback.")
+        log.error("The OAuth flow was not found while waiting for a callback.")
         return None
     flow_data = auth_flows[state]
     callback_port = flow_data["callback_port"]
@@ -335,12 +335,12 @@ def wait_for_callback_sync(state: str, timeout: int = 300) -> Optional[str]:
     start_time = time.time()
     while time.time() - start_time < timeout:
         if flow_data.get("code"):
-            log.info(f"Received OAuth callback for state {state}.")
+            log.info("Received the expected OAuth callback.")
             return flow_data["code"]
         time.sleep(0.5)
         if state in auth_flows:
             flow_data = auth_flows[state]
-    log.warning(f"OAuth callback timed out after {timeout} seconds for state {state}.")
+    log.warning(f"OAuth callback timed out after {timeout} seconds.")
     return None
 
 
@@ -475,12 +475,12 @@ async def asyncio_complete_auth_flow(
                     if user_session and data.get("user_session") == user_session:
                         state = s
                         flow_data = data
-                        log.info(f"Found OAuth flow {state} for the current session.")
+                        log.info("Found an OAuth flow for the current session.")
                         break
                     elif not state:
                         state = s
                         flow_data = data
-                        log.info(f"Found OAuth flow {state} for project {project_id}.")
+                        log.info(f"Found an OAuth flow for project {project_id}.")
         if not state:
             log.info(
                 "Searching for the latest OAuth flow that supports automatic project detection."
@@ -494,7 +494,7 @@ async def asyncio_complete_auth_flow(
             if completed_flows:
                 completed_flows.sort(key=lambda x: x[2], reverse=True)
                 state, flow_data, _ = completed_flows[0]
-                log.info(f"Using completed OAuth flow {state}.")
+                log.info("Using the latest completed OAuth flow.")
             else:
                 pending_flows = []
                 for s, data in auth_flows.items():
@@ -506,16 +506,15 @@ async def asyncio_complete_auth_flow(
                 if pending_flows:
                     pending_flows.sort(key=lambda x: x[2], reverse=True)
                     state, flow_data, _ = pending_flows[0]
-                    log.info(f"Using pending OAuth flow {state}.")
+                    log.info("Using the latest pending OAuth flow.")
         if not state or not flow_data:
             log.error("No matching OAuth flow was found.")
-            log.debug(f"Available OAuth states: {list(auth_flows.keys())}")
+            log.debug(f"Available OAuth flow count: {len(auth_flows)}.")
             return {
                 "success": False,
                 "error": "Authentication flow not found. Please click to get an authentication link first.",
             }
-        log.info(f"Using OAuth flow {state} in mode {flow_data.get('mode', mode)}.")
-        log.debug(f"OAuth callback URL: {flow_data.get('callback_url')}")
+        log.info(f"Using an OAuth flow in {flow_data.get('mode', mode)} mode.")
         log.debug(f"OAuth flow completed: {flow_data.get('completed', False)}")
         log.debug(f"OAuth auto project detection: {flow_data.get('auto_project_detection', False)}")
         if flow_data.get("auto_project_detection", False) and (not project_id):
@@ -541,7 +540,7 @@ async def asyncio_complete_auth_flow(
                 break
             if waited % 5 == 0 and waited > 0:
                 log.info(f"Waiting for OAuth callback code ({waited}s elapsed).")
-                log.debug(f"OAuth flow {state} is still pending.")
+                log.debug("The OAuth flow is still pending.")
             await asyncio.sleep(wait_interval)
             waited += wait_interval
             if state in auth_flows:
@@ -668,26 +667,26 @@ async def complete_auth_flow_from_callback_url(
     callback_url: str, project_id: Optional[str] = None, mode: str = "code_assist"
 ) -> Dict[str, Any]:
     try:
-        log.info(f"Starting authentication from callback URL: {callback_url}")
+        log.info("Starting authentication from an OAuth callback URL.")
         parsed_url = urlparse(callback_url)
         query_params = parse_qs(parsed_url.query)
         if "state" not in query_params or "code" not in query_params:
             return {
                 "success": False,
-                "error": "Callback URL is missing required parameters (state or code)",
+                "error": "The callback URL is missing a required state or code parameter.",
             }
         state = query_params["state"][0]
         code = query_params["code"][0]
-        log.info(f"Parsed from URL: state={state}, code=xxx...")
+        log.info("Parsed the required OAuth callback parameters.")
         if state not in auth_flows:
             return {
                 "success": False,
-                "error": f"Authentication flow not found. Please start authentication first (state: {state})",
+                "error": "The authentication flow was not found. Start authentication again.",
             }
         flow_data = auth_flows[state]
         flow = flow_data["flow"]
         redirect_uri = flow.redirect_uri
-        log.info(f"Using OAuth redirect URI: {redirect_uri}")
+        log.debug(f"Using OAuth redirect URI: {redirect_uri}")
         try:
             credentials = await flow.exchange_code(code)
             log.info("Access token retrieved.")
@@ -875,7 +874,7 @@ def cleanup_expired_flows():
                     port = flow_data.get("callback_port")
                     async_shutdown_server(server, port)
             except Exception as e:
-                log.debug(f"Failed to clean expired OAuth flow {state}: {e}")
+                log.debug(f"Failed to clean up an expired OAuth flow: {e}")
             flow_data.clear()
             del auth_flows[state]
             cleaned_count += 1

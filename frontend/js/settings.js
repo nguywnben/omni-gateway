@@ -316,7 +316,10 @@ async function checkEnvCredsStatus() {
 
             autoLoadStatus.style.color = data.auto_load_enabled ? '#28a745' : '#dc3545';
 
-            document.getElementById('envFilesCount').textContent = t('dataexisting_env_files_count_files', {data_existing_env_files_count: data.existing_env_files_count});
+            document.getElementById('envFilesCount').textContent = t(
+                'dataexisting_env_files_count_files',
+                {files: formatCountLabel(data.existing_env_files_count, 'file')}
+            );
 
             const envFilesList = document.getElementById('envFilesList');
 
@@ -368,7 +371,11 @@ async function loadEnvCredentials() {
 
             if (data.loaded_count > 0) {
 
-                showStatus(t('successfully_imported_dataloaded_co', {data_loaded_count: data.loaded_count, data_total_count: data.total_count}), 'success');
+                showStatus(t('successfully_imported_dataloaded_co', {
+                    data_loaded_count: data.loaded_count,
+                    data_total_count: data.total_count,
+                    credential_noun: Number(data.total_count) === 1 ? 'credential file' : 'credential files'
+                }), 'success');
 
                 setTimeout(() => checkEnvCredsStatus(), 1000);
 
@@ -422,7 +429,9 @@ async function clearEnvCredentials() {
 
         if (response.ok) {
 
-            showStatus(t('successfully_deleted_datadeleted_co', {data_deleted_count: data.deleted_count}), 'success');
+            showStatus(t('successfully_deleted_datadeleted_co', {
+                files: formatCountLabel(data.deleted_count, 'environment-variable credential file')
+            }), 'success');
 
             setTimeout(() => checkEnvCredsStatus(), 1000);
 
@@ -579,10 +588,12 @@ const XAI_CONFIG_FIELDS = {
 const XAI_CONFIG_GROUPS = {
     oauth: {
         label: 'Grok',
+        resetTitle: 'Reset Grok Settings',
         fieldIds: ['xaiClientId', 'xaiOauthIssuer']
     },
     api: {
-        label: 'xAI Console',
+        label: 'xAI transport',
+        resetTitle: 'Reset Shared xAI Transport Settings',
         fieldIds: ['xaiApiUrl', 'xaiUserAgent']
     }
 };
@@ -635,7 +646,7 @@ async function resetXaiSettings(scope) {
     if (!group) return;
     const confirmed = await showConfirmModal(
         `Restore the built-in ${group.label} settings?`,
-        { title: `Reset ${group.label} Settings`, confirmLabel: 'Reset defaults' }
+        { title: group.resetTitle, confirmLabel: 'Reset defaults' }
     );
     if (!confirmed) return;
     try {
@@ -761,7 +772,7 @@ async function saveXaiOauth() {
         showStatus(`Failed to save Grok OAuth credential: ${error.message}`, 'error');
     } finally {
         button.disabled = false;
-        button.textContent = 'Save credentials';
+        button.textContent = 'Save credential';
     }
 }
 

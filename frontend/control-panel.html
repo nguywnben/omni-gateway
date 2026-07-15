@@ -187,7 +187,7 @@
                     <div class="dashboard-grid">
                         <section class="card span-6">
                             <h2 class="card-title">API Integration</h2>
-                            <p class="card-copy card-title-copy">Copy the API key and SDK base URLs used by local clients.</p>
+                            <p class="card-copy card-title-copy">Copy the API key and SDK base URLs used by compatible clients.</p>
                             <div class="metric-row">
                                 <div class="copy-field">
                                     <label for="apiKey">API key</label>
@@ -360,14 +360,14 @@
                         <div class="batch-label">
                             <input type="checkbox" id="selectAllPrimaryCheckbox" class="select-all-checkbox" data-ui-change="select-all-primary">
                             <label for="selectAllPrimaryCheckbox">Select all visible</label>
-                            <span class="selected-count" id="primarySelectedCount">Selected 0 items</span>
+                            <span class="selected-count" id="primarySelectedCount">0 selected</span>
                         </div>
                         <div class="batch-actions">
                             <button type="button" class="batch-btn batch-enable" id="primaryBatchEnableBtn" data-ui-action="batch-primary" data-batch-action="enable" disabled>Enable</button>
                             <button type="button" class="batch-btn" id="primaryBatchDisableBtn" data-ui-action="batch-primary" data-batch-action="disable" disabled>Disable</button>
                             <button type="button" class="batch-btn batch-delete" id="primaryBatchDeleteBtn" data-ui-action="batch-primary" data-batch-action="delete" disabled>Delete</button>
-                            <button type="button" class="batch-btn" id="primaryBatchEnableCreditBtn" data-ui-action="batch-primary" data-batch-action="enable_credit" disabled>Enable credit</button>
-                            <button type="button" class="batch-btn" id="primaryBatchDisableCreditBtn" data-ui-action="batch-primary" data-batch-action="disable_credit" disabled>Disable credit</button>
+                            <button type="button" class="batch-btn" id="primaryBatchEnableCreditBtn" data-ui-action="batch-primary" data-batch-action="enable_credit" disabled>Enable credits</button>
+                            <button type="button" class="batch-btn" id="primaryBatchDisableCreditBtn" data-ui-action="batch-primary" data-batch-action="disable_credit" disabled>Disable credits</button>
                             <button type="button" class="batch-btn" id="primaryBatchVerifyBtn" data-ui-action="batch-verify-primary" disabled>Verify</button>
                         </div>
                     </div>
@@ -625,11 +625,11 @@
                                         <textarea id="xaiCallbackUrl" rows="3" placeholder="http://127.0.0.1:56121/callback?state=...&amp;code=..."></textarea>
                                     </div>
                                     <div class="page-actions" style="margin-top: 14px;">
-                                        <button type="button" class="btn" id="saveXaiOauthBtn" data-ui-action="save-xai-oauth">Save credentials</button>
+                                        <button type="button" class="btn" id="saveXaiOauthBtn" data-ui-action="save-xai-oauth">Save credential</button>
                                     </div>
                                     <div id="xaiOauthSaveResult" class="save-result provider-save-result hidden" style="margin-top: 14px;">
                                         <div>
-                                            <strong id="xaiOauthSaveResultTitle">OAuth credential added to pool</strong>
+                                            <strong id="xaiOauthSaveResultTitle">Grok OAuth credential added to pool</strong>
                                             <p id="xaiOauthSaveResultText"></p>
                                         </div>
                                         <button type="button" class="btn btn-secondary" data-ui-action="switch-tab" data-tab="pool">View</button>
@@ -639,7 +639,7 @@
 
                             <section class="tool-panel">
                                 <h2 class="card-title">Batch Import</h2>
-                                <p class="card-copy provider-tool-copy">Import Grok OAuth credentials from JSON files or ZIP archives. Every account is checked before it enters the pool.</p>
+                                <p class="card-copy provider-tool-copy">Import Grok OAuth credentials from JSON files or ZIP archives. Every credential is validated before it enters the pool.</p>
                                 <button type="button" class="upload-area" id="grokUploadArea" aria-describedby="grokUploadHelp" data-ui-action="select-grok-files">
                                     <div>
                                         <div class="upload-title">Drop OAuth credential files here</div>
@@ -685,8 +685,8 @@
                                 </div>
                             </div>
                             <div class="config-grid provider-config-grid">
-                                <div class="form-group"><label for="xaiClientId">OAuth Client ID</label><input type="text" id="xaiClientId" autocomplete="off"></div>
-                                <div class="form-group"><label for="xaiOauthIssuer">OAuth Issuer</label><input type="url" id="xaiOauthIssuer" autocomplete="off"></div>
+                                <div class="form-group"><label for="xaiClientId">OAuth client ID</label><input type="text" id="xaiClientId" autocomplete="off"></div>
+                                <div class="form-group"><label for="xaiOauthIssuer">OAuth issuer</label><input type="url" id="xaiOauthIssuer" autocomplete="off"></div>
                             </div>
                         </section>
                     </section>
@@ -760,8 +760,8 @@
                         <section class="tool-panel provider-settings-panel">
                             <div class="provider-settings-header">
                                 <div>
-                                    <h2 class="card-title">xAI Console Advanced Settings</h2>
-                                    <p class="card-copy provider-tool-copy">Configure the API endpoint and transport identity used for xAI Console API keys.</p>
+                                    <h2 class="card-title">Shared xAI Transport Settings</h2>
+                                    <p class="card-copy provider-tool-copy">Configure the API endpoint and HTTP identity shared by Grok OAuth accounts and xAI Console API keys.</p>
                                 </div>
                                 <div class="page-actions">
                                     <button type="button" class="btn" data-ui-action="save-xai-console-settings">Save</button>
@@ -901,7 +901,7 @@
                                 </div>
 
                                 <div class="page-actions" style="margin-top: 14px;">
-                                    <button type="button" class="btn" id="getPrimaryCredsBtn" data-ui-action="get-primary-credentials">Save credentials</button>
+                                    <button type="button" class="btn" id="getPrimaryCredsBtn" data-ui-action="get-primary-credentials">Save credential</button>
                                 </div>
 
                                 <div id="primarySaveResult" class="save-result hidden" style="margin-top: 14px;">
@@ -917,14 +917,14 @@
                                     <div class="credentials">
                                         <pre id="primaryCredsContent"></pre>
                                     </div>
-                                    <button type="button" class="btn btn-secondary" id="primaryCredsDownloadBtn" style="margin-top: 10px;" data-ui-action="download-primary-credentials">Download credentials</button>
+                                    <button type="button" class="btn btn-secondary" id="primaryCredsDownloadBtn" style="margin-top: 10px;" data-ui-action="download-primary-credentials">Download credential</button>
                                 </div>
                             </div>
                         </section>
 
                         <section class="tool-panel">
                             <h2 class="card-title">Batch Import</h2>
-                            <p class="card-copy provider-tool-copy">Import Google Antigravity credential JSON files or ZIP archives into the active pool.</p>
+                            <p class="card-copy provider-tool-copy">Import Google Antigravity credentials from JSON files or ZIP archives. Credentials are deduplicated by account email and expiry.</p>
                             <button type="button" class="upload-area" id="primaryUploadArea" aria-describedby="primaryUploadHelp" data-ui-action="select-primary-files">
                                 <div>
                                     <div class="upload-title">Drop credential files here</div>
@@ -937,14 +937,14 @@
                                 <label>Pending files</label>
                                 <div class="file-list" id="primaryFileList"></div>
                                 <div class="page-actions">
-                                    <button type="button" class="btn btn-small" data-ui-action="upload-primary-files">Upload</button>
+                                    <button type="button" class="btn btn-small" data-ui-action="upload-primary-files">Import</button>
                                     <button type="button" class="btn btn-secondary btn-small" data-ui-action="clear-primary-files">Clear</button>
                                 </div>
                             </div>
 
                             <div id="primaryUploadProgressSection" class="hidden" style="margin-top: 16px;">
                                 <div class="progress-bar"><div class="progress-fill" id="primaryProgressFill"></div></div>
-                                <p id="primaryProgressText" class="page-description" style="margin-top: 8px;">Upload progress: 0%</p>
+                                <p id="primaryProgressText" class="page-description" style="margin-top: 8px;">Import progress: 0%</p>
                             </div>
 
                             <div id="primaryUploadResult" class="save-result upload-result hidden" style="margin-top: 14px;">
@@ -1132,7 +1132,7 @@
                                             <option value="">Automatic</option>
                                             <option value="google_antigravity">Google Antigravity</option>
                                             <option value="google_ai_studio">Google AI Studio</option>
-                                            <option value="xai">xAI</option>
+                                            <option value="xai">xAI (Grok and Console)</option>
                                         </select>
                                     </div>
                                     <div class="form-group"><label for="upstreamTimeoutSeconds">Inference timeout in seconds</label><input type="number" id="upstreamTimeoutSeconds" min="5" max="900" step="1"></div>
@@ -1229,7 +1229,7 @@
                                 <div class="code-block">Virtual model orchestration and smart auto-fallback</div>
                                 <div class="code-block">Token-aware cleanup and usage visibility</div>
                                 <div class="code-block">Google Antigravity and Grok OAuth, plus Google AI Studio and xAI Console API keys</div>
-                                <div class="code-block">OpenAI, Anthropic, Gemini, and provider-native format translation</div>
+                                <div class="code-block">OpenAI, Anthropic, Google GenAI, and provider-native format translation</div>
                             </div>
                         </section>
                     </div>

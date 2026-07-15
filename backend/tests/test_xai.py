@@ -446,7 +446,10 @@ class XaiProviderTests(unittest.IsolatedAsyncioTestCase):
         serialized = json.dumps(payload)
         self.assertEqual(payload["uploaded_count"], 0)
         self.assertEqual(payload["error_count"], 1)
-        self.assertIn("does not contain an xAI credential", payload["results"][0]["message"])
+        self.assertIn(
+            "does not contain a Grok or xAI Console credential",
+            payload["results"][0]["message"],
+        )
         self.assertNotIn("google-secret-value", serialized)
 
     async def test_import_scope_rejects_the_other_xai_credential_type(self):

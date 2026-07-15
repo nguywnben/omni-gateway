@@ -8,17 +8,17 @@ const TRANSLATIONS = {
         "action_disable_credit": "Disable credits",
         "action_enable": "Enable",
         "action_enable_credit": "Enable credits",
-        "all_configured_successfully_preview": "Preview channel configured for {successCount}/{selectedFiles_length} credentials.",
+        "all_configured_successfully_preview": "Preview channel configured for {successCount}/{selectedFiles_length} {credential_noun}.",
         "all_credential_files_have_been_down": "Downloaded all credential files.",
         "all_primary_credentials_packed": "Downloaded all provider credentials.",
-        "all_verifications_failed_failed_fai": "All verifications failed. Failed {failCount}/{selectedFiles_length} credentials.",
-        "all_verifications_successful_succes": "All verifications passed. Verified {successCount}/{selectedFiles_length} credentials.",
-        "all_verifications_successful_verifi": "All verifications passed. Verified {successCount}/{selectedFiles_length} provider credentials.",
+        "all_verifications_failed_failed_fai": "Verification failed for all {credentials}.",
+        "all_verifications_successful_succes": "All verifications passed. Verified {credentials}.",
+        "all_verifications_successful_verifi": "All verifications passed. Verified {credentials}.",
         "already_up_to_date": "Already up to date.",
         "already_up_to_date_dup": "Already up to date.",
-        "are_you_sure_you_want_to_batch_set": "Configure the Preview channel for {selectedFiles_length} credentials?\\n\\nThis operation will run in parallel.",
-        "are_you_sure_you_want_to_batch_veri": "Verify Project IDs for {selectedFiles_length} provider credentials?\\n\\nThis operation will run in parallel.",
-        "are_you_sure_you_want_to_batch_veri_dup": "Verify Project IDs for {selectedFiles_length} credentials?\\n\\nThis operation will run in parallel.",
+        "are_you_sure_you_want_to_batch_set": "Configure the Preview channel for {credentials}?\\n\\nThis operation will run in parallel.",
+        "are_you_sure_you_want_to_batch_veri": "Verify access and refresh metadata for {credentials}?\\n\\nThis operation will run in parallel.",
+        "are_you_sure_you_want_to_batch_veri_dup": "Verify access and refresh metadata for {credentials}?\\n\\nThis operation will run in parallel.",
         "are_you_sure_you_want_to_clear_all": "Clear all credential files imported from environment variables?\\nThis will delete authentication files that start with \"env-\".",
         "are_you_sure_you_want_to_delete_fil_dup": "Are you sure you want to delete {filename}?",
         "are_you_sure_you_want_to_perform_on": "Deduplicate credentials now?\\n\\nOnly one credential per email will be kept, and all others will be deleted.\\nThis action cannot be undone.",
@@ -76,11 +76,11 @@ const TRANSLATIONS = {
         "click_to_open_link": "Click to open link",
         "code_assist_creds__environment_variable_no": "No Code Assist credential environment variables found.",
         "configuration_failed": "Configuration failed",
-        "configuration_failed_for_all_failed": "Configuration failed for all credentials. Failed {failCount}/{selectedFiles_length} credentials.",
+        "configuration_failed_for_all_failed": "Configuration failed for all credentials. Failed {failCount}/{selectedFiles_length} {credential_noun}.",
         "configuration_loaded_successfully": "Configuration loaded.",
         "configuration_saved_successfully": "Configuration saved.",
         "configuration_successful": "Configuration successful.",
-        "configuring_preview_channel_for_sel": "Configuring Preview channel for {selectedFiles_length} credentials. Please wait...",
+        "configuring_preview_channel_for_sel": "Configuring the Preview channel for {credentials}. Please wait...",
         "configuring_preview_channel_please": "Configuring Preview channel. Please wait...",
         "confirm_batch_enable": "Enable {count} selected credentials?",
         "confirm_batch_disable": "Disable {count} selected credentials?",
@@ -118,12 +118,12 @@ const TRANSLATIONS = {
         "credential_available": "Credential available",
         "credential_rate_limited": "Credential is valid, but the upstream provider is currently rate limited.",
         "credential_status_label": "Status:",
-        "credentials_fetched_successfully_fr": "Credentials retrieved from the callback URL.",
+        "credentials_fetched_successfully_fr": "Credential retrieved from the callback URL.",
         "credit_disabled_title": "Google One AI credit usage is disabled for this credential.",
         "credit_enabled_title": "Google One AI credit usage is enabled for this credential.",
         "credits_label": "Credits",
-        "dataexisting_env_files_count_files": "{data_existing_env_files_count} files",
-        "deduplication_complete_deleted_data": "Deduplication complete. Deleted {data_deleted_count} duplicate credentials and kept {data_kept_count} credentials ({data_unique_emails_count} unique emails).",
+        "dataexisting_env_files_count_files": "{files}",
+        "deduplication_complete_deleted_data": "Deduplication completed. Deleted {deleted}, kept {kept}, and retained {emails}.",
         "deduplication_details_title": "Deduplication Details",
         "deduplication_detailsnn": "Deduplication details:\\n\\n",
         "deduplication_failed": "Deduplication failed.",
@@ -133,15 +133,16 @@ const TRANSLATIONS = {
         "disable_only": "Disabled only",
         "disconnected": "Disconnected",
         "download_failed_filename": "Download failed: {filename}",
-        "downloaded_filename": "Downloaded: {filename}",
+        "downloaded_filename": "Downloaded {filename}.",
         "email_groupemailnkeep_groupkept_fil": "Email: {group_email}\\nKeep: {group_kept_file}\\nDelete: {group_deleted_files_join}\\n\\n",
         "email_not_fetched": "Email unavailable",
-        "email_refresh_complete_successfully": "Email refresh complete. Retrieved {data_success_count}/{data_total_count} email addresses.",
+        "email_refresh_complete_successfully": "Email refresh completed. Retrieved {data_success_count}/{data_total_count} {address_noun}.",
         "email_refresh_network_error_errorme": "Email refresh network error: {error_message}",
         "enable_only": "Enabled only",
         "enabled": "Enabled",
         "environment_variable_status_check_c": "Environment variable status check complete.",
         "error_code_prefix": "Error",
+        "http_code_prefix": "HTTP",
         "error_dataerror_failed_to_fetch_aut": "Failed to fetch the authentication link: {data_error}",
         "error_dataerror_failed_to_generate": "Failed to generate the authentication link: {data_error}",
         "error_dataerror_failed_to_get_authe": "Failed to retrieve the authentication file: {data_error}",
@@ -172,7 +173,7 @@ const TRANSLATIONS = {
         "failed_to_retrieve_environment_vari": "Failed to retrieve environment variable status: {data_detail____data_error}",
         "failed_to_retrieve_version_informat": "Failed to retrieve version information:",
         "failed_to_save_config_datadetail_da": "Failed to save configuration: {data_detail____data_error}",
-        "fetch_primary_credentials": "Save credentials",
+        "fetch_primary_credentials": "Save credential",
         "fetching_authentication_link": "Fetching authentication link...",
         "full_version_datafull_hashncommit_m": "Full version: {data_full_hash}\\nCommit message: {data_message}\\nCommit time: {data_date}",
         "generating_authentication_link": "Generating authentication link...",
@@ -217,8 +218,8 @@ const TRANSLATIONS = {
         "oneclick_credential_deduplication_i": "One-click credential deduplication in progress...",
         "open_troubleshooter": "Open troubleshooter",
         "other_models_title": "Other models",
-        "parallel_testing_selectedfileslengt": "Testing {selectedFiles_length} provider credentials in parallel. Please wait...",
-        "parallel_verifying_selectedfileslen": "Verifying {selectedFiles_length} credentials in parallel. Please wait...",
+        "parallel_testing_selectedfileslengt": "Verifying {credentials} in parallel. Please wait...",
+        "parallel_verifying_selectedfileslen": "Verifying {credentials} in parallel. Please wait...",
         "please_enter_a_valid_url_starting_w": "Please enter a valid URL starting with http:// or https://.",
         "please_enter_the_callback_url": "Please enter the callback URL.",
         "please_enter_the_password": "Please enter your password.",
@@ -234,15 +235,15 @@ const TRANSLATIONS = {
         "please_select_the_primary_crede_dup": "Please select a provider credential to verify first.",
         "preview_not_supported_title": "This credential does not support Preview models",
         "preview_supported_title": "This credential supports Preview models",
-        "primary_authentication_link_gen": "Provider authentication link generated. Open it, finish Google authorization, then return here to save credentials. If Google opens a localhost callback page, paste that full URL into Callback URL.",
+        "primary_authentication_link_gen": "Provider authentication link generated. Open it, finish Google authorization, then return here to save the credential. If Google opens a localhost callback page, paste that full URL into the Callback URL field.",
         "primary_batch_verification_comp_dup": "Provider batch verification complete.\\n\\nSuccess: {successCount}\\nFailed: {failCount}\\nTotal: {selectedFiles_length}\\n\\nDetailed results:\\n{resultMessages_join___n}",
         "primary_credential_valid": "Provider credential is valid.",
         "project_id_required_to_complete_aut": "A Project ID is required to complete authentication. Restart the flow and enter the correct Project ID.",
         "provider_antigravity": "Google Antigravity",
         "provider_google_ai_studio": "Google AI Studio",
         "provider_authorization_expired": "This authorization session was not found or has expired. Generate a new authorization link and try again.",
-        "provider_authorization_pending": "Authorization is not complete yet. If Google opened a localhost callback page, copy the full callback URL from that tab and paste it into Callback URL.",
-        "provider_callback_url_required": "Paste the localhost callback URL from the Google tab, then click Save credentials.",
+        "provider_authorization_pending": "Authorization is not complete yet. If Google opened a localhost callback page, copy the full callback URL from that tab and paste it into the Callback URL field.",
+        "provider_callback_url_required": "Paste the localhost callback URL from the Google tab into the Callback URL field, then select Save credential.",
         "provider_code_assist": "Code Assist",
         "provider_credential_replaced_title": "Credential renewed",
         "provider_credential_saved_body": "The credential was saved and the provider pool was refreshed. File: {data_file_path}.",
@@ -261,8 +262,8 @@ const TRANSLATIONS = {
         "retry_using_the_selected_project": "Retrying with the selected project...",
         "retrying_with_manually_entered_proj": "Retrying with manually entered Project ID...",
         "right_click_to_copy_link": "Right-click to copy link",
-        "saving_provider_credentials": "Saving credentials to the pool...",
-        "saving_provider_credentials_from_callback": "Saving credentials from the callback URL...",
+        "saving_provider_credentials": "Saving the credential to the pool...",
+        "saving_provider_credentials_from_callback": "Saving the credential from the callback URL...",
         "status_action_failed": "Action failed: {error}",
         "status_action_success": "Action completed: {action}.",
         "status_batch_complete": "Batch operation complete. Processed {success}/{total} credentials.",
@@ -276,27 +277,27 @@ const TRANSLATIONS = {
         "status_filter_suffix": " Filter: {filter}.",
         "status_invalid_file_format": "The file format for {name} is not supported. Use JSON or ZIP files.",
         "status_load_failed": "Unable to load details: {error}",
-        "status_loaded_creds": "Loaded {count} {type} credential files.",
+        "status_loaded_creds": "Loaded {credentials}.",
         "status_loading_file_content": "Loading file content...",
         "status_log_stream_connection_failed": "Failed to connect to the log stream: ",
         "status_log_stream_error_prefix": "Log stream error: ",
         "status_net_error": "Network error: {error}",
-        "status_no_creds": "No credentials are in this pool yet. Add an account or upload credentials to get started.",
+        "status_no_creds": "No credentials are in this pool yet. Add an account or API key, or import credentials to get started.",
         "status_no_errors": "No errors",
         "status_no_filter_data": "No usage statistics found.",
         "status_no_quota_info": "No quota information is available for this credential.",
         "status_page_info": "Page {page} of {total} (showing {start}-{end} of {count}).",
-        "status_select_upload_first": "Select at least one credential file before uploading.",
-        "status_selected_items": "Selected {count} item(s)",
-        "status_upload_aborted": "Upload failed because the connection was interrupted while sending {count} files.",
-        "status_upload_failed_details": "Upload failed: {error}",
-        "status_upload_failed_http": "Upload failed with HTTP {status}.",
-        "status_upload_invalid_response": "The upload completed, but the server returned an invalid response.",
-        "status_upload_success": "Imported {count} {type} credential files.",
-        "status_upload_timeout": "Upload timed out. Try again with fewer files.",
-        "status_uploading_zip": "Uploading and extracting ZIP archives...",
-        "successfully_deleted_datadeleted_co": "Deleted {data_deleted_count} environment variable credential files.",
-        "successfully_imported_dataloaded_co": "Imported {data_loaded_count}/{data_total_count} credential files.",
+        "status_select_upload_first": "Select at least one credential file before importing.",
+        "status_selected_items": "{count} selected",
+        "status_upload_aborted": "Import failed because the connection was interrupted while sending {files}.",
+        "status_upload_failed_details": "Import failed: {error}",
+        "status_upload_failed_http": "Import failed with HTTP {status}.",
+        "status_upload_invalid_response": "The import completed, but the server returned an invalid response.",
+        "status_upload_success": "Imported {credentials}.",
+        "status_upload_timeout": "Import timed out. Try again with fewer files.",
+        "status_uploading_zip": "Importing and extracting ZIP archives...",
+        "successfully_deleted_datadeleted_co": "Deleted {files}.",
+        "successfully_imported_dataloaded_co": "Imported {data_loaded_count}/{data_total_count} {credential_noun}.",
         "table_filename": "Credential file name",
         "test_failed_errormessage": "Test failed: {error_message}",
         "test_successful": "Test completed.",
@@ -320,12 +321,12 @@ const TRANSLATIONS = {
         "validation_successfulnnfile_filenam": "Validation successful.\\n\\nFile: {filename}\\nProject ID: {data_project_id}{tierLine}{creditLine}\\n\\n{data_message}",
         "verification_failed": "Verification failed",
         "verification_failed_errormessage": "Verification failed: {error_message}",
-        "verification_failed_for_all_failed": "Verification failed for all credentials. Failed {failCount}/{selectedFiles_length} provider credentials.",
+        "verification_failed_for_all_failed": "Verification failed for all {credentials}.",
         "verification_failednnerrormsg": "Verification failed.\\n\\n{errorMsg}",
-        "verifying_primary_project_id_pl": "Verifying provider project ID. Please wait...",
-        "verifying_project_id_please_wait": "Verifying Project ID. Please wait...",
+        "verifying_primary_project_id_pl": "Verifying provider access and refreshing metadata. Please wait...",
+        "verifying_project_id_please_wait": "Verifying credential access and refreshing metadata. Please wait...",
         "waiting_for_oauth_callback": "Waiting for OAuth callback...",
-        "waiting_for_oauth_callback_this_may": "Waiting for OAuth callback, this may take some time...",
+        "waiting_for_oauth_callback_this_may": "Waiting for the OAuth callback. This may take some time...",
         "websocket_connected": "WebSocket connected"
     }
 };
@@ -347,6 +348,11 @@ function t(key, vars = {}) {
 
     return text;
 
+}
+
+function formatCountLabel(count, singular, plural = `${singular}s`) {
+    const numericCount = Number(count || 0);
+    return `${numericCount} ${numericCount === 1 ? singular : plural}`;
 }
 
 function escapeHtml(value) {
@@ -843,7 +849,7 @@ function createCredsManager(type) {
 
                 deduplicate: `./api/credentials/deduplicate-by-email`,
 
-                verifyProject: `./api/credentials/verify-project`,
+                verify: `./api/credentials/verify`,
 
                 quota: `./api/credentials/quota`
 
@@ -963,7 +969,9 @@ function createCredsManager(type) {
 
                     this.updatePagination();
 
-                    let msg = t('status_loaded_creds', {count: data.total, type: type === 'primary' ? 'provider' : ''});
+                    const credentialType = type === 'primary' ? 'provider credential' : 'credential';
+                    const credentialLabel = `${data.total} ${credentialType}${data.total === 1 ? '' : 's'}`;
+                    let msg = t('status_loaded_creds', {credentials: credentialLabel});
 
                     if (this.currentStatusFilter !== 'all') {
 
@@ -1532,7 +1540,10 @@ function createUploadManager(type, options = {}) {
             if (variant !== 'success') panel.classList.add(variant);
 
             title.textContent = titleText;
-            text.textContent = ensureTerminalPunctuation(data.message || t('status_upload_success', {count: savedCount, type: credentialType}));
+            const savedLabel = `${savedCount} ${credentialType} credential${savedCount === 1 ? '' : 's'}`;
+            text.textContent = ensureTerminalPunctuation(
+                data.message || t('status_upload_success', {credentials: savedLabel})
+            );
             details.replaceChildren();
 
             const visibleResults = results.slice(0, 6);
@@ -1749,7 +1760,9 @@ function createUploadManager(type, options = {}) {
 
                             const data = JSON.parse(xhr.responseText);
 
-                            const message = data.message || t('status_upload_success', {count: data.uploaded_count, type: credentialType});
+                            const savedCount = Number(data.uploaded_count || 0);
+                            const savedLabel = `${savedCount} ${credentialType} credential${savedCount === 1 ? '' : 's'}`;
+                            const message = data.message || t('status_upload_success', {credentials: savedLabel});
                             const uploadStatus = data.uploaded_count > 0
                                 ? (data.error_count > 0 ? 'warning' : 'success')
                                 : (data.error_count > 0 ? 'error' : 'info');
@@ -1791,8 +1804,10 @@ function createUploadManager(type, options = {}) {
 
                 xhr.onerror = () => {
 
-                    showStatus(t('status_upload_aborted', {count: this.selectedFiles.length}), 'error');
-                    this.renderUploadResult({message: t('status_upload_aborted', {count: this.selectedFiles.length}), results: []}, 'error');
+                    const fileCount = this.selectedFiles.length;
+                    const fileLabel = `${fileCount} file${fileCount === 1 ? '' : 's'}`;
+                    showStatus(t('status_upload_aborted', {files: fileLabel}), 'error');
+                    this.renderUploadResult({message: t('status_upload_aborted', {files: fileLabel}), results: []}, 'error');
 
                     progressSection.classList.add('hidden');
 
