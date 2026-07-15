@@ -486,6 +486,42 @@ function uploadGoogleAiStudioFiles() {
     AppState.googleAiStudioUploadFiles.upload();
 }
 
+function handleGrokFileSelect(event) {
+    AppState.grokUploadFiles.handleFileSelect(event);
+}
+
+function handleGrokFileDrop(event) {
+    event.preventDefault();
+    event.currentTarget.classList.remove('dragover');
+    AppState.grokUploadFiles.addFiles(Array.from(event.dataTransfer.files));
+}
+
+function clearGrokFiles() {
+    AppState.grokUploadFiles.clearFiles();
+}
+
+function uploadGrokFiles() {
+    AppState.grokUploadFiles.upload();
+}
+
+function handleXaiConsoleFileSelect(event) {
+    AppState.xaiConsoleUploadFiles.handleFileSelect(event);
+}
+
+function handleXaiConsoleFileDrop(event) {
+    event.preventDefault();
+    event.currentTarget.classList.remove('dragover');
+    AppState.xaiConsoleUploadFiles.addFiles(Array.from(event.dataTransfer.files));
+}
+
+function clearXaiConsoleFiles() {
+    AppState.xaiConsoleUploadFiles.clearFiles();
+}
+
+function uploadXaiConsoleFiles() {
+    AppState.xaiConsoleUploadFiles.upload();
+}
+
 async function verifyProjectId(filename) {
 
     try {

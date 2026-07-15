@@ -379,6 +379,8 @@
                                 <option value="all">All providers</option>
                                 <option value="google_antigravity">Google Antigravity</option>
                                 <option value="google_ai_studio">Google AI Studio</option>
+                                <option value="grok">Grok</option>
+                                <option value="xai_console">xAI Console</option>
                             </select>
                         </div>
                         <div class="filter-group">
@@ -558,7 +560,220 @@
                                 <span>ZIP</span>
                             </div>
                         </button>
+
+                        <button type="button" class="provider-hero-card provider-selector-button" id="providerSelectorGrok" role="tab" aria-label="Grok" aria-selected="false" aria-controls="providerWorkspaceGrok" data-ui-action="select-provider" data-provider="grok">
+                            <div class="provider-logo-frame">
+                                <img src="/frontend/assets/providers/xai-grok-logo.png" alt="Grok logo">
+                            </div>
+                            <div class="provider-summary">
+                                <div class="provider-eyebrow">Account Provider</div>
+                                <strong class="provider-name">Grok</strong>
+                                <p>Connect a Grok account through OAuth and route its available models through the shared pool.</p>
+                            </div>
+                            <div class="provider-capabilities" aria-label="Grok methods">
+                                <span>OAuth</span>
+                                <span>JSON</span>
+                                <span>ZIP</span>
+                            </div>
+                        </button>
+
+                        <button type="button" class="provider-hero-card provider-selector-button" id="providerSelectorXaiConsole" role="tab" aria-label="xAI Console" aria-selected="false" aria-controls="providerWorkspaceXaiConsole" data-ui-action="select-provider" data-provider="xai_console">
+                            <div class="provider-logo-frame">
+                                <img src="/frontend/assets/providers/xai-console-logo.png" alt="xAI Console logo">
+                            </div>
+                            <div class="provider-summary">
+                                <div class="provider-eyebrow">API Key Provider</div>
+                                <strong class="provider-name">xAI Console</strong>
+                                <p>Add xAI Console API keys for direct Grok model access and automatic provider fallback.</p>
+                            </div>
+                            <div class="provider-capabilities" aria-label="xAI Console methods">
+                                <span>API Key</span>
+                                <span>JSON</span>
+                                <span>ZIP</span>
+                            </div>
+                        </button>
                     </div>
+
+                    <section class="provider-workspace hidden" id="providerWorkspaceGrok" role="tabpanel" aria-labelledby="providerSelectorGrok">
+                        <div class="provider-workspace-heading">
+                            <div class="provider-workspace-logo"><img src="/frontend/assets/providers/xai-grok-logo.png" alt=""></div>
+                            <div>
+                                <h2>Grok</h2>
+                                <p>Add OAuth accounts and route their available Grok models through the shared pool.</p>
+                                <a class="provider-site-link" href="https://grok.com/" target="_blank" rel="noreferrer">https://grok.com/</a>
+                            </div>
+                        </div>
+
+                        <div class="provider-tools-grid">
+                            <section class="tool-panel">
+                                <h2 class="card-title">Grok OAuth</h2>
+                                <p class="card-copy provider-tool-copy">Authorize a Grok account with PKCE and save it directly to the provider pool.</p>
+                                <div class="page-actions">
+                                    <button type="button" class="btn" id="startXaiOauthBtn" data-ui-action="start-xai-oauth">Get provider authentication link</button>
+                                </div>
+                                <div id="xaiOauthFields" class="hidden" style="margin-top: 18px;">
+                                    <div class="auth-link-header">
+                                        <label>Authorization link</label>
+                                        <button type="button" class="btn btn-secondary" title="Copy authorization link" aria-label="Copy authorization link" data-ui-action="copy-xai-auth-url">Copy</button>
+                                    </div>
+                                    <div class="endpoint-code-card auth-link-card">
+                                        <a id="xaiAuthorizationUrl" href="#" target="_blank" rel="noreferrer">Authorization unavailable</a>
+                                    </div>
+                                    <div class="manual-callback-panel">
+                                        <label for="xaiCallbackUrl">Callback URL</label>
+                                        <p class="card-copy provider-tool-copy">If Grok opens a localhost callback page after sign-in, copy the full URL from that tab and paste it here.</p>
+                                        <textarea id="xaiCallbackUrl" rows="3" placeholder="http://127.0.0.1:56121/callback?state=...&amp;code=..."></textarea>
+                                    </div>
+                                    <div class="page-actions" style="margin-top: 14px;">
+                                        <button type="button" class="btn" id="saveXaiOauthBtn" data-ui-action="save-xai-oauth">Save credentials</button>
+                                    </div>
+                                    <div id="xaiOauthSaveResult" class="save-result provider-save-result hidden" style="margin-top: 14px;">
+                                        <div>
+                                            <strong id="xaiOauthSaveResultTitle">OAuth credential added to pool</strong>
+                                            <p id="xaiOauthSaveResultText"></p>
+                                        </div>
+                                        <button type="button" class="btn btn-secondary" data-ui-action="switch-tab" data-tab="pool">View</button>
+                                    </div>
+                                </div>
+                            </section>
+
+                            <section class="tool-panel">
+                                <h2 class="card-title">Batch Import</h2>
+                                <p class="card-copy provider-tool-copy">Import Grok OAuth credentials from JSON files or ZIP archives. Every account is checked before it enters the pool.</p>
+                                <button type="button" class="upload-area" id="grokUploadArea" aria-describedby="grokUploadHelp" data-ui-action="select-grok-files">
+                                    <div>
+                                        <div class="upload-title">Drop OAuth credential files here</div>
+                                        <p class="upload-copy" id="grokUploadHelp">Supports JSON and ZIP archives.</p>
+                                    </div>
+                                </button>
+                                <input type="file" id="grokFileInput" multiple accept=".json,.zip" style="display: none;" data-ui-change="grok-files">
+
+                                <div id="grokFileListSection" class="hidden" style="margin-top: 16px;">
+                                    <label>Pending files</label>
+                                    <div class="file-list" id="grokFileList"></div>
+                                    <div class="page-actions">
+                                        <button type="button" class="btn btn-small" data-ui-action="upload-grok-files">Import</button>
+                                        <button type="button" class="btn btn-secondary btn-small" data-ui-action="clear-grok-files">Clear</button>
+                                    </div>
+                                </div>
+
+                                <div id="grokUploadProgressSection" class="hidden" style="margin-top: 16px;">
+                                    <div class="progress-bar"><div class="progress-fill" id="grokProgressFill"></div></div>
+                                    <p id="grokProgressText" class="page-description" style="margin-top: 8px;">0%</p>
+                                </div>
+
+                                <div id="grokUploadResult" class="save-result upload-result hidden" style="margin-top: 14px;">
+                                    <div>
+                                        <strong id="grokUploadResultTitle">Import complete</strong>
+                                        <p id="grokUploadResultText"></p>
+                                        <div id="grokUploadResultDetails" class="upload-result-details"></div>
+                                    </div>
+                                    <button type="button" class="btn btn-secondary" data-ui-action="switch-tab" data-tab="pool">View</button>
+                                </div>
+                            </section>
+                        </div>
+
+                        <section class="tool-panel provider-settings-panel">
+                            <div class="provider-settings-header">
+                                <div>
+                                    <h2 class="card-title">Grok Advanced Settings</h2>
+                                    <p class="card-copy provider-tool-copy">Configure the public OAuth client and authorization issuer used for Grok accounts.</p>
+                                </div>
+                                <div class="page-actions">
+                                    <button type="button" class="btn" data-ui-action="save-grok-settings">Save</button>
+                                    <button type="button" class="btn btn-secondary" data-ui-action="reset-grok-settings">Reset defaults</button>
+                                </div>
+                            </div>
+                            <div class="config-grid provider-config-grid">
+                                <div class="form-group"><label for="xaiClientId">OAuth Client ID</label><input type="text" id="xaiClientId" autocomplete="off"></div>
+                                <div class="form-group"><label for="xaiOauthIssuer">OAuth Issuer</label><input type="url" id="xaiOauthIssuer" autocomplete="off"></div>
+                            </div>
+                        </section>
+                    </section>
+
+                    <section class="provider-workspace hidden" id="providerWorkspaceXaiConsole" role="tabpanel" aria-labelledby="providerSelectorXaiConsole">
+                        <div class="provider-workspace-heading">
+                            <div class="provider-workspace-logo"><img src="/frontend/assets/providers/xai-console-logo.png" alt=""></div>
+                            <div>
+                                <h2>xAI Console</h2>
+                                <p>Add API keys and route their available Grok models through the shared pool.</p>
+                                <a class="provider-site-link" href="https://console.x.ai/" target="_blank" rel="noreferrer">https://console.x.ai/</a>
+                            </div>
+                        </div>
+
+                        <div class="provider-tools-grid">
+                            <section class="tool-panel">
+                                <h2 class="card-title">xAI Console API Key</h2>
+                                <p class="card-copy provider-tool-copy">Validate an xAI Console API key, discover its available models, and add it to the active pool.</p>
+                                <form id="xaiCredentialForm" autocomplete="off">
+                                    <div class="form-group">
+                                        <label for="xaiApiKey">API key</label>
+                                        <input type="password" id="xaiApiKey" name="xai-api-key" placeholder="Enter an xAI Console API key" autocomplete="one-time-code" data-1p-ignore data-lpignore="true" data-bwignore="true" autocapitalize="none" spellcheck="false" required>
+                                    </div>
+                                    <button type="submit" class="btn" id="addXaiKeyBtn">Validate and add</button>
+                                </form>
+                                <div id="xaiApiKeySaveResult" class="save-result provider-save-result hidden">
+                                    <div>
+                                        <strong id="xaiApiKeySaveResultTitle">API key added to pool</strong>
+                                        <p id="xaiApiKeySaveResultText"></p>
+                                    </div>
+                                    <button type="button" class="btn btn-secondary" data-ui-action="switch-tab" data-tab="pool">View</button>
+                                </div>
+                            </section>
+
+                            <section class="tool-panel">
+                                <h2 class="card-title">Batch Import</h2>
+                                <p class="card-copy provider-tool-copy">Import xAI Console API keys from JSON files or ZIP archives. Every key is validated before it enters the pool.</p>
+                                <button type="button" class="upload-area" id="xaiConsoleUploadArea" aria-describedby="xaiConsoleUploadHelp" data-ui-action="select-xai-console-files">
+                                    <div>
+                                        <div class="upload-title">Drop API key files here</div>
+                                        <p class="upload-copy" id="xaiConsoleUploadHelp">Supports JSON and ZIP archives.</p>
+                                    </div>
+                                </button>
+                                <input type="file" id="xaiConsoleFileInput" multiple accept=".json,.zip" style="display: none;" data-ui-change="xai-console-files">
+
+                                <div id="xaiConsoleFileListSection" class="hidden" style="margin-top: 16px;">
+                                    <label>Pending files</label>
+                                    <div class="file-list" id="xaiConsoleFileList"></div>
+                                    <div class="page-actions">
+                                        <button type="button" class="btn btn-small" data-ui-action="upload-xai-console-files">Import</button>
+                                        <button type="button" class="btn btn-secondary btn-small" data-ui-action="clear-xai-console-files">Clear</button>
+                                    </div>
+                                </div>
+
+                                <div id="xaiConsoleUploadProgressSection" class="hidden" style="margin-top: 16px;">
+                                    <div class="progress-bar"><div class="progress-fill" id="xaiConsoleProgressFill"></div></div>
+                                    <p id="xaiConsoleProgressText" class="page-description" style="margin-top: 8px;">0%</p>
+                                </div>
+
+                                <div id="xaiConsoleUploadResult" class="save-result upload-result hidden" style="margin-top: 14px;">
+                                    <div>
+                                        <strong id="xaiConsoleUploadResultTitle">Import complete</strong>
+                                        <p id="xaiConsoleUploadResultText"></p>
+                                        <div id="xaiConsoleUploadResultDetails" class="upload-result-details"></div>
+                                    </div>
+                                    <button type="button" class="btn btn-secondary" data-ui-action="switch-tab" data-tab="pool">View</button>
+                                </div>
+                            </section>
+                        </div>
+
+                        <section class="tool-panel provider-settings-panel">
+                            <div class="provider-settings-header">
+                                <div>
+                                    <h2 class="card-title">xAI Console Advanced Settings</h2>
+                                    <p class="card-copy provider-tool-copy">Configure the API endpoint and transport identity used for xAI Console API keys.</p>
+                                </div>
+                                <div class="page-actions">
+                                    <button type="button" class="btn" data-ui-action="save-xai-console-settings">Save</button>
+                                    <button type="button" class="btn btn-secondary" data-ui-action="reset-xai-console-settings">Reset defaults</button>
+                                </div>
+                            </div>
+                            <div class="config-grid provider-config-grid">
+                                <div class="form-group"><label for="xaiApiUrl">xAI API</label><input type="url" id="xaiApiUrl" autocomplete="off"></div>
+                                <div class="form-group"><label for="xaiUserAgent">HTTP User-Agent</label><input type="text" id="xaiUserAgent" autocomplete="off"></div>
+                            </div>
+                        </section>
+                    </section>
 
                     <section class="provider-workspace hidden" id="providerWorkspaceGoogleAiStudio" role="tabpanel" aria-labelledby="providerSelectorGoogleAiStudio">
                         <div class="provider-workspace-heading">
@@ -917,6 +1132,7 @@
                                             <option value="">Automatic</option>
                                             <option value="google_antigravity">Google Antigravity</option>
                                             <option value="google_ai_studio">Google AI Studio</option>
+                                            <option value="xai">xAI</option>
                                         </select>
                                     </div>
                                     <div class="form-group"><label for="upstreamTimeoutSeconds">Inference timeout in seconds</label><input type="number" id="upstreamTimeoutSeconds" min="5" max="900" step="1"></div>
@@ -1012,7 +1228,7 @@
                             <div class="integration-list">
                                 <div class="code-block">Virtual model orchestration and smart auto-fallback</div>
                                 <div class="code-block">Token-aware cleanup and usage visibility</div>
-                                <div class="code-block">Google Antigravity OAuth and Google AI Studio API-key routing</div>
+                                <div class="code-block">Google Antigravity and Grok OAuth, plus Google AI Studio and xAI Console API keys</div>
                                 <div class="code-block">OpenAI, Anthropic, Gemini, and provider-native format translation</div>
                             </div>
                         </section>

@@ -18,6 +18,8 @@ from config import (
     get_google_ai_studio_api_url,
     get_token_compression_config,
     get_upstream_timeout_seconds,
+    get_xai_api_url,
+    get_xai_user_agent,
 )
 from core.api.utils import (
     collect_streaming_response,
@@ -41,6 +43,7 @@ from core.model_blacklist import record_model_not_found
 from core.provider_registry import (
     GOOGLE_AI_STUDIO,
     GOOGLE_ANTIGRAVITY,
+    XAI,
     get_credential_provider,
 )
 from core.storage_adapter import get_storage_adapter
@@ -52,6 +55,13 @@ from core.token_compression import (
 from core.usage_stats import (
     extract_token_usage_from_response,
     extract_token_usage_from_stream_chunk,
+)
+from core.xai import (
+    build_xai_headers,
+    fetch_xai_model_ids,
+    gemini_request_to_xai,
+    xai_response_to_gemini,
+    xai_stream_line_to_gemini,
 )
 from fastapi import Response
 from log import log
@@ -308,6 +318,21 @@ async def prepare_provider_request(
             await get_google_ai_studio_api_url(), model_name, streaming
         )
         auth_headers = build_api_key_headers(api_key)
+    elif provider_id == XAI:
+        access_token = (
+            credential_data.get("api_key")
+            or credential_data.get("access_token")
+            or credential_data.get("token")
+        )
+        if not access_token:
+            raise ValueError("xAI credential does not contain an access token or API key.")
+        compression_result = compress_gemini_request(
+            dict(inner_request),
+            CompressionSettings(**await get_token_compression_config()),
+        )
+        payload = gemini_request_to_xai(dict(compression_result.request), model_name, streaming)
+        target_url = f"{(await get_xai_api_url()).rstrip('/')}/chat/completions"
+        auth_headers = build_xai_headers(str(access_token), await get_xai_user_agent())
     else:
         access_token = credential_data.get("access_token") or credential_data.get("token")
         if not access_token:
@@ -335,6 +360,14 @@ async def prepare_provider_request(
         if provider_id == GOOGLE_AI_STUDIO:
             auth_headers.pop("Authorization", None)
             auth_headers["x-goog-api-key"] = str(credential_data.get("api_key") or "")
+        elif provider_id == XAI:
+            auth_headers.pop("x-goog-api-key", None)
+            access_token = (
+                credential_data.get("api_key")
+                or credential_data.get("access_token")
+                or credential_data.get("token")
+            )
+            auth_headers["Authorization"] = f"Bearer {access_token}"
         else:
             auth_headers.pop("x-goog-api-key", None)
             access_token = credential_data.get("access_token") or credential_data.get("token")
@@ -615,6 +648,11 @@ async def stream_request(
                         yield chunk
                         return
                 else:
+                    if provider_id == XAI:
+                        chunk = xai_stream_line_to_gemini(chunk)
+                        if not chunk:
+                            continue
+
                     if not received_content:
                         received_content = True
                         log.debug(
@@ -922,7 +960,29 @@ async def non_stream_request(
                             media_type="application/json",
                         )
                 else:
-                    token_usage = extract_token_usage_from_response(response.content)
+                    response_content = response.content
+                    if provider_id == XAI:
+                        try:
+                            response_content = json.dumps(
+                                xai_response_to_gemini(response.json())
+                            ).encode("utf-8")
+                        except (ValueError, TypeError) as exc:
+                            await record_api_call_error(
+                                credential_manager,
+                                current_file,
+                                502,
+                                None,
+                                mode="primary",
+                                model_name=model_name,
+                                error_message=str(exc),
+                                provider=provider_id,
+                            )
+                            return Response(
+                                content=json.dumps({"error": "xAI returned an invalid response."}),
+                                status_code=502,
+                                media_type="application/json",
+                            )
+                    token_usage = extract_token_usage_from_response(response_content)
                     await record_api_call_success(
                         credential_manager,
                         current_file,
@@ -938,7 +998,9 @@ async def non_stream_request(
                         provider=provider_id,
                     )
                     return Response(
-                        content=response.content, status_code=200, headers=dict(response.headers)
+                        content=response_content,
+                        status_code=200,
+                        media_type="application/json",
                     )
 
             if status_code != 200:
@@ -1198,6 +1260,22 @@ async def fetch_provider_model_ids(
                     )
             except Exception as exc:
                 log.warning(f"Google AI Studio model discovery failed: {exc}")
+            finally:
+                await credential_manager.release_credential(current_file, mode="primary")
+    elif provider_id == XAI:
+        cred_result = await credential_manager.get_valid_credential(mode="primary", provider_id=XAI)
+        if cred_result:
+            current_file, credential_data = cred_result
+            try:
+                access_token = (
+                    credential_data.get("api_key")
+                    or credential_data.get("access_token")
+                    or credential_data.get("token")
+                )
+                if access_token:
+                    model_ids.update(await fetch_xai_model_ids(str(access_token)))
+            except Exception as exc:
+                log.warning(f"xAI model discovery failed: {exc}")
             finally:
                 await credential_manager.release_credential(current_file, mode="primary")
 

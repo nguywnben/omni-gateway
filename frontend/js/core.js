@@ -608,7 +608,7 @@ function navigate(path, pushState = true) {
         tab.removeAttribute('aria-current');
     });
 
-    const targetTabButton = document.querySelector(`.tab[onclick*="'${tabName}'"]`);
+    const targetTabButton = document.querySelector(`.tab[data-tab="${tabName}"]`);
 
     if (targetTabButton) {
 
@@ -717,6 +717,30 @@ const AppState = {
         credentialType: 'Google AI Studio',
         timeoutMs: 900000,
         onComplete: () => AppState.primaryCreds.refresh()
+    }),
+
+    grokUploadFiles: createUploadManager('grok', {
+        endpoint: './api/providers/xai/credentials/import?credential_type=oauth',
+        elementPrefix: 'grok',
+        credentialType: 'Grok OAuth',
+        timeoutMs: 900000,
+        onComplete: async () => {
+            await AppState.primaryCreds.refresh();
+            await loadModelCatalog(true);
+            await refreshUsageStats();
+        }
+    }),
+
+    xaiConsoleUploadFiles: createUploadManager('xaiConsole', {
+        endpoint: './api/providers/xai/credentials/import?credential_type=api_key',
+        elementPrefix: 'xaiConsole',
+        credentialType: 'xAI Console',
+        timeoutMs: 900000,
+        onComplete: async () => {
+            await AppState.primaryCreds.refresh();
+            await loadModelCatalog(true);
+            await refreshUsageStats();
+        }
     }),
 
     currentConfig: {},
@@ -1137,7 +1161,7 @@ function createCredsManager(type) {
 
             if (tierFilterEl) {
 
-                const tierIsRelevant = this.currentProviderFilter !== 'google_ai_studio';
+                const tierIsRelevant = !['google_ai_studio', 'grok', 'xai_console', 'xai'].includes(this.currentProviderFilter);
 
                 tierFilterEl.disabled = !tierIsRelevant;
 
@@ -1560,9 +1584,11 @@ function createUploadManager(type, options = {}) {
 
             files.forEach(file => {
 
-                const isValid = file.type === 'application/json' || file.name.endsWith('.json') ||
+                const lowerName = file.name.toLowerCase();
 
-                    file.type === 'application/zip' || file.name.endsWith('.zip');
+                const isValid = file.type === 'application/json' || lowerName.endsWith('.json') ||
+
+                    file.type === 'application/zip' || lowerName.endsWith('.zip');
 
                 if (isValid) {
 
@@ -1612,7 +1638,7 @@ function createUploadManager(type, options = {}) {
 
             this.selectedFiles.forEach((file, index) => {
 
-                const isZip = file.name.endsWith('.zip');
+                const isZip = file.name.toLowerCase().endsWith('.zip');
 
                 const fileIcon = isZip ? '' : '';
 
@@ -1689,7 +1715,7 @@ function createUploadManager(type, options = {}) {
 
             this.selectedFiles.forEach(file => formData.append('files', file));
 
-            if (this.selectedFiles.some(f => f.name.endsWith('.zip'))) {
+            if (this.selectedFiles.some(f => f.name.toLowerCase().endsWith('.zip'))) {
 
                 showStatus(t('status_uploading_zip'), 'info');
 

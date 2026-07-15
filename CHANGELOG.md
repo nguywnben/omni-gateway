@@ -4,6 +4,15 @@ All notable user-facing changes are documented in this file. Omni Gateway follow
 
 ## [Unreleased]
 
+### Added
+
+- Added Grok OAuth and xAI Console API-key credentials with model discovery, token refresh, pool backup restoration, and provider-aware routing.
+- Added Grok request and response translation for text, image input, function tools, reasoning content, streaming, and provider-reported token usage.
+
+### Fixed
+
+- Scoped account deduplication by provider so OAuth accounts that share an email address across different providers remain independent.
+
 ## [1.0.0] - 2026-07-13
 
 ### Added

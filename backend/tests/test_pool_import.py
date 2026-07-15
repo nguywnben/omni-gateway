@@ -29,10 +29,12 @@ from core.pool_import import (
 from core.provider_registry import (
     GOOGLE_AI_STUDIO,
     GOOGLE_ANTIGRAVITY,
+    XAI,
     antigravity_account_fingerprint,
     build_antigravity_credential_filename,
     canonicalize_antigravity_credential_filename,
 )
+from core.xai import XaiValidation
 
 
 def build_zip(entries: list[tuple[str, object]]) -> bytes:
@@ -61,6 +63,26 @@ class PoolCredentialClassificationTests(unittest.TestCase):
                 {"client_id": "id", "client_secret": "secret", "refresh_token": "refresh"}
             ),
             GOOGLE_ANTIGRAVITY,
+        )
+        self.assertEqual(
+            classify_pool_credential(
+                {
+                    "provider": "xai",
+                    "credential_type": "api_key",
+                    "api_key": "xai-key",
+                }
+            ),
+            XAI,
+        )
+        self.assertEqual(
+            classify_pool_credential(
+                {
+                    "provider": "xai",
+                    "credential_type": "oauth",
+                    "refresh_token": "refresh",
+                }
+            ),
+            XAI,
         )
 
     def test_rejects_ambiguous_and_unsupported_payloads(self):
@@ -131,17 +153,25 @@ class PoolArchiveExtractionTests(unittest.IsolatedAsyncioTestCase):
                             "api_key": "google-key",
                         },
                     ),
+                    (
+                        "nested/xai.json",
+                        {
+                            "provider": "xai",
+                            "credential_type": "api_key",
+                            "api_key": "xai-key",
+                        },
+                    ),
                 ]
             )
         )
 
         self.assertEqual(
             [candidate["provider"] for candidate in candidates],
-            [GOOGLE_ANTIGRAVITY, GOOGLE_AI_STUDIO],
+            [GOOGLE_ANTIGRAVITY, GOOGLE_AI_STUDIO, XAI],
         )
         self.assertEqual(
             [candidate["filename"] for candidate in candidates],
-            ["antigravity.json", "ai-studio.json"],
+            ["antigravity.json", "ai-studio.json", "xai.json"],
         )
         self.assertEqual(errors, [])
 
@@ -243,9 +273,18 @@ class PoolArchiveRestoreTests(unittest.IsolatedAsyncioTestCase):
                         "api_key": "google-api-key-value",
                     },
                 ),
+                (
+                    "xai.json",
+                    {
+                        "provider": "xai",
+                        "credential_type": "api_key",
+                        "api_key": "xai-api-key-value",
+                    },
+                ),
             ]
         )
         validation = GoogleAIStudioValidation(model_ids=["gemini-test"])
+        xai_validation = XaiValidation(model_ids=["grok-test"])
 
         with (
             patch(
@@ -274,15 +313,32 @@ class PoolArchiveRestoreTests(unittest.IsolatedAsyncioTestCase):
                     }
                 ),
             ) as add_mock,
+            patch(
+                "core.pool_import.validate_xai_api_key",
+                new=AsyncMock(return_value=xai_validation),
+            ) as validate_xai_mock,
+            patch(
+                "core.pool_import.store_xai_api_key_credential",
+                new=AsyncMock(
+                    return_value={
+                        "action": "created",
+                        "filename": "xai-grok-test.json",
+                        "label": "API key ending alue",
+                    }
+                ),
+            ) as store_xai_mock,
         ):
             result = await restore_pool_archive(archive)
 
-        self.assertEqual(result["uploaded_count"], 2)
+        self.assertEqual(result["uploaded_count"], 3)
         self.assertEqual(result["error_count"], 0)
         self.assertEqual(result["providers"][GOOGLE_ANTIGRAVITY]["created"], 1)
         self.assertEqual(result["providers"][GOOGLE_AI_STUDIO]["updated"], 1)
+        self.assertEqual(result["providers"][XAI]["created"], 1)
         validate_mock.assert_awaited_once_with("google-api-key-value")
         store_mock.assert_awaited_once()
+        validate_xai_mock.assert_awaited_once_with("xai-api-key-value")
+        store_xai_mock.assert_awaited_once()
         add_mock.assert_awaited_once()
         self.assertEqual(
             add_mock.await_args.args[0],
@@ -290,6 +346,7 @@ class PoolArchiveRestoreTests(unittest.IsolatedAsyncioTestCase):
         )
         serialized = json.dumps(result)
         self.assertNotIn("google-api-key-value", serialized)
+        self.assertNotIn("xai-api-key-value", serialized)
         self.assertNotIn("refresh-token-value", serialized)
 
 
@@ -328,6 +385,41 @@ class AntigravityStorageFilenameTests(unittest.IsolatedAsyncioTestCase):
             storage.store_credential.await_args.args[0],
             "google-antigravity-b4c9a289323b21a0.json",
         )
+
+    async def test_same_email_is_kept_separately_for_different_providers(self):
+        storage = AsyncMock()
+        storage.list_credentials.return_value = ["google-antigravity-existing.json"]
+        storage.get_credential.return_value = {
+            "provider": GOOGLE_ANTIGRAVITY,
+            "credential_type": "oauth",
+            "user_email": "user@example.com",
+            "expiry": "2030-01-01T00:00:00+00:00",
+        }
+        storage.get_credential_state.return_value = {"user_email": "user@example.com"}
+        storage.store_credential.return_value = True
+        storage.update_credential_state.return_value = True
+        incoming = {
+            "provider": XAI,
+            "credential_type": "oauth",
+            "user_email": "user@example.com",
+            "access_token": "access-token",
+            "refresh_token": "refresh-token",
+            "expiry": "2029-01-01T00:00:00+00:00",
+        }
+
+        with patch(
+            "core.credential_pool.get_storage_adapter",
+            new=AsyncMock(return_value=storage),
+        ):
+            result = await upsert_credential_by_email(
+                "xai-grok-example.json",
+                incoming,
+                mode="primary",
+            )
+
+        self.assertEqual(result["action"], "created")
+        self.assertEqual(result["filename"], "xai-grok-example.json")
+        storage.delete_credential.assert_not_awaited()
 
 
 class PoolImportRouteTests(unittest.IsolatedAsyncioTestCase):

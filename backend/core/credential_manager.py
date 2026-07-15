@@ -6,7 +6,7 @@ from config import get_routing_policy
 from core.credential_pool import upsert_credential_by_email
 from core.google_oauth_api import Credentials
 from core.model_blacklist import get_model_blacklist_pairs
-from core.provider_registry import get_credential_provider, is_api_key_credential
+from core.provider_registry import XAI, get_credential_provider, is_api_key_credential
 from core.smart_routing import SmartCredentialRouter
 from core.storage_adapter import get_storage_adapter
 from core.usage_stats import retire_credential_usage
@@ -408,6 +408,14 @@ class CredentialManager:
     ) -> Optional[Dict[str, Any]]:
         await self._ensure_initialized()
         try:
+            if get_credential_provider(credential_data) == XAI:
+                from core.xai import refresh_xai_oauth_credential
+
+                refreshed_data = await refresh_xai_oauth_credential(credential_data)
+                await self._storage_adapter.store_credential(filename, refreshed_data, mode=mode)
+                log.info(f"xAI token refreshed and saved: {filename} (mode={mode}).")
+                return refreshed_data
+
             creds = Credentials.from_dict(credential_data)
 
             if not creds.refresh_token:

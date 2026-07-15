@@ -14,12 +14,14 @@ from core.google_ai_studio import GoogleAIStudioError, validate_api_key
 from core.provider_registry import (
     GOOGLE_AI_STUDIO,
     GOOGLE_ANTIGRAVITY,
+    XAI,
     api_key_fingerprint,
     canonicalize_antigravity_credential_filename,
     get_provider_display_name,
     normalize_provider_id,
 )
-from core.provider_store import store_google_ai_studio_credential
+from core.provider_store import store_google_ai_studio_credential, store_xai_api_key_credential
+from core.xai import XaiError, validate_xai_api_key
 from fastapi import UploadFile
 from log import log
 
@@ -27,7 +29,7 @@ MAX_POOL_ARCHIVE_BYTES = 10 * 1024 * 1024
 MAX_POOL_ARCHIVE_ENTRIES = 500
 MAX_POOL_ENTRY_BYTES = 2 * 1024 * 1024
 MAX_POOL_UNCOMPRESSED_BYTES = 25 * 1024 * 1024
-SUPPORTED_POOL_PROVIDERS = {GOOGLE_ANTIGRAVITY, GOOGLE_AI_STUDIO}
+SUPPORTED_POOL_PROVIDERS = {GOOGLE_ANTIGRAVITY, GOOGLE_AI_STUDIO, XAI}
 
 
 class PoolImportError(ValueError):
@@ -47,6 +49,15 @@ def _is_antigravity_payload(payload: Dict[str, Any]) -> bool:
     return all(_has_text(payload, key) for key in ("client_id", "client_secret", "refresh_token"))
 
 
+def _is_xai_payload(payload: Dict[str, Any]) -> bool:
+    credential_type = str(payload.get("credential_type") or "").strip().lower()
+    if credential_type == "api_key":
+        return _has_text(payload, "api_key")
+    if credential_type == "oauth":
+        return _has_text(payload, "refresh_token") or _has_text(payload, "access_token")
+    return False
+
+
 def classify_pool_credential(payload: Any) -> str:
     """Return a supported provider ID only when the credential shape is clear."""
     if not isinstance(payload, dict):
@@ -61,6 +72,8 @@ def classify_pool_credential(payload: Any) -> str:
             raise PoolImportError("Google AI Studio payload is not a valid API key credential.")
         if provider_id == GOOGLE_ANTIGRAVITY and not _is_antigravity_payload(payload):
             raise PoolImportError("Google Antigravity payload is missing required OAuth fields.")
+        if provider_id == XAI and not _is_xai_payload(payload):
+            raise PoolImportError("xAI payload is not a valid OAuth or API key credential.")
         return provider_id
 
     if _is_ai_studio_payload(payload):
@@ -225,23 +238,75 @@ async def _restore_ai_studio(candidate: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
+async def restore_xai_credential(candidate: Dict[str, Any]) -> Dict[str, Any]:
+    """Validate and restore one Grok or xAI Console credential without returning secrets."""
+    payload = dict(candidate["payload"])
+    payload["provider"] = XAI
+    if str(payload.get("credential_type") or "").lower() == "api_key":
+        api_key = str(payload.get("api_key") or "").strip()
+        validation = await validate_xai_api_key(api_key)
+        stored = await store_xai_api_key_credential(
+            api_key,
+            validation,
+            created_at=str(payload.get("created_at") or "").strip() or None,
+        )
+        return {
+            "status": "success",
+            "action": stored.get("action", "created"),
+            "filename": stored["filename"],
+            "label": stored.get("label") or "xAI Console API key",
+            "model_count": validation.model_count,
+            "message": "xAI Console API key validated and restored to the pool.",
+        }
+
+    identity = str(
+        payload.get("account_fingerprint")
+        or payload.get("user_email")
+        or payload.get("refresh_token")
+        or payload.get("access_token")
+        or payload.get("credential_label")
+        or ""
+    ).strip()
+    fingerprint = api_key_fingerprint(identity)
+    filename = f"grok-{fingerprint or 'unknown'}.json"
+    result = await credential_manager.add_primary_credential(filename, payload)
+    action = str(result.get("action") or "created")
+    return {
+        "status": "success" if result.get("stored", True) else "skipped",
+        "action": action,
+        "filename": result.get("filename", filename),
+        "label": payload.get("credential_label")
+        or payload.get("user_email")
+        or "Grok OAuth account",
+        "message": result.get("message") or "Grok OAuth credential restored to the pool.",
+    }
+
+
 async def restore_pool_archive(upload: UploadFile) -> Dict[str, Any]:
     """Restore supported credentials and return a secret-free per-file report."""
     candidates, results = await extract_pool_archive(upload)
     providers = {
         provider_id: _empty_provider_result(provider_id)
-        for provider_id in (GOOGLE_ANTIGRAVITY, GOOGLE_AI_STUDIO)
+        for provider_id in (GOOGLE_ANTIGRAVITY, GOOGLE_AI_STUDIO, XAI)
     }
-    seen_ai_studio_fingerprints = set()
+    seen_api_key_fingerprints: Dict[str, set[str]] = {
+        GOOGLE_AI_STUDIO: set(),
+        XAI: set(),
+    }
 
     for candidate in candidates:
         provider_id = candidate["provider"]
         provider_result = providers[provider_id]
-        if provider_id == GOOGLE_AI_STUDIO:
+        is_api_key = provider_id == GOOGLE_AI_STUDIO or (
+            provider_id == XAI
+            and str(candidate["payload"].get("credential_type") or "").lower() == "api_key"
+        )
+        if is_api_key:
             fingerprint = api_key_fingerprint(
                 str(candidate["payload"].get("api_key") or "").strip()
             )
-            if fingerprint in seen_ai_studio_fingerprints:
+            provider_fingerprints = seen_api_key_fingerprints[provider_id]
+            if fingerprint in provider_fingerprints:
                 provider_result["skipped"] += 1
                 results.append(
                     {
@@ -254,13 +319,14 @@ async def restore_pool_archive(upload: UploadFile) -> Dict[str, Any]:
                     }
                 )
                 continue
-            seen_ai_studio_fingerprints.add(fingerprint)
+            provider_fingerprints.add(fingerprint)
         try:
-            restored = (
-                await _restore_ai_studio(candidate)
-                if provider_id == GOOGLE_AI_STUDIO
-                else await _restore_antigravity(candidate)
-            )
+            if provider_id == GOOGLE_AI_STUDIO:
+                restored = await _restore_ai_studio(candidate)
+            elif provider_id == XAI:
+                restored = await restore_xai_credential(candidate)
+            else:
+                restored = await _restore_antigravity(candidate)
             action = restored["action"]
             counter = action if action in {"created", "updated", "replaced"} else "skipped"
             provider_result[counter] += 1
@@ -272,7 +338,7 @@ async def restore_pool_archive(upload: UploadFile) -> Dict[str, Any]:
                     "provider_name": provider_result["provider_name"],
                 }
             )
-        except GoogleAIStudioError as exc:
+        except (GoogleAIStudioError, XaiError) as exc:
             provider_result["failed"] += 1
             results.append(
                 {

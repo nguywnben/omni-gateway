@@ -1401,6 +1401,36 @@ function getCredentialProviderMeta(credInfo, managerType) {
 
     }
 
+    if (provider === 'xai' || provider === 'grok' || provider === 'xai_grok' || provider === 'xai_console' || provider === 'xai_oauth' || provider === 'xai_api_key') {
+
+        const credentialType = String(credInfo.credential_type || '').trim().toLowerCase();
+        const isGrok = provider === 'grok' || provider === 'xai_oauth' || credentialType === 'oauth';
+        const isXaiConsole = provider === 'xai_console' || provider === 'xai_api_key' || credentialType === 'api_key';
+
+        if (isGrok) {
+            return {
+                id: 'grok',
+                name: 'Grok',
+                logo: '/frontend/assets/providers/xai-grok-logo.png'
+            };
+        }
+
+        if (isXaiConsole) {
+            return {
+                id: 'xai_console',
+                name: 'xAI Console',
+                logo: '/frontend/assets/providers/xai-console-logo.png'
+            };
+        }
+
+        return {
+            id: 'xai',
+            name: 'xAI',
+            logo: '/frontend/assets/providers/xai-console-logo.png'
+        };
+
+    }
+
     return {
         id: 'code_assist',
         name: t('provider_code_assist'),
@@ -1462,6 +1492,9 @@ function createCredCard(credInfo, manager) {
     const managerType = manager.type;
     const providerMeta = getCredentialProviderMeta(credInfo, managerType);
     const isGoogleAIStudio = providerMeta.id === 'google_ai_studio';
+    const isXai = ['xai', 'grok', 'xai_console'].includes(providerMeta.id);
+    const isAntigravity = providerMeta.id === 'google_antigravity';
+    const isStaticProvider = isGoogleAIStudio || isXai;
     const accountLabel = credInfo.credential_label || credInfo.user_email || t('email_not_fetched');
     const accountClass = (credInfo.credential_label || credInfo.user_email) ? 'cred-email' : 'cred-email empty';
     const providerLogo = providerMeta.logo
@@ -1510,9 +1543,10 @@ function createCredCard(credInfo, manager) {
 
     }
 
-    if (isGoogleAIStudio) {
+    if (isGoogleAIStudio || isXai) {
 
-        statusBadges += '<span class="status-badge muted" title="Google AI Studio API key credential">API key</span>';
+        const credentialType = credInfo.credential_type === 'oauth' ? 'OAuth' : 'API key';
+        statusBadges += `<span class="status-badge muted" title="${escapeAttribute(`${providerMeta.name} ${credentialType} credential`)}">${credentialType}</span>`;
 
     } else {
 
@@ -1526,7 +1560,7 @@ function createCredCard(credInfo, manager) {
 
     }
 
-    if (managerType === 'primary' && !isGoogleAIStudio) {
+    if (managerType === 'primary' && isAntigravity) {
 
         if (credInfo.enable_credit) {
 
@@ -1601,7 +1635,7 @@ function createCredCard(credInfo, manager) {
         modelCount: Number.isFinite(Number(credInfo.model_count)) ? Number(credInfo.model_count) : 0,
     };
 
-    const shouldAutoLoadQuota = managerType === 'primary' && !isGoogleAIStudio && !AppState.quotaPreviewCache[filename];
+    const shouldAutoLoadQuota = managerType === 'primary' && isAntigravity && !AppState.quotaPreviewCache[filename];
 
     if (shouldAutoLoadQuota) {
 
@@ -1623,11 +1657,11 @@ function createCredCard(credInfo, manager) {
 
         <button type="button" class="cred-btn download" data-credential-command="download">${t('btn_download')}</button>
 
-        ${isGoogleAIStudio && Number(credInfo.model_count) > 0 ? `<button type="button" class="cred-btn" data-credential-command="models" title="${escapeAttribute(t('btn_view_models_title'))}">${t('btn_view_models')}</button>` : ''}
+        ${isStaticProvider && Number(credInfo.model_count) > 0 ? `<button type="button" class="cred-btn" data-credential-command="models" title="${escapeAttribute(t('btn_view_models_title'))}">${t('btn_view_models')}</button>` : ''}
 
-        ${managerType === 'primary' && !isGoogleAIStudio ? `<button type="button" class="cred-btn" data-credential-command="quota" title="${escapeAttribute(t('btn_view_quota_title'))}">${t('btn_view_quota')}</button>` : ''}
+        ${managerType === 'primary' && isAntigravity ? `<button type="button" class="cred-btn" data-credential-command="quota" title="${escapeAttribute(t('btn_view_quota_title'))}">${t('btn_view_quota')}</button>` : ''}
 
-        ${managerType === 'primary' && !isGoogleAIStudio ? (credInfo.enable_credit
+        ${managerType === 'primary' && isAntigravity ? (credInfo.enable_credit
 
             ? `<button type="button" class="cred-btn" data-credential-command="disable_credit" title="${escapeAttribute(t('btn_disable_credit_title'))}">${t('btn_disable_credit')}</button>`
 
@@ -1648,7 +1682,7 @@ function createCredCard(credInfo, manager) {
     `;
 
     const checkboxClass = manager.getElementId('file-checkbox');
-    const quotaPreview = isGoogleAIStudio ? '' : renderCredentialQuotaPreview(pathId, filename, managerType);
+    const quotaPreview = isAntigravity ? renderCredentialQuotaPreview(pathId, filename, managerType) : '';
 
     div.innerHTML = `
 

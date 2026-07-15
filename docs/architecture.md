@@ -34,6 +34,7 @@ backend/
     converter/            Pure request/response format translation
     storage/              Concrete persistence backends
     panel/                Authenticated management API and setup policy
+    xai.py                Grok OAuth, xAI model discovery, and transport translation
     provider_registry.py  Provider identity and capability metadata
     smart_routing.py      Provider and credential selection policy
     storage_adapter.py    Persistence boundary used by the application

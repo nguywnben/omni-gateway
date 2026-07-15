@@ -27,11 +27,13 @@ from core.pool_import import PoolImportError, restore_pool_archive
 from core.provider_registry import (
     GOOGLE_AI_STUDIO,
     GOOGLE_ANTIGRAVITY,
+    XAI,
     get_credential_provider,
     get_declared_credential_models,
 )
 from core.storage_adapter import get_storage_adapter
 from core.utils import CODE_ASSIST_USER_AGENT, verify_panel_token
+from core.xai import refresh_xai_oauth_credential
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from fastapi.responses import JSONResponse
 from log import log
@@ -914,6 +916,22 @@ async def test_credential(
             )
             access_token = ""
             project_id = ""
+        elif mode == "primary" and provider_id == XAI:
+            if str(credential_data.get("credential_type") or "").lower() == "oauth":
+                credential_data = await refresh_xai_oauth_credential(credential_data)
+                await storage_adapter.store_credential(filename, credential_data, mode=mode)
+            from core.api.primary import prepare_provider_request
+
+            context = await prepare_provider_request(
+                credential_data,
+                {"model": test_model, "request": test_request},
+                streaming=False,
+            )
+            headers = context.headers
+            request_body = context.payload
+            request_url = context.target_url
+            access_token = ""
+            project_id = ""
         else:
             credentials = Credentials.from_dict(credential_data)
             token_refreshed = await credentials.refresh_if_needed()
@@ -935,7 +953,7 @@ async def test_credential(
                     detail="Credential does not contain a Project ID.",
                 )
 
-        if mode == "primary" and provider_id != GOOGLE_AI_STUDIO:
+        if mode == "primary" and provider_id not in {GOOGLE_AI_STUDIO, XAI}:
             api_base_url = await get_antigravity_api_url()
             from core.api.primary import build_primary_headers
 

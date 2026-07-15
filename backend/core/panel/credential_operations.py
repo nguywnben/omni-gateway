@@ -37,12 +37,14 @@ from core.pool_import import (
 from core.provider_registry import (
     GOOGLE_AI_STUDIO,
     GOOGLE_ANTIGRAVITY,
+    XAI,
     canonicalize_antigravity_credential_filename,
     get_credential_provider,
     get_declared_credential_models,
     normalize_provider_id,
 )
 from core.storage_adapter import get_storage_adapter
+from core.xai import XaiError, fetch_xai_model_ids, refresh_xai_oauth_credential
 from fastapi import HTTPException, Response, UploadFile
 from fastapi.responses import JSONResponse
 from log import log
@@ -449,15 +451,28 @@ async def get_creds_status_common(
         raise HTTPException(status_code=400, detail="Tier filter must be all, free, pro, or ultra.")
 
     normalized_provider_filter = "all"
-    if provider_filter and str(provider_filter).strip().lower() != "all":
-        normalized_provider_filter = normalize_provider_id(provider_filter)
+    credential_type_filter = ""
+    raw_provider_filter = str(provider_filter or "all").strip().lower()
+    if raw_provider_filter != "all":
+        if raw_provider_filter in {"grok", "xai_oauth"}:
+            normalized_provider_filter = XAI
+            credential_type_filter = "oauth"
+        elif raw_provider_filter in {"xai_console", "xai_api_key"}:
+            normalized_provider_filter = XAI
+            credential_type_filter = "api_key"
+        else:
+            normalized_provider_filter = normalize_provider_id(provider_filter)
         if mode != "primary" or normalized_provider_filter not in {
             GOOGLE_ANTIGRAVITY,
             GOOGLE_AI_STUDIO,
+            XAI,
         }:
             raise HTTPException(
                 status_code=400,
-                detail="Provider filter must be all, google_antigravity, or google_ai_studio.",
+                detail=(
+                    "Provider filter must be all, google_antigravity, google_ai_studio, "
+                    "grok, xai_console, or xai."
+                ),
             )
 
     dedupe_result = await deduplicate_credentials_by_account_email(mode=mode)
@@ -486,6 +501,12 @@ async def get_creds_status_common(
         credential_data = await storage_adapter.get_credential(filename, mode=mode) or {}
         provider_id = get_credential_provider(credential_data)
         if filter_by_provider and provider_id != normalized_provider_filter:
+            continue
+        if (
+            credential_type_filter
+            and str(credential_data.get("credential_type") or "oauth").strip().lower()
+            != credential_type_filter
+        ):
             continue
         cred_info = {
             "filename": filename,
@@ -530,7 +551,7 @@ async def get_creds_status_common(
             "limit": limit,
             "has_more": (offset + limit) < total_count,
             "stats": stats,
-            "provider_filter": normalized_provider_filter,
+            "provider_filter": raw_provider_filter,
             "deduplicated_count": dedupe_result.get("deleted_count", 0),
         }
     )
@@ -829,6 +850,46 @@ async def verify_credential_project_common(
                 "message": (
                     "Google AI Studio API key verified. Provider metadata was "
                     "refreshed, the credential was enabled, and recorded errors were cleared."
+                ),
+            }
+        )
+
+    if mode == "primary" and provider_id == XAI:
+        try:
+            if str(credential_data.get("credential_type") or "").lower() == "oauth":
+                credential_data = await refresh_xai_oauth_credential(credential_data)
+            access_token = (
+                credential_data.get("api_key")
+                or credential_data.get("access_token")
+                or credential_data.get("token")
+            )
+            model_ids = await fetch_xai_model_ids(str(access_token or ""))
+        except XaiError as exc:
+            return JSONResponse(
+                status_code=exc.status_code,
+                content={
+                    "success": False,
+                    "filename": filename,
+                    "provider": provider_id,
+                    "message": str(exc),
+                },
+            )
+        credential_data["model_ids"] = model_ids
+        await storage_adapter.store_credential(filename, credential_data, mode=mode)
+        await storage_adapter.update_credential_state(
+            filename,
+            {"disabled": False, "error_codes": [], "error_messages": {}},
+            mode=mode,
+        )
+        return JSONResponse(
+            content={
+                "success": True,
+                "filename": filename,
+                "provider": provider_id,
+                "model_count": len(model_ids),
+                "message": (
+                    "xAI credential verified. Available models were refreshed, the credential "
+                    "was enabled, and recorded errors were cleared."
                 ),
             }
         )

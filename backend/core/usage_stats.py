@@ -91,6 +91,7 @@ def _empty_usage_record(metadata: Dict[str, Any]) -> Dict[str, Any]:
     return {
         "user_email": metadata.get("user_email", ""),
         "credential_label": metadata.get("credential_label", ""),
+        "credential_type": metadata.get("credential_type", ""),
         "provider": provider_id,
         "provider_name": metadata.get("provider_name") or _provider_display_name(provider_id),
         "is_deleted": bool(metadata.get("is_deleted", False)),
@@ -145,6 +146,7 @@ def _usage_record(
     record = {
         "user_email": existing.get("user_email", ""),
         "credential_label": existing.get("credential_label", ""),
+        "credential_type": existing.get("credential_type", ""),
         "provider": provider_id,
         "provider_name": existing.get("provider_name") or _provider_display_name(provider_id),
         "is_deleted": bool(existing.get("is_deleted", False)),
@@ -466,6 +468,7 @@ async def get_credential_usage_metadata() -> Dict[str, Dict[str, str]]:
             metadata[filename] = {
                 "user_email": str(item.get("user_email") or ""),
                 "credential_label": str(credential_data.get("credential_label") or ""),
+                "credential_type": str(credential_data.get("credential_type") or ""),
                 "provider": provider_id,
                 "provider_name": _provider_display_name(provider_id),
             }
