@@ -404,8 +404,9 @@ class XaiCredentialRequest(BaseModel):
     api_key: str = Field(min_length=16, max_length=1024)
 
 
-class XaiOAuthCallbackRequest(BaseModel):
-    callback_url: str = Field(min_length=10, max_length=8192)
+class XaiOAuthCodeRequest(BaseModel):
+    code: str = Field(min_length=1, max_length=4096)
+    state: str = Field(min_length=1, max_length=512)
 
 
 class CredentialModelTestRequest(BaseModel):

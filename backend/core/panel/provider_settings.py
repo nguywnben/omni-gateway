@@ -16,7 +16,7 @@ from core.models import (
     ConfigSaveRequest,
     GoogleAIStudioCredentialRequest,
     XaiCredentialRequest,
-    XaiOAuthCallbackRequest,
+    XaiOAuthCodeRequest,
 )
 from core.pool_import import (
     PoolImportError,
@@ -452,13 +452,13 @@ async def start_xai_oauth(token: str = Depends(verify_panel_token)):
         raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc
 
 
-@router.post("/api/providers/xai/oauth/callback")
+@router.post("/api/providers/xai/oauth/complete")
 async def save_xai_oauth_credential(
-    request: XaiOAuthCallbackRequest,
+    request: XaiOAuthCodeRequest,
     token: str = Depends(verify_panel_token),
 ):
     try:
-        result = await complete_xai_oauth(request.callback_url)
+        result = await complete_xai_oauth(request.code, request.state)
     except XaiError as exc:
         raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc
     return JSONResponse(

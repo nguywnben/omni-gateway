@@ -732,8 +732,12 @@ async function startXaiOauth() {
         const authorizationLink = document.getElementById('xaiAuthorizationUrl');
         authorizationLink.href = data.auth_url || '#';
         authorizationLink.textContent = data.auth_url || 'Authorization unavailable';
-        document.getElementById('xaiCallbackUrl').value = '';
-        document.getElementById('xaiOauthFields')?.classList.remove('hidden');
+        document.getElementById('xaiAuthorizationCode').value = '';
+        const oauthFields = document.getElementById('xaiOauthFields');
+        if (oauthFields) {
+            oauthFields.dataset.state = data.state || '';
+            oauthFields.classList.remove('hidden');
+        }
         showStatus('Grok authorization link generated.', 'success');
     } catch (error) {
         showStatus(`Failed to start Grok OAuth: ${error.message}`, 'error');
@@ -744,25 +748,32 @@ async function startXaiOauth() {
 }
 
 async function saveXaiOauth() {
-    const field = document.getElementById('xaiCallbackUrl');
+    const field = document.getElementById('xaiAuthorizationCode');
     const button = document.getElementById('saveXaiOauthBtn');
-    const callbackUrl = field?.value.trim() || '';
-    if (!callbackUrl) {
-        showStatus('Paste the complete Grok callback URL.', 'error');
+    const code = field?.value.trim() || '';
+    const oauthFields = document.getElementById('xaiOauthFields');
+    const state = oauthFields?.dataset.state || '';
+    if (!code) {
+        showStatus('Enter the authorization code shown by xAI.', 'error');
         field?.focus();
+        return;
+    }
+    if (!state) {
+        showStatus('Generate a new Grok authorization link before saving the credential.', 'error');
         return;
     }
     button.disabled = true;
     button.textContent = 'Saving...';
     try {
-        const response = await fetch('./api/providers/xai/oauth/callback', {
+        const response = await fetch('./api/providers/xai/oauth/complete', {
             method: 'POST',
             headers: getAuthHeaders(),
-            body: JSON.stringify({ callback_url: callbackUrl })
+            body: JSON.stringify({ code, state })
         });
         const data = await response.json().catch(() => ({}));
         if (!response.ok) throw new Error(data.detail || data.error || t('unknown_error'));
         field.value = '';
+        delete oauthFields.dataset.state;
         showXaiCredentialSaveResult('oauth', data);
         showStatus(data.message, 'success');
         await AppState.primaryCreds.refresh();

@@ -16,7 +16,7 @@ BACKEND_DIR = Path(__file__).resolve().parents[1]
 if str(BACKEND_DIR) not in sys.path:
     sys.path.insert(0, str(BACKEND_DIR))
 
-from core.models import ConfigSaveRequest, XaiCredentialRequest, XaiOAuthCallbackRequest
+from core.models import ConfigSaveRequest, XaiCredentialRequest, XaiOAuthCodeRequest
 from core.panel.provider_settings import (
     add_xai_api_key_credential,
     import_xai_credentials,
@@ -196,7 +196,7 @@ class XaiProviderTests(unittest.IsolatedAsyncioTestCase):
         with self.assertRaisesRegex(XaiError, "invalid token endpoint"):
             await refresh_xai_oauth_credential(credential)
 
-    async def test_callback_stores_tokens_but_returns_secret_free_metadata(self):
+    async def test_authorization_code_stores_tokens_but_returns_secret_free_metadata(self):
         _oauth_flows["state-1"] = {
             "created_at": time.time(),
             "code_verifier": "verifier-1",
@@ -209,17 +209,18 @@ class XaiProviderTests(unittest.IsolatedAsyncioTestCase):
                 "filename": "xai-grok-account.json",
             }
         )
+        exchange = AsyncMock(
+            return_value={
+                "access_token": "access-secret",
+                "refresh_token": "refresh-secret",
+                "id_token": "",
+                "expires_in": 3600,
+            }
+        )
         with (
             patch(
                 "core.xai._exchange_xai_token",
-                AsyncMock(
-                    return_value={
-                        "access_token": "access-secret",
-                        "refresh_token": "refresh-secret",
-                        "id_token": "",
-                        "expires_in": 3600,
-                    }
-                ),
+                exchange,
             ),
             patch(
                 "core.xai.fetch_xai_model_ids",
@@ -227,18 +228,26 @@ class XaiProviderTests(unittest.IsolatedAsyncioTestCase):
             ),
             patch("core.xai.credential_manager.add_primary_credential", stored),
         ):
-            result = await complete_xai_oauth(
-                f"{XAI_REDIRECT_URI}?state=state-1&code=authorization-code"
-            )
+            result = await complete_xai_oauth("authorization-code", "state-1")
 
         saved_payload = stored.await_args.args[1]
         self.assertEqual(saved_payload["access_token"], "access-secret")
         self.assertEqual(saved_payload["refresh_token"], "refresh-secret")
+        self.assertEqual(
+            exchange.await_args.args[0],
+            {
+                "grant_type": "authorization_code",
+                "client_id": "public-client-id",
+                "code": "authorization-code",
+                "redirect_uri": XAI_REDIRECT_URI,
+                "code_verifier": "verifier-1",
+            },
+        )
         self.assertEqual(result["model_count"], 2)
         self.assertNotIn("access_token", result)
         self.assertNotIn("refresh_token", result)
 
-    async def test_callback_rejects_an_expired_oauth_session(self):
+    async def test_authorization_code_rejects_an_expired_oauth_session(self):
         _oauth_flows["expired-state"] = {
             "created_at": 1,
             "code_verifier": "verifier-1",
@@ -247,8 +256,13 @@ class XaiProviderTests(unittest.IsolatedAsyncioTestCase):
         }
 
         with self.assertRaisesRegex(XaiError, "not found or has expired"):
+            await complete_xai_oauth("authorization-code", "expired-state")
+
+    async def test_authorization_code_rejects_a_callback_url(self):
+        with self.assertRaisesRegex(XaiError, "not a callback URL"):
             await complete_xai_oauth(
-                f"{XAI_REDIRECT_URI}?state=expired-state&code=authorization-code"
+                f"{XAI_REDIRECT_URI}?state=state-1&code=authorization-code",
+                "state-1",
             )
 
     async def test_config_save_supports_partial_payload_with_environment_lock(self):
@@ -362,9 +376,7 @@ class XaiProviderTests(unittest.IsolatedAsyncioTestCase):
             ),
         ):
             response = await save_xai_oauth_credential(
-                XaiOAuthCallbackRequest(
-                    callback_url=f"{XAI_REDIRECT_URI}?state=state-1&code=code-1"
-                ),
+                XaiOAuthCodeRequest(code="code-1", state="state-1"),
                 token="panel-token",
             )
 

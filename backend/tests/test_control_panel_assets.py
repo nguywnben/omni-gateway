@@ -100,9 +100,13 @@ class ControlPanelAssetTests(unittest.TestCase):
             "./api/providers/xai/config/reset",
             "./api/providers/xai/credentials",
             "./api/providers/xai/oauth/start",
-            "./api/providers/xai/oauth/callback",
+            "./api/providers/xai/oauth/complete",
         ):
             self.assertIn(endpoint, settings_script)
+        self.assertNotIn("./api/providers/xai/oauth/callback", settings_script)
+        self.assertIn('id="xaiAuthorizationCode"', body)
+        self.assertIn("Authorization code", body)
+        self.assertNotIn('id="xaiCallbackUrl"', body)
         self.assertIn(
             "authorizationLink.textContent = data.auth_url || 'Authorization unavailable'",
             settings_script,

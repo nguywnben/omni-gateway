@@ -4,6 +4,12 @@ All notable user-facing changes are documented in this file. Omni Gateway follow
 
 ## [Unreleased]
 
+## [1.1.1] - 2026-07-15
+
+### Changed
+
+- Replaced Grok OAuth callback URL entry with the authorization code shown by xAI while preserving PKCE session validation.
+
 ## [1.1.0] - 2026-07-15
 
 ### Added
@@ -85,7 +91,8 @@ All notable user-facing changes are documented in this file. Omni Gateway follow
 - Provider credential pool, virtual model routing, context optimization, usage visibility, and the management console.
 - Docker Hub and GitHub Container Registry publishing.
 
-[Unreleased]: https://github.com/nguywnben/omni-gateway/compare/v1.1.0...HEAD
+[Unreleased]: https://github.com/nguywnben/omni-gateway/compare/v1.1.1...HEAD
+[1.1.1]: https://github.com/nguywnben/omni-gateway/compare/v1.1.0...v1.1.1
 [1.1.0]: https://github.com/nguywnben/omni-gateway/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/nguywnben/omni-gateway/compare/v0.2.0-beta...v1.0.0
 [0.2.0-beta]: https://github.com/nguywnben/omni-gateway/compare/v0.1.0-beta...v0.2.0-beta

@@ -619,10 +619,10 @@
                                     <div class="endpoint-code-card auth-link-card">
                                         <a id="xaiAuthorizationUrl" href="#" target="_blank" rel="noreferrer">Authorization unavailable</a>
                                     </div>
-                                    <div class="manual-callback-panel">
-                                        <label for="xaiCallbackUrl">Callback URL</label>
-                                        <p class="card-copy provider-tool-copy">If Grok opens a localhost callback page after sign-in, copy the full URL from that tab and paste it here.</p>
-                                        <textarea id="xaiCallbackUrl" rows="3" placeholder="http://127.0.0.1:56121/callback?state=...&amp;code=..."></textarea>
+                                    <div class="oauth-completion-panel">
+                                        <label for="xaiAuthorizationCode">Authorization code</label>
+                                        <p class="card-copy provider-tool-copy">After signing in, copy the code shown by xAI and paste it here.</p>
+                                        <input type="text" id="xaiAuthorizationCode" placeholder="Paste the code shown by xAI" autocomplete="off" spellcheck="false">
                                     </div>
                                     <div class="page-actions" style="margin-top: 14px;">
                                         <button type="button" class="btn" id="saveXaiOauthBtn" data-ui-action="save-xai-oauth">Save credential</button>
@@ -894,7 +894,7 @@
                                     <a id="primaryAuthUrl" href="#" target="_blank" rel="noreferrer">Open Google authorization</a>
                                 </div>
 
-                                <div id="primaryCallbackUrlSection" class="manual-callback-panel hidden">
+                                <div id="primaryCallbackUrlSection" class="oauth-completion-panel hidden">
                                     <label for="primaryCallbackUrlInput">Callback URL</label>
                                     <p class="card-copy provider-tool-copy">If Google opens a localhost callback page after sign-in, copy the full URL from that tab and paste it here.</p>
                                     <textarea id="primaryCallbackUrlInput" rows="3" placeholder="http://localhost:4283/callback?state=...&code=..."></textarea>
