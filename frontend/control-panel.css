@@ -1305,15 +1305,15 @@ button.endpoint-code-card:hover {
     overflow-wrap: anywhere;
 }
 
-.manual-callback-panel {
+.oauth-completion-panel {
     margin-top: 22px;
 }
 
-.manual-callback-panel .provider-tool-copy {
+.oauth-completion-panel .provider-tool-copy {
     margin: 4px 0 10px;
 }
 
-.manual-callback-panel textarea {
+.oauth-completion-panel textarea {
     width: 100%;
     min-height: 88px;
     resize: vertical;

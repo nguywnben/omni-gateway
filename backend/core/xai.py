@@ -11,7 +11,7 @@ import time
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
-from urllib.parse import parse_qs, urlencode, urlparse
+from urllib.parse import urlencode, urlparse
 
 import httpx
 from config import (
@@ -259,22 +259,17 @@ async def _exchange_xai_token(data: Dict[str, str], token_endpoint: str) -> Dict
     return payload
 
 
-async def complete_xai_oauth(callback_url: str) -> Dict[str, Any]:
+async def complete_xai_oauth(code: str, state: str) -> Dict[str, Any]:
     _prune_oauth_flows()
-    parsed = urlparse(str(callback_url or "").strip())
-    if parsed.scheme not in {"http", "https"} or not parsed.netloc:
-        raise XaiError("Enter the complete Grok callback URL.")
-    params = parse_qs(parsed.query)
-    state = str((params.get("state") or [""])[0]).strip()
-    code = str((params.get("code") or [""])[0]).strip()
-    error = str((params.get("error_description") or params.get("error") or [""])[0]).strip()
-    if error:
-        raise XaiError(f"Grok authorization failed: {error}")
+    code = str(code or "").strip()
+    state = str(state or "").strip()
+    if not code:
+        raise XaiError("Enter the authorization code shown by xAI.")
+    if "://" in code or "code=" in code:
+        raise XaiError("Enter the authorization code shown by xAI, not a callback URL.")
     flow = _oauth_flows.pop(state, None)
     if not state or not flow:
         raise XaiError("The Grok OAuth session was not found or has expired.")
-    if not code:
-        raise XaiError("The Grok callback URL does not contain an authorization code.")
     tokens = await _exchange_xai_token(
         {
             "grant_type": "authorization_code",
