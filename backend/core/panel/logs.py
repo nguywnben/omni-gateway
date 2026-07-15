@@ -139,7 +139,7 @@ async def websocket_logs(websocket: WebSocket):
     except HTTPException as e:
         close_code = 4401 if e.status_code in {401, 428} else 4403
         await websocket.close(code=close_code, reason=str(e.detail))
-        log.warning("WebSocket connection denied: token verification failed")
+        log.warning("WebSocket connection denied: token verification failed.")
         return
     except Exception as e:
         await websocket.close(code=1011, reason="Authentication error")

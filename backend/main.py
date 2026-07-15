@@ -61,7 +61,7 @@ def _get_worker_count() -> int:
         raise RuntimeError("WORKERS must be the integer 1.") from exc
     if workers != 1:
         raise RuntimeError(
-            "Omni Gateway 1.0.0 supports WORKERS=1 only. "
+            "Omni Gateway supports WORKERS=1 only. "
             "Credential reservations, cooldowns, and usage aggregation are not yet coordinated "
             "across multiple worker processes."
         )

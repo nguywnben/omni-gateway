@@ -316,7 +316,10 @@ async function checkEnvCredsStatus() {
 
             autoLoadStatus.style.color = data.auto_load_enabled ? '#28a745' : '#dc3545';
 
-            document.getElementById('envFilesCount').textContent = t('dataexisting_env_files_count_files', {data_existing_env_files_count: data.existing_env_files_count});
+            document.getElementById('envFilesCount').textContent = t(
+                'dataexisting_env_files_count_files',
+                {files: formatCountLabel(data.existing_env_files_count, 'file')}
+            );
 
             const envFilesList = document.getElementById('envFilesList');
 
@@ -368,7 +371,11 @@ async function loadEnvCredentials() {
 
             if (data.loaded_count > 0) {
 
-                showStatus(t('successfully_imported_dataloaded_co', {data_loaded_count: data.loaded_count, data_total_count: data.total_count}), 'success');
+                showStatus(t('successfully_imported_dataloaded_co', {
+                    data_loaded_count: data.loaded_count,
+                    data_total_count: data.total_count,
+                    credential_noun: Number(data.total_count) === 1 ? 'credential file' : 'credential files'
+                }), 'success');
 
                 setTimeout(() => checkEnvCredsStatus(), 1000);
 
@@ -422,7 +429,9 @@ async function clearEnvCredentials() {
 
         if (response.ok) {
 
-            showStatus(t('successfully_deleted_datadeleted_co', {data_deleted_count: data.deleted_count}), 'success');
+            showStatus(t('successfully_deleted_datadeleted_co', {
+                files: formatCountLabel(data.deleted_count, 'environment-variable credential file')
+            }), 'success');
 
             setTimeout(() => checkEnvCredsStatus(), 1000);
 
@@ -566,6 +575,204 @@ async function addGoogleAIStudioCredential(event) {
     } finally {
         button.disabled = false;
         button.textContent = 'Validate and add';
+    }
+}
+
+const XAI_CONFIG_FIELDS = {
+    xaiClientId: 'xai_client_id',
+    xaiOauthIssuer: 'xai_oauth_issuer',
+    xaiApiUrl: 'xai_api_url',
+    xaiUserAgent: 'xai_user_agent'
+};
+
+const XAI_CONFIG_GROUPS = {
+    oauth: {
+        label: 'Grok',
+        resetTitle: 'Reset Grok Settings',
+        fieldIds: ['xaiClientId', 'xaiOauthIssuer']
+    },
+    api: {
+        label: 'xAI transport',
+        resetTitle: 'Reset Shared xAI Transport Settings',
+        fieldIds: ['xaiApiUrl', 'xaiUserAgent']
+    }
+};
+
+async function loadXaiSettings() {
+    if (!Object.keys(XAI_CONFIG_FIELDS).some(fieldId => document.getElementById(fieldId))) return;
+    try {
+        const response = await fetch('./api/providers/xai/config', { headers: getAuthHeaders() });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(data.detail || data.error || t('unknown_error'));
+        const locked = new Set(data.env_locked || []);
+        Object.entries(XAI_CONFIG_FIELDS).forEach(([fieldId, configKey]) => {
+            const field = document.getElementById(fieldId);
+            if (!field) return;
+            field.value = data.config?.[configKey] || '';
+            field.disabled = locked.has(configKey);
+            field.classList.toggle('env-locked', field.disabled);
+        });
+    } catch (error) {
+        showStatus(`Failed to load xAI provider settings: ${error.message}`, 'error');
+    }
+}
+
+async function saveXaiSettings(scope) {
+    const group = XAI_CONFIG_GROUPS[scope];
+    if (!group) return;
+    const config = {};
+    group.fieldIds.forEach((fieldId) => {
+        const configKey = XAI_CONFIG_FIELDS[fieldId];
+        const field = document.getElementById(fieldId);
+        if (field && !field.disabled) config[configKey] = field.value.trim();
+    });
+    try {
+        const response = await fetch('./api/providers/xai/config', {
+            method: 'POST',
+            headers: getAuthHeaders(),
+            body: JSON.stringify({ config })
+        });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(data.detail || data.error || t('unknown_error'));
+        showStatus(`${group.label} settings saved.`, 'success');
+        await loadXaiSettings();
+    } catch (error) {
+        showStatus(`Failed to save ${group.label} settings: ${error.message}`, 'error');
+    }
+}
+
+async function resetXaiSettings(scope) {
+    const group = XAI_CONFIG_GROUPS[scope];
+    if (!group) return;
+    const confirmed = await showConfirmModal(
+        `Restore the built-in ${group.label} settings?`,
+        { title: group.resetTitle, confirmLabel: 'Reset defaults' }
+    );
+    if (!confirmed) return;
+    try {
+        const response = await fetch(`./api/providers/xai/config/reset?scope=${encodeURIComponent(scope)}`, {
+            method: 'POST',
+            headers: getAuthHeaders()
+        });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(data.detail || data.error || t('unknown_error'));
+        showStatus(data.message || `${group.label} settings reset to defaults.`, 'success');
+        await loadXaiSettings();
+    } catch (error) {
+        showStatus(`Failed to reset ${group.label} settings: ${error.message}`, 'error');
+    }
+}
+
+function showXaiCredentialSaveResult(kind, data) {
+    const isOauth = kind === 'oauth';
+    const prefix = isOauth ? 'xaiOauth' : 'xaiApiKey';
+    const result = document.getElementById(`${prefix}SaveResult`);
+    const title = document.getElementById(`${prefix}SaveResultTitle`);
+    const text = document.getElementById(`${prefix}SaveResultText`);
+    const credentialName = isOauth ? 'Grok OAuth credential' : 'xAI Console API key';
+    if (title) {
+        title.textContent = data.credential_action === 'updated'
+            ? `${credentialName} updated`
+            : `${credentialName} added to pool`;
+    }
+    if (text) {
+        const modelCount = Number(data.model_count) || 0;
+        text.textContent = `${data.message} ${modelCount} model${modelCount === 1 ? '' : 's'} available.`;
+    }
+    result?.classList.remove('hidden');
+}
+
+async function addXaiApiKeyCredential(event) {
+    event?.preventDefault();
+    const field = document.getElementById('xaiApiKey');
+    const button = document.getElementById('addXaiKeyBtn');
+    const apiKey = field?.value.trim() || '';
+    if (!apiKey) {
+        showStatus('Enter an xAI Console API key.', 'error');
+        field?.focus();
+        return;
+    }
+    button.disabled = true;
+    button.textContent = 'Validating...';
+    document.getElementById('xaiApiKeySaveResult')?.classList.add('hidden');
+    try {
+        const response = await fetch('./api/providers/xai/credentials', {
+            method: 'POST',
+            headers: getAuthHeaders(),
+            body: JSON.stringify({ api_key: apiKey })
+        });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(data.detail || data.error || t('unknown_error'));
+        field.value = '';
+        showXaiCredentialSaveResult('api-key', data);
+        showStatus(data.message, 'success');
+        await AppState.primaryCreds.refresh();
+        await loadModelCatalog(true);
+        await refreshUsageStats();
+    } catch (error) {
+        showStatus(`Failed to add xAI Console API key: ${error.message}`, 'error');
+    } finally {
+        button.disabled = false;
+        button.textContent = 'Validate and add';
+    }
+}
+
+async function startXaiOauth() {
+    const button = document.getElementById('startXaiOauthBtn');
+    button.disabled = true;
+    button.textContent = 'Generating...';
+    document.getElementById('xaiOauthSaveResult')?.classList.add('hidden');
+    try {
+        const response = await fetch('./api/providers/xai/oauth/start', {
+            method: 'POST',
+            headers: getAuthHeaders()
+        });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(data.detail || data.error || t('unknown_error'));
+        const authorizationLink = document.getElementById('xaiAuthorizationUrl');
+        authorizationLink.href = data.auth_url || '#';
+        authorizationLink.textContent = data.auth_url || 'Authorization unavailable';
+        document.getElementById('xaiCallbackUrl').value = '';
+        document.getElementById('xaiOauthFields')?.classList.remove('hidden');
+        showStatus('Grok authorization link generated.', 'success');
+    } catch (error) {
+        showStatus(`Failed to start Grok OAuth: ${error.message}`, 'error');
+    } finally {
+        button.disabled = false;
+        button.textContent = 'Get provider authentication link';
+    }
+}
+
+async function saveXaiOauth() {
+    const field = document.getElementById('xaiCallbackUrl');
+    const button = document.getElementById('saveXaiOauthBtn');
+    const callbackUrl = field?.value.trim() || '';
+    if (!callbackUrl) {
+        showStatus('Paste the complete Grok callback URL.', 'error');
+        field?.focus();
+        return;
+    }
+    button.disabled = true;
+    button.textContent = 'Saving...';
+    try {
+        const response = await fetch('./api/providers/xai/oauth/callback', {
+            method: 'POST',
+            headers: getAuthHeaders(),
+            body: JSON.stringify({ callback_url: callbackUrl })
+        });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(data.detail || data.error || t('unknown_error'));
+        field.value = '';
+        showXaiCredentialSaveResult('oauth', data);
+        showStatus(data.message, 'success');
+        await AppState.primaryCreds.refresh();
+        await loadModelCatalog(true);
+        await refreshUsageStats();
+    } catch (error) {
+        showStatus(`Failed to save Grok OAuth credential: ${error.message}`, 'error');
+    } finally {
+        button.disabled = false;
+        button.textContent = 'Save credential';
     }
 }
 

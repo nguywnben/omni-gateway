@@ -82,7 +82,7 @@ class StorageAdapter:
 
                     self._backend = PostgreSQLManager()
                     await self._backend.initialize()
-                    log.info("Using PostgreSQL storage backend")
+                    log.info("Using the PostgreSQL storage backend.")
                 except Exception as e:
                     log.error(f"Failed to initialize PostgreSQL backend: {e}")
                     if self._backend:
@@ -102,17 +102,17 @@ class StorageAdapter:
 
                     self._backend = SQLiteManager()
                     await self._backend.initialize()
-                    log.info("Using SQLite storage backend")
+                    log.info("Using the SQLite storage backend.")
                 except Exception as e:
                     log.error(f"Failed to initialize SQLite backend: {e}")
-                    raise RuntimeError("No storage backend available") from e
+                    raise RuntimeError("No storage backend is available.") from e
             else:
                 try:
                     from .storage.mongodb_manager import MongoDBManager
 
                     self._backend = MongoDBManager()
                     await self._backend.initialize()
-                    log.info("Using MongoDB storage backend")
+                    log.info("Using the MongoDB storage backend.")
                 except Exception as e:
                     log.error(f"Failed to initialize MongoDB backend: {e}")
                     if self._backend:
@@ -137,7 +137,7 @@ class StorageAdapter:
 
     def _ensure_initialized(self):
         if not self._initialized or not self._backend:
-            raise RuntimeError("Storage adapter not initialized")
+            raise RuntimeError("The storage adapter is not initialized.")
 
     async def store_credential(
         self, filename: str, credential_data: Dict[str, Any], mode: str = "code_assist"

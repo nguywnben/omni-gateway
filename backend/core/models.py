@@ -400,6 +400,14 @@ class GoogleAIStudioCredentialRequest(BaseModel):
     api_key: str
 
 
+class XaiCredentialRequest(BaseModel):
+    api_key: str = Field(min_length=16, max_length=1024)
+
+
+class XaiOAuthCallbackRequest(BaseModel):
+    callback_url: str = Field(min_length=10, max_length=8192)
+
+
 class CredentialModelTestRequest(BaseModel):
     model: str = Field(min_length=1, max_length=200)
 

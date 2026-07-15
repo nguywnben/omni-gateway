@@ -13,7 +13,6 @@ router = APIRouter(tags=["root"])
 
 
 def _oauth_callback_page(success: bool, title: str, message: str) -> HTMLResponse:
-    status_text = "Successful" if success else "Failed"
     safe_title = escape(title)
     safe_message = escape(message)
     html = f"""<!doctype html>
@@ -21,7 +20,7 @@ def _oauth_callback_page(success: bool, title: str, message: str) -> HTMLRespons
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>OAuth {status_text} - Omni Gateway</title>
+    <title>{safe_title} - Omni Gateway</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Google+Sans:ital,opsz,wght@0,17..18,400..700;1,17..18,400..700&display=swap" rel="stylesheet">
@@ -130,7 +129,7 @@ async def serve_oauth_callback(request: Request):
         return _oauth_callback_page(
             True,
             "OAuth Authentication Successful",
-            "Copy this page URL from the browser address bar, return to the Providers page, paste it into Callback URL, and save the credential.",
+            "Copy this page URL from the browser address bar, return to the Providers page, paste it into the Callback URL field, and save the credential.",
         )
 
     return _oauth_callback_page(
@@ -185,4 +184,4 @@ def serve_control_panel():
         return HTMLResponse(content=html_content)
     except Exception as e:
         log.error(f"Failed to load control panel page: {e}")
-        raise HTTPException(status_code=500, detail="Internal server error")
+        raise HTTPException(status_code=500, detail="Internal server error.")

@@ -129,6 +129,50 @@ class RequestNormalizationTests(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn("labels", context.payload)
         self.assertEqual(context.payload["contents"], body["request"]["contents"])
 
+    async def test_xai_request_uses_openai_transport_and_bearer_auth(self):
+        credential = {
+            "provider": "xai",
+            "credential_type": "api_key",
+            "api_key": "xai-example-key-value",
+        }
+        body = {
+            "model": "grok-4",
+            "request": {
+                "contents": [{"role": "user", "parts": [{"text": "Hello"}]}],
+                "generationConfig": {"maxOutputTokens": 256},
+            },
+        }
+        with (
+            patch(
+                "core.api.primary.get_xai_api_url",
+                AsyncMock(return_value="https://api.x.ai/v1"),
+            ),
+            patch(
+                "core.api.primary.get_xai_user_agent",
+                AsyncMock(return_value="grok-cli/omni-gateway"),
+            ),
+            patch(
+                "core.api.primary.get_token_compression_config",
+                AsyncMock(
+                    return_value={
+                        "enabled": True,
+                        "threshold_tokens": 32000,
+                        "target_tokens": 24000,
+                        "min_recent_turns": 4,
+                    }
+                ),
+            ),
+        ):
+            context = await prepare_provider_request(credential, body, streaming=False)
+
+        self.assertEqual(context.provider_id, "xai")
+        self.assertEqual(context.target_url, "https://api.x.ai/v1/chat/completions")
+        self.assertEqual(context.headers["Authorization"], "Bearer xai-example-key-value")
+        self.assertEqual(context.headers["User-Agent"], "grok-cli/omni-gateway")
+        self.assertEqual(context.payload["model"], "grok-4")
+        self.assertEqual(context.payload["messages"][0]["content"], "Hello")
+        self.assertEqual(context.payload["max_tokens"], 256)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -13,6 +13,7 @@ if str(BACKEND_DIR) not in sys.path:
 from core.provider_registry import (
     GOOGLE_AI_STUDIO,
     GOOGLE_ANTIGRAVITY,
+    XAI,
     credential_supports_model,
     get_declared_credential_models,
     get_provider_capabilities,
@@ -26,7 +27,7 @@ class ProviderCapabilityTests(unittest.TestCase):
 
         self.assertEqual(
             {provider["provider_id"] for provider in providers},
-            {GOOGLE_ANTIGRAVITY, GOOGLE_AI_STUDIO},
+            {GOOGLE_ANTIGRAVITY, GOOGLE_AI_STUDIO, XAI},
         )
 
     def test_ai_studio_only_accepts_declared_model_families(self):
@@ -40,6 +41,13 @@ class ProviderCapabilityTests(unittest.TestCase):
         capabilities = get_provider_capabilities(GOOGLE_ANTIGRAVITY)
 
         self.assertEqual(capabilities.credential_types, ("oauth",))
+
+    def test_xai_declares_dual_auth_and_grok_models(self):
+        capabilities = get_provider_capabilities(XAI)
+
+        self.assertEqual(capabilities.credential_types, ("oauth", "api_key"))
+        self.assertTrue(capabilities.supports_model("grok-4"))
+        self.assertFalse(capabilities.supports_model("gemini-2.5-flash"))
 
     def test_credential_model_catalog_restricts_individual_api_keys(self):
         credential = {

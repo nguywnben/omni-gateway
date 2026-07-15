@@ -152,6 +152,9 @@ class CredentialStatusModelTests(unittest.IsolatedAsyncioTestCase):
 
         payload = json.loads(response.body)
         self.assertEqual(payload["model"], "gemini-2.5-pro")
+        self.assertEqual(payload["provider"], "google_ai_studio")
+        self.assertEqual(payload["credential_type"], "api_key")
+        self.assertEqual(payload["message"], "Model test completed successfully.")
         self.assertIn("gemini-2.5-pro:generateContent", post_mock.await_args.kwargs["url"])
 
     async def test_model_endpoint_uses_provider_catalog_when_models_are_not_stored(self):

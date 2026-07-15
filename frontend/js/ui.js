@@ -443,12 +443,13 @@ function buildCredentialTestErrorHtml(filename, data, response) {
     const troubleshooterUrl = safeHttpUrl(metadata.troubleshooter_url);
     const rawDetails = parsedError
         ? JSON.stringify(parsedError, null, 2)
-        : String(data.detail || data.error || data.message || `${t('error_code_prefix')} ${httpCode}`);
+        : String(data.detail || data.error || data.message || `${t('http_code_prefix')} ${httpCode}`);
 
     const summaryRows = [
         [t('table_filename'), filename],
-        ['Code', httpCode],
+        ['HTTP code', httpCode],
         [t('credential_status_label').replace(':', ''), statusText],
+        data.provider ? ['Provider', getCredentialProviderMeta(data, 'usage').name] : null,
         data.model ? ['Model', data.model] : null,
         reason ? ['Reason', reason] : null,
         permission ? ['Permission', permission] : null,
@@ -475,7 +476,9 @@ function buildCredentialTestResultHtml(filename, data, response, options = {}) {
 
     const logicalStatus = data.status_code || response.status;
     const isRateLimited = logicalStatus === 429 && data.success === true;
-    const statusMessage = data.message || (isRateLimited ? t('credential_rate_limited') : t('credential_available'));
+    const statusMessage = isRateLimited
+        ? t('credential_rate_limited')
+        : (data.message || t('credential_available'));
 
     return buildApiResultHtml({
         intro: isRateLimited
@@ -486,7 +489,7 @@ function buildCredentialTestResultHtml(filename, data, response, options = {}) {
             [t('table_filename'), filename],
             ['HTTP code', logicalStatus || response.status],
             [t('credential_status_label').replace(':', ''), statusMessage],
-            data.provider ? ['Provider', getCredentialProviderMeta({ provider: data.provider }, 'usage').name] : null,
+            data.provider ? ['Provider', getCredentialProviderMeta(data, 'usage').name] : null,
             data.model ? ['Model', data.model] : null,
             options.mode ? ['Mode', options.mode] : null,
         ].filter(Boolean),
@@ -571,13 +574,13 @@ function buildCredentialContentHtml(filename, content) {
 
     return `
         <div class="message-result-panel">
-            <div class="message-result-intro">This is the stored credential payload for the selected account.</div>
+            <div class="message-result-intro">This is the stored payload for the selected credential.</div>
             <div class="message-result-section">
-                <div class="message-result-section-title">Credential summary</div>
+                <div class="message-result-section-title">Credential Summary</div>
                 <div class="message-result-summary">${rows}</div>
             </div>
             <div class="message-result-section">
-                <div class="message-result-section-title">Credential payload</div>
+                <div class="message-result-section-title">Credential Payload</div>
                 <pre class="message-modal-code">${escapeHtml(body)}</pre>
             </div>
         </div>
@@ -602,7 +605,7 @@ function buildCredentialModelsHtml(context) {
         <div class="message-result-panel credential-model-panel">
             <div class="message-result-intro">These models are currently reported as available for this credential.</div>
             <div class="message-result-section">
-                <div class="message-result-section-title">Credential summary</div>
+                <div class="message-result-section-title">Credential Summary</div>
                 <div class="message-result-summary">${rows}</div>
             </div>
             <div class="message-result-section">
@@ -757,7 +760,7 @@ function buildCredentialQuotaHtml(filename, data, context = {}) {
             <div class="message-result-panel">
                 <div class="message-result-intro">No quota information is available for this credential yet.</div>
                 <div class="message-result-section">
-                    <div class="message-result-section-title">Quota summary</div>
+                    <div class="message-result-section-title">Quota Summary</div>
                     <div class="message-result-summary">${rows}</div>
                 </div>
                 <div class="modal-empty-state">${escapeHtml(t('status_no_quota_info'))}</div>
@@ -796,11 +799,11 @@ function buildCredentialQuotaHtml(filename, data, context = {}) {
         <div class="message-result-panel">
             <div class="message-result-intro">Quota usage is grouped by model for the selected credential.</div>
             <div class="message-result-section">
-                <div class="message-result-section-title">Quota summary</div>
+                <div class="message-result-section-title">Quota Summary</div>
                 <div class="message-result-summary">${rows}</div>
             </div>
             <div class="message-result-section">
-                <div class="message-result-section-title">Model quota</div>
+                <div class="message-result-section-title">Model Quota</div>
                 <div class="modal-quota-grid">${cards}</div>
             </div>
         </div>
@@ -935,7 +938,7 @@ function buildCredentialErrorsHtml(filename, data) {
             <div class="message-result-panel">
                 <div class="message-result-intro">This credential has no stored provider errors.</div>
                 <div class="message-result-section">
-                    <div class="message-result-section-title">Error summary</div>
+                    <div class="message-result-section-title">Error Summary</div>
                     <div class="message-result-summary">${rows}</div>
                 </div>
                 <div class="modal-empty-state success">
@@ -981,11 +984,11 @@ function buildCredentialErrorsHtml(filename, data) {
         <div class="message-result-panel">
             <div class="message-result-intro">These are the latest provider errors recorded for this credential.</div>
             <div class="message-result-section">
-                <div class="message-result-section-title">Error summary</div>
+                <div class="message-result-section-title">Error Summary</div>
                 <div class="message-result-summary">${rows}</div>
             </div>
             <div class="message-result-section">
-                <div class="message-result-section-title">Error details</div>
+                <div class="message-result-section-title">Error Details</div>
                 <div class="message-error-list">${errorCards}</div>
             </div>
         </div>
@@ -1401,6 +1404,36 @@ function getCredentialProviderMeta(credInfo, managerType) {
 
     }
 
+    if (provider === 'xai' || provider === 'grok' || provider === 'xai_grok' || provider === 'xai_console' || provider === 'xai_oauth' || provider === 'xai_api_key') {
+
+        const credentialType = String(credInfo.credential_type || '').trim().toLowerCase();
+        const isGrok = provider === 'grok' || provider === 'xai_oauth' || credentialType === 'oauth';
+        const isXaiConsole = provider === 'xai_console' || provider === 'xai_api_key' || credentialType === 'api_key';
+
+        if (isGrok) {
+            return {
+                id: 'grok',
+                name: 'Grok',
+                logo: '/frontend/assets/providers/xai-grok-logo.png'
+            };
+        }
+
+        if (isXaiConsole) {
+            return {
+                id: 'xai_console',
+                name: 'xAI Console',
+                logo: '/frontend/assets/providers/xai-console-logo.png'
+            };
+        }
+
+        return {
+            id: 'xai',
+            name: 'xAI',
+            logo: '/frontend/assets/providers/xai-console-logo.png'
+        };
+
+    }
+
     return {
         id: 'code_assist',
         name: t('provider_code_assist'),
@@ -1462,6 +1495,9 @@ function createCredCard(credInfo, manager) {
     const managerType = manager.type;
     const providerMeta = getCredentialProviderMeta(credInfo, managerType);
     const isGoogleAIStudio = providerMeta.id === 'google_ai_studio';
+    const isXai = ['xai', 'grok', 'xai_console'].includes(providerMeta.id);
+    const isAntigravity = providerMeta.id === 'google_antigravity';
+    const isStaticProvider = isGoogleAIStudio || isXai;
     const accountLabel = credInfo.credential_label || credInfo.user_email || t('email_not_fetched');
     const accountClass = (credInfo.credential_label || credInfo.user_email) ? 'cred-email' : 'cred-email empty';
     const providerLogo = providerMeta.logo
@@ -1486,7 +1522,7 @@ function createCredCard(credInfo, manager) {
 
         if (autoBan.length > 0 && status.disabled) {
 
-            statusBadges += '<span class="status-badge danger">Auto-ban</span>';
+            statusBadges += '<span class="status-badge danger">Auto-disabled</span>';
 
         }
 
@@ -1510,9 +1546,10 @@ function createCredCard(credInfo, manager) {
 
     }
 
-    if (isGoogleAIStudio) {
+    if (isGoogleAIStudio || isXai) {
 
-        statusBadges += '<span class="status-badge muted" title="Google AI Studio API key credential">API key</span>';
+        const credentialType = credInfo.credential_type === 'oauth' ? 'OAuth' : 'API key';
+        statusBadges += `<span class="status-badge muted" title="${escapeAttribute(`${providerMeta.name} ${credentialType} credential`)}">${credentialType}</span>`;
 
     } else {
 
@@ -1526,7 +1563,7 @@ function createCredCard(credInfo, manager) {
 
     }
 
-    if (managerType === 'primary' && !isGoogleAIStudio) {
+    if (managerType === 'primary' && isAntigravity) {
 
         if (credInfo.enable_credit) {
 
@@ -1601,7 +1638,7 @@ function createCredCard(credInfo, manager) {
         modelCount: Number.isFinite(Number(credInfo.model_count)) ? Number(credInfo.model_count) : 0,
     };
 
-    const shouldAutoLoadQuota = managerType === 'primary' && !isGoogleAIStudio && !AppState.quotaPreviewCache[filename];
+    const shouldAutoLoadQuota = managerType === 'primary' && isAntigravity && !AppState.quotaPreviewCache[filename];
 
     if (shouldAutoLoadQuota) {
 
@@ -1623,11 +1660,11 @@ function createCredCard(credInfo, manager) {
 
         <button type="button" class="cred-btn download" data-credential-command="download">${t('btn_download')}</button>
 
-        ${isGoogleAIStudio && Number(credInfo.model_count) > 0 ? `<button type="button" class="cred-btn" data-credential-command="models" title="${escapeAttribute(t('btn_view_models_title'))}">${t('btn_view_models')}</button>` : ''}
+        ${isStaticProvider && Number(credInfo.model_count) > 0 ? `<button type="button" class="cred-btn" data-credential-command="models" title="${escapeAttribute(t('btn_view_models_title'))}">${t('btn_view_models')}</button>` : ''}
 
-        ${managerType === 'primary' && !isGoogleAIStudio ? `<button type="button" class="cred-btn" data-credential-command="quota" title="${escapeAttribute(t('btn_view_quota_title'))}">${t('btn_view_quota')}</button>` : ''}
+        ${managerType === 'primary' && isAntigravity ? `<button type="button" class="cred-btn" data-credential-command="quota" title="${escapeAttribute(t('btn_view_quota_title'))}">${t('btn_view_quota')}</button>` : ''}
 
-        ${managerType === 'primary' && !isGoogleAIStudio ? (credInfo.enable_credit
+        ${managerType === 'primary' && isAntigravity ? (credInfo.enable_credit
 
             ? `<button type="button" class="cred-btn" data-credential-command="disable_credit" title="${escapeAttribute(t('btn_disable_credit_title'))}">${t('btn_disable_credit')}</button>`
 
@@ -1648,7 +1685,7 @@ function createCredCard(credInfo, manager) {
     `;
 
     const checkboxClass = manager.getElementId('file-checkbox');
-    const quotaPreview = isGoogleAIStudio ? '' : renderCredentialQuotaPreview(pathId, filename, managerType);
+    const quotaPreview = isAntigravity ? renderCredentialQuotaPreview(pathId, filename, managerType) : '';
 
     div.innerHTML = `
 
@@ -1723,8 +1760,8 @@ function createCredCard(credInfo, manager) {
             if (command === 'models') await showCredentialModels(pathId);
             if (command === 'preview') await configurePreviewChannel(filename);
             if (command === 'verify') {
-                if (managerType === 'primary') await verifyPrimaryProjectId(filename);
-                else await verifyProjectId(filename);
+                if (managerType === 'primary') await verifyProviderCredential(filename);
+                else await verifyCredential(filename);
             }
             if (command === 'test') {
                 await showCredentialModelTest(pathId);

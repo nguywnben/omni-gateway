@@ -8,6 +8,7 @@ from typing import Any, Dict, Optional
 
 GOOGLE_ANTIGRAVITY = "google_antigravity"
 GOOGLE_AI_STUDIO = "google_ai_studio"
+XAI = "xai"
 MAX_DECLARED_MODELS = 500
 MAX_MODEL_ID_LENGTH = 256
 
@@ -22,11 +23,16 @@ _PROVIDER_ALIASES = {
     "gemini": GOOGLE_AI_STUDIO,
     "google-ai-studio": GOOGLE_AI_STUDIO,
     "google_ai_studio": GOOGLE_AI_STUDIO,
+    "grok": XAI,
+    "x-ai": XAI,
+    "xai": XAI,
+    "xai-grok": XAI,
 }
 
 _PROVIDER_NAMES = {
     GOOGLE_ANTIGRAVITY: "Google Antigravity",
     GOOGLE_AI_STUDIO: "Google AI Studio",
+    XAI: "xAI",
 }
 
 
@@ -66,6 +72,12 @@ _PROVIDER_CAPABILITIES = {
         display_name=_PROVIDER_NAMES[GOOGLE_AI_STUDIO],
         credential_types=("api_key",),
         model_prefixes=("gemini-", "gemma-"),
+    ),
+    XAI: ProviderCapabilities(
+        provider_id=XAI,
+        display_name=_PROVIDER_NAMES[XAI],
+        credential_types=("oauth", "api_key"),
+        model_prefixes=("grok-",),
     ),
 }
 
@@ -173,7 +185,7 @@ def api_key_fingerprint(api_key: str) -> str:
 def get_static_credential_identity(credential_data: Dict[str, Any]) -> str:
     """Return a deduplication identity that does not require a network lookup."""
     provider_id = get_credential_provider(credential_data)
-    if provider_id != GOOGLE_AI_STUDIO:
+    if not is_api_key_credential(credential_data):
         return ""
     fingerprint = str(credential_data.get("key_fingerprint") or "").strip()
     if not fingerprint:

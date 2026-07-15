@@ -37,17 +37,24 @@ from core.pool_import import (
 from core.provider_registry import (
     GOOGLE_AI_STUDIO,
     GOOGLE_ANTIGRAVITY,
+    XAI,
     canonicalize_antigravity_credential_filename,
     get_credential_provider,
     get_declared_credential_models,
     normalize_provider_id,
 )
 from core.storage_adapter import get_storage_adapter
+from core.xai import XaiError, fetch_xai_model_ids, refresh_xai_oauth_credential
 from fastapi import HTTPException, Response, UploadFile
 from fastapi.responses import JSONResponse
 from log import log
 
 from .utils import INTERNAL_SERVER_ERROR_DETAIL, validate_credential_filename, validate_mode
+
+
+def _count_label(count: int, singular: str, plural: str | None = None) -> str:
+    label = singular if count == 1 else (plural or f"{singular}s")
+    return f"{count} {label}"
 
 
 def _zip_entry_is_symlink(entry: zipfile.ZipInfo) -> bool:
@@ -90,7 +97,9 @@ async def extract_json_files_from_zip(zip_file: UploadFile) -> List[dict]:
                     detail="ZIP archive exceeds the 25 MB uncompressed limit.",
                 )
 
-            log.info(f"Found {len(json_files)} JSON files in an uploaded ZIP archive.")
+            log.info(
+                f"Found {_count_label(len(json_files), 'JSON file')} in an imported ZIP archive."
+            )
 
             for entry in json_files:
                 json_filename = entry.filename
@@ -140,7 +149,9 @@ async def extract_json_files_from_zip(zip_file: UploadFile) -> List[dict]:
                     log.warning(f"Error processing file {json_filename} in ZIP: {e}")
                     continue
 
-        log.info(f"Extracted {len(files_data)} valid JSON files from the ZIP archive.")
+        log.info(
+            f"Extracted {_count_label(len(files_data), 'valid JSON file')} from the ZIP archive."
+        )
         return files_data
 
     except HTTPException:
@@ -235,7 +246,7 @@ async def _prepare_upload_candidates(files_data: List[dict]) -> tuple[List[dict]
                     "status": "skipped",
                     "action": "skipped",
                     "email": current["email"],
-                    "message": "Skipped because another uploaded credential has the same email with a later expiry.",
+                    "message": "Skipped because another imported credential has the same email with a later expiry.",
                 }
             )
             best_by_email[candidate["email"]] = candidate
@@ -247,7 +258,7 @@ async def _prepare_upload_candidates(files_data: List[dict]) -> tuple[List[dict]
                     "status": "skipped",
                     "action": "skipped",
                     "email": candidate["email"],
-                    "message": "Skipped because another uploaded credential has the same email with an equal or later expiry.",
+                    "message": "Skipped because another imported credential has the same email with an equal or later expiry.",
                 }
             )
 
@@ -261,7 +272,9 @@ async def upload_credentials_common(
     mode = validate_mode(mode)
 
     if not files:
-        raise HTTPException(status_code=400, detail="Please select files to upload.")
+        raise HTTPException(
+            status_code=400, detail="Select at least one credential file to import."
+        )
 
     if len(files) > 100:
         raise HTTPException(
@@ -278,7 +291,9 @@ async def upload_credentials_common(
             zip_files_data = await extract_json_files_from_zip(file)
             uploaded_bytes += sum(len(item["content"].encode("utf-8")) for item in zip_files_data)
             files_data.extend(zip_files_data)
-            log.info(f"Extracted {len(zip_files_data)} JSON files from an uploaded ZIP archive.")
+            log.info(
+                f"Extracted {_count_label(len(zip_files_data), 'JSON file')} from an imported ZIP archive."
+            )
 
         elif normalized_name.endswith(".json"):
             content = await file.read(MAX_POOL_ENTRY_BYTES + 1)
@@ -291,7 +306,8 @@ async def upload_credentials_common(
                 content_str = content.decode("utf-8")
             except UnicodeDecodeError:
                 raise HTTPException(
-                    status_code=400, detail=f"File '{file.filename}' encoding is not supported."
+                    status_code=400,
+                    detail=f"Credential file '{upload_name}' must use UTF-8 encoding.",
                 )
 
             uploaded_bytes += len(content)
@@ -299,18 +315,18 @@ async def upload_credentials_common(
         else:
             raise HTTPException(
                 status_code=400,
-                detail=f"File format '{upload_name}' is not supported. Only JSON and ZIP files are supported.",
+                detail=f"File format '{upload_name}' is not supported. Use a JSON file or ZIP archive.",
             )
 
         if len(files_data) > MAX_POOL_ARCHIVE_ENTRIES:
             raise HTTPException(
                 status_code=400,
-                detail=f"Upload contains more than {MAX_POOL_ARCHIVE_ENTRIES} credential files.",
+                detail=f"Import contains more than {MAX_POOL_ARCHIVE_ENTRIES} credential files.",
             )
         if uploaded_bytes > MAX_POOL_UNCOMPRESSED_BYTES:
             raise HTTPException(
                 status_code=400,
-                detail="Upload exceeds the 25 MB uncompressed limit.",
+                detail="Import exceeds the 25 MB uncompressed limit.",
             )
 
     upload_candidates, preprocessed_results = await _prepare_upload_candidates(files_data)
@@ -343,7 +359,7 @@ async def upload_credentials_common(
                 action = write_result.get("action", "created")
                 status = "success" if stored else "skipped"
                 saved_filename = write_result.get("filename", filename)
-                log.debug(f"Credential upload result: {action} ({saved_filename}, mode={mode})")
+                log.debug(f"Credential import result: {action} ({saved_filename}, mode={mode}).")
                 return {
                     "filename": saved_filename,
                     "source_filename": filename,
@@ -361,7 +377,9 @@ async def upload_credentials_common(
                     "message": "Credential processing failed.",
                 }
 
-        log.info(f"Starting concurrent processing for {len(batch_files)} {mode} files.")
+        log.info(
+            f"Starting concurrent import for {_count_label(len(batch_files), f'{mode} file')}."
+        )
         concurrent_tasks = [process_single_file(file_data) for file_data in batch_files]
         batch_results = await asyncio.gather(*concurrent_tasks, return_exceptions=True)
 
@@ -390,16 +408,20 @@ async def upload_credentials_common(
 
         batch_num = (i // batch_size) + 1
         total_batches = (len(upload_candidates) + batch_size - 1) // batch_size
+        credential_label = "credential" if len(batch_files) == 1 else "credentials"
         log.info(
-            f"Batch {batch_num}/{total_batches} complete: saved or renewed "
-            f"{batch_uploaded_count}/{len(batch_files)} {mode_label} credential files; skipped {batch_skipped_count}."
+            f"Import batch {batch_num}/{total_batches} completed. Saved or renewed "
+            f"{batch_uploaded_count}/{len(batch_files)} {mode_label} {credential_label}; "
+            f"skipped {_count_label(batch_skipped_count, 'duplicate credential')}."
         )
 
     total_skipped = sum(1 for result in all_results if result.get("status") == "skipped")
     if total_success > 0 or total_skipped > 0:
+        credential_label = "credential" if len(files_data) == 1 else "credentials"
         message = (
-            f"Batch upload complete: saved or renewed {total_success}/{len(files_data)} {mode_label} credential files; "
-            f"skipped {total_skipped} duplicate credential files with an equal or shorter expiry."
+            f"Import completed. Saved or renewed {total_success}/{len(files_data)} "
+            f"{mode_label} {credential_label}; skipped "
+            f"{_count_label(total_skipped, 'duplicate credential')} with an equal or shorter expiry."
         )
         return JSONResponse(
             content={
@@ -449,15 +471,28 @@ async def get_creds_status_common(
         raise HTTPException(status_code=400, detail="Tier filter must be all, free, pro, or ultra.")
 
     normalized_provider_filter = "all"
-    if provider_filter and str(provider_filter).strip().lower() != "all":
-        normalized_provider_filter = normalize_provider_id(provider_filter)
+    credential_type_filter = ""
+    raw_provider_filter = str(provider_filter or "all").strip().lower()
+    if raw_provider_filter != "all":
+        if raw_provider_filter in {"grok", "xai_oauth"}:
+            normalized_provider_filter = XAI
+            credential_type_filter = "oauth"
+        elif raw_provider_filter in {"xai_console", "xai_api_key"}:
+            normalized_provider_filter = XAI
+            credential_type_filter = "api_key"
+        else:
+            normalized_provider_filter = normalize_provider_id(provider_filter)
         if mode != "primary" or normalized_provider_filter not in {
             GOOGLE_ANTIGRAVITY,
             GOOGLE_AI_STUDIO,
+            XAI,
         }:
             raise HTTPException(
                 status_code=400,
-                detail="Provider filter must be all, google_antigravity, or google_ai_studio.",
+                detail=(
+                    "Provider filter must be all, google_antigravity, google_ai_studio, "
+                    "grok, xai_console, or xai."
+                ),
             )
 
     dedupe_result = await deduplicate_credentials_by_account_email(mode=mode)
@@ -486,6 +521,12 @@ async def get_creds_status_common(
         credential_data = await storage_adapter.get_credential(filename, mode=mode) or {}
         provider_id = get_credential_provider(credential_data)
         if filter_by_provider and provider_id != normalized_provider_filter:
+            continue
+        if (
+            credential_type_filter
+            and str(credential_data.get("credential_type") or "oauth").strip().lower()
+            != credential_type_filter
+        ):
             continue
         cred_info = {
             "filename": filename,
@@ -530,7 +571,7 @@ async def get_creds_status_common(
             "limit": limit,
             "has_more": (offset + limit) < total_count,
             "stats": stats,
-            "provider_filter": normalized_provider_filter,
+            "provider_filter": raw_provider_filter,
             "deduplicated_count": dedupe_result.get("deleted_count", 0),
         }
     )
@@ -574,7 +615,7 @@ async def download_all_creds_common(mode: str = "code_assist") -> Response:
             status_code=404, detail="No credential files are available to download."
         )
 
-    log.info(f"Packaging {len(credential_filenames)} {mode} credential files.")
+    log.info(f"Packaging {_count_label(len(credential_filenames), f'{mode} credential')}.")
 
     zip_buffer = io.BytesIO()
 
@@ -609,7 +650,10 @@ async def download_all_creds_common(mode: str = "code_assist") -> Response:
                 log.warning(f"Error processing {mode} credential file {filename}: {e}")
                 continue
 
-    log.info(f"Credential package created with {success_count}/{len(credential_filenames)} files.")
+    file_label = "file" if len(credential_filenames) == 1 else "files"
+    log.info(
+        f"Credential package created with {success_count}/{len(credential_filenames)} {file_label}."
+    )
 
     zip_buffer.seek(0)
     return Response(
@@ -710,13 +754,17 @@ async def refresh_all_user_emails_common(mode: str = "code_assist") -> JSONRespo
             )
 
     total_count = len(all_states)
+    address_label = "email address" if success_count == 1 else "email addresses"
     return JSONResponse(
         content={
             "success_count": success_count,
             "total_count": total_count,
             "skipped_count": skipped_count,
             "results": results,
-            "message": f"Retrieved {success_count}/{total_count} email addresses; skipped {skipped_count} credentials with existing emails.",
+            "message": (
+                f"Retrieved {success_count}/{total_count} {address_label}; skipped "
+                f"{_count_label(skipped_count, 'credential')} with an existing email address."
+            ),
         }
     )
 
@@ -746,6 +794,7 @@ async def deduplicate_credentials_by_email_common(mode: str = "code_assist") -> 
 
         deleted_count = dedupe_result.get("deleted_count", 0)
         kept_count = dedupe_result.get("kept_count", total_count - deleted_count)
+        unique_email_count = dedupe_result.get("unique_emails_count", 0)
         result_duplicate_groups = [
             {
                 "email": group["email"],
@@ -765,11 +814,16 @@ async def deduplicate_credentials_by_email_common(mode: str = "code_assist") -> 
                 "deleted_count": deleted_count,
                 "kept_count": kept_count,
                 "total_count": total_count,
-                "unique_emails_count": dedupe_result.get("unique_emails_count", 0),
+                "unique_emails_count": unique_email_count,
                 "no_email_count": dedupe_result.get("no_email_count", 0),
                 "duplicate_groups": result_duplicate_groups,
                 "delete_errors": [],
-                "message": f"Deduplication complete: deleted {deleted_count} duplicate credentials and kept {kept_count} credentials ({dedupe_result.get('unique_emails_count', 0)} unique emails).",
+                "message": (
+                    "Deduplication completed. Deleted "
+                    f"{_count_label(deleted_count, 'duplicate credential')} and kept "
+                    f"{_count_label(kept_count, 'credential')} "
+                    f"({_count_label(unique_email_count, 'unique email address')})."
+                ),
             }
         )
 
@@ -786,9 +840,7 @@ async def deduplicate_credentials_by_email_common(mode: str = "code_assist") -> 
         )
 
 
-async def verify_credential_project_common(
-    filename: str, mode: str = "code_assist"
-) -> JSONResponse:
+async def verify_credential_common(filename: str, mode: str = "code_assist") -> JSONResponse:
     mode = validate_mode(mode)
     filename = validate_credential_filename(filename)
 
@@ -825,10 +877,54 @@ async def verify_credential_project_common(
                 "success": True,
                 "filename": filename,
                 "provider": provider_id,
+                "credential_type": "api_key",
                 "model_count": validation.model_count,
                 "message": (
                     "Google AI Studio API key verified. Provider metadata was "
                     "refreshed, the credential was enabled, and recorded errors were cleared."
+                ),
+            }
+        )
+
+    if mode == "primary" and provider_id == XAI:
+        credential_type = str(credential_data.get("credential_type") or "").lower()
+        try:
+            if credential_type == "oauth":
+                credential_data = await refresh_xai_oauth_credential(credential_data)
+            access_token = (
+                credential_data.get("api_key")
+                or credential_data.get("access_token")
+                or credential_data.get("token")
+            )
+            model_ids = await fetch_xai_model_ids(str(access_token or ""))
+        except XaiError as exc:
+            return JSONResponse(
+                status_code=exc.status_code,
+                content={
+                    "success": False,
+                    "filename": filename,
+                    "provider": provider_id,
+                    "message": str(exc),
+                },
+            )
+        credential_data["model_ids"] = model_ids
+        await storage_adapter.store_credential(filename, credential_data, mode=mode)
+        await storage_adapter.update_credential_state(
+            filename,
+            {"disabled": False, "error_codes": [], "error_messages": {}},
+            mode=mode,
+        )
+        return JSONResponse(
+            content={
+                "success": True,
+                "filename": filename,
+                "provider": provider_id,
+                "credential_type": credential_type,
+                "model_count": len(model_ids),
+                "message": (
+                    f"{'Grok OAuth credential' if credential_type == 'oauth' else 'xAI Console API key'} "
+                    "verified. Available models were refreshed, the credential was enabled, "
+                    "and recorded errors were cleared."
                 ),
             }
         )

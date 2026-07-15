@@ -23,7 +23,7 @@ body:
     attributes:
       label: Version
       description: Provide the release, container tag, or commit hash.
-      placeholder: "v1.0.0 or 629337c"
+      placeholder: "v1.1.0 or 77737d2"
     validations:
       required: true
 

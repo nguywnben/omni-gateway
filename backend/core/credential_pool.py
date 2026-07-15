@@ -119,7 +119,9 @@ async def _find_unique_filename(
         return filename
 
     existing_data = await storage_adapter.get_credential(filename, mode=mode)
-    if get_known_credential_email(existing_data or {}) == get_known_credential_email(
+    if get_credential_provider(existing_data or {}) == get_credential_provider(
+        credential_data
+    ) and get_known_credential_email(existing_data or {}) == get_known_credential_email(
         credential_data
     ):
         return filename
@@ -255,6 +257,10 @@ async def upsert_credential_by_email(
             await storage_adapter.list_credentials(mode=mode)
         ):
             existing_data = await storage_adapter.get_credential(existing_filename, mode=mode)
+            if get_credential_provider(existing_data or {}) != get_credential_provider(
+                credential_data
+            ):
+                continue
             existing_email = await _get_existing_email(
                 storage_adapter, existing_filename, existing_data or {}, mode
             )
@@ -353,7 +359,8 @@ async def deduplicate_credentials_by_account_email(mode: str = "code_assist") ->
             email = await _get_existing_email(
                 storage_adapter, filename, credential_data or {}, mode
             )
-            identity = static_identity or (f"email:{email}" if email else "")
+            provider_id = get_credential_provider(credential_data or {})
+            identity = static_identity or (f"email:{provider_id}:{email}" if email else "")
             if not identity:
                 no_email_count += 1
                 continue
@@ -398,8 +405,10 @@ async def deduplicate_credentials_by_account_email(mode: str = "code_assist") ->
             )
 
         if deleted_count:
+            credential_label = "credential" if deleted_count == 1 else "credentials"
             log.info(
-                f"Deduplicated {deleted_count} credentials in the {mode} pool by account identity."
+                f"Deduplicated {deleted_count} {credential_label} in the {mode} pool "
+                "by account identity."
             )
 
         return {

@@ -32,6 +32,10 @@ PROVIDER_SPECIFIC_CONFIG_KEYS = {
     "stream_to_nonstream",
     "switch_credential_enabled",
     "google_ai_studio_api_url",
+    "xai_api_url",
+    "xai_oauth_issuer",
+    "xai_client_id",
+    "xai_user_agent",
 }
 ALLOWED_CONFIG_KEYS = (
     set(config.ENV_MAPPINGS.values()) - ACCESS_SECRET_KEYS - PROVIDER_SPECIFIC_CONFIG_KEYS

@@ -562,7 +562,7 @@ class SQLiteManager:
                         )
 
                 if deleted_count > 0:
-                    log.debug(f"Deleted {deleted_count} credentials: {filename} (mode={mode}).")
+                    log.debug(f"Deleted credential: {filename} (mode={mode}).")
                     return True
                 else:
                     log.warning(f"No credential found to delete: {filename} (mode={mode})")

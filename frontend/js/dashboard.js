@@ -260,7 +260,10 @@ function renderUsageList() {
         const isUnassigned = filename === '__gateway_unassigned__.json';
         const providerMeta = isUnassigned
             ? { name: 'Gateway', logo: '/frontend/assets/logo.png' }
-            : getCredentialProviderMeta({ provider: stats.provider || stats.provider_name }, 'usage');
+            : getCredentialProviderMeta({
+                provider: stats.provider || stats.provider_name,
+                credential_type: stats.credential_type
+            }, 'usage');
         const accountLabel = isUnassigned
             ? 'No credential assigned'
             : (stats.is_deleted
@@ -318,7 +321,10 @@ function renderUsageProviderSummary() {
         if (filename === '__gateway_unassigned__.json') continue;
 
         const providerMeta = getCredentialProviderMeta(
-            { provider: stats.provider || stats.provider_name },
+            {
+                provider: stats.provider || stats.provider_name,
+                credential_type: stats.credential_type
+            },
             'usage'
         );
 
@@ -347,7 +353,7 @@ function renderUsageProviderSummary() {
     }
 
     container.hidden = false;
-    const providerOrder = ['google_antigravity', 'google_ai_studio', 'code_assist'];
+    const providerOrder = ['google_antigravity', 'google_ai_studio', 'grok', 'xai_console', 'xai', 'code_assist'];
     const providerItems = Array.from(providers.values()).sort((left, right) => {
         const leftIndex = providerOrder.indexOf(left.meta.id);
         const rightIndex = providerOrder.indexOf(right.meta.id);

@@ -45,6 +45,8 @@ class ManagementApiRouteTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertIn("/api/credentials/status", paths)
         self.assertIn("/api/credentials/action", paths)
+        self.assertIn("/api/credentials/verify/{filename}", paths)
+        self.assertNotIn("/api/credentials/verify-project/{filename}", paths)
         self.assertFalse(any(path.startswith("/api/creds") for path in paths))
 
     async def test_beta_credential_route_is_removed_from_the_stable_api(self):

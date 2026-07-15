@@ -43,6 +43,10 @@ DEFAULT_ANTIGRAVITY_API_URL = "https://daily-cloudcode-pa.googleapis.com"
 DEFAULT_ANTIGRAVITY_USER_AGENT = "antigravity/cli/1.0.1 windows/amd64"
 DEFAULT_ANTIGRAVITY_PAYLOAD_USER_AGENT = "antigravity"
 DEFAULT_GOOGLE_AI_STUDIO_API_URL = "https://generativelanguage.googleapis.com"
+DEFAULT_XAI_API_URL = "https://api.x.ai/v1"
+DEFAULT_XAI_OAUTH_ISSUER = "https://auth.x.ai"
+DEFAULT_XAI_CLIENT_ID = "b1a00492-073a-47ea-816f-4c329264a828"
+DEFAULT_XAI_USER_AGENT = "grok-cli/omni-gateway"
 
 
 ENV_MAPPINGS = {
@@ -55,6 +59,10 @@ ENV_MAPPINGS = {
     "SERVICE_USAGE_URL": "service_usage_url",
     "ANTIGRAVITY_API_URL": "antigravity_api_url",
     "GOOGLE_AI_STUDIO_API_URL": "google_ai_studio_api_url",
+    "XAI_API_URL": "xai_api_url",
+    "XAI_OAUTH_ISSUER": "xai_oauth_issuer",
+    "XAI_CLIENT_ID": "xai_client_id",
+    "XAI_USER_AGENT": "xai_user_agent",
     "CODE_ASSIST_CLIENT_ID": "code_assist_client_id",
     "CODE_ASSIST_CLIENT_SECRET": "code_assist_client_secret",
     "ANTIGRAVITY_CLIENT_ID": "antigravity_client_id",
@@ -604,6 +612,42 @@ async def get_google_ai_studio_api_url() -> str:
         )
         or DEFAULT_GOOGLE_AI_STUDIO_API_URL
     ).rstrip("/")
+
+
+async def get_xai_api_url() -> str:
+    return (
+        str(
+            await get_config_value("xai_api_url", DEFAULT_XAI_API_URL, "XAI_API_URL")
+            or DEFAULT_XAI_API_URL
+        )
+        .strip()
+        .rstrip("/")
+    )
+
+
+async def get_xai_oauth_issuer() -> str:
+    return (
+        str(
+            await get_config_value("xai_oauth_issuer", DEFAULT_XAI_OAUTH_ISSUER, "XAI_OAUTH_ISSUER")
+            or DEFAULT_XAI_OAUTH_ISSUER
+        )
+        .strip()
+        .rstrip("/")
+    )
+
+
+async def get_xai_client_id() -> str:
+    return str(
+        await get_config_value("xai_client_id", DEFAULT_XAI_CLIENT_ID, "XAI_CLIENT_ID")
+        or DEFAULT_XAI_CLIENT_ID
+    ).strip()
+
+
+async def get_xai_user_agent() -> str:
+    return str(
+        await get_config_value("xai_user_agent", DEFAULT_XAI_USER_AGENT, "XAI_USER_AGENT")
+        or DEFAULT_XAI_USER_AGENT
+    ).strip()
 
 
 async def get_antigravity_user_agent() -> str:

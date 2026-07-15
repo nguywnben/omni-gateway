@@ -20,7 +20,9 @@ Use this checklist when preparing a tagged Omni Gateway release.
 
 - Add one Google Antigravity credential through OAuth and complete a message test.
 - Add one Google AI Studio key and complete a message test.
-- Refresh the model catalog and route `omway` through at least one model from each provider.
+- Add one Grok credential through OAuth and complete a message test.
+- Add one xAI Console key and complete a message test.
+- Refresh the model catalog and route `omway` through at least one compatible model from every configured provider type.
 - Send one non-streaming and one streaming request through each supported SDK surface.
 - Confirm token usage, provider attribution, fallback, cooldown, and context-compression metrics update.
 - Export the pool, restore it into a clean disposable instance, and verify deduplication results.
@@ -34,7 +36,7 @@ Use this checklist when preparing a tagged Omni Gateway release.
 - Back up the persistent data directory before upgrading an existing instance.
 - Record the previous image digest for rollback.
 - Confirm the version tag publishes `latest` and semantic-version tags, while a default-branch build publishes `edge` without moving `latest`.
-- Perform the documented [1.0 upgrade](upgrading-to-1.0.md) against a copy of beta data when preparing version 1.0.0.
+- When upgrading a beta deployment, perform the documented [1.0 upgrade](upgrading-to-1.0.md) against a copy of the existing data.
 
 ## Release Steps
 

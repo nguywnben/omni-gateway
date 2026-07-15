@@ -295,7 +295,7 @@ function initStaticUiBindings() {
         'select-pool-archive': () => selectPoolImportArchive(),
         'download-pool': () => downloadAllPrimaryCreds(),
         'batch-primary': (element) => batchPrimaryAction(element.dataset.batchAction),
-        'batch-verify-primary': () => batchVerifyPrimaryProjectIds(),
+        'batch-verify-primary': () => batchVerifyProviderCredentials(),
         'change-primary-page': (element) => changePrimaryPage(Number(element.dataset.pageDelta)),
         'refresh-model-catalog': () => loadModelCatalog(true),
         'save-model-pool': () => saveModelPool(),
@@ -306,6 +306,20 @@ function initStaticUiBindings() {
         'clear-ai-studio-files': () => clearGoogleAiStudioFiles(),
         'save-ai-studio-settings': () => saveGoogleAIStudioSettings(),
         'reset-ai-studio-settings': () => resetGoogleAIStudioSettings(),
+        'start-xai-oauth': () => startXaiOauth(),
+        'save-xai-oauth': () => saveXaiOauth(),
+        'select-grok-files': () => document.getElementById('grokFileInput')?.click(),
+        'upload-grok-files': () => uploadGrokFiles(),
+        'clear-grok-files': () => clearGrokFiles(),
+        'select-xai-console-files': () => document.getElementById('xaiConsoleFileInput')?.click(),
+        'upload-xai-console-files': () => uploadXaiConsoleFiles(),
+        'clear-xai-console-files': () => clearXaiConsoleFiles(),
+        'save-grok-settings': () => saveXaiSettings('oauth'),
+        'reset-grok-settings': () => resetXaiSettings('oauth'),
+        'save-xai-console-settings': () => saveXaiSettings('api'),
+        'reset-xai-console-settings': () => resetXaiSettings('api'),
+        'copy-field': (element) => copyInputValue(element.dataset.copyTarget),
+        'copy-xai-auth-url': () => cpUrl(document.getElementById('xaiAuthorizationUrl')),
         'copy-primary-auth-url': () => cpUrl(document.getElementById('primaryAuthUrl')),
         'get-primary-credentials': () => getPrimaryCredentials(),
         'download-primary-credentials': () => downloadPrimaryCredentials(),
@@ -328,6 +342,8 @@ function initStaticUiBindings() {
         'primary-filter': () => applyPrimaryStatusFilter(),
         'primary-page-size': () => changePrimaryPageSize(),
         'ai-studio-files': (_element, event) => handleGoogleAiStudioFileSelect(event),
+        'grok-files': (_element, event) => handleGrokFileSelect(event),
+        'xai-console-files': (_element, event) => handleXaiConsoleFileSelect(event),
         'primary-files': (_element, event) => handlePrimaryFileSelect(event),
         'routing-strategy': () => syncRoutingPolicyControls(),
         'log-level': () => filterLogs()
@@ -362,6 +378,7 @@ function initStaticUiBindings() {
         completeInitialSetup();
     });
     document.getElementById('googleAiStudioCredentialForm')?.addEventListener('submit', addGoogleAIStudioCredential);
+    document.getElementById('xaiCredentialForm')?.addEventListener('submit', addXaiApiKeyCredential);
     document.getElementById('accessPasswordForm')?.addEventListener('submit', (event) => {
         event.preventDefault();
         saveAccessCredentials();
@@ -371,6 +388,8 @@ function initStaticUiBindings() {
 
     for (const [areaId, dropHandler] of [
         ['googleAiStudioUploadArea', handleGoogleAiStudioFileDrop],
+        ['grokUploadArea', handleGrokFileDrop],
+        ['xaiConsoleUploadArea', handleXaiConsoleFileDrop],
         ['primaryUploadArea', handlePrimaryFileDrop]
     ]) {
         const area = document.getElementById(areaId);
@@ -411,6 +430,14 @@ const PROVIDER_WORKSPACES = {
     google_ai_studio: {
         selectorId: 'providerSelectorGoogleAiStudio',
         panelId: 'providerWorkspaceGoogleAiStudio'
+    },
+    grok: {
+        selectorId: 'providerSelectorGrok',
+        panelId: 'providerWorkspaceGrok'
+    },
+    xai_console: {
+        selectorId: 'providerSelectorXaiConsole',
+        panelId: 'providerWorkspaceXaiConsole'
     }
 };
 
@@ -478,6 +505,7 @@ function triggerTabDataLoad(tabName) {
     if (tabName === 'providers') {
         loadAntigravitySettings();
         loadGoogleAIStudioSettings();
+        loadXaiSettings();
     }
 
     if (tabName === 'config') loadConfig();
@@ -494,6 +522,10 @@ const MODEL_PROVIDER_META = {
     google_ai_studio: {
         name: 'Google AI Studio',
         logo: '/frontend/assets/providers/google-ai-studio-logo.png'
+    },
+    xai: {
+        name: 'xAI',
+        logo: '/frontend/assets/providers/xai-console-logo.png'
     }
 };
 

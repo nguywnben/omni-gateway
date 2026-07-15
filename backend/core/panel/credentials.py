@@ -27,11 +27,13 @@ from core.pool_import import PoolImportError, restore_pool_archive
 from core.provider_registry import (
     GOOGLE_AI_STUDIO,
     GOOGLE_ANTIGRAVITY,
+    XAI,
     get_credential_provider,
     get_declared_credential_models,
 )
 from core.storage_adapter import get_storage_adapter
 from core.utils import CODE_ASSIST_USER_AGENT, verify_panel_token
+from core.xai import refresh_xai_oauth_credential
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from fastapi.responses import JSONResponse
 from log import log
@@ -45,7 +47,7 @@ from .credential_operations import (
     get_creds_status_common,
     refresh_all_user_emails_common,
     upload_credentials_common,
-    verify_credential_project_common,
+    verify_credential_common,
 )
 from .utils import (
     internal_server_error,
@@ -80,7 +82,7 @@ async def upload_credentials(
     except HTTPException:
         raise
     except Exception as e:
-        log.error(f"Batch upload failed: {e}")
+        log.error(f"Batch import failed: {e}")
         raise internal_server_error() from e
 
 
@@ -166,7 +168,7 @@ async def get_cred_detail(
 
         credential_data = await storage_adapter.get_credential(filename, mode=mode)
         if not credential_data:
-            raise HTTPException(status_code=404, detail="Credential does not exist")
+            raise HTTPException(status_code=404, detail="Credential does not exist.")
 
         file_status = await storage_adapter.get_credential_state(filename, mode=mode)
         if not file_status:
@@ -209,12 +211,10 @@ async def creds_action(
     try:
         mode = validate_mode(mode)
 
-        log.info(f"Received request: {request}")
-
         filename = validate_credential_filename(request.filename)
         action = request.action
 
-        log.info(f"Performing action '{action}' on file: {filename} (mode={mode})")
+        log.info(f"Performing credential action '{action}' on {filename} (mode={mode}).")
 
         storage_adapter = await get_storage_adapter()
 
@@ -225,32 +225,26 @@ async def creds_action(
                 raise HTTPException(status_code=404, detail="Credential file does not exist.")
 
         if action == "enable":
-            log.info(f"Web request: enable file {filename} (mode = {mode})")
+            log.info(f"Enabling credential {filename} (mode={mode}).")
             result = await credential_manager.set_cred_disabled(filename, False, mode=mode)
-            log.info(f"[WebRoute] set_cred_disabled result: {result}")
             if result:
-                log.info(f"Web request: credential {filename} enabled (mode = {mode}).")
-                return JSONResponse(
-                    content={"message": f"Enabled credential {os.path.basename(filename)}."}
-                )
+                log.info(f"Credential {filename} enabled (mode={mode}).")
+                return JSONResponse(content={"message": "Credential enabled."})
             else:
-                log.error(f"Web request: File {filename} enable failed (mode = {mode})")
+                log.error(f"Failed to enable credential {filename} (mode={mode}).")
                 raise HTTPException(
                     status_code=500,
                     detail="Failed to enable the credential. It may no longer exist.",
                 )
 
         elif action == "disable":
-            log.info(f"Web request: Disable file {filename} (mode = {mode})")
+            log.info(f"Disabling credential {filename} (mode={mode}).")
             result = await credential_manager.set_cred_disabled(filename, True, mode=mode)
-            log.info(f"[WebRoute] set_cred_disabled result: {result}")
             if result:
-                log.info(f"Web request: credential {filename} disabled (mode = {mode}).")
-                return JSONResponse(
-                    content={"message": f"Disabled credential {os.path.basename(filename)}."}
-                )
+                log.info(f"Credential {filename} disabled (mode={mode}).")
+                return JSONResponse(content={"message": "Credential disabled."})
             else:
-                log.error(f"Web request: file {filename} disable failed (mode = {mode})")
+                log.error(f"Failed to disable credential {filename} (mode={mode}).")
                 raise HTTPException(
                     status_code=500,
                     detail="Failed to disable the credential. It may no longer exist.",
@@ -280,7 +274,7 @@ async def creds_action(
             if mode != "primary" or get_credential_provider(credential_data) != GOOGLE_ANTIGRAVITY:
                 raise HTTPException(
                     status_code=400,
-                    detail="Credit mode is only available for Google Antigravity credentials.",
+                    detail="Credit usage is only available for Google Antigravity credentials.",
                 )
             updated = await storage_adapter.update_credential_state(
                 filename, {"enable_credit": True}, mode=mode
@@ -288,18 +282,18 @@ async def creds_action(
             if updated:
                 await clear_all_model_cooldowns_for_credential(storage_adapter, filename, mode)
                 return JSONResponse(
-                    content={"message": f"Enabled credit mode for {os.path.basename(filename)}."}
+                    content={"message": "Credit usage enabled for this credential."}
                 )
             raise HTTPException(
                 status_code=500,
-                detail="Failed to enable credit mode. The credential may no longer exist.",
+                detail="Failed to enable credit usage. The credential may no longer exist.",
             )
 
         elif action == "disable_credit":
             if mode != "primary" or get_credential_provider(credential_data) != GOOGLE_ANTIGRAVITY:
                 raise HTTPException(
                     status_code=400,
-                    detail="Credit mode is only available for Google Antigravity credentials.",
+                    detail="Credit usage is only available for Google Antigravity credentials.",
                 )
             updated = await storage_adapter.update_credential_state(
                 filename, {"enable_credit": False}, mode=mode
@@ -307,11 +301,11 @@ async def creds_action(
             if updated:
                 await clear_all_model_cooldowns_for_credential(storage_adapter, filename, mode)
                 return JSONResponse(
-                    content={"message": f"Disabled credit mode for {os.path.basename(filename)}."}
+                    content={"message": "Credit usage disabled for this credential."}
                 )
             raise HTTPException(
                 status_code=500,
-                detail="Failed to disable credit mode. The credential may no longer exist.",
+                detail="Failed to disable credit usage. The credential may no longer exist.",
             )
 
         else:
@@ -342,7 +336,8 @@ async def creds_batch_action(
                 detail="Select at least one credential file before running a batch action.",
             )
 
-        log.info(f"Performing batch operation on {len(filenames)} files with action: {action}")
+        file_label = "file" if len(filenames) == 1 else "files"
+        log.info(f"Performing credential batch action '{action}' on {len(filenames)} {file_label}.")
 
         success_count = 0
         errors = []
@@ -362,7 +357,7 @@ async def creds_batch_action(
                 if action != "delete":
                     credential_data = await storage_adapter.get_credential(filename, mode=mode)
                     if not credential_data:
-                        errors.append(f"{filename}: credential does not exist")
+                        errors.append(f"{filename}: Credential does not exist.")
                         continue
 
                 # Execute action
@@ -383,10 +378,10 @@ async def creds_batch_action(
                             success_count += 1
                             log.info(f"Deleted credential from batch: {filename}.")
                         else:
-                            errors.append(f"{filename}: delete failed")
+                            errors.append(f"{filename}: Deletion failed.")
                             continue
                     except Exception:
-                        errors.append(f"{filename}: delete failed")
+                        errors.append(f"{filename}: Deletion failed.")
                         continue
                 elif action == "enable_credit":
                     if (
@@ -394,7 +389,7 @@ async def creds_batch_action(
                         or get_credential_provider(credential_data) != GOOGLE_ANTIGRAVITY
                     ):
                         errors.append(
-                            f"{filename}: credit mode is only available for Google Antigravity credentials"
+                            f"{filename}: Credit usage is only available for Google Antigravity credentials."
                         )
                         continue
                     updated = await storage_adapter.update_credential_state(
@@ -406,7 +401,7 @@ async def creds_batch_action(
                         )
                         success_count += 1
                     else:
-                        errors.append(f"{filename}: failed to enable credit mode")
+                        errors.append(f"{filename}: Failed to enable credit usage.")
                         continue
                 elif action == "disable_credit":
                     if (
@@ -414,7 +409,7 @@ async def creds_batch_action(
                         or get_credential_provider(credential_data) != GOOGLE_ANTIGRAVITY
                     ):
                         errors.append(
-                            f"{filename}: credit mode is only available for Google Antigravity credentials"
+                            f"{filename}: Credit usage is only available for Google Antigravity credentials."
                         )
                         continue
                     updated = await storage_adapter.update_credential_state(
@@ -426,19 +421,19 @@ async def creds_batch_action(
                         )
                         success_count += 1
                     else:
-                        errors.append(f"{filename}: failed to disable credit mode")
+                        errors.append(f"{filename}: Failed to disable credit usage.")
                         continue
                 else:
-                    errors.append(f"{filename}: invalid credential action")
+                    errors.append(f"{filename}: Invalid credential action.")
                     continue
 
             except Exception as e:
                 log.error(f"Error processing {filename}: {e}")
-                errors.append(f"{filename}: processing failed")
+                errors.append(f"{filename}: Processing failed.")
                 continue
 
         # Build response message
-        result_message = f"Batch operation complete: processed {success_count}/{len(filenames)} credential files."
+        result_message = f"Batch operation completed. Processed {success_count}/{len(filenames)} credential files."
         if errors:
             result_message += "\nError details:\n" + "\n".join(errors)
 
@@ -552,27 +547,28 @@ async def import_pool_credentials(
     archive: UploadFile = File(...),
     token: str = Depends(verify_panel_token),
 ):
-    """Restore a mixed-provider credential pool from one ZIP archive."""
+    """Import a mixed-provider credential pool from one ZIP archive."""
     try:
         return JSONResponse(content=await restore_pool_archive(archive))
     except PoolImportError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except Exception as exc:
-        log.error(f"Pool restore failed: {exc}")
-        raise HTTPException(status_code=500, detail="Pool archive could not be restored.") from exc
+        log.error(f"Pool import failed: {exc}")
+        raise HTTPException(status_code=500, detail="Pool archive could not be imported.") from exc
 
 
-@router.post("/verify-project/{filename}")
-async def verify_credential_project(
+@router.post("/verify/{filename}")
+@router.post("/verify-project/{filename}", include_in_schema=False)
+async def verify_credential(
     filename: str, token: str = Depends(verify_panel_token), mode: str = "code_assist"
 ):
     try:
         mode = validate_mode(mode)
-        return await verify_credential_project_common(filename, mode=mode)
+        return await verify_credential_common(filename, mode=mode)
     except HTTPException:
         raise
     except Exception as e:
-        log.error(f"Failed to verify credential Project ID {filename}: {e}")
+        log.error(f"Failed to verify credential {filename}: {e}")
         raise internal_server_error() from e
 
 
@@ -914,6 +910,22 @@ async def test_credential(
             )
             access_token = ""
             project_id = ""
+        elif mode == "primary" and provider_id == XAI:
+            if str(credential_data.get("credential_type") or "").lower() == "oauth":
+                credential_data = await refresh_xai_oauth_credential(credential_data)
+                await storage_adapter.store_credential(filename, credential_data, mode=mode)
+            from core.api.primary import prepare_provider_request
+
+            context = await prepare_provider_request(
+                credential_data,
+                {"model": test_model, "request": test_request},
+                streaming=False,
+            )
+            headers = context.headers
+            request_body = context.payload
+            request_url = context.target_url
+            access_token = ""
+            project_id = ""
         else:
             credentials = Credentials.from_dict(credential_data)
             token_refreshed = await credentials.refresh_if_needed()
@@ -935,7 +947,7 @@ async def test_credential(
                     detail="Credential does not contain a Project ID.",
                 )
 
-        if mode == "primary" and provider_id != GOOGLE_AI_STUDIO:
+        if mode == "primary" and provider_id not in {GOOGLE_AI_STUDIO, XAI}:
             api_base_url = await get_antigravity_api_url()
             from core.api.primary import build_primary_headers
 
@@ -1021,7 +1033,7 @@ async def test_credential(
             message = (
                 "Credential is valid, but the upstream provider is currently rate limited."
                 if status_code == 429
-                else "Test successful."
+                else "Model test completed successfully."
             )
             return JSONResponse(
                 status_code=200,
@@ -1031,6 +1043,7 @@ async def test_credential(
                     "message": message,
                     "filename": filename,
                     "provider": provider_id,
+                    "credential_type": credential_data.get("credential_type"),
                     "model": test_model,
                 },
             )
@@ -1066,9 +1079,11 @@ async def test_credential(
             content={
                 "success": False,
                 "status_code": status_code,
-                "message": f"Test failed: HTTP {status_code}",
+                "message": f"Model test failed with HTTP {status_code}.",
                 "error": error_text,
                 "filename": filename,
+                "provider": provider_id,
+                "credential_type": credential_data.get("credential_type"),
                 "model": test_model,
             },
         )
@@ -1082,9 +1097,9 @@ async def test_credential(
             content={
                 "success": False,
                 "status_code": 500,
-                "message": "Test failed.",
-                "error": public_error_detail(e, "Credential testing failed."),
-                "detail": public_error_detail(e, "Credential testing failed."),
+                "message": "Model test failed.",
+                "error": public_error_detail(e, "Credential model testing failed."),
+                "detail": public_error_detail(e, "Credential model testing failed."),
                 "filename": filename,
             },
         )

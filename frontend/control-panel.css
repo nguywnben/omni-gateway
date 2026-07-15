@@ -510,6 +510,7 @@ code {
 .provider-catalog .provider-hero-card {
     grid-template-columns: auto minmax(0, 1fr);
     align-content: start;
+    min-height: 176px;
     margin-bottom: 0;
 }
 
@@ -1375,6 +1376,10 @@ button.endpoint-code-card:hover {
     color: var(--text-muted);
     font-size: 12px;
     line-height: 1.45;
+}
+
+.provider-save-result {
+    margin-top: 14px;
 }
 
 .upload-result {
@@ -3169,6 +3174,10 @@ textarea[readonly] {
 }
 
 @media (max-width: 960px) {
+    .provider-catalog {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
     body.mobile-menu-open {
         overflow: hidden;
     }
