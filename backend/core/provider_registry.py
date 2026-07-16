@@ -13,6 +13,9 @@ GROK = "grok"
 XAI_CONSOLE = "xai_console"
 MAX_DECLARED_MODELS = 500
 MAX_MODEL_ID_LENGTH = 256
+MODEL_SUPPORT_UNSUPPORTED = 0
+MODEL_SUPPORT_INFERRED = 1
+MODEL_SUPPORT_DECLARED = 2
 
 _PROVIDER_ALIASES = {
     "primary": GOOGLE_ANTIGRAVITY,
@@ -277,14 +280,34 @@ def credential_supports_model(
     required_provider: Optional[str] = None,
 ) -> bool:
     """Return whether a credential can serve the requested provider and model."""
+    return (
+        credential_model_support_level(
+            credential_data,
+            model_name,
+            required_provider=required_provider,
+        )
+        > MODEL_SUPPORT_UNSUPPORTED
+    )
+
+
+def credential_model_support_level(
+    credential_data: Dict[str, Any],
+    model_name: Optional[str],
+    required_provider: Optional[str] = None,
+) -> int:
+    """Return the strength of the evidence that a credential supports a model."""
     provider_id = get_credential_provider(credential_data)
     if required_provider and provider_id != normalize_provider_id(required_provider):
-        return False
+        return MODEL_SUPPORT_UNSUPPORTED
     capabilities = get_provider_capabilities(provider_id)
     if not capabilities or not capabilities.supports_model(model_name):
-        return False
+        return MODEL_SUPPORT_UNSUPPORTED
     declared_models = get_declared_credential_models(credential_data)
     if model_name and declared_models:
         normalized_model = str(model_name).strip().removeprefix("models/")
-        return normalized_model in declared_models
-    return True
+        return (
+            MODEL_SUPPORT_DECLARED
+            if normalized_model in declared_models
+            else MODEL_SUPPORT_UNSUPPORTED
+        )
+    return MODEL_SUPPORT_INFERRED

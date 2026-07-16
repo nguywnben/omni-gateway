@@ -243,6 +243,34 @@ class SmartCredentialRouterTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(result[0], "ai-studio.json")
 
+    async def test_confirmed_model_support_precedes_unknown_provider_support(self):
+        storage = FakeStorageAdapter(
+            {
+                "antigravity.json": credential_state(rotation_order=0),
+                "ai-studio.json": credential_state(rotation_order=1),
+            }
+        )
+        storage.credentials["antigravity.json"] = {
+            "provider": "google_antigravity",
+            "token": "access-token",
+            "project_id": "project",
+        }
+        storage.credentials["ai-studio.json"] = {
+            "provider": "google_ai_studio",
+            "credential_type": "api_key",
+            "api_key": "example-key",
+            "model_ids": ["gemini-2.5-flash"],
+        }
+        router = SmartCredentialRouter(clock=lambda: 100.0)
+
+        result = await router.acquire(
+            storage,
+            mode="primary",
+            model_name="gemini-2.5-flash",
+        )
+
+        self.assertEqual(result[0], "ai-studio.json")
+
     async def test_priority_strategy_falls_back_when_preferred_provider_is_unavailable(self):
         storage = FakeStorageAdapter(
             {
@@ -324,6 +352,33 @@ class SmartCredentialRouterTests(unittest.IsolatedAsyncioTestCase):
         )
 
         self.assertEqual(result[0], "antigravity.json")
+
+    async def test_credential_model_exclusion_keeps_other_accounts_available(self):
+        storage = FakeStorageAdapter(
+            {
+                "first.json": credential_state(rotation_order=0),
+                "second.json": credential_state(rotation_order=1),
+            }
+        )
+        for filename in storage.credentials:
+            storage.credentials[filename] = {
+                "provider": "google_ai_studio",
+                "credential_type": "api_key",
+                "api_key": f"key-{filename}",
+                "model_ids": ["gemini-2.5-flash"],
+            }
+        router = SmartCredentialRouter(clock=lambda: 100.0)
+
+        result = await router.acquire(
+            storage,
+            mode="primary",
+            model_name="gemini-2.5-flash",
+            excluded_credential_models={
+                ("first.json", "gemini-2.5-flash"),
+            },
+        )
+
+        self.assertEqual(result[0], "second.json")
 
 
 if __name__ == "__main__":

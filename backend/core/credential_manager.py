@@ -43,6 +43,7 @@ class CredentialManager:
         model_name: Optional[str] = None,
         provider_id: Optional[str] = None,
         excluded_provider_models: Optional[Set[Tuple[str, str]]] = None,
+        excluded_credential_models: Optional[Set[Tuple[str, str]]] = None,
     ) -> Optional[Tuple[str, Dict[str, Any]]]:
         await self._ensure_initialized()
 
@@ -61,6 +62,7 @@ class CredentialManager:
                 routing_strategy=routing_policy["strategy"],
                 preferred_provider=routing_policy["preferred_provider"],
                 excluded_provider_models=excluded_provider_models,
+                excluded_credential_models=excluded_credential_models,
             )
 
             if not result:
@@ -98,6 +100,7 @@ class CredentialManager:
         mode: str = "primary",
         respect_model_blacklist: bool = False,
         excluded_provider_models: Optional[Set[Tuple[str, str]]] = None,
+        excluded_credential_models: Optional[Set[Tuple[str, str]]] = None,
     ) -> Optional[Tuple[str, str, Dict[str, Any]]]:
         """Return the first routable model and credential in priority order."""
         route_exclusions = set(excluded_provider_models or ())
@@ -113,6 +116,7 @@ class CredentialManager:
                 mode=mode,
                 model_name=model_name,
                 excluded_provider_models=route_exclusions,
+                excluded_credential_models=excluded_credential_models,
             )
             if credential:
                 filename, credential_data = credential
@@ -191,6 +195,27 @@ class CredentialManager:
     async def release_credential(self, credential_name: str, mode: str = "code_assist") -> None:
         """Release a routing reservation for a non-inference operation."""
         await self._routing.release(credential_name, mode=mode)
+
+    async def set_model_cooldown(
+        self,
+        credential_name: str,
+        model_name: str,
+        cooldown_until: float,
+        *,
+        mode: str = "primary",
+    ) -> bool:
+        """Temporarily exclude one credential from one model route."""
+        await self._ensure_initialized()
+        backend = self._storage_adapter._backend
+        if not hasattr(backend, "set_model_cooldown"):
+            return False
+        updated = await backend.set_model_cooldown(
+            credential_name,
+            model_name,
+            cooldown_until,
+            mode=mode,
+        )
+        return bool(updated)
 
     async def update_credential_state(
         self, credential_name: str, state_updates: Dict[str, Any], mode: str = "code_assist"

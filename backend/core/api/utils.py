@@ -16,6 +16,7 @@ from fastapi import Response
 from log import log
 
 UNASSIGNED_USAGE_FILENAME = "__gateway_unassigned__.json"
+MODEL_NOT_FOUND_COOLDOWN_SECONDS = 2 * 60
 
 
 async def check_should_auto_disable(status_code: int) -> bool:
@@ -151,7 +152,18 @@ async def record_model_route_miss(
     model_name: str,
     provider: str,
 ) -> None:
-    """Record an unsupported provider-model route without penalizing its credential."""
+    """Record and briefly suppress an unsupported credential-model route."""
+    try:
+        cooldown_until = datetime.now(timezone.utc).timestamp() + MODEL_NOT_FOUND_COOLDOWN_SECONDS
+        await credential_manager.set_model_cooldown(
+            credential_name,
+            model_name,
+            cooldown_until,
+            mode="primary",
+        )
+    except Exception as exc:
+        log.error(f"Failed to set model cooldown for {credential_name}: {exc}")
+
     try:
         await asyncio.to_thread(
             record_call,

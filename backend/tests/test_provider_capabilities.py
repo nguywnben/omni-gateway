@@ -14,8 +14,12 @@ from core.provider_registry import (
     GOOGLE_AI_STUDIO,
     GOOGLE_ANTIGRAVITY,
     GROK,
+    MODEL_SUPPORT_DECLARED,
+    MODEL_SUPPORT_INFERRED,
+    MODEL_SUPPORT_UNSUPPORTED,
     XAI,
     XAI_CONSOLE,
+    credential_model_support_level,
     credential_supports_model,
     get_credential_provider_display_name,
     get_credential_provider_variant,
@@ -80,6 +84,31 @@ class ProviderCapabilityTests(unittest.TestCase):
 
         self.assertTrue(credential_supports_model(credential, "gemini-2.5-flash"))
         self.assertFalse(credential_supports_model(credential, "gemini-2.5-pro"))
+
+    def test_model_support_level_distinguishes_declared_inferred_and_unsupported(self):
+        declared = {
+            "provider": GOOGLE_AI_STUDIO,
+            "credential_type": "api_key",
+            "api_key": "example-key",
+            "model_ids": ["gemini-2.5-flash"],
+        }
+        inferred = {
+            "provider": GOOGLE_ANTIGRAVITY,
+            "token": "example-token",
+        }
+
+        self.assertEqual(
+            credential_model_support_level(declared, "gemini-2.5-flash"),
+            MODEL_SUPPORT_DECLARED,
+        )
+        self.assertEqual(
+            credential_model_support_level(inferred, "gemini-2.5-flash"),
+            MODEL_SUPPORT_INFERRED,
+        )
+        self.assertEqual(
+            credential_model_support_level(declared, "grok-4"),
+            MODEL_SUPPORT_UNSUPPORTED,
+        )
 
     def test_credential_model_catalog_preserves_non_google_namespaces(self):
         credential = {
