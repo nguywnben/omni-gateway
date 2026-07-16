@@ -4,6 +4,18 @@ All notable user-facing changes are documented in this file. Omni Gateway follow
 
 ## [Unreleased]
 
+## [1.1.2] - 2026-07-16
+
+### Changed
+
+- Distinguished Grok OAuth accounts from xAI Console API keys throughout credential storage, usage reporting, imports, and the management console.
+- Prioritized credentials that explicitly declare support for the requested model before routes whose support can only be inferred.
+
+### Fixed
+
+- Retried fixed-model requests through alternate compatible credentials and providers after an upstream `404` without changing the requested model.
+- Kept persistent provider-model blacklisting exclusive to virtual `omway` fallback while applying short credential-model cooldowns to failed fixed routes.
+
 ## [1.1.1] - 2026-07-15
 
 ### Changed
@@ -91,7 +103,8 @@ All notable user-facing changes are documented in this file. Omni Gateway follow
 - Provider credential pool, virtual model routing, context optimization, usage visibility, and the management console.
 - Docker Hub and GitHub Container Registry publishing.
 
-[Unreleased]: https://github.com/nguywnben/omni-gateway/compare/v1.1.1...HEAD
+[Unreleased]: https://github.com/nguywnben/omni-gateway/compare/v1.1.2...HEAD
+[1.1.2]: https://github.com/nguywnben/omni-gateway/compare/v1.1.1...v1.1.2
 [1.1.1]: https://github.com/nguywnben/omni-gateway/compare/v1.1.0...v1.1.1
 [1.1.0]: https://github.com/nguywnben/omni-gateway/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/nguywnben/omni-gateway/compare/v0.2.0-beta...v1.0.0
