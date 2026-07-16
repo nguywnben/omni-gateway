@@ -362,7 +362,7 @@ Google AI Studio batch import accepts JSON files and ZIP archives containing JSO
 
 Every imported key is validated before storage. Duplicate keys within the same import are skipped, existing keys are revalidated and updated, and invalid entries are reported without exposing the key value.
 
-Grok supports PKCE OAuth credentials, while xAI Console supports API keys. xAI Console keys are validated against the xAI model catalog before storage. For Grok OAuth, Omni Gateway generates an authorization link that redirects to `http://127.0.0.1:56121/callback`; after authorization, copy the complete callback URL from the browser and paste it into the Grok OAuth form. Access tokens are refreshed automatically when a refresh token is available, and both credential types expose only the Grok models declared by their current catalog.
+Grok supports PKCE OAuth credentials, while xAI Console supports API keys. xAI Console keys are validated against the Grok model catalog before storage. For Grok OAuth, Omni Gateway generates an authorization link; after authorization, copy the code displayed on the Grok authorization page and paste it into the Grok OAuth form. Access tokens are refreshed automatically when a refresh token is available, and both credential types expose only the Grok models declared by their current catalog.
 
 Pool imports and Google Antigravity batch imports accept archives up to 10 MB, at most 500 files, individual credential files up to 2 MB, and at most 25 MB of uncompressed data. Google AI Studio uses stricter limits of 2 MB per imported file, 200 JSON entries, and 5 MB of uncompressed data.
 

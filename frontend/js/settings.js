@@ -592,8 +592,8 @@ const XAI_CONFIG_GROUPS = {
         fieldIds: ['xaiClientId', 'xaiOauthIssuer']
     },
     api: {
-        label: 'xAI transport',
-        resetTitle: 'Reset Shared xAI Transport Settings',
+        label: 'Grok and xAI Console transport',
+        resetTitle: 'Reset Grok and xAI Console Transport Settings',
         fieldIds: ['xaiApiUrl', 'xaiUserAgent']
     }
 };
@@ -613,7 +613,7 @@ async function loadXaiSettings() {
             field.classList.toggle('env-locked', field.disabled);
         });
     } catch (error) {
-        showStatus(`Failed to load xAI provider settings: ${error.message}`, 'error');
+        showStatus(`Failed to load Grok and xAI Console settings: ${error.message}`, 'error');
     }
 }
 
@@ -754,7 +754,7 @@ async function saveXaiOauth() {
     const oauthFields = document.getElementById('xaiOauthFields');
     const state = oauthFields?.dataset.state || '';
     if (!code) {
-        showStatus('Enter the authorization code shown by xAI.', 'error');
+        showStatus('Enter the code shown on the Grok authorization page.', 'error');
         field?.focus();
         return;
     }

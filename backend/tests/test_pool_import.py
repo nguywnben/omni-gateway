@@ -30,6 +30,7 @@ from core.provider_registry import (
     GOOGLE_AI_STUDIO,
     GOOGLE_ANTIGRAVITY,
     XAI,
+    XAI_CONSOLE,
     antigravity_account_fingerprint,
     build_antigravity_credential_filename,
     canonicalize_antigravity_credential_filename,
@@ -334,7 +335,9 @@ class PoolArchiveRestoreTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result["error_count"], 0)
         self.assertEqual(result["providers"][GOOGLE_ANTIGRAVITY]["created"], 1)
         self.assertEqual(result["providers"][GOOGLE_AI_STUDIO]["updated"], 1)
-        self.assertEqual(result["providers"][XAI]["created"], 1)
+        self.assertEqual(result["providers"][XAI_CONSOLE]["created"], 1)
+        self.assertEqual(result["providers"][XAI_CONSOLE]["provider_name"], "xAI Console")
+        self.assertEqual(result["providers"][XAI_CONSOLE]["routing_provider"], XAI)
         validate_mock.assert_awaited_once_with("google-api-key-value")
         store_mock.assert_awaited_once()
         validate_xai_mock.assert_awaited_once_with("xai-api-key-value")

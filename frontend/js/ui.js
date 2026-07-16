@@ -1427,9 +1427,9 @@ function getCredentialProviderMeta(credInfo, managerType) {
         }
 
         return {
-            id: 'xai',
-            name: 'xAI',
-            logo: '/frontend/assets/providers/xai-console-logo.png'
+            id: 'grok',
+            name: 'Grok',
+            logo: '/frontend/assets/providers/xai-grok-logo.png'
         };
 
     }

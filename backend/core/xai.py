@@ -97,7 +97,7 @@ def build_xai_headers(access_token: str, user_agent: str = "") -> Dict[str, str]
 
 def parse_xai_model_ids(payload: Any) -> List[str]:
     if not isinstance(payload, dict) or not isinstance(payload.get("data"), list):
-        raise XaiError("xAI returned an invalid model response.", 502)
+        raise XaiError("Grok returned an invalid model response.", 502)
     model_ids: List[str] = []
     for item in payload["data"]:
         model_id = str(item.get("id") if isinstance(item, dict) else "").strip()
@@ -122,19 +122,19 @@ async def fetch_xai_model_ids(access_token: str) -> List[str]:
         )
     except (httpx.HTTPError, OSError) as exc:
         raise XaiError(
-            "Unable to reach xAI. Check outbound network and proxy settings.", 502
+            "Unable to reach Grok. Check outbound network and proxy settings.", 502
         ) from exc
     if response.status_code in {401, 403}:
-        raise XaiError("xAI rejected this credential. Check its access and permissions.")
+        raise XaiError("Grok rejected this credential. Check its access and permissions.")
     if response.status_code != 200:
         raise XaiError(
-            f"xAI model discovery failed with HTTP {response.status_code}.",
+            f"Grok model discovery failed with HTTP {response.status_code}.",
             502 if response.status_code >= 500 else 400,
         )
     try:
         model_ids = parse_xai_model_ids(response.json())
     except ValueError as exc:
-        raise XaiError("xAI returned an invalid JSON response.", 502) from exc
+        raise XaiError("Grok returned an invalid JSON response.", 502) from exc
     if not model_ids:
         raise XaiError("The xAI Console API key is valid, but no models are available.")
     return model_ids
@@ -264,9 +264,9 @@ async def complete_xai_oauth(code: str, state: str) -> Dict[str, Any]:
     code = str(code or "").strip()
     state = str(state or "").strip()
     if not code:
-        raise XaiError("Enter the authorization code shown by xAI.")
+        raise XaiError("Enter the code shown on the Grok authorization page.")
     if "://" in code or "code=" in code:
-        raise XaiError("Enter the authorization code shown by xAI, not a callback URL.")
+        raise XaiError("Enter the Grok authorization code, not a callback URL.")
     flow = _oauth_flows.pop(state, None)
     if not state or not flow:
         raise XaiError("The Grok OAuth session was not found or has expired.")
@@ -513,7 +513,7 @@ def gemini_request_to_xai(payload: Dict[str, Any], model: str, streaming: bool) 
 
 def xai_response_to_gemini(payload: Dict[str, Any]) -> Dict[str, Any]:
     if not isinstance(payload.get("choices"), list):
-        raise ValueError("xAI response does not contain a choices array.")
+        raise ValueError("Grok response does not contain a choices array.")
     candidates = []
     for choice in payload.get("choices") or []:
         message = choice.get("message") or {}

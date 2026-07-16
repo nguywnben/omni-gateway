@@ -9,6 +9,8 @@ from typing import Any, Dict, Optional
 GOOGLE_ANTIGRAVITY = "google_antigravity"
 GOOGLE_AI_STUDIO = "google_ai_studio"
 XAI = "xai"
+GROK = "grok"
+XAI_CONSOLE = "xai_console"
 MAX_DECLARED_MODELS = 500
 MAX_MODEL_ID_LENGTH = 256
 
@@ -24,15 +26,26 @@ _PROVIDER_ALIASES = {
     "google-ai-studio": GOOGLE_AI_STUDIO,
     "google_ai_studio": GOOGLE_AI_STUDIO,
     "grok": XAI,
+    "xai-oauth": XAI,
+    "xai_oauth": XAI,
     "x-ai": XAI,
     "xai": XAI,
     "xai-grok": XAI,
+    "xai-api-key": XAI,
+    "xai_api_key": XAI,
+    "xai-console": XAI,
+    "xai_console": XAI,
 }
 
 _PROVIDER_NAMES = {
     GOOGLE_ANTIGRAVITY: "Google Antigravity",
     GOOGLE_AI_STUDIO: "Google AI Studio",
-    XAI: "xAI",
+    XAI: "Grok",
+}
+
+_CREDENTIAL_PROVIDER_NAMES = {
+    GROK: "Grok",
+    XAI_CONSOLE: "xAI Console",
 }
 
 
@@ -162,6 +175,38 @@ def get_credential_provider(credential_data: Optional[Dict[str, Any]]) -> str:
 def get_provider_display_name(provider_id: Any) -> str:
     normalized = normalize_provider_id(provider_id)
     return _PROVIDER_NAMES.get(normalized, str(provider_id or "Provider"))
+
+
+def get_credential_provider_variant(credential_data: Optional[Dict[str, Any]]) -> str:
+    """Return the user-facing provider variant for a credential payload."""
+    data = credential_data or {}
+    provider_id = get_credential_provider(data)
+    if provider_id != XAI:
+        return provider_id
+
+    explicit_provider = str(data.get("provider") or data.get("provider_id") or "").strip().lower()
+    credential_type = str(data.get("credential_type") or "").strip().lower()
+    if (
+        credential_type == "api_key"
+        or data.get("api_key")
+        or explicit_provider
+        in {
+            "xai_console",
+            "xai-console",
+            "xai_api_key",
+            "xai-api-key",
+        }
+    ):
+        return XAI_CONSOLE
+    return GROK
+
+
+def get_credential_provider_display_name(
+    credential_data: Optional[Dict[str, Any]],
+) -> str:
+    """Return the precise provider name shown for one credential."""
+    variant = get_credential_provider_variant(credential_data)
+    return _CREDENTIAL_PROVIDER_NAMES.get(variant, get_provider_display_name(variant))
 
 
 def get_provider_capabilities(provider_id: Any) -> Optional[ProviderCapabilities]:

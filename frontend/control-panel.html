@@ -621,8 +621,8 @@
                                     </div>
                                     <div class="oauth-completion-panel">
                                         <label for="xaiAuthorizationCode">Authorization code</label>
-                                        <p class="card-copy provider-tool-copy">After signing in, copy the code shown by xAI and paste it here.</p>
-                                        <input type="text" id="xaiAuthorizationCode" placeholder="Paste the code shown by xAI" autocomplete="off" spellcheck="false">
+                                        <p class="card-copy provider-tool-copy">After signing in, copy the code shown on the Grok authorization page and paste it here.</p>
+                                        <input type="text" id="xaiAuthorizationCode" placeholder="Paste the Grok authorization code" autocomplete="off" spellcheck="false">
                                     </div>
                                     <div class="page-actions" style="margin-top: 14px;">
                                         <button type="button" class="btn" id="saveXaiOauthBtn" data-ui-action="save-xai-oauth">Save credential</button>
@@ -760,7 +760,7 @@
                         <section class="tool-panel provider-settings-panel">
                             <div class="provider-settings-header">
                                 <div>
-                                    <h2 class="card-title">Shared xAI Transport Settings</h2>
+                                    <h2 class="card-title">Grok and xAI Console Transport Settings</h2>
                                     <p class="card-copy provider-tool-copy">Configure the API endpoint and HTTP identity shared by Grok OAuth accounts and xAI Console API keys.</p>
                                 </div>
                                 <div class="page-actions">
@@ -769,7 +769,7 @@
                                 </div>
                             </div>
                             <div class="config-grid provider-config-grid">
-                                <div class="form-group"><label for="xaiApiUrl">xAI API</label><input type="url" id="xaiApiUrl" autocomplete="off"></div>
+                                <div class="form-group"><label for="xaiApiUrl">Grok API endpoint</label><input type="url" id="xaiApiUrl" autocomplete="off"></div>
                                 <div class="form-group"><label for="xaiUserAgent">HTTP User-Agent</label><input type="text" id="xaiUserAgent" autocomplete="off"></div>
                             </div>
                         </section>
@@ -1132,7 +1132,7 @@
                                             <option value="">Automatic</option>
                                             <option value="google_antigravity">Google Antigravity</option>
                                             <option value="google_ai_studio">Google AI Studio</option>
-                                            <option value="xai">xAI (Grok and Console)</option>
+                                            <option value="xai">Grok</option>
                                         </select>
                                     </div>
                                     <div class="form-group"><label for="upstreamTimeoutSeconds">Inference timeout in seconds</label><input type="number" id="upstreamTimeoutSeconds" min="5" max="900" step="1"></div>

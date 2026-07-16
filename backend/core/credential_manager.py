@@ -177,7 +177,11 @@ class CredentialManager:
                 )
                 return False
 
-            retire_credential_usage(credential_name, provider_id)
+            retire_credential_usage(
+                credential_name,
+                provider_id,
+                credential_type=credential_data.get("credential_type", ""),
+            )
             log.info(f"Credential removed (mode={mode}, provider={provider_id}).")
             return True
         except Exception as e:
@@ -413,7 +417,7 @@ class CredentialManager:
 
                 refreshed_data = await refresh_xai_oauth_credential(credential_data)
                 await self._storage_adapter.store_credential(filename, refreshed_data, mode=mode)
-                log.info(f"xAI token refreshed and saved: {filename} (mode={mode}).")
+                log.info(f"Grok token refreshed and saved: {filename} (mode={mode}).")
                 return refreshed_data
 
             creds = Credentials.from_dict(credential_data)

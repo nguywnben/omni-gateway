@@ -524,8 +524,8 @@ const MODEL_PROVIDER_META = {
         logo: '/frontend/assets/providers/google-ai-studio-logo.png'
     },
     xai: {
-        name: 'xAI',
-        logo: '/frontend/assets/providers/xai-console-logo.png'
+        name: 'Grok',
+        logo: '/frontend/assets/providers/xai-grok-logo.png'
     }
 };
 

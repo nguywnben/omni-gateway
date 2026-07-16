@@ -978,7 +978,7 @@ async def non_stream_request(
                                 provider=provider_id,
                             )
                             return Response(
-                                content=json.dumps({"error": "xAI returned an invalid response."}),
+                                content=json.dumps({"error": "Grok returned an invalid response."}),
                                 status_code=502,
                                 media_type="application/json",
                             )
@@ -1275,7 +1275,7 @@ async def fetch_provider_model_ids(
                 if access_token:
                     model_ids.update(await fetch_xai_model_ids(str(access_token)))
             except Exception as exc:
-                log.warning(f"xAI model discovery failed: {exc}")
+                log.warning(f"Grok model discovery failed: {exc}")
             finally:
                 await credential_manager.release_credential(current_file, mode="primary")
 

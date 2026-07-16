@@ -344,7 +344,7 @@ async def save_xai_config(
     if unknown_keys:
         raise HTTPException(
             status_code=400,
-            detail=f"Unsupported xAI setting(s): {', '.join(unknown_keys)}.",
+            detail=f"Unsupported Grok or xAI Console setting(s): {', '.join(unknown_keys)}.",
         )
     env_locked = get_env_locked_keys() & XAI_CONFIG_KEYS
     current_config = await _current_xai_config()
@@ -366,7 +366,7 @@ async def save_xai_config(
     if not normalized["xai_client_id"] or not normalized["xai_user_agent"]:
         raise HTTPException(
             status_code=400,
-            detail="Grok OAuth client ID and xAI HTTP User-Agent cannot be empty.",
+            detail="Grok OAuth client ID and the shared HTTP User-Agent cannot be empty.",
         )
     storage_adapter = await get_storage_adapter()
     for key, value in normalized.items():
@@ -375,7 +375,7 @@ async def save_xai_config(
     await config.reload_config()
     return JSONResponse(
         content={
-            "message": "xAI settings saved.",
+            "message": "Grok and xAI Console settings saved.",
             "config": await _current_xai_config(),
             "env_locked": sorted(env_locked),
         }
@@ -391,7 +391,7 @@ async def reset_xai_config(
     if normalized_scope and normalized_scope not in XAI_CONFIG_SCOPES:
         raise HTTPException(
             status_code=400,
-            detail="xAI setting scope must be 'oauth' or 'api'.",
+            detail="Grok and xAI Console setting scope must be 'oauth' or 'api'.",
         )
 
     env_locked = get_env_locked_keys() & XAI_CONFIG_KEYS
@@ -402,8 +402,8 @@ async def reset_xai_config(
     await config.reload_config()
     scope_label = {
         "oauth": "Grok settings",
-        "api": "xAI transport settings",
-    }.get(normalized_scope, "xAI settings")
+        "api": "Grok and xAI Console transport settings",
+    }.get(normalized_scope, "Grok and xAI Console settings")
     return JSONResponse(
         content={
             "message": f"{scope_label} reset to defaults.",
