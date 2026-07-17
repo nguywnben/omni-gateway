@@ -1,0 +1,109 @@
+                <div id="poolTab" class="tab-content">
+                    <header class="page-header">
+                            <div>
+                                <div class="page-kicker">Pool</div>
+                                <h1 class="page-title">Provider Credential Pool</h1>
+                                <p class="page-description">Manage accounts and API keys from every connected provider. Monitor credential health, routing capacity, and pool backups from one place.</p>
+                            </div>
+                            <div class="page-actions">
+                                <button type="button" class="btn" data-ui-action="refresh-pool">Refresh</button>
+                                <button type="button" class="btn btn-secondary" id="poolImportArchiveBtn" data-ui-action="select-pool-archive">Import ZIP</button>
+                                <button type="button" class="btn btn-secondary" data-ui-action="download-pool">Download ZIP</button>
+                            </div>
+                    </header>
+                    <input type="file" id="poolImportArchiveInput" accept=".zip,application/zip" hidden data-ui-change="pool-archive">
+
+                    <div class="stats-container">
+                        <div class="stat-item"><span class="stat-number" id="primaryStatTotal">0</span><span class="stat-label">Total credentials</span></div>
+                        <div class="stat-item"><span class="stat-number" id="primaryStatNormal">0</span><span class="stat-label">Active credentials</span></div>
+                        <div class="stat-item"><span class="stat-number" id="primaryStatDisabled">0</span><span class="stat-label">Disabled credentials</span></div>
+                    </div>
+
+                    <div class="batch-controls">
+                        <div class="batch-label">
+                            <input type="checkbox" id="selectAllPrimaryCheckbox" class="select-all-checkbox" data-ui-change="select-all-primary">
+                            <label for="selectAllPrimaryCheckbox">Select all visible</label>
+                            <span class="selected-count" id="primarySelectedCount">0 selected</span>
+                        </div>
+                        <div class="batch-actions">
+                            <button type="button" class="batch-btn batch-enable" id="primaryBatchEnableBtn" data-ui-action="batch-primary" data-batch-action="enable" disabled>Enable</button>
+                            <button type="button" class="batch-btn" id="primaryBatchDisableBtn" data-ui-action="batch-primary" data-batch-action="disable" disabled>Disable</button>
+                            <button type="button" class="batch-btn batch-delete" id="primaryBatchDeleteBtn" data-ui-action="batch-primary" data-batch-action="delete" disabled>Delete</button>
+                            <button type="button" class="batch-btn" id="primaryBatchEnableCreditBtn" data-ui-action="batch-primary" data-batch-action="enable_credit" disabled>Enable credits</button>
+                            <button type="button" class="batch-btn" id="primaryBatchDisableCreditBtn" data-ui-action="batch-primary" data-batch-action="disable_credit" disabled>Disable credits</button>
+                            <button type="button" class="batch-btn" id="primaryBatchVerifyBtn" data-ui-action="batch-verify-primary" disabled>Verify</button>
+                        </div>
+                    </div>
+
+                    <div class="filter-container">
+                        <div class="filter-group">
+                            <label for="primaryProviderFilter">Provider</label>
+                            <select id="primaryProviderFilter" class="filter-select" data-ui-change="primary-filter">
+                                <option value="all">All providers</option>
+                                <option value="google_antigravity">Google Antigravity</option>
+                                <option value="google_ai_studio">Google AI Studio</option>
+                                <option value="grok">Grok</option>
+                                <option value="xai_console">xAI Console</option>
+                            </select>
+                        </div>
+                        <div class="filter-group">
+                            <label for="primaryStatusFilter">Status</label>
+                            <select id="primaryStatusFilter" class="filter-select" data-ui-change="primary-filter">
+                                <option value="all">All</option>
+                                <option value="enabled">Enabled</option>
+                                <option value="disabled">Disabled</option>
+                            </select>
+                        </div>
+                        <div class="filter-group">
+                            <label for="primaryErrorCodeFilter">Error</label>
+                            <select id="primaryErrorCodeFilter" class="filter-select" data-ui-change="primary-filter">
+                                <option value="all">All</option>
+                                <option value="none">None</option>
+                                <option value="400">400</option>
+                                <option value="403">403</option>
+                                <option value="429">429</option>
+                                <option value="500">500</option>
+                            </select>
+                        </div>
+                        <div class="filter-group">
+                            <label for="primaryCooldownFilter">Cooldown</label>
+                            <select id="primaryCooldownFilter" class="filter-select" data-ui-change="primary-filter">
+                                <option value="all">All</option>
+                                <option value="in_cooldown">In cooldown</option>
+                                <option value="no_cooldown">No cooldown</option>
+                            </select>
+                        </div>
+                        <div class="filter-group">
+                            <label for="primaryTierFilter">Tier</label>
+                            <select id="primaryTierFilter" class="filter-select" data-ui-change="primary-filter">
+                                <option value="all">All</option>
+                                <option value="free">Free</option>
+                                <option value="pro">Pro</option>
+                                <option value="ultra">Ultra</option>
+                            </select>
+                        </div>
+                        <div class="filter-group">
+                            <label for="primaryPageSizeSelect">Per page</label>
+                            <select id="primaryPageSizeSelect" class="page-size-select" data-ui-change="primary-page-size">
+                                <option value="20">20</option>
+                                <option value="50">50</option>
+                                <option value="100">100</option>
+                                <option value="200">200</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div id="primaryCredsListSection">
+                        <div id="primaryCredsLoading" class="skeleton-list" role="status" aria-label="Loading provider credentials" aria-busy="true">
+                            <div class="skeleton-item"><div class="skeleton-line title"></div><div class="skeleton-line content"></div><div class="skeleton-line buttons"></div></div>
+                            <div class="skeleton-item"><div class="skeleton-line title"></div><div class="skeleton-line content"></div><div class="skeleton-line buttons"></div></div>
+                            <div class="skeleton-item"><div class="skeleton-line title"></div><div class="skeleton-line content"></div><div class="skeleton-line buttons"></div></div>
+                        </div>
+                        <div class="credential-provider-groups" id="primaryCredsList"></div>
+                        <div class="pagination-container" id="primaryPaginationContainer" style="display: none;">
+                            <button type="button" class="pagination-btn" id="primaryPrevPageBtn" data-ui-action="change-primary-page" data-page-delta="-1">Previous</button>
+                            <div class="pagination-info" id="primaryPaginationInfo">Page 1 of 1</div>
+                            <button type="button" class="pagination-btn" id="primaryNextPageBtn" data-ui-action="change-primary-page" data-page-delta="1">Next</button>
+                        </div>
+                    </div>
+                </div>

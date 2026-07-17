@@ -17,7 +17,7 @@ if str(BACKEND_DIR) not in sys.path:
     sys.path.insert(0, str(BACKEND_DIR))
 
 from core.models import ConfigSaveRequest, XaiCredentialRequest, XaiOAuthCodeRequest
-from core.panel.provider_settings import (
+from core.panel.providers.xai import (
     add_xai_api_key_credential,
     import_xai_credentials,
     reset_xai_config,
@@ -275,19 +275,19 @@ class XaiProviderTests(unittest.IsolatedAsyncioTestCase):
         }
         with (
             patch(
-                "core.panel.provider_settings.get_env_locked_keys",
+                "core.panel.providers.xai.get_env_locked_keys",
                 return_value={"xai_client_id"},
             ),
             patch(
-                "core.panel.provider_settings._current_xai_config",
+                "core.panel.providers.xai._current_xai_config",
                 AsyncMock(side_effect=[current, current]),
             ),
             patch(
-                "core.panel.provider_settings.get_storage_adapter",
+                "core.panel.providers.xai.get_storage_adapter",
                 AsyncMock(return_value=storage),
             ),
             patch(
-                "core.panel.provider_settings.config.reload_config",
+                "core.panel.providers.xai.config.reload_config",
                 AsyncMock(),
             ),
         ):
@@ -311,19 +311,19 @@ class XaiProviderTests(unittest.IsolatedAsyncioTestCase):
         }
         with (
             patch(
-                "core.panel.provider_settings.get_env_locked_keys",
+                "core.panel.providers.xai.get_env_locked_keys",
                 return_value=set(),
             ),
             patch(
-                "core.panel.provider_settings._current_xai_config",
+                "core.panel.providers.xai._current_xai_config",
                 AsyncMock(return_value=current),
             ),
             patch(
-                "core.panel.provider_settings.get_storage_adapter",
+                "core.panel.providers.xai.get_storage_adapter",
                 AsyncMock(return_value=storage),
             ),
             patch(
-                "core.panel.provider_settings.config.reload_config",
+                "core.panel.providers.xai.config.reload_config",
                 AsyncMock(),
             ),
         ):
@@ -337,11 +337,11 @@ class XaiProviderTests(unittest.IsolatedAsyncioTestCase):
     async def test_api_key_route_returns_secret_free_frontend_contract(self):
         with (
             patch(
-                "core.panel.provider_settings.validate_xai_api_key",
+                "core.panel.providers.xai.validate_xai_api_key",
                 AsyncMock(return_value=XaiValidation(model_ids=["grok-4"])),
             ),
             patch(
-                "core.panel.provider_settings.store_xai_api_key_credential",
+                "core.panel.providers.xai.store_xai_api_key_credential",
                 AsyncMock(
                     return_value={
                         "action": "created",
@@ -365,7 +365,7 @@ class XaiProviderTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_oauth_route_returns_secret_free_frontend_contract(self):
         with patch(
-            "core.panel.provider_settings.complete_xai_oauth",
+            "core.panel.providers.xai.complete_xai_oauth",
             AsyncMock(
                 return_value={
                     "action": "created",
@@ -427,7 +427,7 @@ class XaiProviderTests(unittest.IsolatedAsyncioTestCase):
             ]
         )
 
-        with patch("core.panel.provider_settings.restore_xai_credential", restore):
+        with patch("core.panel.providers.xai.restore_xai_credential", restore):
             response = await import_xai_credentials(files=files, token="panel-token")
 
         payload = json.loads(response.body)
@@ -478,7 +478,7 @@ class XaiProviderTests(unittest.IsolatedAsyncioTestCase):
         ]
         restore = AsyncMock()
 
-        with patch("core.panel.provider_settings.restore_xai_credential", restore):
+        with patch("core.panel.providers.xai.restore_xai_credential", restore):
             response = await import_xai_credentials(
                 files=files,
                 credential_type="oauth",

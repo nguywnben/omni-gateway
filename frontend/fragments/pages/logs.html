@@ -1,0 +1,32 @@
+                <div id="logsTab" class="tab-content">
+                    <header class="page-header">
+                        <div>
+                            <div class="page-kicker">Logs</div>
+                            <h1 class="page-title">Runtime Log Stream</h1>
+                            <p class="page-description">Watch routing decisions, upstream responses, credential rotation, and application errors.</p>
+                        </div>
+                        <div class="page-actions">
+                            <button type="button" class="btn btn-secondary" data-ui-action="download-logs">Download</button>
+                            <button type="button" class="btn btn-danger" data-ui-action="clear-logs">Clear</button>
+                        </div>
+                    </header>
+
+                    <div class="filter-container">
+                        <div class="filter-group">
+                            <label for="logLevelFilter">Level</label>
+                            <select id="logLevelFilter" class="filter-select" data-ui-change="log-level">
+                                <option value="all">All</option>
+                                <option value="ERROR">Error</option>
+                                <option value="WARNING">Warning</option>
+                                <option value="INFO">Info</option>
+                                <option value="DEBUG">Debug</option>
+                            </select>
+                        </div>
+                        <label class="switch-row"><input type="checkbox" id="autoScroll" class="config-checkbox" checked><span>Auto-scroll</span></label>
+                    </div>
+
+                    <div id="logConnectionStatus" class="status info" style="margin-bottom: 14px;">
+                        <strong>WebSocket:</strong> <span id="connectionStatusText">Not connected</span>
+                    </div>
+                    <div id="logContainer"><div id="logContent">Waiting for logs...</div></div>
+                </div>

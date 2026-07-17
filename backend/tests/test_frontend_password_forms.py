@@ -1,8 +1,13 @@
+import sys
 import unittest
 from html.parser import HTMLParser
 from pathlib import Path
 
-FRONTEND_HTML = Path(__file__).parents[2] / "frontend" / "control-panel.html"
+BACKEND_DIR = Path(__file__).resolve().parents[1]
+if str(BACKEND_DIR) not in sys.path:
+    sys.path.insert(0, str(BACKEND_DIR))
+
+from core.panel.root import _assemble_console_html
 
 
 class FormControlParser(HTMLParser):
@@ -33,7 +38,7 @@ class FrontendPasswordFormTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         parser = FormControlParser()
-        parser.feed(FRONTEND_HTML.read_text(encoding="utf-8"))
+        parser.feed(_assemble_console_html())
         cls.controls = parser.controls
 
     def find_control(self, control_id):

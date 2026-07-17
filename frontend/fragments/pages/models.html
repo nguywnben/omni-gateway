@@ -1,0 +1,73 @@
+                <div id="modelsTab" class="tab-content">
+                    <header class="page-header">
+                        <div>
+                            <div class="page-kicker">Models</div>
+                            <h1 class="page-title">Routing Models</h1>
+                            <p class="page-description">Build a stable virtual model from models currently available across the active provider pool.</p>
+                        </div>
+                        <div class="page-actions">
+                            <button type="button" class="btn btn-secondary" id="refreshModelCatalogBtn" data-ui-action="refresh-model-catalog">Refresh catalog</button>
+                            <button type="button" class="btn" id="saveModelPoolBtn" data-ui-action="save-model-pool">Save</button>
+                        </div>
+                    </header>
+
+                    <div class="stats-container model-stats-container">
+                        <div class="stat-item"><span class="stat-number" id="modelStatAvailable">0</span><span class="stat-label">Available provider models</span></div>
+                        <div class="stat-item"><span class="stat-number" id="modelStatSelected">0</span><span class="stat-label">Models assigned to omway</span></div>
+                        <div class="stat-item"><span class="stat-number" id="modelStatUnavailable">0</span><span class="stat-label">Unavailable selections</span></div>
+                    </div>
+
+                    <div id="modelCatalogLoading" class="skeleton-config" role="status" aria-label="Loading provider models" aria-busy="true">
+                        <div class="skeleton-config-group"><div class="skeleton-line title"></div><div class="skeleton-line content"></div></div>
+                        <div class="skeleton-config-group"><div class="skeleton-line title"></div><div class="skeleton-line content"></div></div>
+                    </div>
+
+                    <div id="modelPoolWorkspace" class="model-pool-grid hidden">
+                        <section class="card model-pool-card">
+                            <div class="model-pool-heading">
+                                <div>
+                                    <div class="provider-eyebrow">Virtual Model</div>
+                                    <h2 class="card-title model-alias-title">omway</h2>
+                                </div>
+                                <span class="status-badge muted" id="modelPoolStatus">Not configured</span>
+                            </div>
+                            <p class="card-copy card-title-copy">Use <code>omway</code> in OpenAI, Anthropic, or Google GenAI clients. Requests try the selected models from top to bottom.</p>
+                            <div class="model-policy-note">
+                                <strong>Priority fallback</strong>
+                                <span>Credentials are balanced within each model before routing continues to the next model.</span>
+                            </div>
+                            <div class="model-section-heading">
+                                <div>
+                                    <h3>Fallback Order</h3>
+                                    <p>Move models to define which one is attempted first.</p>
+                                </div>
+                            </div>
+                            <div id="selectedModelList" class="selected-model-list"></div>
+                        </section>
+
+                        <section class="card model-catalog-card">
+                            <div class="model-section-heading model-catalog-heading">
+                                <div>
+                                    <h2 class="card-title">Provider Models</h2>
+                                    <p>Select models discovered from enabled provider credentials.</p>
+                                </div>
+                                <input type="search" id="modelCatalogSearch" class="model-catalog-search" placeholder="Search models" autocomplete="off" data-ui-input="model-catalog-search">
+                            </div>
+                            <div id="modelCatalogList" class="model-catalog-list"></div>
+                        </section>
+
+                        <section class="card model-blacklist-card">
+                            <div class="model-section-heading model-blacklist-heading">
+                                <div>
+                                    <h2 class="card-title">Model Blacklist</h2>
+                                    <p>Provider-specific model routes are added here after an upstream 404 response. Other providers and fallback models remain available.</p>
+                                </div>
+                                <div class="model-blacklist-actions">
+                                    <span class="status-badge muted" id="modelBlacklistCount">0 routes</span>
+                                    <button type="button" class="btn btn-secondary btn-small hidden" id="clearModelBlacklistBtn" data-ui-action="clear-model-blacklist">Clear all</button>
+                                </div>
+                            </div>
+                            <div id="modelBlacklistList" class="model-blacklist-list"></div>
+                        </section>
+                    </div>
+                </div>

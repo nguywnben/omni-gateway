@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Omni Gateway Console</title>
+    <link rel="icon" href="/frontend/assets/favicon.ico" sizes="any">
+    <link rel="icon" type="image/png" href="/frontend/assets/logo.png">
+    <link rel="apple-touch-icon" href="/frontend/assets/logo.png">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Google+Sans:ital,opsz,wght@0,17..18,400..700;1,17..18,400..700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/frontend/console.css?v=local">
+</head>
+
+<body>
+    <div id="mobileNavigationOverlay" class="sidebar-overlay" aria-hidden="true" data-ui-action="toggle-mobile-menu"></div>
+
+    <!-- include:fragments/auth/login.html -->
+    <!-- include:fragments/auth/setup.html -->
+
+    <section id="mainSection" class="dashboard-wrapper hidden" aria-label="Dashboard">
+        <!-- include:fragments/layout/sidebar.html -->
+        <!-- include:fragments/layout/mobile-header.html -->
+
+        <main class="dashboard-main">
+            <div class="dashboard-content-container">
+                <!-- include:fragments/pages/dashboard.html -->
+                <!-- include:fragments/pages/pool.html -->
+                <!-- include:fragments/pages/models.html -->
+                <!-- include:fragments/pages/providers.html -->
+                <!-- include:fragments/pages/settings.html -->
+                <!-- include:fragments/pages/logs.html -->
+                <!-- include:fragments/pages/about.html -->
+                <!-- include:fragments/layout/footer.html -->
+            </div>
+        </main>
+    </section>
+
+    <div id="statusSection"></div>
+    <script src="/frontend/console.js?v=local"></script>
+</body>
+
+</html>
