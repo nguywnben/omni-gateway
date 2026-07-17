@@ -1,11 +1,14 @@
-async function loadGoogleAIStudioSettings() {
+async function loadGoogleAIStudioSettings(options = {}) {
     const field = document.getElementById('googleAiStudioApiUrl');
     if (!field) return;
+
+    const preserveContent = options.preserveContent ?? field.dataset.loaded === 'true';
 
     setProviderSettingsLoading(
         ['googleAiStudioSettingsLoading'],
         ['googleAiStudioSettingsForm'],
-        true
+        true,
+        preserveContent
     );
 
     try {
@@ -17,6 +20,7 @@ async function loadGoogleAIStudioSettings() {
             throw new Error(data.detail || data.error || t('unknown_error'));
         }
         field.value = data.config?.google_ai_studio_api_url || '';
+        field.dataset.loaded = 'true';
         const isLocked = (data.env_locked || []).includes('google_ai_studio_api_url');
         field.disabled = isLocked;
         field.classList.toggle('env-locked', isLocked);
@@ -26,7 +30,8 @@ async function loadGoogleAIStudioSettings() {
         setProviderSettingsLoading(
             ['googleAiStudioSettingsLoading'],
             ['googleAiStudioSettingsForm'],
-            false
+            false,
+            preserveContent
         );
     }
 }

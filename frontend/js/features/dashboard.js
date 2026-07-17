@@ -96,7 +96,7 @@ function setUsagePeriod(period) {
 
 }
 
-async function refreshUsageStats() {
+async function refreshUsageStats(options = {}) {
 
     const loading = document.getElementById('usageLoading');
 
@@ -108,19 +108,21 @@ async function refreshUsageStats() {
 
     const tableWrapper = document.querySelector('#dashboardTab .usage-table-wrapper');
 
+    const preserveContent = options.preserveContent ?? AppState.usageStatsLoaded;
+
     updateUsagePeriodLabels();
 
     try {
 
-        if (loading) loading.hidden = false;
+        if (loading && !preserveContent) loading.hidden = false;
 
-        if (statsContainer) statsContainer.setAttribute('aria-busy', 'true');
+        if (statsContainer && !preserveContent) statsContainer.setAttribute('aria-busy', 'true');
 
-        if (tableWrapper) tableWrapper.hidden = true;
+        if (tableWrapper && !preserveContent) tableWrapper.hidden = true;
 
-        list.innerHTML = '';
+        if (!preserveContent) list.innerHTML = '';
 
-        if (providerSummary) {
+        if (providerSummary && !preserveContent) {
 
             providerSummary.innerHTML = '';
             providerSummary.hidden = true;
@@ -156,6 +158,8 @@ async function refreshUsageStats() {
         if (statsResponse.ok && aggregatedResponse.ok) {
 
             AppState.usageStatsData = statsData.success ? statsData.data : statsData;
+
+            AppState.usageStatsLoaded = true;
 
             const aggData = aggregatedData.success ? aggregatedData.data : aggregatedData;
 
@@ -227,9 +231,9 @@ async function refreshUsageStats() {
 
         if (loading) loading.hidden = true;
 
-        if (statsContainer) statsContainer.setAttribute('aria-busy', 'false');
+        if (statsContainer && !preserveContent) statsContainer.setAttribute('aria-busy', 'false');
 
-        if (tableWrapper) tableWrapper.hidden = false;
+        if (tableWrapper && !preserveContent) tableWrapper.hidden = false;
 
     }
 

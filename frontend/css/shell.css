@@ -213,6 +213,9 @@
 
 .dashboard-content-container {
     width: min(100%, 1240px);
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
     margin: 0 auto;
     padding: 40px;
 }
@@ -222,7 +225,7 @@
     align-items: center;
     justify-content: center;
     gap: 8px;
-    margin-top: 34px;
+    margin-top: auto;
     padding-top: 18px;
     border-top: 1px solid var(--border);
     color: var(--text-soft);
@@ -289,10 +292,13 @@
 
 .tab-content {
     display: none;
+    min-width: 0;
 }
 
 .tab-content.active {
     display: block;
+    flex: 0 0 auto;
+    padding-bottom: 34px;
 }
 
 .page-header {

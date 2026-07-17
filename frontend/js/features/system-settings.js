@@ -1,14 +1,16 @@
-async function loadConfig() {
+async function loadConfig(options = {}) {
 
     const loading = document.getElementById('configLoading');
 
     const form = document.getElementById('configForm');
 
+    const preserveContent = options.preserveContent ?? AppState.configLoaded;
+
     try {
 
-        if (loading) loading.hidden = false;
+        if (loading && !preserveContent) loading.hidden = false;
 
-        form.classList.add('hidden');
+        if (!preserveContent) form.classList.add('hidden');
 
         const response = await fetch('./api/config/get', { headers: getAuthHeaders() });
 
@@ -17,6 +19,8 @@ async function loadConfig() {
         if (response.ok) {
 
             AppState.currentConfig = data.config;
+
+            AppState.configLoaded = true;
 
             AppState.envLockedFields = new Set(data.env_locked || []);
 

@@ -351,12 +351,13 @@ function removeSelectedModel(modelId) {
     renderModelCatalog();
 }
 
-async function loadModelCatalog(forceRefresh = false) {
+async function loadModelCatalog(forceRefresh = false, options = {}) {
     const loading = document.getElementById('modelCatalogLoading');
     const workspace = document.getElementById('modelPoolWorkspace');
     const refreshButton = document.getElementById('refreshModelCatalogBtn');
-    if (loading) loading.classList.remove('hidden');
-    if (workspace) workspace.classList.add('hidden');
+    const preserveContent = options.preserveContent ?? AppState.modelCatalogLoaded;
+    if (loading && !preserveContent) loading.classList.remove('hidden');
+    if (workspace && !preserveContent) workspace.classList.add('hidden');
     if (refreshButton) refreshButton.disabled = true;
     try {
         const response = await fetch(`./api/model-catalog${forceRefresh ? '?refresh=true' : ''}`, {
@@ -365,6 +366,7 @@ async function loadModelCatalog(forceRefresh = false) {
         const data = await response.json().catch(() => ({}));
         if (!response.ok) throw new Error(data.detail || data.error || 'Unknown error');
         AppState.modelCatalog = Array.isArray(data.catalog) ? data.catalog : [];
+        AppState.modelCatalogLoaded = true;
         AppState.modelBlacklist = Array.isArray(data.blacklist) ? data.blacklist : [];
         AppState.selectedModels = Array.isArray(data.pool?.selected_models)
             ? [...data.pool.selected_models]
@@ -378,7 +380,7 @@ async function loadModelCatalog(forceRefresh = false) {
     } catch (error) {
         showStatus(`Failed to load the provider model catalog: ${error.message}`, 'error');
     } finally {
-        if (loading) loading.classList.add('hidden');
+        if (loading && !preserveContent) loading.classList.add('hidden');
         if (refreshButton) refreshButton.disabled = false;
     }
 }

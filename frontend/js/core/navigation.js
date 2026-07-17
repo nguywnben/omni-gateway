@@ -36,6 +36,8 @@ const TAB_MAP = {
     about: '/about'
 };
 
+const TAB_DATA_CACHE_MS = 30000;
+
 function navigate(path, pushState = true) {
 
     let targetPath = path || '/dashboard';
@@ -145,6 +147,14 @@ function navigate(path, pushState = true) {
 
     const shouldResetScroll = !currentContent || currentContent !== targetContent;
 
+    if (!shouldResetScroll) {
+
+        void triggerTabDataLoad(tabName);
+
+        return;
+
+    }
+
     document.querySelectorAll('.tab').forEach(tab => {
         tab.classList.remove('active');
         tab.removeAttribute('aria-current');
@@ -171,7 +181,7 @@ function navigate(path, pushState = true) {
 
         targetContent.classList.add('active');
 
-        triggerTabDataLoad(tabName);
+        void triggerTabDataLoad(tabName);
 
         if (shouldResetScroll) {
 
@@ -180,6 +190,90 @@ function navigate(path, pushState = true) {
         }
 
     }
+
+}
+
+function getTabDataLoader(tabName) {
+
+    const loaders = {
+
+        dashboard: () => {
+
+            updateEndpointUrls();
+
+            return refreshUsageStats();
+
+        },
+
+        pool: () => AppState.primaryCreds.refresh(),
+
+        models: () => loadModelCatalog(),
+
+        providers: () => Promise.all([
+
+            loadAntigravitySettings(),
+
+            loadGoogleAIStudioSettings(),
+
+            loadXaiSettings()
+
+        ]),
+
+        config: () => loadConfig(),
+
+        logs: () => {
+
+            connectWebSocket();
+
+            return Promise.resolve();
+
+        }
+
+    };
+
+    return loaders[tabName];
+
+}
+
+async function triggerTabDataLoad(tabName, options = {}) {
+
+    const loader = getTabDataLoader(tabName);
+
+    if (!loader) return;
+
+    const force = options.force === true;
+
+    const loadedAt = Number(AppState.tabLoadTimes[tabName] || 0);
+
+    const isFresh = Date.now() - loadedAt < TAB_DATA_CACHE_MS;
+
+    if (!force && isFresh) return;
+
+    if (AppState.tabLoadPromises[tabName]) {
+
+        return AppState.tabLoadPromises[tabName];
+
+    }
+
+    const loadPromise = Promise.resolve()
+
+        .then(loader)
+
+        .then(() => {
+
+            AppState.tabLoadTimes[tabName] = Date.now();
+
+        })
+
+        .finally(() => {
+
+            delete AppState.tabLoadPromises[tabName];
+
+        });
+
+    AppState.tabLoadPromises[tabName] = loadPromise;
+
+    return loadPromise;
 
 }
 

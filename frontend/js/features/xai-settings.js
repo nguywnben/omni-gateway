@@ -1,9 +1,12 @@
-async function loadXaiSettings() {
+async function loadXaiSettings(options = {}) {
     if (!Object.keys(XAI_CONFIG_FIELDS).some(fieldId => document.getElementById(fieldId))) return;
 
     const loadingIds = ['grokSettingsLoading', 'xaiConsoleSettingsLoading'];
     const formIds = ['grokSettingsForm', 'xaiConsoleSettingsForm'];
-    setProviderSettingsLoading(loadingIds, formIds, true);
+    const preserveContent = options.preserveContent ?? formIds.some(
+        id => document.getElementById(id)?.dataset.loaded === 'true'
+    );
+    setProviderSettingsLoading(loadingIds, formIds, true, preserveContent);
 
     try {
         const response = await fetch('./api/providers/xai/config', { headers: getAuthHeaders() });
@@ -17,10 +20,14 @@ async function loadXaiSettings() {
             field.disabled = locked.has(configKey);
             field.classList.toggle('env-locked', field.disabled);
         });
+        formIds.forEach((id) => {
+            const form = document.getElementById(id);
+            if (form) form.dataset.loaded = 'true';
+        });
     } catch (error) {
         showStatus(`Failed to load Grok and xAI Console settings: ${error.message}`, 'error');
     } finally {
-        setProviderSettingsLoading(loadingIds, formIds, false);
+        setProviderSettingsLoading(loadingIds, formIds, false, preserveContent);
     }
 }
 

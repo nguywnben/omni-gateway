@@ -67,15 +67,21 @@ const AppState = {
 
     currentConfig: {},
 
+    configLoaded: false,
+
     envLockedFields: new Set(),
 
     antigravityConfig: {},
+
+    antigravityConfigLoaded: false,
 
     antigravityEnvLockedFields: new Set(),
 
     activeProviderWorkspace: 'google_antigravity',
 
     modelCatalog: [],
+
+    modelCatalogLoaded: false,
 
     modelBlacklist: [],
 
@@ -93,7 +99,13 @@ const AppState = {
 
     usageStatsData: {},
 
+    usageStatsLoaded: false,
+
     usagePeriod: '1d',
+
+    tabLoadTimes: {},
+
+    tabLoadPromises: {},
 
     quotaPreviewCache: {},
 

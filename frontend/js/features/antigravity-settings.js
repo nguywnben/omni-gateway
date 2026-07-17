@@ -1,16 +1,18 @@
-async function loadAntigravitySettings() {
+async function loadAntigravitySettings(options = {}) {
 
     const loading = document.getElementById('antigravitySettingsLoading');
 
     const form = document.getElementById('antigravitySettingsForm');
 
+    const preserveContent = options.preserveContent ?? AppState.antigravityConfigLoaded;
+
     if (!loading || !form) return;
 
     try {
 
-        loading.hidden = false;
+        if (!preserveContent) loading.hidden = false;
 
-        form.classList.add('hidden');
+        if (!preserveContent) form.classList.add('hidden');
 
         const response = await fetch('./api/providers/antigravity/config', { headers: getAuthHeaders() });
 
@@ -19,6 +21,8 @@ async function loadAntigravitySettings() {
         if (response.ok) {
 
             AppState.antigravityConfig = data.config || {};
+
+            AppState.antigravityConfigLoaded = true;
 
             AppState.antigravityEnvLockedFields = new Set(data.env_locked || []);
 

@@ -108,6 +108,14 @@ class ControlPanelAssetTests(unittest.TestCase):
             navigation_script,
         )
         self.assertNotIn(".tab[onclick*=", navigation_script)
+        self.assertIn("const TAB_DATA_CACHE_MS = 30000", navigation_script)
+        self.assertIn("AppState.tabLoadPromises[tabName]", navigation_script)
+        self.assertIn("void triggerTabDataLoad(tabName)", navigation_script)
+
+        responsive_styles = (BACKEND_DIR.parent / "frontend" / "css" / "responsive.css").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("scrollbar-gutter: stable", responsive_styles)
 
     def test_xai_provider_ui_references_existing_assets_and_endpoints(self):
         response = serve_control_panel()

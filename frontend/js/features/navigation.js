@@ -255,33 +255,6 @@ function initProviderWorkspaceSelector() {
 
 document.addEventListener('DOMContentLoaded', initProviderWorkspaceSelector);
 
-function triggerTabDataLoad(tabName) {
-
-    if (tabName === 'dashboard') {
-
-        refreshUsageStats();
-
-        updateEndpointUrls();
-    }
-
-    if (tabName === 'pool') {
-        AppState.primaryCreds.refresh();
-    }
-
-    if (tabName === 'models') loadModelCatalog();
-
-    if (tabName === 'providers') {
-        loadAntigravitySettings();
-        loadGoogleAIStudioSettings();
-        loadXaiSettings();
-    }
-
-    if (tabName === 'config') loadConfig();
-
-    if (tabName === 'logs') connectWebSocket();
-
-}
-
 const MODEL_PROVIDER_META = {
     google_antigravity: {
         name: 'Google Antigravity',

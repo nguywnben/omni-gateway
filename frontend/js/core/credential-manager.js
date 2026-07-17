@@ -18,6 +18,8 @@ function createCredsManager(type) {
 
         totalCount: 0,
 
+        hasLoaded: false,
+
         currentStatusFilter: 'all',
 
         currentErrorCodeFilter: 'all',
@@ -78,17 +80,19 @@ function createCredsManager(type) {
 
         },
 
-        async refresh() {
+        async refresh(options = {}) {
 
             const loading = document.getElementById(this.getElementId('CredsLoading'));
 
             const list = document.getElementById(this.getElementId('CredsList'));
 
+            const preserveContent = options.preserveContent ?? this.hasLoaded;
+
             try {
 
-                if (loading) loading.hidden = false;
+                if (loading && !preserveContent) loading.hidden = false;
 
-                list.innerHTML = '';
+                if (!preserveContent) list.innerHTML = '';
 
                 const offset = (this.currentPage - 1) * this.pageSize;
 
@@ -155,6 +159,8 @@ function createCredsManager(type) {
                     });
 
                     this.totalCount = data.total;
+
+                    this.hasLoaded = true;
 
                     if (data.stats) {
 
