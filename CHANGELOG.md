@@ -4,6 +4,22 @@ All notable user-facing changes are documented in this file. Omni Gateway follow
 
 ## [Unreleased]
 
+## [1.1.3] - 2026-07-17
+
+### Added
+
+- Added consistent skeleton loading feedback for credential, model-catalog, dashboard, and configuration data.
+
+### Changed
+
+- Split the management console and provider-settings backend into focused, independently maintained modules without changing public routes.
+- Removed Anime.js and its interface motion so navigation, dialogs, notifications, and mobile controls respond immediately with a smaller frontend payload.
+
+### Fixed
+
+- Reduced page-switching jitter by caching recently loaded tab data, deduplicating concurrent loads, and preserving rendered content during background refreshes.
+- Stabilized console layout dimensions and footer placement across desktop and mobile navigation.
+
 ## [1.1.2] - 2026-07-16
 
 ### Changed
@@ -103,7 +119,8 @@ All notable user-facing changes are documented in this file. Omni Gateway follow
 - Provider credential pool, virtual model routing, context optimization, usage visibility, and the management console.
 - Docker Hub and GitHub Container Registry publishing.
 
-[Unreleased]: https://github.com/nguywnben/omni-gateway/compare/v1.1.2...HEAD
+[Unreleased]: https://github.com/nguywnben/omni-gateway/compare/v1.1.3...HEAD
+[1.1.3]: https://github.com/nguywnben/omni-gateway/compare/v1.1.2...v1.1.3
 [1.1.2]: https://github.com/nguywnben/omni-gateway/compare/v1.1.1...v1.1.2
 [1.1.1]: https://github.com/nguywnben/omni-gateway/compare/v1.1.0...v1.1.1
 [1.1.0]: https://github.com/nguywnben/omni-gateway/compare/v1.0.0...v1.1.0

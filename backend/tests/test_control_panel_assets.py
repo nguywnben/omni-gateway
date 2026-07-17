@@ -14,7 +14,6 @@ from core.panel.root import (
     CONSOLE_FRAGMENT_PATHS,
     CONSOLE_SCRIPT_ASSETS,
     CONSOLE_STYLE_ASSETS,
-    CONSOLE_VENDOR_ASSETS,
     _console_asset_version,
     _read_console_bundle,
     serve_control_panel,
@@ -38,10 +37,7 @@ class ControlPanelAssetTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertRegex(body, r"/frontend/console\.css\?v=\d+")
         self.assertRegex(body, r"/frontend/console\.js\?v=\d+")
-        self.assertRegex(body, r"/frontend/vendor/anime\.umd\.min\.js\?v=\d+")
-        vendor_dir = BACKEND_DIR.parent / "frontend" / "vendor"
-        self.assertTrue((vendor_dir / "anime.umd.min.js").is_file())
-        self.assertTrue((vendor_dir / "anime.LICENSE.md").is_file())
+        self.assertNotIn("/frontend/vendor/", body)
         self.assertNotIn("<!-- include:fragments/", body)
         self.assertNotIn("/frontend/control-panel.css", body)
         self.assertNotIn("/frontend/control-panel.js", body)
@@ -57,7 +53,6 @@ class ControlPanelAssetTests(unittest.TestCase):
             self.assertTrue((frontend_dir / "fragments" / relative_path).is_file())
         for relative_path in (
             *CONSOLE_STYLE_ASSETS,
-            *CONSOLE_VENDOR_ASSETS,
             *CONSOLE_SCRIPT_ASSETS,
         ):
             self.assertTrue((frontend_dir / relative_path).is_file())

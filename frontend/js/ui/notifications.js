@@ -21,37 +21,14 @@ function ensureTerminalPunctuation(message) {
 function mountModal(modal) {
 
     document.body.appendChild(modal);
-
-    try {
-
-        return Promise.resolve(window.OmniMotion?.enterModal(modal));
-
-    } catch (error) {
-
-        console.warn('Modal entrance motion was skipped.', error);
-        return Promise.resolve();
-
-    }
+    return Promise.resolve();
 
 }
 
 function unmountModal(modal) {
 
-    let exitMotion;
-
-    try {
-
-        exitMotion = window.OmniMotion?.exitModal(modal);
-
-    } catch (error) {
-
-        console.warn('Modal exit motion was skipped.', error);
-
-    }
-
-    return Promise.resolve(exitMotion)
-        .catch((error) => console.warn('Modal exit motion did not complete.', error))
-        .finally(() => modal.remove());
+    modal.remove();
+    return Promise.resolve();
 
 }
 
@@ -77,37 +54,9 @@ function showStatus(message, type = 'info') {
         statusDiv.textContent = displayMessage;
         statusSection.replaceChildren(statusDiv);
 
-        try {
-
-            window.OmniMotion?.enterStatus(statusDiv);
-
-        } catch (error) {
-
-            console.warn('Status entrance motion was skipped.', error);
-
-        }
-
         window._statusTimeout = setTimeout(() => {
 
-            let exitMotion;
-
-            try {
-
-                exitMotion = window.OmniMotion?.exitStatus(statusDiv);
-
-            } catch (error) {
-
-                console.warn('Status exit motion was skipped.', error);
-
-            }
-
-            Promise.resolve(exitMotion)
-                .catch((error) => console.warn('Status exit motion did not complete.', error))
-                .finally(() => {
-
-                    if (statusDiv.parentElement === statusSection) statusDiv.remove();
-
-                });
+            if (statusDiv.parentElement === statusSection) statusDiv.remove();
 
         }, 3000);
 

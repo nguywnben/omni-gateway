@@ -36,9 +36,6 @@ def run_smoke(base_url: str, expect_fresh_setup: bool, setup_token: str = "") ->
             raise RuntimeError("Management console does not reference the JavaScript bundle.")
         if "/frontend/console.css" not in dashboard.text:
             raise RuntimeError("Management console does not reference the stylesheet bundle.")
-        if "/frontend/vendor/anime.umd.min.js" not in dashboard.text:
-            raise RuntimeError("Management console does not reference the Anime.js runtime.")
-
         script_bundle = client.get("/frontend/console.js?v=smoke")
         require_status(script_bundle, 200, "Frontend JavaScript bundle")
         if "function toggleMobileMenu" not in script_bundle.text:
@@ -47,9 +44,6 @@ def run_smoke(base_url: str, expect_fresh_setup: bool, setup_token: str = "") ->
         require_status(style_bundle, 200, "Frontend stylesheet bundle")
         if "@media" not in style_bundle.text:
             raise RuntimeError("Frontend stylesheet bundle is incomplete.")
-        anime_asset = client.get("/frontend/vendor/anime.umd.min.js")
-        require_status(anime_asset, 200, "Anime.js vendor asset")
-
         setup_status = client.get("/api/auth/setup/status")
         require_status(setup_status, 200, "Setup status")
         setup_payload = setup_status.json()

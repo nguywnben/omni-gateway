@@ -37,10 +37,7 @@ CONSOLE_STYLE_ASSETS = (
     "css/responsive.css",
 )
 
-CONSOLE_VENDOR_ASSETS = ("vendor/anime.umd.min.js",)
-
 CONSOLE_SCRIPT_ASSETS = (
-    "js/motion.js",
     "js/core/i18n.js",
     "js/core/navigation.js",
     "js/core/credential-manager.js",
@@ -78,7 +75,6 @@ def _console_asset_paths():
         FRONTEND_DIR / asset
         for asset in (
             *CONSOLE_STYLE_ASSETS,
-            *CONSOLE_VENDOR_ASSETS,
             *CONSOLE_SCRIPT_ASSETS,
         )
     )
@@ -304,12 +300,6 @@ def serve_control_panel():
             f'src="/frontend/console.js?v={asset_version}"',
             html_content,
         )
-        for asset in CONSOLE_VENDOR_ASSETS:
-            html_content = re.sub(
-                rf'src="/frontend/{re.escape(asset)}(?:\?v=[^"]*)?"',
-                f'src="/frontend/{asset}?v={asset_version}"',
-                html_content,
-            )
         return HTMLResponse(content=html_content)
     except Exception as e:
         log.error(f"Failed to load control panel page: {e}")
