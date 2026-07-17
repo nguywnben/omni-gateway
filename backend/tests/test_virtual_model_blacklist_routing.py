@@ -12,6 +12,7 @@ if str(BACKEND_DIR) not in sys.path:
     sys.path.insert(0, str(BACKEND_DIR))
 
 from core.api.primary import ProviderRequestContext, non_stream_request, stream_request
+from core.api.utils import record_model_route_miss
 from fastapi import Response
 
 
@@ -24,6 +25,21 @@ class FakeUpstreamResponse:
 
 
 class VirtualModelBlacklistRoutingTests(unittest.IsolatedAsyncioTestCase):
+    async def test_model_route_miss_sets_a_credential_scoped_cooldown(self):
+        manager = AsyncMock()
+
+        with patch("core.api.utils.asyncio.to_thread", AsyncMock()) as record_mock:
+            await record_model_route_miss(
+                manager,
+                "credential.json",
+                model_name="gemini-2.5-flash",
+                provider="google_ai_studio",
+            )
+
+        manager.set_model_cooldown.assert_awaited_once()
+        manager.release_credential.assert_awaited_once_with("credential.json", mode="primary")
+        record_mock.assert_awaited_once()
+
     async def test_virtual_route_blacklists_404_and_tries_the_next_model(self):
         first_credential = {
             "provider": "google_ai_studio",
@@ -132,17 +148,29 @@ class VirtualModelBlacklistRoutingTests(unittest.IsolatedAsyncioTestCase):
             {("google_ai_studio", "gemini-retired")},
         )
 
-    async def test_direct_model_404_is_not_added_to_virtual_route_blacklist(self):
-        credential = {
+    async def test_direct_model_404_tries_another_credential_without_persistent_blacklist(self):
+        first_credential = {
             "provider": "google_ai_studio",
             "credential_type": "api_key",
             "api_key": "example-key",
         }
-        context = ProviderRequestContext(
+        second_credential = {
+            "provider": "google_antigravity",
+            "token": "example-token",
+            "project_id": "example-project",
+        }
+        first_context = ProviderRequestContext(
             provider_id="google_ai_studio",
             target_url="https://first.invalid",
             headers={},
-            payload={"model": "gemini-retired"},
+            payload={"model": "gemini-2.5-flash"},
+            request_metrics={},
+        )
+        second_context = ProviderRequestContext(
+            provider_id="google_antigravity",
+            target_url="https://second.invalid",
+            headers={},
+            payload={"model": "gemini-2.5-flash"},
             request_metrics={},
         )
 
@@ -153,11 +181,16 @@ class VirtualModelBlacklistRoutingTests(unittest.IsolatedAsyncioTestCase):
             ),
             patch(
                 "core.api.primary.credential_manager.get_valid_model_credential",
-                AsyncMock(return_value=("gemini-retired", "first.json", credential)),
+                AsyncMock(
+                    side_effect=[
+                        ("gemini-2.5-flash", "first.json", first_credential),
+                        ("gemini-2.5-flash", "second.json", second_credential),
+                    ]
+                ),
             ) as route_mock,
             patch(
                 "core.api.primary.prepare_provider_request",
-                AsyncMock(return_value=context),
+                AsyncMock(side_effect=[first_context, second_context]),
             ),
             patch(
                 "core.api.primary.get_retry_config",
@@ -183,21 +216,31 @@ class VirtualModelBlacklistRoutingTests(unittest.IsolatedAsyncioTestCase):
             ),
             patch(
                 "core.api.primary.post_async",
-                AsyncMock(return_value=FakeUpstreamResponse(404, b'{"error":"model not found"}')),
+                AsyncMock(
+                    side_effect=[
+                        FakeUpstreamResponse(404, b'{"error":"model not found"}'),
+                        FakeUpstreamResponse(200, b'{"response":"ok"}'),
+                    ]
+                ),
             ),
             patch("core.api.primary.record_model_not_found", AsyncMock()) as blacklist_mock,
             patch("core.api.primary.record_model_route_miss", AsyncMock()) as route_miss_mock,
             patch("core.api.primary.record_api_call_error", AsyncMock()),
         ):
             response = await non_stream_request(
-                body={"model": "gemini-retired", "request": {}},
+                body={"model": "gemini-2.5-flash", "request": {}},
                 model_routing=False,
             )
 
-        self.assertEqual(response.status_code, 404)
+        self.assertEqual(response.status_code, 200)
         blacklist_mock.assert_not_awaited()
-        route_miss_mock.assert_not_awaited()
+        route_miss_mock.assert_awaited_once()
+        self.assertEqual(route_mock.await_count, 2)
         self.assertFalse(route_mock.await_args.kwargs["respect_model_blacklist"])
+        self.assertEqual(
+            route_mock.await_args.kwargs["excluded_credential_models"],
+            {("first.json", "gemini-2.5-flash")},
+        )
 
     async def test_virtual_stream_blacklists_404_and_continues_with_next_model(self):
         credentials = [
@@ -302,6 +345,111 @@ class VirtualModelBlacklistRoutingTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(
             route_mock.await_args.kwargs["excluded_provider_models"],
             {("google_ai_studio", "gemini-retired")},
+        )
+
+    async def test_direct_stream_404_tries_another_credential_for_the_same_model(self):
+        credentials = [
+            {
+                "provider": "google_ai_studio",
+                "credential_type": "api_key",
+                "api_key": "example-key",
+            },
+            {
+                "provider": "google_antigravity",
+                "token": "example-token",
+                "project_id": "example-project",
+            },
+        ]
+        contexts = [
+            ProviderRequestContext(
+                provider_id="google_ai_studio",
+                target_url="https://first.invalid",
+                headers={},
+                payload={"model": "gemini-2.5-flash"},
+                request_metrics={},
+            ),
+            ProviderRequestContext(
+                provider_id="google_antigravity",
+                target_url="https://second.invalid",
+                headers={},
+                payload={"model": "gemini-2.5-flash"},
+                request_metrics={},
+            ),
+        ]
+        stream_calls = 0
+
+        def fake_stream_post_async(**_kwargs):
+            nonlocal stream_calls
+            stream_calls += 1
+
+            async def chunks():
+                if stream_calls == 1:
+                    yield Response(
+                        content=b'{"error":"model not found"}',
+                        status_code=404,
+                        media_type="application/json",
+                    )
+                else:
+                    yield b'data: {"response":"ok"}\n\n'
+
+            return chunks()
+
+        with (
+            patch(
+                "core.api.primary.credential_manager.get_valid_model_credential",
+                AsyncMock(
+                    side_effect=[
+                        ("gemini-2.5-flash", "first.json", credentials[0]),
+                        ("gemini-2.5-flash", "second.json", credentials[1]),
+                    ]
+                ),
+            ) as route_mock,
+            patch(
+                "core.api.primary.prepare_provider_request",
+                AsyncMock(side_effect=contexts),
+            ),
+            patch(
+                "core.api.primary.get_retry_config",
+                AsyncMock(
+                    return_value={
+                        "retry_enabled": False,
+                        "max_retries": 0,
+                        "retry_interval": 0,
+                    }
+                ),
+            ),
+            patch(
+                "core.api.primary.get_antigravity_switch_credential_enabled",
+                AsyncMock(return_value=False),
+            ),
+            patch(
+                "core.api.primary.get_auto_disable_error_codes",
+                AsyncMock(return_value=[]),
+            ),
+            patch(
+                "core.api.primary.get_upstream_timeout_seconds",
+                AsyncMock(return_value=30),
+            ),
+            patch("core.api.primary.stream_post_async", side_effect=fake_stream_post_async),
+            patch("core.api.primary.record_model_not_found", AsyncMock()) as blacklist_mock,
+            patch("core.api.primary.record_model_route_miss", AsyncMock()) as route_miss_mock,
+            patch("core.api.primary.record_api_call_success", AsyncMock()),
+        ):
+            chunks = [
+                chunk
+                async for chunk in stream_request(
+                    body={"model": "gemini-2.5-flash", "request": {}},
+                    model_routing=False,
+                )
+            ]
+
+        self.assertEqual(chunks, [b'data: {"response":"ok"}\n\n'])
+        blacklist_mock.assert_not_awaited()
+        route_miss_mock.assert_awaited_once()
+        self.assertEqual(route_mock.await_count, 2)
+        self.assertEqual(
+            route_mock.await_args.kwargs["excluded_credential_models"],
+            {("first.json", "gemini-2.5-flash")},
         )
 
 

@@ -29,6 +29,17 @@ class UsageStatsTests(unittest.TestCase):
             usage_stats._provider_display_name("Google Antigravity"),
             "Google Antigravity",
         )
+        self.assertEqual(usage_stats._provider_display_name("xai"), "Grok")
+
+    def test_credential_display_names_distinguish_grok_from_xai_console(self):
+        self.assertEqual(
+            usage_stats._credential_provider_display_name("xai", "oauth"),
+            "Grok",
+        )
+        self.assertEqual(
+            usage_stats._credential_provider_display_name("xai", "api_key"),
+            "xAI Console",
+        )
 
     def test_record_call_persists_provider_and_compression_metrics(self):
         original_db_path = usage_stats.db_path

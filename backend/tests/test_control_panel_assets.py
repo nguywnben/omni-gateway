@@ -113,6 +113,9 @@ class ControlPanelAssetTests(unittest.TestCase):
         )
         self.assertNotIn("Open xAI authorization", body)
         self.assertNotIn("Open xAI authorization", settings_script)
+        self.assertNotIn(">xAI<", body)
+        self.assertNotIn("name: 'xAI'", core_script)
+        self.assertIn('<option value="xai">Grok</option>', body)
 
     def test_credential_verification_uses_provider_neutral_route(self):
         core_script = (BACKEND_DIR.parent / "frontend" / "js" / "core.js").read_text(

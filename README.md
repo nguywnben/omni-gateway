@@ -2,7 +2,7 @@
 
 A universal AI router for coding tools. Omni Gateway provides smart auto-fallback, token-aware request cleanup, usage visibility, and seamless format translation so local agents, IDE assistants, and automation scripts can use free and premium LLM capacity through one stable API surface.
 
-> **Project status:** Stable. Version `1.1.1` refines Grok OAuth with xAI's authorization-code completion flow while preserving the provider support, stable SDK routes, canonical management routes, configuration names, and single-instance runtime contract established in `1.0.0`.
+> **Project status:** Stable. Version `1.1.2` improves provider identity and model-aware fallback while preserving the stable SDK routes, canonical management routes, configuration names, and single-instance runtime contract established in `1.0.0`.
 
 ## Why Omni Gateway
 
@@ -72,10 +72,10 @@ sudo docker run -d \
   -p 4283:4283 \
   -v /opt/omni-gateway/creds:/app/backend/data/creds \
   -v /opt/omni-gateway/logs:/app/backend/data/logs \
-  nguywnben/omni-gateway:1.1.1
+  nguywnben/omni-gateway:1.1.2
 ```
 
-The same release is published to GitHub Packages as `ghcr.io/nguywnben/omni-gateway:1.1.1`. The `latest` tag tracks the newest stable release; `edge` tracks verified but unreleased builds from `main`. Pin a version tag or digest when reproducible deployment matters.
+The same release is published to GitHub Packages as `ghcr.io/nguywnben/omni-gateway:1.1.2`. The `latest` tag tracks the newest stable release; `edge` tracks verified but unreleased builds from `main`. Pin a version tag or digest when reproducible deployment matters.
 
 Open the control panel at:
 
@@ -87,7 +87,7 @@ On first run, create the console password on the setup screen. No default passwo
 
 Passwords managed by the application are stored as salted scrypt hashes, control-panel sessions use HttpOnly cookies, and public SDK requests authenticate with the generated `sk-ogw-` API key. For a non-interactive deployment, preconfigure `PANEL_PASSWORD` and skip the setup screen entirely.
 
-The `1.1.1` container is published for `linux/amd64`. ARM64 publication is intentionally paused until every provider dependency, including the Vertex transport stack, can be built and tested with the same contract.
+The `1.1.2` container is published for `linux/amd64`. ARM64 publication is intentionally paused until every provider dependency, including the Vertex transport stack, can be built and tested with the same contract.
 
 If the server firewall is enabled, allow the gateway port:
 
@@ -122,7 +122,7 @@ sudo mkdir -p /opt/omni-gateway/creds /opt/omni-gateway/logs
 docker compose -f deploy/docker-compose.yml up -d
 ```
 
-The included compose file pulls `nguywnben/omni-gateway:latest` and uses `/opt/omni-gateway` by default for persistent host data. Set `IMAGE=nguywnben/omni-gateway:1.1.1` to pin this release, and set `DATA_DIR=/custom/path` when the server uses a different storage location.
+The included compose file pulls `nguywnben/omni-gateway:latest` and uses `/opt/omni-gateway` by default for persistent host data. Set `IMAGE=nguywnben/omni-gateway:1.1.2` to pin this release, and set `DATA_DIR=/custom/path` when the server uses a different storage location.
 
 Compose forwards `API_KEY`, `PANEL_PASSWORD`, `SETUP_TOKEN`, external storage URIs, and `PROXY` from the shell or a root `.env` file. Leave them empty to retain automatic key generation, first-run setup, local SQLite storage, and direct outbound networking.
 
@@ -362,7 +362,7 @@ Google AI Studio batch import accepts JSON files and ZIP archives containing JSO
 
 Every imported key is validated before storage. Duplicate keys within the same import are skipped, existing keys are revalidated and updated, and invalid entries are reported without exposing the key value.
 
-Grok supports PKCE OAuth credentials, while xAI Console supports API keys. xAI Console keys are validated against the xAI model catalog before storage. For Grok OAuth, Omni Gateway generates an authorization link that redirects to `http://127.0.0.1:56121/callback`; after authorization, copy the complete callback URL from the browser and paste it into the Grok OAuth form. Access tokens are refreshed automatically when a refresh token is available, and both credential types expose only the Grok models declared by their current catalog.
+Grok supports PKCE OAuth credentials, while xAI Console supports API keys. xAI Console keys are validated against the Grok model catalog before storage. For Grok OAuth, Omni Gateway generates an authorization link; after authorization, copy the code displayed on the Grok authorization page and paste it into the Grok OAuth form. Access tokens are refreshed automatically when a refresh token is available, and both credential types expose only the Grok models declared by their current catalog.
 
 Pool imports and Google Antigravity batch imports accept archives up to 10 MB, at most 500 files, individual credential files up to 2 MB, and at most 25 MB of uncompressed data. Google AI Studio uses stricter limits of 2 MB per imported file, 200 JSON entries, and 5 MB of uncompressed data.
 

@@ -442,12 +442,14 @@ async def stream_request(
     requested_model = str(body.get("model") or "")
     candidates = _normalize_model_candidates(body, model_candidates)
     route_exclusions: set[tuple[str, str]] = set()
+    credential_route_exclusions: set[tuple[str, str]] = set()
 
     route_result = await credential_manager.get_valid_model_credential(
         candidates,
         mode="primary",
         respect_model_blacklist=model_routing,
         excluded_provider_models=route_exclusions,
+        excluded_credential_models=credential_route_exclusions,
     )
 
     if not route_result:
@@ -513,6 +515,7 @@ async def stream_request(
             mode="primary",
             respect_model_blacklist=model_routing,
             excluded_provider_models=route_exclusions,
+            excluded_credential_models=credential_route_exclusions,
         )
         if not route_result:
             return None
@@ -535,7 +538,7 @@ async def stream_request(
         request_metrics = new_context.request_metrics
         return True
 
-    attempt_limit = max_retries + (MAX_MODEL_ROUTE_ATTEMPTS if model_routing else 0)
+    attempt_limit = max_retries + MAX_MODEL_ROUTE_ATTEMPTS
     for attempt in range(attempt_limit + 1):
         received_content = False
         stream_token_usage: Dict[str, int] = {}
@@ -564,15 +567,22 @@ async def stream_request(
                     except Exception:
                         error_body = ""
 
-                    if model_routing and status_code == 404:
-                        log.warning(
-                            f"[provider stream] model route not found; blacklisting provider={provider_id}, model={model_name}."
-                        )
-                        await _exclude_missing_model_route(
-                            route_exclusions=route_exclusions,
-                            provider_id=provider_id,
-                            model_name=model_name,
-                        )
+                    if status_code == 404:
+                        credential_route_exclusions.add((current_file, model_name))
+                        if model_routing:
+                            log.warning(
+                                f"[provider stream] model route not found; blacklisting provider={provider_id}, model={model_name}."
+                            )
+                            await _exclude_missing_model_route(
+                                route_exclusions=route_exclusions,
+                                provider_id=provider_id,
+                                model_name=model_name,
+                            )
+                        else:
+                            log.warning(
+                                "[provider stream] credential could not serve the requested model; "
+                                f"trying another route (credential={current_file}, model={model_name})."
+                            )
                         await record_model_route_miss(
                             credential_manager,
                             current_file,
@@ -715,7 +725,7 @@ async def stream_request(
 
             if need_retry:
                 if model_route_retry:
-                    log.info("[provider stream] Trying the next virtual-model route.")
+                    log.info("[provider stream] Trying the next compatible model route.")
                 else:
                     log.info(
                         "[provider stream] retrying request "
@@ -827,12 +837,14 @@ async def non_stream_request(
     requested_model = str(body.get("model") or "")
     candidates = _normalize_model_candidates(body, model_candidates)
     route_exclusions: set[tuple[str, str]] = set()
+    credential_route_exclusions: set[tuple[str, str]] = set()
 
     route_result = await credential_manager.get_valid_model_credential(
         candidates,
         mode="primary",
         respect_model_blacklist=model_routing,
         excluded_provider_models=route_exclusions,
+        excluded_credential_models=credential_route_exclusions,
     )
 
     if not route_result:
@@ -896,6 +908,7 @@ async def non_stream_request(
             mode="primary",
             respect_model_blacklist=model_routing,
             excluded_provider_models=route_exclusions,
+            excluded_credential_models=credential_route_exclusions,
         )
         if not route_result:
             return None
@@ -918,7 +931,7 @@ async def non_stream_request(
         request_metrics = new_context.request_metrics
         return True
 
-    attempt_limit = max_retries + (MAX_MODEL_ROUTE_ATTEMPTS if model_routing else 0)
+    attempt_limit = max_retries + MAX_MODEL_ROUTE_ATTEMPTS
     for attempt in range(attempt_limit + 1):
         need_retry = False
 
@@ -978,7 +991,7 @@ async def non_stream_request(
                                 provider=provider_id,
                             )
                             return Response(
-                                content=json.dumps({"error": "xAI returned an invalid response."}),
+                                content=json.dumps({"error": "Grok returned an invalid response."}),
                                 status_code=502,
                                 media_type="application/json",
                             )
@@ -1016,15 +1029,22 @@ async def non_stream_request(
                 except Exception:
                     pass
 
-                if model_routing and status_code == 404:
-                    log.warning(
-                        f"[provider] model route not found; blacklisting provider={provider_id}, model={model_name}."
-                    )
-                    await _exclude_missing_model_route(
-                        route_exclusions=route_exclusions,
-                        provider_id=provider_id,
-                        model_name=model_name,
-                    )
+                if status_code == 404:
+                    credential_route_exclusions.add((current_file, model_name))
+                    if model_routing:
+                        log.warning(
+                            f"[provider] model route not found; blacklisting provider={provider_id}, model={model_name}."
+                        )
+                        await _exclude_missing_model_route(
+                            route_exclusions=route_exclusions,
+                            provider_id=provider_id,
+                            model_name=model_name,
+                        )
+                    else:
+                        log.warning(
+                            "[provider] credential could not serve the requested model; "
+                            f"trying another route (credential={current_file}, model={model_name})."
+                        )
                     await record_model_route_miss(
                         credential_manager,
                         current_file,
@@ -1275,7 +1295,7 @@ async def fetch_provider_model_ids(
                 if access_token:
                     model_ids.update(await fetch_xai_model_ids(str(access_token)))
             except Exception as exc:
-                log.warning(f"xAI model discovery failed: {exc}")
+                log.warning(f"Grok model discovery failed: {exc}")
             finally:
                 await credential_manager.release_credential(current_file, mode="primary")
 

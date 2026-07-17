@@ -14,9 +14,13 @@ from core.google_ai_studio import GoogleAIStudioError, validate_api_key
 from core.provider_registry import (
     GOOGLE_AI_STUDIO,
     GOOGLE_ANTIGRAVITY,
+    GROK,
     XAI,
+    XAI_CONSOLE,
     api_key_fingerprint,
     canonicalize_antigravity_credential_filename,
+    get_credential_provider_display_name,
+    get_credential_provider_variant,
     get_provider_display_name,
     normalize_provider_id,
 )
@@ -187,10 +191,17 @@ async def extract_pool_archive(
     return candidates, errors
 
 
-def _empty_provider_result(provider_id: str) -> Dict[str, Any]:
+def _empty_provider_result(
+    provider_id: str, *, routing_provider: str | None = None
+) -> Dict[str, Any]:
     return {
         "provider": provider_id,
-        "provider_name": get_provider_display_name(provider_id),
+        "provider_name": (
+            get_credential_provider_display_name({"provider": provider_id})
+            if provider_id in {GROK, XAI_CONSOLE}
+            else get_provider_display_name(provider_id)
+        ),
+        "routing_provider": routing_provider or provider_id,
         "created": 0,
         "updated": 0,
         "replaced": 0,
@@ -288,8 +299,10 @@ async def restore_pool_archive(upload: UploadFile) -> Dict[str, Any]:
     """Import supported credentials and return a secret-free per-file report."""
     candidates, results = await extract_pool_archive(upload)
     providers = {
-        provider_id: _empty_provider_result(provider_id)
-        for provider_id in (GOOGLE_ANTIGRAVITY, GOOGLE_AI_STUDIO, XAI)
+        GOOGLE_ANTIGRAVITY: _empty_provider_result(GOOGLE_ANTIGRAVITY),
+        GOOGLE_AI_STUDIO: _empty_provider_result(GOOGLE_AI_STUDIO),
+        GROK: _empty_provider_result(GROK, routing_provider=XAI),
+        XAI_CONSOLE: _empty_provider_result(XAI_CONSOLE, routing_provider=XAI),
     }
     seen_api_key_fingerprints: Dict[str, set[str]] = {
         GOOGLE_AI_STUDIO: set(),
@@ -298,7 +311,8 @@ async def restore_pool_archive(upload: UploadFile) -> Dict[str, Any]:
 
     for candidate in candidates:
         provider_id = candidate["provider"]
-        provider_result = providers[provider_id]
+        report_provider_id = get_credential_provider_variant(candidate["payload"])
+        provider_result = providers[report_provider_id]
         is_api_key = provider_id == GOOGLE_AI_STUDIO or (
             provider_id == XAI
             and str(candidate["payload"].get("credential_type") or "").lower() == "api_key"
@@ -315,7 +329,8 @@ async def restore_pool_archive(upload: UploadFile) -> Dict[str, Any]:
                         "status": "skipped",
                         "action": "skipped",
                         "source_filename": candidate["source_filename"],
-                        "provider": provider_id,
+                        "provider": report_provider_id,
+                        "routing_provider": provider_id,
                         "provider_name": provider_result["provider_name"],
                         "message": "Duplicate API key in this archive was skipped.",
                     }
@@ -336,7 +351,8 @@ async def restore_pool_archive(upload: UploadFile) -> Dict[str, Any]:
                 {
                     **restored,
                     "source_filename": candidate["source_filename"],
-                    "provider": provider_id,
+                    "provider": report_provider_id,
+                    "routing_provider": provider_id,
                     "provider_name": provider_result["provider_name"],
                 }
             )
@@ -346,7 +362,8 @@ async def restore_pool_archive(upload: UploadFile) -> Dict[str, Any]:
                 {
                     "status": "error",
                     "source_filename": candidate["source_filename"],
-                    "provider": provider_id,
+                    "provider": report_provider_id,
+                    "routing_provider": provider_id,
                     "provider_name": provider_result["provider_name"],
                     "message": str(exc),
                 }
@@ -363,7 +380,8 @@ async def restore_pool_archive(upload: UploadFile) -> Dict[str, Any]:
                 {
                     "status": "error",
                     "source_filename": candidate["source_filename"],
-                    "provider": provider_id,
+                    "provider": report_provider_id,
+                    "routing_provider": provider_id,
                     "provider_name": provider_result["provider_name"],
                     "message": "Credential could not be imported.",
                 }

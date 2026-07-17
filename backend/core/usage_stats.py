@@ -9,6 +9,8 @@ from typing import Any, Dict, List, Optional
 from core.provider_registry import (
     GOOGLE_ANTIGRAVITY,
     get_credential_provider,
+    get_credential_provider_display_name,
+    get_credential_provider_variant,
     get_provider_display_name,
     normalize_provider_id,
 )
@@ -60,9 +62,23 @@ def _provider_display_name(value: Any) -> str:
     return get_provider_display_name(normalize_provider_id(value or GOOGLE_ANTIGRAVITY))
 
 
-def deleted_usage_filename(provider: Any) -> str:
+def _credential_provider_display_name(provider: Any, credential_type: Any = "") -> str:
+    return get_credential_provider_display_name(
+        {
+            "provider": provider or GOOGLE_ANTIGRAVITY,
+            "credential_type": credential_type or "",
+        }
+    )
+
+
+def deleted_usage_filename(provider: Any, credential_type: Any = "") -> str:
     """Return the anonymous history bucket for a deleted provider credential."""
-    provider_id = normalize_provider_id(provider or GOOGLE_ANTIGRAVITY)
+    provider_id = get_credential_provider_variant(
+        {
+            "provider": provider or GOOGLE_ANTIGRAVITY,
+            "credential_type": credential_type or "",
+        }
+    )
     safe_provider_id = "".join(
         character if character.isalnum() or character == "_" else "_" for character in provider_id
     ).strip("_")
@@ -93,7 +109,8 @@ def _empty_usage_record(metadata: Dict[str, Any]) -> Dict[str, Any]:
         "credential_label": metadata.get("credential_label", ""),
         "credential_type": metadata.get("credential_type", ""),
         "provider": provider_id,
-        "provider_name": metadata.get("provider_name") or _provider_display_name(provider_id),
+        "provider_name": metadata.get("provider_name")
+        or _credential_provider_display_name(provider_id, metadata.get("credential_type")),
         "is_deleted": bool(metadata.get("is_deleted", False)),
         "calls": 0,
         "successful_calls": 0,
@@ -148,7 +165,8 @@ def _usage_record(
         "credential_label": existing.get("credential_label", ""),
         "credential_type": existing.get("credential_type", ""),
         "provider": provider_id,
-        "provider_name": existing.get("provider_name") or _provider_display_name(provider_id),
+        "provider_name": existing.get("provider_name")
+        or _credential_provider_display_name(provider_id, existing.get("credential_type")),
         "is_deleted": bool(existing.get("is_deleted", False)),
         "calls": calls,
         "successful_calls": successful_calls,
@@ -378,7 +396,7 @@ def record_call(
             conn.close()
 
 
-def retire_credential_usage(filename: str, provider: Any) -> int:
+def retire_credential_usage(filename: str, provider: Any, *, credential_type: Any = "") -> int:
     """Detach historical usage from a deleted credential without losing totals."""
     source_filename = os.path.basename(str(filename or ""))
     if (
@@ -388,8 +406,13 @@ def retire_credential_usage(filename: str, provider: Any) -> int:
     ):
         return 0
 
-    provider_id = normalize_provider_id(provider or GOOGLE_ANTIGRAVITY)
-    anonymous_filename = deleted_usage_filename(provider_id)
+    provider_id = get_credential_provider_variant(
+        {
+            "provider": provider or GOOGLE_ANTIGRAVITY,
+            "credential_type": credential_type or "",
+        }
+    )
+    anonymous_filename = deleted_usage_filename(provider_id, credential_type)
     init_db()
     with db_lock:
         conn = sqlite3.connect(db_path)
@@ -470,7 +493,7 @@ async def get_credential_usage_metadata() -> Dict[str, Dict[str, str]]:
                 "credential_label": str(credential_data.get("credential_label") or ""),
                 "credential_type": str(credential_data.get("credential_type") or ""),
                 "provider": provider_id,
-                "provider_name": _provider_display_name(provider_id),
+                "provider_name": get_credential_provider_display_name(credential_data),
             }
 
         return metadata
@@ -543,12 +566,23 @@ async def get_stats_for_period(period: str = "1d") -> Dict[str, Dict[str, Any]]:
             for row in cursor.fetchall():
                 existing = res.get(row[0], {})
                 if is_deleted_usage_filename(row[0]):
-                    provider_id = normalize_provider_id(row[14] or GOOGLE_ANTIGRAVITY)
+                    raw_provider = str(row[14] or GOOGLE_ANTIGRAVITY)
+                    credential_type = (
+                        "api_key"
+                        if raw_provider == "xai_console"
+                        else "oauth"
+                        if raw_provider == "grok"
+                        else ""
+                    )
+                    provider_id = normalize_provider_id(raw_provider)
                     existing = {
                         "user_email": "",
                         "credential_label": "Deleted credential",
                         "provider": provider_id,
-                        "provider_name": _provider_display_name(provider_id),
+                        "provider_name": _credential_provider_display_name(
+                            raw_provider, credential_type
+                        ),
+                        "credential_type": credential_type,
                         "is_deleted": True,
                     }
                 res[row[0]] = _usage_record(

@@ -9,7 +9,7 @@ from dataclasses import dataclass
 from typing import Any, Callable, Deque, Dict, Optional, Set, Tuple
 
 from core.provider_registry import (
-    credential_supports_model,
+    credential_model_support_level,
     get_credential_provider,
     normalize_provider_id,
 )
@@ -89,6 +89,7 @@ class SmartCredentialRouter:
         routing_strategy: str,
         preferred_provider: Optional[str],
         excluded_provider_models: Set[Tuple[str, str]],
+        excluded_credential_models: Set[Tuple[str, str]],
         now: float,
     ) -> list[tuple[tuple[Any, ...], str]]:
         candidates = []
@@ -104,6 +105,8 @@ class SmartCredentialRouter:
                 continue
 
             key = (mode, filename)
+            if model_name and (filename, model_name) in excluded_credential_models:
+                continue
             if model_name and (self._providers.get(key), model_name) in excluded_provider_models:
                 continue
             provider_penalty = 0
@@ -161,6 +164,7 @@ class SmartCredentialRouter:
         routing_strategy: str = "balanced",
         preferred_provider: Optional[str] = None,
         excluded_provider_models: Optional[Set[Tuple[str, str]]] = None,
+        excluded_credential_models: Optional[Set[Tuple[str, str]]] = None,
     ) -> Optional[CredentialResult]:
         """Reserve and return the best currently available credential."""
         async with self._lock:
@@ -187,6 +191,14 @@ class SmartCredentialRouter:
                 for excluded_provider, excluded_model in (excluded_provider_models or set())
                 if str(excluded_provider or "").strip() and str(excluded_model or "").strip()
             }
+            normalized_credential_exclusions = {
+                (
+                    str(excluded_filename).replace("\\", "/").rsplit("/", 1)[-1],
+                    str(excluded_model).strip(),
+                )
+                for excluded_filename, excluded_model in (excluded_credential_models or set())
+                if str(excluded_filename or "").strip() and str(excluded_model or "").strip()
+            }
             ranked = self._rank_candidates(
                 states,
                 mode=mode,
@@ -194,19 +206,29 @@ class SmartCredentialRouter:
                 routing_strategy=normalized_strategy,
                 preferred_provider=normalized_preferred_provider,
                 excluded_provider_models=normalized_exclusions,
+                excluded_credential_models=normalized_credential_exclusions,
                 now=now,
             )
 
+            selected = None
             for score, filename in ranked:
                 credential_data = await storage_adapter.get_credential(filename, mode=mode)
                 if not credential_data:
                     continue
-                if not credential_supports_model(
+                support_level = credential_model_support_level(
                     credential_data,
                     model_name,
                     required_provider=provider_id,
-                ):
+                )
+                if not support_level:
                     continue
+
+                candidate = ((-support_level, *score), score, filename, credential_data)
+                if selected is None or candidate[0] < selected[0]:
+                    selected = candidate
+
+            if selected is not None:
+                _, score, filename, credential_data = selected
 
                 if mode == "primary":
                     credential_data["enable_credit"] = bool(
@@ -220,7 +242,7 @@ class SmartCredentialRouter:
                     f"Smart routing selected {filename} "
                     f"(mode={mode}, model={model_name or ''}, "
                     f"provider={get_credential_provider(credential_data)}, "
-                    f"in_flight={score[2] + 1}, calls={score[4]})."
+                    f"support={-selected[0][0]}, in_flight={score[2] + 1}, calls={score[4]})."
                 )
                 return filename, credential_data
 

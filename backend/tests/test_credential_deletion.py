@@ -36,6 +36,7 @@ class CredentialDeletionTests(unittest.IsolatedAsyncioTestCase):
         retire_usage.assert_called_once_with(
             "google-ai-studio-fingerprint.json",
             "google_ai_studio",
+            credential_type="api_key",
         )
 
     async def test_failed_delete_keeps_usage_history_unchanged(self):
