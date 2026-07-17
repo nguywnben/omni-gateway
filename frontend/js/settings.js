@@ -453,9 +453,28 @@ async function clearEnvCredentials() {
 
 // =====================================================================
 
+function setProviderSettingsLoading(loadingIds, formIds, isLoading) {
+    loadingIds.forEach((id) => {
+        const element = document.getElementById(id);
+        if (!element) return;
+        element.hidden = !isLoading;
+        element.setAttribute('aria-busy', String(isLoading));
+    });
+
+    formIds.forEach((id) => {
+        document.getElementById(id)?.classList.toggle('hidden', isLoading);
+    });
+}
+
 async function loadGoogleAIStudioSettings() {
     const field = document.getElementById('googleAiStudioApiUrl');
     if (!field) return;
+
+    setProviderSettingsLoading(
+        ['googleAiStudioSettingsLoading'],
+        ['googleAiStudioSettingsForm'],
+        true
+    );
 
     try {
         const response = await fetch('./api/providers/google-ai-studio/config', {
@@ -471,6 +490,12 @@ async function loadGoogleAIStudioSettings() {
         field.classList.toggle('env-locked', isLocked);
     } catch (error) {
         showStatus(`Failed to load Google AI Studio settings: ${error.message}`, 'error');
+    } finally {
+        setProviderSettingsLoading(
+            ['googleAiStudioSettingsLoading'],
+            ['googleAiStudioSettingsForm'],
+            false
+        );
     }
 }
 
@@ -600,6 +625,11 @@ const XAI_CONFIG_GROUPS = {
 
 async function loadXaiSettings() {
     if (!Object.keys(XAI_CONFIG_FIELDS).some(fieldId => document.getElementById(fieldId))) return;
+
+    const loadingIds = ['grokSettingsLoading', 'xaiConsoleSettingsLoading'];
+    const formIds = ['grokSettingsForm', 'xaiConsoleSettingsForm'];
+    setProviderSettingsLoading(loadingIds, formIds, true);
+
     try {
         const response = await fetch('./api/providers/xai/config', { headers: getAuthHeaders() });
         const data = await response.json().catch(() => ({}));
@@ -614,6 +644,8 @@ async function loadXaiSettings() {
         });
     } catch (error) {
         showStatus(`Failed to load Grok and xAI Console settings: ${error.message}`, 'error');
+    } finally {
+        setProviderSettingsLoading(loadingIds, formIds, false);
     }
 }
 
@@ -811,7 +843,7 @@ async function loadAntigravitySettings() {
 
     try {
 
-        loading.style.display = 'block';
+        loading.hidden = false;
 
         form.classList.add('hidden');
 
@@ -841,7 +873,7 @@ async function loadAntigravitySettings() {
 
     } finally {
 
-        loading.style.display = 'none';
+        loading.hidden = true;
 
     }
 
@@ -1059,7 +1091,7 @@ async function loadConfig() {
 
     try {
 
-        loading.style.display = 'block';
+        if (loading) loading.hidden = false;
 
         form.classList.add('hidden');
 
@@ -1091,7 +1123,7 @@ async function loadConfig() {
 
     } finally {
 
-        loading.style.display = 'none';
+        if (loading) loading.hidden = true;
 
     }
 

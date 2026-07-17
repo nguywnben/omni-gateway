@@ -113,7 +113,7 @@
             <div class="sidebar-footer">
                 <div class="sidebar-meta">
                     <span>Console</span>
-                    <span id="versionText">Loading</span>
+                    <span id="versionText" class="skeleton skeleton-inline" aria-label="Loading version" aria-busy="true"></span>
                 </div>
                 <button type="button" class="btn btn-secondary btn-small" data-ui-action="logout">Sign out</button>
             </div>
@@ -157,7 +157,7 @@
                         </div>
                     </header>
 
-                    <div class="stats-container">
+                    <div class="stats-container" id="dashboardStats" aria-label="Dashboard metrics" aria-busy="true">
                         <div class="stat-item">
                             <span class="stat-number" id="totalApiCalls">0</span>
                             <span class="stat-label"><span id="totalApiCallsLabel">Requests in the last 24 hours</span><span class="stat-detail"><span id="successfulApiCalls">0</span> successful / <span id="failedApiCalls">0</span> failed</span></span>
@@ -192,7 +192,7 @@
                                 <div class="copy-field">
                                     <label for="apiKey">API key</label>
                                     <div class="secret-field">
-                                        <input type="password" id="apiKey" value="..." readonly title="Copy API key" aria-label="API key. Copy API key." data-ui-action="copy-api-key">
+                                        <input type="password" id="apiKey" value="" class="skeleton skeleton-control" readonly title="Copy API key" aria-label="Loading API key" aria-busy="true" data-ui-action="copy-api-key">
                                         <button type="button" id="toggleApiKeyVisibilityBtn" class="btn btn-secondary icon-btn" data-ui-action="toggle-api-key" title="Show API key" aria-label="Show API key">
                                             <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z"></path><circle cx="12" cy="12" r="3"></circle></svg>
                                         </button>
@@ -313,7 +313,7 @@
                             <h2 class="card-title" id="usageBreakdownTitle">24-Hour Request Breakdown</h2>
                             <p class="card-copy card-title-copy" id="usageBreakdownDescription">Review provider and credential traffic for the last 24 hours.</p>
                             <div class="usage-provider-summary" id="usageProviderSummary" aria-label="Provider activity"></div>
-                            <div id="usageLoading" class="skeleton-table">
+                            <div id="usageLoading" class="skeleton-table" role="status" aria-label="Loading request breakdown" aria-busy="true">
                                 <div class="skeleton-row header"><div class="skeleton-cell"></div><div class="skeleton-cell"></div><div class="skeleton-cell"></div><div class="skeleton-cell"></div></div>
                                 <div class="skeleton-row"><div class="skeleton-cell"></div><div class="skeleton-cell"></div><div class="skeleton-cell"></div><div class="skeleton-cell"></div></div>
                             </div>
@@ -431,7 +431,7 @@
                     </div>
 
                     <div id="primaryCredsListSection">
-                        <div id="primaryCredsLoading" class="skeleton-list">
+                        <div id="primaryCredsLoading" class="skeleton-list" role="status" aria-label="Loading provider credentials" aria-busy="true">
                             <div class="skeleton-item"><div class="skeleton-line title"></div><div class="skeleton-line content"></div><div class="skeleton-line buttons"></div></div>
                             <div class="skeleton-item"><div class="skeleton-line title"></div><div class="skeleton-line content"></div><div class="skeleton-line buttons"></div></div>
                             <div class="skeleton-item"><div class="skeleton-line title"></div><div class="skeleton-line content"></div><div class="skeleton-line buttons"></div></div>
@@ -464,7 +464,7 @@
                         <div class="stat-item"><span class="stat-number" id="modelStatUnavailable">0</span><span class="stat-label">Unavailable selections</span></div>
                     </div>
 
-                    <div id="modelCatalogLoading" class="skeleton-config">
+                    <div id="modelCatalogLoading" class="skeleton-config" role="status" aria-label="Loading provider models" aria-busy="true">
                         <div class="skeleton-config-group"><div class="skeleton-line title"></div><div class="skeleton-line content"></div></div>
                         <div class="skeleton-config-group"><div class="skeleton-line title"></div><div class="skeleton-line content"></div></div>
                     </div>
@@ -684,7 +684,11 @@
                                     <button type="button" class="btn btn-secondary" data-ui-action="reset-grok-settings">Reset defaults</button>
                                 </div>
                             </div>
-                            <div class="config-grid provider-config-grid">
+                            <div id="grokSettingsLoading" class="skeleton-config provider-settings-skeleton" role="status" aria-label="Loading Grok settings" aria-busy="true">
+                                <div class="skeleton-config-group"><div class="skeleton-line title"></div><div class="skeleton-line field"></div></div>
+                                <div class="skeleton-config-group"><div class="skeleton-line title"></div><div class="skeleton-line field"></div></div>
+                            </div>
+                            <div id="grokSettingsForm" class="config-grid provider-config-grid hidden">
                                 <div class="form-group"><label for="xaiClientId">OAuth client ID</label><input type="text" id="xaiClientId" autocomplete="off"></div>
                                 <div class="form-group"><label for="xaiOauthIssuer">OAuth issuer</label><input type="url" id="xaiOauthIssuer" autocomplete="off"></div>
                             </div>
@@ -768,7 +772,11 @@
                                     <button type="button" class="btn btn-secondary" data-ui-action="reset-xai-console-settings">Reset defaults</button>
                                 </div>
                             </div>
-                            <div class="config-grid provider-config-grid">
+                            <div id="xaiConsoleSettingsLoading" class="skeleton-config provider-settings-skeleton" role="status" aria-label="Loading xAI Console settings" aria-busy="true">
+                                <div class="skeleton-config-group"><div class="skeleton-line title"></div><div class="skeleton-line field"></div></div>
+                                <div class="skeleton-config-group"><div class="skeleton-line title"></div><div class="skeleton-line field"></div></div>
+                            </div>
+                            <div id="xaiConsoleSettingsForm" class="config-grid provider-config-grid hidden">
                                 <div class="form-group"><label for="xaiApiUrl">Grok API endpoint</label><input type="url" id="xaiApiUrl" autocomplete="off"></div>
                                 <div class="form-group"><label for="xaiUserAgent">HTTP User-Agent</label><input type="text" id="xaiUserAgent" autocomplete="off"></div>
                             </div>
@@ -854,7 +862,10 @@
                                     <button type="button" class="btn btn-secondary" data-ui-action="reset-ai-studio-settings">Reset defaults</button>
                                 </div>
                             </div>
-                            <div class="provider-settings-grid provider-settings-grid-single">
+                            <div id="googleAiStudioSettingsLoading" class="skeleton-config provider-settings-skeleton" role="status" aria-label="Loading Google AI Studio settings" aria-busy="true">
+                                <div class="skeleton-config-group"><div class="skeleton-line title"></div><div class="skeleton-line content"></div><div class="skeleton-line field"></div></div>
+                            </div>
+                            <div id="googleAiStudioSettingsForm" class="provider-settings-grid provider-settings-grid-single hidden">
                                 <section class="provider-settings-group">
                                     <h3>Upstream Endpoint</h3>
                                     <p class="card-copy provider-tool-copy">Set the Google Generative Language API host used for validation and inference.</p>
@@ -969,7 +980,11 @@
                                 </div>
                             </div>
 
-                            <div id="antigravitySettingsLoading" class="page-description">Loading Google Antigravity settings...</div>
+                            <div id="antigravitySettingsLoading" class="skeleton-config provider-settings-skeleton" role="status" aria-label="Loading Google Antigravity settings" aria-busy="true">
+                                <div class="skeleton-config-group"><div class="skeleton-line title"></div><div class="skeleton-line content"></div><div class="skeleton-line field"></div></div>
+                                <div class="skeleton-config-group"><div class="skeleton-line title"></div><div class="skeleton-line content"></div><div class="skeleton-line field"></div><div class="skeleton-line field"></div></div>
+                                <div class="skeleton-config-group"><div class="skeleton-line title"></div><div class="skeleton-line content"></div><div class="skeleton-line field"></div></div>
+                            </div>
 
                             <div id="antigravitySettingsForm" class="provider-settings-grid hidden">
                                 <section class="provider-settings-group">
@@ -1017,9 +1032,10 @@
                     </header>
 
                     <div id="configSection">
-                        <div id="configLoading" class="skeleton-config">
-                            <div class="skeleton-config-group"><div class="skeleton-line title"></div><div class="skeleton-line content"></div></div>
-                            <div class="skeleton-config-group"><div class="skeleton-line title"></div><div class="skeleton-line content"></div></div>
+                        <div id="configLoading" class="skeleton-config" role="status" aria-label="Loading system configuration" aria-busy="true">
+                            <div class="skeleton-config-group"><div class="skeleton-line title"></div><div class="skeleton-line content"></div><div class="skeleton-line field"></div><div class="skeleton-line field"></div></div>
+                            <div class="skeleton-config-group"><div class="skeleton-line title"></div><div class="skeleton-line content"></div><div class="skeleton-line field"></div><div class="skeleton-line field"></div></div>
+                            <div class="skeleton-config-group"><div class="skeleton-line title"></div><div class="skeleton-line content"></div><div class="skeleton-line field"></div><div class="skeleton-line field"></div></div>
                         </div>
 
                         <div id="configForm" class="hidden">

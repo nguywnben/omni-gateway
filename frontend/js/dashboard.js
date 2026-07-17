@@ -104,11 +104,19 @@ async function refreshUsageStats() {
 
     const providerSummary = document.getElementById('usageProviderSummary');
 
+    const statsContainer = document.getElementById('dashboardStats');
+
+    const tableWrapper = document.querySelector('#dashboardTab .usage-table-wrapper');
+
     updateUsagePeriodLabels();
 
     try {
 
-        loading.style.display = 'block';
+        if (loading) loading.hidden = false;
+
+        if (statsContainer) statsContainer.setAttribute('aria-busy', 'true');
+
+        if (tableWrapper) tableWrapper.hidden = true;
 
         list.innerHTML = '';
 
@@ -217,7 +225,11 @@ async function refreshUsageStats() {
 
     } finally {
 
-        loading.style.display = 'none';
+        if (loading) loading.hidden = true;
+
+        if (statsContainer) statsContainer.setAttribute('aria-busy', 'false');
+
+        if (tableWrapper) tableWrapper.hidden = false;
 
     }
 
@@ -514,13 +526,13 @@ function updateCooldownDisplays() {
 
 async function fetchAndDisplayVersion() {
 
+    const versionText = document.getElementById('versionText');
+
     try {
 
         const response = await fetch('./api/version/info');
 
         const data = await response.json();
-
-        const versionText = document.getElementById('versionText');
 
         if (data.success) {
 
@@ -542,11 +554,21 @@ async function fetchAndDisplayVersion() {
 
         console.error(t('failed_to_retrieve_version_informat'), error);
 
-        const versionText = document.getElementById('versionText');
-
         if (versionText) {
 
             versionText.textContent = t('failed_to_fetch_version_information');
+
+        }
+
+    } finally {
+
+        if (versionText) {
+
+            versionText.classList.remove('skeleton', 'skeleton-inline');
+
+            versionText.setAttribute('aria-busy', 'false');
+
+            versionText.removeAttribute('aria-label');
 
         }
 

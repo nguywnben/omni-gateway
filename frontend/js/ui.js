@@ -66,6 +66,7 @@ function showStatus(message, type = 'info') {
 
 async function updateEndpointUrls() {
     const origin = window.location.origin;
+    const apiKeyEl = document.getElementById('apiKey');
 
     const openaiEl = document.getElementById('openaiEndpointUrl');
     if (openaiEl) openaiEl.textContent = `${origin}/v1`;
@@ -81,7 +82,6 @@ async function updateEndpointUrls() {
         if (response.ok) {
             const data = await response.json();
             if (data.success) {
-                const apiKeyEl = document.getElementById('apiKey');
                 const apiKey = data.api_key || '';
                 if (apiKeyEl) {
                     apiKeyEl.value = apiKey;
@@ -101,6 +101,12 @@ async function updateEndpointUrls() {
         }
     } catch (e) {
         console.error("Failed to fetch API key", e);
+    } finally {
+        if (apiKeyEl) {
+            apiKeyEl.classList.remove('skeleton', 'skeleton-control');
+            apiKeyEl.setAttribute('aria-busy', 'false');
+            apiKeyEl.setAttribute('aria-label', 'API key. Copy API key.');
+        }
     }
 }
 

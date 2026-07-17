@@ -881,7 +881,7 @@ function createCredsManager(type) {
 
             try {
 
-                loading.style.display = 'block';
+                if (loading) loading.hidden = false;
 
                 list.innerHTML = '';
 
@@ -993,7 +993,7 @@ function createCredsManager(type) {
 
             } finally {
 
-                loading.style.display = 'none';
+                if (loading) loading.hidden = true;
 
             }
 
