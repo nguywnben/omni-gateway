@@ -40,7 +40,12 @@ backend/
     storage_adapter.py    Persistence boundary used by the application
   tests/                   Regression and contract tests
 frontend/
-  js/                     Console scripts split by UI responsibility
+  index.html              Console shell and ordered asset manifest
+  fragments/              Auth, layout, and page-level HTML fragments
+  css/                    Cascade-ordered style layers
+  js/core/                Shared state, navigation, and manager factories
+  js/ui/                  Reusable UI primitives and credential views
+  js/features/            Page and workflow modules
   assets/                 Brand and provider assets
 deploy/                   Container and hosting definitions
 docs/                     Architecture and maintained project assets
@@ -82,16 +87,29 @@ The Render Blueprint deliberately uses a paid persistent disk. Free Render servi
 
 ## Module Decomposition
 
-The first decomposition stage is complete:
+The management console is assembled server-side from repository-owned fragments. The browser still receives one complete DOM, so route behavior and accessibility relationships do not depend on client-side template loading.
+
+CSS and JavaScript remain split into reviewable source modules. The panel router concatenates each ordered manifest into one versioned, immutable browser bundle, which preserves module ownership without multiplying production network requests.
 
 ```text
-frontend/js/
-  core.js                 Localization, shared state, and manager factories
-  ui.js                   Dialogs, result views, and credential-card rendering
-  console.js              Authentication, navigation, model pool, and OAuth flows
-  credentials.js          Credential pool actions and batch operations
-  settings.js             Logs, provider settings, and system configuration
-  dashboard.js            Usage, version, responsive controls, and startup
+frontend/
+  index.html
+  fragments/
+    auth/                  Login and first-run setup
+    layout/                Sidebar, mobile header, and footer
+    pages/                 One fragment per console route
+  css/
+    foundation.css         Tokens, reset, typography, and base elements
+    shell.css              Authentication and application layout
+    providers-and-models.css
+    forms-and-data.css
+    components.css
+    dialogs.css
+    responsive.css         Breakpoint overrides loaded last
+  js/
+    core/                  Localization, navigation, state, and managers
+    ui/                    Notifications, dialogs, API-key UI, and credential views
+    features/              Authentication, pool, models, providers, settings, and logs
 
 backend/core/panel/
   credentials.py          Credential HTTP routes
@@ -100,9 +118,17 @@ backend/core/panel/
   auth_support.py         Login throttling and response shaping
   environment_credentials.py Environment credential import routes
   setup_security.py       Remote first-run bootstrap policy
+  providers/
+    catalog.py            Provider capability discovery
+    antigravity.py        Google Antigravity settings
+    google_ai_studio.py   Google AI Studio settings and imports
+    xai.py                Grok OAuth and xAI Console settings and imports
+    import_utils.py        Shared bounded-import policy
 ```
 
-Further decomposition should happen only with behavior-preserving contract tests:
+Module size is a review signal, not a target. A file is split when it owns independent workflows, provider contracts, or UI layers. Cohesive translation algorithms and storage adapters remain intact even when long because arbitrary slicing would increase coupling without creating a stable boundary.
+
+Further converter decomposition should happen only when request, response, tool, and streaming contracts can be separated with behavior-preserving tests:
 
 ```text
 backend/core/converter/{openai,anthropic}_to_gemini.py

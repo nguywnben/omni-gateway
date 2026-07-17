@@ -1,0 +1,197 @@
+                <div id="dashboardTab" class="tab-content active">
+                    <header class="page-header">
+                        <div>
+                            <div class="page-kicker">Overview</div>
+                            <h1 class="page-title">Omni Gateway Dashboard</h1>
+                            <p class="page-description">Monitor request flow, provider capacity, and integration details for coding-tool traffic.</p>
+                        </div>
+                        <div class="page-actions">
+                            <label class="dashboard-range-control" for="usagePeriodSelect">
+                                <span>Time range</span>
+                                <select id="usagePeriodSelect" class="filter-select" data-ui-change="usage-period">
+                                    <option value="1d">1 day</option>
+                                    <option value="7d">7 days</option>
+                                    <option value="30d">30 days</option>
+                                    <option value="all">All</option>
+                                </select>
+                            </label>
+                        </div>
+                    </header>
+
+                    <div class="stats-container" id="dashboardStats" aria-label="Dashboard metrics" aria-busy="true">
+                        <div class="stat-item">
+                            <span class="stat-number" id="totalApiCalls">0</span>
+                            <span class="stat-label"><span id="totalApiCallsLabel">Requests in the last 24 hours</span><span class="stat-detail"><span id="successfulApiCalls">0</span> successful / <span id="failedApiCalls">0</span> failed</span></span>
+                        </div>
+                        <div class="stat-item">
+                            <span class="stat-number" id="successRate24h">0%</span>
+                            <span class="stat-label">Success rate<span class="stat-detail" id="successRateDetail">No traffic yet</span></span>
+                        </div>
+                        <div class="stat-item">
+                            <span class="stat-number"><span id="activeFiles">0</span>/<span id="totalFiles">0</span></span>
+                            <span class="stat-label">Active / total credentials<span class="stat-detail"><span id="disabledFiles">0</span> disabled</span></span>
+                        </div>
+                        <div class="stat-item">
+                            <span class="stat-number" id="avgCallsPerFile">0.0</span>
+                            <span class="stat-label">Requests per active credential<span class="stat-detail"><span id="assignedApiCalls">0</span> assigned requests</span></span>
+                        </div>
+                        <div class="stat-item">
+                            <span class="stat-number" id="totalTokens24h">0</span>
+                            <span class="stat-label"><span id="totalTokensLabel">Tokens in the last 24 hours</span><span class="stat-detail">Input <span id="inputTokens24h">0</span> / output <span id="outputTokens24h">0</span></span></span>
+                        </div>
+                        <div class="stat-item">
+                            <span class="stat-number" id="avgTokensPerRequest">0</span>
+                            <span class="stat-label">Tokens per successful request<span class="stat-detail">Cached <span id="cachedTokens24h">0</span> / estimated savings <span id="estimatedTokensSaved">0</span></span></span>
+                        </div>
+                    </div>
+
+                    <div class="dashboard-grid">
+                        <section class="card span-6">
+                            <h2 class="card-title">API Integration</h2>
+                            <p class="card-copy card-title-copy">Copy the API key and SDK base URLs used by compatible clients.</p>
+                            <div class="metric-row">
+                                <div class="copy-field">
+                                    <label for="apiKey">API key</label>
+                                    <div class="secret-field">
+                                        <input type="password" id="apiKey" value="" class="skeleton skeleton-control" readonly title="Copy API key" aria-label="Loading API key" aria-busy="true" data-ui-action="copy-api-key">
+                                        <button type="button" id="toggleApiKeyVisibilityBtn" class="btn btn-secondary icon-btn" data-ui-action="toggle-api-key" title="Show API key" aria-label="Show API key">
+                                            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+                                        </button>
+                                        <button type="button" id="regenerateApiKeyBtn" class="btn btn-secondary icon-btn" data-ui-action="regenerate-api-key" title="Regenerate API key">
+                                            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 11a8 8 0 0 0-14.8-3"></path><path d="M4 5v4h4"></path><path d="M4 13a8 8 0 0 0 14.8 3"></path><path d="M20 19v-4h-4"></path></svg>
+                                        </button>
+                                    </div>
+                                </div>
+                                <div class="copy-field">
+                                    <label>OpenAI base URL</label>
+                                    <button type="button" class="endpoint-code-card" id="openaiEndpointUrl" title="Copy OpenAI base URL" aria-label="OpenAI base URL. Copy OpenAI base URL." data-ui-action="copy-url">Loading</button>
+                                </div>
+                                <div class="copy-field">
+                                    <label>Anthropic base URL</label>
+                                    <button type="button" class="endpoint-code-card" id="anthropicEndpointUrl" title="Copy Anthropic base URL" aria-label="Anthropic base URL. Copy Anthropic base URL." data-ui-action="copy-url">Loading</button>
+                                </div>
+                                <div class="copy-field">
+                                    <label>Google GenAI base URL</label>
+                                    <button type="button" class="endpoint-code-card" id="googleGenaiEndpointUrl" title="Copy Google GenAI base URL" aria-label="Google GenAI base URL. Copy Google GenAI base URL." data-ui-action="copy-url">Loading</button>
+                                </div>
+                            </div>
+                        </section>
+
+                        <section class="card span-6 client-setup-card">
+                            <input class="setup-language-radio" type="radio" id="setupLangPython" name="setupLanguage" checked>
+                            <input class="setup-language-radio" type="radio" id="setupLangNode" name="setupLanguage">
+                            <div class="setup-card-header">
+                                <div>
+                                    <h2 class="card-title">SDK Setup</h2>
+                                    <p class="setup-card-copy">Select a language to view the client configuration for each supported SDK.</p>
+                                </div>
+                                <div class="setup-language-switch" role="radiogroup" aria-label="Client language">
+                                    <label for="setupLangPython" class="setup-language-option">Python</label>
+                                    <label for="setupLangNode" class="setup-language-option">Node.js</label>
+                                </div>
+                            </div>
+                            <div class="client-setup-panels">
+                                <div class="client-setup-panel setup-python">
+                                    <div class="client-route-card">
+                                        <div class="client-route-header">
+                                            <div>
+                                                <strong>OpenAI</strong>
+                                            </div>
+                                            <span>openai</span>
+                                        </div>
+                                        <dl class="client-route-details">
+                                            <div><dt>Initialize</dt><dd>OpenAI(base_url, api_key)</dd></div>
+                                            <div><dt>Request</dt><dd>client.chat.completions.create(model, messages)</dd></div>
+                                        </dl>
+                                    </div>
+                                    <div class="client-route-card">
+                                        <div class="client-route-header">
+                                            <div>
+                                                <strong>Anthropic</strong>
+                                            </div>
+                                            <span>anthropic</span>
+                                        </div>
+                                        <dl class="client-route-details">
+                                            <div><dt>Initialize</dt><dd>Anthropic(base_url, api_key)</dd></div>
+                                            <div><dt>Request</dt><dd>client.messages.create(model, max_tokens, messages)</dd></div>
+                                        </dl>
+                                    </div>
+                                    <div class="client-route-card">
+                                        <div class="client-route-header">
+                                            <div>
+                                                <strong>Google GenAI</strong>
+                                            </div>
+                                            <span>google-genai</span>
+                                        </div>
+                                        <dl class="client-route-details">
+                                            <div><dt>Initialize</dt><dd>genai.Client(api_key, http_options)</dd></div>
+                                            <div><dt>Request</dt><dd>client.models.generate_content(model, contents)</dd></div>
+                                        </dl>
+                                    </div>
+                                </div>
+                                <div class="client-setup-panel setup-node">
+                                    <div class="client-route-card">
+                                        <div class="client-route-header">
+                                            <div>
+                                                <strong>OpenAI</strong>
+                                            </div>
+                                            <span>openai</span>
+                                        </div>
+                                        <dl class="client-route-details">
+                                            <div><dt>Initialize</dt><dd>new OpenAI({ baseURL, apiKey })</dd></div>
+                                            <div><dt>Request</dt><dd>client.chat.completions.create({ model, messages })</dd></div>
+                                        </dl>
+                                    </div>
+                                    <div class="client-route-card">
+                                        <div class="client-route-header">
+                                            <div>
+                                                <strong>Anthropic</strong>
+                                            </div>
+                                            <span>@anthropic-ai/sdk</span>
+                                        </div>
+                                        <dl class="client-route-details">
+                                            <div><dt>Initialize</dt><dd>new Anthropic({ baseURL, apiKey })</dd></div>
+                                            <div><dt>Request</dt><dd>client.messages.create({ model, max_tokens, messages })</dd></div>
+                                        </dl>
+                                    </div>
+                                    <div class="client-route-card">
+                                        <div class="client-route-header">
+                                            <div>
+                                                <strong>Google GenAI</strong>
+                                            </div>
+                                            <span>@google/genai</span>
+                                        </div>
+                                        <dl class="client-route-details">
+                                            <div><dt>Initialize</dt><dd>new GoogleGenAI({ apiKey, httpOptions })</dd></div>
+                                            <div><dt>Request</dt><dd>ai.models.generateContent({ model, contents })</dd></div>
+                                        </dl>
+                                    </div>
+                                </div>
+                            </div>
+                        </section>
+
+                        <section class="card span-12">
+                            <h2 class="card-title" id="usageBreakdownTitle">24-Hour Request Breakdown</h2>
+                            <p class="card-copy card-title-copy" id="usageBreakdownDescription">Review provider and credential traffic for the last 24 hours.</p>
+                            <div class="usage-provider-summary" id="usageProviderSummary" aria-label="Provider activity"></div>
+                            <div id="usageLoading" class="skeleton-table" role="status" aria-label="Loading request breakdown" aria-busy="true">
+                                <div class="skeleton-row header"><div class="skeleton-cell"></div><div class="skeleton-cell"></div><div class="skeleton-cell"></div><div class="skeleton-cell"></div></div>
+                                <div class="skeleton-row"><div class="skeleton-cell"></div><div class="skeleton-cell"></div><div class="skeleton-cell"></div><div class="skeleton-cell"></div></div>
+                            </div>
+                            <div class="usage-table-wrapper">
+                                <table class="usage-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Credential</th>
+                                            <th>Requests</th>
+                                            <th>Success</th>
+                                            <th>Tokens</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="usageList"></tbody>
+                                </table>
+                            </div>
+                        </section>
+                    </div>
+
+                </div>

@@ -7,7 +7,7 @@ from . import (
     environment_credentials,
     logs,
     model_pools,
-    provider_settings,
+    providers,
     root,
     usage_routes,
     version,
@@ -26,7 +26,7 @@ def create_router() -> APIRouter:
     router.include_router(logs.router)
     router.include_router(version.router)
     router.include_router(usage_routes.router)
-    router.include_router(provider_settings.router)
+    router.include_router(providers.router)
     router.include_router(model_pools.router)
 
     return router

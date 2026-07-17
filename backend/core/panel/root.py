@@ -1,15 +1,151 @@
 """Root routes for the management console."""
 
 import re
+from functools import lru_cache
 from html import escape
 
 from core.auth import accept_oauth_callback
 from fastapi import APIRouter, HTTPException, Request
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, Response
 from log import log
 from paths import FRONTEND_DIR
 
 router = APIRouter(tags=["root"])
+
+CONSOLE_FRAGMENT_PATHS = (
+    "auth/login.html",
+    "auth/setup.html",
+    "layout/sidebar.html",
+    "layout/mobile-header.html",
+    "pages/dashboard.html",
+    "pages/pool.html",
+    "pages/models.html",
+    "pages/providers.html",
+    "pages/settings.html",
+    "pages/logs.html",
+    "pages/about.html",
+    "layout/footer.html",
+)
+
+CONSOLE_STYLE_ASSETS = (
+    "css/foundation.css",
+    "css/shell.css",
+    "css/providers-and-models.css",
+    "css/forms-and-data.css",
+    "css/components.css",
+    "css/dialogs.css",
+    "css/responsive.css",
+)
+
+CONSOLE_VENDOR_ASSETS = ("vendor/anime.umd.min.js",)
+
+CONSOLE_SCRIPT_ASSETS = (
+    "js/motion.js",
+    "js/core/i18n.js",
+    "js/core/navigation.js",
+    "js/core/credential-manager.js",
+    "js/core/upload-manager.js",
+    "js/core/state.js",
+    "js/ui/notifications.js",
+    "js/ui/api-integration.js",
+    "js/ui/dialog-content.js",
+    "js/ui/dialogs.js",
+    "js/ui/credential-dialogs.js",
+    "js/ui/credential-cards.js",
+    "js/features/authentication.js",
+    "js/features/navigation.js",
+    "js/features/model-pool.js",
+    "js/features/code-assist-authentication.js",
+    "js/features/antigravity-authentication.js",
+    "js/features/credential-pool.js",
+    "js/features/credential-diagnostics.js",
+    "js/features/credential-batch-actions.js",
+    "js/features/logs.js",
+    "js/features/environment-credentials.js",
+    "js/features/provider-settings-shared.js",
+    "js/features/google-ai-studio-settings.js",
+    "js/features/xai-settings.js",
+    "js/features/antigravity-settings.js",
+    "js/features/system-settings.js",
+    "js/features/dashboard.js",
+    "js/features/version.js",
+    "js/features/mobile-navigation.js",
+)
+
+
+def _console_asset_paths():
+    return tuple(
+        FRONTEND_DIR / asset
+        for asset in (
+            *CONSOLE_STYLE_ASSETS,
+            *CONSOLE_VENDOR_ASSETS,
+            *CONSOLE_SCRIPT_ASSETS,
+        )
+    )
+
+
+def _console_asset_version() -> int:
+    return max(path.stat().st_mtime_ns for path in _console_asset_paths())
+
+
+@lru_cache(maxsize=4)
+def _read_console_bundle(asset_paths: tuple[str, ...], asset_version: int, separator: str) -> str:
+    """Read a versioned bundle while keeping source files independently editable."""
+    del asset_version
+    return (
+        separator.join(
+            (FRONTEND_DIR / relative_path).read_text(encoding="utf-8").rstrip()
+            for relative_path in asset_paths
+        )
+        + "\n"
+    )
+
+
+def _bundle_cache_headers(request: Request) -> dict[str, str]:
+    if request.query_params.get("v"):
+        return {"Cache-Control": "public, max-age=31536000, immutable"}
+    return {"Cache-Control": "no-cache"}
+
+
+def _assemble_console_html() -> str:
+    """Assemble the console shell from its fixed, repository-owned fragments."""
+    html_content = (FRONTEND_DIR / "index.html").read_text(encoding="utf-8")
+    fragment_root = FRONTEND_DIR / "fragments"
+
+    for relative_path in CONSOLE_FRAGMENT_PATHS:
+        marker = f"<!-- include:fragments/{relative_path} -->"
+        fragment = (fragment_root / relative_path).read_text(encoding="utf-8").rstrip()
+        if marker not in html_content:
+            raise RuntimeError(f"Console shell is missing the fragment marker: {marker}")
+        html_content = html_content.replace(marker, fragment, 1)
+
+    if "<!-- include:fragments/" in html_content:
+        raise RuntimeError("Console shell contains an unresolved fragment marker.")
+    return html_content
+
+
+@router.get("/frontend/console.css", include_in_schema=False)
+def serve_console_styles(request: Request):
+    """Serve the ordered console styles as one cacheable response."""
+    asset_version = _console_asset_version()
+    content = _read_console_bundle(CONSOLE_STYLE_ASSETS, asset_version, "\n")
+    return Response(
+        content=content,
+        media_type="text/css",
+        headers=_bundle_cache_headers(request),
+    )
+
+
+@router.get("/frontend/console.js", include_in_schema=False)
+def serve_console_scripts(request: Request):
+    """Serve the ordered console modules as one cacheable classic script."""
+    asset_version = _console_asset_version()
+    content = _read_console_bundle(CONSOLE_SCRIPT_ASSETS, asset_version, "\n;\n")
+    return Response(
+        content=content,
+        media_type="text/javascript",
+        headers=_bundle_cache_headers(request),
+    )
 
 
 def _oauth_callback_page(success: bool, title: str, message: str) -> HTMLResponse:
@@ -156,26 +292,19 @@ async def serve_oauth_callback(request: Request):
 def serve_control_panel():
     """Serve the single responsive console entry point for public app routes."""
     try:
-        with open(FRONTEND_DIR / "control-panel.html", "r", encoding="utf-8") as f:
-            html_content = f.read()
-        script_assets = (
-            "js/core.js",
-            "js/ui.js",
-            "js/console.js",
-            "js/credentials.js",
-            "js/settings.js",
-            "js/dashboard.js",
-        )
-        asset_paths = (FRONTEND_DIR / "control-panel.css",) + tuple(
-            FRONTEND_DIR / asset for asset in script_assets
-        )
-        asset_version = max(path.stat().st_mtime_ns for path in asset_paths)
+        html_content = _assemble_console_html()
+        asset_version = _console_asset_version()
         html_content = re.sub(
-            r'href="/frontend/control-panel\.css(?:\?v=[^"]*)?"',
-            f'href="/frontend/control-panel.css?v={asset_version}"',
+            r'href="/frontend/console\.css(?:\?v=[^"]*)?"',
+            f'href="/frontend/console.css?v={asset_version}"',
             html_content,
         )
-        for asset in script_assets:
+        html_content = re.sub(
+            r'src="/frontend/console\.js(?:\?v=[^"]*)?"',
+            f'src="/frontend/console.js?v={asset_version}"',
+            html_content,
+        )
+        for asset in CONSOLE_VENDOR_ASSETS:
             html_content = re.sub(
                 rf'src="/frontend/{re.escape(asset)}(?:\?v=[^"]*)?"',
                 f'src="/frontend/{asset}?v={asset_version}"',

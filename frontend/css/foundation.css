@@ -1,0 +1,122 @@
+:root {
+    --font-sans: "Google Sans", sans-serif;
+    --bg: #ffffff;
+    --bg-subtle: #fafafa;
+    --bg-muted: #f6f6f6;
+    --surface: #ffffff;
+    --text: #111111;
+    --text-muted: #666666;
+    --text-soft: #8a8a8a;
+    --border: #e7e7e7;
+    --border-strong: #d8d8d8;
+    --control-hover: #f4f4f4;
+    --control-hover-border: #d8d8d8;
+    --field-hover-border: var(--control-hover-border);
+    --accent: #111111;
+    --accent-hover: #2f2f2f;
+    --accent-contrast: #ffffff;
+    --success: #137333;
+    --success-bg: #eef7f0;
+    --danger: #b3261e;
+    --danger-bg: #fceeee;
+    --danger-hover: #fae2df;
+    --danger-border-hover: #e8aaa4;
+    --warning: #9a6700;
+    --warning-bg: #fff7df;
+    --info: #1a73e8;
+    --info-bg: #eef4ff;
+    --skeleton: #ededed;
+    --skeleton-strong: #e4e4e4;
+    --sidebar-width: 248px;
+    --radius: 8px;
+    --shadow-pop: 0 18px 50px rgba(0, 0, 0, 0.08);
+}
+
+* {
+    box-sizing: border-box;
+    font-family: var(--font-sans) !important;
+}
+
+html {
+    background: var(--bg);
+    color: var(--text);
+    font-size: 14px;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: geometricPrecision;
+    overflow-x: hidden;
+}
+
+body {
+    margin: 0;
+    min-height: 100vh;
+    background: var(--bg);
+    color: var(--text);
+    overflow-x: hidden;
+}
+
+button,
+input,
+select,
+textarea {
+    font: inherit;
+}
+
+button {
+    appearance: none;
+}
+
+a {
+    color: var(--accent);
+    text-decoration: none;
+}
+
+a:hover {
+    text-decoration: underline;
+}
+
+svg {
+    display: block;
+    flex: 0 0 auto;
+}
+
+h1,
+h2,
+h3,
+h4,
+p {
+    margin: 0;
+}
+
+pre,
+code {
+    margin: 0;
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
+.hidden,
+[hidden] {
+    display: none !important;
+}
+
+#loginSection,
+#setupSection,
+#mainSection {
+    display: none !important;
+}
+
+.app-mark {
+    width: 28px;
+    height: 28px;
+    overflow: hidden;
+    border-radius: var(--radius);
+    display: inline-grid;
+    place-items: center;
+}
+
+.app-mark-image {
+    width: 80%;
+    height: 80%;
+    display: block;
+    object-fit: contain;
+}

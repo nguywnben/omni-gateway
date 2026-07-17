@@ -25,7 +25,7 @@ from core.google_ai_studio import (
     parse_model_ids,
     validate_api_key,
 )
-from core.panel.provider_settings import (
+from core.panel.providers.google_ai_studio import (
     _extract_ai_studio_import_file,
     import_google_ai_studio_credentials,
 )
@@ -133,11 +133,11 @@ class GoogleAIStudioImportArchiveTests(unittest.IsolatedAsyncioTestCase):
 
         with (
             patch(
-                "core.panel.provider_settings.validate_api_key",
+                "core.panel.providers.google_ai_studio.validate_api_key",
                 new=AsyncMock(return_value=validation),
             ) as validate_mock,
             patch(
-                "core.panel.provider_settings._store_google_ai_studio_credential",
+                "core.panel.providers.google_ai_studio._store_google_ai_studio_credential",
                 new=AsyncMock(
                     side_effect=[
                         {"action": "created", "filename": "first.json", "label": "First"},
