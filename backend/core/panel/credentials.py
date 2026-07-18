@@ -14,9 +14,7 @@ from core.google_ai_studio import (
     build_api_key_headers,
     build_generation_url,
 )
-from core.google_oauth_api import (
-    Credentials,
-)
+from core.google_oauth_api import Credentials, merge_refreshed_credential_data
 from core.model_pool import ModelPoolError, model_catalog_service, normalize_model_id
 from core.models import (
     CredentialModelTestRequest,
@@ -635,7 +633,7 @@ async def get_credential_quota(
 
         await creds.refresh_if_needed()
 
-        updated_data = creds.to_dict()
+        updated_data = merge_refreshed_credential_data(credential_data, creds)
         if updated_data != credential_data:
             log.info(f"Token automatically refreshed: {filename}")
             await storage_adapter.store_credential(filename, updated_data, mode=mode)
@@ -700,7 +698,7 @@ async def configure_preview_channel(
 
         if token_refreshed:
             log.info(f"Token automatically refreshed: {filename}")
-            credential_data = credentials.to_dict()
+            credential_data = merge_refreshed_credential_data(credential_data, credentials)
             await storage_adapter.store_credential(filename, credential_data, mode=mode)
 
         access_token = credential_data.get("access_token") or credential_data.get("token")
@@ -931,7 +929,7 @@ async def test_credential(
             token_refreshed = await credentials.refresh_if_needed()
             if token_refreshed:
                 log.info(f"Token automatically refreshed: {filename} (mode = {mode})")
-                credential_data = credentials.to_dict()
+                credential_data = merge_refreshed_credential_data(credential_data, credentials)
                 await storage_adapter.store_credential(filename, credential_data, mode=mode)
 
             access_token = credential_data.get("access_token") or credential_data.get("token")

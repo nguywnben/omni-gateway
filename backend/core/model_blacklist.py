@@ -1,4 +1,4 @@
-"""Persistent provider-model exclusions learned from upstream 404 responses."""
+"""Persistent route exclusions learned from upstream model-not-found responses."""
 
 from __future__ import annotations
 
@@ -24,6 +24,11 @@ def _normalize_timestamp(value: Any) -> float:
     return timestamp if math.isfinite(timestamp) and timestamp >= 0 else 0.0
 
 
+def _normalize_credential_name(value: Any) -> str:
+    basename = str(value or "").replace("\\", "/").rsplit("/", 1)[-1].strip()
+    return basename[:255]
+
+
 def _normalize_entry(value: Any) -> Optional[dict[str, Any]]:
     if not isinstance(value, dict):
         return None
@@ -41,7 +46,7 @@ def _normalize_entry(value: Any) -> Optional[dict[str, Any]]:
         failure_count = max(1, int(value.get("failure_count") or 1))
     except (TypeError, ValueError):
         failure_count = 1
-    return {
+    entry = {
         "provider_id": provider_id,
         "model_id": model_id,
         "status_code": 404,
@@ -49,6 +54,10 @@ def _normalize_entry(value: Any) -> Optional[dict[str, Any]]:
         "first_seen_at": first_seen_at,
         "last_seen_at": last_seen_at,
     }
+    credential_name = _normalize_credential_name(value.get("credential_name"))
+    if credential_name:
+        entry["credential_name"] = credential_name
+    return entry
 
 
 def _normalize_blacklist(raw: Any) -> list[dict[str, Any]]:
@@ -56,12 +65,16 @@ def _normalize_blacklist(raw: Any) -> list[dict[str, Any]]:
     if not isinstance(values, list):
         return []
 
-    entries_by_key: dict[tuple[str, str], dict[str, Any]] = {}
+    entries_by_key: dict[tuple[str, str, str], dict[str, Any]] = {}
     for value in values:
         entry = _normalize_entry(value)
         if not entry:
             continue
-        key = (entry["provider_id"], entry["model_id"])
+        key = (
+            entry["provider_id"],
+            entry["model_id"],
+            entry.get("credential_name", ""),
+        )
         current = entries_by_key.get(key)
         if not current:
             entries_by_key[key] = entry
@@ -76,6 +89,7 @@ def _normalize_blacklist(raw: Any) -> list[dict[str, Any]]:
             -entry["last_seen_at"],
             entry["provider_id"],
             entry["model_id"],
+            entry.get("credential_name", ""),
         ),
     )
     return entries[:MAX_MODEL_BLACKLIST_ENTRIES]
@@ -100,9 +114,20 @@ async def get_model_blacklist(*, storage_adapter=None) -> list[dict[str, Any]]:
 
 
 async def get_model_blacklist_pairs(*, storage_adapter=None) -> set[tuple[str, str]]:
+    """Return legacy provider-wide exclusions without widening credential failures."""
     return {
         (entry["provider_id"], entry["model_id"])
         for entry in await get_model_blacklist(storage_adapter=storage_adapter)
+        if not entry.get("credential_name")
+    }
+
+
+async def get_credential_model_blacklist_pairs(*, storage_adapter=None) -> set[tuple[str, str]]:
+    """Return deployment-scoped exclusions keyed by credential filename and model."""
+    return {
+        (entry["credential_name"], entry["model_id"])
+        for entry in await get_model_blacklist(storage_adapter=storage_adapter)
+        if entry.get("credential_name")
     }
 
 
@@ -110,15 +135,22 @@ async def record_model_not_found(
     provider_id: Any,
     model_id: Any,
     *,
+    credential_name: Any = None,
     storage_adapter=None,
     now: Optional[float] = None,
 ) -> dict[str, Any]:
-    """Add or update a provider-scoped model exclusion after an upstream 404."""
+    """Add or update a model exclusion after an upstream 404.
+
+    New observations should include ``credential_name`` so one account's
+    entitlement does not suppress a model for every account at that provider.
+    Entries without a credential name remain supported for legacy data.
+    """
     storage = storage_adapter or await get_storage_adapter()
     normalized_provider = normalize_provider_id(provider_id)
     if not normalized_provider:
         raise ValueError("A provider ID is required.")
     normalized_model = normalize_model_id(model_id)
+    normalized_credential = _normalize_credential_name(credential_name)
     observed_at = _normalize_timestamp(time.time() if now is None else now)
 
     async with _write_lock:
@@ -129,6 +161,7 @@ async def record_model_not_found(
                 for item in entries
                 if item["provider_id"] == normalized_provider
                 and item["model_id"] == normalized_model
+                and item.get("credential_name", "") == normalized_credential
             ),
             None,
         )
@@ -144,6 +177,8 @@ async def record_model_not_found(
                 "first_seen_at": observed_at,
                 "last_seen_at": observed_at,
             }
+            if normalized_credential:
+                entry["credential_name"] = normalized_credential
             entries.append(entry)
         await _save_entries(storage, entries)
         return dict(entry)
@@ -153,11 +188,13 @@ async def remove_model_blacklist_entry(
     provider_id: Any,
     model_id: Any,
     *,
+    credential_name: Any = None,
     storage_adapter=None,
 ) -> bool:
     storage = storage_adapter or await get_storage_adapter()
     normalized_provider = normalize_provider_id(provider_id)
     normalized_model = normalize_model_id(model_id)
+    normalized_credential = _normalize_credential_name(credential_name)
 
     async with _write_lock:
         entries = await _load_entries(storage)
@@ -167,6 +204,10 @@ async def remove_model_blacklist_entry(
             if not (
                 entry["provider_id"] == normalized_provider
                 and entry["model_id"] == normalized_model
+                and (
+                    not normalized_credential
+                    or entry.get("credential_name", "") == normalized_credential
+                )
             )
         ]
         if len(retained) == len(entries):

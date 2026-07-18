@@ -16,13 +16,16 @@ GEMINI.md
 
 # Databases
 *.db
+*.db-*
 *.sqlite
 *.sqlite3
+*.sqlite-*
 
 # Environment configuration
 .env
 *.env
 .env.*
+*.env.*
 !.env.example
 .envrc
 

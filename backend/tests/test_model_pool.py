@@ -215,12 +215,22 @@ class ModelPoolTests(unittest.IsolatedAsyncioTestCase):
             )
         )
 
-        with patch(
-            "core.credential_manager.get_model_blacklist_pairs",
-            AsyncMock(
-                return_value={
-                    ("google_ai_studio", "gemini-retired"),
-                }
+        with (
+            patch(
+                "core.credential_manager.get_model_blacklist_pairs",
+                AsyncMock(
+                    return_value={
+                        ("google_ai_studio", "gemini-retired"),
+                    }
+                ),
+            ),
+            patch(
+                "core.credential_manager.get_credential_model_blacklist_pairs",
+                AsyncMock(
+                    return_value={
+                        ("limited.json", "gemini-retired"),
+                    }
+                ),
             ),
         ):
             await manager.get_valid_model_credential(
@@ -237,6 +247,10 @@ class ModelPoolTests(unittest.IsolatedAsyncioTestCase):
                 ("google_ai_studio", "gemini-retired"),
                 ("google_antigravity", "claude-sonnet-4-6"),
             },
+        )
+        self.assertEqual(
+            manager.get_valid_credential.await_args.kwargs["excluded_credential_models"],
+            {("limited.json", "gemini-retired")},
         )
 
     async def test_openai_virtual_model_routes_hi_prompt_and_preserves_alias(self):

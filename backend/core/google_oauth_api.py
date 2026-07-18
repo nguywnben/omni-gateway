@@ -155,6 +155,21 @@ class Credentials:
         return result
 
 
+def merge_refreshed_credential_data(
+    credential_data: Dict[str, Any], credentials: Credentials
+) -> Dict[str, Any]:
+    """Update token fields without discarding provider metadata or model catalogs."""
+    merged = dict(credential_data)
+    for key, value in credentials.to_dict().items():
+        if value is not None:
+            merged[key] = value
+    if credentials.access_token:
+        # Keep both spellings because imported credentials and legacy adapters use both.
+        merged["access_token"] = credentials.access_token
+        merged["token"] = credentials.access_token
+    return merged
+
+
 class Flow:
     def __init__(
         self, client_id: str, client_secret: str, scopes: List[str], redirect_uri: str = None

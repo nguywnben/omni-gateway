@@ -14,7 +14,7 @@ if str(BACKEND_DIR) not in sys.path:
 
 from core.model_pool import ModelCatalogEntry
 from core.models import CredentialModelTestRequest
-from core.panel.credential_operations import get_creds_status_common
+from core.panel.credential_operations import get_creds_status_common, verify_credential_common
 from core.panel.credentials import get_credential_models, test_credential
 from fastapi import HTTPException
 
@@ -68,14 +68,26 @@ class FakeUpstreamResponse:
 
 
 class FakeAntigravityStorage(FakeCredentialStorage):
+    def __init__(self, *, expired: bool = False):
+        super().__init__()
+        self.expired = expired
+
     async def get_credential(self, _filename, mode="primary"):
         self.requested_mode = mode
         return {
             "provider": "google_antigravity",
             "credential_type": "oauth",
             "token": "example-access-token",
+            "refresh_token": "example-refresh-token",
+            "client_id": "example-client-id",
+            "client_secret": "example-client-secret",
             "project_id": "example-project",
+            "user_email": "developer@example.com",
+            "expiry": "2000-01-01T00:00:00+00:00" if self.expired else "2099-01-01T00:00:00+00:00",
         }
+
+    async def store_credential(self, filename, data, mode="primary"):
+        self.stored_credential = (filename, dict(data), mode)
 
 
 class CredentialStatusModelTests(unittest.IsolatedAsyncioTestCase):
@@ -207,6 +219,80 @@ class CredentialStatusModelTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(context.exception.status_code, 400)
         post_mock.assert_not_awaited()
+
+    async def test_antigravity_verification_persists_the_credential_model_catalog(self):
+        storage = FakeAntigravityStorage()
+
+        with (
+            patch(
+                "core.panel.credential_operations.get_storage_adapter",
+                AsyncMock(return_value=storage),
+            ),
+            patch(
+                "core.panel.credential_operations.get_antigravity_api_url",
+                AsyncMock(return_value="https://provider.example"),
+            ),
+            patch(
+                "core.panel.credential_operations.get_antigravity_user_agent",
+                AsyncMock(return_value="test-agent"),
+            ),
+            patch(
+                "core.panel.credential_operations.fetch_project_id_and_tier",
+                AsyncMock(return_value=("example-project", "pro", None)),
+            ),
+            patch(
+                "core.panel.credential_operations.fetch_antigravity_model_ids",
+                AsyncMock(return_value=["claude-sonnet-4-6", "gemini-3-flash-preview"]),
+            ),
+        ):
+            response = await verify_credential_common(
+                "google-antigravity-example.json", mode="primary"
+            )
+
+        payload = json.loads(response.body)
+        stored = storage.stored_credential[1]
+        self.assertEqual(payload["model_count"], 2)
+        self.assertEqual(
+            stored["model_ids"],
+            ["claude-sonnet-4-6", "gemini-3-flash-preview"],
+        )
+        self.assertEqual(stored["user_email"], "developer@example.com")
+
+    async def test_antigravity_token_refresh_preserves_credential_metadata(self):
+        storage = FakeAntigravityStorage(expired=True)
+
+        with (
+            patch(
+                "core.panel.credential_operations.get_storage_adapter",
+                AsyncMock(return_value=storage),
+            ),
+            patch(
+                "core.panel.credential_operations.Credentials.refresh_if_needed",
+                AsyncMock(return_value=True),
+            ),
+            patch(
+                "core.panel.credential_operations.get_antigravity_api_url",
+                AsyncMock(return_value="https://provider.example"),
+            ),
+            patch(
+                "core.panel.credential_operations.get_antigravity_user_agent",
+                AsyncMock(return_value="test-agent"),
+            ),
+            patch(
+                "core.panel.credential_operations.fetch_project_id_and_tier",
+                AsyncMock(return_value=("example-project", "pro", None)),
+            ),
+            patch(
+                "core.panel.credential_operations.fetch_antigravity_model_ids",
+                AsyncMock(return_value=["gemini-3-flash-preview"]),
+            ),
+        ):
+            await verify_credential_common("google-antigravity-example.json", mode="primary")
+
+        stored = storage.stored_credential[1]
+        self.assertEqual(stored["provider"], "google_antigravity")
+        self.assertEqual(stored["credential_type"], "oauth")
+        self.assertEqual(stored["user_email"], "developer@example.com")
 
 
 if __name__ == "__main__":

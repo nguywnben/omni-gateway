@@ -23,6 +23,8 @@ Use this checklist when preparing a tagged Omni Gateway release.
 - Add one Grok credential through OAuth and complete a message test.
 - Add one xAI Console key and complete a message test.
 - Refresh the model catalog and route `omway` through at least one compatible model from every configured provider type.
+- Configure two credentials from the same provider with different model catalogs; confirm a fixed model uses only compatible credentials and that one credential's model-not-found response does not disable the route for the other credential.
+- Remove one entry from **Unavailable Model Routes**, revalidate its credential, and confirm the route becomes eligible again without changing unrelated provider routes.
 - Send one non-streaming and one streaming request through each supported SDK surface.
 - Confirm token usage, provider attribution, fallback, cooldown, and context-compression metrics update.
 - Export the pool, restore it into a clean disposable instance, and verify deduplication results.

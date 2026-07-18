@@ -4,8 +4,11 @@ from typing import Any, Dict, List, Optional, Set, Tuple
 
 from config import get_routing_policy
 from core.credential_pool import upsert_credential_by_email
-from core.google_oauth_api import Credentials
-from core.model_blacklist import get_model_blacklist_pairs
+from core.google_oauth_api import Credentials, merge_refreshed_credential_data
+from core.model_blacklist import (
+    get_credential_model_blacklist_pairs,
+    get_model_blacklist_pairs,
+)
 from core.provider_registry import XAI, get_credential_provider, is_api_key_credential
 from core.smart_routing import SmartCredentialRouter
 from core.storage_adapter import get_storage_adapter
@@ -104,8 +107,10 @@ class CredentialManager:
     ) -> Optional[Tuple[str, str, Dict[str, Any]]]:
         """Return the first routable model and credential in priority order."""
         route_exclusions = set(excluded_provider_models or ())
+        credential_route_exclusions = set(excluded_credential_models or ())
         if respect_model_blacklist:
             route_exclusions.update(await get_model_blacklist_pairs())
+            credential_route_exclusions.update(await get_credential_model_blacklist_pairs())
         seen = set()
         for value in model_names or ():
             model_name = str(value or "").strip()
@@ -116,7 +121,7 @@ class CredentialManager:
                 mode=mode,
                 model_name=model_name,
                 excluded_provider_models=route_exclusions,
-                excluded_credential_models=excluded_credential_models,
+                excluded_credential_models=credential_route_exclusions,
             )
             if credential:
                 filename, credential_data = credential
@@ -306,7 +311,7 @@ class CredentialManager:
 
             if token_refreshed:
                 log.info(f"Token automatically refreshed: {credential_name} (mode = {mode})")
-                updated_data = credentials.to_dict()
+                updated_data = merge_refreshed_credential_data(credential_data, credentials)
                 await self._storage_adapter.store_credential(
                     credential_name, updated_data, mode=mode
                 )
@@ -462,13 +467,7 @@ class CredentialManager:
             log.debug(f"Refreshing token: {filename} (mode={mode})")
             await creds.refresh()
 
-            if creds.access_token:
-                credential_data["access_token"] = creds.access_token
-
-                credential_data["token"] = creds.access_token
-
-            if creds.expires_at:
-                credential_data["expiry"] = creds.expires_at.isoformat()
+            credential_data = merge_refreshed_credential_data(credential_data, creds)
 
             await self._storage_adapter.store_credential(filename, credential_data, mode=mode)
             log.info(f"Token refreshed and saved: {filename} (mode = {mode}).")

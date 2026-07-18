@@ -13,7 +13,6 @@ from config import (
     get_antigravity_payload_user_agent,
     get_antigravity_stream_to_nonstream,
     get_antigravity_switch_credential_enabled,
-    get_antigravity_user_agent,
     get_auto_disable_error_codes,
     get_google_ai_studio_api_url,
     get_token_compression_config,
@@ -21,7 +20,12 @@ from config import (
     get_xai_api_url,
     get_xai_user_agent,
 )
+from core.antigravity import (
+    build_antigravity_headers,
+    fetch_antigravity_model_ids,
+)
 from core.api.utils import (
+    RETRYABLE_UPSTREAM_STATUS_CODES,
     collect_streaming_response,
     get_retry_config,
     handle_error_with_retry,
@@ -285,12 +289,7 @@ async def wrap_cli_request(
 
 
 async def build_primary_headers(access_token: str, model: str = "") -> Dict[str, str]:
-    return {
-        "User-Agent": await get_antigravity_user_agent(),
-        "Authorization": f"Bearer {access_token}",
-        "Content-Type": "application/json",
-        "Accept-Encoding": "gzip",
-    }
+    return await build_antigravity_headers(access_token)
 
 
 async def prepare_provider_request(
@@ -383,7 +382,7 @@ async def prepare_provider_request(
 
 
 def _is_retryable_status(status_code: int, disable_error_codes: List[int]) -> bool:
-    return status_code in (429, 503) or status_code in disable_error_codes
+    return status_code in RETRYABLE_UPSTREAM_STATUS_CODES or status_code in disable_error_codes
 
 
 def _normalize_model_candidates(
@@ -401,6 +400,13 @@ def _normalize_model_candidates(
     return candidates
 
 
+def _no_credential_error_message(model_name: str) -> str:
+    normalized_model = str(model_name or "").strip()
+    if normalized_model:
+        return f"No enabled credential supports model '{normalized_model}'."
+    return "No credentials are available."
+
+
 async def _switch_credential_for_retry(
     *,
     refresh_credential_fast,
@@ -416,18 +422,23 @@ async def _switch_credential_for_retry(
 
 async def _exclude_missing_model_route(
     *,
-    route_exclusions: set[tuple[str, str]],
+    credential_route_exclusions: set[tuple[str, str]],
+    credential_name: str,
     provider_id: str,
     model_name: str,
 ) -> None:
-    """Exclude a 404 route immediately and persist it when storage is available."""
-    route_exclusions.add((provider_id, model_name))
+    """Exclude one failed credential-model route and persist it when possible."""
+    credential_route_exclusions.add((credential_name, model_name))
     try:
-        await record_model_not_found(provider_id, model_name)
+        await record_model_not_found(
+            provider_id,
+            model_name,
+            credential_name=credential_name,
+        )
     except Exception as exc:
         log.error(
             "Model route blacklist persistence failed "
-            f"(provider={provider_id}, model={model_name}): {exc}"
+            f"(provider={provider_id}, credential={credential_name}, model={model_name}): {exc}"
         )
 
 
@@ -458,7 +469,7 @@ async def stream_request(
             status_code=503, mode="primary", model_name=requested_model
         )
         yield Response(
-            content=json.dumps({"error": "No credentials are available."}),
+            content=json.dumps({"error": _no_credential_error_message(requested_model)}),
             status_code=503,
             media_type="application/json",
         )
@@ -571,10 +582,12 @@ async def stream_request(
                         credential_route_exclusions.add((current_file, model_name))
                         if model_routing:
                             log.warning(
-                                f"[provider stream] model route not found; blacklisting provider={provider_id}, model={model_name}."
+                                "[provider stream] model route not found; blacklisting "
+                                f"credential={current_file}, provider={provider_id}, model={model_name}."
                             )
                             await _exclude_missing_model_route(
-                                route_exclusions=route_exclusions,
+                                credential_route_exclusions=credential_route_exclusions,
+                                credential_name=current_file,
                                 provider_id=provider_id,
                                 model_name=model_name,
                             )
@@ -711,7 +724,7 @@ async def stream_request(
                     provider=provider_id,
                 )
 
-                if retry_attempt < max_retries:
+                if retry_config["retry_enabled"] and retry_attempt < max_retries:
                     retry_attempt += 1
                     need_retry = True
                 else:
@@ -766,7 +779,7 @@ async def stream_request(
                 error_message=str(e),
                 provider=provider_id,
             )
-            if retry_attempt < max_retries:
+            if retry_config["retry_enabled"] and retry_attempt < max_retries:
                 retry_attempt += 1
                 log.info(
                     "[provider stream] retry after abnormality "
@@ -853,7 +866,7 @@ async def non_stream_request(
             status_code=503, mode="primary", model_name=requested_model
         )
         return Response(
-            content=json.dumps({"error": "No credentials are available."}),
+            content=json.dumps({"error": _no_credential_error_message(requested_model)}),
             status_code=503,
             media_type="application/json",
         )
@@ -962,7 +975,7 @@ async def non_stream_request(
                         provider=provider_id,
                     )
 
-                    if retry_attempt < max_retries:
+                    if retry_config["retry_enabled"] and retry_attempt < max_retries:
                         retry_attempt += 1
                         need_retry = True
                     else:
@@ -1033,10 +1046,12 @@ async def non_stream_request(
                     credential_route_exclusions.add((current_file, model_name))
                     if model_routing:
                         log.warning(
-                            f"[provider] model route not found; blacklisting provider={provider_id}, model={model_name}."
+                            "[provider] model route not found; blacklisting "
+                            f"credential={current_file}, provider={provider_id}, model={model_name}."
                         )
                         await _exclude_missing_model_route(
-                            route_exclusions=route_exclusions,
+                            credential_route_exclusions=credential_route_exclusions,
+                            credential_name=current_file,
                             provider_id=provider_id,
                             model_name=model_name,
                         )
@@ -1147,7 +1162,7 @@ async def non_stream_request(
                 error_message=str(e),
                 provider=provider_id,
             )
-            if retry_attempt < max_retries:
+            if retry_config["retry_enabled"] and retry_attempt < max_retries:
                 retry_attempt += 1
                 log.info(
                     "[provider] Retry after exception "
@@ -1235,27 +1250,7 @@ async def fetch_provider_model_ids(
             try:
                 access_token = credential_data.get("access_token") or credential_data.get("token")
                 if access_token:
-                    response = await post_async(
-                        url=(
-                            f"{(await get_antigravity_api_url()).rstrip('/')}"
-                            "/v1internal:fetchAvailableModels"
-                        ),
-                        json={},
-                        headers=await build_primary_headers(str(access_token)),
-                    )
-                    if response.status_code == 200:
-                        data = response.json()
-                        if isinstance(data.get("models"), dict):
-                            model_ids.update(data["models"].keys())
-                            if "claude-sonnet-4-6" in data["models"]:
-                                model_ids.add("claude-sonnet-4-6-thinking")
-                            if "claude-opus-4-6-thinking" in data["models"]:
-                                model_ids.add("claude-opus-4-6")
-                    else:
-                        log.warning(
-                            "Google Antigravity model discovery failed with HTTP "
-                            f"{response.status_code}."
-                        )
+                    model_ids.update(await fetch_antigravity_model_ids(str(access_token)))
             except Exception as exc:
                 log.warning(f"Google Antigravity model discovery failed: {exc}")
             finally:

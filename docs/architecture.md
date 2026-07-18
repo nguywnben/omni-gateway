@@ -34,7 +34,8 @@ backend/
     converter/            Pure request/response format translation
     storage/              Concrete persistence backends
     panel/                Authenticated management API and setup policy
-    xai.py                Grok OAuth, xAI Console model discovery, and transport translation
+    antigravity.py        Google Antigravity headers and per-credential model discovery
+    xai.py               Grok OAuth, xAI Console model discovery, and transport translation
     provider_registry.py  Provider identity and capability metadata
     smart_routing.py      Provider and credential selection policy
     storage_adapter.py    Persistence boundary used by the application
@@ -64,6 +65,8 @@ Dependencies should flow inward from HTTP adapters to orchestration and domain p
 7. Recoverable failures trigger bounded credential or model fallback.
 8. The response is translated to the originating SDK format and streamed or returned.
 9. Usage, latency, token, retry, and credential-health results are recorded asynchronously.
+
+Model eligibility is evaluated before a request is sent. A declared model catalog on a credential is authoritative; provider-prefix inference is used only when no catalog has been stored. A provider model-not-found response creates a credential-scoped negative route cache, so a missing entitlement on one account does not disable the same model for other accounts.
 
 ## State and Scaling
 
@@ -147,3 +150,4 @@ Current decisions:
 
 - [ADR-001: Preserve SDK-Compatible API Boundaries](decisions/001-sdk-compatible-api-boundaries.md)
 - [ADR-002: Secure First Run and Enforce Single-Worker Operation](decisions/002-secure-first-run-and-single-worker.md)
+- [ADR-003: Deployment-Scoped Model Eligibility and Negative Route Cache](decisions/003-deployment-scoped-model-eligibility.md)

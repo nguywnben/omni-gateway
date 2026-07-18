@@ -14,6 +14,8 @@ Modern coding workflows often mix clients and providers: OpenAI-compatible tools
 - Token-aware cleanup: normalizes payloads and trims only oversized conversation prefixes at safe turn boundaries while preserving system instructions, tool definitions, and recent context.
 - Format translation: accepts OpenAI Chat Completions and Responses, Gemini native requests, and Anthropic Messages, then translates requests and streaming responses across formats.
 - Credential orchestration: manages OAuth accounts and provider API keys with health state, cooldown tracking, verification, deduplication, and provider-aware fallback.
+- Credential-level model routing: keeps a separate capability catalog for each credential, so one account's entitlement cannot send a request to another account that does not expose the selected model.
+- Route health memory: records model-not-found responses at credential scope and exposes the affected routes for recovery from the Models page.
 - Streaming resilience: supports SSE streaming, pseudo-streaming for clients that require streamed output, and anti-truncation retries for long generations.
 - Control panel: ships with a web console for credentials, logs, configuration, usage, and version information.
 
@@ -184,9 +186,9 @@ Omni Gateway reads configuration from environment variables first, then stored c
 | `CODE_ASSIST_ENDPOINT` | `https://cloudcode-pa.googleapis.com` | Code Assist backend endpoint. |
 | `ANTIGRAVITY_API_URL` | `https://daily-cloudcode-pa.googleapis.com` | Google Antigravity backend endpoint. |
 | `PROXY` | empty | Optional HTTP, HTTPS, or SOCKS proxy. |
-| `RETRY_429_ENABLED` | `true` | Retry rate-limited requests. |
-| `RETRY_429_MAX_RETRIES` | `5` | Maximum rate-limit retry attempts. |
-| `RETRY_429_INTERVAL` | `1` | Delay between retries in seconds. |
+| `RETRY_429_ENABLED` | `true` | Enable bounded retries for rate limits and transient upstream failures. The legacy name is retained for configuration compatibility. |
+| `RETRY_429_MAX_RETRIES` | `5` | Maximum retry attempts for transient upstream failures. |
+| `RETRY_429_INTERVAL` | `1` | Base delay between transient retries in seconds. |
 | `AUTO_DISABLE` | `false` | Disable credentials after configured hard failures. |
 | `AUTO_DISABLE_ERROR_CODES` | `403` | Comma-separated hard-failure status codes. |
 | `ROUTING_STRATEGY` | `balanced` | Credential selection policy: `balanced` or `priority`. |
@@ -320,7 +322,9 @@ Authentication, request-validation, routing, upstream, and pre-stream failures u
 
 The Models page builds the virtual model `omway` from models discovered across enabled provider credentials. Arrange its members in priority order once, then use `omway` from any supported SDK. Omni Gateway balances healthy credentials that support the first model and continues through the configured model order when that model is unavailable. Concrete provider model IDs remain available for clients that need deterministic model selection. Saving an empty selection disables `omway` without affecting provider credentials.
 
-Model discovery is provider-aware: a shared model can be backed by multiple providers, while provider-specific models only use compatible credentials. Refreshing the catalog rechecks current provider availability; unavailable selections remain visible in the configuration until they are restored or removed.
+Model discovery is provider-aware: a shared model can be backed by multiple providers, while provider-specific models only use compatible credentials. Each verified credential stores its own provider catalog, and the router gives declared credential support priority over generic provider inference. Refreshing the catalog rechecks current provider availability; unavailable selections remain visible in the configuration until they are restored or removed.
+
+When an upstream returns `404` for a concrete model, Omni Gateway records an unavailable route for that credential and model rather than suppressing the entire provider. The route is temporarily avoided immediately and remains visible under **Unavailable Model Routes** until it is removed or the credential is revalidated. This prevents one account's subscription or regional entitlement from affecting other accounts at the same provider. If no enabled credential declares or can infer support for a requested concrete model, the gateway returns a clear no-compatible-credential error instead of sending the request to a random provider.
 
 Omni Gateway recognizes feature prefixes and suffixes in model names:
 

@@ -239,6 +239,18 @@ async function refreshUsageStats(options = {}) {
 
 }
 
+function getUsageCallCount(stats = {}) {
+
+    return Number(stats.calls ?? stats.calls_24h ?? 0);
+
+}
+
+function getUsageEntriesWithTraffic() {
+
+    return Object.entries(AppState.usageStatsData || {}).filter(([, stats]) => getUsageCallCount(stats) > 0);
+
+}
+
 function renderUsageList() {
 
     const list = document.getElementById('usageList');
@@ -249,7 +261,9 @@ function renderUsageList() {
 
     renderUsageProviderSummary();
 
-    if (Object.keys(AppState.usageStatsData).length === 0) {
+    const usageEntries = getUsageEntriesWithTraffic();
+
+    if (usageEntries.length === 0) {
 
         const tr = document.createElement('tr');
 
@@ -261,11 +275,11 @@ function renderUsageList() {
 
     }
 
-    for (const [filename, stats] of Object.entries(AppState.usageStatsData)) {
+    for (const [filename, stats] of usageEntries) {
 
         const tr = document.createElement('tr');
 
-        const calls = stats.calls ?? stats.calls_24h ?? 0;
+        const calls = getUsageCallCount(stats);
         const successfulCalls = stats.successful_calls ?? stats.successful_calls_24h ?? 0;
         const failedCalls = stats.failed_calls ?? stats.failed_calls_24h ?? 0;
         const inputTokens = stats.input_tokens ?? stats.input_tokens_24h ?? 0;
@@ -332,7 +346,7 @@ function renderUsageProviderSummary() {
 
     const providers = new Map();
 
-    for (const [filename, stats] of Object.entries(AppState.usageStatsData || {})) {
+    for (const [filename, stats] of getUsageEntriesWithTraffic()) {
 
         if (filename === '__gateway_unassigned__.json') continue;
 
@@ -353,7 +367,7 @@ function renderUsageProviderSummary() {
         };
 
         if (!stats.is_deleted) current.credentials += 1;
-        current.calls += Number(stats.calls ?? stats.calls_24h ?? 0);
+        current.calls += getUsageCallCount(stats);
         current.successfulCalls += Number(stats.successful_calls ?? stats.successful_calls_24h ?? 0);
         current.totalTokens += Number(stats.total_tokens ?? stats.total_tokens_24h ?? 0);
         providers.set(providerMeta.id, current);
