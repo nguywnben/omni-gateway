@@ -17,6 +17,7 @@ from log import log
 
 UNASSIGNED_USAGE_FILENAME = "__gateway_unassigned__.json"
 MODEL_NOT_FOUND_COOLDOWN_SECONDS = 2 * 60
+RETRYABLE_UPSTREAM_STATUS_CODES = frozenset({408, 409, 429, 500, 502, 503, 504})
 
 
 async def check_should_auto_disable(status_code: int) -> bool:
@@ -61,7 +62,7 @@ async def handle_error_with_retry(
             return True
         return False
 
-    if status_code in (429, 500, 503) and retry_enabled and attempt < max_retries:
+    if status_code in RETRYABLE_UPSTREAM_STATUS_CODES and retry_enabled and attempt < max_retries:
         log.info(
             f"[{mode.upper()} RETRY] {status_code} error encountered, retrying "
             f"(attempt {attempt + 1}/{max_retries})"

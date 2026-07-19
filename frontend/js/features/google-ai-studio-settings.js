@@ -149,13 +149,13 @@ const XAI_CONFIG_FIELDS = {
 
 const XAI_CONFIG_GROUPS = {
     oauth: {
-        label: 'Grok',
-        resetTitle: 'Reset Grok Settings',
+        label: 'Grok Build',
+        resetTitle: 'Reset Grok Build Settings',
         fieldIds: ['xaiClientId', 'xaiOauthIssuer']
     },
     api: {
-        label: 'Grok and xAI Console transport',
-        resetTitle: 'Reset Grok and xAI Console Transport Settings',
+        label: 'Grok Build and xAI Console transport',
+        resetTitle: 'Reset Grok Build and xAI Console Transport Settings',
         fieldIds: ['xaiApiUrl', 'xaiUserAgent']
     }
 };

@@ -87,7 +87,7 @@ function renderModelBlacklist() {
     if (entries.length === 0) {
         const empty = document.createElement('div');
         empty.className = 'model-empty-state';
-        empty.textContent = 'No model routes are blacklisted.';
+        empty.textContent = 'No unavailable model routes are recorded.';
         list.appendChild(empty);
         return;
     }
@@ -127,16 +127,24 @@ function renderModelBlacklist() {
         const lastSeen = document.createElement('span');
         lastSeen.textContent = `Last seen ${formatModelBlacklistTime(entry.last_seen_at)}`;
         metadata.append(status, occurrences, lastSeen);
+        if (entry.credential_name) {
+            const credential = document.createElement('span');
+            credential.textContent = `Credential ${entry.credential_name}`;
+            metadata.appendChild(credential);
+        }
         details.append(identity, metadata);
 
         const removeButton = document.createElement('button');
         removeButton.type = 'button';
         removeButton.className = 'btn btn-secondary btn-small';
         removeButton.textContent = 'Remove';
-        removeButton.title = 'Restore this provider-model route';
+        removeButton.title = entry.credential_name
+            ? 'Restore this credential-model route'
+            : 'Restore this provider-model route';
         removeButton.addEventListener('click', () => removeModelBlacklistEntry(
             entry.provider_id,
             entry.model_id,
+            entry.credential_name || '',
             removeButton
         ));
         item.append(details, removeButton);
@@ -144,50 +152,19 @@ function renderModelBlacklist() {
     });
 }
 
-function restoreModelRoutesLocally(restoredEntries) {
-    const restoredKeys = new Set(
-        restoredEntries.map(entry => `${entry.provider_id}\u0000${entry.model_id}`)
-    );
-    AppState.modelBlacklist = AppState.modelBlacklist.filter(entry => (
-        !restoredKeys.has(`${entry.provider_id}\u0000${entry.model_id}`)
-    ));
-    AppState.modelCatalog = AppState.modelCatalog.map(entry => {
-        const restoredProviders = new Set(
-            restoredEntries
-                .filter(value => value.model_id === entry.model_id)
-                .map(value => value.provider_id)
-        );
-        if (restoredProviders.size === 0) return entry;
-        const blacklistedProviders = (entry.blacklisted_providers || [])
-            .filter(value => !restoredProviders.has(value));
-        const routableProviders = (entry.providers || [])
-            .filter(value => !blacklistedProviders.includes(value));
-        return {
-            ...entry,
-            blacklisted_providers: blacklistedProviders,
-            routable_providers: routableProviders,
-            available: routableProviders.length > 0
-        };
-    });
-    renderSelectedModels();
-    renderModelCatalog();
-    renderModelBlacklist();
-}
-
-function restoreModelRouteLocally(providerId, modelId) {
-    restoreModelRoutesLocally([{ provider_id: providerId, model_id: modelId }]);
-}
-
-async function removeModelBlacklistEntry(providerId, modelId, button) {
+async function removeModelBlacklistEntry(providerId, modelId, credentialName, button) {
     if (button) button.disabled = true;
     try {
+        const query = credentialName
+            ? `?credential_name=${encodeURIComponent(credentialName)}`
+            : '';
         const response = await fetch(
-            `./api/model-blacklist/${encodeURIComponent(providerId)}/models/${encodeURIComponent(modelId)}`,
+            `./api/model-blacklist/${encodeURIComponent(providerId)}/models/${encodeURIComponent(modelId)}${query}`,
             { method: 'DELETE', headers: getAuthHeaders() }
         );
         const data = await response.json().catch(() => ({}));
         if (!response.ok) throw new Error(data.detail || data.error || 'Unknown error');
-        restoreModelRouteLocally(providerId, modelId);
+        await loadModelCatalog(false, { preserveContent: true });
         showStatus(data.message || 'Model route removed from blacklist.', 'success');
     } catch (error) {
         showStatus(`Failed to remove the model route: ${error.message}`, 'error');
@@ -197,9 +174,9 @@ async function removeModelBlacklistEntry(providerId, modelId, button) {
 
 async function clearModelBlacklist() {
     const confirmed = await showConfirmModal(
-        'Restore every provider-model route currently excluded after an upstream 404 response?',
+        'Restore every unavailable model route currently excluded after an upstream 404 response?',
         {
-            title: 'Clear Model Blacklist',
+            title: 'Clear Unavailable Routes',
             confirmLabel: 'Clear all'
         }
     );
@@ -214,7 +191,7 @@ async function clearModelBlacklist() {
         });
         const data = await response.json().catch(() => ({}));
         if (!response.ok) throw new Error(data.detail || data.error || 'Unknown error');
-        restoreModelRoutesLocally([...AppState.modelBlacklist]);
+        await loadModelCatalog(false, { preserveContent: true });
         showStatus(data.message || 'Model blacklist cleared.', 'success');
     } catch (error) {
         showStatus(`Failed to clear the model blacklist: ${error.message}`, 'error');

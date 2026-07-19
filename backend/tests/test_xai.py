@@ -330,7 +330,7 @@ class XaiProviderTests(unittest.IsolatedAsyncioTestCase):
             response = await reset_xai_config(scope="oauth", token="panel-token")
 
         payload = json.loads(response.body)
-        self.assertEqual(payload["message"], "Grok settings reset to defaults.")
+        self.assertEqual(payload["message"], "Grok Build settings reset to defaults.")
         deleted_keys = {call.args[0] for call in storage.delete_config.await_args_list}
         self.assertEqual(deleted_keys, {"xai_client_id", "xai_oauth_issuer"})
 
@@ -459,7 +459,7 @@ class XaiProviderTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(payload["uploaded_count"], 0)
         self.assertEqual(payload["error_count"], 1)
         self.assertIn(
-            "does not contain a Grok or xAI Console credential",
+            "does not contain a Grok Build or xAI Console credential",
             payload["results"][0]["message"],
         )
         self.assertNotIn("google-secret-value", serialized)
@@ -489,7 +489,7 @@ class XaiProviderTests(unittest.IsolatedAsyncioTestCase):
         serialized = json.dumps(payload)
         self.assertEqual(payload["uploaded_count"], 0)
         self.assertEqual(payload["error_count"], 1)
-        self.assertIn("Grok OAuth credential", payload["results"][0]["message"])
+        self.assertIn("Grok Build OAuth credential", payload["results"][0]["message"])
         self.assertNotIn("xai-api-key-secret-value", serialized)
         restore.assert_not_awaited()
 

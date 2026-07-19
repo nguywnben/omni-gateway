@@ -14,9 +14,7 @@ from core.google_ai_studio import (
     build_api_key_headers,
     build_generation_url,
 )
-from core.google_oauth_api import (
-    Credentials,
-)
+from core.google_oauth_api import Credentials, merge_refreshed_credential_data
 from core.model_pool import ModelPoolError, model_catalog_service, normalize_model_id
 from core.models import (
     CredentialModelTestRequest,
@@ -30,10 +28,12 @@ from core.provider_registry import (
     XAI,
     get_credential_provider,
     get_declared_credential_models,
+    is_api_key_credential,
 )
 from core.storage_adapter import get_storage_adapter
 from core.utils import CODE_ASSIST_USER_AGENT, verify_panel_token
-from core.xai import refresh_xai_oauth_credential
+from core.xai import XaiError, refresh_xai_oauth_credential
+from core.xai_billing import fetch_xai_billing_usage
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from fastapi.responses import JSONResponse
 from log import log
@@ -629,13 +629,60 @@ async def get_credential_quota(
                 }
             )
 
+        if provider_id == XAI:
+            if is_api_key_credential(credential_data):
+                return JSONResponse(
+                    content={
+                        "success": True,
+                        "supported": False,
+                        "filename": filename,
+                        "provider": provider_id,
+                        "message": (
+                            "Account quota is available for Grok Build OAuth credentials only. "
+                            "xAI Console does not expose this billing view for API keys."
+                        ),
+                    }
+                )
+
+            async def refresh_oauth_credential() -> dict:
+                refreshed = await refresh_xai_oauth_credential(credential_data)
+                await storage_adapter.store_credential(filename, refreshed, mode=mode)
+                log.info(f"Grok Build token automatically refreshed: {filename}")
+                return refreshed
+
+            if not (credential_data.get("access_token") or credential_data.get("token")):
+                credential_data = await refresh_oauth_credential()
+            access_token = credential_data.get("access_token") or credential_data.get("token")
+
+            try:
+                quota_info = await fetch_xai_billing_usage(access_token)
+            except XaiError as exc:
+                if exc.status_code == 401 and credential_data.get("refresh_token"):
+                    credential_data = await refresh_oauth_credential()
+                    access_token = credential_data.get("access_token") or credential_data.get(
+                        "token"
+                    )
+                    quota_info = await fetch_xai_billing_usage(access_token)
+                else:
+                    raise
+
+            return JSONResponse(
+                content={
+                    "success": True,
+                    "supported": True,
+                    "filename": filename,
+                    "provider": provider_id,
+                    **quota_info,
+                }
+            )
+
         from core.google_oauth_api import Credentials
 
         creds = Credentials.from_dict(credential_data)
 
         await creds.refresh_if_needed()
 
-        updated_data = creds.to_dict()
+        updated_data = merge_refreshed_credential_data(credential_data, creds)
         if updated_data != credential_data:
             log.info(f"Token automatically refreshed: {filename}")
             await storage_adapter.store_credential(filename, updated_data, mode=mode)
@@ -667,6 +714,11 @@ async def get_credential_quota(
                 },
             )
 
+    except XaiError as e:
+        return JSONResponse(
+            status_code=502 if e.status_code >= 500 else 400,
+            content={"success": False, "filename": filename, "error": str(e)},
+        )
     except HTTPException:
         raise
     except Exception as e:
@@ -700,7 +752,7 @@ async def configure_preview_channel(
 
         if token_refreshed:
             log.info(f"Token automatically refreshed: {filename}")
-            credential_data = credentials.to_dict()
+            credential_data = merge_refreshed_credential_data(credential_data, credentials)
             await storage_adapter.store_credential(filename, credential_data, mode=mode)
 
         access_token = credential_data.get("access_token") or credential_data.get("token")
@@ -931,7 +983,7 @@ async def test_credential(
             token_refreshed = await credentials.refresh_if_needed()
             if token_refreshed:
                 log.info(f"Token automatically refreshed: {filename} (mode = {mode})")
-                credential_data = credentials.to_dict()
+                credential_data = merge_refreshed_credential_data(credential_data, credentials)
                 await storage_adapter.store_credential(filename, credential_data, mode=mode)
 
             access_token = credential_data.get("access_token") or credential_data.get("token")

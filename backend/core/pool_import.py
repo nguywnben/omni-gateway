@@ -78,7 +78,7 @@ def classify_pool_credential(payload: Any) -> str:
             raise PoolImportError("Google Antigravity payload is missing required OAuth fields.")
         if provider_id == XAI and not _is_xai_payload(payload):
             raise PoolImportError(
-                "Credential payload is not a valid Grok OAuth or xAI Console API key credential."
+                "Credential payload is not a valid Grok Build OAuth or xAI Console API key credential."
             )
         return provider_id
 
@@ -252,7 +252,7 @@ async def _restore_ai_studio(candidate: Dict[str, Any]) -> Dict[str, Any]:
 
 
 async def restore_xai_credential(candidate: Dict[str, Any]) -> Dict[str, Any]:
-    """Validate and import one Grok or xAI Console credential without returning secrets."""
+    """Validate and import one Grok Build or xAI Console credential without returning secrets."""
     payload = dict(candidate["payload"])
     payload["provider"] = XAI
     if str(payload.get("credential_type") or "").lower() == "api_key":
@@ -290,8 +290,8 @@ async def restore_xai_credential(candidate: Dict[str, Any]) -> Dict[str, Any]:
         "filename": result.get("filename", filename),
         "label": payload.get("credential_label")
         or payload.get("user_email")
-        or "Grok OAuth account",
-        "message": result.get("message") or "Grok OAuth credential imported into the pool.",
+        or "Grok Build OAuth account",
+        "message": result.get("message") or "Grok Build OAuth credential imported into the pool.",
     }
 
 

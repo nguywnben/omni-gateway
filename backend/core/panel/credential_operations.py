@@ -10,6 +10,7 @@ from config import (
     get_antigravity_api_url,
     get_antigravity_user_agent,
 )
+from core.antigravity import AntigravityError, fetch_antigravity_model_ids
 from core.credential_manager import credential_manager
 from core.credential_pool import (
     deduplicate_credentials_by_account_email,
@@ -26,6 +27,7 @@ from core.google_oauth_api import (
     enable_required_apis,
     fetch_project_id_and_tier,
     get_user_projects,
+    merge_refreshed_credential_data,
     select_default_project,
 )
 from core.pool_import import (
@@ -922,7 +924,7 @@ async def verify_credential_common(filename: str, mode: str = "code_assist") -> 
                 "credential_type": credential_type,
                 "model_count": len(model_ids),
                 "message": (
-                    f"{'Grok OAuth credential' if credential_type == 'oauth' else 'xAI Console API key'} "
+                    f"{'Grok Build OAuth credential' if credential_type == 'oauth' else 'xAI Console API key'} "
                     "verified. Available models were refreshed, the credential was enabled, "
                     "and recorded errors were cleared."
                 ),
@@ -935,7 +937,7 @@ async def verify_credential_common(filename: str, mode: str = "code_assist") -> 
 
     if token_refreshed:
         log.info(f"Token automatically refreshed: {filename} (mode = {mode})")
-        credential_data = credentials.to_dict()
+        credential_data = merge_refreshed_credential_data(credential_data, credentials)
         await storage_adapter.store_credential(filename, credential_data, mode=mode)
 
     if mode == "primary":
@@ -947,6 +949,23 @@ async def verify_credential_common(filename: str, mode: str = "code_assist") -> 
             api_base_url=api_base_url,
             include_credits=True,
         )
+        try:
+            model_ids = await fetch_antigravity_model_ids(
+                credentials.access_token,
+                api_base_url=api_base_url,
+                user_agent=user_agent,
+            )
+        except AntigravityError as exc:
+            return JSONResponse(
+                status_code=exc.status_code,
+                content={
+                    "success": False,
+                    "filename": filename,
+                    "provider": provider_id,
+                    "message": str(exc),
+                },
+            )
+        credential_data["model_ids"] = model_ids
     else:
         credit_amount = None
         subscription_tier = None
@@ -995,6 +1014,8 @@ async def verify_credential_common(filename: str, mode: str = "code_assist") -> 
 
         if mode == "primary" and credit_amount is not None:
             response_data["credit_amount"] = credit_amount
+        if mode == "primary":
+            response_data["model_count"] = len(credential_data.get("model_ids") or [])
 
         return JSONResponse(content=response_data)
     else:

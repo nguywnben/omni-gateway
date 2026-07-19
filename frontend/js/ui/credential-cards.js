@@ -74,7 +74,7 @@ function getCredentialProviderMeta(credInfo, managerType) {
         if (isGrok) {
             return {
                 id: 'grok',
-                name: 'Grok',
+                name: t('provider_grok'),
                 logo: '/frontend/assets/providers/xai-grok-logo.png'
             };
         }
@@ -89,7 +89,7 @@ function getCredentialProviderMeta(credInfo, managerType) {
 
         return {
             id: 'grok',
-            name: 'Grok',
+            name: t('provider_grok'),
             logo: '/frontend/assets/providers/xai-grok-logo.png'
         };
 
@@ -157,6 +157,7 @@ function createCredCard(credInfo, manager) {
     const providerMeta = getCredentialProviderMeta(credInfo, managerType);
     const isGoogleAIStudio = providerMeta.id === 'google_ai_studio';
     const isXai = ['xai', 'grok', 'xai_console'].includes(providerMeta.id);
+    const isGrokOAuth = providerMeta.id === 'grok' && credInfo.credential_type !== 'api_key';
     const isAntigravity = providerMeta.id === 'google_antigravity';
     const isStaticProvider = isGoogleAIStudio || isXai;
     const accountLabel = credInfo.credential_label || credInfo.user_email || t('email_not_fetched');
@@ -299,7 +300,8 @@ function createCredCard(credInfo, manager) {
         modelCount: Number.isFinite(Number(credInfo.model_count)) ? Number(credInfo.model_count) : 0,
     };
 
-    const shouldAutoLoadQuota = managerType === 'primary' && isAntigravity && !AppState.quotaPreviewCache[filename];
+    const supportsQuotaPreview = managerType === 'primary' && (isAntigravity || isGrokOAuth);
+    const shouldAutoLoadQuota = supportsQuotaPreview && !AppState.quotaPreviewCache[filename];
 
     if (shouldAutoLoadQuota) {
 
@@ -323,7 +325,7 @@ function createCredCard(credInfo, manager) {
 
         ${isStaticProvider && Number(credInfo.model_count) > 0 ? `<button type="button" class="cred-btn" data-credential-command="models" title="${escapeAttribute(t('btn_view_models_title'))}">${t('btn_view_models')}</button>` : ''}
 
-        ${managerType === 'primary' && isAntigravity ? `<button type="button" class="cred-btn" data-credential-command="quota" title="${escapeAttribute(t('btn_view_quota_title'))}">${t('btn_view_quota')}</button>` : ''}
+        ${supportsQuotaPreview ? `<button type="button" class="cred-btn" data-credential-command="quota" title="${escapeAttribute(t('btn_view_quota_title'))}">${t('btn_view_quota')}</button>` : ''}
 
         ${managerType === 'primary' && isAntigravity ? (credInfo.enable_credit
 
@@ -346,7 +348,7 @@ function createCredCard(credInfo, manager) {
     `;
 
     const checkboxClass = manager.getElementId('file-checkbox');
-    const quotaPreview = isAntigravity ? renderCredentialQuotaPreview(pathId, filename, managerType) : '';
+    const quotaPreview = supportsQuotaPreview ? renderCredentialQuotaPreview(pathId, filename, managerType) : '';
 
     div.innerHTML = `
 

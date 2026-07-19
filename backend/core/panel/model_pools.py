@@ -87,7 +87,7 @@ async def get_model_catalog(
 
 @router.get("/api/model-blacklist")
 async def get_model_blacklist_entries(token: str = Depends(verify_panel_token)):
-    """Return provider-scoped model routes excluded by observed upstream 404 responses."""
+    """Return model routes excluded by observed upstream 404 responses."""
     entries = await get_model_blacklist()
     return JSONResponse(content={"blacklist": entries, "count": len(entries)})
 
@@ -96,11 +96,19 @@ async def get_model_blacklist_entries(token: str = Depends(verify_panel_token)):
 async def delete_model_blacklist_entry(
     provider_id: str,
     model_id: str = Path(..., description="Provider model ID"),
+    credential_name: str = Query(default=""),
     token: str = Depends(verify_panel_token),
 ):
-    """Restore one provider-model route to the virtual routing pool."""
+    """Restore one credential-model route, or every matching provider route."""
     try:
-        removed = await remove_model_blacklist_entry(provider_id, model_id)
+        if credential_name:
+            removed = await remove_model_blacklist_entry(
+                provider_id,
+                model_id,
+                credential_name=credential_name,
+            )
+        else:
+            removed = await remove_model_blacklist_entry(provider_id, model_id)
     except (ModelPoolError, ValueError) as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     return JSONResponse(

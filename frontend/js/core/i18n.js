@@ -241,6 +241,7 @@ const TRANSLATIONS = {
         "project_id_required_to_complete_aut": "A Project ID is required to complete authentication. Restart the flow and enter the correct Project ID.",
         "provider_antigravity": "Google Antigravity",
         "provider_google_ai_studio": "Google AI Studio",
+        "provider_grok": "Grok Build",
         "provider_authorization_expired": "This authorization session was not found or has expired. Generate a new authorization link and try again.",
         "provider_authorization_pending": "Authorization is not complete yet. If Google opened a localhost callback page, copy the full callback URL from that tab and paste it into the Callback URL field.",
         "provider_callback_url_required": "Paste the localhost callback URL from the Google tab into the Callback URL field, then select Save credential.",

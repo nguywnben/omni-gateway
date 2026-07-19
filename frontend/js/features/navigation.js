@@ -265,7 +265,7 @@ const MODEL_PROVIDER_META = {
         logo: '/frontend/assets/providers/google-ai-studio-logo.png'
     },
     xai: {
-        name: 'Grok',
+        name: 'Grok Build',
         logo: '/frontend/assets/providers/xai-grok-logo.png'
     }
 };

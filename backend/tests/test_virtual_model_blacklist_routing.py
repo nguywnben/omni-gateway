@@ -137,7 +137,11 @@ class VirtualModelBlacklistRoutingTests(unittest.IsolatedAsyncioTestCase):
             )
 
         self.assertEqual(response.status_code, 200)
-        blacklist_mock.assert_awaited_once_with("google_ai_studio", "gemini-retired")
+        blacklist_mock.assert_awaited_once_with(
+            "google_ai_studio",
+            "gemini-retired",
+            credential_name="first.json",
+        )
         route_miss_mock.assert_awaited_once()
         self.assertEqual(route_mock.await_count, 2)
         self.assertEqual(upstream_mock.await_count, 3)
@@ -145,7 +149,11 @@ class VirtualModelBlacklistRoutingTests(unittest.IsolatedAsyncioTestCase):
             self.assertTrue(call.kwargs["respect_model_blacklist"])
         self.assertEqual(
             route_mock.await_args.kwargs["excluded_provider_models"],
-            {("google_ai_studio", "gemini-retired")},
+            set(),
+        )
+        self.assertEqual(
+            route_mock.await_args.kwargs["excluded_credential_models"],
+            {("first.json", "gemini-retired")},
         )
 
     async def test_direct_model_404_tries_another_credential_without_persistent_blacklist(self):
@@ -340,11 +348,19 @@ class VirtualModelBlacklistRoutingTests(unittest.IsolatedAsyncioTestCase):
             ]
 
         self.assertEqual(chunks, [b'data: {"response":"ok"}\n\n'])
-        blacklist_mock.assert_awaited_once_with("google_ai_studio", "gemini-retired")
+        blacklist_mock.assert_awaited_once_with(
+            "google_ai_studio",
+            "gemini-retired",
+            credential_name="first.json",
+        )
         self.assertEqual(route_mock.await_count, 2)
         self.assertEqual(
             route_mock.await_args.kwargs["excluded_provider_models"],
-            {("google_ai_studio", "gemini-retired")},
+            set(),
+        )
+        self.assertEqual(
+            route_mock.await_args.kwargs["excluded_credential_models"],
+            {("first.json", "gemini-retired")},
         )
 
     async def test_direct_stream_404_tries_another_credential_for_the_same_model(self):

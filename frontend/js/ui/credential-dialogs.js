@@ -194,7 +194,91 @@ function quotaLevelFromUsedPercentage(usedPercentage) {
 
 }
 
+function formatQuotaNumber(value) {
+
+    const number = Number(value);
+    return Number.isFinite(number) ? number.toLocaleString('en-US') : 'Unavailable';
+
+}
+
+function formatQuotaResetTime(value) {
+
+    const date = new Date(value || '');
+    if (!Number.isFinite(date.getTime())) return 'Reset time unavailable';
+    return date.toLocaleString(undefined, {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+    });
+
+}
+
+function buildAccountBillingQuotaHtml(filename, data, context = {}) {
+
+    const periods = [
+        data.monthly ? { id: 'monthly', label: 'Monthly Credits', ...data.monthly } : null,
+        data.weekly ? { id: 'weekly', label: 'Weekly Usage', ...data.weekly } : null,
+    ].filter(Boolean);
+    const remainingPercentages = periods
+        .map((period) => Number(period.remaining_percentage))
+        .filter(Number.isFinite);
+    const lowestRemaining = remainingPercentages.length ? Math.min(...remainingPercentages) : null;
+    const rows = renderMessageResultRows([
+        ['Provider', context.providerName || t('provider_grok')],
+        context.accountLabel ? ['Account', context.accountLabel] : ['Credential', filename],
+        ['Quota source', 'Grok Build account billing'],
+        ['Billing periods', periods.length],
+        lowestRemaining !== null ? ['Lowest remaining quota', `${lowestRemaining}%`] : null,
+    ].filter(Boolean));
+
+    const cards = periods.map((period) => {
+        const usedPercentage = Math.max(0, Math.min(100, Number(period.used_percentage) || 0));
+        const remainingPercentage = Math.max(0, Math.min(100, Number(period.remaining_percentage) || 0));
+        const level = quotaLevelFromUsedPercentage(usedPercentage);
+        const usageText = period.id === 'monthly'
+            ? `${formatQuotaNumber(period.used)} / ${formatQuotaNumber(period.limit)} credits used`
+            : `${usedPercentage}% used`;
+
+        return `
+            <div class="modal-quota-card ${level}">
+                <div class="modal-quota-head">
+                    <div class="modal-quota-model">${escapeHtml(period.label)}</div>
+                    <div class="modal-quota-percent">${remainingPercentage}% left</div>
+                </div>
+                <div class="modal-quota-bar">
+                    <div class="modal-quota-bar-value" style="width: ${remainingPercentage}%;"></div>
+                </div>
+                <div class="modal-quota-foot">
+                    <span>${escapeHtml(usageText)}</span>
+                    <span>Resets ${escapeHtml(formatQuotaResetTime(period.reset_time))}</span>
+                </div>
+            </div>
+        `;
+    }).join('');
+
+    return `
+        <div class="message-result-panel">
+            <div class="message-result-intro">Account quota reported by Grok Build for the selected OAuth credential.</div>
+            <div class="message-result-section">
+                <div class="message-result-section-title">Quota Summary</div>
+                <div class="message-result-summary">${rows}</div>
+            </div>
+            <div class="message-result-section">
+                <div class="message-result-section-title">Billing Periods</div>
+                <div class="modal-quota-grid">${cards}</div>
+            </div>
+        </div>
+    `;
+
+}
+
 function buildCredentialQuotaHtml(filename, data, context = {}) {
+
+    if (data?.quota_type === 'account_billing') {
+        return buildAccountBillingQuotaHtml(filename, data, context);
+    }
 
     const models = data.models || {};
     const entries = Object.entries(models);
@@ -270,6 +354,20 @@ function buildCredentialQuotaHtml(filename, data, context = {}) {
 
 function summarizeCredentialQuota(data) {
 
+    if (data?.quota_type === 'account_billing') {
+        const periods = [data.monthly, data.weekly].filter(Boolean);
+        const remainingValues = periods
+            .map((period) => Number(period.remaining_percentage))
+            .filter(Number.isFinite);
+        if (!remainingValues.length) return { level: 'muted', label: 'No quota' };
+        const remainingPercentage = Math.min(...remainingValues);
+        return {
+            level: quotaLevelFromUsedPercentage(100 - remainingPercentage),
+            label: `${remainingPercentage}% left`,
+            periodCount: periods.length,
+        };
+    }
+
     const models = data?.models || {};
     const entries = Object.entries(models);
 
@@ -305,6 +403,25 @@ function summarizeCredentialQuota(data) {
 
 }
 
+function describeCredentialQuotaPreview(summary) {
+
+    if (summary.modelCount) {
+        const modelLabel = `model${summary.modelCount === 1 ? '' : 's'}`;
+        return `Average quota: ${summary.label} across ${summary.modelCount} ${modelLabel}.`;
+    }
+
+    if (summary.periodCount > 1) {
+        return `Lowest account quota: ${summary.label} across ${summary.periodCount} active billing periods.`;
+    }
+
+    if (summary.periodCount === 1) {
+        return `Account quota: ${summary.label} for the active billing period.`;
+    }
+
+    return t('btn_view_quota_title');
+
+}
+
 function renderCredentialQuotaPreview(pathId, filename, managerType) {
 
     if (managerType !== 'primary') return '';
@@ -318,9 +435,7 @@ function renderCredentialQuotaPreview(pathId, filename, managerType) {
                 ? {
                     level: cached.summary.level,
                     label: cached.summary.label,
-                    title: cached.summary.modelCount
-                        ? `Average quota: ${cached.summary.label} across ${cached.summary.modelCount} model${cached.summary.modelCount === 1 ? '' : 's'}`
-                        : t('btn_view_quota_title'),
+                    title: describeCredentialQuotaPreview(cached.summary),
                 }
                 : { level: 'loading', label: t('quota_preview_loading'), title: t('card_loading_quota') };
 

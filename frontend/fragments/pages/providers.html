@@ -40,16 +40,16 @@
                             </div>
                         </button>
 
-                        <button type="button" class="provider-hero-card provider-selector-button" id="providerSelectorGrok" role="tab" aria-label="Grok" aria-selected="false" aria-controls="providerWorkspaceGrok" data-ui-action="select-provider" data-provider="grok">
+                        <button type="button" class="provider-hero-card provider-selector-button" id="providerSelectorGrok" role="tab" aria-label="Grok Build" aria-selected="false" aria-controls="providerWorkspaceGrok" data-ui-action="select-provider" data-provider="grok">
                             <div class="provider-logo-frame">
-                                <img src="/frontend/assets/providers/xai-grok-logo.png" alt="Grok logo">
+                                <img src="/frontend/assets/providers/xai-grok-logo.png" alt="Grok Build logo">
                             </div>
                             <div class="provider-summary">
                                 <div class="provider-eyebrow">Account Provider</div>
-                                <strong class="provider-name">Grok</strong>
-                                <p>Connect a Grok account through OAuth and route its available models through the shared pool.</p>
+                                <strong class="provider-name">Grok Build</strong>
+                                <p>Connect a Grok Build account through OAuth and route its available models through the shared pool.</p>
                             </div>
-                            <div class="provider-capabilities" aria-label="Grok methods">
+                            <div class="provider-capabilities" aria-label="Grok Build methods">
                                 <span>OAuth</span>
                                 <span>JSON</span>
                                 <span>ZIP</span>
@@ -63,7 +63,7 @@
                             <div class="provider-summary">
                                 <div class="provider-eyebrow">API Key Provider</div>
                                 <strong class="provider-name">xAI Console</strong>
-                                <p>Add xAI Console API keys for direct Grok model access and automatic provider fallback.</p>
+                                <p>Add xAI Console API keys for direct Grok Build model access and automatic provider fallback.</p>
                             </div>
                             <div class="provider-capabilities" aria-label="xAI Console methods">
                                 <span>API Key</span>
@@ -77,16 +77,16 @@
                         <div class="provider-workspace-heading">
                             <div class="provider-workspace-logo"><img src="/frontend/assets/providers/xai-grok-logo.png" alt=""></div>
                             <div>
-                                <h2>Grok</h2>
-                                <p>Add OAuth accounts and route their available Grok models through the shared pool.</p>
-                                <a class="provider-site-link" href="https://grok.com/" target="_blank" rel="noreferrer">https://grok.com/</a>
+                                <h2>Grok Build</h2>
+                                <p>Add OAuth accounts and route their available Grok Build models through the shared pool.</p>
+                                <a class="provider-site-link" href="https://grok.com/build" target="_blank" rel="noreferrer">https://grok.com/build</a>
                             </div>
                         </div>
 
                         <div class="provider-tools-grid">
                             <section class="tool-panel">
-                                <h2 class="card-title">Grok OAuth</h2>
-                                <p class="card-copy provider-tool-copy">Authorize a Grok account with PKCE and save it directly to the provider pool.</p>
+                                <h2 class="card-title">Grok Build OAuth</h2>
+                                <p class="card-copy provider-tool-copy">Authorize a Grok Build account with PKCE and save it directly to the provider pool.</p>
                                 <div class="page-actions">
                                     <button type="button" class="btn" id="startXaiOauthBtn" data-ui-action="start-xai-oauth">Get provider authentication link</button>
                                 </div>
@@ -100,15 +100,15 @@
                                     </div>
                                     <div class="oauth-completion-panel">
                                         <label for="xaiAuthorizationCode">Authorization code</label>
-                                        <p class="card-copy provider-tool-copy">After signing in, copy the code shown on the Grok authorization page and paste it here.</p>
-                                        <input type="text" id="xaiAuthorizationCode" placeholder="Paste the Grok authorization code" autocomplete="off" spellcheck="false">
+                                        <p class="card-copy provider-tool-copy">After signing in, copy the code shown on the Grok Build authorization page and paste it here.</p>
+                                        <input type="text" id="xaiAuthorizationCode" placeholder="Paste the Grok Build authorization code" autocomplete="off" spellcheck="false">
                                     </div>
                                     <div class="page-actions" style="margin-top: 14px;">
                                         <button type="button" class="btn" id="saveXaiOauthBtn" data-ui-action="save-xai-oauth">Save credential</button>
                                     </div>
                                     <div id="xaiOauthSaveResult" class="save-result provider-save-result hidden" style="margin-top: 14px;">
                                         <div>
-                                            <strong id="xaiOauthSaveResultTitle">Grok OAuth credential added to pool</strong>
+                                            <strong id="xaiOauthSaveResultTitle">Grok Build OAuth credential added to pool</strong>
                                             <p id="xaiOauthSaveResultText"></p>
                                         </div>
                                         <button type="button" class="btn btn-secondary" data-ui-action="switch-tab" data-tab="pool">View</button>
@@ -118,7 +118,7 @@
 
                             <section class="tool-panel">
                                 <h2 class="card-title">Batch Import</h2>
-                                <p class="card-copy provider-tool-copy">Import Grok OAuth credentials from JSON files or ZIP archives. Every credential is validated before it enters the pool.</p>
+                                <p class="card-copy provider-tool-copy">Import Grok Build OAuth credentials from JSON files or ZIP archives. Every credential is validated before it enters the pool.</p>
                                 <button type="button" class="upload-area" id="grokUploadArea" aria-describedby="grokUploadHelp" data-ui-action="select-grok-files">
                                     <div>
                                         <div class="upload-title">Drop OAuth credential files here</div>
@@ -155,15 +155,15 @@
                         <section class="tool-panel provider-settings-panel">
                             <div class="provider-settings-header">
                                 <div>
-                                    <h2 class="card-title">Grok Advanced Settings</h2>
-                                    <p class="card-copy provider-tool-copy">Configure the public OAuth client and authorization issuer used for Grok accounts.</p>
+                                    <h2 class="card-title">Grok Build Advanced Settings</h2>
+                                    <p class="card-copy provider-tool-copy">Configure the public OAuth client and authorization issuer used for Grok Build accounts.</p>
                                 </div>
                                 <div class="page-actions">
                                     <button type="button" class="btn" data-ui-action="save-grok-settings">Save</button>
                                     <button type="button" class="btn btn-secondary" data-ui-action="reset-grok-settings">Reset defaults</button>
                                 </div>
                             </div>
-                            <div id="grokSettingsLoading" class="skeleton-config provider-settings-skeleton" role="status" aria-label="Loading Grok settings" aria-busy="true">
+                            <div id="grokSettingsLoading" class="skeleton-config provider-settings-skeleton" role="status" aria-label="Loading Grok Build settings" aria-busy="true">
                                 <div class="skeleton-config-group"><div class="skeleton-line title"></div><div class="skeleton-line field"></div></div>
                                 <div class="skeleton-config-group"><div class="skeleton-line title"></div><div class="skeleton-line field"></div></div>
                             </div>
@@ -179,7 +179,7 @@
                             <div class="provider-workspace-logo"><img src="/frontend/assets/providers/xai-console-logo.png" alt=""></div>
                             <div>
                                 <h2>xAI Console</h2>
-                                <p>Add API keys and route their available Grok models through the shared pool.</p>
+                                <p>Add API keys and route their available Grok Build models through the shared pool.</p>
                                 <a class="provider-site-link" href="https://console.x.ai/" target="_blank" rel="noreferrer">https://console.x.ai/</a>
                             </div>
                         </div>
@@ -243,8 +243,8 @@
                         <section class="tool-panel provider-settings-panel">
                             <div class="provider-settings-header">
                                 <div>
-                                    <h2 class="card-title">Grok and xAI Console Transport Settings</h2>
-                                    <p class="card-copy provider-tool-copy">Configure the API endpoint and HTTP identity shared by Grok OAuth accounts and xAI Console API keys.</p>
+                                    <h2 class="card-title">Grok Build and xAI Console Transport Settings</h2>
+                                    <p class="card-copy provider-tool-copy">Configure the API endpoint and HTTP identity shared by Grok Build OAuth accounts and xAI Console API keys.</p>
                                 </div>
                                 <div class="page-actions">
                                     <button type="button" class="btn" data-ui-action="save-xai-console-settings">Save</button>
@@ -256,7 +256,7 @@
                                 <div class="skeleton-config-group"><div class="skeleton-line title"></div><div class="skeleton-line field"></div></div>
                             </div>
                             <div id="xaiConsoleSettingsForm" class="config-grid provider-config-grid hidden">
-                                <div class="form-group"><label for="xaiApiUrl">Grok API endpoint</label><input type="url" id="xaiApiUrl" autocomplete="off"></div>
+                                <div class="form-group"><label for="xaiApiUrl">xAI API endpoint</label><input type="url" id="xaiApiUrl" autocomplete="off"></div>
                                 <div class="form-group"><label for="xaiUserAgent">HTTP User-Agent</label><input type="text" id="xaiUserAgent" autocomplete="off"></div>
                             </div>
                         </section>

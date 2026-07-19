@@ -138,7 +138,7 @@ class ControlPanelAssetTests(unittest.TestCase):
             self.assertIn(f'id="{element_id}"', body)
         self.assertIn("/frontend/assets/providers/xai-grok-logo.png", body)
         self.assertIn("/frontend/assets/providers/xai-console-logo.png", body)
-        self.assertIn('<strong class="provider-name">Grok</strong>', body)
+        self.assertIn('<strong class="provider-name">Grok Build</strong>', body)
         self.assertIn('<strong class="provider-name">xAI Console</strong>', body)
         self.assertIn(
             "./api/providers/xai/credentials/import?credential_type=oauth",
@@ -168,7 +168,7 @@ class ControlPanelAssetTests(unittest.TestCase):
         self.assertNotIn("Open xAI authorization", settings_script)
         self.assertNotIn(">xAI<", body)
         self.assertNotIn("name: 'xAI'", upload_script)
-        self.assertIn('<option value="xai">Grok</option>', body)
+        self.assertIn('<option value="xai">Grok Build</option>', body)
 
     def test_credential_verification_uses_provider_neutral_route(self):
         credential_manager_script = read_scripts("core/credential-manager.js")
@@ -178,6 +178,20 @@ class ControlPanelAssetTests(unittest.TestCase):
         self.assertIn("./api/credentials/verify/", credential_script)
         self.assertNotIn("./api/credentials/verify-project", credential_manager_script)
         self.assertNotIn("./api/credentials/verify-project", credential_script)
+
+    def test_grok_build_oauth_uses_the_shared_quota_dialog(self):
+        card_script = read_scripts("ui/credential-cards.js")
+        dialog_script = read_scripts("ui/credential-dialogs.js")
+
+        self.assertIn("isGrokOAuth", card_script)
+        self.assertIn(
+            "const supportsQuotaPreview = managerType === 'primary' && (isAntigravity || isGrokOAuth);",
+            card_script,
+        )
+        self.assertIn("const quotaPreview = supportsQuotaPreview", card_script)
+        self.assertIn("data?.quota_type === 'account_billing'", dialog_script)
+        self.assertIn("Billing Periods", dialog_script)
+        self.assertIn("active billing periods", dialog_script)
 
 
 if __name__ == "__main__":

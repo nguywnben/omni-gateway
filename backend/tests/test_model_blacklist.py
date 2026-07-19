@@ -14,6 +14,7 @@ if str(BACKEND_DIR) not in sys.path:
 
 from core.model_blacklist import (
     clear_model_blacklist,
+    get_credential_model_blacklist_pairs,
     get_model_blacklist,
     get_model_blacklist_pairs,
     record_model_not_found,
@@ -40,6 +41,61 @@ class FakeConfigStorage:
 
 
 class ModelBlacklistTests(unittest.IsolatedAsyncioTestCase):
+    async def test_not_found_routes_are_scoped_to_individual_credentials(self):
+        storage = FakeConfigStorage()
+
+        await record_model_not_found(
+            "google_ai_studio",
+            "gemini-account-limited",
+            credential_name="first.json",
+            storage_adapter=storage,
+            now=100.0,
+        )
+        await record_model_not_found(
+            "google_ai_studio",
+            "gemini-account-limited",
+            credential_name="second.json",
+            storage_adapter=storage,
+            now=110.0,
+        )
+
+        entries = await get_model_blacklist(storage_adapter=storage)
+        self.assertEqual(
+            [(entry["credential_name"], entry["failure_count"]) for entry in entries],
+            [("second.json", 1), ("first.json", 1)],
+        )
+        self.assertEqual(
+            await get_credential_model_blacklist_pairs(storage_adapter=storage),
+            {
+                ("first.json", "gemini-account-limited"),
+                ("second.json", "gemini-account-limited"),
+            },
+        )
+        self.assertEqual(await get_model_blacklist_pairs(storage_adapter=storage), set())
+
+    async def test_legacy_provider_routes_remain_provider_scoped(self):
+        storage = FakeConfigStorage()
+        storage.values["model_route_blacklist"] = {
+            "entries": [
+                {
+                    "provider_id": "google_ai_studio",
+                    "model_id": "gemini-retired",
+                    "failure_count": 1,
+                    "first_seen_at": 100.0,
+                    "last_seen_at": 100.0,
+                }
+            ]
+        }
+
+        self.assertEqual(
+            await get_model_blacklist_pairs(storage_adapter=storage),
+            {("google_ai_studio", "gemini-retired")},
+        )
+        self.assertEqual(
+            await get_credential_model_blacklist_pairs(storage_adapter=storage),
+            set(),
+        )
+
     async def test_repeated_not_found_updates_one_provider_model_entry(self):
         storage = FakeConfigStorage()
 
@@ -169,12 +225,18 @@ class ModelBlacklistTests(unittest.IsolatedAsyncioTestCase):
         with patch(
             "core.panel.model_pools.remove_model_blacklist_entry",
             AsyncMock(return_value=True),
-        ):
+        ) as remove_mock:
             response = await delete_model_blacklist_entry(
                 "google_ai_studio",
                 "gemini-retired",
+                credential_name="first.json",
                 token="test-session",
             )
+        remove_mock.assert_awaited_once_with(
+            "google_ai_studio",
+            "gemini-retired",
+            credential_name="first.json",
+        )
         self.assertEqual(
             json.loads(response.body)["message"], "Model route removed from blacklist."
         )

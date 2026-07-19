@@ -53,7 +53,7 @@ class ProviderCapabilityTests(unittest.TestCase):
     def test_xai_declares_dual_auth_and_grok_models(self):
         capabilities = get_provider_capabilities(XAI)
 
-        self.assertEqual(capabilities.display_name, "Grok")
+        self.assertEqual(capabilities.display_name, "Grok Build")
         self.assertEqual(capabilities.credential_types, ("oauth", "api_key"))
         self.assertTrue(capabilities.supports_model("grok-4"))
         self.assertFalse(capabilities.supports_model("gemini-2.5-flash"))
@@ -63,7 +63,7 @@ class ProviderCapabilityTests(unittest.TestCase):
         api_key_credential = {"provider": XAI, "credential_type": "api_key"}
 
         self.assertEqual(get_credential_provider_variant(oauth_credential), GROK)
-        self.assertEqual(get_credential_provider_display_name(oauth_credential), "Grok")
+        self.assertEqual(get_credential_provider_display_name(oauth_credential), "Grok Build")
         self.assertEqual(get_credential_provider_variant(api_key_credential), XAI_CONSOLE)
         self.assertEqual(
             get_credential_provider_display_name(api_key_credential),
