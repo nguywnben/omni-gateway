@@ -4,6 +4,22 @@ All notable user-facing changes are documented in this file. Omni Gateway follow
 
 ## [Unreleased]
 
+## [1.1.4] - 2026-07-19
+
+### Added
+
+- Added deployment-aware Google Antigravity model discovery and persisted per-credential model catalogs during verification.
+- Added Grok Build OAuth account billing visibility with monthly credits, weekly usage, reset times, and a conservative remaining-quota badge.
+
+### Changed
+
+- Standardized the Grok OAuth product name as Grok Build across provider contracts, imports, usage reporting, documentation, and the management console.
+
+### Fixed
+
+- Restricted fixed and virtual model routing to credentials whose discovered catalog supports the selected model while preserving fallback through other eligible credentials and providers.
+- Kept unavailable-model memory scoped to the credential and provider route that actually failed, so one account cannot incorrectly suppress another account's valid model deployment.
+
 ## [1.1.3] - 2026-07-17
 
 ### Added
