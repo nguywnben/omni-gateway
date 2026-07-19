@@ -96,7 +96,11 @@ function initStaticUiBindings() {
         'clear-openai-platform-files': () => clearOpenAIPlatformFiles(),
         'save-openai-settings': (element) => saveOpenAISettings(element.dataset.openaiScope),
         'reset-openai-settings': (element) => resetOpenAISettings(element.dataset.openaiScope),
-        'copy-field': (element) => copyInputValue(element.dataset.copyTarget),
+        'copy-codex-device-code': (element) => {
+            cpUrl(element);
+            element.blur();
+        },
+        'copy-codex-verification-url': () => cpUrl(document.getElementById('codexVerificationUrl')),
         'copy-xai-auth-url': () => cpUrl(document.getElementById('xaiAuthorizationUrl')),
         'copy-primary-auth-url': () => cpUrl(document.getElementById('primaryAuthUrl')),
         'get-primary-credentials': () => getPrimaryCredentials(),

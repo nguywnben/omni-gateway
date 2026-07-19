@@ -181,7 +181,7 @@ async function startCodexOauth() {
             fields.dataset.pollInterval = String(data.interval || 5);
             fields.classList.remove('hidden');
         }
-        if (code) code.value = data.user_code || '';
+        if (code) code.textContent = data.user_code || 'Code unavailable';
         if (verification) {
             verification.href = data.verification_uri || '#';
             verification.textContent = data.verification_uri || 'Verification page unavailable';

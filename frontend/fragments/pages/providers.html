@@ -420,8 +420,17 @@
                                 <div class="page-actions"><button type="button" class="btn" id="startCodexOauthBtn" data-ui-action="start-codex-oauth">Get authorization code</button></div>
                                 <div id="codexOauthFields" class="hidden provider-device-flow" style="margin-top: 18px;" data-flow-id="">
                                     <div class="device-flow-grid">
-                                        <div><label for="codexUserCode">Device code</label><div class="copy-field-row"><input type="text" id="codexUserCode" readonly><button type="button" class="btn btn-secondary" data-ui-action="copy-field" data-copy-target="codexUserCode">Copy</button></div></div>
-                                        <div><label>Verification page</label><a id="codexVerificationUrl" class="endpoint-code-card auth-link-card" href="#" target="_blank" rel="noreferrer">Open verification page</a></div>
+                                        <div class="device-flow-field">
+                                            <span class="device-flow-label">Device code</span>
+                                            <button type="button" id="codexUserCode" class="endpoint-code-card device-code-button" title="Copy device code" aria-label="Copy device code" data-ui-action="copy-codex-device-code">Code unavailable</button>
+                                        </div>
+                                        <div class="device-flow-field">
+                                            <span class="device-flow-label">Verification page</span>
+                                            <div class="device-verification-row">
+                                                <a id="codexVerificationUrl" class="endpoint-code-card auth-link-card" href="#" target="_blank" rel="noreferrer">Open verification page</a>
+                                                <button type="button" class="btn btn-secondary" title="Copy verification page URL" aria-label="Copy verification page URL" data-ui-action="copy-codex-verification-url">Copy</button>
+                                            </div>
+                                        </div>
                                     </div>
                                     <p class="card-copy provider-tool-copy">Open the verification page, enter the device code, complete sign-in, then check the authorization status.</p>
                                     <div class="page-actions"><button type="button" class="btn" id="completeCodexOauthBtn" data-ui-action="complete-codex-oauth">Check authorization</button></div>

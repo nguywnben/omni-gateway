@@ -192,6 +192,18 @@ class ControlPanelAssetTests(unittest.TestCase):
         self.assertIn("/frontend/assets/providers/openai-platform-logo.png", body)
         self.assertIn('<strong class="provider-name">Codex</strong>', body)
         self.assertIn('<strong class="provider-name">OpenAI Platform</strong>', body)
+        self.assertIn(
+            'id="codexUserCode" class="endpoint-code-card device-code-button"',
+            body,
+        )
+        self.assertIn('data-ui-action="copy-codex-device-code"', body)
+        self.assertNotIn('data-copy-target="codexUserCode"', body)
+        self.assertIn(
+            'data-ui-action="copy-codex-verification-url">Copy</button>',
+            body,
+        )
+        self.assertIn('class="device-verification-row"', body)
+        self.assertNotIn('class="copy-field-row"', body)
         self.assertIn("./api/providers/openai/codex/oauth/start", settings_script)
         self.assertIn("./api/providers/openai/platform/credentials", settings_script)
         self.assertIn(
