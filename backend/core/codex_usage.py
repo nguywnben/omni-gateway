@@ -111,9 +111,7 @@ def _review_rate_limit(payload: Dict[str, Any]) -> Optional[Dict[str, Any]]:
 
 def _duration_label(window: Dict[str, Any], fallback: str) -> str:
     seconds = _finite_number(
-        window.get("limit_window_seconds")
-        or window.get("window_seconds")
-        or window.get("seconds")
+        window.get("limit_window_seconds") or window.get("window_seconds") or window.get("seconds")
     )
     if seconds is None or seconds <= 0:
         return fallback

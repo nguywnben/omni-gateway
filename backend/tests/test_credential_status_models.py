@@ -429,7 +429,9 @@ class CredentialStatusModelTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(payload["provider"], "xai")
         self.assertEqual(payload["credential_type"], "oauth")
         refresh_credential.assert_awaited_once()
-        self.assertEqual(storage.stored_credential[1]["access_token"], "refreshed-grok-access-token")
+        self.assertEqual(
+            storage.stored_credential[1]["access_token"], "refreshed-grok-access-token"
+        )
 
     async def test_model_endpoint_uses_provider_catalog_when_models_are_not_stored(self):
         storage = FakeAntigravityStorage()
@@ -612,9 +614,7 @@ class CredentialStatusModelTests(unittest.IsolatedAsyncioTestCase):
                 new_callable=AsyncMock,
             ) as refresh_credential,
         ):
-            response = await verify_credential_common(
-                "xai-console-example.json", mode="primary"
-            )
+            response = await verify_credential_common("xai-console-example.json", mode="primary")
 
         payload = json.loads(response.body)
         self.assertTrue(payload["success"])
@@ -650,9 +650,7 @@ class CredentialStatusModelTests(unittest.IsolatedAsyncioTestCase):
                 AsyncMock(return_value=["grok-4"]),
             ) as fetch_models,
         ):
-            response = await verify_credential_common(
-                "grok-build-example.json", mode="primary"
-            )
+            response = await verify_credential_common("grok-build-example.json", mode="primary")
 
         payload = json.loads(response.body)
         self.assertTrue(payload["success"])
@@ -682,9 +680,7 @@ class CredentialStatusModelTests(unittest.IsolatedAsyncioTestCase):
                 AsyncMock(return_value=["gpt-5.4", "gpt-5.3-codex"]),
             ) as fetch_models,
         ):
-            response = await verify_credential_common(
-                "openai-codex-example.json", mode="primary"
-            )
+            response = await verify_credential_common("openai-codex-example.json", mode="primary")
 
         payload = json.loads(response.body)
         self.assertTrue(payload["success"])
@@ -736,9 +732,7 @@ class CredentialStatusModelTests(unittest.IsolatedAsyncioTestCase):
                 AsyncMock(return_value=refreshed_credential),
             ) as refresh_credential,
         ):
-            response = await verify_credential_common(
-                "openai-codex-example.json", mode="primary"
-            )
+            response = await verify_credential_common("openai-codex-example.json", mode="primary")
 
         payload = json.loads(response.body)
         self.assertTrue(payload["success"])

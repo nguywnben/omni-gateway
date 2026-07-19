@@ -963,16 +963,12 @@ async def verify_credential_common(filename: str, mode: str = "code_assist") -> 
                         raise
                     credential_data = await refresh_codex_credential()
                     access_token = str(
-                        credential_data.get("access_token")
-                        or credential_data.get("token")
-                        or ""
+                        credential_data.get("access_token") or credential_data.get("token") or ""
                     )
                     account_id = str(credential_data.get("account_id") or "").strip()
                     model_ids = await fetch_codex_model_ids(access_token, account_id)
             else:
-                model_ids = await fetch_openai_model_ids(
-                    str(credential_data.get("api_key") or "")
-                )
+                model_ids = await fetch_openai_model_ids(str(credential_data.get("api_key") or ""))
         except (CodexError, OpenAIPlatformError, ValueError) as exc:
             return JSONResponse(
                 status_code=getattr(exc, "status_code", 400),
@@ -992,7 +988,9 @@ async def verify_credential_common(filename: str, mode: str = "code_assist") -> 
             {"disabled": False, "error_codes": [], "error_messages": {}},
             mode=mode,
         )
-        credential_name = "Codex OAuth credential" if credential_variant == CODEX else "OpenAI Platform API key"
+        credential_name = (
+            "Codex OAuth credential" if credential_variant == CODEX else "OpenAI Platform API key"
+        )
         return JSONResponse(
             content={
                 "success": True,

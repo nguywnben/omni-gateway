@@ -213,7 +213,9 @@ def _parse_xai_import_document(content: bytes, source_name: str) -> Dict[str, An
     except PoolImportError as exc:
         raise ValueError(f"{source_name}: {exc}") from exc
     if provider_id != XAI:
-        raise ValueError(f"{source_name} does not contain a Grok Build or SpaceXAI Console credential.")
+        raise ValueError(
+            f"{source_name} does not contain a Grok Build or SpaceXAI Console credential."
+        )
 
     return {
         "source_filename": source_name,

@@ -64,11 +64,14 @@ class CodexUsageTests(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(usage["limit_reached"])
         self.assertTrue(usage["review_limit_reached"])
         self.assertEqual(usage["reset_credits"], {"available_count": 2})
-        self.assertEqual([window["id"] for window in usage["windows"]], [
-            "session",
-            "weekly",
-            "review_session",
-        ])
+        self.assertEqual(
+            [window["id"] for window in usage["windows"]],
+            [
+                "session",
+                "weekly",
+                "review_session",
+            ],
+        )
         self.assertEqual(usage["windows"][0]["label"], "5-Hour Limit")
         self.assertEqual(usage["windows"][0]["used_percentage"], 25)
         self.assertEqual(usage["windows"][0]["remaining_percentage"], 75)

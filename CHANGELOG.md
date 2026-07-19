@@ -4,14 +4,26 @@ All notable user-facing changes are documented in this file. Omni Gateway follow
 
 ## [Unreleased]
 
+## [2.0.0] - 2026-07-19
+
 ### Added
 
 - Added Codex device OAuth, account-scoped model discovery, token refresh, Responses transport translation, and JSON/ZIP credential import.
 - Added OpenAI Platform API-key validation, model discovery, Chat Completions routing, and JSON/ZIP credential import.
+- Added provider-native quota, plan, and subscription diagnostics for Codex, Grok Build, Google Antigravity, and supported API-key credentials.
+- Added provider-specific credential verification and model testing across every supported credential type.
 
 ### Changed
 
 - Reorganized the Providers page as a searchable, responsive product catalog with separate credential workspaces and settings for every connection type.
+- Renamed xAI Console to SpaceXAI Console and standardized Codex and Grok Build product naming and assets throughout the console.
+- Expanded credential cards with truthful authentication, subscription, health, quota, and model-capability information.
+
+### Fixed
+
+- Routed verification and model tests through each credential's native provider implementation instead of the Google Antigravity transport.
+- Refreshed expired Codex access tokens once before retrying verification, quota, and model-test requests.
+- Kept provider diagnostics and badges aligned with the actual credential payload instead of inferring unsupported account properties.
 
 ## [1.1.4] - 2026-07-19
 

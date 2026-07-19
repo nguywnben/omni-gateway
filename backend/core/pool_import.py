@@ -355,9 +355,7 @@ async def restore_openai_credential(candidate: Dict[str, Any]) -> Dict[str, Any]
         "status": "success" if result.get("stored", True) else "skipped",
         "action": result.get("action", "created"),
         "filename": result.get("filename", filename),
-        "label": payload.get("credential_label")
-        or payload.get("user_email")
-        or "Codex account",
+        "label": payload.get("credential_label") or payload.get("user_email") or "Codex account",
         "message": result.get("message") or "Codex credential imported into the pool.",
     }
 

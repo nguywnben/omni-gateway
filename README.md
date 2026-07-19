@@ -2,7 +2,7 @@
 
 A universal AI router for coding tools. Omni Gateway provides smart auto-fallback, token-aware request cleanup, usage visibility, and seamless format translation so local agents, IDE assistants, and automation scripts can use free and premium LLM capacity through one stable API surface.
 
-> **Project status:** Stable. Version `1.1.4` strengthens credential-level model eligibility and adds provider-backed Grok Build quota visibility while preserving the stable SDK routes, canonical management routes, configuration names, and single-instance runtime contract established in `1.0.0`.
+> **Project status:** Stable. Version `2.0.0` adds Codex and OpenAI Platform integrations, provider-native credential diagnostics, and a scalable provider catalog while preserving the stable SDK routes, canonical management routes, configuration names, and single-instance runtime contract established in `1.0.0`.
 
 ## Why Omni Gateway
 
@@ -74,10 +74,10 @@ sudo docker run -d \
   -p 4283:4283 \
   -v /opt/omni-gateway/creds:/app/backend/data/creds \
   -v /opt/omni-gateway/logs:/app/backend/data/logs \
-  nguywnben/omni-gateway:1.1.4
+  nguywnben/omni-gateway:2.0.0
 ```
 
-The same release is published to GitHub Packages as `ghcr.io/nguywnben/omni-gateway:1.1.4`. The `latest` tag tracks the newest stable release; `edge` tracks verified but unreleased builds from `main`. Pin a version tag or digest when reproducible deployment matters.
+The same release is published to GitHub Packages as `ghcr.io/nguywnben/omni-gateway:2.0.0`. The `latest` tag tracks the newest stable release; `edge` tracks verified but unreleased builds from `main`. Pin a version tag or digest when reproducible deployment matters.
 
 Open the control panel at:
 
@@ -89,7 +89,7 @@ On first run, create the console password on the setup screen. No default passwo
 
 Passwords managed by the application are stored as salted scrypt hashes, control-panel sessions use HttpOnly cookies, and public SDK requests authenticate with the generated `sk-ogw-` API key. For a non-interactive deployment, preconfigure `PANEL_PASSWORD` and skip the setup screen entirely.
 
-The `1.1.4` container is published for `linux/amd64`. ARM64 publication is intentionally paused until every provider dependency, including the Vertex transport stack, can be built and tested with the same contract.
+The `2.0.0` container is published for `linux/amd64`. ARM64 publication is intentionally paused until every provider dependency, including the Vertex transport stack, can be built and tested with the same contract.
 
 If the server firewall is enabled, allow the gateway port:
 
@@ -124,7 +124,7 @@ sudo mkdir -p /opt/omni-gateway/creds /opt/omni-gateway/logs
 docker compose -f deploy/docker-compose.yml up -d
 ```
 
-The included compose file pulls `nguywnben/omni-gateway:latest` and uses `/opt/omni-gateway` by default for persistent host data. Set `IMAGE=nguywnben/omni-gateway:1.1.4` to pin this release, and set `DATA_DIR=/custom/path` when the server uses a different storage location.
+The included compose file pulls `nguywnben/omni-gateway:latest` and uses `/opt/omni-gateway` by default for persistent host data. Set `IMAGE=nguywnben/omni-gateway:2.0.0` to pin this release, and set `DATA_DIR=/custom/path` when the server uses a different storage location.
 
 Compose forwards `API_KEY`, `PANEL_PASSWORD`, `SETUP_TOKEN`, external storage URIs, and `PROXY` from the shell or a root `.env` file. Leave them empty to retain automatic key generation, first-run setup, local SQLite storage, and direct outbound networking.
 
