@@ -43,11 +43,11 @@ _PROVIDER_ALIASES = {
 _PROVIDER_NAMES = {
     GOOGLE_ANTIGRAVITY: "Google Antigravity",
     GOOGLE_AI_STUDIO: "Google AI Studio",
-    XAI: "Grok",
+    XAI: "Grok Build",
 }
 
 _CREDENTIAL_PROVIDER_NAMES = {
-    GROK: "Grok",
+    GROK: "Grok Build",
     XAI_CONSOLE: "xAI Console",
 }
 

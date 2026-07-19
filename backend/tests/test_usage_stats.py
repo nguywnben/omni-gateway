@@ -29,12 +29,12 @@ class UsageStatsTests(unittest.TestCase):
             usage_stats._provider_display_name("Google Antigravity"),
             "Google Antigravity",
         )
-        self.assertEqual(usage_stats._provider_display_name("xai"), "Grok")
+        self.assertEqual(usage_stats._provider_display_name("xai"), "Grok Build")
 
     def test_credential_display_names_distinguish_grok_from_xai_console(self):
         self.assertEqual(
             usage_stats._credential_provider_display_name("xai", "oauth"),
-            "Grok",
+            "Grok Build",
         )
         self.assertEqual(
             usage_stats._credential_provider_display_name("xai", "api_key"),

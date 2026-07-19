@@ -35,7 +35,7 @@ Omni Gateway
         |
         v
 provider adapters
-  Google Antigravity | Google AI Studio | Grok | xAI Console | Code Assist | Vertex-compatible route
+  Google Antigravity | Google AI Studio | Grok Build | xAI Console | Code Assist | Vertex-compatible route
 ```
 
 The public API stays stable while provider-specific adapters evolve behind Omni Gateway.
@@ -209,10 +209,10 @@ Omni Gateway reads configuration from environment variables first, then stored c
 | `ANTIGRAVITY_CLIENT_ID` | bundled desktop client | Optional override for the Google Antigravity OAuth client ID. It can also be managed from the Providers page. |
 | `ANTIGRAVITY_CLIENT_SECRET` | bundled desktop client | Optional override for the Google Antigravity OAuth client secret. Configure it through env or the Providers page when the upstream client changes. |
 | `GOOGLE_AI_STUDIO_API_URL` | `https://generativelanguage.googleapis.com` | Optional Google AI Studio Generative Language API endpoint override. |
-| `XAI_API_URL` | `https://api.x.ai/v1` | Optional shared inference and model-catalog endpoint override for Grok OAuth accounts and xAI Console API keys. It can also be managed from the Providers page. |
-| `XAI_OAUTH_ISSUER` | `https://auth.x.ai` | Optional Grok OAuth issuer override. Only HTTPS hosts under `x.ai` are accepted by the console. |
-| `XAI_CLIENT_ID` | bundled public client | Optional override for the Grok PKCE OAuth client ID. |
-| `XAI_USER_AGENT` | `grok-cli/omni-gateway` | Optional shared HTTP User-Agent override for Grok OAuth and xAI Console API requests. |
+| `XAI_API_URL` | `https://api.x.ai/v1` | Optional shared inference and model-catalog endpoint override for Grok Build OAuth accounts and xAI Console API keys. It can also be managed from the Providers page. |
+| `XAI_OAUTH_ISSUER` | `https://auth.x.ai` | Optional Grok Build OAuth issuer override. Only HTTPS hosts under `x.ai` are accepted by the console. |
+| `XAI_CLIENT_ID` | bundled public client | Optional override for the Grok Build PKCE OAuth client ID. |
+| `XAI_USER_AGENT` | `grok-cli/omni-gateway` | Optional shared HTTP User-Agent override for Grok Build OAuth and xAI Console API requests. |
 | `ANTIGRAVITY_USER_AGENT` | `antigravity/cli/1.0.1 windows/amd64` | Optional Google Antigravity protocol User-Agent override. |
 | `ANTIGRAVITY_PAYLOAD_USER_AGENT` | `antigravity` | Optional payload-level Google Antigravity userAgent override. |
 | `LOG_LEVEL` | `info` | Runtime log level. |
@@ -344,7 +344,7 @@ Omni Gateway records request volume, success rate, credential attribution, provi
 1. Start Omni Gateway.
 2. Open `http://YOUR_SERVER_IP:4283` on a VPS, or `http://127.0.0.1:4283` for local development.
 3. Create the console password on the first-run setup screen. For remote setup, enter the bootstrap token from the application logs; alternatively preconfigure `PANEL_PASSWORD`.
-4. Add a Google Antigravity account, Google AI Studio API key, Grok OAuth account, or xAI Console API key from the Providers page.
+4. Add a Google Antigravity account, Google AI Studio API key, Grok Build OAuth account, or xAI Console API key from the Providers page.
 5. Verify credentials and watch cooldown/error state in the panel.
 6. Point your coding tool to one of the API surfaces above.
 
@@ -366,13 +366,13 @@ Google AI Studio batch import accepts JSON files and ZIP archives containing JSO
 
 Every imported key is validated before storage. Duplicate keys within the same import are skipped, existing keys are revalidated and updated, and invalid entries are reported without exposing the key value.
 
-Grok supports PKCE OAuth credentials, while xAI Console supports API keys. xAI Console keys are validated against the Grok model catalog before storage. For Grok OAuth, Omni Gateway generates an authorization link; after authorization, copy the code displayed on the Grok authorization page and paste it into the Grok OAuth form. Access tokens are refreshed automatically when a refresh token is available, and both credential types expose only the Grok models declared by their current catalog.
+Grok Build supports PKCE OAuth credentials, while xAI Console supports API keys. xAI Console keys are validated against the Grok Build model catalog before storage. For Grok Build OAuth, Omni Gateway generates an authorization link; after authorization, copy the code displayed on the Grok Build authorization page and paste it into the Grok Build OAuth form. Access tokens are refreshed automatically when a refresh token is available, and both credential types expose only the Grok Build models declared by their current catalog. The Pool page can retrieve monthly credit usage and, when xAI provides it, weekly usage for Grok Build OAuth accounts. This account-level billing view is not available for xAI Console API keys.
 
 Pool imports and Google Antigravity batch imports accept archives up to 10 MB, at most 500 files, individual credential files up to 2 MB, and at most 25 MB of uncompressed data. Google AI Studio uses stricter limits of 2 MB per imported file, 200 JSON entries, and 5 MB of uncompressed data.
 
-The Pool page also provides a provider-independent backup workflow. `Download ZIP` exports the active credential pool, and `Import ZIP` restores that archive by identifying each credential as Google Antigravity, Google AI Studio, Grok, or xAI Console. OAuth accounts retain provider-scoped email-and-expiry deduplication, while API keys are validated and deduplicated by a provider-scoped, non-reversible key fingerprint. Unsupported or malformed entries are reported individually without blocking valid credentials in the same archive.
+The Pool page also provides a provider-independent backup workflow. `Download ZIP` exports the active credential pool, and `Import ZIP` restores that archive by identifying each credential as Google Antigravity, Google AI Studio, Grok Build, or xAI Console. OAuth accounts retain provider-scoped email-and-expiry deduplication, while API keys are validated and deduplicated by a provider-scoped, non-reversible key fingerprint. Unsupported or malformed entries are reported individually without blocking valid credentials in the same archive.
 
-Google Antigravity credentials use `google-antigravity-{account_fingerprint}.json`, where the fingerprint is derived from the normalized account email without exposing it. Google AI Studio credentials use `google-ai-studio-{key_fingerprint}.json`, Grok OAuth credentials use `grok-{account_fingerprint}.json`, and xAI Console credentials use `xai-console-{key_fingerprint}.json`. Legacy `provider_*.json` and `xai-grok-*.json` credentials remain compatible and are exported with canonical names.
+Google Antigravity credentials use `google-antigravity-{account_fingerprint}.json`, where the fingerprint is derived from the normalized account email without exposing it. Google AI Studio credentials use `google-ai-studio-{key_fingerprint}.json`, Grok Build OAuth credentials use `grok-{account_fingerprint}.json`, and xAI Console credentials use `xai-console-{key_fingerprint}.json`. Legacy `provider_*.json` and `xai-grok-*.json` credentials remain compatible and are exported with canonical names.
 
 Credential mode names:
 

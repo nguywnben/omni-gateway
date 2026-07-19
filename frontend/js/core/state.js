@@ -44,7 +44,7 @@ const AppState = {
     grokUploadFiles: createUploadManager('grok', {
         endpoint: './api/providers/xai/credentials/import?credential_type=oauth',
         elementPrefix: 'grok',
-        credentialType: 'Grok OAuth',
+        credentialType: 'Grok Build OAuth',
         timeoutMs: 900000,
         onComplete: async () => {
             await AppState.primaryCreds.refresh();

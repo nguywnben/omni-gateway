@@ -25,7 +25,7 @@ async function loadXaiSettings(options = {}) {
             if (form) form.dataset.loaded = 'true';
         });
     } catch (error) {
-        showStatus(`Failed to load Grok and xAI Console settings: ${error.message}`, 'error');
+        showStatus(`Failed to load Grok Build and xAI Console settings: ${error.message}`, 'error');
     } finally {
         setProviderSettingsLoading(loadingIds, formIds, false, preserveContent);
     }
@@ -83,7 +83,7 @@ function showXaiCredentialSaveResult(kind, data) {
     const result = document.getElementById(`${prefix}SaveResult`);
     const title = document.getElementById(`${prefix}SaveResultTitle`);
     const text = document.getElementById(`${prefix}SaveResultText`);
-    const credentialName = isOauth ? 'Grok OAuth credential' : 'xAI Console API key';
+    const credentialName = isOauth ? 'Grok Build OAuth credential' : 'xAI Console API key';
     if (title) {
         title.textContent = data.credential_action === 'updated'
             ? `${credentialName} updated`
@@ -152,9 +152,9 @@ async function startXaiOauth() {
             oauthFields.dataset.state = data.state || '';
             oauthFields.classList.remove('hidden');
         }
-        showStatus('Grok authorization link generated.', 'success');
+        showStatus('Grok Build authorization link generated.', 'success');
     } catch (error) {
-        showStatus(`Failed to start Grok OAuth: ${error.message}`, 'error');
+        showStatus(`Failed to start Grok Build OAuth: ${error.message}`, 'error');
     } finally {
         button.disabled = false;
         button.textContent = 'Get provider authentication link';
@@ -168,12 +168,12 @@ async function saveXaiOauth() {
     const oauthFields = document.getElementById('xaiOauthFields');
     const state = oauthFields?.dataset.state || '';
     if (!code) {
-        showStatus('Enter the code shown on the Grok authorization page.', 'error');
+        showStatus('Enter the code shown on the Grok Build authorization page.', 'error');
         field?.focus();
         return;
     }
     if (!state) {
-        showStatus('Generate a new Grok authorization link before saving the credential.', 'error');
+        showStatus('Generate a new Grok Build authorization link before saving the credential.', 'error');
         return;
     }
     button.disabled = true;
@@ -194,7 +194,7 @@ async function saveXaiOauth() {
         await loadModelCatalog(true);
         await refreshUsageStats();
     } catch (error) {
-        showStatus(`Failed to save Grok OAuth credential: ${error.message}`, 'error');
+        showStatus(`Failed to save Grok Build OAuth credential: ${error.message}`, 'error');
     } finally {
         button.disabled = false;
         button.textContent = 'Save credential';
