@@ -95,6 +95,27 @@ function getCredentialProviderMeta(credInfo, managerType) {
 
     }
 
+    if (provider === 'openai' || provider === 'codex' || provider === 'openai_codex' || provider === 'openai_platform' || provider === 'openai_api_key') {
+
+        const credentialType = String(credInfo.credential_type || '').trim().toLowerCase();
+        const isCodex = provider === 'codex' || provider === 'openai_codex' || credentialType === 'oauth';
+
+        if (isCodex) {
+            return {
+                id: 'codex',
+                name: 'OpenAI Codex',
+                logo: '/frontend/assets/providers/openai-codex-logo.png'
+            };
+        }
+
+        return {
+            id: 'openai_platform',
+            name: 'OpenAI Platform',
+            logo: '/frontend/assets/providers/openai-platform-logo.png'
+        };
+
+    }
+
     return {
         id: 'code_assist',
         name: t('provider_code_assist'),
@@ -157,9 +178,10 @@ function createCredCard(credInfo, manager) {
     const providerMeta = getCredentialProviderMeta(credInfo, managerType);
     const isGoogleAIStudio = providerMeta.id === 'google_ai_studio';
     const isXai = ['xai', 'grok', 'xai_console'].includes(providerMeta.id);
+    const isOpenAI = ['codex', 'openai_platform'].includes(providerMeta.id);
     const isGrokOAuth = providerMeta.id === 'grok' && credInfo.credential_type !== 'api_key';
     const isAntigravity = providerMeta.id === 'google_antigravity';
-    const isStaticProvider = isGoogleAIStudio || isXai;
+    const isStaticProvider = isGoogleAIStudio || isXai || isOpenAI;
     const accountLabel = credInfo.credential_label || credInfo.user_email || t('email_not_fetched');
     const accountClass = (credInfo.credential_label || credInfo.user_email) ? 'cred-email' : 'cred-email empty';
     const providerLogo = providerMeta.logo
@@ -208,7 +230,7 @@ function createCredCard(credInfo, manager) {
 
     }
 
-    if (isGoogleAIStudio || isXai) {
+    if (isGoogleAIStudio || isXai || isOpenAI) {
 
         const credentialType = credInfo.credential_type === 'oauth' ? 'OAuth' : 'API key';
         statusBadges += `<span class="status-badge muted" title="${escapeAttribute(`${providerMeta.name} ${credentialType} credential`)}">${credentialType}</span>`;

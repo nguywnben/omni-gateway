@@ -29,6 +29,7 @@ from core.pool_import import (
 from core.provider_registry import (
     GOOGLE_AI_STUDIO,
     GOOGLE_ANTIGRAVITY,
+    OPENAI,
     XAI,
     XAI_CONSOLE,
     antigravity_account_fingerprint,
@@ -74,6 +75,26 @@ class PoolCredentialClassificationTests(unittest.TestCase):
                 }
             ),
             XAI,
+        )
+        self.assertEqual(
+            classify_pool_credential(
+                {
+                    "provider": "openai",
+                    "credential_type": "api_key",
+                    "api_key": "sk-openai-key",
+                }
+            ),
+            OPENAI,
+        )
+        self.assertEqual(
+            classify_pool_credential(
+                {
+                    "provider": "codex",
+                    "credential_type": "oauth",
+                    "refresh_token": "refresh",
+                }
+            ),
+            OPENAI,
         )
         self.assertEqual(
             classify_pool_credential(

@@ -215,7 +215,9 @@ function getTabDataLoader(tabName) {
 
             loadGoogleAIStudioSettings(),
 
-            loadXaiSettings()
+            loadXaiSettings(),
+
+            loadOpenAISettings()
 
         ]),
 

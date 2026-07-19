@@ -7,7 +7,18 @@
                         </div>
                     </header>
 
-                    <div class="provider-catalog" role="tablist" aria-label="Available providers">
+                    <div class="provider-catalog-toolbar" role="search">
+                        <div>
+                            <strong>Provider Catalog</strong>
+                            <p>Choose a connection type, then add credentials to the shared routing pool.</p>
+                        </div>
+                        <div class="provider-catalog-search-group">
+                            <label class="provider-catalog-search-label" for="providerCatalogSearch">Find a provider</label>
+                            <input type="search" id="providerCatalogSearch" class="provider-catalog-search" placeholder="Search providers" autocomplete="off" data-ui-input="provider-catalog-search">
+                        </div>
+                    </div>
+
+                    <div id="providerCatalog" class="provider-catalog" role="tablist" aria-label="Available providers">
                         <button type="button" class="provider-hero-card provider-selector-button active" id="providerSelectorGoogleAntigravity" role="tab" aria-label="Google Antigravity" aria-selected="true" aria-controls="providerWorkspaceGoogleAntigravity" data-ui-action="select-provider" data-provider="google_antigravity">
                             <div class="provider-logo-frame">
                                 <img src="/frontend/assets/providers/google-antigravity-logo.png" alt="Google Antigravity logo">
@@ -71,7 +82,41 @@
                                 <span>ZIP</span>
                             </div>
                         </button>
+
+                        <button type="button" class="provider-hero-card provider-selector-button" id="providerSelectorCodex" role="tab" aria-label="OpenAI Codex" aria-selected="false" aria-controls="providerWorkspaceCodex" data-ui-action="select-provider" data-provider="codex" data-provider-name="OpenAI Codex">
+                            <div class="provider-logo-frame">
+                                <img src="/frontend/assets/providers/openai-codex-logo.png" alt="OpenAI Codex logo">
+                            </div>
+                            <div class="provider-summary">
+                                <div class="provider-eyebrow">Account Provider</div>
+                                <strong class="provider-name">OpenAI Codex</strong>
+                                <p>Authorize a ChatGPT account with the OpenAI device flow and route Codex models through the pool.</p>
+                            </div>
+                            <div class="provider-capabilities" aria-label="OpenAI Codex methods">
+                                <span>OAuth</span>
+                                <span>JSON</span>
+                                <span>ZIP</span>
+                            </div>
+                        </button>
+
+                        <button type="button" class="provider-hero-card provider-selector-button" id="providerSelectorOpenAiPlatform" role="tab" aria-label="OpenAI Platform" aria-selected="false" aria-controls="providerWorkspaceOpenAiPlatform" data-ui-action="select-provider" data-provider="openai_platform" data-provider-name="OpenAI Platform">
+                            <div class="provider-logo-frame">
+                                <img src="/frontend/assets/providers/openai-platform-logo.png" alt="OpenAI Platform logo">
+                            </div>
+                            <div class="provider-summary">
+                                <div class="provider-eyebrow">API Key Provider</div>
+                                <strong class="provider-name">OpenAI Platform</strong>
+                                <p>Validate OpenAI API keys, discover available models, and route requests through the shared pool.</p>
+                            </div>
+                            <div class="provider-capabilities" aria-label="OpenAI Platform methods">
+                                <span>API Key</span>
+                                <span>JSON</span>
+                                <span>ZIP</span>
+                            </div>
+                        </button>
                     </div>
+
+                    <p id="providerCatalogEmpty" class="provider-catalog-empty hidden" aria-live="polite">No providers match your search.</p>
 
                     <section class="provider-workspace hidden" id="providerWorkspaceGrok" role="tabpanel" aria-labelledby="providerSelectorGrok">
                         <div class="provider-workspace-heading">
@@ -356,6 +401,116 @@
                             </div>
                         </section>
                         </div>
+                    </section>
+
+                    <section class="provider-workspace hidden" id="providerWorkspaceCodex" role="tabpanel" aria-labelledby="providerSelectorCodex">
+                        <div class="provider-workspace-heading">
+                            <div class="provider-workspace-logo"><img src="/frontend/assets/providers/openai-codex-logo.png" alt=""></div>
+                            <div>
+                                <h2>OpenAI Codex</h2>
+                                <p>Authorize a ChatGPT account and route its Codex models through the shared pool.</p>
+                                <a class="provider-site-link" href="https://chatgpt.com/codex" target="_blank" rel="noreferrer">https://chatgpt.com/codex</a>
+                            </div>
+                        </div>
+
+                        <div class="provider-tools-grid">
+                            <section class="tool-panel">
+                                <h2 class="card-title">OpenAI Codex OAuth</h2>
+                                <p class="card-copy provider-tool-copy">Generate a device code, finish sign-in at OpenAI, and save the account to the provider pool.</p>
+                                <div class="page-actions"><button type="button" class="btn" id="startCodexOauthBtn" data-ui-action="start-codex-oauth">Get authorization code</button></div>
+                                <div id="codexOauthFields" class="hidden provider-device-flow" style="margin-top: 18px;" data-flow-id="">
+                                    <div class="device-flow-grid">
+                                        <div><label for="codexUserCode">Device code</label><div class="copy-field-row"><input type="text" id="codexUserCode" readonly><button type="button" class="btn btn-secondary" data-ui-action="copy-field" data-copy-target="codexUserCode">Copy</button></div></div>
+                                        <div><label>Verification page</label><a id="codexVerificationUrl" class="endpoint-code-card auth-link-card" href="#" target="_blank" rel="noreferrer">Open OpenAI verification</a></div>
+                                    </div>
+                                    <p class="card-copy provider-tool-copy">Open the verification page, enter the device code, complete sign-in, then check the authorization status.</p>
+                                    <div class="page-actions"><button type="button" class="btn" id="completeCodexOauthBtn" data-ui-action="complete-codex-oauth">Check authorization</button></div>
+                                </div>
+                                <div id="codexOauthSaveResult" class="save-result provider-save-result hidden" style="margin-top: 14px;"><div><strong id="codexOauthSaveResultTitle">OpenAI Codex credential added to pool</strong><p id="codexOauthSaveResultText"></p></div><button type="button" class="btn btn-secondary" data-ui-action="switch-tab" data-tab="pool">View</button></div>
+                            </section>
+
+                            <section class="tool-panel">
+                                <h2 class="card-title">Batch Import</h2>
+                                <p class="card-copy provider-tool-copy">Import OpenAI Codex OAuth JSON files or ZIP archives. Imported tokens remain in local credential storage.</p>
+                                <button type="button" class="upload-area" id="codexUploadArea" aria-describedby="codexUploadHelp" data-ui-action="select-codex-files"><div><div class="upload-title">Drop Codex credential files here</div><p class="upload-copy" id="codexUploadHelp">Supports JSON and ZIP archives.</p></div></button>
+                                <input type="file" id="codexFileInput" multiple accept=".json,.zip" style="display: none;" data-ui-change="codex-files">
+                                <div id="codexFileListSection" class="hidden" style="margin-top: 16px;"><label>Pending files</label><div class="file-list" id="codexFileList"></div><div class="page-actions"><button type="button" class="btn btn-small" data-ui-action="upload-codex-files">Import</button><button type="button" class="btn btn-secondary btn-small" data-ui-action="clear-codex-files">Clear</button></div></div>
+                                <div id="codexUploadProgressSection" class="hidden" style="margin-top: 16px;"><div class="progress-bar"><div class="progress-fill" id="codexProgressFill"></div></div><p id="codexProgressText" class="page-description" style="margin-top: 8px;">0%</p></div>
+                                <div id="codexUploadResult" class="save-result upload-result hidden" style="margin-top: 14px;"><div><strong id="codexUploadResultTitle">Import complete</strong><p id="codexUploadResultText"></p><div id="codexUploadResultDetails" class="upload-result-details"></div></div><button type="button" class="btn btn-secondary" data-ui-action="switch-tab" data-tab="pool">View</button></div>
+                            </section>
+                        </div>
+
+                        <section class="tool-panel provider-settings-panel">
+                            <div class="provider-settings-header">
+                                <div>
+                                    <h2 class="card-title">OpenAI Codex Advanced Settings</h2>
+                                    <p class="card-copy provider-tool-copy">Configure the authorization client and Codex endpoint used by OpenAI account credentials.</p>
+                                </div>
+                                <div class="page-actions">
+                                    <button type="button" class="btn" data-ui-action="save-openai-settings" data-openai-scope="codex">Save</button>
+                                    <button type="button" class="btn btn-secondary" data-ui-action="reset-openai-settings" data-openai-scope="codex">Reset defaults</button>
+                                </div>
+                            </div>
+                            <div id="codexSettingsLoading" class="skeleton-config provider-settings-skeleton" role="status" aria-label="Loading OpenAI Codex settings" aria-busy="true">
+                                <div class="skeleton-config-group"><div class="skeleton-line title"></div><div class="skeleton-line field"></div></div>
+                                <div class="skeleton-config-group"><div class="skeleton-line title"></div><div class="skeleton-line field"></div></div>
+                            </div>
+                            <div id="codexSettingsForm" class="provider-settings-grid provider-settings-grid-single hidden">
+                                <section class="provider-settings-group config-two-column">
+                                    <div class="form-group"><label for="codexApiUrl">Codex API</label><input type="url" id="codexApiUrl" autocomplete="off"></div>
+                                    <div class="form-group"><label for="codexAuthBase">Authorization service</label><input type="url" id="codexAuthBase" autocomplete="off"></div>
+                                    <div class="form-group"><label for="codexClientId">OAuth client ID</label><input type="text" id="codexClientId" autocomplete="off"></div>
+                                    <div class="form-group"><label for="codexUserAgent">HTTP User-Agent</label><input type="text" id="codexUserAgent" autocomplete="off"></div>
+                                </section>
+                            </div>
+                        </section>
+                    </section>
+
+                    <section class="provider-workspace hidden" id="providerWorkspaceOpenAiPlatform" role="tabpanel" aria-labelledby="providerSelectorOpenAiPlatform">
+                        <div class="provider-workspace-heading">
+                            <div class="provider-workspace-logo"><img src="/frontend/assets/providers/openai-platform-logo.png" alt=""></div>
+                            <div><h2>OpenAI Platform</h2><p>Add API keys, discover enabled models, and route OpenAI Platform requests through the shared pool.</p><a class="provider-site-link" href="https://platform.openai.com/" target="_blank" rel="noreferrer">https://platform.openai.com/</a></div>
+                        </div>
+
+                        <div class="provider-tools-grid">
+                            <section class="tool-panel">
+                                <h2 class="card-title">OpenAI Platform API Key</h2>
+                                <p class="card-copy provider-tool-copy">Validate an API key against the model catalog, then add it to the active pool.</p>
+                                <form id="openaiPlatformCredentialForm" autocomplete="off"><div class="form-group"><label for="openaiPlatformApiKey">API key</label><input type="password" id="openaiPlatformApiKey" name="openai-platform-api-key" placeholder="Enter an OpenAI API key" autocomplete="one-time-code" data-1p-ignore data-lpignore="true" data-bwignore="true" autocapitalize="none" spellcheck="false" required></div><button type="submit" class="btn" id="addOpenaiPlatformKeyBtn">Validate and add</button></form>
+                                <div id="openaiPlatformSaveResult" class="save-result provider-save-result hidden"><div><strong id="openaiPlatformSaveResultTitle">API key added to pool</strong><p id="openaiPlatformSaveResultText"></p></div><button type="button" class="btn btn-secondary" data-ui-action="switch-tab" data-tab="pool">View</button></div>
+                            </section>
+
+                            <section class="tool-panel">
+                                <h2 class="card-title">Batch Import</h2>
+                                <p class="card-copy provider-tool-copy">Import OpenAI Platform API key JSON files or ZIP archives. Each key is validated before it enters the pool.</p>
+                                <button type="button" class="upload-area" id="openaiPlatformUploadArea" aria-describedby="openaiPlatformUploadHelp" data-ui-action="select-openai-platform-files"><div><div class="upload-title">Drop API key files here</div><p class="upload-copy" id="openaiPlatformUploadHelp">Supports JSON and ZIP archives.</p></div></button>
+                                <input type="file" id="openaiPlatformFileInput" multiple accept=".json,.zip" style="display: none;" data-ui-change="openai-platform-files">
+                                <div id="openaiPlatformFileListSection" class="hidden" style="margin-top: 16px;"><label>Pending files</label><div class="file-list" id="openaiPlatformFileList"></div><div class="page-actions"><button type="button" class="btn btn-small" data-ui-action="upload-openai-platform-files">Import</button><button type="button" class="btn btn-secondary btn-small" data-ui-action="clear-openai-platform-files">Clear</button></div></div>
+                                <div id="openaiPlatformUploadProgressSection" class="hidden" style="margin-top: 16px;"><div class="progress-bar"><div class="progress-fill" id="openaiPlatformProgressFill"></div></div><p id="openaiPlatformProgressText" class="page-description" style="margin-top: 8px;">0%</p></div>
+                                <div id="openaiPlatformUploadResult" class="save-result upload-result hidden" style="margin-top: 14px;"><div><strong id="openaiPlatformUploadResultTitle">Import complete</strong><p id="openaiPlatformUploadResultText"></p><div id="openaiPlatformUploadResultDetails" class="upload-result-details"></div></div><button type="button" class="btn btn-secondary" data-ui-action="switch-tab" data-tab="pool">View</button></div>
+                            </section>
+                        </div>
+
+                        <section class="tool-panel provider-settings-panel">
+                            <div class="provider-settings-header">
+                                <div>
+                                    <h2 class="card-title">OpenAI Platform Advanced Settings</h2>
+                                    <p class="card-copy provider-tool-copy">Configure the API endpoint used for key validation, model discovery, and inference.</p>
+                                </div>
+                                <div class="page-actions">
+                                    <button type="button" class="btn" data-ui-action="save-openai-settings" data-openai-scope="platform">Save</button>
+                                    <button type="button" class="btn btn-secondary" data-ui-action="reset-openai-settings" data-openai-scope="platform">Reset defaults</button>
+                                </div>
+                            </div>
+                            <div id="openaiPlatformSettingsLoading" class="skeleton-config provider-settings-skeleton" role="status" aria-label="Loading OpenAI Platform settings" aria-busy="true">
+                                <div class="skeleton-config-group"><div class="skeleton-line title"></div><div class="skeleton-line field"></div></div>
+                            </div>
+                            <div id="openaiPlatformSettingsForm" class="provider-settings-grid provider-settings-grid-single hidden">
+                                <section class="provider-settings-group">
+                                    <div class="form-group"><label for="openaiApiUrl">OpenAI Platform API</label><input type="url" id="openaiApiUrl" autocomplete="off"></div>
+                                </section>
+                            </div>
+                        </section>
                     </section>
 
                     <section class="provider-workspace" id="providerWorkspaceGoogleAntigravity" role="tabpanel" aria-labelledby="providerSelectorGoogleAntigravity">

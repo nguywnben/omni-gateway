@@ -65,6 +65,30 @@ const AppState = {
         }
     }),
 
+    codexUploadFiles: createUploadManager('codex', {
+        endpoint: './api/providers/openai/credentials/import?credential_type=oauth',
+        elementPrefix: 'codex',
+        credentialType: 'OpenAI Codex',
+        timeoutMs: 900000,
+        onComplete: async () => {
+            await AppState.primaryCreds.refresh();
+            await loadModelCatalog(true);
+            await refreshUsageStats();
+        }
+    }),
+
+    openaiPlatformUploadFiles: createUploadManager('openaiPlatform', {
+        endpoint: './api/providers/openai/credentials/import?credential_type=api_key',
+        elementPrefix: 'openaiPlatform',
+        credentialType: 'OpenAI Platform',
+        timeoutMs: 900000,
+        onComplete: async () => {
+            await AppState.primaryCreds.refresh();
+            await loadModelCatalog(true);
+            await refreshUsageStats();
+        }
+    }),
+
     currentConfig: {},
 
     configLoaded: false,

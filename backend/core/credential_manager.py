@@ -9,7 +9,14 @@ from core.model_blacklist import (
     get_credential_model_blacklist_pairs,
     get_model_blacklist_pairs,
 )
-from core.provider_registry import XAI, get_credential_provider, is_api_key_credential
+from core.provider_registry import (
+    CODEX,
+    OPENAI,
+    XAI,
+    get_credential_provider,
+    get_credential_provider_variant,
+    is_api_key_credential,
+)
 from core.smart_routing import SmartCredentialRouter
 from core.storage_adapter import get_storage_adapter
 from core.usage_stats import retire_credential_usage
@@ -442,12 +449,21 @@ class CredentialManager:
     ) -> Optional[Dict[str, Any]]:
         await self._ensure_initialized()
         try:
-            if get_credential_provider(credential_data) == XAI:
+            provider_id = get_credential_provider(credential_data)
+            if provider_id == XAI:
                 from core.xai import refresh_xai_oauth_credential
 
                 refreshed_data = await refresh_xai_oauth_credential(credential_data)
                 await self._storage_adapter.store_credential(filename, refreshed_data, mode=mode)
                 log.info(f"Grok Build token refreshed and saved: {filename} (mode={mode}).")
+                return refreshed_data
+
+            if provider_id == OPENAI and get_credential_provider_variant(credential_data) == CODEX:
+                from core.codex import refresh_codex_oauth_credential
+
+                refreshed_data = await refresh_codex_oauth_credential(credential_data)
+                await self._storage_adapter.store_credential(filename, refreshed_data, mode=mode)
+                log.info(f"OpenAI Codex token refreshed and saved: {filename} (mode={mode}).")
                 return refreshed_data
 
             creds = Credentials.from_dict(credential_data)

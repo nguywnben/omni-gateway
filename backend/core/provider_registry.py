@@ -11,6 +11,9 @@ GOOGLE_AI_STUDIO = "google_ai_studio"
 XAI = "xai"
 GROK = "grok"
 XAI_CONSOLE = "xai_console"
+OPENAI = "openai"
+CODEX = "codex"
+OPENAI_PLATFORM = "openai_platform"
 MAX_DECLARED_MODELS = 500
 MAX_MODEL_ID_LENGTH = 256
 MODEL_SUPPORT_UNSUPPORTED = 0
@@ -38,17 +41,30 @@ _PROVIDER_ALIASES = {
     "xai_api_key": XAI,
     "xai-console": XAI,
     "xai_console": XAI,
+    "openai": OPENAI,
+    "openai-api": OPENAI,
+    "openai_api": OPENAI,
+    "openai-platform": OPENAI,
+    "openai_platform": OPENAI,
+    "openai-api-key": OPENAI,
+    "openai_api_key": OPENAI,
+    "codex": OPENAI,
+    "openai-codex": OPENAI,
+    "openai_codex": OPENAI,
 }
 
 _PROVIDER_NAMES = {
     GOOGLE_ANTIGRAVITY: "Google Antigravity",
     GOOGLE_AI_STUDIO: "Google AI Studio",
     XAI: "Grok Build",
+    OPENAI: "OpenAI",
 }
 
 _CREDENTIAL_PROVIDER_NAMES = {
     GROK: "Grok Build",
     XAI_CONSOLE: "SpaceXAI Console",
+    CODEX: "OpenAI Codex",
+    OPENAI_PLATFORM: "OpenAI Platform",
 }
 
 
@@ -94,6 +110,12 @@ _PROVIDER_CAPABILITIES = {
         display_name=_PROVIDER_NAMES[XAI],
         credential_types=("oauth", "api_key"),
         model_prefixes=("grok-",),
+    ),
+    OPENAI: ProviderCapabilities(
+        provider_id=OPENAI,
+        display_name=_PROVIDER_NAMES[OPENAI],
+        credential_types=("oauth", "api_key"),
+        model_prefixes=(),
     ),
 }
 
@@ -185,7 +207,22 @@ def get_credential_provider_variant(credential_data: Optional[Dict[str, Any]]) -
     data = credential_data or {}
     provider_id = get_credential_provider(data)
     if provider_id != XAI:
-        return provider_id
+        if provider_id != OPENAI:
+            return provider_id
+
+        explicit_provider = (
+            str(data.get("provider") or data.get("provider_id") or "")
+            .strip()
+            .lower()
+            .replace("-", "_")
+        )
+        credential_type = str(data.get("credential_type") or "").strip().lower()
+        if credential_type == "oauth" or explicit_provider in {
+            "codex",
+            "openai_codex",
+        }:
+            return CODEX
+        return OPENAI_PLATFORM
 
     explicit_provider = str(data.get("provider") or data.get("provider_id") or "").strip().lower()
     credential_type = str(data.get("credential_type") or "").strip().lower()

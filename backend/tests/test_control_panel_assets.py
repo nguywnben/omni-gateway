@@ -170,6 +170,39 @@ class ControlPanelAssetTests(unittest.TestCase):
         self.assertNotIn("name: 'xAI'", upload_script)
         self.assertIn('<option value="xai">Grok Build</option>', body)
 
+    def test_openai_provider_ui_references_existing_assets_and_endpoints(self):
+        response = serve_control_panel()
+        body = response.body.decode("utf-8")
+        settings_script = read_scripts("features/openai-settings.js")
+        upload_script = read_scripts("core/upload-manager.js", "core/state.js")
+        provider_assets = BACKEND_DIR.parent / "frontend" / "assets" / "providers"
+        self.assertTrue((provider_assets / "openai-codex-logo.png").is_file())
+        self.assertTrue((provider_assets / "openai-platform-logo.png").is_file())
+        for element_id in (
+            "providerCatalogSearch",
+            "providerSelectorCodex",
+            "providerWorkspaceCodex",
+            "providerSelectorOpenAiPlatform",
+            "providerWorkspaceOpenAiPlatform",
+            "codexUploadArea",
+            "openaiPlatformUploadArea",
+        ):
+            self.assertIn(f'id="{element_id}"', body)
+        self.assertIn("/frontend/assets/providers/openai-codex-logo.png", body)
+        self.assertIn("/frontend/assets/providers/openai-platform-logo.png", body)
+        self.assertIn('<strong class="provider-name">OpenAI Codex</strong>', body)
+        self.assertIn('<strong class="provider-name">OpenAI Platform</strong>', body)
+        self.assertIn("./api/providers/openai/codex/oauth/start", settings_script)
+        self.assertIn("./api/providers/openai/platform/credentials", settings_script)
+        self.assertIn(
+            "./api/providers/openai/credentials/import?credential_type=oauth",
+            upload_script,
+        )
+        self.assertIn(
+            "./api/providers/openai/credentials/import?credential_type=api_key",
+            upload_script,
+        )
+
     def test_credential_verification_uses_provider_neutral_route(self):
         credential_manager_script = read_scripts("core/credential-manager.js")
         credential_script = read_scripts("features/credential-diagnostics.js")
