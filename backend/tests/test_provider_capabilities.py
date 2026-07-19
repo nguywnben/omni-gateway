@@ -11,12 +11,15 @@ if str(BACKEND_DIR) not in sys.path:
     sys.path.insert(0, str(BACKEND_DIR))
 
 from core.provider_registry import (
+    CODEX,
     GOOGLE_AI_STUDIO,
     GOOGLE_ANTIGRAVITY,
     GROK,
     MODEL_SUPPORT_DECLARED,
     MODEL_SUPPORT_INFERRED,
     MODEL_SUPPORT_UNSUPPORTED,
+    OPENAI,
+    OPENAI_PLATFORM,
     XAI,
     XAI_CONSOLE,
     credential_model_support_level,
@@ -35,7 +38,7 @@ class ProviderCapabilityTests(unittest.TestCase):
 
         self.assertEqual(
             {provider["provider_id"] for provider in providers},
-            {GOOGLE_ANTIGRAVITY, GOOGLE_AI_STUDIO, XAI},
+            {GOOGLE_ANTIGRAVITY, GOOGLE_AI_STUDIO, OPENAI, XAI},
         )
 
     def test_ai_studio_only_accepts_declared_model_families(self):
@@ -67,11 +70,23 @@ class ProviderCapabilityTests(unittest.TestCase):
         self.assertEqual(get_credential_provider_variant(api_key_credential), XAI_CONSOLE)
         self.assertEqual(
             get_credential_provider_display_name(api_key_credential),
-            "xAI Console",
+            "SpaceXAI Console",
         )
         self.assertEqual(
             get_credential_provider_display_name({"provider": XAI, "api_key": "legacy-api-key"}),
-            "xAI Console",
+            "SpaceXAI Console",
+        )
+
+    def test_openai_credentials_use_precise_user_facing_provider_names(self):
+        oauth_credential = {"provider": OPENAI, "credential_type": "oauth"}
+        api_key_credential = {"provider": OPENAI, "credential_type": "api_key"}
+
+        self.assertEqual(get_credential_provider_variant(oauth_credential), CODEX)
+        self.assertEqual(get_credential_provider_display_name(oauth_credential), "Codex")
+        self.assertEqual(get_credential_provider_variant(api_key_credential), OPENAI_PLATFORM)
+        self.assertEqual(
+            get_credential_provider_display_name(api_key_credential),
+            "OpenAI Platform",
         )
 
     def test_credential_model_catalog_restricts_individual_api_keys(self):

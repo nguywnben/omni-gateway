@@ -62,6 +62,7 @@ CONSOLE_SCRIPT_ASSETS = (
     "js/features/provider-settings-shared.js",
     "js/features/google-ai-studio-settings.js",
     "js/features/xai-settings.js",
+    "js/features/openai-settings.js",
     "js/features/antigravity-settings.js",
     "js/features/system-settings.js",
     "js/features/dashboard.js",

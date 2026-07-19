@@ -154,8 +154,8 @@ const XAI_CONFIG_GROUPS = {
         fieldIds: ['xaiClientId', 'xaiOauthIssuer']
     },
     api: {
-        label: 'Grok Build and xAI Console transport',
-        resetTitle: 'Reset Grok Build and xAI Console Transport Settings',
+        label: 'Grok Build and SpaceXAI Console transport',
+        resetTitle: 'Reset Grok Build and SpaceXAI Console Transport Settings',
         fieldIds: ['xaiApiUrl', 'xaiUserAgent']
     }
 };

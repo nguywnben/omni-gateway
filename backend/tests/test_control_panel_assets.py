@@ -123,8 +123,8 @@ class ControlPanelAssetTests(unittest.TestCase):
         )
         upload_script = read_scripts("core/upload-manager.js", "core/state.js")
         provider_assets = BACKEND_DIR.parent / "frontend" / "assets" / "providers"
-        self.assertTrue((provider_assets / "xai-grok-logo.png").is_file())
-        self.assertTrue((provider_assets / "xai-console-logo.png").is_file())
+        self.assertTrue((provider_assets / "grok-build-logo.png").is_file())
+        self.assertTrue((provider_assets / "spacexai-console-logo.png").is_file())
         for element_id in (
             "providerSelectorGrok",
             "providerWorkspaceGrok",
@@ -136,10 +136,10 @@ class ControlPanelAssetTests(unittest.TestCase):
             "xaiConsoleFileInput",
         ):
             self.assertIn(f'id="{element_id}"', body)
-        self.assertIn("/frontend/assets/providers/xai-grok-logo.png", body)
-        self.assertIn("/frontend/assets/providers/xai-console-logo.png", body)
+        self.assertIn("/frontend/assets/providers/grok-build-logo.png", body)
+        self.assertIn("/frontend/assets/providers/spacexai-console-logo.png", body)
         self.assertIn('<strong class="provider-name">Grok Build</strong>', body)
-        self.assertIn('<strong class="provider-name">xAI Console</strong>', body)
+        self.assertIn('<strong class="provider-name">SpaceXAI Console</strong>', body)
         self.assertIn(
             "./api/providers/xai/credentials/import?credential_type=oauth",
             upload_script,
@@ -170,6 +170,53 @@ class ControlPanelAssetTests(unittest.TestCase):
         self.assertNotIn("name: 'xAI'", upload_script)
         self.assertIn('<option value="xai">Grok Build</option>', body)
 
+    def test_openai_provider_ui_references_existing_assets_and_endpoints(self):
+        response = serve_control_panel()
+        body = response.body.decode("utf-8")
+        settings_script = read_scripts("features/openai-settings.js")
+        upload_script = read_scripts("core/upload-manager.js", "core/state.js")
+        provider_assets = BACKEND_DIR.parent / "frontend" / "assets" / "providers"
+        self.assertTrue((provider_assets / "codex-logo.png").is_file())
+        self.assertTrue((provider_assets / "openai-platform-logo.png").is_file())
+        for element_id in (
+            "providerCatalogSearch",
+            "providerSelectorCodex",
+            "providerWorkspaceCodex",
+            "providerSelectorOpenAiPlatform",
+            "providerWorkspaceOpenAiPlatform",
+            "codexUploadArea",
+            "openaiPlatformUploadArea",
+        ):
+            self.assertIn(f'id="{element_id}"', body)
+        self.assertIn("/frontend/assets/providers/codex-logo.png", body)
+        self.assertIn("/frontend/assets/providers/openai-platform-logo.png", body)
+        self.assertIn('<strong class="provider-name">Codex</strong>', body)
+        self.assertIn('<strong class="provider-name">OpenAI Platform</strong>', body)
+        self.assertIn(
+            'id="codexUserCode" class="endpoint-code-card device-code-button"',
+            body,
+        )
+        self.assertIn('data-ui-action="copy-codex-device-code"', body)
+        self.assertNotIn('data-copy-target="codexUserCode"', body)
+        self.assertIn(
+            'data-ui-action="copy-codex-verification-url">Copy</button>',
+            body,
+        )
+        self.assertIn('class="device-verification-row"', body)
+        self.assertNotIn('class="copy-field-row"', body)
+        self.assertIn("./api/providers/openai/codex/oauth/start", settings_script)
+        self.assertIn("./api/providers/openai/platform/credentials", settings_script)
+        self.assertIn("codexUsageUrl: 'codex_usage_url'", settings_script)
+        self.assertIn('id="codexUsageUrl"', body)
+        self.assertIn(
+            "./api/providers/openai/credentials/import?credential_type=oauth",
+            upload_script,
+        )
+        self.assertIn(
+            "./api/providers/openai/credentials/import?credential_type=api_key",
+            upload_script,
+        )
+
     def test_credential_verification_uses_provider_neutral_route(self):
         credential_manager_script = read_scripts("core/credential-manager.js")
         credential_script = read_scripts("features/credential-diagnostics.js")
@@ -184,14 +231,35 @@ class ControlPanelAssetTests(unittest.TestCase):
         dialog_script = read_scripts("ui/credential-dialogs.js")
 
         self.assertIn("isGrokOAuth", card_script)
-        self.assertIn(
-            "const supportsQuotaPreview = managerType === 'primary' && (isAntigravity || isGrokOAuth);",
-            card_script,
-        )
+        self.assertIn("isCodexOAuth", card_script)
+        self.assertIn("isAntigravity || isGrokOAuth || isCodexOAuth", card_script)
         self.assertIn("const quotaPreview = supportsQuotaPreview", card_script)
         self.assertIn("data?.quota_type === 'account_billing'", dialog_script)
         self.assertIn("Billing Periods", dialog_script)
         self.assertIn("active billing periods", dialog_script)
+        self.assertIn("data?.quota_type === 'account_rate_limits'", dialog_script)
+        self.assertIn("Usage Windows", dialog_script)
+
+    def test_subscription_plans_are_rendered_as_credential_badges(self):
+        card_script = read_scripts("ui/credential-cards.js")
+        dialog_script = read_scripts("ui/credential-dialogs.js")
+
+        self.assertIn("renderCredentialSubscriptionBadge", card_script)
+        self.assertIn("subscription-plan-${pathId}", card_script)
+        self.assertIn("Plan: ${escapeHtml(plan.label)}", card_script)
+        self.assertIn("Tier: ${escapeHtml(plan.label)}", card_script)
+        self.assertIn("updateCredentialSubscriptionBadge", dialog_script)
+        self.assertIn("cached.data?.plan", dialog_script)
+        self.assertIn("cardContext.subscriptionPlan", dialog_script)
+
+    def test_all_supported_credentials_have_an_authentication_badge(self):
+        card_script = read_scripts("ui/credential-cards.js")
+
+        self.assertIn("getCredentialAuthenticationType", card_script)
+        self.assertIn("'google_antigravity', 'grok', 'codex'", card_script)
+        self.assertIn("'google_ai_studio', 'xai_console', 'openai_platform'", card_script)
+        self.assertIn("renderCredentialAuthenticationBadge", card_script)
+        self.assertIn("${authenticationType}", card_script)
 
 
 if __name__ == "__main__":

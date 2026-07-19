@@ -409,6 +409,14 @@ class XaiOAuthCodeRequest(BaseModel):
     state: str = Field(min_length=1, max_length=512)
 
 
+class OpenAIPlatformCredentialRequest(BaseModel):
+    api_key: str = Field(min_length=1, max_length=1024)
+
+
+class CodexOAuthCompleteRequest(BaseModel):
+    flow_id: str = Field(min_length=1, max_length=256)
+
+
 class CredentialModelTestRequest(BaseModel):
     model: str = Field(min_length=1, max_length=200)
 

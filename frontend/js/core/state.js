@@ -56,7 +56,31 @@ const AppState = {
     xaiConsoleUploadFiles: createUploadManager('xaiConsole', {
         endpoint: './api/providers/xai/credentials/import?credential_type=api_key',
         elementPrefix: 'xaiConsole',
-        credentialType: 'xAI Console',
+        credentialType: 'SpaceXAI Console',
+        timeoutMs: 900000,
+        onComplete: async () => {
+            await AppState.primaryCreds.refresh();
+            await loadModelCatalog(true);
+            await refreshUsageStats();
+        }
+    }),
+
+    codexUploadFiles: createUploadManager('codex', {
+        endpoint: './api/providers/openai/credentials/import?credential_type=oauth',
+        elementPrefix: 'codex',
+        credentialType: 'Codex',
+        timeoutMs: 900000,
+        onComplete: async () => {
+            await AppState.primaryCreds.refresh();
+            await loadModelCatalog(true);
+            await refreshUsageStats();
+        }
+    }),
+
+    openaiPlatformUploadFiles: createUploadManager('openaiPlatform', {
+        endpoint: './api/providers/openai/credentials/import?credential_type=api_key',
+        elementPrefix: 'openaiPlatform',
+        credentialType: 'OpenAI Platform',
         timeoutMs: 900000,
         onComplete: async () => {
             await AppState.primaryCreds.refresh();

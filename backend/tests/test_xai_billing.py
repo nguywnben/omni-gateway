@@ -15,6 +15,7 @@ from core.xai import XaiError
 from core.xai_billing import (
     XAI_BILLING_API_URL,
     fetch_xai_billing_usage,
+    parse_xai_access_tier,
     parse_xai_monthly_usage,
     parse_xai_weekly_usage,
 )
@@ -30,6 +31,16 @@ class FakeResponse:
 
 
 class XaiBillingTests(unittest.IsolatedAsyncioTestCase):
+    def test_access_tier_is_read_from_the_provider_token(self):
+        token = "header.eyJ0aWVyIjo0fQ.signature"
+
+        self.assertEqual(parse_xai_access_tier(token), "4")
+
+    def test_access_tier_rejects_malformed_or_unsupported_claims(self):
+        self.assertIsNone(parse_xai_access_tier("not-a-jwt"))
+        self.assertIsNone(parse_xai_access_tier("header.eyJ0aWVyIjp0cnVlfQ.signature"))
+        self.assertIsNone(parse_xai_access_tier("header.eyJ0aWVyIjoiUHJvIn0.signature"))
+
     def test_monthly_usage_is_normalized_for_the_console(self):
         usage = parse_xai_monthly_usage(
             {
@@ -73,6 +84,7 @@ class XaiBillingTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(usage["remaining_percentage"], 100)
 
     async def test_fetch_uses_grok_build_billing_contract(self):
+        tier_token = "header.eyJ0aWVyIjo0fQ.signature"
         request = AsyncMock(
             side_effect=[
                 FakeResponse(
@@ -98,7 +110,7 @@ class XaiBillingTests(unittest.IsolatedAsyncioTestCase):
             ]
         )
         with patch("core.xai_billing.get_async", request):
-            usage = await fetch_xai_billing_usage("oauth-access-token")
+            usage = await fetch_xai_billing_usage(tier_token)
 
         self.assertEqual(request.await_args_list[0].args[0], f"{XAI_BILLING_API_URL}/billing")
         self.assertEqual(
@@ -106,10 +118,11 @@ class XaiBillingTests(unittest.IsolatedAsyncioTestCase):
             f"{XAI_BILLING_API_URL}/billing?format=credits",
         )
         headers = request.await_args_list[0].kwargs["headers"]
-        self.assertEqual(headers["Authorization"], "Bearer oauth-access-token")
+        self.assertEqual(headers["Authorization"], f"Bearer {tier_token}")
         self.assertEqual(headers["x-xai-token-auth"], "xai-grok-cli")
         self.assertNotIn("x-user-id", headers)
         self.assertEqual(usage["quota_type"], "account_billing")
+        self.assertEqual(usage["plan"], "Tier 4")
         self.assertEqual(usage["weekly"]["used_percentage"], 28)
 
     async def test_weekly_quota_is_optional_when_the_endpoint_is_unavailable(self):

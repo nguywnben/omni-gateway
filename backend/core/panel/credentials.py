@@ -9,6 +9,8 @@ from config import (
     get_google_ai_studio_api_url,
 )
 from core.api.primary import fetch_quota_info
+from core.codex import CodexError, refresh_codex_oauth_credential
+from core.codex_usage import fetch_codex_usage
 from core.credential_manager import credential_manager
 from core.google_ai_studio import (
     build_api_key_headers,
@@ -25,6 +27,7 @@ from core.pool_import import PoolImportError, restore_pool_archive
 from core.provider_registry import (
     GOOGLE_AI_STUDIO,
     GOOGLE_ANTIGRAVITY,
+    OPENAI,
     XAI,
     get_credential_provider,
     get_declared_credential_models,
@@ -629,6 +632,56 @@ async def get_credential_quota(
                 }
             )
 
+        if provider_id == OPENAI:
+            if is_api_key_credential(credential_data):
+                return JSONResponse(
+                    content={
+                        "success": True,
+                        "supported": False,
+                        "filename": filename,
+                        "provider": provider_id,
+                        "message": (
+                            "Account quota is available for Codex OAuth credentials only. "
+                            "OpenAI Platform does not expose this account rate-limit view "
+                            "for API keys."
+                        ),
+                    }
+                )
+
+            async def refresh_codex_credential() -> dict:
+                refreshed = await refresh_codex_oauth_credential(credential_data)
+                await storage_adapter.store_credential(filename, refreshed, mode=mode)
+                log.info(f"Codex token automatically refreshed: {filename}")
+                return refreshed
+
+            if not (credential_data.get("access_token") or credential_data.get("token")):
+                credential_data = await refresh_codex_credential()
+            access_token = credential_data.get("access_token") or credential_data.get("token")
+            account_id = str(credential_data.get("account_id") or "").strip()
+
+            try:
+                quota_info = await fetch_codex_usage(access_token, account_id)
+            except CodexError as exc:
+                if exc.status_code == 401 and credential_data.get("refresh_token"):
+                    credential_data = await refresh_codex_credential()
+                    access_token = credential_data.get("access_token") or credential_data.get(
+                        "token"
+                    )
+                    account_id = str(credential_data.get("account_id") or "").strip()
+                    quota_info = await fetch_codex_usage(access_token, account_id)
+                else:
+                    raise
+
+            return JSONResponse(
+                content={
+                    "success": True,
+                    "supported": True,
+                    "filename": filename,
+                    "provider": provider_id,
+                    **quota_info,
+                }
+            )
+
         if provider_id == XAI:
             if is_api_key_credential(credential_data):
                 return JSONResponse(
@@ -639,7 +692,7 @@ async def get_credential_quota(
                         "provider": provider_id,
                         "message": (
                             "Account quota is available for Grok Build OAuth credentials only. "
-                            "xAI Console does not expose this billing view for API keys."
+                            "SpaceXAI Console does not expose this billing view for API keys."
                         ),
                     }
                 )
@@ -714,7 +767,7 @@ async def get_credential_quota(
                 },
             )
 
-    except XaiError as e:
+    except (CodexError, XaiError) as e:
         return JSONResponse(
             status_code=502 if e.status_code >= 500 else 400,
             content={"success": False, "filename": filename, "error": str(e)},
@@ -962,10 +1015,18 @@ async def test_credential(
             )
             access_token = ""
             project_id = ""
-        elif mode == "primary" and provider_id == XAI:
-            if str(credential_data.get("credential_type") or "").lower() == "oauth":
+        elif mode == "primary" and provider_id in {XAI, OPENAI}:
+            if provider_id == XAI and not is_api_key_credential(credential_data):
                 credential_data = await refresh_xai_oauth_credential(credential_data)
                 await storage_adapter.store_credential(filename, credential_data, mode=mode)
+            elif (
+                provider_id == OPENAI
+                and not is_api_key_credential(credential_data)
+                and not (credential_data.get("access_token") or credential_data.get("token"))
+            ):
+                credential_data = await refresh_codex_oauth_credential(credential_data)
+                await storage_adapter.store_credential(filename, credential_data, mode=mode)
+                log.info(f"Codex token automatically refreshed: {filename}")
             from core.api.primary import prepare_provider_request
 
             context = await prepare_provider_request(
@@ -999,7 +1060,7 @@ async def test_credential(
                     detail="Credential does not contain a Project ID.",
                 )
 
-        if mode == "primary" and provider_id not in {GOOGLE_AI_STUDIO, XAI}:
+        if mode == "primary" and provider_id not in {GOOGLE_AI_STUDIO, XAI, OPENAI}:
             api_base_url = await get_antigravity_api_url()
             from core.api.primary import build_primary_headers
 
@@ -1029,6 +1090,32 @@ async def test_credential(
         )
 
         status_code = response.status_code
+
+        if (
+            status_code == 401
+            and mode == "primary"
+            and provider_id == OPENAI
+            and not is_api_key_credential(credential_data)
+            and credential_data.get("refresh_token")
+        ):
+            credential_data = await refresh_codex_oauth_credential(credential_data)
+            await storage_adapter.store_credential(filename, credential_data, mode=mode)
+            log.info(f"Codex token automatically refreshed: {filename}")
+            context = await prepare_provider_request(
+                credential_data,
+                {"model": test_model, "request": test_request},
+                streaming=False,
+            )
+            headers = context.headers
+            request_body = context.payload
+            request_url = context.target_url
+            response = await post_async(
+                url=request_url,
+                json=request_body,
+                headers=headers,
+                timeout=30.0,
+            )
+            status_code = response.status_code
 
         if status_code == 200 or status_code == 429:
             log.info(
@@ -1142,6 +1229,30 @@ async def test_credential(
 
     except HTTPException:
         raise
+    except (CodexError, XaiError) as e:
+        return JSONResponse(
+            status_code=e.status_code,
+            content={
+                "success": False,
+                "status_code": e.status_code,
+                "message": "Model test failed.",
+                "error": public_error_detail(e, "Credential model testing failed."),
+                "detail": public_error_detail(e, "Credential model testing failed."),
+                "filename": filename,
+            },
+        )
+    except ValueError as e:
+        return JSONResponse(
+            status_code=400,
+            content={
+                "success": False,
+                "status_code": 400,
+                "message": "Model test failed.",
+                "error": public_error_detail(e, "Credential model testing failed."),
+                "detail": public_error_detail(e, "Credential model testing failed."),
+                "filename": filename,
+            },
+        )
     except Exception as e:
         log.error(f"Failed to test credential {filename}: {e}")
         return JSONResponse(

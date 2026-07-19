@@ -86,7 +86,21 @@ function initStaticUiBindings() {
         'reset-grok-settings': () => resetXaiSettings('oauth'),
         'save-xai-console-settings': () => saveXaiSettings('api'),
         'reset-xai-console-settings': () => resetXaiSettings('api'),
-        'copy-field': (element) => copyInputValue(element.dataset.copyTarget),
+        'start-codex-oauth': () => startCodexOauth(),
+        'complete-codex-oauth': () => completeCodexOauth(),
+        'select-codex-files': () => document.getElementById('codexFileInput')?.click(),
+        'upload-codex-files': () => uploadCodexFiles(),
+        'clear-codex-files': () => clearCodexFiles(),
+        'select-openai-platform-files': () => document.getElementById('openaiPlatformFileInput')?.click(),
+        'upload-openai-platform-files': () => uploadOpenAIPlatformFiles(),
+        'clear-openai-platform-files': () => clearOpenAIPlatformFiles(),
+        'save-openai-settings': (element) => saveOpenAISettings(element.dataset.openaiScope),
+        'reset-openai-settings': (element) => resetOpenAISettings(element.dataset.openaiScope),
+        'copy-codex-device-code': (element) => {
+            cpUrl(element);
+            element.blur();
+        },
+        'copy-codex-verification-url': () => cpUrl(document.getElementById('codexVerificationUrl')),
         'copy-xai-auth-url': () => cpUrl(document.getElementById('xaiAuthorizationUrl')),
         'copy-primary-auth-url': () => cpUrl(document.getElementById('primaryAuthUrl')),
         'get-primary-credentials': () => getPrimaryCredentials(),
@@ -112,6 +126,8 @@ function initStaticUiBindings() {
         'ai-studio-files': (_element, event) => handleGoogleAiStudioFileSelect(event),
         'grok-files': (_element, event) => handleGrokFileSelect(event),
         'xai-console-files': (_element, event) => handleXaiConsoleFileSelect(event),
+        'codex-files': (_element, event) => handleCodexFileSelect(event),
+        'openai-platform-files': (_element, event) => handleOpenAIPlatformFileSelect(event),
         'primary-files': (_element, event) => handlePrimaryFileSelect(event),
         'routing-strategy': () => syncRoutingPolicyControls(),
         'log-level': () => filterLogs()
@@ -135,6 +151,9 @@ function initStaticUiBindings() {
         if (event.target.matches('[data-ui-input="model-catalog-search"]')) {
             renderModelCatalog();
         }
+        if (event.target.matches('[data-ui-input="provider-catalog-search"]')) {
+            filterProviderCatalog(event.target.value);
+        }
     });
 
     document.getElementById('loginForm')?.addEventListener('submit', (event) => {
@@ -147,6 +166,7 @@ function initStaticUiBindings() {
     });
     document.getElementById('googleAiStudioCredentialForm')?.addEventListener('submit', addGoogleAIStudioCredential);
     document.getElementById('xaiCredentialForm')?.addEventListener('submit', addXaiApiKeyCredential);
+    document.getElementById('openaiPlatformCredentialForm')?.addEventListener('submit', addOpenAIPlatformCredential);
     document.getElementById('accessPasswordForm')?.addEventListener('submit', (event) => {
         event.preventDefault();
         saveAccessCredentials();
@@ -158,6 +178,8 @@ function initStaticUiBindings() {
         ['googleAiStudioUploadArea', handleGoogleAiStudioFileDrop],
         ['grokUploadArea', handleGrokFileDrop],
         ['xaiConsoleUploadArea', handleXaiConsoleFileDrop],
+        ['codexUploadArea', handleCodexFileDrop],
+        ['openaiPlatformUploadArea', handleOpenAIPlatformFileDrop],
         ['primaryUploadArea', handlePrimaryFileDrop]
     ]) {
         const area = document.getElementById(areaId);
@@ -206,8 +228,34 @@ const PROVIDER_WORKSPACES = {
     xai_console: {
         selectorId: 'providerSelectorXaiConsole',
         panelId: 'providerWorkspaceXaiConsole'
+    },
+    codex: {
+        selectorId: 'providerSelectorCodex',
+        panelId: 'providerWorkspaceCodex'
+    },
+    openai_platform: {
+        selectorId: 'providerSelectorOpenAiPlatform',
+        panelId: 'providerWorkspaceOpenAiPlatform'
     }
 };
+
+function filterProviderCatalog(value = '') {
+    const query = String(value || '').trim().toLowerCase();
+    const cards = Array.from(document.querySelectorAll('#providerCatalog [data-provider]'));
+    let visibleCount = 0;
+    cards.forEach((card) => {
+        const searchableText = [
+            card.dataset.provider,
+            card.dataset.providerName,
+            card.textContent
+        ].join(' ').toLowerCase();
+        const isVisible = !query || searchableText.includes(query);
+        card.classList.toggle('hidden', !isVisible);
+        card.setAttribute('aria-hidden', String(!isVisible));
+        visibleCount += isVisible ? 1 : 0;
+    });
+    document.getElementById('providerCatalogEmpty')?.classList.toggle('hidden', visibleCount > 0);
+}
 
 function selectProviderWorkspace(providerId, focusSelector = false) {
     const selected = PROVIDER_WORKSPACES[providerId];
@@ -234,19 +282,30 @@ function selectProviderWorkspace(providerId, focusSelector = false) {
 function initProviderWorkspaceSelector() {
     const providerIds = Object.keys(PROVIDER_WORKSPACES);
 
-    providerIds.forEach((providerId, index) => {
+    providerIds.forEach((providerId) => {
         const selector = document.getElementById(PROVIDER_WORKSPACES[providerId].selectorId);
         selector?.addEventListener('keydown', (event) => {
             if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
             event.preventDefault();
 
-            let nextIndex = index;
-            if (event.key === 'ArrowLeft') nextIndex = (index - 1 + providerIds.length) % providerIds.length;
-            if (event.key === 'ArrowRight') nextIndex = (index + 1) % providerIds.length;
-            if (event.key === 'Home') nextIndex = 0;
-            if (event.key === 'End') nextIndex = providerIds.length - 1;
+            const visibleProviderIds = providerIds.filter((id) => {
+                const candidate = document.getElementById(PROVIDER_WORKSPACES[id].selectorId);
+                return candidate && !candidate.classList.contains('hidden');
+            });
+            if (!visibleProviderIds.length) return;
 
-            selectProviderWorkspace(providerIds[nextIndex], true);
+            const currentIndex = Math.max(0, visibleProviderIds.indexOf(providerId));
+            let nextIndex = currentIndex;
+            if (event.key === 'ArrowLeft') {
+                nextIndex = (currentIndex - 1 + visibleProviderIds.length) % visibleProviderIds.length;
+            }
+            if (event.key === 'ArrowRight') {
+                nextIndex = (currentIndex + 1) % visibleProviderIds.length;
+            }
+            if (event.key === 'Home') nextIndex = 0;
+            if (event.key === 'End') nextIndex = visibleProviderIds.length - 1;
+
+            selectProviderWorkspace(visibleProviderIds[nextIndex], true);
         });
     });
 
@@ -266,6 +325,10 @@ const MODEL_PROVIDER_META = {
     },
     xai: {
         name: 'Grok Build',
-        logo: '/frontend/assets/providers/xai-grok-logo.png'
+        logo: '/frontend/assets/providers/grok-build-logo.png'
+    },
+    openai: {
+        name: 'OpenAI',
+        logo: '/frontend/assets/providers/openai-platform-logo.png'
     }
 };

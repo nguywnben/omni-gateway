@@ -14,7 +14,10 @@ from config import (
     get_antigravity_stream_to_nonstream,
     get_antigravity_switch_credential_enabled,
     get_auto_disable_error_codes,
+    get_codex_api_url,
+    get_codex_user_agent,
     get_google_ai_studio_api_url,
+    get_openai_api_url,
     get_token_compression_config,
     get_upstream_timeout_seconds,
     get_xai_api_url,
@@ -35,6 +38,12 @@ from core.api.utils import (
     record_model_route_miss,
     record_unassigned_api_call_error,
 )
+from core.codex import (
+    build_codex_headers,
+    codex_response_to_gemini,
+    codex_stream_line_to_gemini,
+    gemini_request_to_codex,
+)
 from core.credential_manager import credential_manager
 from core.google_ai_studio import (
     build_api_key_headers,
@@ -44,11 +53,22 @@ from core.google_ai_studio import (
 )
 from core.httpx_client import get_async, post_async, stream_post_async
 from core.model_blacklist import record_model_not_found
+from core.openai_platform import (
+    build_openai_headers,
+    fetch_openai_model_ids,
+    gemini_request_to_openai,
+    openai_response_to_gemini,
+    openai_stream_line_to_gemini,
+)
 from core.provider_registry import (
+    CODEX,
     GOOGLE_AI_STUDIO,
     GOOGLE_ANTIGRAVITY,
+    OPENAI,
+    OPENAI_PLATFORM,
     XAI,
     get_credential_provider,
+    get_credential_provider_variant,
 )
 from core.storage_adapter import get_storage_adapter
 from core.token_compression import (
@@ -332,6 +352,38 @@ async def prepare_provider_request(
         payload = gemini_request_to_xai(dict(compression_result.request), model_name, streaming)
         target_url = f"{(await get_xai_api_url()).rstrip('/')}/chat/completions"
         auth_headers = build_xai_headers(str(access_token), await get_xai_user_agent())
+    elif provider_id == OPENAI:
+        credential_variant = get_credential_provider_variant(credential_data)
+        access_token = (
+            credential_data.get("api_key")
+            if credential_variant == OPENAI_PLATFORM
+            else credential_data.get("access_token") or credential_data.get("token")
+        )
+        if not access_token:
+            raise ValueError("OpenAI credential does not contain an API key or access token.")
+        compression_result = compress_gemini_request(
+            dict(inner_request),
+            CompressionSettings(**await get_token_compression_config()),
+        )
+        if credential_variant == OPENAI_PLATFORM:
+            payload = gemini_request_to_openai(
+                dict(compression_result.request), model_name, streaming
+            )
+            target_url = f"{(await get_openai_api_url()).rstrip('/')}/chat/completions"
+            auth_headers = build_openai_headers(str(access_token))
+        else:
+            payload = gemini_request_to_codex(
+                dict(compression_result.request), model_name, streaming
+            )
+            target_url = f"{(await get_codex_api_url()).rstrip('/')}/responses"
+            auth_headers = build_codex_headers(
+                str(access_token),
+                str(credential_data.get("account_id") or ""),
+                session_id=str(
+                    inner_request.get("sessionId") or _session_key(inner_request, model_name)
+                ),
+                user_agent=await get_codex_user_agent(),
+            )
     else:
         access_token = credential_data.get("access_token") or credential_data.get("token")
         if not access_token:
@@ -367,6 +419,19 @@ async def prepare_provider_request(
                 or credential_data.get("token")
             )
             auth_headers["Authorization"] = f"Bearer {access_token}"
+        elif provider_id == OPENAI:
+            auth_headers.pop("x-goog-api-key", None)
+            credential_variant = get_credential_provider_variant(credential_data)
+            access_token = (
+                credential_data.get("api_key")
+                if credential_variant == OPENAI_PLATFORM
+                else credential_data.get("access_token") or credential_data.get("token")
+            )
+            auth_headers["Authorization"] = f"Bearer {access_token}"
+            if credential_variant == CODEX:
+                account_id = str(credential_data.get("account_id") or "").strip()
+                if account_id:
+                    auth_headers["ChatGPT-Account-Id"] = account_id
         else:
             auth_headers.pop("x-goog-api-key", None)
             access_token = credential_data.get("access_token") or credential_data.get("token")
@@ -675,6 +740,13 @@ async def stream_request(
                         chunk = xai_stream_line_to_gemini(chunk)
                         if not chunk:
                             continue
+                    elif provider_id == OPENAI:
+                        if get_credential_provider_variant(credential_data) == OPENAI_PLATFORM:
+                            chunk = openai_stream_line_to_gemini(chunk)
+                        else:
+                            chunk = codex_stream_line_to_gemini(chunk)
+                        if not chunk:
+                            continue
 
                     if not received_content:
                         received_content = True
@@ -766,13 +838,44 @@ async def stream_request(
                 continue
 
         except Exception as e:
+            exception_status = int(getattr(e, "status_code", 500) or 500)
             log.error(
                 f"[provider stream] Streaming Request Exception: {e}, Credentials: {current_file}"
             )
+            if exception_status == 404:
+                credential_route_exclusions.add((current_file, model_name))
+                if model_routing:
+                    await _exclude_missing_model_route(
+                        credential_route_exclusions=credential_route_exclusions,
+                        credential_name=current_file,
+                        provider_id=provider_id,
+                        model_name=model_name,
+                    )
+                await record_model_route_miss(
+                    credential_manager,
+                    current_file,
+                    model_name=model_name,
+                    provider=provider_id,
+                )
+                if attempt < attempt_limit:
+                    switched = await _switch_credential_for_retry(
+                        refresh_credential_fast=refresh_credential_fast,
+                        log_prefix="[provider stream]",
+                    )
+                    if switched:
+                        continue
+                yield Response(
+                    content=json.dumps(
+                        {"error": "No compatible credential could serve the requested model."}
+                    ),
+                    status_code=404,
+                    media_type="application/json",
+                )
+                return
             await record_api_call_error(
                 credential_manager,
                 current_file,
-                500,
+                exception_status,
                 None,
                 mode="primary",
                 model_name=model_name,
@@ -872,6 +975,23 @@ async def non_stream_request(
         )
 
     model_name, current_file, credential_data = route_result
+    if (
+        get_credential_provider(credential_data) == OPENAI
+        and get_credential_provider_variant(credential_data) == CODEX
+    ):
+        # ChatGPT's Codex endpoint is stream-only. Re-enter through the streaming
+        # path so downstream non-stream clients still receive one collected response.
+        await credential_manager.release_credential(current_file, mode="primary")
+        return await collect_streaming_response(
+            stream_request(
+                body=body,
+                native=False,
+                headers=headers,
+                model_candidates=model_candidates,
+                model_routing=model_routing,
+            )
+        )
+
     request_body = {**body, "model": model_name}
     try:
         context = await prepare_provider_request(
@@ -1006,6 +1126,31 @@ async def non_stream_request(
                             return Response(
                                 content=json.dumps(
                                     {"error": "Grok Build returned an invalid response."}
+                                ),
+                                status_code=502,
+                                media_type="application/json",
+                            )
+                    elif provider_id == OPENAI:
+                        try:
+                            if get_credential_provider_variant(credential_data) == OPENAI_PLATFORM:
+                                translated = openai_response_to_gemini(response.json())
+                            else:
+                                translated = codex_response_to_gemini(response.json())
+                            response_content = json.dumps(translated).encode("utf-8")
+                        except (ValueError, TypeError) as exc:
+                            await record_api_call_error(
+                                credential_manager,
+                                current_file,
+                                502,
+                                None,
+                                mode="primary",
+                                model_name=model_name,
+                                error_message=str(exc),
+                                provider=provider_id,
+                            )
+                            return Response(
+                                content=json.dumps(
+                                    {"error": "OpenAI returned an invalid response."}
                                 ),
                                 status_code=502,
                                 media_type="application/json",
@@ -1293,6 +1438,21 @@ async def fetch_provider_model_ids(
                     model_ids.update(await fetch_xai_model_ids(str(access_token)))
             except Exception as exc:
                 log.warning(f"Grok Build model discovery failed: {exc}")
+            finally:
+                await credential_manager.release_credential(current_file, mode="primary")
+    elif provider_id == OPENAI:
+        cred_result = await credential_manager.get_valid_credential(
+            mode="primary", provider_id=OPENAI
+        )
+        if cred_result:
+            current_file, credential_data = cred_result
+            try:
+                if get_credential_provider_variant(credential_data) == OPENAI_PLATFORM:
+                    api_key = str(credential_data.get("api_key") or "")
+                    if api_key:
+                        model_ids.update(await fetch_openai_model_ids(api_key))
+            except Exception as exc:
+                log.warning(f"OpenAI model discovery failed: {exc}")
             finally:
                 await credential_manager.release_credential(current_file, mode="primary")
 

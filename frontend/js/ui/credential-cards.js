@@ -75,22 +75,43 @@ function getCredentialProviderMeta(credInfo, managerType) {
             return {
                 id: 'grok',
                 name: t('provider_grok'),
-                logo: '/frontend/assets/providers/xai-grok-logo.png'
+                logo: '/frontend/assets/providers/grok-build-logo.png'
             };
         }
 
         if (isXaiConsole) {
             return {
                 id: 'xai_console',
-                name: 'xAI Console',
-                logo: '/frontend/assets/providers/xai-console-logo.png'
+                name: 'SpaceXAI Console',
+                logo: '/frontend/assets/providers/spacexai-console-logo.png'
             };
         }
 
         return {
             id: 'grok',
             name: t('provider_grok'),
-            logo: '/frontend/assets/providers/xai-grok-logo.png'
+            logo: '/frontend/assets/providers/grok-build-logo.png'
+        };
+
+    }
+
+    if (provider === 'openai' || provider === 'codex' || provider === 'openai_codex' || provider === 'openai_platform' || provider === 'openai_api_key') {
+
+        const credentialType = String(credInfo.credential_type || '').trim().toLowerCase();
+        const isCodex = provider === 'codex' || provider === 'openai_codex' || credentialType === 'oauth';
+
+        if (isCodex) {
+            return {
+                id: 'codex',
+                name: 'Codex',
+                logo: '/frontend/assets/providers/codex-logo.png'
+            };
+        }
+
+        return {
+            id: 'openai_platform',
+            name: 'OpenAI Platform',
+            logo: '/frontend/assets/providers/openai-platform-logo.png'
         };
 
     }
@@ -147,6 +168,70 @@ function createCredentialProviderGroup(providerMeta, credentials, manager) {
 
 }
 
+function normalizeCredentialSubscriptionPlan(value, kind = 'plan') {
+
+    const rawValue = String(value || '').trim();
+    if (!rawValue || rawValue.toLowerCase() === 'unknown' || rawValue.length > 48) return null;
+
+    const normalizedKind = kind === 'tier' || /^tier[\s:_-]/i.test(rawValue) ? 'tier' : 'plan';
+    const displayValue = rawValue
+        .replace(/^tier[\s:_-]*/i, '')
+        .replace(/[_-]+/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+    if (!displayValue) return null;
+
+    const label = displayValue.replace(/\b\w/g, (character) => character.toUpperCase());
+    const normalizedLabel = label.toLowerCase();
+    const badgeClass = normalizedLabel === 'free'
+        ? 'tier-free'
+        : (normalizedLabel === 'ultra' || normalizedLabel === 'enterprise' ? 'tier-ultra' : 'tier-pro');
+
+    return { label, kind: normalizedKind, badgeClass };
+
+}
+
+function renderCredentialSubscriptionBadge(pathId, value, kind = 'plan') {
+
+    const plan = normalizeCredentialSubscriptionPlan(value, kind);
+    if (!plan) {
+        return `<span id="subscription-plan-${pathId}" class="status-badge subscription-badge muted" hidden></span>`;
+    }
+
+    const badgeLabel = plan.kind === 'tier'
+        ? `Tier: ${escapeHtml(plan.label)}`
+        : `Plan: ${escapeHtml(plan.label)}`;
+    const title = plan.kind === 'tier'
+        ? `Access tier reported by the provider: ${plan.label}`
+        : `Subscription plan reported by the provider: ${plan.label}`;
+
+    return `<span id="subscription-plan-${pathId}" class="status-badge subscription-badge ${plan.badgeClass}" title="${escapeAttribute(title)}">${badgeLabel}</span>`;
+
+}
+
+function getCredentialAuthenticationType(providerMeta, credInfo) {
+
+    const providerId = String(providerMeta?.id || '').trim().toLowerCase();
+    if (['google_antigravity', 'grok', 'codex'].includes(providerId)) return 'OAuth';
+    if (['google_ai_studio', 'xai_console', 'openai_platform'].includes(providerId)) return 'API key';
+
+    const declaredType = String(credInfo?.credential_type || '').trim().toLowerCase();
+    if (declaredType === 'oauth') return 'OAuth';
+    if (declaredType === 'api_key') return 'API key';
+    return '';
+
+}
+
+function renderCredentialAuthenticationBadge(providerMeta, credInfo) {
+
+    const authenticationType = getCredentialAuthenticationType(providerMeta, credInfo);
+    if (!authenticationType) return '';
+
+    const title = `${providerMeta.name} ${authenticationType} credential`;
+    return `<span class="status-badge muted" title="${escapeAttribute(title)}">${authenticationType}</span>`;
+
+}
+
 function createCredCard(credInfo, manager) {
 
     const div = document.createElement('div');
@@ -157,9 +242,22 @@ function createCredCard(credInfo, manager) {
     const providerMeta = getCredentialProviderMeta(credInfo, managerType);
     const isGoogleAIStudio = providerMeta.id === 'google_ai_studio';
     const isXai = ['xai', 'grok', 'xai_console'].includes(providerMeta.id);
+    const isOpenAI = ['codex', 'openai_platform'].includes(providerMeta.id);
     const isGrokOAuth = providerMeta.id === 'grok' && credInfo.credential_type !== 'api_key';
+    const isCodexOAuth = providerMeta.id === 'codex' && credInfo.credential_type === 'oauth';
     const isAntigravity = providerMeta.id === 'google_antigravity';
-    const isStaticProvider = isGoogleAIStudio || isXai;
+    const isStaticProvider = isGoogleAIStudio || isXai || isOpenAI;
+    const pathId = (managerType === 'primary' ? 'primary_' : '') + btoa(encodeURIComponent(filename)).replace(/[+/=]/g, '_');
+    const supportsQuotaPreview = managerType === 'primary'
+        && (isAntigravity || isGrokOAuth || isCodexOAuth);
+    const shouldAutoLoadQuota = supportsQuotaPreview && !AppState.quotaPreviewCache[filename];
+
+    if (shouldAutoLoadQuota) {
+
+        AppState.quotaPreviewCache[filename] = { loading: true };
+
+    }
+
     const accountLabel = credInfo.credential_label || credInfo.user_email || t('email_not_fetched');
     const accountClass = (credInfo.credential_label || credInfo.user_email) ? 'cred-email' : 'cred-email empty';
     const providerLogo = providerMeta.logo
@@ -208,12 +306,21 @@ function createCredCard(credInfo, manager) {
 
     }
 
-    if (isGoogleAIStudio || isXai) {
+    statusBadges += renderCredentialAuthenticationBadge(providerMeta, credInfo);
 
-        const credentialType = credInfo.credential_type === 'oauth' ? 'OAuth' : 'API key';
-        statusBadges += `<span class="status-badge muted" title="${escapeAttribute(`${providerMeta.name} ${credentialType} credential`)}">${credentialType}</span>`;
+    if (isAntigravity) {
 
-    } else {
+        statusBadges += renderCredentialSubscriptionBadge(pathId, credInfo.tier, 'plan');
+
+    } else if (isGrokOAuth || isCodexOAuth) {
+
+        statusBadges += renderCredentialSubscriptionBadge(
+            pathId,
+            AppState.quotaPreviewCache[filename]?.data?.plan,
+            isGrokOAuth ? 'tier' : 'plan'
+        );
+
+    } else if (!isStaticProvider) {
 
         const tier = (credInfo.tier || 'pro').toString().toLowerCase();
 
@@ -289,8 +396,6 @@ function createCredCard(credInfo, manager) {
 
     }
 
-    const pathId = (managerType === 'primary' ? 'primary_' : '') + btoa(encodeURIComponent(filename)).replace(/[+/=]/g, '_');
-
     AppState.credentialCardIndex[pathId] = {
         filename,
         managerType,
@@ -298,16 +403,9 @@ function createCredCard(credInfo, manager) {
         accountLabel: credInfo.user_email || credInfo.credential_label || '',
         providerName: providerMeta.name,
         modelCount: Number.isFinite(Number(credInfo.model_count)) ? Number(credInfo.model_count) : 0,
+        subscriptionPlan: isAntigravity ? credInfo.tier : '',
+        subscriptionKind: isAntigravity ? 'plan' : '',
     };
-
-    const supportsQuotaPreview = managerType === 'primary' && (isAntigravity || isGrokOAuth);
-    const shouldAutoLoadQuota = supportsQuotaPreview && !AppState.quotaPreviewCache[filename];
-
-    if (shouldAutoLoadQuota) {
-
-        AppState.quotaPreviewCache[filename] = { loading: true };
-
-    }
 
     const actionButtons = `
 

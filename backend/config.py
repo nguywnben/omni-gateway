@@ -47,6 +47,12 @@ DEFAULT_XAI_API_URL = "https://api.x.ai/v1"
 DEFAULT_XAI_OAUTH_ISSUER = "https://auth.x.ai"
 DEFAULT_XAI_CLIENT_ID = "b1a00492-073a-47ea-816f-4c329264a828"
 DEFAULT_XAI_USER_AGENT = "grok-cli/omni-gateway"
+DEFAULT_OPENAI_API_URL = "https://api.openai.com/v1"
+DEFAULT_CODEX_API_URL = "https://chatgpt.com/backend-api/codex"
+DEFAULT_CODEX_USAGE_URL = "https://chatgpt.com/backend-api/wham/usage"
+DEFAULT_CODEX_AUTH_BASE = "https://auth.openai.com"
+DEFAULT_CODEX_CLIENT_ID = "app_EMoamEEZ73f0CkXaXp7hrann"
+DEFAULT_CODEX_USER_AGENT = "codex_cli_rs/0.0.0 (Unknown 0; unknown)"
 
 
 ENV_MAPPINGS = {
@@ -63,6 +69,12 @@ ENV_MAPPINGS = {
     "XAI_OAUTH_ISSUER": "xai_oauth_issuer",
     "XAI_CLIENT_ID": "xai_client_id",
     "XAI_USER_AGENT": "xai_user_agent",
+    "OPENAI_API_URL": "openai_api_url",
+    "CODEX_API_URL": "codex_api_url",
+    "CODEX_USAGE_URL": "codex_usage_url",
+    "CODEX_AUTH_BASE": "codex_auth_base",
+    "CODEX_CLIENT_ID": "codex_client_id",
+    "CODEX_USER_AGENT": "codex_user_agent",
     "CODE_ASSIST_CLIENT_ID": "code_assist_client_id",
     "CODE_ASSIST_CLIENT_SECRET": "code_assist_client_secret",
     "ANTIGRAVITY_CLIENT_ID": "antigravity_client_id",
@@ -647,6 +659,67 @@ async def get_xai_user_agent() -> str:
     return str(
         await get_config_value("xai_user_agent", DEFAULT_XAI_USER_AGENT, "XAI_USER_AGENT")
         or DEFAULT_XAI_USER_AGENT
+    ).strip()
+
+
+async def get_openai_api_url() -> str:
+    """Return the OpenAI Platform API base URL."""
+    return (
+        str(
+            await get_config_value("openai_api_url", DEFAULT_OPENAI_API_URL, "OPENAI_API_URL")
+            or DEFAULT_OPENAI_API_URL
+        )
+        .strip()
+        .rstrip("/")
+    )
+
+
+async def get_codex_api_url() -> str:
+    """Return the ChatGPT Codex upstream API base URL."""
+    return (
+        str(
+            await get_config_value("codex_api_url", DEFAULT_CODEX_API_URL, "CODEX_API_URL")
+            or DEFAULT_CODEX_API_URL
+        )
+        .strip()
+        .rstrip("/")
+    )
+
+
+async def get_codex_usage_url() -> str:
+    """Return the ChatGPT Codex account usage endpoint."""
+    return (
+        str(
+            await get_config_value("codex_usage_url", DEFAULT_CODEX_USAGE_URL, "CODEX_USAGE_URL")
+            or DEFAULT_CODEX_USAGE_URL
+        )
+        .strip()
+        .rstrip("/")
+    )
+
+
+async def get_codex_auth_base() -> str:
+    return (
+        str(
+            await get_config_value("codex_auth_base", DEFAULT_CODEX_AUTH_BASE, "CODEX_AUTH_BASE")
+            or DEFAULT_CODEX_AUTH_BASE
+        )
+        .strip()
+        .rstrip("/")
+    )
+
+
+async def get_codex_client_id() -> str:
+    return str(
+        await get_config_value("codex_client_id", DEFAULT_CODEX_CLIENT_ID, "CODEX_CLIENT_ID")
+        or DEFAULT_CODEX_CLIENT_ID
+    ).strip()
+
+
+async def get_codex_user_agent() -> str:
+    return str(
+        await get_config_value("codex_user_agent", DEFAULT_CODEX_USER_AGENT, "CODEX_USER_AGENT")
+        or DEFAULT_CODEX_USER_AGENT
     ).strip()
 
 

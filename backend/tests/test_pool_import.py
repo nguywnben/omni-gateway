@@ -29,6 +29,7 @@ from core.pool_import import (
 from core.provider_registry import (
     GOOGLE_AI_STUDIO,
     GOOGLE_ANTIGRAVITY,
+    OPENAI,
     XAI,
     XAI_CONSOLE,
     antigravity_account_fingerprint,
@@ -74,6 +75,26 @@ class PoolCredentialClassificationTests(unittest.TestCase):
                 }
             ),
             XAI,
+        )
+        self.assertEqual(
+            classify_pool_credential(
+                {
+                    "provider": "openai",
+                    "credential_type": "api_key",
+                    "api_key": "sk-openai-key",
+                }
+            ),
+            OPENAI,
+        )
+        self.assertEqual(
+            classify_pool_credential(
+                {
+                    "provider": "codex",
+                    "credential_type": "oauth",
+                    "refresh_token": "refresh",
+                }
+            ),
+            OPENAI,
         )
         self.assertEqual(
             classify_pool_credential(
@@ -336,7 +357,7 @@ class PoolArchiveRestoreTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result["providers"][GOOGLE_ANTIGRAVITY]["created"], 1)
         self.assertEqual(result["providers"][GOOGLE_AI_STUDIO]["updated"], 1)
         self.assertEqual(result["providers"][XAI_CONSOLE]["created"], 1)
-        self.assertEqual(result["providers"][XAI_CONSOLE]["provider_name"], "xAI Console")
+        self.assertEqual(result["providers"][XAI_CONSOLE]["provider_name"], "SpaceXAI Console")
         self.assertEqual(result["providers"][XAI_CONSOLE]["routing_provider"], XAI)
         validate_mock.assert_awaited_once_with("google-api-key-value")
         store_mock.assert_awaited_once()

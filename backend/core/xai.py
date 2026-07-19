@@ -1,4 +1,4 @@
-"""Shared Grok Build OAuth and xAI Console transport helpers."""
+"""Shared Grok Build OAuth and SpaceXAI Console transport helpers."""
 
 from __future__ import annotations
 
@@ -136,14 +136,14 @@ async def fetch_xai_model_ids(access_token: str) -> List[str]:
     except ValueError as exc:
         raise XaiError("Grok Build returned an invalid JSON response.", 502) from exc
     if not model_ids:
-        raise XaiError("The xAI Console API key is valid, but no models are available.")
+        raise XaiError("The SpaceXAI Console API key is valid, but no models are available.")
     return model_ids
 
 
 async def validate_xai_api_key(api_key: str) -> XaiValidation:
     normalized = str(api_key or "").strip()
     if len(normalized) < 16 or len(normalized) > 1024:
-        raise XaiError("Enter a valid xAI Console API key.")
+        raise XaiError("Enter a valid SpaceXAI Console API key.")
     return XaiValidation(model_ids=await fetch_xai_model_ids(normalized))
 
 
