@@ -35,7 +35,7 @@ Omni Gateway
         |
         v
 provider adapters
-  Google Antigravity | Google AI Studio | Grok Build | SpaceXAI Console | OpenAI Codex | OpenAI Platform
+  Google Antigravity | Google AI Studio | Grok Build | SpaceXAI Console | Codex | OpenAI Platform
 ```
 
 The public API stays stable while provider-specific adapters evolve behind Omni Gateway.
@@ -214,10 +214,10 @@ Omni Gateway reads configuration from environment variables first, then stored c
 | `XAI_CLIENT_ID` | bundled public client | Optional override for the Grok Build PKCE OAuth client ID. |
 | `XAI_USER_AGENT` | `grok-cli/omni-gateway` | Optional shared HTTP User-Agent override for Grok Build OAuth and SpaceXAI Console API requests. |
 | `OPENAI_API_URL` | `https://api.openai.com/v1` | Optional OpenAI Platform API endpoint override. It can also be managed from the Providers page. |
-| `CODEX_API_URL` | `https://chatgpt.com/backend-api/codex` | Optional OpenAI Codex inference and account-model endpoint override. |
-| `CODEX_AUTH_BASE` | `https://auth.openai.com` | Optional OpenAI Codex device-authorization service override. |
-| `CODEX_CLIENT_ID` | bundled public client | Optional override for the OpenAI Codex device OAuth client ID. |
-| `CODEX_USER_AGENT` | Codex CLI-compatible value | Optional User-Agent override for OpenAI Codex requests. |
+| `CODEX_API_URL` | `https://chatgpt.com/backend-api/codex` | Optional Codex inference and account-model endpoint override. |
+| `CODEX_AUTH_BASE` | `https://auth.openai.com` | Optional Codex device-authorization service override. |
+| `CODEX_CLIENT_ID` | bundled public client | Optional override for the Codex device OAuth client ID. |
+| `CODEX_USER_AGENT` | Codex CLI-compatible value | Optional User-Agent override for Codex requests. |
 | `ANTIGRAVITY_USER_AGENT` | `antigravity/cli/1.0.1 windows/amd64` | Optional Google Antigravity protocol User-Agent override. |
 | `ANTIGRAVITY_PAYLOAD_USER_AGENT` | `antigravity` | Optional payload-level Google Antigravity userAgent override. |
 | `LOG_LEVEL` | `info` | Runtime log level. |
@@ -373,13 +373,13 @@ Every imported key is validated before storage. Duplicate keys within the same i
 
 Grok Build supports PKCE OAuth credentials, while SpaceXAI Console supports API keys. SpaceXAI Console keys are validated against the Grok Build model catalog before storage. For Grok Build OAuth, Omni Gateway generates an authorization link; after authorization, copy the code displayed on the Grok Build authorization page and paste it into the Grok Build OAuth form. Access tokens are refreshed automatically when a refresh token is available, and both credential types expose only the Grok Build models declared by their current catalog. The Pool page can retrieve monthly credit usage and, when xAI provides it, weekly usage for Grok Build OAuth accounts. This account-level billing view is not available for SpaceXAI Console API keys.
 
-OpenAI Codex uses OpenAI's device authorization flow. Generate a device code from the Providers page, open the displayed verification URL, enter the code, finish sign-in, and return to check authorization. Omni Gateway stores the account-scoped model catalog returned by Codex, refreshes OAuth access tokens when needed, and sends compatible requests through the Codex Responses transport. OpenAI Platform uses API-key authentication; keys are validated through the account model catalog before entering the pool. Both products support JSON and ZIP import with provider-specific validation and deduplication.
+Codex uses OpenAI's device authorization flow. Generate a device code from the Providers page, open the displayed verification URL, enter the code, finish sign-in, and return to check authorization. Omni Gateway stores the account-scoped model catalog returned by Codex, refreshes OAuth access tokens when needed, and sends compatible requests through the Codex Responses transport. OpenAI Platform uses API-key authentication; keys are validated through the account model catalog before entering the pool. Both products support JSON and ZIP import with provider-specific validation and deduplication.
 
 Pool imports and Google Antigravity batch imports accept archives up to 10 MB, at most 500 files, individual credential files up to 2 MB, and at most 25 MB of uncompressed data. Google AI Studio and OpenAI provider imports use stricter limits of 2 MB per imported file, 200 JSON entries, and 5 MB of uncompressed data.
 
-The Pool page also provides a provider-independent backup workflow. `Download ZIP` exports the active credential pool, and `Import ZIP` restores that archive by identifying each credential as Google Antigravity, Google AI Studio, Grok Build, SpaceXAI Console, OpenAI Codex, or OpenAI Platform. OAuth accounts retain provider-scoped identity deduplication, while API keys are validated and deduplicated by a provider-scoped, non-reversible key fingerprint. Unsupported or malformed entries are reported individually without blocking valid credentials in the same archive.
+The Pool page also provides a provider-independent backup workflow. `Download ZIP` exports the active credential pool, and `Import ZIP` restores that archive by identifying each credential as Google Antigravity, Google AI Studio, Grok Build, SpaceXAI Console, Codex, or OpenAI Platform. OAuth accounts retain provider-scoped identity deduplication, while API keys are validated and deduplicated by a provider-scoped, non-reversible key fingerprint. Unsupported or malformed entries are reported individually without blocking valid credentials in the same archive.
 
-Google Antigravity credentials use `google-antigravity-{account_fingerprint}.json`, where the fingerprint is derived from the normalized account email without exposing it. Google AI Studio credentials use `google-ai-studio-{key_fingerprint}.json`, Grok Build OAuth credentials use `grok-{account_fingerprint}.json`, SpaceXAI Console credentials use `xai-console-{key_fingerprint}.json`, OpenAI Codex credentials use `openai-codex-{account_fingerprint}.json`, and OpenAI Platform credentials use `openai-platform-{key_fingerprint}.json`. Legacy `provider_*.json` and `xai-grok-*.json` credentials remain compatible and are exported with canonical names.
+Google Antigravity credentials use `google-antigravity-{account_fingerprint}.json`, where the fingerprint is derived from the normalized account email without exposing it. Google AI Studio credentials use `google-ai-studio-{key_fingerprint}.json`, Grok Build OAuth credentials use `grok-{account_fingerprint}.json`, SpaceXAI Console credentials use `xai-console-{key_fingerprint}.json`, Codex credentials use `openai-codex-{account_fingerprint}.json`, and OpenAI Platform credentials use `openai-platform-{key_fingerprint}.json`. Legacy `provider_*.json` and `xai-grok-*.json` credentials remain compatible and are exported with canonical names.
 
 Credential mode names:
 

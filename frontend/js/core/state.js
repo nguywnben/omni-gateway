@@ -68,7 +68,7 @@ const AppState = {
     codexUploadFiles: createUploadManager('codex', {
         endpoint: './api/providers/openai/credentials/import?credential_type=oauth',
         elementPrefix: 'codex',
-        credentialType: 'OpenAI Codex',
+        credentialType: 'Codex',
         timeoutMs: 900000,
         onComplete: async () => {
             await AppState.primaryCreds.refresh();

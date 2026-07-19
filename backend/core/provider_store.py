@@ -111,6 +111,6 @@ async def store_codex_credential(credential_data: dict) -> dict:
     return {
         "action": result.get("action", "created"),
         "filename": result.get("filename", filename),
-        "label": payload.get("credential_label") or "OpenAI Codex account",
+        "label": payload.get("credential_label") or "Codex account",
         "fingerprint": fingerprint,
     }

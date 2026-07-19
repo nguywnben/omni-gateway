@@ -82,7 +82,7 @@ class ProviderCapabilityTests(unittest.TestCase):
         api_key_credential = {"provider": OPENAI, "credential_type": "api_key"}
 
         self.assertEqual(get_credential_provider_variant(oauth_credential), CODEX)
-        self.assertEqual(get_credential_provider_display_name(oauth_credential), "OpenAI Codex")
+        self.assertEqual(get_credential_provider_display_name(oauth_credential), "Codex")
         self.assertEqual(get_credential_provider_variant(api_key_credential), OPENAI_PLATFORM)
         self.assertEqual(
             get_credential_provider_display_name(api_key_credential),

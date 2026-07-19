@@ -53,7 +53,7 @@
 
                         <button type="button" class="provider-hero-card provider-selector-button" id="providerSelectorGrok" role="tab" aria-label="Grok Build" aria-selected="false" aria-controls="providerWorkspaceGrok" data-ui-action="select-provider" data-provider="grok">
                             <div class="provider-logo-frame">
-                                <img src="/frontend/assets/providers/xai-grok-logo.png" alt="Grok Build logo">
+                                <img src="/frontend/assets/providers/grok-build-logo.png" alt="Grok Build logo">
                             </div>
                             <div class="provider-summary">
                                 <div class="provider-eyebrow">Account Provider</div>
@@ -83,16 +83,16 @@
                             </div>
                         </button>
 
-                        <button type="button" class="provider-hero-card provider-selector-button" id="providerSelectorCodex" role="tab" aria-label="OpenAI Codex" aria-selected="false" aria-controls="providerWorkspaceCodex" data-ui-action="select-provider" data-provider="codex" data-provider-name="OpenAI Codex">
+                        <button type="button" class="provider-hero-card provider-selector-button" id="providerSelectorCodex" role="tab" aria-label="Codex" aria-selected="false" aria-controls="providerWorkspaceCodex" data-ui-action="select-provider" data-provider="codex" data-provider-name="Codex">
                             <div class="provider-logo-frame">
-                                <img src="/frontend/assets/providers/openai-codex-logo.png" alt="OpenAI Codex logo">
+                                <img src="/frontend/assets/providers/codex-logo.png" alt="Codex logo">
                             </div>
                             <div class="provider-summary">
                                 <div class="provider-eyebrow">Account Provider</div>
-                                <strong class="provider-name">OpenAI Codex</strong>
+                                <strong class="provider-name">Codex</strong>
                                 <p>Authorize a ChatGPT account with the OpenAI device flow and route Codex models through the pool.</p>
                             </div>
-                            <div class="provider-capabilities" aria-label="OpenAI Codex methods">
+                            <div class="provider-capabilities" aria-label="Codex methods">
                                 <span>OAuth</span>
                                 <span>JSON</span>
                                 <span>ZIP</span>
@@ -120,7 +120,7 @@
 
                     <section class="provider-workspace hidden" id="providerWorkspaceGrok" role="tabpanel" aria-labelledby="providerSelectorGrok">
                         <div class="provider-workspace-heading">
-                            <div class="provider-workspace-logo"><img src="/frontend/assets/providers/xai-grok-logo.png" alt=""></div>
+                            <div class="provider-workspace-logo"><img src="/frontend/assets/providers/grok-build-logo.png" alt=""></div>
                             <div>
                                 <h2>Grok Build</h2>
                                 <p>Add OAuth accounts and route their available Grok Build models through the shared pool.</p>
@@ -405,9 +405,9 @@
 
                     <section class="provider-workspace hidden" id="providerWorkspaceCodex" role="tabpanel" aria-labelledby="providerSelectorCodex">
                         <div class="provider-workspace-heading">
-                            <div class="provider-workspace-logo"><img src="/frontend/assets/providers/openai-codex-logo.png" alt=""></div>
+                            <div class="provider-workspace-logo"><img src="/frontend/assets/providers/codex-logo.png" alt=""></div>
                             <div>
-                                <h2>OpenAI Codex</h2>
+                                <h2>Codex</h2>
                                 <p>Authorize a ChatGPT account and route its Codex models through the shared pool.</p>
                                 <a class="provider-site-link" href="https://chatgpt.com/codex" target="_blank" rel="noreferrer">https://chatgpt.com/codex</a>
                             </div>
@@ -415,23 +415,23 @@
 
                         <div class="provider-tools-grid">
                             <section class="tool-panel">
-                                <h2 class="card-title">OpenAI Codex OAuth</h2>
+                                <h2 class="card-title">Codex OAuth</h2>
                                 <p class="card-copy provider-tool-copy">Generate a device code, finish sign-in at OpenAI, and save the account to the provider pool.</p>
                                 <div class="page-actions"><button type="button" class="btn" id="startCodexOauthBtn" data-ui-action="start-codex-oauth">Get authorization code</button></div>
                                 <div id="codexOauthFields" class="hidden provider-device-flow" style="margin-top: 18px;" data-flow-id="">
                                     <div class="device-flow-grid">
                                         <div><label for="codexUserCode">Device code</label><div class="copy-field-row"><input type="text" id="codexUserCode" readonly><button type="button" class="btn btn-secondary" data-ui-action="copy-field" data-copy-target="codexUserCode">Copy</button></div></div>
-                                        <div><label>Verification page</label><a id="codexVerificationUrl" class="endpoint-code-card auth-link-card" href="#" target="_blank" rel="noreferrer">Open OpenAI verification</a></div>
+                                        <div><label>Verification page</label><a id="codexVerificationUrl" class="endpoint-code-card auth-link-card" href="#" target="_blank" rel="noreferrer">Open verification page</a></div>
                                     </div>
                                     <p class="card-copy provider-tool-copy">Open the verification page, enter the device code, complete sign-in, then check the authorization status.</p>
                                     <div class="page-actions"><button type="button" class="btn" id="completeCodexOauthBtn" data-ui-action="complete-codex-oauth">Check authorization</button></div>
                                 </div>
-                                <div id="codexOauthSaveResult" class="save-result provider-save-result hidden" style="margin-top: 14px;"><div><strong id="codexOauthSaveResultTitle">OpenAI Codex credential added to pool</strong><p id="codexOauthSaveResultText"></p></div><button type="button" class="btn btn-secondary" data-ui-action="switch-tab" data-tab="pool">View</button></div>
+                                <div id="codexOauthSaveResult" class="save-result provider-save-result hidden" style="margin-top: 14px;"><div><strong id="codexOauthSaveResultTitle">Codex credential added to pool</strong><p id="codexOauthSaveResultText"></p></div><button type="button" class="btn btn-secondary" data-ui-action="switch-tab" data-tab="pool">View</button></div>
                             </section>
 
                             <section class="tool-panel">
                                 <h2 class="card-title">Batch Import</h2>
-                                <p class="card-copy provider-tool-copy">Import OpenAI Codex OAuth JSON files or ZIP archives. Imported tokens remain in local credential storage.</p>
+                                <p class="card-copy provider-tool-copy">Import Codex OAuth JSON files or ZIP archives. Imported tokens remain in local credential storage.</p>
                                 <button type="button" class="upload-area" id="codexUploadArea" aria-describedby="codexUploadHelp" data-ui-action="select-codex-files"><div><div class="upload-title">Drop Codex credential files here</div><p class="upload-copy" id="codexUploadHelp">Supports JSON and ZIP archives.</p></div></button>
                                 <input type="file" id="codexFileInput" multiple accept=".json,.zip" style="display: none;" data-ui-change="codex-files">
                                 <div id="codexFileListSection" class="hidden" style="margin-top: 16px;"><label>Pending files</label><div class="file-list" id="codexFileList"></div><div class="page-actions"><button type="button" class="btn btn-small" data-ui-action="upload-codex-files">Import</button><button type="button" class="btn btn-secondary btn-small" data-ui-action="clear-codex-files">Clear</button></div></div>
@@ -443,7 +443,7 @@
                         <section class="tool-panel provider-settings-panel">
                             <div class="provider-settings-header">
                                 <div>
-                                    <h2 class="card-title">OpenAI Codex Advanced Settings</h2>
+                                    <h2 class="card-title">Codex Advanced Settings</h2>
                                     <p class="card-copy provider-tool-copy">Configure the authorization client and Codex endpoint used by OpenAI account credentials.</p>
                                 </div>
                                 <div class="page-actions">
@@ -451,7 +451,7 @@
                                     <button type="button" class="btn btn-secondary" data-ui-action="reset-openai-settings" data-openai-scope="codex">Reset defaults</button>
                                 </div>
                             </div>
-                            <div id="codexSettingsLoading" class="skeleton-config provider-settings-skeleton" role="status" aria-label="Loading OpenAI Codex settings" aria-busy="true">
+                            <div id="codexSettingsLoading" class="skeleton-config provider-settings-skeleton" role="status" aria-label="Loading Codex settings" aria-busy="true">
                                 <div class="skeleton-config-group"><div class="skeleton-line title"></div><div class="skeleton-line field"></div></div>
                                 <div class="skeleton-config-group"><div class="skeleton-line title"></div><div class="skeleton-line field"></div></div>
                             </div>

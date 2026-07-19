@@ -1,4 +1,4 @@
-"""OpenAI Codex device OAuth and Responses transport helpers."""
+"""Codex device OAuth and Responses transport helpers."""
 
 from __future__ import annotations
 
@@ -206,7 +206,7 @@ async def complete_codex_device_flow(flow_id: str) -> Dict[str, Any]:
     _prune_device_flows()
     flow = _device_flows.get(str(flow_id or "").strip())
     if not flow:
-        raise CodexError("The OpenAI Codex authorization session was not found or has expired.")
+        raise CodexError("The Codex authorization session was not found or has expired.")
     device_data = await _poll_device_flow(flow)
     if device_data is None:
         return {
@@ -221,7 +221,7 @@ async def complete_codex_device_flow(flow_id: str) -> Dict[str, Any]:
         model_ids = await fetch_codex_model_ids(tokens["access_token"], account_id)
     except CodexError as exc:
         log.warning(
-            "OpenAI Codex model discovery failed after authorization; using the fallback catalog: %s",
+            "Codex model discovery failed after authorization; using the fallback catalog: %s",
             exc,
         )
         model_ids = list(CODEX_DEFAULT_MODEL_IDS)
@@ -247,7 +247,7 @@ async def complete_codex_device_flow(flow_id: str) -> Dict[str, Any]:
 async def refresh_codex_oauth_credential(credential_data: Dict[str, Any]) -> Dict[str, Any]:
     refresh_token = str(credential_data.get("refresh_token") or "").strip()
     if not refresh_token:
-        raise CodexError("OpenAI Codex credential does not contain a refresh token.", 401)
+        raise CodexError("Codex credential does not contain a refresh token.", 401)
     try:
         response = await post_async(
             await _auth_endpoint("oauth/token"),
@@ -294,7 +294,7 @@ def build_codex_headers(
 ) -> Dict[str, str]:
     token = str(access_token or "").strip()
     if not token:
-        raise ValueError("OpenAI Codex credential does not contain an access token.")
+        raise ValueError("Codex credential does not contain an access token.")
     headers = {
         "Authorization": f"Bearer {token}",
         "Content-Type": "application/json",
@@ -350,7 +350,7 @@ def parse_codex_model_ids(payload: Any) -> List[str]:
 
 
 async def fetch_codex_model_ids(access_token: str, account_id: str = "") -> List[str]:
-    """Fetch the model entitlements declared for one OpenAI Codex account."""
+    """Fetch the model entitlements declared for one Codex account."""
     api_url = (await get_codex_api_url()).rstrip("/")
     headers = build_codex_headers(
         access_token,
@@ -365,15 +365,15 @@ async def fetch_codex_model_ids(access_token: str, account_id: str = "") -> List
             timeout=30.0,
         )
     except (httpx.HTTPError, OSError) as exc:
-        raise CodexError("Unable to retrieve the OpenAI Codex model catalog.", 502) from exc
+        raise CodexError("Unable to retrieve the Codex model catalog.", 502) from exc
     if response.status_code != 200:
-        raise _provider_error(response, "OpenAI Codex model discovery failed.")
+        raise _provider_error(response, "Codex model discovery failed.")
     try:
         model_ids = parse_codex_model_ids(response.json())
     except ValueError as exc:
         raise CodexError("OpenAI returned an invalid Codex model catalog.", 502) from exc
     if not model_ids:
-        raise CodexError("OpenAI Codex did not return any available models.", 502)
+        raise CodexError("Codex did not return any available models.", 502)
     return model_ids
 
 
@@ -500,7 +500,7 @@ def gemini_request_to_codex(payload: Dict[str, Any], model: str, streaming: bool
 def codex_response_to_gemini(payload: Dict[str, Any]) -> Dict[str, Any]:
     output = payload.get("output")
     if not isinstance(output, list):
-        raise ValueError("OpenAI Codex response does not contain an output array.")
+        raise ValueError("Codex response does not contain an output array.")
     parts: List[Dict[str, Any]] = []
     for item in output:
         if not isinstance(item, dict):
@@ -566,7 +566,7 @@ def codex_stream_line_to_gemini(line: Any) -> Optional[str]:
     if event_type in {"error", "response.failed"}:
         error = payload.get("error") or (payload.get("response") or {}).get("error") or {}
         error_code = str(error.get("code") or error.get("type") or "").strip().lower()
-        message = str(error.get("message") or "OpenAI Codex streaming request failed.").strip()
+        message = str(error.get("message") or "Codex streaming request failed.").strip()
         status_code = 502
         if error_code in {"model_not_found", "not_found"}:
             status_code = 404

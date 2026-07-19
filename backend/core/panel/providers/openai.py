@@ -1,4 +1,4 @@
-"""OpenAI Codex and OpenAI Platform management console routes."""
+"""Codex and OpenAI Platform management console routes."""
 
 import io
 import json
@@ -99,7 +99,7 @@ async def save_openai_config(
         "codex_user_agent": str(candidate["codex_user_agent"] or "").strip(),
     }
     if not normalized["codex_client_id"] or not normalized["codex_user_agent"]:
-        raise HTTPException(status_code=400, detail="OpenAI Codex client settings cannot be empty.")
+        raise HTTPException(status_code=400, detail="Codex client settings cannot be empty.")
     storage_adapter = await get_storage_adapter()
     for key, value in normalized.items():
         if key in new_config and key not in locked:
@@ -202,9 +202,9 @@ async def complete_codex_oauth(
             "label": stored["label"],
             "model_count": result["model_count"],
             "message": (
-                "OpenAI Codex credential renewed in the provider pool."
+                "Codex credential renewed in the provider pool."
                 if action == "updated"
-                else "OpenAI Codex credential added to the provider pool."
+                else "Codex credential added to the provider pool."
             ),
         },
     )
@@ -231,7 +231,7 @@ def _parse_openai_json(content: bytes, source_name: str, credential_type: str) -
             else:
                 provider_id = str(provider or "openai").strip()
                 if provider_id.lower().replace("-", "_") not in {"openai", "codex", "openai_codex"}:
-                    raise ValueError("Credential is not an OpenAI Codex credential.")
+                    raise ValueError("Credential is not a Codex credential.")
                 normalized_item = dict(item)
                 aliases = {
                     "access_token": "accessToken",
@@ -369,7 +369,7 @@ async def import_openai_credentials(
                 try:
                     provider_id = str(candidate["payload"].get("provider") or "").strip()
                     if not provider_id:
-                        raise PoolImportError("OpenAI Codex credential is missing its provider.")
+                        raise PoolImportError("Codex credential is missing its provider.")
                 except PoolImportError:
                     raise
                 restored = await restore_openai_credential(candidate)

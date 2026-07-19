@@ -6,7 +6,7 @@ All notable user-facing changes are documented in this file. Omni Gateway follow
 
 ### Added
 
-- Added OpenAI Codex device OAuth, account-scoped model discovery, token refresh, Responses transport translation, and JSON/ZIP credential import.
+- Added Codex device OAuth, account-scoped model discovery, token refresh, Responses transport translation, and JSON/ZIP credential import.
 - Added OpenAI Platform API-key validation, model discovery, Chat Completions routing, and JSON/ZIP credential import.
 
 ### Changed

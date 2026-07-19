@@ -123,7 +123,7 @@ class ControlPanelAssetTests(unittest.TestCase):
         )
         upload_script = read_scripts("core/upload-manager.js", "core/state.js")
         provider_assets = BACKEND_DIR.parent / "frontend" / "assets" / "providers"
-        self.assertTrue((provider_assets / "xai-grok-logo.png").is_file())
+        self.assertTrue((provider_assets / "grok-build-logo.png").is_file())
         self.assertTrue((provider_assets / "spacexai-console-logo.png").is_file())
         for element_id in (
             "providerSelectorGrok",
@@ -136,7 +136,7 @@ class ControlPanelAssetTests(unittest.TestCase):
             "xaiConsoleFileInput",
         ):
             self.assertIn(f'id="{element_id}"', body)
-        self.assertIn("/frontend/assets/providers/xai-grok-logo.png", body)
+        self.assertIn("/frontend/assets/providers/grok-build-logo.png", body)
         self.assertIn("/frontend/assets/providers/spacexai-console-logo.png", body)
         self.assertIn('<strong class="provider-name">Grok Build</strong>', body)
         self.assertIn('<strong class="provider-name">SpaceXAI Console</strong>', body)
@@ -176,7 +176,7 @@ class ControlPanelAssetTests(unittest.TestCase):
         settings_script = read_scripts("features/openai-settings.js")
         upload_script = read_scripts("core/upload-manager.js", "core/state.js")
         provider_assets = BACKEND_DIR.parent / "frontend" / "assets" / "providers"
-        self.assertTrue((provider_assets / "openai-codex-logo.png").is_file())
+        self.assertTrue((provider_assets / "codex-logo.png").is_file())
         self.assertTrue((provider_assets / "openai-platform-logo.png").is_file())
         for element_id in (
             "providerCatalogSearch",
@@ -188,9 +188,9 @@ class ControlPanelAssetTests(unittest.TestCase):
             "openaiPlatformUploadArea",
         ):
             self.assertIn(f'id="{element_id}"', body)
-        self.assertIn("/frontend/assets/providers/openai-codex-logo.png", body)
+        self.assertIn("/frontend/assets/providers/codex-logo.png", body)
         self.assertIn("/frontend/assets/providers/openai-platform-logo.png", body)
-        self.assertIn('<strong class="provider-name">OpenAI Codex</strong>', body)
+        self.assertIn('<strong class="provider-name">Codex</strong>', body)
         self.assertIn('<strong class="provider-name">OpenAI Platform</strong>', body)
         self.assertIn("./api/providers/openai/codex/oauth/start", settings_script)
         self.assertIn("./api/providers/openai/platform/credentials", settings_script)

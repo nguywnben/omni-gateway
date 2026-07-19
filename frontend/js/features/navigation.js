@@ -321,7 +321,7 @@ const MODEL_PROVIDER_META = {
     },
     xai: {
         name: 'Grok Build',
-        logo: '/frontend/assets/providers/xai-grok-logo.png'
+        logo: '/frontend/assets/providers/grok-build-logo.png'
     },
     openai: {
         name: 'OpenAI',

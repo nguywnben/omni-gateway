@@ -99,7 +99,7 @@ def classify_pool_credential(payload: Any) -> str:
             )
         if provider_id == OPENAI and not _is_openai_payload(payload):
             raise PoolImportError(
-                "Credential payload is not a valid OpenAI Codex OAuth or OpenAI Platform API key credential."
+                "Credential payload is not a valid Codex OAuth or OpenAI Platform API key credential."
             )
         return provider_id
 
@@ -313,7 +313,7 @@ async def restore_xai_credential(candidate: Dict[str, Any]) -> Dict[str, Any]:
 
 
 async def restore_openai_credential(candidate: Dict[str, Any]) -> Dict[str, Any]:
-    """Validate and import one OpenAI Codex or OpenAI Platform credential."""
+    """Validate and import one Codex or OpenAI Platform credential."""
     payload = dict(candidate["payload"])
     payload["provider"] = OPENAI
     credential_type = str(payload.get("credential_type") or "").strip().lower()
@@ -338,7 +338,7 @@ async def restore_openai_credential(candidate: Dict[str, Any]) -> Dict[str, Any]
         str(payload.get("refresh_token") or "").strip()
         or str(payload.get("access_token") or "").strip()
     ):
-        raise CodexError("OpenAI Codex credential is missing its OAuth token.")
+        raise CodexError("Codex credential is missing its OAuth token.")
     if not payload.get("model_ids"):
         payload["model_ids"] = list(CODEX_DEFAULT_MODEL_IDS)
     identity = str(
@@ -357,8 +357,8 @@ async def restore_openai_credential(candidate: Dict[str, Any]) -> Dict[str, Any]
         "filename": result.get("filename", filename),
         "label": payload.get("credential_label")
         or payload.get("user_email")
-        or "OpenAI Codex account",
-        "message": result.get("message") or "OpenAI Codex credential imported into the pool.",
+        or "Codex account",
+        "message": result.get("message") or "Codex credential imported into the pool.",
     }
 
 

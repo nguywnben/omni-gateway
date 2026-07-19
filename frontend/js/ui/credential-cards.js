@@ -75,7 +75,7 @@ function getCredentialProviderMeta(credInfo, managerType) {
             return {
                 id: 'grok',
                 name: t('provider_grok'),
-                logo: '/frontend/assets/providers/xai-grok-logo.png'
+                logo: '/frontend/assets/providers/grok-build-logo.png'
             };
         }
 
@@ -90,7 +90,7 @@ function getCredentialProviderMeta(credInfo, managerType) {
         return {
             id: 'grok',
             name: t('provider_grok'),
-            logo: '/frontend/assets/providers/xai-grok-logo.png'
+            logo: '/frontend/assets/providers/grok-build-logo.png'
         };
 
     }
@@ -103,8 +103,8 @@ function getCredentialProviderMeta(credInfo, managerType) {
         if (isCodex) {
             return {
                 id: 'codex',
-                name: 'OpenAI Codex',
-                logo: '/frontend/assets/providers/openai-codex-logo.png'
+                name: 'Codex',
+                logo: '/frontend/assets/providers/codex-logo.png'
             };
         }
 

@@ -63,7 +63,7 @@ _PROVIDER_NAMES = {
 _CREDENTIAL_PROVIDER_NAMES = {
     GROK: "Grok Build",
     XAI_CONSOLE: "SpaceXAI Console",
-    CODEX: "OpenAI Codex",
+    CODEX: "Codex",
     OPENAI_PLATFORM: "OpenAI Platform",
 }
 

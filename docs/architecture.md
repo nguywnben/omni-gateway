@@ -35,7 +35,7 @@ backend/
     storage/              Concrete persistence backends
     panel/                Authenticated management API and setup policy
     antigravity.py        Google Antigravity headers and per-credential model discovery
-    codex.py              OpenAI Codex device OAuth, model discovery, and Responses translation
+    codex.py              Codex device OAuth, model discovery, and Responses translation
     openai_platform.py    OpenAI Platform API-key validation and Chat Completions transport
     xai.py               Grok Build OAuth, SpaceXAI Console model discovery, and transport translation
     xai_billing.py       Grok Build OAuth account quota retrieval and normalization
@@ -128,7 +128,7 @@ backend/core/panel/
     catalog.py            Provider capability discovery
     antigravity.py        Google Antigravity settings
     google_ai_studio.py   Google AI Studio settings and imports
-    openai.py             OpenAI Codex and OpenAI Platform settings and imports
+    openai.py             Codex and OpenAI Platform settings and imports
     xai.py                Grok Build OAuth and SpaceXAI Console settings and imports
     import_utils.py        Shared bounded-import policy
 ```

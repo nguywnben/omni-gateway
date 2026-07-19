@@ -13,8 +13,8 @@ const OPENAI_CONFIG_GROUPS = {
         fieldIds: ['openaiApiUrl']
     },
     codex: {
-        label: 'OpenAI Codex',
-        resetTitle: 'Reset OpenAI Codex Settings',
+        label: 'Codex',
+        resetTitle: 'Reset Codex Settings',
         fieldIds: ['codexApiUrl', 'codexAuthBase', 'codexClientId', 'codexUserAgent']
     }
 };
@@ -111,7 +111,7 @@ function showOpenAICredentialSaveResult(kind, data) {
     const result = document.getElementById(`${prefix}SaveResult`);
     const title = document.getElementById(`${prefix}SaveResultTitle`);
     const text = document.getElementById(`${prefix}SaveResultText`);
-    const credentialName = isCodex ? 'OpenAI Codex credential' : 'OpenAI Platform API key';
+    const credentialName = isCodex ? 'Codex credential' : 'OpenAI Platform API key';
     if (title) {
         title.textContent = data.credential_action === 'updated'
             ? `${credentialName} updated`
@@ -186,9 +186,9 @@ async function startCodexOauth() {
             verification.href = data.verification_uri || '#';
             verification.textContent = data.verification_uri || 'Verification page unavailable';
         }
-        showStatus('OpenAI Codex device code generated.', 'success');
+        showStatus('Codex device code generated.', 'success');
     } catch (error) {
-        showStatus(`Failed to start OpenAI Codex authorization: ${error.message}`, 'error');
+        showStatus(`Failed to start Codex authorization: ${error.message}`, 'error');
     } finally {
         button.disabled = false;
         button.textContent = 'Get authorization code';
@@ -200,7 +200,7 @@ async function completeCodexOauth() {
     const flowId = fields?.dataset.flowId || '';
     const button = document.getElementById('completeCodexOauthBtn');
     if (!flowId) {
-        showStatus('Generate a new OpenAI Codex device code before checking authorization.', 'error');
+        showStatus('Generate a new Codex device code before checking authorization.', 'error');
         return;
     }
 
@@ -214,7 +214,7 @@ async function completeCodexOauth() {
         });
         const data = await response.json().catch(() => ({}));
         if (response.status === 202 && data.pending) {
-            showStatus(data.message || 'OpenAI Codex authorization is still pending.', 'info');
+            showStatus(data.message || 'Codex authorization is still pending.', 'info');
             return;
         }
         if (!response.ok) throw new Error(data.detail || data.error || t('unknown_error'));
@@ -226,7 +226,7 @@ async function completeCodexOauth() {
         await loadModelCatalog(true);
         await refreshUsageStats();
     } catch (error) {
-        showStatus(`Failed to save OpenAI Codex credential: ${error.message}`, 'error');
+        showStatus(`Failed to save Codex credential: ${error.message}`, 'error');
     } finally {
         button.disabled = false;
         button.textContent = 'Check authorization';

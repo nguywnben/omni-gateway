@@ -1,4 +1,4 @@
-"""Tests for OpenAI Codex and OpenAI Platform provider contracts."""
+"""Tests for Codex and OpenAI Platform provider contracts."""
 
 from __future__ import annotations
 
