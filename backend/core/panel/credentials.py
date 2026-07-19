@@ -639,7 +639,7 @@ async def get_credential_quota(
                         "provider": provider_id,
                         "message": (
                             "Account quota is available for Grok Build OAuth credentials only. "
-                            "xAI Console does not expose this billing view for API keys."
+                            "SpaceXAI Console does not expose this billing view for API keys."
                         ),
                     }
                 )

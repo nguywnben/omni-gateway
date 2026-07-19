@@ -1,4 +1,4 @@
-"""Tests for the shared Grok and xAI Console provider contract."""
+"""Tests for the shared Grok and SpaceXAI Console provider contract."""
 
 from __future__ import annotations
 
@@ -459,7 +459,7 @@ class XaiProviderTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(payload["uploaded_count"], 0)
         self.assertEqual(payload["error_count"], 1)
         self.assertIn(
-            "does not contain a Grok Build or xAI Console credential",
+            "does not contain a Grok Build or SpaceXAI Console credential",
             payload["results"][0]["message"],
         )
         self.assertNotIn("google-secret-value", serialized)

@@ -48,7 +48,7 @@ _PROVIDER_NAMES = {
 
 _CREDENTIAL_PROVIDER_NAMES = {
     GROK: "Grok Build",
-    XAI_CONSOLE: "xAI Console",
+    XAI_CONSOLE: "SpaceXAI Console",
 }
 
 

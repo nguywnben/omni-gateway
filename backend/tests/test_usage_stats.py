@@ -38,7 +38,7 @@ class UsageStatsTests(unittest.TestCase):
         )
         self.assertEqual(
             usage_stats._credential_provider_display_name("xai", "api_key"),
-            "xAI Console",
+            "SpaceXAI Console",
         )
 
     def test_record_call_persists_provider_and_compression_metrics(self):

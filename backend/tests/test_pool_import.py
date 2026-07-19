@@ -336,7 +336,7 @@ class PoolArchiveRestoreTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result["providers"][GOOGLE_ANTIGRAVITY]["created"], 1)
         self.assertEqual(result["providers"][GOOGLE_AI_STUDIO]["updated"], 1)
         self.assertEqual(result["providers"][XAI_CONSOLE]["created"], 1)
-        self.assertEqual(result["providers"][XAI_CONSOLE]["provider_name"], "xAI Console")
+        self.assertEqual(result["providers"][XAI_CONSOLE]["provider_name"], "SpaceXAI Console")
         self.assertEqual(result["providers"][XAI_CONSOLE]["routing_provider"], XAI)
         validate_mock.assert_awaited_once_with("google-api-key-value")
         store_mock.assert_awaited_once()

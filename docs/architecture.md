@@ -35,7 +35,7 @@ backend/
     storage/              Concrete persistence backends
     panel/                Authenticated management API and setup policy
     antigravity.py        Google Antigravity headers and per-credential model discovery
-    xai.py               Grok Build OAuth, xAI Console model discovery, and transport translation
+    xai.py               Grok Build OAuth, SpaceXAI Console model discovery, and transport translation
     xai_billing.py       Grok Build OAuth account quota retrieval and normalization
     provider_registry.py  Provider identity and capability metadata
     smart_routing.py      Provider and credential selection policy
@@ -126,7 +126,7 @@ backend/core/panel/
     catalog.py            Provider capability discovery
     antigravity.py        Google Antigravity settings
     google_ai_studio.py   Google AI Studio settings and imports
-    xai.py                Grok Build OAuth and xAI Console settings and imports
+    xai.py                Grok Build OAuth and SpaceXAI Console settings and imports
     import_utils.py        Shared bounded-import policy
 ```
 

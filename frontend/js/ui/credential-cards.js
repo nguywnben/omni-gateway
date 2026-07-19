@@ -82,8 +82,8 @@ function getCredentialProviderMeta(credInfo, managerType) {
         if (isXaiConsole) {
             return {
                 id: 'xai_console',
-                name: 'xAI Console',
-                logo: '/frontend/assets/providers/xai-console-logo.png'
+                name: 'SpaceXAI Console',
+                logo: '/frontend/assets/providers/spacexai-console-logo.png'
             };
         }
 

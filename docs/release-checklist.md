@@ -22,7 +22,7 @@ Use this checklist when preparing a tagged Omni Gateway release.
 - Add one Google AI Studio key and complete a message test.
 - Add one Grok Build credential through OAuth and complete a message test.
 - Open the Grok Build credential quota view and confirm monthly usage is displayed.
-- Add one xAI Console key and complete a message test.
+- Add one SpaceXAI Console key and complete a message test.
 - Refresh the model catalog and route `omway` through at least one compatible model from every configured provider type.
 - Configure two credentials from the same provider with different model catalogs; confirm a fixed model uses only compatible credentials and that one credential's model-not-found response does not disable the route for the other credential.
 - Remove one entry from **Unavailable Model Routes**, revalidate its credential, and confirm the route becomes eligible again without changing unrelated provider routes.

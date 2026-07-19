@@ -56,16 +56,16 @@
                             </div>
                         </button>
 
-                        <button type="button" class="provider-hero-card provider-selector-button" id="providerSelectorXaiConsole" role="tab" aria-label="xAI Console" aria-selected="false" aria-controls="providerWorkspaceXaiConsole" data-ui-action="select-provider" data-provider="xai_console">
+                        <button type="button" class="provider-hero-card provider-selector-button" id="providerSelectorXaiConsole" role="tab" aria-label="SpaceXAI Console" aria-selected="false" aria-controls="providerWorkspaceXaiConsole" data-ui-action="select-provider" data-provider="xai_console">
                             <div class="provider-logo-frame">
-                                <img src="/frontend/assets/providers/xai-console-logo.png" alt="xAI Console logo">
+                                <img src="/frontend/assets/providers/spacexai-console-logo.png" alt="SpaceXAI Console logo">
                             </div>
                             <div class="provider-summary">
                                 <div class="provider-eyebrow">API Key Provider</div>
-                                <strong class="provider-name">xAI Console</strong>
-                                <p>Add xAI Console API keys for direct Grok Build model access and automatic provider fallback.</p>
+                                <strong class="provider-name">SpaceXAI Console</strong>
+                                <p>Add SpaceXAI Console API keys for direct Grok Build model access and automatic provider fallback.</p>
                             </div>
-                            <div class="provider-capabilities" aria-label="xAI Console methods">
+                            <div class="provider-capabilities" aria-label="SpaceXAI Console methods">
                                 <span>API Key</span>
                                 <span>JSON</span>
                                 <span>ZIP</span>
@@ -176,9 +176,9 @@
 
                     <section class="provider-workspace hidden" id="providerWorkspaceXaiConsole" role="tabpanel" aria-labelledby="providerSelectorXaiConsole">
                         <div class="provider-workspace-heading">
-                            <div class="provider-workspace-logo"><img src="/frontend/assets/providers/xai-console-logo.png" alt=""></div>
+                            <div class="provider-workspace-logo"><img src="/frontend/assets/providers/spacexai-console-logo.png" alt=""></div>
                             <div>
-                                <h2>xAI Console</h2>
+                                <h2>SpaceXAI Console</h2>
                                 <p>Add API keys and route their available Grok Build models through the shared pool.</p>
                                 <a class="provider-site-link" href="https://console.x.ai/" target="_blank" rel="noreferrer">https://console.x.ai/</a>
                             </div>
@@ -186,12 +186,12 @@
 
                         <div class="provider-tools-grid">
                             <section class="tool-panel">
-                                <h2 class="card-title">xAI Console API Key</h2>
-                                <p class="card-copy provider-tool-copy">Validate an xAI Console API key, discover its available models, and add it to the active pool.</p>
+                                <h2 class="card-title">SpaceXAI Console API Key</h2>
+                                <p class="card-copy provider-tool-copy">Validate a SpaceXAI Console API key, discover its available models, and add it to the active pool.</p>
                                 <form id="xaiCredentialForm" autocomplete="off">
                                     <div class="form-group">
                                         <label for="xaiApiKey">API key</label>
-                                        <input type="password" id="xaiApiKey" name="xai-api-key" placeholder="Enter an xAI Console API key" autocomplete="one-time-code" data-1p-ignore data-lpignore="true" data-bwignore="true" autocapitalize="none" spellcheck="false" required>
+                                        <input type="password" id="xaiApiKey" name="xai-api-key" placeholder="Enter a SpaceXAI Console API key" autocomplete="one-time-code" data-1p-ignore data-lpignore="true" data-bwignore="true" autocapitalize="none" spellcheck="false" required>
                                     </div>
                                     <button type="submit" class="btn" id="addXaiKeyBtn">Validate and add</button>
                                 </form>
@@ -206,7 +206,7 @@
 
                             <section class="tool-panel">
                                 <h2 class="card-title">Batch Import</h2>
-                                <p class="card-copy provider-tool-copy">Import xAI Console API keys from JSON files or ZIP archives. Every key is validated before it enters the pool.</p>
+                                <p class="card-copy provider-tool-copy">Import SpaceXAI Console API keys from JSON files or ZIP archives. Every key is validated before it enters the pool.</p>
                                 <button type="button" class="upload-area" id="xaiConsoleUploadArea" aria-describedby="xaiConsoleUploadHelp" data-ui-action="select-xai-console-files">
                                     <div>
                                         <div class="upload-title">Drop API key files here</div>
@@ -243,15 +243,15 @@
                         <section class="tool-panel provider-settings-panel">
                             <div class="provider-settings-header">
                                 <div>
-                                    <h2 class="card-title">Grok Build and xAI Console Transport Settings</h2>
-                                    <p class="card-copy provider-tool-copy">Configure the API endpoint and HTTP identity shared by Grok Build OAuth accounts and xAI Console API keys.</p>
+                                    <h2 class="card-title">Grok Build and SpaceXAI Console Transport Settings</h2>
+                                    <p class="card-copy provider-tool-copy">Configure the API endpoint and HTTP identity shared by Grok Build OAuth accounts and SpaceXAI Console API keys.</p>
                                 </div>
                                 <div class="page-actions">
                                     <button type="button" class="btn" data-ui-action="save-xai-console-settings">Save</button>
                                     <button type="button" class="btn btn-secondary" data-ui-action="reset-xai-console-settings">Reset defaults</button>
                                 </div>
                             </div>
-                            <div id="xaiConsoleSettingsLoading" class="skeleton-config provider-settings-skeleton" role="status" aria-label="Loading xAI Console settings" aria-busy="true">
+                            <div id="xaiConsoleSettingsLoading" class="skeleton-config provider-settings-skeleton" role="status" aria-label="Loading SpaceXAI Console settings" aria-busy="true">
                                 <div class="skeleton-config-group"><div class="skeleton-line title"></div><div class="skeleton-line field"></div></div>
                                 <div class="skeleton-config-group"><div class="skeleton-line title"></div><div class="skeleton-line field"></div></div>
                             </div>

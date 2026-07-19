@@ -25,7 +25,7 @@ async function loadXaiSettings(options = {}) {
             if (form) form.dataset.loaded = 'true';
         });
     } catch (error) {
-        showStatus(`Failed to load Grok Build and xAI Console settings: ${error.message}`, 'error');
+        showStatus(`Failed to load Grok Build and SpaceXAI Console settings: ${error.message}`, 'error');
     } finally {
         setProviderSettingsLoading(loadingIds, formIds, false, preserveContent);
     }
@@ -83,7 +83,7 @@ function showXaiCredentialSaveResult(kind, data) {
     const result = document.getElementById(`${prefix}SaveResult`);
     const title = document.getElementById(`${prefix}SaveResultTitle`);
     const text = document.getElementById(`${prefix}SaveResultText`);
-    const credentialName = isOauth ? 'Grok Build OAuth credential' : 'xAI Console API key';
+    const credentialName = isOauth ? 'Grok Build OAuth credential' : 'SpaceXAI Console API key';
     if (title) {
         title.textContent = data.credential_action === 'updated'
             ? `${credentialName} updated`
@@ -102,7 +102,7 @@ async function addXaiApiKeyCredential(event) {
     const button = document.getElementById('addXaiKeyBtn');
     const apiKey = field?.value.trim() || '';
     if (!apiKey) {
-        showStatus('Enter an xAI Console API key.', 'error');
+        showStatus('Enter a SpaceXAI Console API key.', 'error');
         field?.focus();
         return;
     }
@@ -124,7 +124,7 @@ async function addXaiApiKeyCredential(event) {
         await loadModelCatalog(true);
         await refreshUsageStats();
     } catch (error) {
-        showStatus(`Failed to add xAI Console API key: ${error.message}`, 'error');
+        showStatus(`Failed to add SpaceXAI Console API key: ${error.message}`, 'error');
     } finally {
         button.disabled = false;
         button.textContent = 'Validate and add';

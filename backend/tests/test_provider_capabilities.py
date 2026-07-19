@@ -67,11 +67,11 @@ class ProviderCapabilityTests(unittest.TestCase):
         self.assertEqual(get_credential_provider_variant(api_key_credential), XAI_CONSOLE)
         self.assertEqual(
             get_credential_provider_display_name(api_key_credential),
-            "xAI Console",
+            "SpaceXAI Console",
         )
         self.assertEqual(
             get_credential_provider_display_name({"provider": XAI, "api_key": "legacy-api-key"}),
-            "xAI Console",
+            "SpaceXAI Console",
         )
 
     def test_credential_model_catalog_restricts_individual_api_keys(self):

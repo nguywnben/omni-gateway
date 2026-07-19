@@ -924,7 +924,7 @@ async def verify_credential_common(filename: str, mode: str = "code_assist") -> 
                 "credential_type": credential_type,
                 "model_count": len(model_ids),
                 "message": (
-                    f"{'Grok Build OAuth credential' if credential_type == 'oauth' else 'xAI Console API key'} "
+                    f"{'Grok Build OAuth credential' if credential_type == 'oauth' else 'SpaceXAI Console API key'} "
                     "verified. Available models were refreshed, the credential was enabled, "
                     "and recorded errors were cleared."
                 ),

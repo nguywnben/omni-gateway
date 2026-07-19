@@ -124,7 +124,7 @@ class ControlPanelAssetTests(unittest.TestCase):
         upload_script = read_scripts("core/upload-manager.js", "core/state.js")
         provider_assets = BACKEND_DIR.parent / "frontend" / "assets" / "providers"
         self.assertTrue((provider_assets / "xai-grok-logo.png").is_file())
-        self.assertTrue((provider_assets / "xai-console-logo.png").is_file())
+        self.assertTrue((provider_assets / "spacexai-console-logo.png").is_file())
         for element_id in (
             "providerSelectorGrok",
             "providerWorkspaceGrok",
@@ -137,9 +137,9 @@ class ControlPanelAssetTests(unittest.TestCase):
         ):
             self.assertIn(f'id="{element_id}"', body)
         self.assertIn("/frontend/assets/providers/xai-grok-logo.png", body)
-        self.assertIn("/frontend/assets/providers/xai-console-logo.png", body)
+        self.assertIn("/frontend/assets/providers/spacexai-console-logo.png", body)
         self.assertIn('<strong class="provider-name">Grok Build</strong>', body)
-        self.assertIn('<strong class="provider-name">xAI Console</strong>', body)
+        self.assertIn('<strong class="provider-name">SpaceXAI Console</strong>', body)
         self.assertIn(
             "./api/providers/xai/credentials/import?credential_type=oauth",
             upload_script,

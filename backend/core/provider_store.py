@@ -44,7 +44,7 @@ async def store_xai_api_key_credential(
     *,
     created_at: Optional[str] = None,
 ) -> dict:
-    """Store one validated xAI Console API key without exposing it."""
+    """Store one validated SpaceXAI Console API key without exposing it."""
     normalized_key = str(api_key or "").strip()
     fingerprint = api_key_fingerprint(normalized_key)
     credential_label = f"API key ending {normalized_key[-4:]}"

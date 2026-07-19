@@ -56,7 +56,7 @@ const AppState = {
     xaiConsoleUploadFiles: createUploadManager('xaiConsole', {
         endpoint: './api/providers/xai/credentials/import?credential_type=api_key',
         elementPrefix: 'xaiConsole',
-        credentialType: 'xAI Console',
+        credentialType: 'SpaceXAI Console',
         timeoutMs: 900000,
         onComplete: async () => {
             await AppState.primaryCreds.refresh();

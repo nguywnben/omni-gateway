@@ -40,7 +40,7 @@ All notable user-facing changes are documented in this file. Omni Gateway follow
 
 ### Changed
 
-- Distinguished Grok OAuth accounts from xAI Console API keys throughout credential storage, usage reporting, imports, and the management console.
+- Distinguished Grok OAuth accounts from SpaceXAI Console API keys throughout credential storage, usage reporting, imports, and the management console.
 - Prioritized credentials that explicitly declare support for the requested model before routes whose support can only be inferred.
 
 ### Fixed
@@ -58,7 +58,7 @@ All notable user-facing changes are documented in this file. Omni Gateway follow
 
 ### Added
 
-- Added Grok OAuth and xAI Console API-key credentials with model discovery, token refresh, pool backup restoration, and provider-aware routing.
+- Added Grok OAuth and SpaceXAI Console API-key credentials with model discovery, token refresh, pool backup restoration, and provider-aware routing.
 - Added Grok request and response translation for text, image input, function tools, reasoning content, streaming, and provider-reported token usage.
 
 ### Fixed
