@@ -4,7 +4,7 @@ All notable user-facing changes are documented in this file. Omni Gateway follow
 
 ## [Unreleased]
 
-## [2.0.0] - 2026-07-19
+## [1.2.0] - 2026-07-19
 
 ### Added
 
