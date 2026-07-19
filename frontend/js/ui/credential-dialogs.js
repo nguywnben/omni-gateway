@@ -228,6 +228,7 @@ function buildAccountBillingQuotaHtml(filename, data, context = {}) {
     const rows = renderMessageResultRows([
         ['Provider', context.providerName || t('provider_grok')],
         context.accountLabel ? ['Account', context.accountLabel] : ['Credential', filename],
+        data.plan ? ['Access tier', data.plan] : null,
         ['Quota source', 'Grok Build account billing'],
         ['Billing periods', periods.length],
         lowestRemaining !== null ? ['Lowest remaining quota', `${lowestRemaining}%`] : null,
@@ -274,10 +275,82 @@ function buildAccountBillingQuotaHtml(filename, data, context = {}) {
 
 }
 
+function buildAccountRateLimitQuotaHtml(filename, data, context = {}) {
+
+    const windows = Array.isArray(data.windows) ? data.windows : [];
+    const remainingPercentages = windows
+        .map((windowData) => Number(windowData.remaining_percentage))
+        .filter(Number.isFinite);
+    const lowestRemaining = remainingPercentages.length ? Math.min(...remainingPercentages) : null;
+    const rawPlan = String(data.plan || 'unknown').trim().replace(/[_-]+/g, ' ');
+    const plan = rawPlan.replace(/\b\w/g, (character) => character.toUpperCase());
+    const availableResetCredits = Number(data.reset_credits?.available_count);
+    const hasReviewWindows = windows.some((windowData) => String(windowData.id || '').startsWith('review_'));
+    const rows = renderMessageResultRows([
+        ['Provider', context.providerName || 'Codex'],
+        context.accountLabel ? ['Account', context.accountLabel] : ['Credential', filename],
+        ['Plan', plan || 'Unknown'],
+        ['Usage windows', windows.length],
+        lowestRemaining !== null ? ['Lowest remaining quota', `${lowestRemaining}%`] : null,
+        Number.isFinite(availableResetCredits)
+            ? ['Rate-limit reset credits', Math.max(0, availableResetCredits)]
+            : null,
+        ['Standard limit', data.limit_reached ? 'Reached' : 'Available'],
+        hasReviewWindows
+            ? ['Code review limit', data.review_limit_reached ? 'Reached' : 'Available']
+            : null,
+    ].filter(Boolean));
+
+    const cards = windows.map((windowData) => {
+        const usedPercentage = Math.max(0, Math.min(100, Number(windowData.used_percentage) || 0));
+        const remainingPercentage = Math.max(
+            0,
+            Math.min(100, Number(windowData.remaining_percentage) || 0)
+        );
+        const level = quotaLevelFromUsedPercentage(usedPercentage);
+        const resetTime = formatQuotaResetTime(windowData.reset_time);
+
+        return `
+            <div class="modal-quota-card ${level}">
+                <div class="modal-quota-head">
+                    <div class="modal-quota-model">${escapeHtml(windowData.label || 'Usage Limit')}</div>
+                    <div class="modal-quota-percent">${remainingPercentage}% left</div>
+                </div>
+                <div class="modal-quota-bar">
+                    <div class="modal-quota-bar-value" style="width: ${remainingPercentage}%;"></div>
+                </div>
+                <div class="modal-quota-foot">
+                    <span>${usedPercentage}% used</span>
+                    <span>${windowData.reset_time ? `Resets ${escapeHtml(resetTime)}` : escapeHtml(resetTime)}</span>
+                </div>
+            </div>
+        `;
+    }).join('');
+
+    return `
+        <div class="message-result-panel">
+            <div class="message-result-intro">Account rate limits reported by Codex for the selected OAuth credential.</div>
+            <div class="message-result-section">
+                <div class="message-result-section-title">Quota Summary</div>
+                <div class="message-result-summary">${rows}</div>
+            </div>
+            <div class="message-result-section">
+                <div class="message-result-section-title">Usage Windows</div>
+                <div class="modal-quota-grid">${cards}</div>
+            </div>
+        </div>
+    `;
+
+}
+
 function buildCredentialQuotaHtml(filename, data, context = {}) {
 
     if (data?.quota_type === 'account_billing') {
         return buildAccountBillingQuotaHtml(filename, data, context);
+    }
+
+    if (data?.quota_type === 'account_rate_limits') {
+        return buildAccountRateLimitQuotaHtml(filename, data, context);
     }
 
     const models = data.models || {};
@@ -368,6 +441,20 @@ function summarizeCredentialQuota(data) {
         };
     }
 
+    if (data?.quota_type === 'account_rate_limits') {
+        const windows = Array.isArray(data.windows) ? data.windows : [];
+        const remainingValues = windows
+            .map((windowData) => Number(windowData.remaining_percentage))
+            .filter(Number.isFinite);
+        if (!remainingValues.length) return { level: 'muted', label: 'No quota' };
+        const remainingPercentage = Math.min(...remainingValues);
+        return {
+            level: quotaLevelFromUsedPercentage(100 - remainingPercentage),
+            label: `${remainingPercentage}% left`,
+            windowCount: windows.length,
+        };
+    }
+
     const models = data?.models || {};
     const entries = Object.entries(models);
 
@@ -418,6 +505,14 @@ function describeCredentialQuotaPreview(summary) {
         return `Account quota: ${summary.label} for the active billing period.`;
     }
 
+    if (summary.windowCount > 1) {
+        return `Lowest account quota: ${summary.label} across ${summary.windowCount} usage windows.`;
+    }
+
+    if (summary.windowCount === 1) {
+        return `Account quota: ${summary.label} for the active usage window.`;
+    }
+
     return t('btn_view_quota_title');
 
 }
@@ -449,6 +544,8 @@ function renderCredentialQuotaPreview(pathId, filename, managerType) {
 
 function updateCredentialQuotaPreview(pathId, filename) {
 
+    updateCredentialSubscriptionBadge(pathId, filename);
+
     const chip = document.getElementById(`quota-preview-${pathId}`);
 
     if (!chip) return;
@@ -458,6 +555,21 @@ function updateCredentialQuotaPreview(pathId, filename) {
     if (updatedChip) {
         updatedChip.addEventListener('click', () => loadPrimaryQuotaPreview(pathId));
     }
+
+}
+
+function updateCredentialSubscriptionBadge(pathId, filename) {
+
+    const badge = document.getElementById(`subscription-plan-${pathId}`);
+    if (!badge) return;
+
+    const cached = AppState.quotaPreviewCache[filename] || {};
+    const cardContext = AppState.credentialCardIndex[pathId] || {};
+    const plan = cached.data?.plan || cardContext.subscriptionPlan;
+    const kind = cached.data?.plan
+        ? (cached.data?.quota_type === 'account_billing' ? 'tier' : 'plan')
+        : (cardContext.subscriptionKind || 'plan');
+    badge.outerHTML = renderCredentialSubscriptionBadge(pathId, plan, kind);
 
 }
 

@@ -1,6 +1,7 @@
 const OPENAI_CONFIG_FIELDS = {
     openaiApiUrl: 'openai_api_url',
     codexApiUrl: 'codex_api_url',
+    codexUsageUrl: 'codex_usage_url',
     codexAuthBase: 'codex_auth_base',
     codexClientId: 'codex_client_id',
     codexUserAgent: 'codex_user_agent'
@@ -15,7 +16,7 @@ const OPENAI_CONFIG_GROUPS = {
     codex: {
         label: 'Codex',
         resetTitle: 'Reset Codex Settings',
-        fieldIds: ['codexApiUrl', 'codexAuthBase', 'codexClientId', 'codexUserAgent']
+        fieldIds: ['codexApiUrl', 'codexUsageUrl', 'codexAuthBase', 'codexClientId', 'codexUserAgent']
     }
 };
 

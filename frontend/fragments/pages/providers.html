@@ -453,7 +453,7 @@
                             <div class="provider-settings-header">
                                 <div>
                                     <h2 class="card-title">Codex Advanced Settings</h2>
-                                    <p class="card-copy provider-tool-copy">Configure the authorization client and Codex endpoint used by OpenAI account credentials.</p>
+                                    <p class="card-copy provider-tool-copy">Configure authorization, inference, model discovery, and account quota services for Codex credentials.</p>
                                 </div>
                                 <div class="page-actions">
                                     <button type="button" class="btn" data-ui-action="save-openai-settings" data-openai-scope="codex">Save</button>
@@ -467,6 +467,7 @@
                             <div id="codexSettingsForm" class="provider-settings-grid provider-settings-grid-single hidden">
                                 <section class="provider-settings-group config-two-column">
                                     <div class="form-group"><label for="codexApiUrl">Codex API</label><input type="url" id="codexApiUrl" autocomplete="off"></div>
+                                    <div class="form-group"><label for="codexUsageUrl">Usage API</label><input type="url" id="codexUsageUrl" autocomplete="off"></div>
                                     <div class="form-group"><label for="codexAuthBase">Authorization service</label><input type="url" id="codexAuthBase" autocomplete="off"></div>
                                     <div class="form-group"><label for="codexClientId">OAuth client ID</label><input type="text" id="codexClientId" autocomplete="off"></div>
                                     <div class="form-group"><label for="codexUserAgent">HTTP User-Agent</label><input type="text" id="codexUserAgent" autocomplete="off"></div>

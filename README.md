@@ -215,6 +215,7 @@ Omni Gateway reads configuration from environment variables first, then stored c
 | `XAI_USER_AGENT` | `grok-cli/omni-gateway` | Optional shared HTTP User-Agent override for Grok Build OAuth and SpaceXAI Console API requests. |
 | `OPENAI_API_URL` | `https://api.openai.com/v1` | Optional OpenAI Platform API endpoint override. It can also be managed from the Providers page. |
 | `CODEX_API_URL` | `https://chatgpt.com/backend-api/codex` | Optional Codex inference and account-model endpoint override. |
+| `CODEX_USAGE_URL` | `https://chatgpt.com/backend-api/wham/usage` | Optional Codex account rate-limit endpoint override. |
 | `CODEX_AUTH_BASE` | `https://auth.openai.com` | Optional Codex device-authorization service override. |
 | `CODEX_CLIENT_ID` | bundled public client | Optional override for the Codex device OAuth client ID. |
 | `CODEX_USER_AGENT` | Codex CLI-compatible value | Optional User-Agent override for Codex requests. |

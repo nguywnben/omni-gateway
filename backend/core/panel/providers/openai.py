@@ -39,13 +39,20 @@ router = APIRouter(tags=["provider-openai"])
 OPENAI_CONFIG_KEYS = {
     "openai_api_url",
     "codex_api_url",
+    "codex_usage_url",
     "codex_auth_base",
     "codex_client_id",
     "codex_user_agent",
 }
 OPENAI_CONFIG_SCOPES = {
     "platform": {"openai_api_url"},
-    "codex": {"codex_api_url", "codex_auth_base", "codex_client_id", "codex_user_agent"},
+    "codex": {
+        "codex_api_url",
+        "codex_usage_url",
+        "codex_auth_base",
+        "codex_client_id",
+        "codex_user_agent",
+    },
 }
 
 
@@ -53,6 +60,7 @@ async def _current_openai_config() -> dict:
     return {
         "openai_api_url": await config.get_openai_api_url(),
         "codex_api_url": await config.get_codex_api_url(),
+        "codex_usage_url": await config.get_codex_usage_url(),
         "codex_auth_base": await config.get_codex_auth_base(),
         "codex_client_id": await config.get_codex_client_id(),
         "codex_user_agent": await config.get_codex_user_agent(),
@@ -88,12 +96,14 @@ async def save_openai_config(
     try:
         platform_url = normalize_openai_api_url(str(candidate["openai_api_url"] or ""))
         codex_url = normalize_openai_api_url(str(candidate["codex_api_url"] or ""))
+        codex_usage_url = normalize_openai_api_url(str(candidate["codex_usage_url"] or ""))
         auth_base = normalize_openai_api_url(str(candidate["codex_auth_base"] or ""))
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     normalized = {
         "openai_api_url": platform_url,
         "codex_api_url": codex_url,
+        "codex_usage_url": codex_usage_url,
         "codex_auth_base": auth_base,
         "codex_client_id": str(candidate["codex_client_id"] or "").strip(),
         "codex_user_agent": str(candidate["codex_user_agent"] or "").strip(),

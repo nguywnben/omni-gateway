@@ -49,6 +49,7 @@ DEFAULT_XAI_CLIENT_ID = "b1a00492-073a-47ea-816f-4c329264a828"
 DEFAULT_XAI_USER_AGENT = "grok-cli/omni-gateway"
 DEFAULT_OPENAI_API_URL = "https://api.openai.com/v1"
 DEFAULT_CODEX_API_URL = "https://chatgpt.com/backend-api/codex"
+DEFAULT_CODEX_USAGE_URL = "https://chatgpt.com/backend-api/wham/usage"
 DEFAULT_CODEX_AUTH_BASE = "https://auth.openai.com"
 DEFAULT_CODEX_CLIENT_ID = "app_EMoamEEZ73f0CkXaXp7hrann"
 DEFAULT_CODEX_USER_AGENT = "codex_cli_rs/0.0.0 (Unknown 0; unknown)"
@@ -70,6 +71,7 @@ ENV_MAPPINGS = {
     "XAI_USER_AGENT": "xai_user_agent",
     "OPENAI_API_URL": "openai_api_url",
     "CODEX_API_URL": "codex_api_url",
+    "CODEX_USAGE_URL": "codex_usage_url",
     "CODEX_AUTH_BASE": "codex_auth_base",
     "CODEX_CLIENT_ID": "codex_client_id",
     "CODEX_USER_AGENT": "codex_user_agent",
@@ -678,6 +680,18 @@ async def get_codex_api_url() -> str:
         str(
             await get_config_value("codex_api_url", DEFAULT_CODEX_API_URL, "CODEX_API_URL")
             or DEFAULT_CODEX_API_URL
+        )
+        .strip()
+        .rstrip("/")
+    )
+
+
+async def get_codex_usage_url() -> str:
+    """Return the ChatGPT Codex account usage endpoint."""
+    return (
+        str(
+            await get_config_value("codex_usage_url", DEFAULT_CODEX_USAGE_URL, "CODEX_USAGE_URL")
+            or DEFAULT_CODEX_USAGE_URL
         )
         .strip()
         .rstrip("/")

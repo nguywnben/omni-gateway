@@ -11,6 +11,7 @@ from config import (
     get_antigravity_user_agent,
 )
 from core.antigravity import AntigravityError, fetch_antigravity_model_ids
+from core.codex import CodexError, fetch_codex_model_ids, refresh_codex_oauth_credential
 from core.credential_manager import credential_manager
 from core.credential_pool import (
     deduplicate_credentials_by_account_email,
@@ -30,6 +31,7 @@ from core.google_oauth_api import (
     merge_refreshed_credential_data,
     select_default_project,
 )
+from core.openai_platform import OpenAIPlatformError, fetch_openai_model_ids
 from core.pool_import import (
     MAX_POOL_ARCHIVE_BYTES,
     MAX_POOL_ARCHIVE_ENTRIES,
@@ -37,11 +39,15 @@ from core.pool_import import (
     MAX_POOL_UNCOMPRESSED_BYTES,
 )
 from core.provider_registry import (
+    CODEX,
     GOOGLE_AI_STUDIO,
     GOOGLE_ANTIGRAVITY,
+    OPENAI,
+    OPENAI_PLATFORM,
     XAI,
     canonicalize_antigravity_credential_filename,
     get_credential_provider,
+    get_credential_provider_variant,
     get_declared_credential_models,
     normalize_provider_id,
 )
@@ -927,6 +933,76 @@ async def verify_credential_common(filename: str, mode: str = "code_assist") -> 
                     f"{'Grok Build OAuth credential' if credential_type == 'oauth' else 'SpaceXAI Console API key'} "
                     "verified. Available models were refreshed, the credential was enabled, "
                     "and recorded errors were cleared."
+                ),
+            }
+        )
+
+    if mode == "primary" and provider_id == OPENAI:
+        credential_variant = get_credential_provider_variant(credential_data)
+        credential_type = "api_key" if credential_variant == OPENAI_PLATFORM else "oauth"
+
+        async def refresh_codex_credential() -> dict:
+            refreshed = await refresh_codex_oauth_credential(credential_data)
+            await storage_adapter.store_credential(filename, refreshed, mode=mode)
+            log.info(f"Codex token automatically refreshed: {filename}")
+            return refreshed
+
+        try:
+            if credential_variant == CODEX:
+                if not (credential_data.get("access_token") or credential_data.get("token")):
+                    credential_data = await refresh_codex_credential()
+
+                access_token = str(
+                    credential_data.get("access_token") or credential_data.get("token") or ""
+                )
+                account_id = str(credential_data.get("account_id") or "").strip()
+                try:
+                    model_ids = await fetch_codex_model_ids(access_token, account_id)
+                except CodexError as exc:
+                    if exc.status_code != 401 or not credential_data.get("refresh_token"):
+                        raise
+                    credential_data = await refresh_codex_credential()
+                    access_token = str(
+                        credential_data.get("access_token")
+                        or credential_data.get("token")
+                        or ""
+                    )
+                    account_id = str(credential_data.get("account_id") or "").strip()
+                    model_ids = await fetch_codex_model_ids(access_token, account_id)
+            else:
+                model_ids = await fetch_openai_model_ids(
+                    str(credential_data.get("api_key") or "")
+                )
+        except (CodexError, OpenAIPlatformError, ValueError) as exc:
+            return JSONResponse(
+                status_code=getattr(exc, "status_code", 400),
+                content={
+                    "success": False,
+                    "filename": filename,
+                    "provider": provider_id,
+                    "credential_type": credential_type,
+                    "message": str(exc),
+                },
+            )
+
+        credential_data["model_ids"] = model_ids
+        await storage_adapter.store_credential(filename, credential_data, mode=mode)
+        await storage_adapter.update_credential_state(
+            filename,
+            {"disabled": False, "error_codes": [], "error_messages": {}},
+            mode=mode,
+        )
+        credential_name = "Codex OAuth credential" if credential_variant == CODEX else "OpenAI Platform API key"
+        return JSONResponse(
+            content={
+                "success": True,
+                "filename": filename,
+                "provider": provider_id,
+                "credential_type": credential_type,
+                "model_count": len(model_ids),
+                "message": (
+                    f"{credential_name} verified. Available models were refreshed, "
+                    "the credential was enabled, and recorded errors were cleared."
                 ),
             }
         )

@@ -206,6 +206,8 @@ class ControlPanelAssetTests(unittest.TestCase):
         self.assertNotIn('class="copy-field-row"', body)
         self.assertIn("./api/providers/openai/codex/oauth/start", settings_script)
         self.assertIn("./api/providers/openai/platform/credentials", settings_script)
+        self.assertIn("codexUsageUrl: 'codex_usage_url'", settings_script)
+        self.assertIn('id="codexUsageUrl"', body)
         self.assertIn(
             "./api/providers/openai/credentials/import?credential_type=oauth",
             upload_script,
@@ -229,14 +231,35 @@ class ControlPanelAssetTests(unittest.TestCase):
         dialog_script = read_scripts("ui/credential-dialogs.js")
 
         self.assertIn("isGrokOAuth", card_script)
-        self.assertIn(
-            "const supportsQuotaPreview = managerType === 'primary' && (isAntigravity || isGrokOAuth);",
-            card_script,
-        )
+        self.assertIn("isCodexOAuth", card_script)
+        self.assertIn("isAntigravity || isGrokOAuth || isCodexOAuth", card_script)
         self.assertIn("const quotaPreview = supportsQuotaPreview", card_script)
         self.assertIn("data?.quota_type === 'account_billing'", dialog_script)
         self.assertIn("Billing Periods", dialog_script)
         self.assertIn("active billing periods", dialog_script)
+        self.assertIn("data?.quota_type === 'account_rate_limits'", dialog_script)
+        self.assertIn("Usage Windows", dialog_script)
+
+    def test_subscription_plans_are_rendered_as_credential_badges(self):
+        card_script = read_scripts("ui/credential-cards.js")
+        dialog_script = read_scripts("ui/credential-dialogs.js")
+
+        self.assertIn("renderCredentialSubscriptionBadge", card_script)
+        self.assertIn("subscription-plan-${pathId}", card_script)
+        self.assertIn("Plan: ${escapeHtml(plan.label)}", card_script)
+        self.assertIn("Tier: ${escapeHtml(plan.label)}", card_script)
+        self.assertIn("updateCredentialSubscriptionBadge", dialog_script)
+        self.assertIn("cached.data?.plan", dialog_script)
+        self.assertIn("cardContext.subscriptionPlan", dialog_script)
+
+    def test_all_supported_credentials_have_an_authentication_badge(self):
+        card_script = read_scripts("ui/credential-cards.js")
+
+        self.assertIn("getCredentialAuthenticationType", card_script)
+        self.assertIn("'google_antigravity', 'grok', 'codex'", card_script)
+        self.assertIn("'google_ai_studio', 'xai_console', 'openai_platform'", card_script)
+        self.assertIn("renderCredentialAuthenticationBadge", card_script)
+        self.assertIn("${authenticationType}", card_script)
 
 
 if __name__ == "__main__":
