@@ -4,6 +4,21 @@ All notable user-facing changes are documented in this file. Omni Gateway follow
 
 ## [Unreleased]
 
+## [1.2.1] - 2026-07-24
+
+### Changed
+
+- Optimized provider model discovery by sampling representative credential capabilities instead of querying every credential in large pools.
+- Preserved a unified model catalog while labeling each model with its specific provider product and deduplicating only within that provider.
+- Expanded fixed-model response normalization across OpenAI Chat Completions, Responses, Anthropic Messages, and Google GenAI request surfaces.
+- Separated removed credentials from the active 24-hour request breakdown while retaining their historical usage totals.
+
+### Fixed
+
+- Prevented provider selection from routing fixed-model requests through credentials whose discovered catalogs do not support the requested model.
+- Kept provider-specific model support independent when different providers expose the same model identifier.
+- Removed misleading Grok Build tier badges when upstream account metadata does not represent a subscription plan.
+
 ## [1.2.0] - 2026-07-19
 
 ### Added
