@@ -35,7 +35,7 @@ Omni Gateway
         |
         v
 provider adapters
-  Google Antigravity | Google AI Studio | Grok Build | SpaceXAI Console | Codex | OpenAI Platform
+  Google Antigravity | Google AI Studio | Grok Build | SpaceXAI Console | Codex | OpenAI Platform | Claude Code | Claude Platform | Ollama
 ```
 
 The public API stays stable while provider-specific adapters evolve behind Omni Gateway.
@@ -219,6 +219,11 @@ Omni Gateway reads configuration from environment variables first, then stored c
 | `CODEX_AUTH_BASE` | `https://auth.openai.com` | Optional Codex device-authorization service override. |
 | `CODEX_CLIENT_ID` | bundled public client | Optional override for the Codex device OAuth client ID. |
 | `CODEX_USER_AGENT` | Codex CLI-compatible value | Optional User-Agent override for Codex requests. |
+| `ANTHROPIC_API_URL` | `https://api.anthropic.com/v1` | Optional Claude Platform and Claude Code Messages API endpoint override. It can also be managed from the Providers page. |
+| `CLAUDE_OAUTH_AUTHORIZE_URL` | `https://claude.ai/oauth/authorize` | Optional Claude Code PKCE authorization endpoint override. Only Anthropic and Claude hosts are accepted by the console. |
+| `CLAUDE_OAUTH_TOKEN_URL` | `https://api.anthropic.com/v1/oauth/token` | Optional Claude Code token endpoint override. Only Anthropic and Claude hosts are accepted by the console. |
+| `CLAUDE_CLIENT_ID` | bundled public client | Optional override for the Claude Code PKCE OAuth client ID. |
+| `CLAUDE_USER_AGENT` | `claude-cli/omni-gateway` | Optional User-Agent override for Claude Code and Claude Platform requests. |
 | `ANTIGRAVITY_USER_AGENT` | `antigravity/cli/1.0.1 windows/amd64` | Optional Google Antigravity protocol User-Agent override. |
 | `ANTIGRAVITY_PAYLOAD_USER_AGENT` | `antigravity` | Optional payload-level Google Antigravity userAgent override. |
 | `LOG_LEVEL` | `info` | Runtime log level. |
@@ -350,7 +355,7 @@ Omni Gateway records request volume, success rate, credential attribution, provi
 1. Start Omni Gateway.
 2. Open `http://YOUR_SERVER_IP:4283` on a VPS, or `http://127.0.0.1:4283` for local development.
 3. Create the console password on the first-run setup screen. For remote setup, enter the bootstrap token from the application logs; alternatively preconfigure `PANEL_PASSWORD`.
-4. Add a Google Antigravity account, Google AI Studio API key, Grok Build OAuth account, or SpaceXAI Console API key from the Providers page.
+4. Add an account, API key, or Ollama connection from the Providers page.
 5. Verify credentials and watch cooldown/error state in the panel.
 6. Point your coding tool to one of the API surfaces above.
 
@@ -376,11 +381,15 @@ Grok Build supports PKCE OAuth credentials, while SpaceXAI Console supports API 
 
 Codex uses OpenAI's device authorization flow. Generate a device code from the Providers page, open the displayed verification URL, enter the code, finish sign-in, and return to check authorization. Omni Gateway stores the account-scoped model catalog returned by Codex, refreshes OAuth access tokens when needed, and sends compatible requests through the Codex Responses transport. OpenAI Platform uses API-key authentication; keys are validated through the account model catalog before entering the pool. Both products support JSON and ZIP import with provider-specific validation and deduplication.
 
-Pool imports and Google Antigravity batch imports accept archives up to 10 MB, at most 500 files, individual credential files up to 2 MB, and at most 25 MB of uncompressed data. Google AI Studio and OpenAI provider imports use stricter limits of 2 MB per imported file, 200 JSON entries, and 5 MB of uncompressed data.
+Claude Code uses Anthropic's PKCE OAuth flow. Generate an authorization link, finish authorization, then paste the returned authorization code into the Providers page. Claude Platform accepts Anthropic API keys. Both products discover the models exposed to each credential, use the Anthropic Messages transport, refresh Claude Code access tokens when possible, and support validated JSON or ZIP import.
 
-The Pool page also provides a provider-independent backup workflow. `Download ZIP` exports the active credential pool, and `Import ZIP` restores that archive by identifying each credential as Google Antigravity, Google AI Studio, Grok Build, SpaceXAI Console, Codex, or OpenAI Platform. OAuth accounts retain provider-scoped identity deduplication, while API keys are validated and deduplicated by a provider-scoped, non-reversible key fingerprint. Unsupported or malformed entries are reported individually without blocking valid credentials in the same archive.
+Ollama connections are configured per endpoint and may include an optional bearer API key for protected or cloud servers. Omni Gateway discovers models through `/api/tags` and routes inference through `/api/chat`. When Omni Gateway runs in Docker, `localhost` refers to the container itself; use a host-gateway address or another network-reachable Ollama endpoint.
 
-Google Antigravity credentials use `google-antigravity-{account_fingerprint}.json`, where the fingerprint is derived from the normalized account email without exposing it. Google AI Studio credentials use `google-ai-studio-{key_fingerprint}.json`, Grok Build OAuth credentials use `grok-{account_fingerprint}.json`, SpaceXAI Console credentials use `xai-console-{key_fingerprint}.json`, Codex credentials use `openai-codex-{account_fingerprint}.json`, and OpenAI Platform credentials use `openai-platform-{key_fingerprint}.json`. Legacy `provider_*.json` and `xai-grok-*.json` credentials remain compatible and are exported with canonical names.
+Pool imports and Google Antigravity batch imports accept archives up to 10 MB, at most 500 files, individual credential files up to 2 MB, and at most 25 MB of uncompressed data. Google AI Studio, OpenAI, Anthropic, and Ollama provider imports use stricter limits of 2 MB per imported file, 200 JSON entries, and 5 MB of uncompressed data.
+
+The Pool page also provides a provider-independent backup workflow. `Download ZIP` exports the active credential pool, and `Import ZIP` restores that archive by identifying each credential as Google Antigravity, Google AI Studio, Grok Build, SpaceXAI Console, Codex, OpenAI Platform, Claude Code, Claude Platform, or Ollama. OAuth accounts retain provider-scoped identity deduplication, while API keys are validated and deduplicated by a provider-scoped, non-reversible key fingerprint. Unsupported or malformed entries are reported individually without blocking valid credentials in the same archive.
+
+Google Antigravity credentials use `google-antigravity-{account_fingerprint}.json`, where the fingerprint is derived from the normalized account email without exposing it. Google AI Studio credentials use `google-ai-studio-{key_fingerprint}.json`, Grok Build OAuth credentials use `grok-{account_fingerprint}.json`, SpaceXAI Console credentials use `xai-console-{key_fingerprint}.json`, Codex credentials use `openai-codex-{account_fingerprint}.json`, OpenAI Platform credentials use `openai-platform-{key_fingerprint}.json`, Claude Code credentials use `claude-code-{account_fingerprint}.json`, Claude Platform credentials use `claude-platform-{key_fingerprint}.json`, and Ollama connections use `ollama-{connection_fingerprint}.json`. Legacy `provider_*.json` and `xai-grok-*.json` credentials remain compatible and are exported with canonical names.
 
 Credential mode names:
 

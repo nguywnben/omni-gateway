@@ -96,6 +96,20 @@ function initStaticUiBindings() {
         'clear-openai-platform-files': () => clearOpenAIPlatformFiles(),
         'save-openai-settings': (element) => saveOpenAISettings(element.dataset.openaiScope),
         'reset-openai-settings': (element) => resetOpenAISettings(element.dataset.openaiScope),
+        'start-claude-oauth': () => startClaudeOauth(),
+        'save-claude-oauth': () => saveClaudeOauth(),
+        'select-claude-code-files': () => document.getElementById('claudeCodeFileInput')?.click(),
+        'upload-claude-code-files': () => uploadClaudeCodeFiles(),
+        'clear-claude-code-files': () => clearClaudeCodeFiles(),
+        'select-claude-platform-files': () => document.getElementById('claudePlatformFileInput')?.click(),
+        'upload-claude-platform-files': () => uploadClaudePlatformFiles(),
+        'clear-claude-platform-files': () => clearClaudePlatformFiles(),
+        'save-anthropic-settings': (element) => saveAnthropicSettings(element.dataset.anthropicScope),
+        'reset-anthropic-settings': (element) => resetAnthropicSettings(element.dataset.anthropicScope),
+        'copy-claude-auth-url': () => cpUrl(document.getElementById('claudeAuthorizationUrl')),
+        'select-ollama-files': () => document.getElementById('ollamaFileInput')?.click(),
+        'upload-ollama-files': () => uploadOllamaFiles(),
+        'clear-ollama-files': () => clearOllamaFiles(),
         'copy-codex-device-code': (element) => {
             cpUrl(element);
             element.blur();
@@ -128,6 +142,9 @@ function initStaticUiBindings() {
         'xai-console-files': (_element, event) => handleXaiConsoleFileSelect(event),
         'codex-files': (_element, event) => handleCodexFileSelect(event),
         'openai-platform-files': (_element, event) => handleOpenAIPlatformFileSelect(event),
+        'claude-code-files': (_element, event) => handleClaudeCodeFileSelect(event),
+        'claude-platform-files': (_element, event) => handleClaudePlatformFileSelect(event),
+        'ollama-files': (_element, event) => handleOllamaFileSelect(event),
         'primary-files': (_element, event) => handlePrimaryFileSelect(event),
         'routing-strategy': () => syncRoutingPolicyControls(),
         'log-level': () => filterLogs()
@@ -167,6 +184,8 @@ function initStaticUiBindings() {
     document.getElementById('googleAiStudioCredentialForm')?.addEventListener('submit', addGoogleAIStudioCredential);
     document.getElementById('xaiCredentialForm')?.addEventListener('submit', addXaiApiKeyCredential);
     document.getElementById('openaiPlatformCredentialForm')?.addEventListener('submit', addOpenAIPlatformCredential);
+    document.getElementById('claudePlatformCredentialForm')?.addEventListener('submit', addClaudePlatformCredential);
+    document.getElementById('ollamaCredentialForm')?.addEventListener('submit', addOllamaCredential);
     document.getElementById('accessPasswordForm')?.addEventListener('submit', (event) => {
         event.preventDefault();
         saveAccessCredentials();
@@ -180,6 +199,9 @@ function initStaticUiBindings() {
         ['xaiConsoleUploadArea', handleXaiConsoleFileDrop],
         ['codexUploadArea', handleCodexFileDrop],
         ['openaiPlatformUploadArea', handleOpenAIPlatformFileDrop],
+        ['claudeCodeUploadArea', handleClaudeCodeFileDrop],
+        ['claudePlatformUploadArea', handleClaudePlatformFileDrop],
+        ['ollamaUploadArea', handleOllamaFileDrop],
         ['primaryUploadArea', handlePrimaryFileDrop]
     ]) {
         const area = document.getElementById(areaId);
@@ -236,6 +258,18 @@ const PROVIDER_WORKSPACES = {
     openai_platform: {
         selectorId: 'providerSelectorOpenAiPlatform',
         panelId: 'providerWorkspaceOpenAiPlatform'
+    },
+    claude_code: {
+        selectorId: 'providerSelectorClaudeCode',
+        panelId: 'providerWorkspaceClaudeCode'
+    },
+    claude_platform: {
+        selectorId: 'providerSelectorClaudePlatform',
+        panelId: 'providerWorkspaceClaudePlatform'
+    },
+    ollama: {
+        selectorId: 'providerSelectorOllama',
+        panelId: 'providerWorkspaceOllama'
     }
 };
 
@@ -338,6 +372,22 @@ const MODEL_PROVIDER_META = {
     openai_platform: {
         name: 'OpenAI Platform',
         logo: '/frontend/assets/providers/openai-platform-logo.png'
+    },
+    claude_code: {
+        name: 'Claude Code',
+        logo: '/frontend/assets/providers/claude-code-logo.png'
+    },
+    claude_platform: {
+        name: 'Claude Platform',
+        logo: '/frontend/assets/providers/claude-platform-logo.png'
+    },
+    anthropic: {
+        name: 'Anthropic',
+        logo: '/frontend/assets/providers/claude-platform-logo.png'
+    },
+    ollama: {
+        name: 'Ollama',
+        logo: '/frontend/assets/providers/ollama-logo.png'
     },
     xai: {
         name: 'Grok Build',

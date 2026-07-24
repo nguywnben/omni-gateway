@@ -10,7 +10,10 @@ from core.model_blacklist import (
     get_model_blacklist_pairs,
 )
 from core.provider_registry import (
+    ANTHROPIC,
+    CLAUDE_CODE,
     CODEX,
+    OLLAMA,
     OPENAI,
     XAI,
     get_credential_provider,
@@ -406,6 +409,8 @@ class CredentialManager:
         try:
             if is_api_key_credential(credential_data):
                 return False
+            if get_credential_provider(credential_data) == OLLAMA:
+                return False
 
             if not credential_data.get("access_token") and not credential_data.get("token"):
                 log.debug("No access_token found, refresh required")
@@ -477,6 +482,17 @@ class CredentialManager:
                 refreshed_data = await refresh_codex_oauth_credential(credential_data)
                 await self._storage_adapter.store_credential(filename, refreshed_data, mode=mode)
                 log.info(f"Codex token refreshed and saved: {filename} (mode={mode}).")
+                return refreshed_data
+
+            if (
+                provider_id == ANTHROPIC
+                and get_credential_provider_variant(credential_data) == CLAUDE_CODE
+            ):
+                from core.anthropic import refresh_claude_oauth_credential
+
+                refreshed_data = await refresh_claude_oauth_credential(credential_data)
+                await self._storage_adapter.store_credential(filename, refreshed_data, mode=mode)
+                log.info(f"Claude Code token refreshed and saved: {filename} (mode={mode}).")
                 return refreshed_data
 
             creds = Credentials.from_dict(credential_data)

@@ -144,6 +144,8 @@ function createCredsManager(type) {
 
                             provider: item.provider,
 
+                            provider_variant: item.provider_variant,
+
                             model_count: Number.isFinite(Number(item.model_count)) ? Number(item.model_count) : 0,
 
                             model_cooldowns: item.model_cooldowns || {},
@@ -380,7 +382,7 @@ function createCredsManager(type) {
 
             if (tierFilterEl) {
 
-                const tierIsRelevant = !['google_ai_studio', 'grok', 'xai_console', 'xai'].includes(this.currentProviderFilter);
+                const tierIsRelevant = !['google_ai_studio', 'grok', 'xai_console', 'xai', 'codex', 'openai_platform', 'openai', 'claude_code', 'claude_platform', 'anthropic', 'ollama'].includes(this.currentProviderFilter);
 
                 tierFilterEl.disabled = !tierIsRelevant;
 

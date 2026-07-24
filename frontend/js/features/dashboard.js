@@ -445,7 +445,7 @@ function renderUsageProviderSummary() {
     }
 
     container.hidden = false;
-    const providerOrder = ['google_antigravity', 'google_ai_studio', 'grok', 'xai_console', 'xai', 'code_assist'];
+    const providerOrder = ['google_antigravity', 'google_ai_studio', 'grok', 'xai_console', 'codex', 'openai_platform', 'claude_code', 'claude_platform', 'ollama', 'xai', 'openai', 'anthropic', 'code_assist'];
     const providerItems = Array.from(providers.values()).sort((left, right) => {
         const leftIndex = providerOrder.indexOf(left.meta.id);
         const rightIndex = providerOrder.indexOf(right.meta.id);

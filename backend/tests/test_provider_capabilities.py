@@ -11,6 +11,9 @@ if str(BACKEND_DIR) not in sys.path:
     sys.path.insert(0, str(BACKEND_DIR))
 
 from core.provider_registry import (
+    ANTHROPIC,
+    CLAUDE_CODE,
+    CLAUDE_PLATFORM,
     CODEX,
     GOOGLE_AI_STUDIO,
     GOOGLE_ANTIGRAVITY,
@@ -18,6 +21,7 @@ from core.provider_registry import (
     MODEL_SUPPORT_DECLARED,
     MODEL_SUPPORT_INFERRED,
     MODEL_SUPPORT_UNSUPPORTED,
+    OLLAMA,
     OPENAI,
     OPENAI_PLATFORM,
     XAI,
@@ -38,8 +42,27 @@ class ProviderCapabilityTests(unittest.TestCase):
 
         self.assertEqual(
             {provider["provider_id"] for provider in providers},
-            {GOOGLE_ANTIGRAVITY, GOOGLE_AI_STUDIO, OPENAI, XAI},
+            {ANTHROPIC, GOOGLE_ANTIGRAVITY, GOOGLE_AI_STUDIO, OLLAMA, OPENAI, XAI},
         )
+
+    def test_anthropic_credentials_use_precise_user_facing_provider_names(self):
+        oauth_credential = {"provider": ANTHROPIC, "credential_type": "oauth"}
+        api_key_credential = {"provider": ANTHROPIC, "credential_type": "api_key"}
+
+        self.assertEqual(get_credential_provider_variant(oauth_credential), CLAUDE_CODE)
+        self.assertEqual(get_credential_provider_display_name(oauth_credential), "Claude Code")
+        self.assertEqual(get_credential_provider_variant(api_key_credential), CLAUDE_PLATFORM)
+        self.assertEqual(
+            get_credential_provider_display_name(api_key_credential),
+            "Claude Platform",
+        )
+
+    def test_ollama_accepts_discovered_models_without_brand_prefix_assumptions(self):
+        capabilities = get_provider_capabilities(OLLAMA)
+
+        self.assertEqual(capabilities.credential_types, ("connection",))
+        self.assertTrue(capabilities.supports_model("qwen3.5"))
+        self.assertTrue(capabilities.supports_model("custom-lab-model:latest"))
 
     def test_ai_studio_only_accepts_declared_model_families(self):
         capabilities = get_provider_capabilities(GOOGLE_AI_STUDIO)
