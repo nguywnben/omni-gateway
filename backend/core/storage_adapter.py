@@ -21,6 +21,8 @@ class StorageBackend(Protocol):
 
     async def list_credentials(self, mode: str = "code_assist") -> List[str]: ...
 
+    async def get_all_credentials(self, mode: str = "code_assist") -> Dict[str, Dict[str, Any]]: ...
+
     async def delete_credential(self, filename: str, mode: str = "code_assist") -> bool: ...
 
     async def update_credential_state(
@@ -154,6 +156,10 @@ class StorageAdapter:
     async def list_credentials(self, mode: str = "code_assist") -> List[str]:
         self._ensure_initialized()
         return await self._backend.list_credentials(mode)
+
+    async def get_all_credentials(self, mode: str = "code_assist") -> Dict[str, Dict[str, Any]]:
+        self._ensure_initialized()
+        return await self._backend.get_all_credentials(mode)
 
     async def delete_credential(self, filename: str, mode: str = "code_assist") -> bool:
         self._ensure_initialized()

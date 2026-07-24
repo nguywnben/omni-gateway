@@ -123,9 +123,44 @@ class UsageAggregationTests(unittest.IsolatedAsyncioTestCase):
                 self.assertEqual(result[deleted_filename]["credential_label"], "Deleted credential")
                 self.assertEqual(result[deleted_filename]["user_email"], "")
                 self.assertTrue(result[deleted_filename]["is_deleted"])
+                self.assertTrue(result[deleted_filename]["is_historical"])
                 self.assertEqual(result[deleted_filename]["provider"], "google_ai_studio")
                 self.assertEqual(result[deleted_filename]["calls"], 1)
                 self.assertEqual(result[deleted_filename]["total_tokens"], 50)
+            finally:
+                usage_stats.db_path = original_db_path
+
+    async def test_unavailable_credential_usage_is_classified_as_historical(self):
+        original_db_path = usage_stats.db_path
+        with workspace_temp_directory() as temp_dir:
+            try:
+                usage_stats.db_path = str(Path(temp_dir) / "usage.db")
+                usage_stats.record_call(
+                    "legacy-account.json",
+                    provider="grok",
+                    token_usage={"totalTokenCount": 25},
+                )
+
+                with (
+                    patch.object(
+                        usage_stats,
+                        "get_credential_usage_metadata",
+                        AsyncMock(return_value={}),
+                    ),
+                    patch.object(
+                        usage_stats,
+                        "get_all_credential_filenames",
+                        AsyncMock(return_value=[]),
+                    ),
+                ):
+                    result = await usage_stats.get_stats_for_period("all")
+
+                record = result["legacy-account.json"]
+                self.assertFalse(record["is_deleted"])
+                self.assertTrue(record["is_historical"])
+                self.assertEqual(record["credential_label"], "Unavailable credential")
+                self.assertEqual(record["provider_name"], "Grok Build")
+                self.assertEqual(record["total_tokens"], 25)
             finally:
                 usage_stats.db_path = original_db_path
 
@@ -165,6 +200,7 @@ class UsageAggregationTests(unittest.IsolatedAsyncioTestCase):
                 deleted_filename = usage_stats.deleted_usage_filename("google_antigravity")
                 self.assertEqual(result[deleted_filename]["calls"], 1)
                 self.assertTrue(result[deleted_filename]["is_deleted"])
+                self.assertTrue(result[deleted_filename]["is_historical"])
             finally:
                 usage_stats.db_path = original_db_path
 

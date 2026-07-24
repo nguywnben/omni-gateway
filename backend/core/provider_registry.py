@@ -197,9 +197,22 @@ def get_credential_provider(credential_data: Optional[Dict[str, Any]]) -> str:
     return GOOGLE_ANTIGRAVITY
 
 
+def get_provider_routing_id(provider_id: Any) -> str:
+    """Return the routing provider shared by one user-facing provider product."""
+    normalized = str(provider_id or "").strip().lower().replace("-", "_").replace(" ", "_")
+    if normalized in {CODEX, OPENAI_PLATFORM}:
+        return OPENAI
+    if normalized in {GROK, XAI_CONSOLE}:
+        return XAI
+    return normalize_provider_id(normalized)
+
+
 def get_provider_display_name(provider_id: Any) -> str:
-    normalized = normalize_provider_id(provider_id)
-    return _PROVIDER_NAMES.get(normalized, str(provider_id or "Provider"))
+    normalized = str(provider_id or "").strip().lower().replace("-", "_").replace(" ", "_")
+    if normalized in _CREDENTIAL_PROVIDER_NAMES:
+        return _CREDENTIAL_PROVIDER_NAMES[normalized]
+    routing_provider = get_provider_routing_id(normalized)
+    return _PROVIDER_NAMES.get(routing_provider, str(provider_id or "Provider"))
 
 
 def get_credential_provider_variant(credential_data: Optional[Dict[str, Any]]) -> str:

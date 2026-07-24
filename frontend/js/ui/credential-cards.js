@@ -312,12 +312,12 @@ function createCredCard(credInfo, manager) {
 
         statusBadges += renderCredentialSubscriptionBadge(pathId, credInfo.tier, 'plan');
 
-    } else if (isGrokOAuth || isCodexOAuth) {
+    } else if (isCodexOAuth) {
 
         statusBadges += renderCredentialSubscriptionBadge(
             pathId,
             AppState.quotaPreviewCache[filename]?.data?.plan,
-            isGrokOAuth ? 'tier' : 'plan'
+            'plan'
         );
 
     } else if (!isStaticProvider) {

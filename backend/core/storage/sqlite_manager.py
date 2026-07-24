@@ -534,6 +534,28 @@ class SQLiteManager:
             log.error(f"Error listing credentials: {e}")
             return []
 
+    async def get_all_credentials(self, mode: str = "code_assist") -> Dict[str, Dict[str, Any]]:
+        self._ensure_initialized()
+        try:
+            table_name = self._get_table_name(mode)
+            async with aiosqlite.connect(self._db_path) as db:
+                async with db.execute(f"""
+                    SELECT filename, credential_data
+                    FROM {table_name}
+                    ORDER BY rotation_order
+                """) as cursor:
+                    rows = await cursor.fetchall()
+            credentials = {}
+            for filename, credential_json in rows:
+                try:
+                    credentials[filename] = json.loads(credential_json)
+                except (TypeError, json.JSONDecodeError):
+                    log.warning(f"Ignoring invalid credential data for {filename}.")
+            return credentials
+        except Exception as e:
+            log.error(f"Error loading credentials: {e}")
+            return {}
+
     async def delete_credential(self, filename: str, mode: str = "code_assist") -> bool:
         self._ensure_initialized()
 

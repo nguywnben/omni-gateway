@@ -670,6 +670,24 @@ class MongoDBManager:
             log.error(f"Error listing credentials: {e}")
             return []
 
+    async def get_all_credentials(self, mode: str = "code_assist") -> Dict[str, Dict[str, Any]]:
+        self._ensure_initialized()
+        try:
+            collection = self._db[self._get_collection_name(mode)]
+            pipeline = [
+                {"$sort": {"rotation_order": 1}},
+                {"$project": {"filename": 1, "credential_data": 1, "_id": 0}},
+            ]
+            docs = await collection.aggregate(pipeline).to_list(length=None)
+            return {
+                doc["filename"]: doc["credential_data"]
+                for doc in docs
+                if doc.get("filename") and isinstance(doc.get("credential_data"), dict)
+            }
+        except Exception as e:
+            log.error(f"Error loading credentials: {e}")
+            return {}
+
     async def delete_credential(self, filename: str, mode: str = "code_assist") -> bool:
         self._ensure_initialized()
 

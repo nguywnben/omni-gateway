@@ -389,6 +389,19 @@ class CredentialManager:
                 cooldown_until=cooldown_until,
             )
 
+    async def prepare_credential(
+        self,
+        filename: str,
+        credential_data: Dict[str, Any],
+        *,
+        mode: str = "primary",
+    ) -> Optional[Dict[str, Any]]:
+        """Refresh one stored credential when needed without acquiring a routing lease."""
+        await self._ensure_initialized()
+        if await self._should_refresh_token(credential_data):
+            return await self._refresh_token(credential_data, filename, mode=mode)
+        return credential_data
+
     async def _should_refresh_token(self, credential_data: Dict[str, Any]) -> bool:
         try:
             if is_api_key_credential(credential_data):

@@ -4,6 +4,7 @@ import json
 import sys
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
 from starlette.responses import Response
@@ -12,10 +13,14 @@ BACKEND_DIR = Path(__file__).resolve().parents[1]
 if str(BACKEND_DIR) not in sys.path:
     sys.path.insert(0, str(BACKEND_DIR))
 
-from core.api.primary import fetch_provider_model_ids
+from core.api.primary import (
+    fetch_provider_model_ids,
+    get_configured_provider_model_ids,
+)
 from core.credential_manager import CredentialManager
 from core.model_pool import (
     DEFAULT_VIRTUAL_MODEL_ALIAS,
+    ModelCatalogEntry,
     ModelCatalogService,
     ModelPoolError,
     ModelResolution,
@@ -26,6 +31,7 @@ from core.model_pool import (
     save_virtual_model_pool,
 )
 from core.models import ClaudeRequest, GeminiRequest, OpenAIChatCompletionRequest
+from core.panel.model_pools import get_model_catalog
 from core.router.primary.anthropic import messages as anthropic_messages
 from core.router.primary.gemini import generate_content as gemini_generate_content
 from core.router.primary.model_list import get_primary_models_with_features
@@ -71,6 +77,110 @@ class FakeCredentialStorage:
         return self.credentials.get(filename)
 
 
+class FakeProviderVariantStorage:
+    def __init__(self):
+        self.credentials = {
+            "codex-basic.json": {
+                "provider": "openai",
+                "credential_type": "oauth",
+                "model_ids": ["gpt-5.1-codex"],
+            },
+            "codex-pro.json": {
+                "provider": "openai",
+                "credential_type": "oauth",
+                "model_ids": ["gpt-5.1-codex", "gpt-5.2-codex"],
+            },
+            "openai-platform.json": {
+                "provider": "openai",
+                "credential_type": "api_key",
+                "api_key": "sk-platform",
+                "model_ids": ["gpt-5.2"],
+            },
+            "grok-build.json": {
+                "provider": "xai",
+                "credential_type": "oauth",
+                "model_ids": ["grok-code-fast-1"],
+            },
+            "spacexai-console.json": {
+                "provider": "xai",
+                "credential_type": "api_key",
+                "api_key": "xai-platform",
+                "model_ids": ["grok-4"],
+            },
+        }
+
+    async def list_credentials(self, mode="primary"):
+        return list(self.credentials)
+
+    async def get_credential_state(self, filename, mode="primary"):
+        return {"disabled": False}
+
+    async def get_credential(self, filename, mode="primary"):
+        return self.credentials.get(filename)
+
+
+class FakeDiscoveryStorage:
+    def __init__(self):
+        self.credentials = {
+            "basic.json": {
+                "provider": "google_ai_studio",
+                "credential_type": "api_key",
+                "api_key": "basic-key",
+                "model_ids": ["gemini-shared"],
+            },
+            "premium.json": {
+                "provider": "google_ai_studio",
+                "credential_type": "api_key",
+                "api_key": "premium-key",
+                "model_ids": ["gemini-shared"],
+            },
+        }
+        self.saved = {}
+
+    async def list_credentials(self, mode="primary"):
+        return list(self.credentials)
+
+    async def get_credential_state(self, filename, mode="primary"):
+        return {"disabled": False}
+
+    async def get_credential(self, filename, mode="primary"):
+        return self.credentials.get(filename)
+
+    async def store_credential(self, filename, credential_data, mode="primary"):
+        self.credentials[filename] = credential_data
+        self.saved[filename] = credential_data
+        return True
+
+
+class FakeLargeCohortStorage:
+    def __init__(self, count=1000):
+        self.credentials = {
+            f"credential-{index:04d}.json": {
+                "provider": "google_ai_studio",
+                "credential_type": "api_key",
+                "api_key": f"key-{index}",
+                "tier": "standard",
+                "model_ids": ["gemini-shared"],
+            }
+            for index in range(count)
+        }
+        self.saved = {}
+
+    async def list_credentials(self, mode="primary"):
+        return list(self.credentials)
+
+    async def get_credential_state(self, filename, mode="primary"):
+        return {"disabled": False}
+
+    async def get_credential(self, filename, mode="primary"):
+        return self.credentials.get(filename)
+
+    async def store_credential(self, filename, credential_data, mode="primary"):
+        self.credentials[filename] = credential_data
+        self.saved[filename] = credential_data
+        return True
+
+
 class ModelPoolTests(unittest.IsolatedAsyncioTestCase):
     async def test_catalog_merges_provider_models_without_losing_provenance(self):
         calls = []
@@ -93,6 +203,46 @@ class ModelPoolTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(
             flash.providers,
             ("google_ai_studio", "google_antigravity"),
+        )
+
+    async def test_management_catalog_keeps_cross_provider_models_separate(self):
+        entries = [
+            ModelCatalogEntry(
+                "shared-model",
+                ("codex", "openai_platform"),
+            )
+        ]
+        with (
+            patch(
+                "core.panel.model_pools.model_catalog_service.get_catalog",
+                AsyncMock(return_value=entries),
+            ),
+            patch(
+                "core.panel.model_pools.get_virtual_model_pool",
+                AsyncMock(
+                    return_value={
+                        "alias": "omway",
+                        "strategy": "priority_fallback",
+                        "selected_models": [],
+                        "enabled": True,
+                    }
+                ),
+            ),
+            patch(
+                "core.panel.model_pools.get_model_blacklist",
+                AsyncMock(return_value=[]),
+            ),
+        ):
+            response = await get_model_catalog(refresh=False, token="panel-token")
+
+        payload = json.loads(response.body)
+        self.assertEqual(
+            [group["provider_name"] for group in payload["provider_catalogs"]],
+            ["Codex", "OpenAI Platform"],
+        )
+        self.assertEqual(
+            [group["models"][0]["model_id"] for group in payload["provider_catalogs"]],
+            ["shared-model", "shared-model"],
         )
 
     async def test_virtual_model_pool_round_trips_ordered_models(self):
@@ -193,6 +343,107 @@ class ModelPoolTests(unittest.IsolatedAsyncioTestCase):
             model_ids,
             {"gemini-2.5-flash", "gemma-3-27b-it"},
         )
+
+    async def test_provider_catalog_preserves_product_variants(self):
+        storage = FakeProviderVariantStorage()
+        with patch(
+            "core.api.primary.get_storage_adapter",
+            AsyncMock(return_value=storage),
+        ):
+            provider_models = await get_configured_provider_model_ids()
+
+        self.assertEqual(
+            provider_models,
+            {
+                "codex": {"gpt-5.1-codex", "gpt-5.2-codex"},
+                "openai_platform": {"gpt-5.2"},
+                "grok": {"grok-code-fast-1"},
+                "xai_console": {"grok-4"},
+            },
+        )
+
+    async def test_provider_catalog_discovers_distinct_entitlement_cohorts(self):
+        storage = FakeDiscoveryStorage()
+        storage.credentials["basic.json"]["tier"] = "standard"
+        storage.credentials["premium.json"]["tier"] = "premium"
+
+        async def get_models(*args, headers=None, **kwargs):
+            api_key = (headers or {}).get("x-goog-api-key")
+            suffix = "premium" if api_key == "premium-key" else "basic"
+            return SimpleNamespace(
+                status_code=200,
+                json=lambda: {
+                    "models": [
+                        {
+                            "name": "models/gemini-shared",
+                            "supportedGenerationMethods": ["generateContent"],
+                        },
+                        {
+                            "name": f"models/gemini-{suffix}",
+                            "supportedGenerationMethods": ["generateContent"],
+                        },
+                    ]
+                },
+            )
+
+        with (
+            patch(
+                "core.api.primary.get_storage_adapter",
+                AsyncMock(return_value=storage),
+            ),
+            patch(
+                "core.api.primary.get_async",
+                AsyncMock(side_effect=get_models),
+            ) as get_models,
+        ):
+            model_ids = await fetch_provider_model_ids("google_ai_studio")
+
+        self.assertEqual(get_models.await_count, 2)
+        self.assertEqual(
+            model_ids,
+            {"gemini-shared", "gemini-basic", "gemini-premium"},
+        )
+        self.assertEqual(
+            storage.saved["basic.json"]["model_ids"],
+            ["gemini-basic", "gemini-shared"],
+        )
+        self.assertEqual(
+            storage.saved["premium.json"]["model_ids"],
+            ["gemini-premium", "gemini-shared"],
+        )
+
+    async def test_provider_catalog_uses_one_representative_for_large_cohort(self):
+        storage = FakeLargeCohortStorage()
+        response = SimpleNamespace(
+            status_code=200,
+            json=lambda: {
+                "models": [
+                    {
+                        "name": "models/gemini-shared",
+                        "supportedGenerationMethods": ["generateContent"],
+                    },
+                    {
+                        "name": "models/gemini-current",
+                        "supportedGenerationMethods": ["generateContent"],
+                    },
+                ]
+            },
+        )
+        with (
+            patch(
+                "core.api.primary.get_storage_adapter",
+                AsyncMock(return_value=storage),
+            ),
+            patch(
+                "core.api.primary.get_async",
+                AsyncMock(return_value=response),
+            ) as get_models,
+        ):
+            model_ids = await fetch_provider_model_ids("google_ai_studio")
+
+        self.assertEqual(get_models.await_count, 1)
+        self.assertEqual(model_ids, {"gemini-shared", "gemini-current"})
+        self.assertEqual(len(storage.saved), 1)
 
     async def test_credential_manager_tries_model_candidates_in_order(self):
         manager = CredentialManager()

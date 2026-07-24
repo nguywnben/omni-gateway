@@ -13,6 +13,7 @@ from core.model_pool import (
     save_virtual_model_pool,
 )
 from core.models import VirtualModelPoolUpdateRequest
+from core.provider_registry import get_provider_display_name, get_provider_routing_id
 from core.utils import verify_panel_token
 from fastapi import APIRouter, Depends, HTTPException, Path, Query
 from fastapi.responses import JSONResponse
@@ -32,18 +33,22 @@ async def get_model_catalog(
         pool = await get_virtual_model_pool()
         blacklist = await get_model_blacklist()
         blacklisted_pairs = {(entry["provider_id"], entry["model_id"]) for entry in blacklist}
+
+        def is_blacklisted(provider_id: str, model_id: str) -> bool:
+            return (get_provider_routing_id(provider_id), model_id) in blacklisted_pairs
+
         catalog = []
         for entry in entries:
             value = entry.to_dict()
             value["blacklisted_providers"] = [
                 provider_id
                 for provider_id in value["providers"]
-                if (provider_id, value["model_id"]) in blacklisted_pairs
+                if is_blacklisted(provider_id, value["model_id"])
             ]
             value["routable_providers"] = [
                 provider_id
                 for provider_id in value["providers"]
-                if (provider_id, value["model_id"]) not in blacklisted_pairs
+                if not is_blacklisted(provider_id, value["model_id"])
             ]
             value["available"] = bool(value["routable_providers"])
             catalog.append(value)
@@ -61,9 +66,41 @@ async def get_model_catalog(
                 )
         catalog.sort(key=lambda entry: entry["model_id"])
         catalog_by_id = {entry["model_id"]: entry for entry in catalog}
+        provider_catalog_map = {}
+        for entry in catalog:
+            model_id = entry["model_id"]
+            for provider_id in entry["providers"]:
+                group = provider_catalog_map.setdefault(
+                    provider_id,
+                    {
+                        "provider_id": provider_id,
+                        "provider_name": get_provider_display_name(provider_id),
+                        "routing_provider_id": get_provider_routing_id(provider_id),
+                        "models": [],
+                    },
+                )
+                group["models"].append(
+                    {
+                        "model_id": model_id,
+                        "available": not is_blacklisted(provider_id, model_id),
+                        "blacklisted": is_blacklisted(provider_id, model_id),
+                    }
+                )
+        provider_catalogs = sorted(
+            (
+                {
+                    **group,
+                    "models": sorted(group["models"], key=lambda model: model["model_id"]),
+                    "model_count": len(group["models"]),
+                }
+                for group in provider_catalog_map.values()
+            ),
+            key=lambda group: (group["provider_name"], group["provider_id"]),
+        )
         return JSONResponse(
             content={
                 "catalog": catalog,
+                "provider_catalogs": provider_catalogs,
                 "pool": pool,
                 "blacklist": blacklist,
                 "summary": {
