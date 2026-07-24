@@ -112,6 +112,21 @@ class ControlPanelAssetTests(unittest.TestCase):
         )
         self.assertIn("scrollbar-gutter: stable", responsive_styles)
 
+    def test_dashboard_separates_historical_credential_usage(self):
+        response = serve_control_panel()
+        body = response.body.decode("utf-8")
+        dashboard_script = read_scripts("features/dashboard.js")
+
+        self.assertIn('id="historicalUsageSection"', body)
+        self.assertIn('id="historicalUsageList"', body)
+        self.assertIn("function getCurrentUsageEntriesWithTraffic()", dashboard_script)
+        self.assertIn("function getHistoricalUsageEntriesWithTraffic()", dashboard_script)
+        self.assertIn("Boolean(stats.is_historical || stats.is_deleted)", dashboard_script)
+        self.assertIn(
+            "for (const [filename, stats] of getCurrentUsageEntriesWithTraffic())",
+            dashboard_script,
+        )
+
     def test_xai_provider_ui_references_existing_assets_and_endpoints(self):
         response = serve_control_panel()
         body = response.body.decode("utf-8")

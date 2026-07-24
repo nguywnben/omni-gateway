@@ -104,6 +104,10 @@ async function refreshUsageStats(options = {}) {
 
     const providerSummary = document.getElementById('usageProviderSummary');
 
+    const historicalSection = document.getElementById('historicalUsageSection');
+
+    const historicalList = document.getElementById('historicalUsageList');
+
     const statsContainer = document.getElementById('dashboardStats');
 
     const tableWrapper = document.querySelector('#dashboardTab .usage-table-wrapper');
@@ -126,6 +130,13 @@ async function refreshUsageStats(options = {}) {
 
             providerSummary.innerHTML = '';
             providerSummary.hidden = true;
+
+        }
+
+        if (!preserveContent) {
+
+            if (historicalList) historicalList.innerHTML = '';
+            if (historicalSection) historicalSection.hidden = true;
 
         }
 
@@ -251,23 +262,99 @@ function getUsageEntriesWithTraffic() {
 
 }
 
-function renderUsageList() {
+function isHistoricalUsageEntry([filename, stats]) {
 
-    const list = document.getElementById('usageList');
+    return filename !== '__gateway_unassigned__.json'
+        && Boolean(stats.is_historical || stats.is_deleted);
 
-    if (!list) return;
+}
+
+function getCurrentUsageEntriesWithTraffic() {
+
+    return getUsageEntriesWithTraffic().filter((entry) => !isHistoricalUsageEntry(entry));
+
+}
+
+function getHistoricalUsageEntriesWithTraffic() {
+
+    return getUsageEntriesWithTraffic().filter(isHistoricalUsageEntry);
+
+}
+
+function createUsageTableRow(filename, stats) {
+
+    const tr = document.createElement('tr');
+
+    const calls = getUsageCallCount(stats);
+    const successfulCalls = stats.successful_calls ?? stats.successful_calls_24h ?? 0;
+    const failedCalls = stats.failed_calls ?? stats.failed_calls_24h ?? 0;
+    const inputTokens = stats.input_tokens ?? stats.input_tokens_24h ?? 0;
+    const outputTokens = stats.output_tokens ?? stats.output_tokens_24h ?? 0;
+    const totalTokens = stats.total_tokens ?? stats.total_tokens_24h ?? 0;
+    const estimatedTokensSaved = stats.estimated_tokens_saved ?? stats.estimated_tokens_saved_24h ?? 0;
+    const successRate = calls > 0 ? Math.round((successfulCalls / calls) * 100) : 0;
+    const isUnassigned = filename === '__gateway_unassigned__.json';
+    const providerMeta = isUnassigned
+        ? { name: 'Gateway', logo: '/frontend/assets/logo.png' }
+        : getCredentialProviderMeta({
+            provider: stats.provider || stats.provider_name,
+            credential_type: stats.credential_type
+        }, 'usage');
+    const accountLabel = isUnassigned
+        ? 'No credential assigned'
+        : (stats.is_deleted
+            ? t('deleted_credential')
+            : (stats.is_historical
+                ? (stats.credential_label || t('unavailable_credential'))
+                : (stats.credential_label || stats.user_email || t('email_not_fetched'))));
+    const providerLogo = providerMeta.logo
+        ? `<img src="${escapeAttribute(providerMeta.logo)}" alt="${escapeAttribute(providerMeta.name)} logo">`
+        : `<span>${escapeHtml(providerMeta.name.charAt(0))}</span>`;
+
+    tr.innerHTML = `
+
+        <td>
+            <div class="usage-credential-identity">
+                <div class="cred-provider-logo" aria-hidden="true">${providerLogo}</div>
+                <div class="usage-credential-copy">
+                    <div class="usage-credential-name">${escapeHtml(accountLabel)}</div>
+                    <div class="usage-credential-meta">${escapeHtml(providerMeta.name)}</div>
+                </div>
+            </div>
+        </td>
+
+        <td>
+            <div class="usage-cell-primary">${formatUsageNumber(calls)} requests</div>
+            <div class="usage-cell-meta">${formatUsageNumber(successfulCalls)} successful / ${formatUsageNumber(failedCalls)} failed</div>
+        </td>
+
+        <td>
+            <div class="usage-cell-primary">${successRate}%</div>
+            <div class="usage-cell-meta">${calls > 0 ? `${formatUsageNumber(successfulCalls)} of ${formatUsageNumber(calls)} succeeded` : 'No traffic recorded'}</div>
+        </td>
+
+        <td>
+            <div class="usage-cell-primary">${formatUsageNumber(totalTokens)} total</div>
+            <div class="usage-cell-meta">Input ${formatUsageNumber(inputTokens)} / output ${formatUsageNumber(outputTokens)} / estimated savings ${formatUsageNumber(estimatedTokensSaved)}</div>
+        </td>
+
+    `;
+
+    return tr;
+
+}
+
+function renderUsageTableRows(list, entries, emptyMessage = '') {
 
     list.innerHTML = '';
 
-    renderUsageProviderSummary();
+    if (entries.length === 0) {
 
-    const usageEntries = getUsageEntriesWithTraffic();
-
-    if (usageEntries.length === 0) {
+        if (!emptyMessage) return;
 
         const tr = document.createElement('tr');
 
-        tr.innerHTML = `<td colspan="4" style="text-align: center; color: var(--text-muted); padding: 18px 12px;">${t('status_no_filter_data')}</td>`;
+        tr.innerHTML = `<td colspan="4" style="text-align: center; color: var(--text-muted); padding: 18px 12px;">${escapeHtml(emptyMessage)}</td>`;
 
         list.appendChild(tr);
 
@@ -275,66 +362,41 @@ function renderUsageList() {
 
     }
 
-    for (const [filename, stats] of usageEntries) {
+    for (const [filename, stats] of entries) {
 
-        const tr = document.createElement('tr');
-
-        const calls = getUsageCallCount(stats);
-        const successfulCalls = stats.successful_calls ?? stats.successful_calls_24h ?? 0;
-        const failedCalls = stats.failed_calls ?? stats.failed_calls_24h ?? 0;
-        const inputTokens = stats.input_tokens ?? stats.input_tokens_24h ?? 0;
-        const outputTokens = stats.output_tokens ?? stats.output_tokens_24h ?? 0;
-        const totalTokens = stats.total_tokens ?? stats.total_tokens_24h ?? 0;
-        const estimatedTokensSaved = stats.estimated_tokens_saved ?? stats.estimated_tokens_saved_24h ?? 0;
-        const successRate = calls > 0 ? Math.round((successfulCalls / calls) * 100) : 0;
-        const isUnassigned = filename === '__gateway_unassigned__.json';
-        const providerMeta = isUnassigned
-            ? { name: 'Gateway', logo: '/frontend/assets/logo.png' }
-            : getCredentialProviderMeta({
-                provider: stats.provider || stats.provider_name,
-                credential_type: stats.credential_type
-            }, 'usage');
-        const accountLabel = isUnassigned
-            ? 'No credential assigned'
-            : (stats.is_deleted
-                ? t('deleted_credential')
-                : (stats.credential_label || stats.user_email || t('email_not_fetched')));
-        const providerLogo = providerMeta.logo
-            ? `<img src="${escapeAttribute(providerMeta.logo)}" alt="${escapeAttribute(providerMeta.name)} logo">`
-            : `<span>${escapeHtml(providerMeta.name.charAt(0))}</span>`;
-
-        tr.innerHTML = `
-
-            <td>
-                <div class="usage-credential-identity">
-                    <div class="cred-provider-logo" aria-hidden="true">${providerLogo}</div>
-                    <div class="usage-credential-copy">
-                        <div class="usage-credential-name">${escapeHtml(accountLabel)}</div>
-                        <div class="usage-credential-meta">${escapeHtml(providerMeta.name)}</div>
-                    </div>
-                </div>
-            </td>
-
-            <td>
-                <div class="usage-cell-primary">${formatUsageNumber(calls)} requests</div>
-                <div class="usage-cell-meta">${formatUsageNumber(successfulCalls)} successful / ${formatUsageNumber(failedCalls)} failed</div>
-            </td>
-
-            <td>
-                <div class="usage-cell-primary">${successRate}%</div>
-                <div class="usage-cell-meta">${calls > 0 ? `${formatUsageNumber(successfulCalls)} of ${formatUsageNumber(calls)} succeeded` : 'No traffic recorded'}</div>
-            </td>
-
-            <td>
-                <div class="usage-cell-primary">${formatUsageNumber(totalTokens)} total</div>
-                <div class="usage-cell-meta">Input ${formatUsageNumber(inputTokens)} / output ${formatUsageNumber(outputTokens)} / estimated savings ${formatUsageNumber(estimatedTokensSaved)}</div>
-            </td>
-
-        `;
-
-        list.appendChild(tr);
+        list.appendChild(createUsageTableRow(filename, stats));
 
     }
+
+}
+
+function renderHistoricalUsageList() {
+
+    const section = document.getElementById('historicalUsageSection');
+    const list = document.getElementById('historicalUsageList');
+
+    if (!section || !list) return;
+
+    const entries = getHistoricalUsageEntriesWithTraffic();
+
+    section.hidden = entries.length === 0;
+    renderUsageTableRows(list, entries);
+
+}
+
+function renderUsageList() {
+
+    const list = document.getElementById('usageList');
+
+    if (!list) return;
+
+    renderUsageProviderSummary();
+    renderUsageTableRows(
+        list,
+        getCurrentUsageEntriesWithTraffic(),
+        t('status_no_filter_data')
+    );
+    renderHistoricalUsageList();
 
 }
 
@@ -346,7 +408,7 @@ function renderUsageProviderSummary() {
 
     const providers = new Map();
 
-    for (const [filename, stats] of getUsageEntriesWithTraffic()) {
+    for (const [filename, stats] of getCurrentUsageEntriesWithTraffic()) {
 
         if (filename === '__gateway_unassigned__.json') continue;
 

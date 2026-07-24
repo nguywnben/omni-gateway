@@ -129,6 +129,7 @@ const TRANSLATIONS = {
         "deduplication_failed": "Deduplication failed.",
         "deduplication_network_error_errorme": "Deduplication network error: {error_message}",
         "deleted_credential": "Deleted credential",
+        "unavailable_credential": "Unavailable credential",
         "dialog_tip": "Tip",
         "disable_only": "Disabled only",
         "disconnected": "Disconnected",

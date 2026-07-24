@@ -112,6 +112,7 @@ def _empty_usage_record(metadata: Dict[str, Any]) -> Dict[str, Any]:
         "provider_name": metadata.get("provider_name")
         or _credential_provider_display_name(provider_id, metadata.get("credential_type")),
         "is_deleted": bool(metadata.get("is_deleted", False)),
+        "is_historical": bool(metadata.get("is_historical", False)),
         "calls": 0,
         "successful_calls": 0,
         "failed_calls": 0,
@@ -168,6 +169,7 @@ def _usage_record(
         "provider_name": existing.get("provider_name")
         or _credential_provider_display_name(provider_id, existing.get("credential_type")),
         "is_deleted": bool(existing.get("is_deleted", False)),
+        "is_historical": bool(existing.get("is_historical", False)),
         "calls": calls,
         "successful_calls": successful_calls,
         "failed_calls": failed_calls,
@@ -530,6 +532,7 @@ async def get_stats_for_period(period: str = "1d") -> Dict[str, Dict[str, Any]]:
 
     metadata_by_filename = await get_credential_usage_metadata()
     filenames = await get_all_credential_filenames()
+    active_filenames = set(filenames)
     for name in filenames:
         metadata = metadata_by_filename.get(name, {})
         res[name] = _empty_usage_record(metadata)
@@ -564,28 +567,36 @@ async def get_stats_for_period(period: str = "1d") -> Dict[str, Dict[str, Any]]:
                 params,
             )
             for row in cursor.fetchall():
-                existing = res.get(row[0], {})
-                if is_deleted_usage_filename(row[0]):
+                filename = str(row[0] or "")
+                existing = res.get(filename, {})
+                is_deleted = is_deleted_usage_filename(filename)
+                is_historical = (
+                    filename != UNASSIGNED_USAGE_FILENAME and filename not in active_filenames
+                )
+                if is_historical:
                     raw_provider = str(row[14] or GOOGLE_ANTIGRAVITY)
                     credential_type = (
                         "api_key"
-                        if raw_provider == "xai_console"
+                        if raw_provider in {"google_ai_studio", "openai_platform", "xai_console"}
                         else "oauth"
-                        if raw_provider == "grok"
+                        if raw_provider in {"grok", "openai"}
                         else ""
                     )
                     provider_id = normalize_provider_id(raw_provider)
                     existing = {
                         "user_email": "",
-                        "credential_label": "Deleted credential",
+                        "credential_label": (
+                            "Deleted credential" if is_deleted else "Unavailable credential"
+                        ),
                         "provider": provider_id,
                         "provider_name": _credential_provider_display_name(
                             raw_provider, credential_type
                         ),
                         "credential_type": credential_type,
-                        "is_deleted": True,
+                        "is_deleted": is_deleted,
+                        "is_historical": True,
                     }
-                res[row[0]] = _usage_record(
+                res[filename] = _usage_record(
                     existing=existing,
                     provider=row[14],
                     calls=row[1],
