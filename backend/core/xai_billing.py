@@ -2,9 +2,6 @@
 
 from __future__ import annotations
 
-import base64
-import binascii
-import json
 import math
 from datetime import datetime
 from typing import Any, Dict, Optional
@@ -14,25 +11,6 @@ from core.httpx_client import get_async
 from core.xai import XaiError
 
 XAI_BILLING_API_URL = "https://cli-chat-proxy.grok.com/v1"
-
-
-def parse_xai_access_tier(access_token: str) -> Optional[str]:
-    """Read the display-only access tier issued in a Grok Build JWT."""
-    token = str(access_token or "").strip()
-    parts = token.split(".")
-    if len(parts) != 3 or len(parts[1]) > 16_384:
-        return None
-    try:
-        padding = "=" * (-len(parts[1]) % 4)
-        claims = json.loads(base64.urlsafe_b64decode(parts[1] + padding))
-    except (binascii.Error, UnicodeDecodeError, json.JSONDecodeError, ValueError):
-        return None
-    if not isinstance(claims, dict):
-        return None
-    tier = claims.get("tier")
-    if isinstance(tier, bool) or not isinstance(tier, int) or not 0 <= tier <= 99:
-        return None
-    return str(tier)
 
 
 def _finite_number(value: Any) -> Optional[float]:
@@ -169,10 +147,8 @@ async def fetch_xai_billing_usage(access_token: str) -> Dict[str, Any]:
     except ValueError as exc:
         raise XaiError("Grok Build returned an invalid billing response.", 502) from exc
 
-    access_tier = parse_xai_access_tier(access_token)
     return {
         "quota_type": "account_billing",
-        "plan": f"Tier {access_tier}" if access_tier is not None else None,
         "monthly": monthly,
         "weekly": await _fetch_optional_weekly_usage(headers),
     }

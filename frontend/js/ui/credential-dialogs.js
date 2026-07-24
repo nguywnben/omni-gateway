@@ -228,7 +228,6 @@ function buildAccountBillingQuotaHtml(filename, data, context = {}) {
     const rows = renderMessageResultRows([
         ['Provider', context.providerName || t('provider_grok')],
         context.accountLabel ? ['Account', context.accountLabel] : ['Credential', filename],
-        data.plan ? ['Access tier', data.plan] : null,
         ['Quota source', 'Grok Build account billing'],
         ['Billing periods', periods.length],
         lowestRemaining !== null ? ['Lowest remaining quota', `${lowestRemaining}%`] : null,
@@ -566,9 +565,7 @@ function updateCredentialSubscriptionBadge(pathId, filename) {
     const cached = AppState.quotaPreviewCache[filename] || {};
     const cardContext = AppState.credentialCardIndex[pathId] || {};
     const plan = cached.data?.plan || cardContext.subscriptionPlan;
-    const kind = cached.data?.plan
-        ? (cached.data?.quota_type === 'account_billing' ? 'tier' : 'plan')
-        : (cardContext.subscriptionKind || 'plan');
+    const kind = cached.data?.plan ? 'plan' : (cardContext.subscriptionKind || 'plan');
     badge.outerHTML = renderCredentialSubscriptionBadge(pathId, plan, kind);
 
 }

@@ -42,6 +42,7 @@ from core.codex import (
     build_codex_headers,
     codex_response_to_gemini,
     codex_stream_line_to_gemini,
+    fetch_codex_model_ids,
     gemini_request_to_codex,
 )
 from core.credential_manager import credential_manager
@@ -64,11 +65,14 @@ from core.provider_registry import (
     CODEX,
     GOOGLE_AI_STUDIO,
     GOOGLE_ANTIGRAVITY,
+    GROK,
     OPENAI,
     OPENAI_PLATFORM,
     XAI,
+    XAI_CONSOLE,
     get_credential_provider,
     get_credential_provider_variant,
+    get_provider_routing_id,
 )
 from core.storage_adapter import get_storage_adapter
 from core.token_compression import (
@@ -94,6 +98,10 @@ SESSION_TTL_SECONDS = 6 * 60 * 60
 MAX_SESSION_STATES = 1024
 _REDIS_KEY_PREFIX = "primary:session:"
 MAX_MODEL_ROUTE_ATTEMPTS = 128
+MAX_MODEL_DISCOVERY_CONCURRENCY = 8
+MAX_MODEL_DISCOVERY_COHORTS = 32
+MAX_MODEL_DISCOVERY_FAILOVER_ATTEMPTS = 3
+MODEL_DISCOVERY_ROTATION_SECONDS = 5 * 60
 
 
 @dataclass
@@ -104,6 +112,12 @@ class PrimarySessionState:
     step_index: int
     created_at: float
     last_used_at: float
+
+
+@dataclass(frozen=True)
+class CredentialModelDiscovery:
+    model_ids: frozenset[str]
+    refreshed: bool
 
 
 @dataclass(frozen=True)
@@ -1350,133 +1364,345 @@ async def non_stream_request(
         )
 
 
-async def get_configured_provider_model_ids() -> Dict[str, set[str]]:
-    """Return enabled providers and model metadata already stored per credential."""
+async def _get_enabled_catalog_credentials() -> List[Tuple[str, str, str, Dict[str, Any]]]:
+    """Return enabled credentials with precise product and routing identities."""
     storage_adapter = await get_storage_adapter()
-    provider_models: Dict[str, set[str]] = {}
-    for filename in await storage_adapter.list_credentials(mode="primary"):
-        state = await storage_adapter.get_credential_state(filename, mode="primary")
-        if state.get("disabled"):
-            continue
-        credential_data = await storage_adapter.get_credential(filename, mode="primary")
-        if not credential_data:
-            continue
-        provider_id = get_credential_provider(credential_data)
-        model_ids = provider_models.setdefault(provider_id, set())
-        stored_model_ids = credential_data.get("model_ids")
-        if isinstance(stored_model_ids, list):
-            model_ids.update(
-                str(model_id).removeprefix("models/").strip()
-                for model_id in stored_model_ids
-                if str(model_id or "").strip()
+    credentials: List[Tuple[str, str, str, Dict[str, Any]]] = []
+
+    get_all_credentials = getattr(storage_adapter, "get_all_credentials", None)
+    get_all_states = getattr(storage_adapter, "get_all_credential_states", None)
+    if callable(get_all_credentials) and callable(get_all_states):
+        credential_map, state_map = await asyncio.gather(
+            get_all_credentials(mode="primary"),
+            get_all_states(mode="primary"),
+        )
+        credential_items = credential_map.items()
+    else:
+        filenames = await storage_adapter.list_credentials(mode="primary")
+        credential_items = []
+        state_map = {}
+        for filename in filenames:
+            state_map[filename] = await storage_adapter.get_credential_state(
+                filename, mode="primary"
             )
+            credential_data = await storage_adapter.get_credential(filename, mode="primary")
+            credential_items.append((filename, credential_data))
+
+    for filename, credential_data in credential_items:
+        state = state_map.get(filename) or {}
+        if state.get("disabled") or not credential_data:
+            continue
+        catalog_data = dict(credential_data)
+        if state.get("tier") and not catalog_data.get("tier"):
+            catalog_data["tier"] = state["tier"]
+        credentials.append(
+            (
+                filename,
+                get_credential_provider_variant(catalog_data),
+                get_credential_provider(catalog_data),
+                catalog_data,
+            )
+        )
+    return credentials
+
+
+def _stored_model_ids(credential_data: Dict[str, Any]) -> set[str]:
+    values = credential_data.get("model_ids")
+    if not isinstance(values, list):
+        return set()
+    return {
+        str(model_id).removeprefix("models/").strip()
+        for model_id in values
+        if str(model_id or "").strip()
+    }
+
+
+async def get_configured_provider_model_ids() -> Dict[str, set[str]]:
+    """Return stored model catalogs grouped by precise provider product."""
+    provider_models: Dict[str, set[str]] = {}
+    for _, provider_variant, _, credential_data in await _get_enabled_catalog_credentials():
+        provider_models.setdefault(provider_variant, set()).update(
+            _stored_model_ids(credential_data)
+        )
     return provider_models
 
 
 async def get_configured_provider_ids() -> set[str]:
-    """Return providers with at least one enabled credential."""
+    """Return provider products with at least one enabled credential."""
     return set(await get_configured_provider_model_ids())
+
+
+def _catalog_request_matches(
+    requested_provider: str,
+    provider_variant: str,
+    routing_provider: str,
+) -> bool:
+    requested = str(requested_provider or "").strip().lower().replace("-", "_")
+    if requested in {CODEX, OPENAI_PLATFORM, GROK, XAI_CONSOLE}:
+        return provider_variant == requested
+    return routing_provider == get_provider_routing_id(requested)
+
+
+def _catalog_entitlement_signature(credential_data: Dict[str, Any]) -> str:
+    fields = (
+        "tier",
+        "plan",
+        "plan_type",
+        "subscription_tier",
+        "subscription_plan",
+        "account_type",
+        "access_tier",
+    )
+    values = []
+    for field in fields:
+        value = credential_data.get(field)
+        if isinstance(value, (str, int, float)) and str(value).strip():
+            values.append(f"{field}:{str(value).strip().lower()}")
+    return "|".join(values) or "unknown"
+
+
+def _stored_catalog_signature(credential_data: Dict[str, Any]) -> str:
+    model_ids = sorted(_stored_model_ids(credential_data))
+    if not model_ids:
+        return "uncataloged"
+    payload = "\0".join(model_ids).encode("utf-8")
+    return hashlib.sha256(payload).hexdigest()[:16]
+
+
+def _catalog_cohort_key(
+    credential: Tuple[str, str, str, Dict[str, Any]],
+) -> Tuple[str, str, str]:
+    _, provider_variant, _, credential_data = credential
+    return (
+        provider_variant,
+        _catalog_entitlement_signature(credential_data),
+        _stored_catalog_signature(credential_data),
+    )
+
+
+def _catalog_rotation_score(*parts: str) -> bytes:
+    window = int(time.time() // MODEL_DISCOVERY_ROTATION_SECONDS)
+    value = "|".join((str(window), *parts)).encode("utf-8")
+    return hashlib.sha256(value).digest()
+
+
+def _group_catalog_credentials(
+    credentials: List[Tuple[str, str, str, Dict[str, Any]]],
+) -> Dict[Tuple[str, str, str], List[Tuple[str, str, str, Dict[str, Any]]]]:
+    cohorts: Dict[
+        Tuple[str, str, str],
+        List[Tuple[str, str, str, Dict[str, Any]]],
+    ] = {}
+    for credential in credentials:
+        cohorts.setdefault(_catalog_cohort_key(credential), []).append(credential)
+    return cohorts
+
+
+def _select_catalog_cohorts(
+    cohorts: Dict[
+        Tuple[str, str, str],
+        List[Tuple[str, str, str, Dict[str, Any]]],
+    ],
+) -> List[
+    Tuple[
+        Tuple[str, str, str],
+        List[Tuple[str, str, str, Dict[str, Any]]],
+    ]
+]:
+    """Select a bounded, provider-fair set of cohorts for live discovery."""
+    queues: Dict[
+        str,
+        List[
+            Tuple[
+                Tuple[str, str, str],
+                List[Tuple[str, str, str, Dict[str, Any]]],
+            ]
+        ],
+    ] = {}
+    for key, members in cohorts.items():
+        queues.setdefault(key[0], []).append((key, members))
+    for provider_id, items in queues.items():
+        items.sort(key=lambda item: _catalog_rotation_score(provider_id, *item[0]))
+
+    selected = []
+    provider_ids = sorted(queues)
+    while len(selected) < MAX_MODEL_DISCOVERY_COHORTS:
+        progressed = False
+        for provider_id in provider_ids:
+            queue = queues[provider_id]
+            if not queue:
+                continue
+            selected.append(queue.pop(0))
+            progressed = True
+            if len(selected) >= MAX_MODEL_DISCOVERY_COHORTS:
+                break
+        if not progressed:
+            break
+    return selected
+
+
+async def _discover_credential_model_ids(
+    filename: str,
+    provider_variant: str,
+    credential_data: Dict[str, Any],
+    storage_adapter,
+) -> CredentialModelDiscovery:
+    """Refresh and persist the catalog exposed by one credential."""
+    stored = _stored_model_ids(credential_data)
+    data = credential_data
+    try:
+        if provider_variant == GOOGLE_ANTIGRAVITY:
+            data = await credential_manager.prepare_credential(
+                filename, credential_data, mode="primary"
+            )
+            access_token = (data or {}).get("access_token") or (data or {}).get("token")
+            if not access_token:
+                return CredentialModelDiscovery(frozenset(stored), False)
+            discovered = await fetch_antigravity_model_ids(str(access_token))
+        elif provider_variant == GOOGLE_AI_STUDIO:
+            api_key = str(data.get("api_key") or "")
+            if not api_key:
+                return CredentialModelDiscovery(frozenset(stored), False)
+            response = await get_async(
+                build_models_url(await get_google_ai_studio_api_url()),
+                headers=build_api_key_headers(api_key),
+                timeout=30.0,
+            )
+            if response.status_code != 200:
+                raise RuntimeError(f"HTTP {response.status_code}")
+            discovered = parse_model_ids(response.json())
+        elif provider_variant in {GROK, XAI_CONSOLE}:
+            if provider_variant == GROK:
+                data = await credential_manager.prepare_credential(
+                    filename, credential_data, mode="primary"
+                )
+            access_token = (
+                (data or {}).get("api_key")
+                or (data or {}).get("access_token")
+                or (data or {}).get("token")
+            )
+            if not access_token:
+                return CredentialModelDiscovery(frozenset(stored), False)
+            discovered = await fetch_xai_model_ids(str(access_token))
+        elif provider_variant == CODEX:
+            data = await credential_manager.prepare_credential(
+                filename, credential_data, mode="primary"
+            )
+            access_token = (data or {}).get("access_token") or (data or {}).get("token")
+            if not access_token:
+                return CredentialModelDiscovery(frozenset(stored), False)
+            account_id = str((data or {}).get("account_id") or "")
+            discovered = await fetch_codex_model_ids(str(access_token), account_id)
+        elif provider_variant == OPENAI_PLATFORM:
+            api_key = str(data.get("api_key") or "")
+            if not api_key:
+                return CredentialModelDiscovery(frozenset(stored), False)
+            discovered = await fetch_openai_model_ids(api_key)
+        else:
+            return CredentialModelDiscovery(frozenset(stored), False)
+
+        normalized = {
+            str(model_id).removeprefix("models/").strip()
+            for model_id in discovered
+            if str(model_id or "").strip()
+        }
+        if normalized and normalized != stored:
+            updated = dict(data or credential_data)
+            updated["model_ids"] = sorted(normalized)
+            await storage_adapter.store_credential(filename, updated, mode="primary")
+        return CredentialModelDiscovery(frozenset(normalized or stored), True)
+    except Exception as exc:
+        log.warning(f"{provider_variant} model discovery failed for {filename}: {exc}")
+        return CredentialModelDiscovery(frozenset(stored), False)
+
+
+async def _discover_catalog_models(
+    credentials: List[Tuple[str, str, str, Dict[str, Any]]],
+    storage_adapter,
+) -> Dict[str, set[str]]:
+    """Merge all cached catalogs and refresh only bounded cohort representatives."""
+    provider_models: Dict[str, set[str]] = {}
+    for _, provider_variant, _, credential_data in credentials:
+        provider_models.setdefault(provider_variant, set()).update(
+            _stored_model_ids(credential_data)
+        )
+
+    cohorts = _group_catalog_credentials(credentials)
+    selected = _select_catalog_cohorts(cohorts)
+    skipped_count = len(cohorts) - len(selected)
+    if skipped_count:
+        log.info(
+            "Model discovery deferred %s cohort(s); cached catalogs remain available.",
+            skipped_count,
+        )
+
+    semaphore = asyncio.Semaphore(MAX_MODEL_DISCOVERY_CONCURRENCY)
+
+    async def discover_cohort(key, members):
+        ordered = sorted(
+            members,
+            key=lambda item: _catalog_rotation_score(*key, item[0]),
+        )
+        models: set[str] = set()
+        for filename, provider_variant, _, credential_data in ordered[
+            :MAX_MODEL_DISCOVERY_FAILOVER_ATTEMPTS
+        ]:
+            models.update(_stored_model_ids(credential_data))
+            async with semaphore:
+                result = await _discover_credential_model_ids(
+                    filename,
+                    provider_variant,
+                    credential_data,
+                    storage_adapter,
+                )
+            models.update(result.model_ids)
+            if result.refreshed:
+                break
+        return key[0], models
+
+    results = await asyncio.gather(
+        *(discover_cohort(key, members) for key, members in selected),
+        return_exceptions=True,
+    )
+    for result in results:
+        if isinstance(result, Exception):
+            log.warning(f"Provider model cohort discovery failed: {result}")
+            continue
+        provider_variant, model_ids = result
+        provider_models.setdefault(provider_variant, set()).update(model_ids)
+    return provider_models
 
 
 async def fetch_provider_model_ids(
     provider_id: str,
     stored_model_ids: Optional[set[str]] = None,
 ) -> set[str]:
-    """Discover model IDs exposed by one configured provider."""
-    if stored_model_ids is None:
-        provider_models = await get_configured_provider_model_ids()
-        stored_model_ids = provider_models.get(provider_id, set())
-    model_ids = set(stored_model_ids)
+    """Discover model IDs through bounded representatives of matching cohorts."""
+    fallback = set(stored_model_ids or ())
+    credentials = [
+        credential
+        for credential in await _get_enabled_catalog_credentials()
+        if _catalog_request_matches(provider_id, credential[1], credential[2])
+    ]
+    if not credentials:
+        return fallback
 
-    if provider_id == GOOGLE_ANTIGRAVITY:
-        cred_result = await credential_manager.get_valid_credential(
-            mode="primary", provider_id=GOOGLE_ANTIGRAVITY
-        )
-        if cred_result:
-            current_file, credential_data = cred_result
-            try:
-                access_token = credential_data.get("access_token") or credential_data.get("token")
-                if access_token:
-                    model_ids.update(await fetch_antigravity_model_ids(str(access_token)))
-            except Exception as exc:
-                log.warning(f"Google Antigravity model discovery failed: {exc}")
-            finally:
-                await credential_manager.release_credential(current_file, mode="primary")
-    elif provider_id == GOOGLE_AI_STUDIO:
-        cred_result = await credential_manager.get_valid_credential(
-            mode="primary", provider_id=GOOGLE_AI_STUDIO
-        )
-        if cred_result:
-            current_file, credential_data = cred_result
-            try:
-                response = await get_async(
-                    build_models_url(await get_google_ai_studio_api_url()),
-                    headers=build_api_key_headers(credential_data.get("api_key", "")),
-                    timeout=30.0,
-                )
-                if response.status_code == 200:
-                    model_ids.update(parse_model_ids(response.json()))
-                else:
-                    log.warning(
-                        f"Google AI Studio model discovery failed with HTTP {response.status_code}."
-                    )
-            except Exception as exc:
-                log.warning(f"Google AI Studio model discovery failed: {exc}")
-            finally:
-                await credential_manager.release_credential(current_file, mode="primary")
-    elif provider_id == XAI:
-        cred_result = await credential_manager.get_valid_credential(mode="primary", provider_id=XAI)
-        if cred_result:
-            current_file, credential_data = cred_result
-            try:
-                access_token = (
-                    credential_data.get("api_key")
-                    or credential_data.get("access_token")
-                    or credential_data.get("token")
-                )
-                if access_token:
-                    model_ids.update(await fetch_xai_model_ids(str(access_token)))
-            except Exception as exc:
-                log.warning(f"Grok Build model discovery failed: {exc}")
-            finally:
-                await credential_manager.release_credential(current_file, mode="primary")
-    elif provider_id == OPENAI:
-        cred_result = await credential_manager.get_valid_credential(
-            mode="primary", provider_id=OPENAI
-        )
-        if cred_result:
-            current_file, credential_data = cred_result
-            try:
-                if get_credential_provider_variant(credential_data) == OPENAI_PLATFORM:
-                    api_key = str(credential_data.get("api_key") or "")
-                    if api_key:
-                        model_ids.update(await fetch_openai_model_ids(api_key))
-            except Exception as exc:
-                log.warning(f"OpenAI model discovery failed: {exc}")
-            finally:
-                await credential_manager.release_credential(current_file, mode="primary")
-
+    storage_adapter = await get_storage_adapter()
+    provider_models = await _discover_catalog_models(credentials, storage_adapter)
+    model_ids = set(fallback)
+    for values in provider_models.values():
+        model_ids.update(values)
     return model_ids
 
 
 async def fetch_configured_provider_models() -> Dict[str, List[str]]:
-    """Return active provider model catalogs with provider provenance."""
-    stored_provider_models = await get_configured_provider_model_ids()
-    provider_ids = sorted(stored_provider_models)
-    discovered = await asyncio.gather(
-        *(
-            fetch_provider_model_ids(provider_id, stored_provider_models[provider_id])
-            for provider_id in provider_ids
-        ),
-        return_exceptions=True,
-    )
-    provider_models: Dict[str, List[str]] = {}
-    for provider_id, result in zip(provider_ids, discovered):
-        if isinstance(result, Exception):
-            log.warning(f"{provider_id} model discovery failed: {result}")
-            result = stored_provider_models[provider_id]
-        provider_models[provider_id] = sorted(result)
-    return provider_models
+    """Discover bounded provider cohorts while preserving every cached catalog."""
+    credentials = await _get_enabled_catalog_credentials()
+    storage_adapter = await get_storage_adapter()
+    provider_models = await _discover_catalog_models(credentials, storage_adapter)
+    return {
+        provider_id: sorted(model_ids) for provider_id, model_ids in sorted(provider_models.items())
+    }
 
 
 async def fetch_quota_info(access_token: str) -> Dict[str, Any]:

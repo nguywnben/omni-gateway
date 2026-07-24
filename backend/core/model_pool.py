@@ -12,7 +12,7 @@ from core.storage_adapter import get_storage_adapter
 
 DEFAULT_VIRTUAL_MODEL_ALIAS = "omway"
 MODEL_POOL_CONFIG_KEY = "virtual_model_pool"
-MODEL_CATALOG_TTL_SECONDS = 60.0
+MODEL_CATALOG_TTL_SECONDS = 5 * 60.0
 MAX_POOL_MODELS = 64
 _MODEL_ID_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:/-]{0,199}$")
 

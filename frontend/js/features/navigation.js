@@ -323,12 +323,28 @@ const MODEL_PROVIDER_META = {
         name: 'Google AI Studio',
         logo: '/frontend/assets/providers/google-ai-studio-logo.png'
     },
+    grok: {
+        name: 'Grok Build',
+        logo: '/frontend/assets/providers/grok-build-logo.png'
+    },
+    xai_console: {
+        name: 'SpaceXAI Console',
+        logo: '/frontend/assets/providers/spacexai-console-logo.png'
+    },
+    codex: {
+        name: 'Codex',
+        logo: '/frontend/assets/providers/codex-logo.png'
+    },
+    openai_platform: {
+        name: 'OpenAI Platform',
+        logo: '/frontend/assets/providers/openai-platform-logo.png'
+    },
     xai: {
         name: 'Grok Build',
         logo: '/frontend/assets/providers/grok-build-logo.png'
     },
     openai: {
-        name: 'OpenAI',
+        name: 'OpenAI Platform',
         logo: '/frontend/assets/providers/openai-platform-logo.png'
     }
 };
