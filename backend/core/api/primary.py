@@ -23,6 +23,7 @@ from config import (
     get_token_compression_config,
     get_upstream_timeout_seconds,
     get_xai_api_url,
+    get_xai_oauth_api_url,
     get_xai_user_agent,
 )
 from core.anthropic import (
@@ -108,6 +109,7 @@ from core.usage_stats import (
 from core.xai import (
     build_xai_headers,
     fetch_xai_model_ids,
+    fetch_xai_oauth_model_ids,
     gemini_request_to_xai,
     xai_response_to_gemini,
     xai_stream_line_to_gemini,
@@ -385,8 +387,19 @@ async def prepare_provider_request(
             CompressionSettings(**await get_token_compression_config()),
         )
         payload = gemini_request_to_xai(dict(compression_result.request), model_name, streaming)
-        target_url = f"{(await get_xai_api_url()).rstrip('/')}/chat/completions"
-        auth_headers = build_xai_headers(str(access_token), await get_xai_user_agent())
+        is_oauth = (
+            get_credential_provider_variant(credential_data) == GROK
+            or str(credential_data.get("credential_type") or "").strip().lower() == "oauth"
+        )
+        base_url = await get_xai_oauth_api_url() if is_oauth else await get_xai_api_url()
+        target_url = f"{base_url.rstrip('/')}/chat/completions"
+        auth_headers = build_xai_headers(
+            str(access_token),
+            await get_xai_user_agent(),
+            oauth=is_oauth,
+        )
+        if is_oauth and model_name:
+            auth_headers["x-grok-model-override"] = model_name
     elif provider_id == OPENAI:
         credential_variant = get_credential_provider_variant(credential_data)
         access_token = (
@@ -1695,7 +1708,11 @@ async def _discover_credential_model_ids(
             )
             if not access_token:
                 return CredentialModelDiscovery(frozenset(stored), False)
-            discovered = await fetch_xai_model_ids(str(access_token))
+            discovered = (
+                await fetch_xai_oauth_model_ids(str(access_token))
+                if provider_variant == GROK
+                else await fetch_xai_model_ids(str(access_token))
+            )
         elif provider_variant == CODEX:
             data = await credential_manager.prepare_credential(
                 filename, credential_data, mode="primary"

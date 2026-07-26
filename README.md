@@ -209,7 +209,8 @@ Omni Gateway reads configuration from environment variables first, then stored c
 | `ANTIGRAVITY_CLIENT_ID` | bundled desktop client | Optional override for the Google Antigravity OAuth client ID. It can also be managed from the Providers page. |
 | `ANTIGRAVITY_CLIENT_SECRET` | bundled desktop client | Optional override for the Google Antigravity OAuth client secret. Configure it through env or the Providers page when the upstream client changes. |
 | `GOOGLE_AI_STUDIO_API_URL` | `https://generativelanguage.googleapis.com` | Optional Google AI Studio Generative Language API endpoint override. |
-| `XAI_API_URL` | `https://api.x.ai/v1` | Optional shared inference and model-catalog endpoint override for Grok Build OAuth accounts and SpaceXAI Console API keys. It can also be managed from the Providers page. |
+| `XAI_API_URL` | `https://api.x.ai/v1` | Optional SpaceXAI Console API endpoint override for API-key credentials. It can also be managed from the Providers page. |
+| `XAI_OAUTH_API_URL` | `https://cli-chat-proxy.grok.com/v1` | Optional Grok Build OAuth subscription endpoint override. |
 | `XAI_OAUTH_ISSUER` | `https://auth.x.ai` | Optional Grok Build OAuth issuer override. Only HTTPS hosts under `x.ai` are accepted by the console. |
 | `XAI_CLIENT_ID` | bundled public client | Optional override for the Grok Build PKCE OAuth client ID. |
 | `XAI_USER_AGENT` | `grok-cli/omni-gateway` | Optional shared HTTP User-Agent override for Grok Build OAuth and SpaceXAI Console API requests. |

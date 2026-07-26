@@ -57,7 +57,12 @@ from core.provider_registry import (
     normalize_provider_id,
 )
 from core.storage_adapter import get_storage_adapter
-from core.xai import XaiError, fetch_xai_model_ids, refresh_xai_oauth_credential
+from core.xai import (
+    XaiError,
+    fetch_xai_model_ids,
+    fetch_xai_oauth_model_ids,
+    refresh_xai_oauth_credential,
+)
 from fastapi import HTTPException, Response, UploadFile
 from fastapi.responses import JSONResponse
 from log import log
@@ -924,7 +929,11 @@ async def verify_credential_common(filename: str, mode: str = "code_assist") -> 
                 or credential_data.get("access_token")
                 or credential_data.get("token")
             )
-            model_ids = await fetch_xai_model_ids(str(access_token or ""))
+            model_ids = (
+                await fetch_xai_oauth_model_ids(str(access_token or ""))
+                if credential_type == "oauth"
+                else await fetch_xai_model_ids(str(access_token or ""))
+            )
         except XaiError as exc:
             return JSONResponse(
                 status_code=exc.status_code,

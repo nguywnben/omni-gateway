@@ -17,6 +17,7 @@ import httpx
 from config import (
     get_xai_api_url,
     get_xai_client_id,
+    get_xai_oauth_api_url,
     get_xai_oauth_issuer,
     get_xai_user_agent,
 )
@@ -81,7 +82,12 @@ def _validate_discovered_endpoint(value: Any, label: str) -> str:
         raise XaiError(f"Grok Build OAuth discovery returned an invalid {label}.", 502) from exc
 
 
-def build_xai_headers(access_token: str, user_agent: str = "") -> Dict[str, str]:
+def build_xai_headers(
+    access_token: str,
+    user_agent: str = "",
+    *,
+    oauth: bool = False,
+) -> Dict[str, str]:
     token = str(access_token or "").strip()
     if not token:
         raise ValueError("Provider credential does not contain an access token or API key.")
@@ -92,15 +98,26 @@ def build_xai_headers(access_token: str, user_agent: str = "") -> Dict[str, str]
     }
     if str(user_agent or "").strip():
         headers["User-Agent"] = str(user_agent).strip()
+    if oauth:
+        headers["X-XAI-Token-Auth"] = "xai-grok-cli"
+        headers["x-grok-client-identifier"] = "grok-shell"
     return headers
 
 
 def parse_xai_model_ids(payload: Any) -> List[str]:
-    if not isinstance(payload, dict) or not isinstance(payload.get("data"), list):
+    if not isinstance(payload, dict):
+        raise XaiError("Grok Build returned an invalid model response.", 502)
+    raw_models = payload.get("data")
+    if not isinstance(raw_models, list):
+        raw_models = payload.get("models")
+    if not isinstance(raw_models, list):
         raise XaiError("Grok Build returned an invalid model response.", 502)
     model_ids: List[str] = []
-    for item in payload["data"]:
-        model_id = str(item.get("id") if isinstance(item, dict) else "").strip()
+    for item in raw_models:
+        if isinstance(item, dict):
+            model_id = str(item.get("id") or item.get("model") or "").strip()
+        else:
+            model_id = str(item or "").strip()
         if (
             model_id
             and len(model_id) <= MAX_MODEL_ID_LENGTH
@@ -113,19 +130,37 @@ def parse_xai_model_ids(payload: Any) -> List[str]:
     return model_ids
 
 
-async def fetch_xai_model_ids(access_token: str) -> List[str]:
+async def _fetch_xai_model_ids(
+    access_token: str,
+    *,
+    base_url: str,
+    model_paths: tuple[str, ...],
+    oauth: bool,
+) -> List[str]:
+    user_agent = await get_xai_user_agent()
+    response = None
     try:
-        response = await get_async(
-            f"{normalize_xai_api_url(await get_xai_api_url())}/models",
-            headers=build_xai_headers(access_token, await get_xai_user_agent()),
-            timeout=30.0,
-        )
+        for index, model_path in enumerate(model_paths):
+            response = await get_async(
+                f"{normalize_xai_api_url(base_url)}/{model_path.lstrip('/')}",
+                headers=build_xai_headers(access_token, user_agent, oauth=oauth),
+                timeout=30.0,
+            )
+            if response.status_code != 404 or index >= len(model_paths) - 1:
+                break
     except (httpx.HTTPError, OSError) as exc:
         raise XaiError(
             "Unable to reach Grok Build. Check outbound network and proxy settings.", 502
         ) from exc
+
+    if response is None:
+        raise XaiError("Grok Build did not return a model response.", 502)
     if response.status_code in {401, 403}:
-        raise XaiError("Grok Build rejected this credential. Check its access and permissions.")
+        credential_label = "OAuth credential" if oauth else "credential"
+        raise XaiError(
+            f"Grok Build rejected this {credential_label}. Check its access and permissions.",
+            response.status_code,
+        )
     if response.status_code != 200:
         raise XaiError(
             f"Grok Build model discovery failed with HTTP {response.status_code}.",
@@ -136,8 +171,27 @@ async def fetch_xai_model_ids(access_token: str) -> List[str]:
     except ValueError as exc:
         raise XaiError("Grok Build returned an invalid JSON response.", 502) from exc
     if not model_ids:
-        raise XaiError("The SpaceXAI Console API key is valid, but no models are available.")
+        credential_label = "Grok Build OAuth credential" if oauth else "SpaceXAI Console API key"
+        raise XaiError(f"The {credential_label} is valid, but no models are available.")
     return model_ids
+
+
+async def fetch_xai_model_ids(access_token: str) -> List[str]:
+    return await _fetch_xai_model_ids(
+        access_token,
+        base_url=await get_xai_api_url(),
+        model_paths=("models",),
+        oauth=False,
+    )
+
+
+async def fetch_xai_oauth_model_ids(access_token: str) -> List[str]:
+    return await _fetch_xai_model_ids(
+        access_token,
+        base_url=await get_xai_oauth_api_url(),
+        model_paths=("models-v2", "models"),
+        oauth=True,
+    )
 
 
 async def validate_xai_api_key(api_key: str) -> XaiValidation:
@@ -280,7 +334,7 @@ async def complete_xai_oauth(code: str, state: str) -> Dict[str, Any]:
         },
         flow["token_endpoint"],
     )
-    model_ids = await fetch_xai_model_ids(tokens["access_token"])
+    model_ids = await fetch_xai_oauth_model_ids(tokens["access_token"])
     identity = _decode_id_token_identity(tokens.get("id_token"))
     expires_in = max(60, int(tokens.get("expires_in") or 3600))
     expiry = datetime.now(timezone.utc) + timedelta(seconds=expires_in)
