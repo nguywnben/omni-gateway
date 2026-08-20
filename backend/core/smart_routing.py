@@ -76,9 +76,9 @@ class SmartCredentialRouter:
     def _active_failure(
         self, mode: str, filename: str, model_name: Optional[str]
     ) -> Optional[FailurePenalty]:
-        return self._failures.get(self._failure_key(mode, filename, model_name)) or self._failures.get(
-            self._failure_key(mode, filename)
-        )
+        return self._failures.get(
+            self._failure_key(mode, filename, model_name)
+        ) or self._failures.get(self._failure_key(mode, filename))
 
     @staticmethod
     def _failure_kind(error_code: Optional[int]) -> str:
@@ -156,13 +156,21 @@ class SmartCredentialRouter:
 
             if state.get("disabled", False):
                 decisions[filename] = RouteCandidate(
-                    filename, provider_id, "rejected", "disabled", in_flight=in_flight,
+                    filename,
+                    provider_id,
+                    "rejected",
+                    "disabled",
+                    in_flight=in_flight,
                     consecutive_failures=consecutive_failures,
                 )
                 continue
             if not self._is_model_available(state, model_name, now):
                 decisions[filename] = RouteCandidate(
-                    filename, provider_id, "rejected", "model_cooldown", in_flight=in_flight,
+                    filename,
+                    provider_id,
+                    "rejected",
+                    "model_cooldown",
+                    in_flight=in_flight,
                     consecutive_failures=consecutive_failures,
                 )
                 continue
@@ -170,21 +178,33 @@ class SmartCredentialRouter:
             preview_penalty = self._preview_penalty(state, mode, model_name)
             if preview_penalty is None:
                 decisions[filename] = RouteCandidate(
-                    filename, provider_id, "rejected", "preview_incompatible", in_flight=in_flight,
+                    filename,
+                    provider_id,
+                    "rejected",
+                    "preview_incompatible",
+                    in_flight=in_flight,
                     consecutive_failures=consecutive_failures,
                 )
                 continue
 
             if model_name and (filename, model_name) in excluded_credential_models:
                 decisions[filename] = RouteCandidate(
-                    filename, provider_id, "rejected", "credential_model_blacklist",
-                    in_flight=in_flight, consecutive_failures=consecutive_failures,
+                    filename,
+                    provider_id,
+                    "rejected",
+                    "credential_model_blacklist",
+                    in_flight=in_flight,
+                    consecutive_failures=consecutive_failures,
                 )
                 continue
             if model_name and (provider_id, model_name) in excluded_provider_models:
                 decisions[filename] = RouteCandidate(
-                    filename, provider_id, "rejected", "provider_model_blacklist",
-                    in_flight=in_flight, consecutive_failures=consecutive_failures,
+                    filename,
+                    provider_id,
+                    "rejected",
+                    "provider_model_blacklist",
+                    in_flight=in_flight,
+                    consecutive_failures=consecutive_failures,
                 )
                 continue
             provider_penalty = 0
@@ -302,7 +322,10 @@ class SmartCredentialRouter:
                 if not credential_data:
                     candidate = decisions[filename]
                     decisions[filename] = RouteCandidate(
-                        filename, candidate.provider_id, "rejected", "credential_missing",
+                        filename,
+                        candidate.provider_id,
+                        "rejected",
+                        "credential_missing",
                         in_flight=candidate.in_flight,
                         consecutive_failures=candidate.consecutive_failures,
                     )
@@ -315,7 +338,10 @@ class SmartCredentialRouter:
                 if not support_level:
                     candidate = decisions[filename]
                     decisions[filename] = RouteCandidate(
-                        filename, candidate.provider_id, "rejected", "model_unsupported",
+                        filename,
+                        candidate.provider_id,
+                        "rejected",
+                        "model_unsupported",
                         in_flight=candidate.in_flight,
                         consecutive_failures=candidate.consecutive_failures,
                     )

@@ -282,7 +282,9 @@ async def complete_gemini_cli_oauth(
             timeout=20.0,
         )
     except (httpx.HTTPError, OSError) as exc:
-        raise GeminiCliError("Unable to reach Google OAuth token service.", status_code=502) from exc
+        raise GeminiCliError(
+            "Unable to reach Google OAuth token service.", status_code=502
+        ) from exc
 
     if response.status_code != 200:
         raise GeminiCliError(
@@ -293,7 +295,9 @@ async def complete_gemini_cli_oauth(
     tokens = response.json()
     access_token = str(tokens.get("access_token") or "").strip()
     if not access_token:
-        raise GeminiCliError("Google OAuth response did not include an access token.", status_code=502)
+        raise GeminiCliError(
+            "Google OAuth response did not include an access token.", status_code=502
+        )
 
     refresh_token = str(tokens.get("refresh_token") or "").strip()
     expires_in = int(tokens.get("expires_in") or 3600)

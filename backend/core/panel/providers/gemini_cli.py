@@ -209,7 +209,9 @@ async def import_gemini_cli_files(
                 with zipfile.ZipFile(io.BytesIO(content)) as zf:
                     entries = [e for e in zf.infolist() if not e.is_dir()]
                     if len(entries) > MAX_PROVIDER_IMPORT_ENTRIES:
-                        raise ValueError(f"ZIP archive contains too many entries (max {MAX_PROVIDER_IMPORT_ENTRIES}).")
+                        raise ValueError(
+                            f"ZIP archive contains too many entries (max {MAX_PROVIDER_IMPORT_ENTRIES})."
+                        )
                     total_uncompressed = sum(e.file_size for e in entries)
                     if total_uncompressed > MAX_PROVIDER_IMPORT_UNCOMPRESSED_BYTES:
                         raise ValueError("ZIP uncompressed size exceeds limit (25 MB).")

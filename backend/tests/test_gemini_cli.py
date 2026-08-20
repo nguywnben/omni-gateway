@@ -130,7 +130,9 @@ class TestGeminiCliAsync(unittest.IsolatedAsyncioTestCase):
         with patch("core.gemini_cli.fetch_gemini_cli_project_id", return_value="mock-project"):
             with patch(
                 "core.gemini_cli.upsert_credential_by_email",
-                new=AsyncMock(return_value={"action": "created", "filename": "gemini-cli-test.json"}),
+                new=AsyncMock(
+                    return_value={"action": "created", "filename": "gemini-cli-test.json"}
+                ),
             ) as mock_upsert:
                 result = await complete_gemini_cli_oauth("mock-auth-code", state)
                 self.assertTrue(result["success"])

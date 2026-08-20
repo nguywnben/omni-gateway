@@ -36,10 +36,7 @@ class HttpxClientManager:
         loop_id = id(asyncio.get_running_loop())
         signature = (
             loop_id,
-            *(
-                (key, repr(value))
-                for key, value in sorted(client_kwargs.items())
-            ),
+            *((key, repr(value)) for key, value in sorted(client_kwargs.items())),
         )
 
         with self._lock:

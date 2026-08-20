@@ -35,7 +35,9 @@ class HttpxClientManagerTests(unittest.IsolatedAsyncioTestCase):
         manager = HttpxClientManager()
         try:
             async with manager.get_client(timeout=15.0) as default_client:
-                async with manager.get_client(timeout=15.0, follow_redirects=True) as redirect_client:
+                async with manager.get_client(
+                    timeout=15.0, follow_redirects=True
+                ) as redirect_client:
                     self.assertIsNot(default_client, redirect_client)
         finally:
             await manager.close()

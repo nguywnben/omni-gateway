@@ -120,7 +120,11 @@ def _is_ollama_payload(payload: Dict[str, Any]) -> bool:
 def _is_gemini_cli_payload(payload: Dict[str, Any]) -> bool:
     credential_type = str(payload.get("credential_type") or "").strip().lower()
     if credential_type in {"", "oauth"}:
-        return _has_text(payload, "refresh_token") or _has_text(payload, "access_token") or _has_text(payload, "token")
+        return (
+            _has_text(payload, "refresh_token")
+            or _has_text(payload, "access_token")
+            or _has_text(payload, "token")
+        )
     return False
 
 
