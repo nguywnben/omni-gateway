@@ -474,6 +474,17 @@
         gap: 18px;
     }
 
+    .provider-workspace-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 12px;
+    }
+
+    .provider-workspace-header .provider-catalog-pagination {
+        width: 100%;
+        justify-content: flex-end;
+    }
+
     .provider-workspace-heading {
         align-items: flex-start;
     }

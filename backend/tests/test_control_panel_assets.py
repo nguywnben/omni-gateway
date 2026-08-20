@@ -127,7 +127,7 @@ class ControlPanelAssetTests(unittest.TestCase):
             dashboard_script,
         )
 
-    def test_provider_catalog_uses_a_bounded_horizontal_rail(self):
+    def test_provider_catalog_uses_pagination(self):
         response = serve_control_panel()
         body = response.body.decode("utf-8")
         navigation_script = read_scripts("features/navigation.js")
@@ -136,18 +136,20 @@ class ControlPanelAssetTests(unittest.TestCase):
         ).read_text(encoding="utf-8")
 
         for element_id in (
-            "providerCatalogViewport",
-            "providerCatalogPrevious",
-            "providerCatalogNext",
+            "providerCatalog",
+            "providerCatalogPagination",
+            "providerCatalogPrevBtn",
+            "providerCatalogNextBtn",
+            "providerCatalogPaginationInfo",
         ):
             self.assertIn(element_id, body)
-        self.assertIn("scroll-provider-catalog", body)
-        self.assertIn("function scrollProviderCatalog(direction)", navigation_script)
-        self.assertIn("function updateProviderCatalogNavigation()", navigation_script)
-        self.assertIn("new ResizeObserver(updateProviderCatalogNavigation)", navigation_script)
-        self.assertIn("if (viewport.clientWidth <= 1) return;", navigation_script)
-        self.assertIn("overflow-x: auto", provider_styles)
-        self.assertIn("flex: 0 0 calc((100% - 24px) / 3)", provider_styles)
+        self.assertIn("provider-workspace-header", body)
+        self.assertIn("change-provider-catalog-page", body)
+        self.assertIn("PROVIDER_CATALOG_PAGE_SIZE = 6", navigation_script)
+        self.assertIn("function changeProviderCatalogPage(delta)", navigation_script)
+        self.assertIn("function updateProviderCatalogPagination()", navigation_script)
+        self.assertIn("grid-template-columns: repeat(3, minmax(0, 1fr))", provider_styles)
+        self.assertIn(".provider-workspace-header", provider_styles)
         self.assertIn(
             ".provider-catalog-toolbar strong,\n.provider-catalog-search-label",
             provider_styles,

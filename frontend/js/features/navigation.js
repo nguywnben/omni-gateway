@@ -1,5 +1,3 @@
-let providerCatalogResizeObserver = null;
-
 function updateTabSlider(targetTab, animate = true) {
 
     const slider = document.querySelector('.tab-slider');
@@ -71,7 +69,7 @@ function initStaticUiBindings() {
         'save-model-pool': () => saveModelPool(),
         'clear-model-blacklist': () => clearModelBlacklist(),
         'select-provider': (element) => selectProviderWorkspace(element.dataset.provider),
-        'scroll-provider-catalog': (element) => scrollProviderCatalog(Number(element.dataset.direction)),
+        'change-provider-catalog-page': (element) => changeProviderCatalogPage(Number(element.dataset.pageDelta)),
         'select-ai-studio-files': () => document.getElementById('googleAiStudioFileInput')?.click(),
         'upload-ai-studio-files': () => uploadGoogleAiStudioFiles(),
         'clear-ai-studio-files': () => clearGoogleAiStudioFiles(),
@@ -216,17 +214,7 @@ function initStaticUiBindings() {
         area?.addEventListener('drop', dropHandler);
     }
 
-    const providerCatalogViewport = document.getElementById('providerCatalogViewport');
-    providerCatalogViewport?.addEventListener(
-        'scroll',
-        updateProviderCatalogNavigation,
-        { passive: true }
-    );
-    if (providerCatalogViewport && typeof ResizeObserver === 'function') {
-        providerCatalogResizeObserver = new ResizeObserver(updateProviderCatalogNavigation);
-        providerCatalogResizeObserver.observe(providerCatalogViewport);
-    }
-    updateProviderCatalogNavigation();
+    updateProviderCatalogPagination();
 }
 
 document.addEventListener('DOMContentLoaded', initStaticUiBindings);
@@ -238,8 +226,6 @@ window.addEventListener('resize', () => {
     if (activeTab) updateTabSlider(activeTab, false);
 
     if (window.innerWidth > 960) setMobileMenuState(false);
-
-    updateProviderCatalogNavigation();
 
 });
 
@@ -290,53 +276,85 @@ const PROVIDER_WORKSPACES = {
     }
 };
 
-function updateProviderCatalogNavigation() {
-    const viewport = document.getElementById('providerCatalogViewport');
-    const previousButton = document.getElementById('providerCatalogPrevious');
-    const nextButton = document.getElementById('providerCatalogNext');
-    if (!viewport || !previousButton || !nextButton) return;
-    if (viewport.clientWidth <= 1) return;
+const PROVIDER_CATALOG_PAGE_SIZE = 6;
+let providerCatalogCurrentPage = 1;
+let providerCatalogSearchQuery = '';
 
-    const maximumScroll = Math.max(0, viewport.scrollWidth - viewport.clientWidth);
-    previousButton.disabled = maximumScroll <= 1 || viewport.scrollLeft <= 1;
-    nextButton.disabled = maximumScroll <= 1 || viewport.scrollLeft >= maximumScroll - 1;
-}
-
-function scrollProviderCatalog(direction) {
-    const viewport = document.getElementById('providerCatalogViewport');
-    const catalog = document.getElementById('providerCatalog');
-    const firstVisibleCard = catalog?.querySelector('[data-provider]:not(.hidden)');
-    if (!viewport || !catalog || !firstVisibleCard || !direction) return;
-
-    const catalogStyles = getComputedStyle(catalog);
-    const gap = Number.parseFloat(catalogStyles.columnGap || catalogStyles.gap) || 0;
-    const distance = firstVisibleCard.getBoundingClientRect().width + gap;
-    viewport.scrollBy({
-        left: Math.sign(direction) * distance,
-        behavior: 'auto'
-    });
-    requestAnimationFrame(updateProviderCatalogNavigation);
-}
-
-function filterProviderCatalog(value = '') {
-    const query = String(value || '').trim().toLowerCase();
+function getFilteredProviderCards() {
     const cards = Array.from(document.querySelectorAll('#providerCatalog [data-provider]'));
-    let visibleCount = 0;
-    cards.forEach((card) => {
+    const query = providerCatalogSearchQuery.trim().toLowerCase();
+    if (!query) return cards;
+    return cards.filter((card) => {
         const searchableText = [
             card.dataset.provider,
             card.dataset.providerName,
             card.textContent
         ].join(' ').toLowerCase();
-        const isVisible = !query || searchableText.includes(query);
+        return searchableText.includes(query);
+    });
+}
+
+function updateProviderCatalogPagination() {
+    const allCards = Array.from(document.querySelectorAll('#providerCatalog [data-provider]'));
+    const filteredCards = getFilteredProviderCards();
+    const totalItems = filteredCards.length;
+    const totalPages = Math.max(1, Math.ceil(totalItems / PROVIDER_CATALOG_PAGE_SIZE));
+
+    if (providerCatalogCurrentPage > totalPages) {
+        providerCatalogCurrentPage = totalPages;
+    }
+    if (providerCatalogCurrentPage < 1) {
+        providerCatalogCurrentPage = 1;
+    }
+
+    const startIndex = (providerCatalogCurrentPage - 1) * PROVIDER_CATALOG_PAGE_SIZE;
+    const endIndex = startIndex + PROVIDER_CATALOG_PAGE_SIZE;
+    const visibleCards = new Set(filteredCards.slice(startIndex, endIndex));
+
+    allCards.forEach((card) => {
+        const isVisible = visibleCards.has(card);
         card.classList.toggle('hidden', !isVisible);
         card.setAttribute('aria-hidden', String(!isVisible));
-        visibleCount += isVisible ? 1 : 0;
     });
-    document.getElementById('providerCatalogEmpty')?.classList.toggle('hidden', visibleCount > 0);
-    const viewport = document.getElementById('providerCatalogViewport');
-    if (viewport) viewport.scrollLeft = 0;
-    requestAnimationFrame(updateProviderCatalogNavigation);
+
+    const emptyElement = document.getElementById('providerCatalogEmpty');
+    if (emptyElement) {
+        emptyElement.classList.toggle('hidden', totalItems > 0);
+    }
+
+    const paginationContainer = document.getElementById('providerCatalogPagination');
+    const prevButton = document.getElementById('providerCatalogPrevBtn');
+    const nextButton = document.getElementById('providerCatalogNextBtn');
+    const infoElement = document.getElementById('providerCatalogPaginationInfo');
+
+    if (paginationContainer) {
+        paginationContainer.style.display = totalPages > 1 ? 'flex' : 'none';
+    }
+    if (prevButton) {
+        prevButton.disabled = providerCatalogCurrentPage <= 1;
+    }
+    if (nextButton) {
+        nextButton.disabled = providerCatalogCurrentPage >= totalPages;
+    }
+    if (infoElement) {
+        infoElement.textContent = `Page ${providerCatalogCurrentPage} of ${totalPages}`;
+    }
+}
+
+function changeProviderCatalogPage(delta) {
+    const filteredCards = getFilteredProviderCards();
+    const totalPages = Math.max(1, Math.ceil(filteredCards.length / PROVIDER_CATALOG_PAGE_SIZE));
+    const targetPage = providerCatalogCurrentPage + delta;
+    if (targetPage >= 1 && targetPage <= totalPages) {
+        providerCatalogCurrentPage = targetPage;
+        updateProviderCatalogPagination();
+    }
+}
+
+function filterProviderCatalog(value = '') {
+    providerCatalogSearchQuery = String(value || '');
+    providerCatalogCurrentPage = 1;
+    updateProviderCatalogPagination();
 }
 
 function selectProviderWorkspace(providerId, focusSelector = false) {
@@ -344,6 +362,17 @@ function selectProviderWorkspace(providerId, focusSelector = false) {
     if (!selected) return;
 
     AppState.activeProviderWorkspace = providerId;
+
+    const filteredCards = getFilteredProviderCards();
+    const targetCard = document.getElementById(selected.selectorId);
+    if (targetCard && filteredCards.includes(targetCard)) {
+        const cardIndex = filteredCards.indexOf(targetCard);
+        const cardPage = Math.floor(cardIndex / PROVIDER_CATALOG_PAGE_SIZE) + 1;
+        if (cardPage !== providerCatalogCurrentPage) {
+            providerCatalogCurrentPage = cardPage;
+            updateProviderCatalogPagination();
+        }
+    }
 
     Object.entries(PROVIDER_WORKSPACES).forEach(([id, workspace]) => {
         const selector = document.getElementById(workspace.selectorId);
@@ -355,6 +384,13 @@ function selectProviderWorkspace(providerId, focusSelector = false) {
         if (selector) selector.tabIndex = isActive ? 0 : -1;
         panel?.classList.toggle('hidden', !isActive);
     });
+
+    const activePanel = document.getElementById(selected.panelId);
+    const header = activePanel?.querySelector('.provider-workspace-header');
+    const pagination = document.getElementById('providerCatalogPagination');
+    if (header && pagination && pagination.parentElement !== header) {
+        header.appendChild(pagination);
+    }
 
     if (focusSelector) {
         const selector = document.getElementById(selected.selectorId);
