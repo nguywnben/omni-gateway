@@ -44,6 +44,29 @@
     margin-bottom: 18px;
 }
 
+.login-language-control {
+    display: grid;
+    gap: 6px;
+    margin-bottom: 18px;
+}
+
+.login-language-control label {
+    color: var(--text-muted);
+    font-size: 13px;
+    font-weight: 600;
+}
+
+.login-language-control select,
+.sidebar-language-switcher {
+    width: 100%;
+    min-height: 38px;
+}
+
+.sidebar-language-switcher {
+    color: var(--text-muted);
+    font-size: 12px;
+}
+
 .login-form {
     position: relative;
     display: grid;

@@ -1,4 +1,4 @@
-    <section id="loginSection" class="login-wrapper" aria-label="Login">
+    <section id="loginSection" class="login-wrapper" data-i18n-aria-label="sign_in_title" aria-label="Sign In to the Console">
         <div class="login-card">
             <div class="login-brand">
                 <span class="app-mark" aria-hidden="true">
@@ -6,17 +6,21 @@
                 </span>
                 <div class="login-brand-title">Omni Gateway</div>
             </div>
-            <h1 class="login-title">Sign In to the Console</h1>
-            <p class="login-copy">Manage routing, credentials, fallback behavior, and protocol translation from one focused workspace.</p>
+            <h1 class="login-title" data-i18n="sign_in_title">Sign In to the Console</h1>
+            <p class="login-copy" data-i18n="login_copy">Manage routing, credentials, fallback behavior, and protocol translation from one focused workspace.</p>
+            <div class="login-language-control">
+                <label for="loginLanguage" data-i18n="language">Language</label>
+                <select id="loginLanguage" class="lang-switcher"></select>
+            </div>
             <form id="loginForm" class="login-form" autocomplete="on">
                 <input class="password-manager-identity" type="text" name="username" value="admin" autocomplete="username" tabindex="-1" aria-hidden="true">
-                <label for="loginPassword">Console password</label>
-                <input type="password" id="loginPassword" name="password" placeholder="Enter password" autocomplete="current-password">
-                <button type="submit" class="btn">Continue</button>
+                <label for="loginPassword" data-i18n="console_password">Console password</label>
+                <input type="password" id="loginPassword" name="password" data-i18n-placeholder="enter_password" placeholder="Enter password" autocomplete="current-password">
+                <button type="submit" class="btn" data-i18n="continue">Continue</button>
             </form>
         </div>
         <footer class="login-footer" aria-label="Site footer">
             <span>Omni Gateway</span>
-            <span>Universal AI routing for coding tools.</span>
+            <span data-i18n="footer_tagline">Universal AI routing for coding tools.</span>
         </footer>
     </section>

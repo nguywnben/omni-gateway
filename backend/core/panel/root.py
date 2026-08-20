@@ -44,6 +44,7 @@ CONSOLE_STYLE_ASSETS = (
 )
 
 CONSOLE_SCRIPT_ASSETS = (
+    "js/core/locales.js",
     "js/core/i18n.js",
     "js/core/navigation.js",
     "js/core/credential-manager.js",

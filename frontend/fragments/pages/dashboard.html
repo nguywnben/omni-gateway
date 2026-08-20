@@ -1,18 +1,18 @@
                 <div id="dashboardTab" class="tab-content active">
                     <header class="page-header">
                         <div>
-                            <div class="page-kicker">Overview</div>
-                            <h1 class="page-title">Omni Gateway Dashboard</h1>
-                            <p class="page-description">Monitor request flow, provider capacity, and integration details for coding-tool traffic.</p>
+                            <div class="page-kicker" data-i18n="dashboard">Overview</div>
+                            <h1 class="page-title" data-i18n="dashboard_title">Omni Gateway Dashboard</h1>
+                            <p class="page-description" data-i18n="dashboard_description">Monitor request flow, provider capacity, and integration details for coding-tool traffic.</p>
                         </div>
                         <div class="page-actions">
                             <label class="dashboard-range-control" for="usagePeriodSelect">
-                                <span>Time range</span>
+                                <span data-i18n="time_range">Time range</span>
                                 <select id="usagePeriodSelect" class="filter-select" data-ui-change="usage-period">
-                                    <option value="1d">1 day</option>
-                                    <option value="7d">7 days</option>
-                                    <option value="30d">30 days</option>
-                                    <option value="all">All</option>
+                                    <option value="1d" data-i18n="one_day">1 day</option>
+                                    <option value="7d" data-i18n="seven_days">7 days</option>
+                                    <option value="30d" data-i18n="thirty_days">30 days</option>
+                                    <option value="all" data-i18n="all">All</option>
                                 </select>
                             </label>
                         </div>
@@ -51,7 +51,7 @@
                             <p class="card-copy card-title-copy">Copy the API key and SDK base URLs used by compatible clients.</p>
                             <div class="metric-row">
                                 <div class="copy-field">
-                                    <label for="apiKey">API key</label>
+                                    <label for="apiKey" data-i18n="api_key">API key</label>
                                     <div class="secret-field">
                                         <input type="password" id="apiKey" value="" class="skeleton skeleton-control" readonly title="Copy API key" aria-label="Loading API key" aria-busy="true" data-ui-action="copy-api-key">
                                         <button type="button" id="toggleApiKeyVisibilityBtn" class="btn btn-secondary icon-btn" data-ui-action="toggle-api-key" title="Show API key" aria-label="Show API key">
@@ -63,15 +63,15 @@
                                     </div>
                                 </div>
                                 <div class="copy-field">
-                                    <label>OpenAI base URL</label>
+                                    <label data-i18n="openai_base_url">OpenAI base URL</label>
                                     <button type="button" class="endpoint-code-card" id="openaiEndpointUrl" title="Copy OpenAI base URL" aria-label="OpenAI base URL. Copy OpenAI base URL." data-ui-action="copy-url">Loading</button>
                                 </div>
                                 <div class="copy-field">
-                                    <label>Anthropic base URL</label>
+                                    <label data-i18n="anthropic_base_url">Anthropic base URL</label>
                                     <button type="button" class="endpoint-code-card" id="anthropicEndpointUrl" title="Copy Anthropic base URL" aria-label="Anthropic base URL. Copy Anthropic base URL." data-ui-action="copy-url">Loading</button>
                                 </div>
                                 <div class="copy-field">
-                                    <label>Google GenAI base URL</label>
+                                    <label data-i18n="google_genai_base_url">Google GenAI base URL</label>
                                     <button type="button" class="endpoint-code-card" id="googleGenaiEndpointUrl" title="Copy Google GenAI base URL" aria-label="Google GenAI base URL. Copy Google GenAI base URL." data-ui-action="copy-url">Loading</button>
                                 </div>
                             </div>

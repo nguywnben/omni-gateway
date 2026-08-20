@@ -336,11 +336,73 @@ const TRANSLATIONS = {
 
 // =====================================================================
 
+const LANGUAGE_STORAGE_KEY = 'omni_gateway_console_locale';
+
+function getActiveLocale() {
+
+    return typeof AppState !== 'undefined' && AppState.lang
+        ? AppState.lang
+        : 'en';
+
+}
+
+function normalizeLocale(value) {
+
+    const normalized = String(value || '').replace('_', '-').toLowerCase();
+
+    return Object.keys(SUPPORTED_LOCALES).find((locale) => locale.toLowerCase() === normalized) || '';
+
+}
+
+function detectBrowserLocale() {
+
+    const browserNavigator = typeof navigator === 'object' ? navigator : {};
+    const candidates = Array.isArray(browserNavigator.languages) && browserNavigator.languages.length > 0
+        ? browserNavigator.languages
+        : [browserNavigator.language];
+
+    for (const candidate of candidates.filter(Boolean)) {
+
+        const exact = normalizeLocale(candidate);
+
+        if (exact) return exact;
+
+        const normalized = String(candidate).replace('_', '-').toLowerCase();
+        const [language, region] = normalized.split('-');
+
+        if (language === 'zh') {
+
+            if (['tw', 'hk', 'mo', 'hant'].includes(region)) return 'zh-TW';
+
+            return 'zh-CN';
+
+        }
+
+        if (SUPPORTED_LOCALES[language]) return language;
+
+    }
+
+    return 'en';
+
+}
+
 function t(key, vars = {}) {
 
-    const lang = AppState.lang || 'en';
+    const lang = getActiveLocale();
+    const localeMessages = {
+        ...(COMMON_UI_TRANSLATIONS[lang] || {}),
+        ...(SUPPORTED_LOCALES[lang]?.messages || {})
+    };
+    const englishMessages = {
+        ...COMMON_UI_TRANSLATIONS.en,
+        ...SUPPORTED_LOCALES.en.messages
+    };
 
-    let text = (TRANSLATIONS[lang] && TRANSLATIONS[lang][key]) || (TRANSLATIONS['en'] && TRANSLATIONS['en'][key]) || key;
+    let text = localeMessages[key]
+        || (TRANSLATIONS[lang] && TRANSLATIONS[lang][key])
+        || englishMessages[key]
+        || (TRANSLATIONS.en && TRANSLATIONS.en[key])
+        || key;
 
     for (const [k, v] of Object.entries(vars)) {
 
@@ -354,7 +416,8 @@ function t(key, vars = {}) {
 
 function formatCountLabel(count, singular, plural = `${singular}s`) {
     const numericCount = Number(count || 0);
-    return `${numericCount} ${numericCount === 1 ? singular : plural}`;
+    const formattedCount = new Intl.NumberFormat(getActiveLocale()).format(numericCount);
+    return `${formattedCount} ${numericCount === 1 ? singular : plural}`;
 }
 
 function escapeHtml(value) {
@@ -382,33 +445,78 @@ function safeHttpUrl(value) {
     }
 }
 
-function changeLanguage(lang) {
+function populateLanguageSwitchers() {
 
-    setLanguage('en');
+    document.querySelectorAll('.lang-switcher').forEach((switcher) => {
 
+        if (switcher.options.length === Object.keys(SUPPORTED_LOCALES).length) return;
+
+        switcher.replaceChildren(...Object.entries(SUPPORTED_LOCALES).map(([locale, definition]) => {
+
+            const option = document.createElement('option');
+            option.value = locale;
+            option.textContent = definition.label;
+            return option;
+
+        }));
+
+    });
+
+}
+
+function changeLanguage(locale) {
+
+    setLanguage(locale, true);
     applyLanguage();
+
+    window.setTimeout(() => window.location.reload(), 0);
 
 }
 
 function initLanguage() {
 
-    setLanguage('en');
+    let storedLocale = '';
 
+    try {
+
+        storedLocale = normalizeLocale(localStorage.getItem(LANGUAGE_STORAGE_KEY));
+
+    } catch (_) {
+
+        // Storage can be disabled by the browser; locale detection remains available.
+
+    }
+
+    setLanguage(storedLocale || detectBrowserLocale(), false);
     applyLanguage();
 
 }
 
-function setLanguage(lang) {
+function setLanguage(locale, persist) {
 
-    if (!TRANSLATIONS[lang]) lang = 'en';
+    const selectedLocale = normalizeLocale(locale) || 'en';
 
-    AppState.lang = lang;
+    if (typeof AppState !== 'undefined') AppState.lang = selectedLocale;
 
-    localStorage.setItem('lang', lang);
+    if (persist) {
 
-    document.querySelectorAll('.lang-switcher').forEach(sw => {
+        try {
 
-        sw.value = lang;
+            localStorage.setItem(LANGUAGE_STORAGE_KEY, selectedLocale);
+
+        } catch (_) {
+
+            // The interface still works when persistent storage is unavailable.
+
+        }
+
+    }
+
+    populateLanguageSwitchers();
+
+    document.querySelectorAll('.lang-switcher').forEach((switcher) => {
+
+        switcher.value = selectedLocale;
 
     });
 
@@ -416,7 +524,9 @@ function setLanguage(lang) {
 
 function applyLanguage() {
 
-    const lang = AppState.lang || 'en';
+    const lang = getActiveLocale();
+
+    document.documentElement.lang = lang;
 
     document.querySelectorAll('[data-i18n]').forEach(el => {
 
@@ -426,7 +536,7 @@ function applyLanguage() {
 
         if (text && text !== key) {
 
-            el.innerHTML = text;
+            el.textContent = text;
 
         }
 
@@ -460,6 +570,40 @@ function applyLanguage() {
 
     });
 
+    document.querySelectorAll('[data-i18n-placeholder]').forEach(el => {
+
+        const text = t(el.getAttribute('data-i18n-placeholder'));
+
+        if (text) el.setAttribute('placeholder', text);
+
+    });
+
+    document.querySelectorAll('[data-i18n-aria-label]').forEach(el => {
+
+        const text = t(el.getAttribute('data-i18n-aria-label'));
+
+        if (text) el.setAttribute('aria-label', text);
+
+    });
+
+    document.querySelectorAll('.lang-switcher').forEach((switcher) => {
+
+        switcher.setAttribute('aria-label', t('language'));
+
+    });
+
+    document.dispatchEvent(new CustomEvent('omni:locale-change', { detail: { locale: lang } }));
+
 }
 
 document.addEventListener('DOMContentLoaded', initLanguage);
+
+document.addEventListener('change', (event) => {
+
+    if (event.target instanceof HTMLSelectElement && event.target.matches('.lang-switcher')) {
+
+        changeLanguage(event.target.value);
+
+    }
+
+});

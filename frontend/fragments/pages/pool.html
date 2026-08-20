@@ -1,14 +1,14 @@
                 <div id="poolTab" class="tab-content">
                     <header class="page-header">
                             <div>
-                                <div class="page-kicker">Pool</div>
-                                <h1 class="page-title">Provider Credential Pool</h1>
-                                <p class="page-description">Manage accounts and API keys from every connected provider. Monitor credential health, routing capacity, and pool backups from one place.</p>
+                                <div class="page-kicker" data-i18n="pool">Pool</div>
+                                <h1 class="page-title" data-i18n="pool_title">Provider Credential Pool</h1>
+                                <p class="page-description" data-i18n="pool_description">Manage accounts and API keys from every connected provider. Monitor credential health, routing capacity, and pool backups from one place.</p>
                             </div>
                             <div class="page-actions">
-                                <button type="button" class="btn" data-ui-action="refresh-pool">Refresh</button>
-                                <button type="button" class="btn btn-secondary" id="poolImportArchiveBtn" data-ui-action="select-pool-archive">Import ZIP</button>
-                                <button type="button" class="btn btn-secondary" data-ui-action="download-pool">Download ZIP</button>
+                                <button type="button" class="btn" data-ui-action="refresh-pool" data-i18n="refresh">Refresh</button>
+                                <button type="button" class="btn btn-secondary" id="poolImportArchiveBtn" data-ui-action="select-pool-archive" data-i18n="import_zip">Import ZIP</button>
+                                <button type="button" class="btn btn-secondary" data-ui-action="download-pool" data-i18n="download_zip">Download ZIP</button>
                             </div>
                     </header>
                     <input type="file" id="poolImportArchiveInput" accept=".zip,application/zip" hidden data-ui-change="pool-archive">
