@@ -17,6 +17,7 @@ from core.anthropic import (
 )
 from core.codex import CODEX_DEFAULT_MODEL_IDS, CodexError
 from core.credential_manager import credential_manager
+from core.gemini_cli import DEFAULT_GEMINI_CLI_MODELS
 from core.google_ai_studio import GoogleAIStudioError, validate_api_key
 from core.ollama import OllamaError, normalize_ollama_base_url, validate_ollama_connection
 from core.openai_platform import OpenAIPlatformError, validate_openai_api_key
@@ -41,7 +42,6 @@ from core.provider_registry import (
     get_credential_provider_variant,
     normalize_provider_id,
 )
-from core.gemini_cli import DEFAULT_GEMINI_CLI_MODELS, GeminiCliError
 from core.provider_store import (
     store_claude_platform_credential,
     store_google_ai_studio_credential,

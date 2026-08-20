@@ -16,9 +16,11 @@ from config import get_server_host, get_server_port, trust_proxy_headers_enabled
 # Import managers and utilities
 from core.credential_manager import credential_manager
 from core.health import router as health_router
+from core.httpx_client import http_client
 from core.keep_alive import keep_alive_service
 from core.panel import router as panel_router
 from core.panel.setup_security import get_setup_bootstrap_token
+from core.request_context import request_scope
 from core.request_limits import RequestBodyLimitMiddleware, get_max_request_body_bytes
 from core.router.primary.anthropic import router as primary_anthropic_router
 from core.router.primary.gemini import router as primary_gemini_router
@@ -128,6 +130,12 @@ async def lifespan(app: FastAPI):
             log.error(f"Error while shutting down the credential manager: {e}")
 
         try:
+            await http_client.close()
+            log.info("Outbound HTTP clients closed.")
+        except Exception as e:
+            log.error(f"Error while closing outbound HTTP clients: {e}")
+
+        try:
             await close_storage_adapter()
             log.info("Storage adapter closed.")
         except Exception as e:
@@ -224,7 +232,8 @@ async def add_security_headers(request, call_next):
         else uuid.uuid4().hex
     )
     request.state.request_id = request_id
-    response = await call_next(request)
+    with request_scope(request_id):
+        response = await call_next(request)
     response.headers["X-Request-ID"] = request_id
     response.headers["X-Content-Type-Options"] = "nosniff"
     response.headers["X-Frame-Options"] = "DENY"

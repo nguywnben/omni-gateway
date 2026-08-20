@@ -1,5 +1,7 @@
+import asyncio
 from contextlib import asynccontextmanager
-from typing import Any, AsyncGenerator, Dict, Optional
+from threading import RLock
+from typing import Any, AsyncGenerator, Dict, Hashable, Optional, Tuple
 
 import httpx
 from config import get_proxy_config
@@ -7,8 +9,19 @@ from log import log
 
 
 class HttpxClientManager:
+    """Reuse HTTP clients for the lifetime of one application event loop."""
+
+    def __init__(self) -> None:
+        self._clients: Dict[Tuple[Hashable, ...], httpx.AsyncClient] = {}
+        self._lock = RLock()
+
     async def get_client_kwargs(self, timeout: float = 30.0, **kwargs) -> Dict[str, Any]:
-        client_kwargs = {"timeout": timeout, "trust_env": False, **kwargs}
+        client_kwargs = {
+            "timeout": timeout,
+            "trust_env": False,
+            "limits": httpx.Limits(max_connections=100, max_keepalive_connections=20),
+            **kwargs,
+        }
 
         current_proxy_config = await get_proxy_config()
         if current_proxy_config:
@@ -16,29 +29,48 @@ class HttpxClientManager:
 
         return client_kwargs
 
+    async def _get_or_create_client(
+        self, timeout: Optional[float] = 30.0, **kwargs
+    ) -> httpx.AsyncClient:
+        client_kwargs = await self.get_client_kwargs(timeout=timeout, **kwargs)
+        loop_id = id(asyncio.get_running_loop())
+        signature = (
+            loop_id,
+            *(
+                (key, repr(value))
+                for key, value in sorted(client_kwargs.items())
+            ),
+        )
+
+        with self._lock:
+            client = self._clients.get(signature)
+            if client is None or client.is_closed:
+                self._clients[signature] = httpx.AsyncClient(**client_kwargs)
+            return self._clients[signature]
+
     @asynccontextmanager
     async def get_client(
         self, timeout: float = 30.0, **kwargs
     ) -> AsyncGenerator[httpx.AsyncClient, None]:
-        client_kwargs = await self.get_client_kwargs(timeout=timeout, **kwargs)
-
-        async with httpx.AsyncClient(**client_kwargs) as client:
-            yield client
+        yield await self._get_or_create_client(timeout=timeout, **kwargs)
 
     @asynccontextmanager
     async def get_streaming_client(
         self, timeout: float = None, **kwargs
     ) -> AsyncGenerator[httpx.AsyncClient, None]:
-        client_kwargs = await self.get_client_kwargs(timeout=timeout, **kwargs)
+        yield await self._get_or_create_client(timeout=timeout, **kwargs)
 
-        client = httpx.AsyncClient(**client_kwargs)
-        try:
-            yield client
-        finally:
+    async def close(self) -> None:
+        """Close clients created by the current runtime before its event loop exits."""
+        with self._lock:
+            clients = list(self._clients.values())
+            self._clients.clear()
+
+        for client in clients:
             try:
                 await client.aclose()
-            except Exception as e:
-                log.warning(f"Error closing streaming client: {e}")
+            except Exception as exc:
+                log.warning(f"Error closing HTTP client: {exc}")
 
 
 http_client = HttpxClientManager()

@@ -4,13 +4,12 @@ from __future__ import annotations
 
 import base64
 import hashlib
-import json
 import platform
 import secrets
 import sys
 import time
 from datetime import datetime, timedelta, timezone
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Optional
 from urllib.parse import urlencode, urlparse
 
 import httpx
@@ -20,13 +19,11 @@ from config import (
     get_gemini_cli_oauth_client_config,
     get_gemini_cli_oauth_token_url,
 )
-from core.credential_manager import credential_manager
 from core.credential_pool import upsert_credential_by_email
 from core.httpx_client import get_async, post_async
 from core.provider_registry import (
     GEMINI_CLI,
     build_gemini_cli_credential_filename,
-    gemini_cli_account_fingerprint,
 )
 from log import log
 

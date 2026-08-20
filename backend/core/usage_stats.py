@@ -32,6 +32,7 @@ USAGE_PERIODS = {
 
 
 TOKEN_COLUMNS = {
+    "request_id": "TEXT DEFAULT ''",
     "model": "TEXT DEFAULT ''",
     "provider": "TEXT DEFAULT ''",
     "status_code": "INTEGER DEFAULT 200",
@@ -339,6 +340,7 @@ def record_call(
     success: bool = True,
     token_usage: Optional[Dict[str, Any]] = None,
     request_metrics: Optional[Dict[str, Any]] = None,
+    request_id: str = "",
 ):
     filename = os.path.basename(filename)
     if not filename:
@@ -355,6 +357,7 @@ def record_call(
                 INSERT INTO usage_logs (
                     filename,
                     timestamp,
+                    request_id,
                     model,
                     provider,
                     status_code,
@@ -370,11 +373,12 @@ def record_call(
                     latency_ms,
                     retry_count
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     filename,
                     time.time(),
+                    str(request_id or "")[:128],
                     model or "",
                     provider or "",
                     _int_value(status_code or 200),

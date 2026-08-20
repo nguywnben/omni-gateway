@@ -15,7 +15,7 @@ from core.gemini_cli import (
     normalize_gemini_cli_api_url,
 )
 from core.models import ConfigSaveRequest, GeminiCliOAuthCodeRequest
-from core.pool_import import PoolImportError, restore_gemini_cli_credential
+from core.pool_import import restore_gemini_cli_credential
 from core.provider_registry import GEMINI_CLI
 from core.storage_adapter import get_storage_adapter
 from core.utils import verify_panel_token

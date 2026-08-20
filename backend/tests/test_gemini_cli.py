@@ -4,25 +4,24 @@ import unittest
 import zipfile
 from unittest.mock import AsyncMock, patch
 
-import config
 from config import DEFAULT_GEMINI_CLI_CLIENT_ID
 from core.gemini_cli import (
-    DEFAULT_GEMINI_CLI_MODELS,
     build_gemini_cli_headers,
     complete_gemini_cli_oauth,
     create_gemini_cli_oauth_flow,
-    fetch_gemini_cli_project_id,
     gemini_cli_user_agent,
     is_gemini_cli_oauth_state,
     normalize_gemini_cli_api_url,
     wrap_gemini_cli_payload,
 )
-from core.pool_import import classify_pool_credential, restore_gemini_cli_credential, restore_pool_archive
+from core.pool_import import (
+    classify_pool_credential,
+    restore_pool_archive,
+)
 from core.provider_registry import (
     GEMINI_CLI,
     build_gemini_cli_credential_filename,
     gemini_cli_account_fingerprint,
-    get_credential_provider,
     get_provider_capabilities,
     normalize_provider_id,
 )
@@ -197,10 +196,8 @@ class TestGeminiCliAsync(unittest.IsolatedAsyncioTestCase):
     async def test_gemini_cli_panel_routes(self):
         from core.panel.providers.gemini_cli import (
             get_gemini_cli_config,
-            save_gemini_cli_config,
             start_gemini_cli_oauth,
         )
-        from core.models import ConfigSaveRequest
 
         resp = await get_gemini_cli_config()
         self.assertEqual(resp.status_code, 200)
