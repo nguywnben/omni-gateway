@@ -10,13 +10,17 @@ from core.model_blacklist import (
     get_model_blacklist_pairs,
 )
 from core.provider_registry import (
+    ANTHROPIC,
+    CLAUDE_CODE,
     CODEX,
+    OLLAMA,
     OPENAI,
     XAI,
     get_credential_provider,
     get_credential_provider_variant,
     is_api_key_credential,
 )
+from core.routing_decision import RouteDecision
 from core.smart_routing import SmartCredentialRouter
 from core.storage_adapter import get_storage_adapter
 from core.usage_stats import retire_credential_usage
@@ -208,6 +212,11 @@ class CredentialManager:
         """Release a routing reservation for a non-inference operation."""
         await self._routing.release(credential_name, mode=mode)
 
+    async def get_recent_routing_decisions(self, limit: int = 20) -> tuple[RouteDecision, ...]:
+        """Return secret-free recent routing decisions for management diagnostics."""
+        await self._ensure_initialized()
+        return await self._routing.recent_decisions(limit=limit)
+
     async def set_model_cooldown(
         self,
         credential_name: str,
@@ -387,6 +396,8 @@ class CredentialManager:
                 mode=mode,
                 success=success,
                 cooldown_until=cooldown_until,
+                model_name=model_name,
+                error_code=error_code,
             )
 
     async def prepare_credential(
@@ -405,6 +416,8 @@ class CredentialManager:
     async def _should_refresh_token(self, credential_data: Dict[str, Any]) -> bool:
         try:
             if is_api_key_credential(credential_data):
+                return False
+            if get_credential_provider(credential_data) == OLLAMA:
                 return False
 
             if not credential_data.get("access_token") and not credential_data.get("token"):
@@ -477,6 +490,17 @@ class CredentialManager:
                 refreshed_data = await refresh_codex_oauth_credential(credential_data)
                 await self._storage_adapter.store_credential(filename, refreshed_data, mode=mode)
                 log.info(f"Codex token refreshed and saved: {filename} (mode={mode}).")
+                return refreshed_data
+
+            if (
+                provider_id == ANTHROPIC
+                and get_credential_provider_variant(credential_data) == CLAUDE_CODE
+            ):
+                from core.anthropic import refresh_claude_oauth_credential
+
+                refreshed_data = await refresh_claude_oauth_credential(credential_data)
+                await self._storage_adapter.store_credential(filename, refreshed_data, mode=mode)
+                log.info(f"Claude Code token refreshed and saved: {filename} (mode={mode}).")
                 return refreshed_data
 
             creds = Credentials.from_dict(credential_data)

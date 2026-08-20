@@ -44,6 +44,7 @@ DEFAULT_ANTIGRAVITY_USER_AGENT = "antigravity/cli/1.0.1 windows/amd64"
 DEFAULT_ANTIGRAVITY_PAYLOAD_USER_AGENT = "antigravity"
 DEFAULT_GOOGLE_AI_STUDIO_API_URL = "https://generativelanguage.googleapis.com"
 DEFAULT_XAI_API_URL = "https://api.x.ai/v1"
+DEFAULT_XAI_OAUTH_API_URL = "https://cli-chat-proxy.grok.com/v1"
 DEFAULT_XAI_OAUTH_ISSUER = "https://auth.x.ai"
 DEFAULT_XAI_CLIENT_ID = "b1a00492-073a-47ea-816f-4c329264a828"
 DEFAULT_XAI_USER_AGENT = "grok-cli/omni-gateway"
@@ -53,6 +54,18 @@ DEFAULT_CODEX_USAGE_URL = "https://chatgpt.com/backend-api/wham/usage"
 DEFAULT_CODEX_AUTH_BASE = "https://auth.openai.com"
 DEFAULT_CODEX_CLIENT_ID = "app_EMoamEEZ73f0CkXaXp7hrann"
 DEFAULT_CODEX_USER_AGENT = "codex_cli_rs/0.0.0 (Unknown 0; unknown)"
+DEFAULT_ANTHROPIC_API_URL = "https://api.anthropic.com/v1"
+DEFAULT_CLAUDE_OAUTH_AUTHORIZE_URL = "https://claude.ai/oauth/authorize"
+DEFAULT_CLAUDE_OAUTH_TOKEN_URL = "https://api.anthropic.com/v1/oauth/token"
+DEFAULT_CLAUDE_CLIENT_ID = "9d1c250a-e61b-44d9-88ed-5944d1962f5e"
+DEFAULT_CLAUDE_USER_AGENT = "claude-cli/omni-gateway"
+DEFAULT_GEMINI_CLI_CLIENT_ID = (
+    "681255809395-oo8ft2oprdrnp9e3aqf6av3hmdib135j.apps.googleusercontent.com"
+)
+DEFAULT_GEMINI_CLI_CLIENT_SECRET = "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"
+DEFAULT_GEMINI_CLI_API_URL = "https://cloudcode-pa.googleapis.com"
+DEFAULT_GEMINI_CLI_OAUTH_AUTHORIZE_URL = "https://accounts.google.com/o/oauth2/v2/auth"
+DEFAULT_GEMINI_CLI_OAUTH_TOKEN_URL = "https://oauth2.googleapis.com/token"
 
 
 ENV_MAPPINGS = {
@@ -65,7 +78,13 @@ ENV_MAPPINGS = {
     "SERVICE_USAGE_URL": "service_usage_url",
     "ANTIGRAVITY_API_URL": "antigravity_api_url",
     "GOOGLE_AI_STUDIO_API_URL": "google_ai_studio_api_url",
+    "GEMINI_CLI_CLIENT_ID": "gemini_cli_client_id",
+    "GEMINI_CLI_CLIENT_SECRET": "gemini_cli_client_secret",
+    "GEMINI_CLI_API_URL": "gemini_cli_api_url",
+    "GEMINI_CLI_OAUTH_AUTHORIZE_URL": "gemini_cli_oauth_authorize_url",
+    "GEMINI_CLI_OAUTH_TOKEN_URL": "gemini_cli_oauth_token_url",
     "XAI_API_URL": "xai_api_url",
+    "XAI_OAUTH_API_URL": "xai_oauth_api_url",
     "XAI_OAUTH_ISSUER": "xai_oauth_issuer",
     "XAI_CLIENT_ID": "xai_client_id",
     "XAI_USER_AGENT": "xai_user_agent",
@@ -75,6 +94,11 @@ ENV_MAPPINGS = {
     "CODEX_AUTH_BASE": "codex_auth_base",
     "CODEX_CLIENT_ID": "codex_client_id",
     "CODEX_USER_AGENT": "codex_user_agent",
+    "ANTHROPIC_API_URL": "anthropic_api_url",
+    "CLAUDE_OAUTH_AUTHORIZE_URL": "claude_oauth_authorize_url",
+    "CLAUDE_OAUTH_TOKEN_URL": "claude_oauth_token_url",
+    "CLAUDE_CLIENT_ID": "claude_client_id",
+    "CLAUDE_USER_AGENT": "claude_user_agent",
     "CODE_ASSIST_CLIENT_ID": "code_assist_client_id",
     "CODE_ASSIST_CLIENT_SECRET": "code_assist_client_secret",
     "ANTIGRAVITY_CLIENT_ID": "antigravity_client_id",
@@ -637,6 +661,21 @@ async def get_xai_api_url() -> str:
     )
 
 
+async def get_xai_oauth_api_url() -> str:
+    return (
+        str(
+            await get_config_value(
+                "xai_oauth_api_url",
+                DEFAULT_XAI_OAUTH_API_URL,
+                "XAI_OAUTH_API_URL",
+            )
+            or DEFAULT_XAI_OAUTH_API_URL
+        )
+        .strip()
+        .rstrip("/")
+    )
+
+
 async def get_xai_oauth_issuer() -> str:
     return (
         str(
@@ -723,6 +762,64 @@ async def get_codex_user_agent() -> str:
     ).strip()
 
 
+async def get_anthropic_api_url() -> str:
+    """Return the Anthropic Messages API base URL."""
+    return (
+        str(
+            await get_config_value(
+                "anthropic_api_url", DEFAULT_ANTHROPIC_API_URL, "ANTHROPIC_API_URL"
+            )
+            or DEFAULT_ANTHROPIC_API_URL
+        )
+        .strip()
+        .rstrip("/")
+    )
+
+
+async def get_claude_oauth_authorize_url() -> str:
+    return (
+        str(
+            await get_config_value(
+                "claude_oauth_authorize_url",
+                DEFAULT_CLAUDE_OAUTH_AUTHORIZE_URL,
+                "CLAUDE_OAUTH_AUTHORIZE_URL",
+            )
+            or DEFAULT_CLAUDE_OAUTH_AUTHORIZE_URL
+        )
+        .strip()
+        .rstrip("/")
+    )
+
+
+async def get_claude_oauth_token_url() -> str:
+    return (
+        str(
+            await get_config_value(
+                "claude_oauth_token_url",
+                DEFAULT_CLAUDE_OAUTH_TOKEN_URL,
+                "CLAUDE_OAUTH_TOKEN_URL",
+            )
+            or DEFAULT_CLAUDE_OAUTH_TOKEN_URL
+        )
+        .strip()
+        .rstrip("/")
+    )
+
+
+async def get_claude_client_id() -> str:
+    return str(
+        await get_config_value("claude_client_id", DEFAULT_CLAUDE_CLIENT_ID, "CLAUDE_CLIENT_ID")
+        or DEFAULT_CLAUDE_CLIENT_ID
+    ).strip()
+
+
+async def get_claude_user_agent() -> str:
+    return str(
+        await get_config_value("claude_user_agent", DEFAULT_CLAUDE_USER_AGENT, "CLAUDE_USER_AGENT")
+        or DEFAULT_CLAUDE_USER_AGENT
+    ).strip()
+
+
 async def get_antigravity_user_agent() -> str:
     """Return the Antigravity CLI user agent."""
     env_value = os.getenv("ANTIGRAVITY_USER_AGENT")
@@ -792,6 +889,62 @@ async def get_antigravity_oauth_client_config() -> tuple[str, str]:
     )
 
     return client_id, client_secret
+
+
+async def get_gemini_cli_oauth_client_config() -> tuple[str, str]:
+    """Return the OAuth client used for Gemini CLI provider credential creation."""
+    client_id = str(
+        await get_config_value(
+            "gemini_cli_client_id",
+            DEFAULT_GEMINI_CLI_CLIENT_ID,
+            "GEMINI_CLI_CLIENT_ID",
+        )
+        or DEFAULT_GEMINI_CLI_CLIENT_ID
+    ).strip()
+
+    client_secret = str(
+        await get_config_value(
+            "gemini_cli_client_secret",
+            DEFAULT_GEMINI_CLI_CLIENT_SECRET,
+            "GEMINI_CLI_CLIENT_SECRET",
+        )
+        or DEFAULT_GEMINI_CLI_CLIENT_SECRET
+    ).strip()
+
+    return client_id, client_secret
+
+
+async def get_gemini_cli_api_url() -> str:
+    return str(
+        await get_config_value(
+            "gemini_cli_api_url",
+            DEFAULT_GEMINI_CLI_API_URL,
+            "GEMINI_CLI_API_URL",
+        )
+        or DEFAULT_GEMINI_CLI_API_URL
+    ).strip()
+
+
+async def get_gemini_cli_oauth_authorize_url() -> str:
+    return str(
+        await get_config_value(
+            "gemini_cli_oauth_authorize_url",
+            DEFAULT_GEMINI_CLI_OAUTH_AUTHORIZE_URL,
+            "GEMINI_CLI_OAUTH_AUTHORIZE_URL",
+        )
+        or DEFAULT_GEMINI_CLI_OAUTH_AUTHORIZE_URL
+    ).strip()
+
+
+async def get_gemini_cli_oauth_token_url() -> str:
+    return str(
+        await get_config_value(
+            "gemini_cli_oauth_token_url",
+            DEFAULT_GEMINI_CLI_OAUTH_TOKEN_URL,
+            "GEMINI_CLI_OAUTH_TOKEN_URL",
+        )
+        or DEFAULT_GEMINI_CLI_OAUTH_TOKEN_URL
+    ).strip()
 
 
 async def get_keepalive_url() -> str:

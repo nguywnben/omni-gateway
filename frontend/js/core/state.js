@@ -89,6 +89,42 @@ const AppState = {
         }
     }),
 
+    claudeCodeUploadFiles: createUploadManager('claudeCode', {
+        endpoint: './api/providers/anthropic/credentials/import?credential_type=oauth',
+        elementPrefix: 'claudeCode',
+        credentialType: 'Claude Code',
+        timeoutMs: 900000,
+        onComplete: async () => {
+            await AppState.primaryCreds.refresh();
+            await loadModelCatalog(true);
+            await refreshUsageStats();
+        }
+    }),
+
+    claudePlatformUploadFiles: createUploadManager('claudePlatform', {
+        endpoint: './api/providers/anthropic/credentials/import?credential_type=api_key',
+        elementPrefix: 'claudePlatform',
+        credentialType: 'Claude Platform',
+        timeoutMs: 900000,
+        onComplete: async () => {
+            await AppState.primaryCreds.refresh();
+            await loadModelCatalog(true);
+            await refreshUsageStats();
+        }
+    }),
+
+    ollamaUploadFiles: createUploadManager('ollama', {
+        endpoint: './api/providers/ollama/credentials/import',
+        elementPrefix: 'ollama',
+        credentialType: 'Ollama',
+        timeoutMs: 900000,
+        onComplete: async () => {
+            await AppState.primaryCreds.refresh();
+            await loadModelCatalog(true);
+            await refreshUsageStats();
+        }
+    }),
+
     currentConfig: {},
 
     configLoaded: false,

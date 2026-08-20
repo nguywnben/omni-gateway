@@ -62,13 +62,14 @@ class UsageStatsTests(unittest.TestCase):
                         "latency_ms": 125,
                         "retry_count": 2,
                     },
+                    request_id="request-123",
                 )
 
                 connection = sqlite3.connect(usage_stats.db_path)
                 try:
                     row = connection.execute(
                         """
-                        SELECT input_tokens, output_tokens, total_tokens,
+                        SELECT request_id, input_tokens, output_tokens, total_tokens,
                                estimated_input_tokens, estimated_tokens_saved,
                                compressed_messages, latency_ms, retry_count
                         FROM usage_logs
@@ -77,7 +78,7 @@ class UsageStatsTests(unittest.TestCase):
                 finally:
                     connection.close()
 
-                self.assertEqual(row, (120, 30, 150, 100, 40, 6, 125, 2))
+                self.assertEqual(row, ("request-123", 120, 30, 150, 100, 40, 6, 125, 2))
             finally:
                 usage_stats.db_path = original_db_path
 

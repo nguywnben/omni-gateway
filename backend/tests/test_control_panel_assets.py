@@ -127,6 +127,34 @@ class ControlPanelAssetTests(unittest.TestCase):
             dashboard_script,
         )
 
+    def test_provider_catalog_uses_pagination(self):
+        response = serve_control_panel()
+        body = response.body.decode("utf-8")
+        navigation_script = read_scripts("features/navigation.js")
+        provider_styles = (
+            BACKEND_DIR.parent / "frontend" / "css" / "providers-and-models.css"
+        ).read_text(encoding="utf-8")
+
+        for element_id in (
+            "providerCatalog",
+            "providerCatalogPagination",
+            "providerCatalogPrevBtn",
+            "providerCatalogNextBtn",
+            "providerCatalogPaginationInfo",
+        ):
+            self.assertIn(element_id, body)
+        self.assertIn("provider-workspace-header", body)
+        self.assertIn("change-provider-catalog-page", body)
+        self.assertIn("PROVIDER_CATALOG_PAGE_SIZE = 6", navigation_script)
+        self.assertIn("function changeProviderCatalogPage(delta)", navigation_script)
+        self.assertIn("function updateProviderCatalogPagination()", navigation_script)
+        self.assertIn("grid-template-columns: repeat(3, minmax(0, 1fr))", provider_styles)
+        self.assertIn(".provider-workspace-header", provider_styles)
+        self.assertIn(
+            ".provider-catalog-toolbar strong,\n.provider-catalog-search-label",
+            provider_styles,
+        )
+
     def test_xai_provider_ui_references_existing_assets_and_endpoints(self):
         response = serve_control_panel()
         body = response.body.decode("utf-8")

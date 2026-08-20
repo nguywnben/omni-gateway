@@ -11,6 +11,7 @@ from config import (
     get_retry_429_max_retries,
 )
 from core.credential_manager import CredentialManager
+from core.request_context import get_request_elapsed_ms, get_request_id
 from core.usage_stats import record_call
 from fastapi import Response
 from log import log
@@ -93,6 +94,8 @@ async def record_api_call_success(
 ) -> None:
     if credential_manager and credential_name:
         try:
+            request_metrics = dict(request_metrics or {})
+            request_metrics.setdefault("latency_ms", get_request_elapsed_ms())
             await asyncio.to_thread(
                 record_call,
                 credential_name,
@@ -102,6 +105,7 @@ async def record_api_call_success(
                 success=True,
                 token_usage=token_usage,
                 request_metrics=request_metrics,
+                request_id=get_request_id(),
             )
         except Exception as e:
             log.error(f"Failed to record usage for {credential_name}: {e}")
@@ -131,6 +135,7 @@ async def record_api_call_error(
                 status_code=status_code,
                 success=False,
                 token_usage=None,
+                request_id=get_request_id(),
             )
         except Exception as e:
             log.error(f"Failed to record failed usage for {credential_name}: {e}")
@@ -174,6 +179,7 @@ async def record_model_route_miss(
             status_code=404,
             success=False,
             token_usage=None,
+            request_id=get_request_id(),
         )
     except Exception as exc:
         log.error(f"Failed to record model route miss for {credential_name}: {exc}")
@@ -197,6 +203,7 @@ async def record_unassigned_api_call_error(
             status_code=status_code,
             success=False,
             token_usage=None,
+            request_id=get_request_id(),
         )
     except Exception as e:
         log.error(f"Failed to record unassigned usage failure: {e}")

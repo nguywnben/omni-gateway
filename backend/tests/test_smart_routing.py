@@ -11,6 +11,7 @@ BACKEND_DIR = Path(__file__).resolve().parents[1]
 if str(BACKEND_DIR) not in sys.path:
     sys.path.insert(0, str(BACKEND_DIR))
 
+from core.request_context import request_scope
 from core.smart_routing import SmartCredentialRouter
 
 
@@ -47,6 +48,27 @@ def credential_state(**overrides: Any) -> Dict[str, Any]:
 
 
 class SmartCredentialRouterTests(unittest.IsolatedAsyncioTestCase):
+    async def test_decision_explains_selected_and_rejected_candidates(self):
+        storage = FakeStorageAdapter(
+            {
+                "disabled.json": credential_state(disabled=True),
+                "ready.json": credential_state(rotation_order=1),
+            }
+        )
+        router = SmartCredentialRouter(clock=lambda: 100.0)
+
+        result, decision = await router.acquire_with_decision(
+            storage,
+            mode="primary",
+            model_name="model-a",
+        )
+
+        self.assertEqual(result[0], "ready.json")
+        self.assertEqual(decision.selected_filename, "ready.json")
+        candidates = {candidate.filename: candidate for candidate in decision.candidates}
+        self.assertEqual(candidates["disabled.json"].reason, "disabled")
+        self.assertEqual(candidates["ready.json"].state, "selected")
+
     async def test_concurrent_acquisitions_spread_across_available_credentials(self):
         now = [100.0]
         storage = FakeStorageAdapter(
@@ -84,6 +106,57 @@ class SmartCredentialRouterTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(first[0], "a.json")
         self.assertEqual(second[0], "b.json")
+
+    async def test_client_request_failure_does_not_penalize_the_credential(self):
+        storage = FakeStorageAdapter({"a.json": credential_state()})
+        router = SmartCredentialRouter(clock=lambda: 100.0)
+
+        first = await router.acquire(storage, mode="primary", model_name="model-a")
+        await router.complete(
+            first[0],
+            mode="primary",
+            success=False,
+            model_name="model-a",
+            error_code=400,
+        )
+
+        self.assertIsNotNone(await router.acquire(storage, mode="primary", model_name="model-a"))
+
+    async def test_model_not_found_only_penalizes_the_affected_model(self):
+        storage = FakeStorageAdapter({"a.json": credential_state()})
+        router = SmartCredentialRouter(clock=lambda: 100.0)
+
+        first = await router.acquire(storage, mode="primary", model_name="model-a")
+        await router.complete(
+            first[0],
+            mode="primary",
+            success=False,
+            model_name="model-a",
+            error_code=404,
+        )
+
+        self.assertIsNone(await router.acquire(storage, mode="primary", model_name="model-a"))
+        self.assertIsNotNone(await router.acquire(storage, mode="primary", model_name="model-b"))
+
+        _, decision = await router.acquire_with_decision(
+            storage,
+            mode="primary",
+            model_name="model-a",
+        )
+        self.assertEqual(decision.candidates[0].reason, "backoff_model_unavailable")
+
+    async def test_routing_decision_includes_the_request_context_id(self):
+        storage = FakeStorageAdapter({"a.json": credential_state()})
+        router = SmartCredentialRouter(clock=lambda: 100.0)
+
+        with request_scope("request-123"):
+            _, decision = await router.acquire_with_decision(
+                storage,
+                mode="primary",
+                model_name="model-a",
+            )
+
+        self.assertEqual(decision.request_id, "request-123")
 
     async def test_all_credentials_in_backoff_are_not_reused_immediately(self):
         now = [100.0]

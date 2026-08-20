@@ -40,7 +40,7 @@ function formatCooldownTime(remainingSeconds) {
 
 function getCredentialProviderMeta(credInfo, managerType) {
 
-    const provider = String(credInfo.provider || credInfo.provider_name || '')
+    const provider = String(credInfo.provider_variant || credInfo.provider || credInfo.provider_name || '')
         .trim()
         .toLowerCase()
         .replace(/[\s-]+/g, '_');
@@ -112,6 +112,29 @@ function getCredentialProviderMeta(credInfo, managerType) {
             id: 'openai_platform',
             name: 'OpenAI Platform',
             logo: '/frontend/assets/providers/openai-platform-logo.png'
+        };
+
+    }
+
+    if (provider === 'anthropic' || provider === 'claude' || provider === 'claude_code' || provider === 'claude_platform') {
+
+        const credentialType = String(credInfo.credential_type || '').trim().toLowerCase();
+        const isClaudeCode = provider === 'claude_code' || credentialType === 'oauth';
+
+        return {
+            id: isClaudeCode ? 'claude_code' : 'claude_platform',
+            name: isClaudeCode ? 'Claude Code' : 'Claude Platform',
+            logo: isClaudeCode ? '/frontend/assets/providers/claude-code-logo.png' : '/frontend/assets/providers/claude-platform-logo.png'
+        };
+
+    }
+
+    if (provider === 'ollama' || provider === 'ollama_cloud' || provider === 'ollama_local') {
+
+        return {
+            id: 'ollama',
+            name: 'Ollama',
+            logo: '/frontend/assets/providers/ollama-logo.png'
         };
 
     }
@@ -212,8 +235,9 @@ function renderCredentialSubscriptionBadge(pathId, value, kind = 'plan') {
 function getCredentialAuthenticationType(providerMeta, credInfo) {
 
     const providerId = String(providerMeta?.id || '').trim().toLowerCase();
-    if (['google_antigravity', 'grok', 'codex'].includes(providerId)) return 'OAuth';
-    if (['google_ai_studio', 'xai_console', 'openai_platform'].includes(providerId)) return 'API key';
+    if (['google_antigravity', 'grok', 'codex', 'claude_code'].includes(providerId)) return 'OAuth';
+    if (['google_ai_studio', 'xai_console', 'openai_platform', 'claude_platform'].includes(providerId)) return 'API key';
+    if (providerId === 'ollama') return 'Connection';
 
     const declaredType = String(credInfo?.credential_type || '').trim().toLowerCase();
     if (declaredType === 'oauth') return 'OAuth';
@@ -243,10 +267,12 @@ function createCredCard(credInfo, manager) {
     const isGoogleAIStudio = providerMeta.id === 'google_ai_studio';
     const isXai = ['xai', 'grok', 'xai_console'].includes(providerMeta.id);
     const isOpenAI = ['codex', 'openai_platform'].includes(providerMeta.id);
+    const isAnthropic = ['claude_code', 'claude_platform'].includes(providerMeta.id);
+    const isOllama = providerMeta.id === 'ollama';
     const isGrokOAuth = providerMeta.id === 'grok' && credInfo.credential_type !== 'api_key';
     const isCodexOAuth = providerMeta.id === 'codex' && credInfo.credential_type === 'oauth';
     const isAntigravity = providerMeta.id === 'google_antigravity';
-    const isStaticProvider = isGoogleAIStudio || isXai || isOpenAI;
+    const isStaticProvider = isGoogleAIStudio || isXai || isOpenAI || isAnthropic || isOllama;
     const pathId = (managerType === 'primary' ? 'primary_' : '') + btoa(encodeURIComponent(filename)).replace(/[+/=]/g, '_');
     const supportsQuotaPreview = managerType === 'primary'
         && (isAntigravity || isGrokOAuth || isCodexOAuth);

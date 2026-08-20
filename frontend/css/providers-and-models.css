@@ -12,16 +12,19 @@
 
 .provider-catalog-toolbar {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(240px, 320px);
-    align-items: end;
-    gap: 16px;
+    grid-template-columns: minmax(0, 1fr) minmax(280px, 360px);
+    align-items: start;
+    gap: 20px;
     margin-bottom: 14px;
 }
 
-.provider-catalog-toolbar strong {
+.provider-catalog-toolbar strong,
+.provider-catalog-search-label {
     display: block;
+    color: var(--text);
     font-size: 15px;
     font-weight: 680;
+    line-height: 1.45;
 }
 
 .provider-catalog-toolbar p {
@@ -29,12 +32,6 @@
     color: var(--text-muted);
     font-size: 13px;
     line-height: 1.45;
-}
-
-.provider-catalog-search-label {
-    color: var(--text-muted);
-    font-size: 12px;
-    font-weight: 650;
 }
 
 .provider-catalog-search-group {
@@ -48,6 +45,7 @@
 }
 
 .provider-catalog {
+    width: 100%;
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 12px;
@@ -59,6 +57,10 @@
     align-content: start;
     min-height: 168px;
     margin-bottom: 0;
+}
+
+.provider-catalog-pagination {
+    margin: 0 0 16px;
 }
 
 .provider-catalog-empty {
@@ -117,6 +119,30 @@
     height: 36px;
     object-fit: contain;
     display: block;
+}
+
+
+.provider-reveal-section,
+.provider-upload-section {
+    margin-top: 18px;
+}
+
+.provider-action-gap {
+    margin-top: 14px;
+}
+
+.provider-progress-copy {
+    margin-top: 8px;
+}
+
+.field-optional {
+    color: var(--text-soft);
+    font-size: 11px;
+    font-weight: 550;
+}
+
+.form-help {
+    margin: 0 0 12px;
 }
 
 .provider-summary {
@@ -238,14 +264,20 @@
 }
 
 @media (max-width: 1180px) {
-    .provider-catalog {
-        grid-template-columns: repeat(2, minmax(0, 1fr));
+    .provider-catalog .provider-hero-card {
+        flex-basis: calc((100% - 12px) / 2);
+    }
+}
+
+@media (max-width: 860px) {
+    .provider-catalog-toolbar {
+        grid-template-columns: minmax(0, 1fr);
     }
 }
 
 @media (max-width: 720px) {
-    .provider-catalog-toolbar {
-        grid-template-columns: minmax(0, 1fr);
+    .provider-catalog .provider-hero-card {
+        flex-basis: 100%;
     }
 
     .provider-catalog-search-label {
@@ -568,9 +600,28 @@
     gap: 14px;
 }
 
+.provider-workspace-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 20px;
+    padding: 4px 2px;
+}
+
+.provider-workspace-header .provider-workspace-heading {
+    flex: 1 1 auto;
+    min-width: 0;
+    padding: 0;
+}
+
+.provider-workspace-header .provider-catalog-pagination {
+    flex: 0 0 auto;
+    margin: 0;
+}
+
 .provider-workspace-heading {
     display: flex;
-    align-items: center;
+    align-items: flex-start;
     gap: 12px;
     padding: 4px 2px;
 }

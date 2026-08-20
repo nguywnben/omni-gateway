@@ -8,12 +8,17 @@ from typing import Any, Dict, Optional
 
 GOOGLE_ANTIGRAVITY = "google_antigravity"
 GOOGLE_AI_STUDIO = "google_ai_studio"
+GEMINI_CLI = "gemini_cli"
 XAI = "xai"
 GROK = "grok"
 XAI_CONSOLE = "xai_console"
 OPENAI = "openai"
 CODEX = "codex"
 OPENAI_PLATFORM = "openai_platform"
+ANTHROPIC = "anthropic"
+CLAUDE_CODE = "claude_code"
+CLAUDE_PLATFORM = "claude_platform"
+OLLAMA = "ollama"
 MAX_DECLARED_MODELS = 500
 MAX_MODEL_ID_LENGTH = 256
 MODEL_SUPPORT_UNSUPPORTED = 0
@@ -31,6 +36,10 @@ _PROVIDER_ALIASES = {
     "gemini": GOOGLE_AI_STUDIO,
     "google-ai-studio": GOOGLE_AI_STUDIO,
     "google_ai_studio": GOOGLE_AI_STUDIO,
+    "gemini-cli": GEMINI_CLI,
+    "gemini_cli": GEMINI_CLI,
+    "geminicli": GEMINI_CLI,
+    "gc": GEMINI_CLI,
     "grok": XAI,
     "xai-oauth": XAI,
     "xai_oauth": XAI,
@@ -51,20 +60,37 @@ _PROVIDER_ALIASES = {
     "codex": OPENAI,
     "openai-codex": OPENAI,
     "openai_codex": OPENAI,
+    "anthropic": ANTHROPIC,
+    "claude": ANTHROPIC,
+    "claude-code": ANTHROPIC,
+    "claude_code": ANTHROPIC,
+    "claude-platform": ANTHROPIC,
+    "claude_platform": ANTHROPIC,
+    "ollama": OLLAMA,
+    "ollama-cloud": OLLAMA,
+    "ollama_cloud": OLLAMA,
+    "ollama-local": OLLAMA,
+    "ollama_local": OLLAMA,
 }
 
 _PROVIDER_NAMES = {
     GOOGLE_ANTIGRAVITY: "Google Antigravity",
     GOOGLE_AI_STUDIO: "Google AI Studio",
+    GEMINI_CLI: "Gemini CLI",
     XAI: "Grok Build",
     OPENAI: "OpenAI",
+    ANTHROPIC: "Anthropic",
+    OLLAMA: "Ollama",
 }
 
 _CREDENTIAL_PROVIDER_NAMES = {
+    GEMINI_CLI: "Gemini CLI",
     GROK: "Grok Build",
     XAI_CONSOLE: "SpaceXAI Console",
     CODEX: "Codex",
     OPENAI_PLATFORM: "OpenAI Platform",
+    CLAUDE_CODE: "Claude Code",
+    CLAUDE_PLATFORM: "Claude Platform",
 }
 
 
@@ -105,11 +131,29 @@ _PROVIDER_CAPABILITIES = {
         credential_types=("api_key",),
         model_prefixes=("gemini-", "gemma-"),
     ),
+    GEMINI_CLI: ProviderCapabilities(
+        provider_id=GEMINI_CLI,
+        display_name=_PROVIDER_NAMES[GEMINI_CLI],
+        credential_types=("oauth",),
+        model_prefixes=("gemini-", "gemma-"),
+    ),
     XAI: ProviderCapabilities(
         provider_id=XAI,
         display_name=_PROVIDER_NAMES[XAI],
         credential_types=("oauth", "api_key"),
         model_prefixes=("grok-",),
+    ),
+    ANTHROPIC: ProviderCapabilities(
+        provider_id=ANTHROPIC,
+        display_name=_PROVIDER_NAMES[ANTHROPIC],
+        credential_types=("oauth", "api_key"),
+        model_prefixes=("claude-",),
+    ),
+    OLLAMA: ProviderCapabilities(
+        provider_id=OLLAMA,
+        display_name=_PROVIDER_NAMES[OLLAMA],
+        credential_types=("connection",),
+        model_prefixes=(),
     ),
     OPENAI: ProviderCapabilities(
         provider_id=OPENAI,
@@ -160,6 +204,39 @@ def build_antigravity_credential_filename(
     return f"google-antigravity-{fingerprint or 'unknown'}.json"
 
 
+def gemini_cli_account_fingerprint(
+    credential_data: Optional[Dict[str, Any]] = None,
+    *,
+    email: Any = None,
+) -> str:
+    """Create a stable, non-reversible Gemini CLI account identifier."""
+    data = credential_data or {}
+    normalized_email = (
+        str(email or data.get("user_email") or data.get("email") or data.get("account_email") or "")
+        .strip()
+        .lower()
+    )
+    if normalized_email:
+        return _short_fingerprint(normalized_email)
+
+    token_identity = data.get("refresh_token") or data.get("token")
+    if token_identity:
+        return _short_fingerprint(token_identity)
+
+    project_identity = data.get("project_id") or data.get("quota_project_id")
+    return _short_fingerprint(project_identity)
+
+
+def build_gemini_cli_credential_filename(
+    credential_data: Optional[Dict[str, Any]] = None,
+    *,
+    email: Any = None,
+) -> str:
+    """Build the canonical filename for a Gemini CLI credential."""
+    fingerprint = gemini_cli_account_fingerprint(credential_data, email=email)
+    return f"gemini-cli-{fingerprint or 'unknown'}.json"
+
+
 def canonicalize_antigravity_credential_filename(
     filename: Any,
     credential_data: Optional[Dict[str, Any]] = None,
@@ -200,6 +277,8 @@ def get_credential_provider(credential_data: Optional[Dict[str, Any]]) -> str:
 def get_provider_routing_id(provider_id: Any) -> str:
     """Return the routing provider shared by one user-facing provider product."""
     normalized = str(provider_id or "").strip().lower().replace("-", "_").replace(" ", "_")
+    if normalized in {CLAUDE_CODE, CLAUDE_PLATFORM}:
+        return ANTHROPIC
     if normalized in {CODEX, OPENAI_PLATFORM}:
         return OPENAI
     if normalized in {GROK, XAI_CONSOLE}:
@@ -219,6 +298,18 @@ def get_credential_provider_variant(credential_data: Optional[Dict[str, Any]]) -
     """Return the user-facing provider variant for a credential payload."""
     data = credential_data or {}
     provider_id = get_credential_provider(data)
+    if provider_id == ANTHROPIC:
+        explicit_provider = (
+            str(data.get("provider") or data.get("provider_id") or "")
+            .strip()
+            .lower()
+            .replace("-", "_")
+        )
+        credential_type = str(data.get("credential_type") or "").strip().lower()
+        if credential_type == "oauth" or explicit_provider in {"claude_code", "claude"}:
+            return CLAUDE_CODE
+        return CLAUDE_PLATFORM
+
     if provider_id != XAI:
         if provider_id != OPENAI:
             return provider_id
@@ -283,6 +374,9 @@ def api_key_fingerprint(api_key: str) -> str:
 def get_static_credential_identity(credential_data: Dict[str, Any]) -> str:
     """Return a deduplication identity that does not require a network lookup."""
     provider_id = get_credential_provider(credential_data)
+    if provider_id == OLLAMA:
+        fingerprint = str(credential_data.get("connection_fingerprint") or "").strip()
+        return f"{provider_id}:{fingerprint}" if fingerprint else ""
     if not is_api_key_credential(credential_data):
         return ""
     fingerprint = str(credential_data.get("key_fingerprint") or "").strip()

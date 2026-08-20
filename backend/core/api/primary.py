@@ -9,19 +9,30 @@ from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Tuple
 
 from config import (
+    get_anthropic_api_url,
     get_antigravity_api_url,
     get_antigravity_payload_user_agent,
     get_antigravity_stream_to_nonstream,
     get_antigravity_switch_credential_enabled,
     get_auto_disable_error_codes,
+    get_claude_user_agent,
     get_codex_api_url,
     get_codex_user_agent,
+    get_gemini_cli_api_url,
     get_google_ai_studio_api_url,
     get_openai_api_url,
     get_token_compression_config,
     get_upstream_timeout_seconds,
     get_xai_api_url,
+    get_xai_oauth_api_url,
     get_xai_user_agent,
+)
+from core.anthropic import (
+    anthropic_response_to_gemini,
+    anthropic_stream_line_to_gemini,
+    build_anthropic_headers,
+    fetch_anthropic_model_ids,
+    gemini_request_to_anthropic,
 )
 from core.antigravity import (
     build_antigravity_headers,
@@ -46,6 +57,11 @@ from core.codex import (
     gemini_request_to_codex,
 )
 from core.credential_manager import credential_manager
+from core.gemini_cli import (
+    DEFAULT_GEMINI_CLI_MODELS,
+    build_gemini_cli_headers,
+    wrap_gemini_cli_payload,
+)
 from core.google_ai_studio import (
     build_api_key_headers,
     build_generation_url,
@@ -54,6 +70,14 @@ from core.google_ai_studio import (
 )
 from core.httpx_client import get_async, post_async, stream_post_async
 from core.model_blacklist import record_model_not_found
+from core.ollama import (
+    build_ollama_headers,
+    fetch_ollama_model_ids,
+    gemini_request_to_ollama,
+    normalize_ollama_base_url,
+    ollama_response_to_gemini,
+    ollama_stream_line_to_gemini,
+)
 from core.openai_platform import (
     build_openai_headers,
     fetch_openai_model_ids,
@@ -62,10 +86,15 @@ from core.openai_platform import (
     openai_stream_line_to_gemini,
 )
 from core.provider_registry import (
+    ANTHROPIC,
+    CLAUDE_CODE,
+    CLAUDE_PLATFORM,
     CODEX,
+    GEMINI_CLI,
     GOOGLE_AI_STUDIO,
     GOOGLE_ANTIGRAVITY,
     GROK,
+    OLLAMA,
     OPENAI,
     OPENAI_PLATFORM,
     XAI,
@@ -87,6 +116,7 @@ from core.usage_stats import (
 from core.xai import (
     build_xai_headers,
     fetch_xai_model_ids,
+    fetch_xai_oauth_model_ids,
     gemini_request_to_xai,
     xai_response_to_gemini,
     xai_stream_line_to_gemini,
@@ -364,8 +394,19 @@ async def prepare_provider_request(
             CompressionSettings(**await get_token_compression_config()),
         )
         payload = gemini_request_to_xai(dict(compression_result.request), model_name, streaming)
-        target_url = f"{(await get_xai_api_url()).rstrip('/')}/chat/completions"
-        auth_headers = build_xai_headers(str(access_token), await get_xai_user_agent())
+        is_oauth = (
+            get_credential_provider_variant(credential_data) == GROK
+            or str(credential_data.get("credential_type") or "").strip().lower() == "oauth"
+        )
+        base_url = await get_xai_oauth_api_url() if is_oauth else await get_xai_api_url()
+        target_url = f"{base_url.rstrip('/')}/chat/completions"
+        auth_headers = build_xai_headers(
+            str(access_token),
+            await get_xai_user_agent(),
+            oauth=is_oauth,
+        )
+        if is_oauth and model_name:
+            auth_headers["x-grok-model-override"] = model_name
     elif provider_id == OPENAI:
         credential_variant = get_credential_provider_variant(credential_data)
         access_token = (
@@ -398,6 +439,52 @@ async def prepare_provider_request(
                 ),
                 user_agent=await get_codex_user_agent(),
             )
+    elif provider_id == ANTHROPIC:
+        compression_result = compress_gemini_request(
+            dict(inner_request),
+            CompressionSettings(**await get_token_compression_config()),
+        )
+        payload = gemini_request_to_anthropic(
+            dict(compression_result.request), model_name, streaming
+        )
+        target_url = f"{(await get_anthropic_api_url()).rstrip('/')}/messages"
+        auth_headers = build_anthropic_headers(
+            credential_data,
+            user_agent=await get_claude_user_agent(),
+        )
+    elif provider_id == OLLAMA:
+        compression_result = compress_gemini_request(
+            dict(inner_request),
+            CompressionSettings(**await get_token_compression_config()),
+        )
+        payload = gemini_request_to_ollama(dict(compression_result.request), model_name, streaming)
+        base_url = normalize_ollama_base_url(str(credential_data.get("base_url") or ""))
+        target_url = f"{base_url}/api/chat"
+        auth_headers = build_ollama_headers(str(credential_data.get("api_key") or ""))
+    elif provider_id == GEMINI_CLI:
+        access_token = credential_data.get("access_token") or credential_data.get("token")
+        if not access_token:
+            raise ValueError("Gemini CLI credential does not contain an access token.")
+        compression_result = compress_gemini_request(
+            dict(inner_request),
+            CompressionSettings(**await get_token_compression_config()),
+        )
+        project_id = str(credential_data.get("project_id") or "")
+        payload = wrap_gemini_cli_payload(
+            dict(compression_result.request), model_name, project_id=project_id
+        )
+        base_url = (await get_gemini_cli_api_url()).rstrip("/")
+        action = (
+            "v1internal:streamGenerateContent?alt=sse"
+            if streaming
+            else "v1internal:generateContent"
+        )
+        target_url = f"{base_url}/{action}"
+        auth_headers = build_gemini_cli_headers(
+            str(access_token),
+            model=model_name,
+            stream=streaming,
+        )
     else:
         access_token = credential_data.get("access_token") or credential_data.get("token")
         if not access_token:
@@ -425,6 +512,9 @@ async def prepare_provider_request(
         if provider_id == GOOGLE_AI_STUDIO:
             auth_headers.pop("Authorization", None)
             auth_headers["x-goog-api-key"] = str(credential_data.get("api_key") or "")
+        elif provider_id == GEMINI_CLI:
+            access_token = credential_data.get("access_token") or credential_data.get("token")
+            auth_headers["Authorization"] = f"Bearer {access_token}"
         elif provider_id == XAI:
             auth_headers.pop("x-goog-api-key", None)
             access_token = (
@@ -446,6 +536,19 @@ async def prepare_provider_request(
                 account_id = str(credential_data.get("account_id") or "").strip()
                 if account_id:
                     auth_headers["ChatGPT-Account-Id"] = account_id
+        elif provider_id == ANTHROPIC:
+            for header in ("Authorization", "x-api-key", "anthropic-version", "anthropic-beta"):
+                auth_headers.pop(header, None)
+            auth_headers.update(
+                build_anthropic_headers(
+                    credential_data,
+                    user_agent=await get_claude_user_agent(),
+                )
+            )
+        elif provider_id == OLLAMA:
+            auth_headers.pop("x-goog-api-key", None)
+            auth_headers.pop("Authorization", None)
+            auth_headers.update(build_ollama_headers(str(credential_data.get("api_key") or "")))
         else:
             auth_headers.pop("x-goog-api-key", None)
             access_token = credential_data.get("access_token") or credential_data.get("token")
@@ -759,6 +862,16 @@ async def stream_request(
                             chunk = openai_stream_line_to_gemini(chunk)
                         else:
                             chunk = codex_stream_line_to_gemini(chunk)
+                        if not chunk:
+                            continue
+                    elif provider_id == ANTHROPIC:
+                        chunk = anthropic_stream_line_to_gemini(
+                            chunk, stream_id=f"{current_file}:{model_name}"
+                        )
+                        if not chunk:
+                            continue
+                    elif provider_id == OLLAMA:
+                        chunk = ollama_stream_line_to_gemini(chunk)
                         if not chunk:
                             continue
 
@@ -1165,6 +1278,52 @@ async def non_stream_request(
                             return Response(
                                 content=json.dumps(
                                     {"error": "OpenAI returned an invalid response."}
+                                ),
+                                status_code=502,
+                                media_type="application/json",
+                            )
+                    elif provider_id == ANTHROPIC:
+                        try:
+                            response_content = json.dumps(
+                                anthropic_response_to_gemini(response.json())
+                            ).encode("utf-8")
+                        except (ValueError, TypeError) as exc:
+                            await record_api_call_error(
+                                credential_manager,
+                                current_file,
+                                502,
+                                None,
+                                mode="primary",
+                                model_name=model_name,
+                                error_message=str(exc),
+                                provider=provider_id,
+                            )
+                            return Response(
+                                content=json.dumps(
+                                    {"error": "Anthropic returned an invalid response."}
+                                ),
+                                status_code=502,
+                                media_type="application/json",
+                            )
+                    elif provider_id == OLLAMA:
+                        try:
+                            response_content = json.dumps(
+                                ollama_response_to_gemini(response.json())
+                            ).encode("utf-8")
+                        except (ValueError, TypeError) as exc:
+                            await record_api_call_error(
+                                credential_manager,
+                                current_file,
+                                502,
+                                None,
+                                mode="primary",
+                                model_name=model_name,
+                                error_message=str(exc),
+                                provider=provider_id,
+                            )
+                            return Response(
+                                content=json.dumps(
+                                    {"error": "Ollama returned an invalid response."}
                                 ),
                                 status_code=502,
                                 media_type="application/json",
@@ -1583,7 +1742,11 @@ async def _discover_credential_model_ids(
             )
             if not access_token:
                 return CredentialModelDiscovery(frozenset(stored), False)
-            discovered = await fetch_xai_model_ids(str(access_token))
+            discovered = (
+                await fetch_xai_oauth_model_ids(str(access_token))
+                if provider_variant == GROK
+                else await fetch_xai_model_ids(str(access_token))
+            )
         elif provider_variant == CODEX:
             data = await credential_manager.prepare_credential(
                 filename, credential_data, mode="primary"
@@ -1598,6 +1761,27 @@ async def _discover_credential_model_ids(
             if not api_key:
                 return CredentialModelDiscovery(frozenset(stored), False)
             discovered = await fetch_openai_model_ids(api_key)
+        elif provider_variant in {CLAUDE_CODE, CLAUDE_PLATFORM}:
+            if provider_variant == CLAUDE_CODE:
+                data = await credential_manager.prepare_credential(
+                    filename, credential_data, mode="primary"
+                )
+            if not data:
+                return CredentialModelDiscovery(frozenset(stored), False)
+            discovered = await fetch_anthropic_model_ids(data)
+        elif provider_variant == OLLAMA:
+            base_url = str(data.get("base_url") or "")
+            if not base_url:
+                return CredentialModelDiscovery(frozenset(stored), False)
+            discovered = await fetch_ollama_model_ids(
+                base_url,
+                str(data.get("api_key") or ""),
+            )
+        elif provider_variant == GEMINI_CLI:
+            data = await credential_manager.prepare_credential(
+                filename, credential_data, mode="primary"
+            )
+            discovered = (data or {}).get("model_ids") or DEFAULT_GEMINI_CLI_MODELS
         else:
             return CredentialModelDiscovery(frozenset(stored), False)
 

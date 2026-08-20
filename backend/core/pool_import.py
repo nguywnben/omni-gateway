@@ -9,27 +9,43 @@ import zipfile
 from pathlib import PurePosixPath
 from typing import Any, Dict, List, Tuple
 
+from core.anthropic import (
+    AnthropicError,
+    fetch_anthropic_model_ids,
+    refresh_claude_oauth_credential,
+    validate_anthropic_api_key,
+)
 from core.codex import CODEX_DEFAULT_MODEL_IDS, CodexError
 from core.credential_manager import credential_manager
+from core.gemini_cli import DEFAULT_GEMINI_CLI_MODELS
 from core.google_ai_studio import GoogleAIStudioError, validate_api_key
+from core.ollama import OllamaError, normalize_ollama_base_url, validate_ollama_connection
 from core.openai_platform import OpenAIPlatformError, validate_openai_api_key
 from core.provider_registry import (
+    ANTHROPIC,
+    CLAUDE_CODE,
+    CLAUDE_PLATFORM,
     CODEX,
+    GEMINI_CLI,
     GOOGLE_AI_STUDIO,
     GOOGLE_ANTIGRAVITY,
     GROK,
+    OLLAMA,
     OPENAI,
     OPENAI_PLATFORM,
     XAI,
     XAI_CONSOLE,
     api_key_fingerprint,
+    build_gemini_cli_credential_filename,
     canonicalize_antigravity_credential_filename,
     get_credential_provider_display_name,
     get_credential_provider_variant,
     normalize_provider_id,
 )
 from core.provider_store import (
+    store_claude_platform_credential,
     store_google_ai_studio_credential,
+    store_ollama_credential,
     store_openai_platform_credential,
     store_xai_api_key_credential,
 )
@@ -41,7 +57,15 @@ MAX_POOL_ARCHIVE_BYTES = 10 * 1024 * 1024
 MAX_POOL_ARCHIVE_ENTRIES = 500
 MAX_POOL_ENTRY_BYTES = 2 * 1024 * 1024
 MAX_POOL_UNCOMPRESSED_BYTES = 25 * 1024 * 1024
-SUPPORTED_POOL_PROVIDERS = {GOOGLE_ANTIGRAVITY, GOOGLE_AI_STUDIO, XAI, OPENAI}
+SUPPORTED_POOL_PROVIDERS = {
+    GOOGLE_ANTIGRAVITY,
+    GOOGLE_AI_STUDIO,
+    GEMINI_CLI,
+    XAI,
+    OPENAI,
+    ANTHROPIC,
+    OLLAMA,
+}
 
 
 class PoolImportError(ValueError):
@@ -79,6 +103,31 @@ def _is_openai_payload(payload: Dict[str, Any]) -> bool:
     return False
 
 
+def _is_anthropic_payload(payload: Dict[str, Any]) -> bool:
+    credential_type = str(payload.get("credential_type") or "").strip().lower()
+    if credential_type == "api_key":
+        return _has_text(payload, "api_key")
+    if credential_type == "oauth":
+        return _has_text(payload, "refresh_token") or _has_text(payload, "access_token")
+    return False
+
+
+def _is_ollama_payload(payload: Dict[str, Any]) -> bool:
+    credential_type = str(payload.get("credential_type") or "").strip().lower()
+    return credential_type in {"", "connection"} and _has_text(payload, "base_url")
+
+
+def _is_gemini_cli_payload(payload: Dict[str, Any]) -> bool:
+    credential_type = str(payload.get("credential_type") or "").strip().lower()
+    if credential_type in {"", "oauth"}:
+        return (
+            _has_text(payload, "refresh_token")
+            or _has_text(payload, "access_token")
+            or _has_text(payload, "token")
+        )
+    return False
+
+
 def classify_pool_credential(payload: Any) -> str:
     """Return a supported provider ID only when the credential shape is clear."""
     if not isinstance(payload, dict):
@@ -93,6 +142,8 @@ def classify_pool_credential(payload: Any) -> str:
             raise PoolImportError("Google AI Studio payload is not a valid API key credential.")
         if provider_id == GOOGLE_ANTIGRAVITY and not _is_antigravity_payload(payload):
             raise PoolImportError("Google Antigravity payload is missing required OAuth fields.")
+        if provider_id == GEMINI_CLI and not _is_gemini_cli_payload(payload):
+            raise PoolImportError("Gemini CLI payload is missing required OAuth token fields.")
         if provider_id == XAI and not _is_xai_payload(payload):
             raise PoolImportError(
                 "Credential payload is not a valid Grok Build OAuth or SpaceXAI Console API key credential."
@@ -101,12 +152,23 @@ def classify_pool_credential(payload: Any) -> str:
             raise PoolImportError(
                 "Credential payload is not a valid Codex OAuth or OpenAI Platform API key credential."
             )
+        if provider_id == ANTHROPIC and not _is_anthropic_payload(payload):
+            raise PoolImportError(
+                "Credential payload is not a valid Claude Code OAuth or Claude Platform API key credential."
+            )
+        if provider_id == OLLAMA and not _is_ollama_payload(payload):
+            raise PoolImportError("Ollama payload is missing a valid connection endpoint.")
         return provider_id
 
-    if _is_ai_studio_payload(payload):
-        return GOOGLE_AI_STUDIO
     if _is_antigravity_payload(payload):
         return GOOGLE_ANTIGRAVITY
+    if _is_ollama_payload(payload):
+        return OLLAMA
+    api_key = str(payload.get("api_key") or "").strip()
+    if api_key.startswith("sk-ant-"):
+        return ANTHROPIC
+    if _is_ai_studio_payload(payload):
+        return GOOGLE_AI_STUDIO
     raise PoolImportError("Credential provider could not be identified safely.")
 
 
@@ -244,6 +306,28 @@ async def _restore_antigravity(candidate: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
+async def restore_gemini_cli_credential(candidate: Dict[str, Any]) -> Dict[str, Any]:
+    """Import one Gemini CLI credential payload into the pool."""
+    payload = dict(candidate["payload"])
+    payload["provider"] = GEMINI_CLI
+    payload["provider_id"] = GEMINI_CLI
+    if not payload.get("model_ids"):
+        payload["model_ids"] = list(DEFAULT_GEMINI_CLI_MODELS)
+    user_email = str(payload.get("user_email") or payload.get("email") or "").strip().lower()
+    filename = build_gemini_cli_credential_filename(payload, email=user_email)
+    result = await credential_manager.add_primary_credential(filename, payload)
+    action = str(result.get("action") or "created")
+    stored = bool(result.get("stored", action != "skipped"))
+    return {
+        "status": "success" if stored else "skipped",
+        "action": action,
+        "filename": result.get("filename", filename),
+        "label": user_email or "Gemini CLI account",
+        "message": result.get("message")
+        or ("Credential imported into the pool." if stored else "Credential was already current."),
+    }
+
+
 async def _restore_ai_studio(candidate: Dict[str, Any]) -> Dict[str, Any]:
     payload = candidate["payload"]
     api_key = str(payload.get("api_key") or "").strip()
@@ -360,21 +444,102 @@ async def restore_openai_credential(candidate: Dict[str, Any]) -> Dict[str, Any]
     }
 
 
+async def restore_anthropic_credential(candidate: Dict[str, Any]) -> Dict[str, Any]:
+    """Validate and import one Claude Code or Claude Platform credential."""
+    payload = dict(candidate["payload"])
+    payload["provider"] = ANTHROPIC
+    credential_type = str(payload.get("credential_type") or "").strip().lower()
+    if credential_type == "api_key":
+        api_key = str(payload.get("api_key") or "").strip()
+        validation = await validate_anthropic_api_key(api_key)
+        stored = await store_claude_platform_credential(
+            api_key,
+            validation,
+            created_at=str(payload.get("created_at") or "").strip() or None,
+        )
+        return {
+            "status": "success",
+            "action": stored.get("action", "created"),
+            "filename": stored["filename"],
+            "label": stored.get("label") or "Claude Platform API key",
+            "model_count": validation.model_count,
+            "message": "Claude Platform API key validated and imported into the pool.",
+        }
+
+    if credential_type != "oauth" or not (
+        str(payload.get("refresh_token") or "").strip()
+        or str(payload.get("access_token") or "").strip()
+    ):
+        raise AnthropicError("Claude Code credential is missing its OAuth token.")
+    if payload.get("refresh_token"):
+        payload = await refresh_claude_oauth_credential(payload)
+    model_ids = await fetch_anthropic_model_ids(payload)
+    payload["model_ids"] = model_ids
+    identity = str(
+        payload.get("account_fingerprint")
+        or payload.get("user_email")
+        or payload.get("refresh_token")
+        or payload.get("access_token")
+        or ""
+    ).strip()
+    fingerprint = api_key_fingerprint(identity)
+    filename = f"claude-code-{fingerprint or 'unknown'}.json"
+    result = await credential_manager.add_primary_credential(filename, payload)
+    return {
+        "status": "success" if result.get("stored", True) else "skipped",
+        "action": result.get("action", "created"),
+        "filename": result.get("filename", filename),
+        "label": payload.get("credential_label")
+        or payload.get("user_email")
+        or "Claude Code account",
+        "model_count": len(model_ids),
+        "message": result.get("message") or "Claude Code credential imported into the pool.",
+    }
+
+
+async def restore_ollama_credential(candidate: Dict[str, Any]) -> Dict[str, Any]:
+    """Validate and import one local, remote, or cloud Ollama connection."""
+    payload = dict(candidate["payload"])
+    base_url = normalize_ollama_base_url(str(payload.get("base_url") or ""))
+    api_key = str(payload.get("api_key") or "").strip()
+    validation = await validate_ollama_connection(base_url, api_key)
+    stored = await store_ollama_credential(
+        base_url,
+        api_key,
+        validation,
+        created_at=str(payload.get("created_at") or "").strip() or None,
+    )
+    return {
+        "status": "success",
+        "action": stored.get("action", "created"),
+        "filename": stored["filename"],
+        "label": stored.get("label") or "Ollama connection",
+        "model_count": validation.model_count,
+        "message": "Ollama connection validated and imported into the pool.",
+    }
+
+
 async def restore_pool_archive(upload: UploadFile) -> Dict[str, Any]:
     """Import supported credentials and return a secret-free per-file report."""
     candidates, results = await extract_pool_archive(upload)
     providers = {
         GOOGLE_ANTIGRAVITY: _empty_provider_result(GOOGLE_ANTIGRAVITY),
         GOOGLE_AI_STUDIO: _empty_provider_result(GOOGLE_AI_STUDIO),
+        GEMINI_CLI: _empty_provider_result(GEMINI_CLI),
         GROK: _empty_provider_result(GROK, routing_provider=XAI),
         XAI_CONSOLE: _empty_provider_result(XAI_CONSOLE, routing_provider=XAI),
         CODEX: _empty_provider_result(CODEX, routing_provider=OPENAI),
         OPENAI_PLATFORM: _empty_provider_result(OPENAI_PLATFORM, routing_provider=OPENAI),
+        CLAUDE_CODE: _empty_provider_result(CLAUDE_CODE, routing_provider=ANTHROPIC),
+        CLAUDE_PLATFORM: _empty_provider_result(CLAUDE_PLATFORM, routing_provider=ANTHROPIC),
+        OLLAMA: _empty_provider_result(OLLAMA),
     }
     seen_api_key_fingerprints: Dict[str, set[str]] = {
         GOOGLE_AI_STUDIO: set(),
         XAI: set(),
         OPENAI: set(),
+        ANTHROPIC: set(),
+        OLLAMA: set(),
     }
 
     for candidate in candidates:
@@ -391,11 +556,20 @@ async def restore_pool_archive(upload: UploadFile) -> Dict[str, Any]:
                 provider_id == OPENAI
                 and str(candidate["payload"].get("credential_type") or "").lower() == "api_key"
             )
+            or (
+                provider_id == ANTHROPIC
+                and str(candidate["payload"].get("credential_type") or "").lower() == "api_key"
+            )
+            or provider_id == OLLAMA
         )
         if is_api_key:
-            fingerprint = api_key_fingerprint(
-                str(candidate["payload"].get("api_key") or "").strip()
-            )
+            fingerprint_source = str(candidate["payload"].get("api_key") or "").strip()
+            if provider_id == OLLAMA:
+                fingerprint_source = (
+                    f"{str(candidate['payload'].get('base_url') or '').strip().rstrip('/')}"
+                    f"\0{fingerprint_source}"
+                )
+            fingerprint = api_key_fingerprint(fingerprint_source)
             provider_fingerprints = seen_api_key_fingerprints[provider_id]
             if fingerprint in provider_fingerprints:
                 provider_result["skipped"] += 1
@@ -415,10 +589,16 @@ async def restore_pool_archive(upload: UploadFile) -> Dict[str, Any]:
         try:
             if provider_id == GOOGLE_AI_STUDIO:
                 restored = await _restore_ai_studio(candidate)
+            elif provider_id == GEMINI_CLI:
+                restored = await restore_gemini_cli_credential(candidate)
             elif provider_id == XAI:
                 restored = await restore_xai_credential(candidate)
             elif provider_id == OPENAI:
                 restored = await restore_openai_credential(candidate)
+            elif provider_id == ANTHROPIC:
+                restored = await restore_anthropic_credential(candidate)
+            elif provider_id == OLLAMA:
+                restored = await restore_ollama_credential(candidate)
             else:
                 restored = await _restore_antigravity(candidate)
             action = restored["action"]
@@ -433,7 +613,14 @@ async def restore_pool_archive(upload: UploadFile) -> Dict[str, Any]:
                     "provider_name": provider_result["provider_name"],
                 }
             )
-        except (CodexError, GoogleAIStudioError, OpenAIPlatformError, XaiError) as exc:
+        except (
+            AnthropicError,
+            CodexError,
+            GoogleAIStudioError,
+            OllamaError,
+            OpenAIPlatformError,
+            XaiError,
+        ) as exc:
             provider_result["failed"] += 1
             results.append(
                 {
