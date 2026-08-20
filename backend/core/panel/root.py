@@ -4,6 +4,7 @@ import re
 from functools import lru_cache
 from html import escape
 
+from core.anthropic import AnthropicError, complete_claude_oauth, is_claude_oauth_state
 from core.auth import accept_oauth_callback
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import HTMLResponse, Response
@@ -251,12 +252,55 @@ async def serve_oauth_callback(request: Request):
     code = request.query_params.get("code")
     state = request.query_params.get("state")
     error = request.query_params.get("error")
+    is_claude_callback = is_claude_oauth_state(state)
 
     if error:
         return _oauth_callback_page(
             False,
-            "OAuth Authentication Failed",
-            "Google returned an authorization error. Return to Omni Gateway and start the provider authentication flow again.",
+            (
+                "Claude Code Authentication Failed"
+                if is_claude_callback
+                else "OAuth Authentication Failed"
+            ),
+            (
+                "Claude Code returned an authorization error. Return to Omni Gateway and start "
+                "the Claude Code authentication flow again."
+                if is_claude_callback
+                else "Google returned an authorization error. Return to Omni Gateway and start "
+                "the provider authentication flow again."
+            ),
+        )
+
+    if is_claude_callback:
+        try:
+            result = await complete_claude_oauth(code or "", state or "")
+        except AnthropicError as exc:
+            return _oauth_callback_page(
+                False,
+                "Claude Code Authentication Failed",
+                f"{exc} Return to Omni Gateway and generate a new Claude Code authorization link.",
+            )
+        except Exception as exc:
+            log.error(f"Failed to complete the Claude Code OAuth callback: {exc}")
+            return _oauth_callback_page(
+                False,
+                "Claude Code Authentication Failed",
+                "Omni Gateway could not finish the Claude Code authentication flow. "
+                "Return to the Providers page and try again.",
+            )
+        model_count = int(result.get("model_count") or 0)
+        credential_action = {
+            "updated": "updated",
+            "skipped": "already current in the provider pool",
+        }.get(result.get("action"), "added to the provider pool")
+        return _oauth_callback_page(
+            True,
+            "Claude Code Authentication Successful",
+            (
+                f"The Claude Code credential was {credential_action} with {model_count} "
+                f"available model{'s' if model_count != 1 else ''}. You can close this tab "
+                "and return to Omni Gateway."
+            ),
         )
 
     accepted, message = accept_oauth_callback(code, state)

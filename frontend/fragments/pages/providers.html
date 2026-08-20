@@ -14,11 +14,16 @@
                         </div>
                         <div class="provider-catalog-search-group">
                             <label class="provider-catalog-search-label" for="providerCatalogSearch">Find a provider</label>
-                            <input type="search" id="providerCatalogSearch" class="provider-catalog-search" placeholder="Search providers" autocomplete="off" data-ui-input="provider-catalog-search">
+                            <div class="provider-catalog-search-row">
+                                <input type="search" id="providerCatalogSearch" class="provider-catalog-search" placeholder="Search providers" autocomplete="off" data-ui-input="provider-catalog-search">
+                                <button type="button" class="btn btn-secondary provider-catalog-nav-button" id="providerCatalogPrevious" aria-controls="providerCatalog" data-ui-action="scroll-provider-catalog" data-direction="-1" title="Previous providers" aria-label="Show previous providers" disabled>‹</button>
+                                <button type="button" class="btn btn-secondary provider-catalog-nav-button" id="providerCatalogNext" aria-controls="providerCatalog" data-ui-action="scroll-provider-catalog" data-direction="1" title="Next providers" aria-label="Show next providers">›</button>
+                            </div>
                         </div>
                     </div>
 
-                    <div id="providerCatalog" class="provider-catalog" role="tablist" aria-label="Available providers">
+                    <div id="providerCatalogViewport" class="provider-catalog-viewport">
+                        <div id="providerCatalog" class="provider-catalog" role="tablist" aria-label="Available providers">
                         <button type="button" class="provider-hero-card provider-selector-button active" id="providerSelectorGoogleAntigravity" role="tab" aria-label="Google Antigravity" aria-selected="true" aria-controls="providerWorkspaceGoogleAntigravity" data-ui-action="select-provider" data-provider="google_antigravity">
                             <div class="provider-logo-frame">
                                 <img src="/frontend/assets/providers/google-antigravity-logo.png" alt="Google Antigravity logo">
@@ -143,6 +148,7 @@
                             </div>
                             <div class="provider-capabilities" aria-label="Ollama methods"><span>Endpoint</span><span>JSON</span><span>ZIP</span></div>
                         </button>
+                        </div>
                     </div>
 
                     <p id="providerCatalogEmpty" class="provider-catalog-empty hidden" aria-live="polite">No providers match your search.</p>
@@ -555,7 +561,7 @@
                     <section class="provider-workspace hidden" id="providerWorkspaceClaudeCode" role="tabpanel" aria-labelledby="providerSelectorClaudeCode">
                         <div class="provider-workspace-heading">
                             <div class="provider-workspace-logo"><img src="/frontend/assets/providers/claude-code-logo.png" alt=""></div>
-                            <div><h2>Claude Code</h2><p>Authorize Anthropic accounts and route their available Claude models through the shared pool.</p><a class="provider-site-link" href="https://claude.ai/code" target="_blank" rel="noreferrer">https://claude.ai/code</a></div>
+                            <div><h2>Claude Code</h2><p>Authorize Anthropic accounts and route their available Claude models through the shared pool.</p><a class="provider-site-link" href="https://claude.com/product/claude-code" target="_blank" rel="noreferrer">https://claude.com/product/claude-code</a></div>
                         </div>
                         <div class="provider-tools-grid">
                             <section class="tool-panel">
@@ -587,7 +593,7 @@
                     </section>
 
                     <section class="provider-workspace hidden" id="providerWorkspaceClaudePlatform" role="tabpanel" aria-labelledby="providerSelectorClaudePlatform">
-                        <div class="provider-workspace-heading"><div class="provider-workspace-logo"><img src="/frontend/assets/providers/claude-platform-logo.png" alt=""></div><div><h2>Claude Platform</h2><p>Add API keys and route their available Claude models through the shared pool.</p><a class="provider-site-link" href="https://console.anthropic.com/" target="_blank" rel="noreferrer">https://console.anthropic.com/</a></div></div>
+                        <div class="provider-workspace-heading"><div class="provider-workspace-logo"><img src="/frontend/assets/providers/claude-platform-logo.png" alt=""></div><div><h2>Claude Platform</h2><p>Add API keys and route their available Claude models through the shared pool.</p><a class="provider-site-link" href="https://platform.claude.com/" target="_blank" rel="noreferrer">https://platform.claude.com/</a></div></div>
                         <div class="provider-tools-grid">
                             <section class="tool-panel"><h2 class="card-title">Claude Platform API Key</h2><p class="card-copy provider-tool-copy">Validate an Anthropic API key, discover its models, and add it to the active pool.</p><form id="claudePlatformCredentialForm" autocomplete="off"><div class="form-group"><label for="claudePlatformApiKey">API key</label><input type="password" id="claudePlatformApiKey" name="claude-platform-api-key" placeholder="Enter an Anthropic API key" autocomplete="one-time-code" data-1p-ignore data-lpignore="true" data-bwignore="true" autocapitalize="none" spellcheck="false" required></div><button type="submit" class="btn" id="addClaudePlatformKeyBtn">Validate and add</button></form><div id="claudePlatformSaveResult" class="save-result provider-save-result hidden"><div><strong id="claudePlatformSaveResultTitle">API key added to pool</strong><p id="claudePlatformSaveResultText"></p></div><button type="button" class="btn btn-secondary" data-ui-action="switch-tab" data-tab="pool">View</button></div></section>
                             <section class="tool-panel"><h2 class="card-title">Batch Import</h2><p class="card-copy provider-tool-copy">Import Claude Platform API key JSON files or ZIP archives.</p><button type="button" class="upload-area" id="claudePlatformUploadArea" aria-describedby="claudePlatformUploadHelp" data-ui-action="select-claude-platform-files"><div><div class="upload-title">Drop API key files here</div><p class="upload-copy" id="claudePlatformUploadHelp">Supports JSON and ZIP archives.</p></div></button><input type="file" id="claudePlatformFileInput" multiple accept=".json,.zip" class="hidden" data-ui-change="claude-platform-files"><div id="claudePlatformFileListSection" class="hidden provider-upload-section"><label>Pending files</label><div class="file-list" id="claudePlatformFileList"></div><div class="page-actions"><button type="button" class="btn btn-small" data-ui-action="upload-claude-platform-files">Import</button><button type="button" class="btn btn-secondary btn-small" data-ui-action="clear-claude-platform-files">Clear</button></div></div><div id="claudePlatformUploadProgressSection" class="hidden provider-upload-section"><div class="progress-bar"><div class="progress-fill" id="claudePlatformProgressFill"></div></div><p id="claudePlatformProgressText" class="page-description provider-progress-copy">0%</p></div><div id="claudePlatformUploadResult" class="save-result upload-result hidden"><div><strong id="claudePlatformUploadResultTitle">Import complete</strong><p id="claudePlatformUploadResultText"></p><div id="claudePlatformUploadResultDetails" class="upload-result-details"></div></div><button type="button" class="btn btn-secondary" data-ui-action="switch-tab" data-tab="pool">View</button></div></section>

@@ -135,9 +135,12 @@ class AccessCredentialUpdateTests(unittest.IsolatedAsyncioTestCase):
             panel_password_confirm="new-panel-password",
         )
 
-        with patch(
-            "core.panel.config_routes.verify_password",
-            new=AsyncMock(return_value=False),
+        with (
+            patch.dict(os.environ, {"PANEL_PASSWORD": ""}),
+            patch(
+                "core.panel.config_routes.verify_password",
+                new=AsyncMock(return_value=False),
+            ),
         ):
             with self.assertRaises(HTTPException) as context:
                 await update_access_credentials(
@@ -157,6 +160,7 @@ class AccessCredentialUpdateTests(unittest.IsolatedAsyncioTestCase):
         )
 
         with (
+            patch.dict(os.environ, {"PANEL_PASSWORD": ""}),
             patch(
                 "core.panel.config_routes.verify_password",
                 new=AsyncMock(return_value=True),
@@ -197,9 +201,12 @@ class AccessCredentialUpdateTests(unittest.IsolatedAsyncioTestCase):
             panel_password_confirm="different-password",
         )
 
-        with patch(
-            "core.panel.config_routes.verify_password",
-            new=AsyncMock(return_value=True),
+        with (
+            patch.dict(os.environ, {"PANEL_PASSWORD": ""}),
+            patch(
+                "core.panel.config_routes.verify_password",
+                new=AsyncMock(return_value=True),
+            ),
         ):
             with self.assertRaises(HTTPException) as context:
                 await update_access_credentials(

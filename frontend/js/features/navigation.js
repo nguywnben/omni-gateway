@@ -1,3 +1,5 @@
+let providerCatalogResizeObserver = null;
+
 function updateTabSlider(targetTab, animate = true) {
 
     const slider = document.querySelector('.tab-slider');
@@ -69,6 +71,7 @@ function initStaticUiBindings() {
         'save-model-pool': () => saveModelPool(),
         'clear-model-blacklist': () => clearModelBlacklist(),
         'select-provider': (element) => selectProviderWorkspace(element.dataset.provider),
+        'scroll-provider-catalog': (element) => scrollProviderCatalog(Number(element.dataset.direction)),
         'select-ai-studio-files': () => document.getElementById('googleAiStudioFileInput')?.click(),
         'upload-ai-studio-files': () => uploadGoogleAiStudioFiles(),
         'clear-ai-studio-files': () => clearGoogleAiStudioFiles(),
@@ -212,6 +215,18 @@ function initStaticUiBindings() {
         area?.addEventListener('dragleave', () => area.classList.remove('dragover'));
         area?.addEventListener('drop', dropHandler);
     }
+
+    const providerCatalogViewport = document.getElementById('providerCatalogViewport');
+    providerCatalogViewport?.addEventListener(
+        'scroll',
+        updateProviderCatalogNavigation,
+        { passive: true }
+    );
+    if (providerCatalogViewport && typeof ResizeObserver === 'function') {
+        providerCatalogResizeObserver = new ResizeObserver(updateProviderCatalogNavigation);
+        providerCatalogResizeObserver.observe(providerCatalogViewport);
+    }
+    updateProviderCatalogNavigation();
 }
 
 document.addEventListener('DOMContentLoaded', initStaticUiBindings);
@@ -223,6 +238,8 @@ window.addEventListener('resize', () => {
     if (activeTab) updateTabSlider(activeTab, false);
 
     if (window.innerWidth > 960) setMobileMenuState(false);
+
+    updateProviderCatalogNavigation();
 
 });
 
@@ -273,6 +290,34 @@ const PROVIDER_WORKSPACES = {
     }
 };
 
+function updateProviderCatalogNavigation() {
+    const viewport = document.getElementById('providerCatalogViewport');
+    const previousButton = document.getElementById('providerCatalogPrevious');
+    const nextButton = document.getElementById('providerCatalogNext');
+    if (!viewport || !previousButton || !nextButton) return;
+    if (viewport.clientWidth <= 1) return;
+
+    const maximumScroll = Math.max(0, viewport.scrollWidth - viewport.clientWidth);
+    previousButton.disabled = maximumScroll <= 1 || viewport.scrollLeft <= 1;
+    nextButton.disabled = maximumScroll <= 1 || viewport.scrollLeft >= maximumScroll - 1;
+}
+
+function scrollProviderCatalog(direction) {
+    const viewport = document.getElementById('providerCatalogViewport');
+    const catalog = document.getElementById('providerCatalog');
+    const firstVisibleCard = catalog?.querySelector('[data-provider]:not(.hidden)');
+    if (!viewport || !catalog || !firstVisibleCard || !direction) return;
+
+    const catalogStyles = getComputedStyle(catalog);
+    const gap = Number.parseFloat(catalogStyles.columnGap || catalogStyles.gap) || 0;
+    const distance = firstVisibleCard.getBoundingClientRect().width + gap;
+    viewport.scrollBy({
+        left: Math.sign(direction) * distance,
+        behavior: 'auto'
+    });
+    requestAnimationFrame(updateProviderCatalogNavigation);
+}
+
 function filterProviderCatalog(value = '') {
     const query = String(value || '').trim().toLowerCase();
     const cards = Array.from(document.querySelectorAll('#providerCatalog [data-provider]'));
@@ -289,6 +334,9 @@ function filterProviderCatalog(value = '') {
         visibleCount += isVisible ? 1 : 0;
     });
     document.getElementById('providerCatalogEmpty')?.classList.toggle('hidden', visibleCount > 0);
+    const viewport = document.getElementById('providerCatalogViewport');
+    if (viewport) viewport.scrollLeft = 0;
+    requestAnimationFrame(updateProviderCatalogNavigation);
 }
 
 function selectProviderWorkspace(providerId, focusSelector = false) {
@@ -309,7 +357,9 @@ function selectProviderWorkspace(providerId, focusSelector = false) {
     });
 
     if (focusSelector) {
-        document.getElementById(selected.selectorId)?.focus();
+        const selector = document.getElementById(selected.selectorId);
+        selector?.focus();
+        selector?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
     }
 }
 

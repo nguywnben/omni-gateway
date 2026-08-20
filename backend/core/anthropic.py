@@ -184,6 +184,12 @@ def _prune_oauth_flows() -> None:
         _oauth_flows.pop(next(iter(_oauth_flows)), None)
 
 
+def is_claude_oauth_state(state: str | None) -> bool:
+    """Return whether a callback state belongs to an active Claude Code flow."""
+    _prune_oauth_flows()
+    return bool(state and state in _oauth_flows)
+
+
 async def create_claude_oauth_url() -> Dict[str, str]:
     _prune_oauth_flows()
     state = secrets.token_urlsafe(32)
