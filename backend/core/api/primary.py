@@ -18,6 +18,7 @@ from config import (
     get_claude_user_agent,
     get_codex_api_url,
     get_codex_user_agent,
+    get_gemini_cli_api_url,
     get_google_ai_studio_api_url,
     get_openai_api_url,
     get_token_compression_config,
@@ -56,6 +57,11 @@ from core.codex import (
     gemini_request_to_codex,
 )
 from core.credential_manager import credential_manager
+from core.gemini_cli import (
+    DEFAULT_GEMINI_CLI_MODELS,
+    build_gemini_cli_headers,
+    wrap_gemini_cli_payload,
+)
 from core.google_ai_studio import (
     build_api_key_headers,
     build_generation_url,
@@ -84,6 +90,7 @@ from core.provider_registry import (
     CLAUDE_CODE,
     CLAUDE_PLATFORM,
     CODEX,
+    GEMINI_CLI,
     GOOGLE_AI_STUDIO,
     GOOGLE_ANTIGRAVITY,
     GROK,
@@ -454,6 +461,30 @@ async def prepare_provider_request(
         base_url = normalize_ollama_base_url(str(credential_data.get("base_url") or ""))
         target_url = f"{base_url}/api/chat"
         auth_headers = build_ollama_headers(str(credential_data.get("api_key") or ""))
+    elif provider_id == GEMINI_CLI:
+        access_token = credential_data.get("access_token") or credential_data.get("token")
+        if not access_token:
+            raise ValueError("Gemini CLI credential does not contain an access token.")
+        compression_result = compress_gemini_request(
+            dict(inner_request),
+            CompressionSettings(**await get_token_compression_config()),
+        )
+        project_id = str(credential_data.get("project_id") or "")
+        payload = wrap_gemini_cli_payload(
+            dict(compression_result.request), model_name, project_id=project_id
+        )
+        base_url = (await get_gemini_cli_api_url()).rstrip("/")
+        action = (
+            "v1internal:streamGenerateContent?alt=sse"
+            if streaming
+            else "v1internal:generateContent"
+        )
+        target_url = f"{base_url}/{action}"
+        auth_headers = build_gemini_cli_headers(
+            str(access_token),
+            model=model_name,
+            stream=streaming,
+        )
     else:
         access_token = credential_data.get("access_token") or credential_data.get("token")
         if not access_token:
@@ -481,6 +512,9 @@ async def prepare_provider_request(
         if provider_id == GOOGLE_AI_STUDIO:
             auth_headers.pop("Authorization", None)
             auth_headers["x-goog-api-key"] = str(credential_data.get("api_key") or "")
+        elif provider_id == GEMINI_CLI:
+            access_token = credential_data.get("access_token") or credential_data.get("token")
+            auth_headers["Authorization"] = f"Bearer {access_token}"
         elif provider_id == XAI:
             auth_headers.pop("x-goog-api-key", None)
             access_token = (
@@ -1743,6 +1777,11 @@ async def _discover_credential_model_ids(
                 base_url,
                 str(data.get("api_key") or ""),
             )
+        elif provider_variant == GEMINI_CLI:
+            data = await credential_manager.prepare_credential(
+                filename, credential_data, mode="primary"
+            )
+            discovered = (data or {}).get("model_ids") or DEFAULT_GEMINI_CLI_MODELS
         else:
             return CredentialModelDiscovery(frozenset(stored), False)
 

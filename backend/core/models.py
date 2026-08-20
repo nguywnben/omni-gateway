@@ -422,6 +422,11 @@ class ClaudeOAuthCodeRequest(BaseModel):
     state: str = Field(min_length=1, max_length=512)
 
 
+class GeminiCliOAuthCodeRequest(BaseModel):
+    code: str = Field(min_length=1, max_length=4096)
+    state: Optional[str] = Field(default="", max_length=512)
+
+
 class OllamaCredentialRequest(BaseModel):
     base_url: str = Field(min_length=1, max_length=2048)
     api_key: str = Field(default="", max_length=4096)

@@ -59,6 +59,13 @@ DEFAULT_CLAUDE_OAUTH_AUTHORIZE_URL = "https://claude.ai/oauth/authorize"
 DEFAULT_CLAUDE_OAUTH_TOKEN_URL = "https://api.anthropic.com/v1/oauth/token"
 DEFAULT_CLAUDE_CLIENT_ID = "9d1c250a-e61b-44d9-88ed-5944d1962f5e"
 DEFAULT_CLAUDE_USER_AGENT = "claude-cli/omni-gateway"
+DEFAULT_GEMINI_CLI_CLIENT_ID = (
+    "681255809395-oo8ft2oprdrnp9e3aqf6av3hmdib135j.apps.googleusercontent.com"
+)
+DEFAULT_GEMINI_CLI_CLIENT_SECRET = "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"
+DEFAULT_GEMINI_CLI_API_URL = "https://cloudcode-pa.googleapis.com"
+DEFAULT_GEMINI_CLI_OAUTH_AUTHORIZE_URL = "https://accounts.google.com/o/oauth2/v2/auth"
+DEFAULT_GEMINI_CLI_OAUTH_TOKEN_URL = "https://oauth2.googleapis.com/token"
 
 
 ENV_MAPPINGS = {
@@ -71,6 +78,11 @@ ENV_MAPPINGS = {
     "SERVICE_USAGE_URL": "service_usage_url",
     "ANTIGRAVITY_API_URL": "antigravity_api_url",
     "GOOGLE_AI_STUDIO_API_URL": "google_ai_studio_api_url",
+    "GEMINI_CLI_CLIENT_ID": "gemini_cli_client_id",
+    "GEMINI_CLI_CLIENT_SECRET": "gemini_cli_client_secret",
+    "GEMINI_CLI_API_URL": "gemini_cli_api_url",
+    "GEMINI_CLI_OAUTH_AUTHORIZE_URL": "gemini_cli_oauth_authorize_url",
+    "GEMINI_CLI_OAUTH_TOKEN_URL": "gemini_cli_oauth_token_url",
     "XAI_API_URL": "xai_api_url",
     "XAI_OAUTH_API_URL": "xai_oauth_api_url",
     "XAI_OAUTH_ISSUER": "xai_oauth_issuer",
@@ -877,6 +889,62 @@ async def get_antigravity_oauth_client_config() -> tuple[str, str]:
     )
 
     return client_id, client_secret
+
+
+async def get_gemini_cli_oauth_client_config() -> tuple[str, str]:
+    """Return the OAuth client used for Gemini CLI provider credential creation."""
+    client_id = str(
+        await get_config_value(
+            "gemini_cli_client_id",
+            DEFAULT_GEMINI_CLI_CLIENT_ID,
+            "GEMINI_CLI_CLIENT_ID",
+        )
+        or DEFAULT_GEMINI_CLI_CLIENT_ID
+    ).strip()
+
+    client_secret = str(
+        await get_config_value(
+            "gemini_cli_client_secret",
+            DEFAULT_GEMINI_CLI_CLIENT_SECRET,
+            "GEMINI_CLI_CLIENT_SECRET",
+        )
+        or DEFAULT_GEMINI_CLI_CLIENT_SECRET
+    ).strip()
+
+    return client_id, client_secret
+
+
+async def get_gemini_cli_api_url() -> str:
+    return str(
+        await get_config_value(
+            "gemini_cli_api_url",
+            DEFAULT_GEMINI_CLI_API_URL,
+            "GEMINI_CLI_API_URL",
+        )
+        or DEFAULT_GEMINI_CLI_API_URL
+    ).strip()
+
+
+async def get_gemini_cli_oauth_authorize_url() -> str:
+    return str(
+        await get_config_value(
+            "gemini_cli_oauth_authorize_url",
+            DEFAULT_GEMINI_CLI_OAUTH_AUTHORIZE_URL,
+            "GEMINI_CLI_OAUTH_AUTHORIZE_URL",
+        )
+        or DEFAULT_GEMINI_CLI_OAUTH_AUTHORIZE_URL
+    ).strip()
+
+
+async def get_gemini_cli_oauth_token_url() -> str:
+    return str(
+        await get_config_value(
+            "gemini_cli_oauth_token_url",
+            DEFAULT_GEMINI_CLI_OAUTH_TOKEN_URL,
+            "GEMINI_CLI_OAUTH_TOKEN_URL",
+        )
+        or DEFAULT_GEMINI_CLI_OAUTH_TOKEN_URL
+    ).strip()
 
 
 async def get_keepalive_url() -> str:

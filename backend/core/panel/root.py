@@ -6,6 +6,11 @@ from html import escape
 
 from core.anthropic import AnthropicError, complete_claude_oauth, is_claude_oauth_state
 from core.auth import accept_oauth_callback
+from core.gemini_cli import (
+    GeminiCliError,
+    complete_gemini_cli_oauth,
+    is_gemini_cli_oauth_state,
+)
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import HTMLResponse, Response
 from log import log
@@ -62,6 +67,7 @@ CONSOLE_SCRIPT_ASSETS = (
     "js/features/environment-credentials.js",
     "js/features/provider-settings-shared.js",
     "js/features/google-ai-studio-settings.js",
+    "js/features/gemini-cli-settings.js",
     "js/features/xai-settings.js",
     "js/features/openai-settings.js",
     "js/features/anthropic-settings.js",
@@ -253,6 +259,7 @@ async def serve_oauth_callback(request: Request):
     state = request.query_params.get("state")
     error = request.query_params.get("error")
     is_claude_callback = is_claude_oauth_state(state)
+    is_gemini_cli_callback = is_gemini_cli_oauth_state(state)
 
     if error:
         return _oauth_callback_page(
@@ -260,12 +267,17 @@ async def serve_oauth_callback(request: Request):
             (
                 "Claude Code Authentication Failed"
                 if is_claude_callback
+                else "Gemini CLI Authentication Failed"
+                if is_gemini_cli_callback
                 else "OAuth Authentication Failed"
             ),
             (
                 "Claude Code returned an authorization error. Return to Omni Gateway and start "
                 "the Claude Code authentication flow again."
                 if is_claude_callback
+                else "Gemini CLI returned an authorization error. Return to Omni Gateway and start "
+                "the Gemini CLI authentication flow again."
+                if is_gemini_cli_callback
                 else "Google returned an authorization error. Return to Omni Gateway and start "
                 "the provider authentication flow again."
             ),
@@ -301,6 +313,31 @@ async def serve_oauth_callback(request: Request):
                 f"available model{'s' if model_count != 1 else ''}. You can close this tab "
                 "and return to Omni Gateway."
             ),
+        )
+
+    if is_gemini_cli_callback:
+        try:
+            result = await complete_gemini_cli_oauth(code or "", state or "")
+        except GeminiCliError as exc:
+            return _oauth_callback_page(
+                False,
+                "Gemini CLI Authentication Failed",
+                f"{exc} Return to Omni Gateway and generate a new Gemini CLI authorization link.",
+            )
+        except Exception as exc:
+            log.error(f"Failed to complete the Gemini CLI OAuth callback: {exc}")
+            return _oauth_callback_page(
+                False,
+                "Gemini CLI Authentication Failed",
+                "Omni Gateway could not finish the Gemini CLI authentication flow. "
+                "Return to the Providers page and try again.",
+            )
+        user_email = result.get("user_email") or "account"
+        return _oauth_callback_page(
+            True,
+            "Gemini CLI Authentication Successful",
+            f"The Gemini CLI credential ({user_email}) was added to the provider pool. "
+            "You can close this tab and return to Omni Gateway.",
         )
 
     accepted, message = accept_oauth_callback(code, state)

@@ -2,7 +2,7 @@
 
 from fastapi import APIRouter
 
-from . import anthropic, antigravity, catalog, google_ai_studio, ollama, openai, xai
+from . import anthropic, antigravity, catalog, gemini_cli, google_ai_studio, ollama, openai, xai
 
 
 def create_router() -> APIRouter:
@@ -10,6 +10,7 @@ def create_router() -> APIRouter:
     router.include_router(catalog.router)
     router.include_router(antigravity.router)
     router.include_router(google_ai_studio.router)
+    router.include_router(gemini_cli.router)
     router.include_router(xai.router)
     router.include_router(openai.router)
     router.include_router(anthropic.router)

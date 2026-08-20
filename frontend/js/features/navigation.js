@@ -75,6 +75,14 @@ function initStaticUiBindings() {
         'clear-ai-studio-files': () => clearGoogleAiStudioFiles(),
         'save-ai-studio-settings': () => saveGoogleAIStudioSettings(),
         'reset-ai-studio-settings': () => resetGoogleAIStudioSettings(),
+        'start-gemini-cli-oauth': () => startGeminiCliOauth(),
+        'save-gemini-cli-oauth': () => saveGeminiCliOauth(),
+        'select-gemini-cli-files': () => document.getElementById('geminiCliFileInput')?.click(),
+        'upload-gemini-cli-files': () => uploadGeminiCliFiles(),
+        'clear-gemini-cli-files': () => clearGeminiCliFiles(),
+        'save-gemini-cli-settings': () => saveGeminiCliSettings(),
+        'reset-gemini-cli-settings': () => resetGeminiCliSettings(),
+        'copy-gemini-cli-auth-url': () => cpUrl(document.getElementById('geminiCliAuthorizationUrl')),
         'start-xai-oauth': () => startXaiOauth(),
         'save-xai-oauth': () => saveXaiOauth(),
         'select-grok-files': () => document.getElementById('grokFileInput')?.click(),
@@ -139,6 +147,7 @@ function initStaticUiBindings() {
         'primary-filter': () => applyPrimaryStatusFilter(),
         'primary-page-size': () => changePrimaryPageSize(),
         'ai-studio-files': (_element, event) => handleGoogleAiStudioFileSelect(event),
+        'gemini-cli-files': (_element, event) => handleGeminiCliFileSelect(event),
         'grok-files': (_element, event) => handleGrokFileSelect(event),
         'xai-console-files': (_element, event) => handleXaiConsoleFileSelect(event),
         'codex-files': (_element, event) => handleCodexFileSelect(event),
@@ -273,6 +282,10 @@ const PROVIDER_WORKSPACES = {
     ollama: {
         selectorId: 'providerSelectorOllama',
         panelId: 'providerWorkspaceOllama'
+    },
+    gemini_cli: {
+        selectorId: 'providerSelectorGeminiCli',
+        panelId: 'providerWorkspaceGeminiCli'
     }
 };
 
@@ -442,6 +455,10 @@ const MODEL_PROVIDER_META = {
     google_ai_studio: {
         name: 'Google AI Studio',
         logo: '/frontend/assets/providers/google-ai-studio-logo.png'
+    },
+    gemini_cli: {
+        name: 'Gemini CLI',
+        logo: '/frontend/assets/providers/gemini-cli-logo.png'
     },
     grok: {
         name: 'Grok Build',

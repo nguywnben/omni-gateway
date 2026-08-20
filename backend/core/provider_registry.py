@@ -8,6 +8,7 @@ from typing import Any, Dict, Optional
 
 GOOGLE_ANTIGRAVITY = "google_antigravity"
 GOOGLE_AI_STUDIO = "google_ai_studio"
+GEMINI_CLI = "gemini_cli"
 XAI = "xai"
 GROK = "grok"
 XAI_CONSOLE = "xai_console"
@@ -35,6 +36,10 @@ _PROVIDER_ALIASES = {
     "gemini": GOOGLE_AI_STUDIO,
     "google-ai-studio": GOOGLE_AI_STUDIO,
     "google_ai_studio": GOOGLE_AI_STUDIO,
+    "gemini-cli": GEMINI_CLI,
+    "gemini_cli": GEMINI_CLI,
+    "geminicli": GEMINI_CLI,
+    "gc": GEMINI_CLI,
     "grok": XAI,
     "xai-oauth": XAI,
     "xai_oauth": XAI,
@@ -71,6 +76,7 @@ _PROVIDER_ALIASES = {
 _PROVIDER_NAMES = {
     GOOGLE_ANTIGRAVITY: "Google Antigravity",
     GOOGLE_AI_STUDIO: "Google AI Studio",
+    GEMINI_CLI: "Gemini CLI",
     XAI: "Grok Build",
     OPENAI: "OpenAI",
     ANTHROPIC: "Anthropic",
@@ -78,6 +84,7 @@ _PROVIDER_NAMES = {
 }
 
 _CREDENTIAL_PROVIDER_NAMES = {
+    GEMINI_CLI: "Gemini CLI",
     GROK: "Grok Build",
     XAI_CONSOLE: "SpaceXAI Console",
     CODEX: "Codex",
@@ -122,6 +129,12 @@ _PROVIDER_CAPABILITIES = {
         provider_id=GOOGLE_AI_STUDIO,
         display_name=_PROVIDER_NAMES[GOOGLE_AI_STUDIO],
         credential_types=("api_key",),
+        model_prefixes=("gemini-", "gemma-"),
+    ),
+    GEMINI_CLI: ProviderCapabilities(
+        provider_id=GEMINI_CLI,
+        display_name=_PROVIDER_NAMES[GEMINI_CLI],
+        credential_types=("oauth",),
         model_prefixes=("gemini-", "gemma-"),
     ),
     XAI: ProviderCapabilities(
@@ -189,6 +202,39 @@ def build_antigravity_credential_filename(
     """Build the canonical filename for a Google Antigravity credential."""
     fingerprint = antigravity_account_fingerprint(credential_data, email=email)
     return f"google-antigravity-{fingerprint or 'unknown'}.json"
+
+
+def gemini_cli_account_fingerprint(
+    credential_data: Optional[Dict[str, Any]] = None,
+    *,
+    email: Any = None,
+) -> str:
+    """Create a stable, non-reversible Gemini CLI account identifier."""
+    data = credential_data or {}
+    normalized_email = (
+        str(email or data.get("user_email") or data.get("email") or data.get("account_email") or "")
+        .strip()
+        .lower()
+    )
+    if normalized_email:
+        return _short_fingerprint(normalized_email)
+
+    token_identity = data.get("refresh_token") or data.get("token")
+    if token_identity:
+        return _short_fingerprint(token_identity)
+
+    project_identity = data.get("project_id") or data.get("quota_project_id")
+    return _short_fingerprint(project_identity)
+
+
+def build_gemini_cli_credential_filename(
+    credential_data: Optional[Dict[str, Any]] = None,
+    *,
+    email: Any = None,
+) -> str:
+    """Build the canonical filename for a Gemini CLI credential."""
+    fingerprint = gemini_cli_account_fingerprint(credential_data, email=email)
+    return f"gemini-cli-{fingerprint or 'unknown'}.json"
 
 
 def canonicalize_antigravity_credential_filename(
