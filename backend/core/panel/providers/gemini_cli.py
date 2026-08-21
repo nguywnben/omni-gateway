@@ -14,13 +14,13 @@ from core.gemini_cli import (
     create_gemini_cli_oauth_flow,
     normalize_gemini_cli_api_url,
 )
+from core.i18n import LocalizedJSONResponse as JSONResponse
 from core.models import ConfigSaveRequest, GeminiCliOAuthCodeRequest
 from core.pool_import import restore_gemini_cli_credential
 from core.provider_registry import GEMINI_CLI
 from core.storage_adapter import get_storage_adapter
 from core.utils import verify_panel_token
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
-from fastapi.responses import JSONResponse
 from log import log
 
 from ..utils import get_env_locked_keys

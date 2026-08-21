@@ -5,6 +5,7 @@ import json
 import zipfile
 from typing import List, Tuple
 
+from core.i18n import LocalizedJSONResponse as JSONResponse
 from core.models import OllamaCredentialRequest
 from core.ollama import OllamaError, normalize_ollama_base_url, validate_ollama_connection
 from core.pool_import import restore_ollama_credential
@@ -12,7 +13,6 @@ from core.provider_registry import OLLAMA, api_key_fingerprint
 from core.provider_store import store_ollama_credential
 from core.utils import verify_panel_token
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
-from fastapi.responses import JSONResponse
 from log import log
 
 from .import_utils import (

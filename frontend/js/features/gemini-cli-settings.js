@@ -33,7 +33,7 @@ async function loadGeminiCliSettings(options = {}) {
             if (form) form.dataset.loaded = 'true';
         });
     } catch (error) {
-        showStatus(`Failed to load Gemini CLI provider settings: ${error.message}`, 'error');
+        showStatus(t('provider.settings_load_failed', {provider: 'Gemini CLI', error: error.message}), 'error');
     } finally {
         setProviderSettingsLoading(loadingIds, formIds, false, preserveContent);
     }
@@ -53,17 +53,17 @@ async function saveGeminiCliSettings() {
         });
         const data = await response.json().catch(() => ({}));
         if (!response.ok) throw new Error(data.detail || data.error || t('unknown_error'));
-        showStatus('Gemini CLI settings saved.', 'success');
+        showStatus(t('provider.settings_saved', {provider: 'Gemini CLI'}), 'success');
         await loadGeminiCliSettings();
     } catch (error) {
-        showStatus(`Failed to save Gemini CLI settings: ${error.message}`, 'error');
+        showStatus(t('provider.settings_save_failed', {provider: 'Gemini CLI', error: error.message}), 'error');
     }
 }
 
 async function resetGeminiCliSettings() {
     const confirmed = await showConfirmModal(
-        'Restore the built-in Gemini CLI settings? Environment-managed values will be preserved.',
-        { title: 'Reset Gemini CLI Settings', confirmLabel: 'Reset defaults' }
+        t('provider.reset_confirm', {provider: 'Gemini CLI'}),
+        { title: t('provider.reset_title', {provider: 'Gemini CLI'}), confirmLabel: t('btn_reset_defaults') }
     );
     if (!confirmed) return;
     try {
@@ -73,10 +73,10 @@ async function resetGeminiCliSettings() {
         });
         const data = await response.json().catch(() => ({}));
         if (!response.ok) throw new Error(data.detail || data.error || t('unknown_error'));
-        showStatus(data.message || 'Gemini CLI settings reset to defaults.', 'success');
+        showStatus(data.message || t('provider.settings_reset', {provider: 'Gemini CLI'}), 'success');
         await loadGeminiCliSettings();
     } catch (error) {
-        showStatus(`Failed to reset Gemini CLI settings: ${error.message}`, 'error');
+        showStatus(t('provider.settings_reset_failed', {provider: 'Gemini CLI', error: error.message}), 'error');
     }
 }
 
@@ -100,9 +100,9 @@ async function startGeminiCliOauth() {
             fields.classList.remove('hidden');
             fields.dataset.oauthState = data.state || '';
         }
-        showStatus('Gemini CLI authorization link generated. Sign in to complete.', 'info');
+        showStatus(t('provider.auth_ready', {provider: 'Gemini CLI'}), 'info');
     } catch (error) {
-        showStatus(`Failed to start Gemini CLI OAuth: ${error.message}`, 'error');
+        showStatus(t('provider.auth_start_failed', {provider: 'Gemini CLI', error: error.message}), 'error');
     }
 }
 
@@ -111,7 +111,7 @@ async function saveGeminiCliOauth() {
     const fields = document.getElementById('geminiCliOauthFields');
     const code = codeInput?.value?.trim() || '';
     if (!code) {
-        showStatus('Please paste the authorization code.', 'error');
+        showStatus(t('provider.auth_code_required', {provider: 'Gemini CLI'}), 'error');
         codeInput?.focus();
         return;
     }
@@ -128,15 +128,17 @@ async function saveGeminiCliOauth() {
         const saveResult = document.getElementById('geminiCliOauthSaveResult');
         const saveResultText = document.getElementById('geminiCliOauthSaveResultText');
         if (saveResult && saveResultText) {
-            saveResultText.textContent = `Credential saved (${data.credential?.user_email || 'Google Account'})`;
+            saveResultText.textContent = t('runtime.credential_saved', {
+                account: data.credential?.user_email || 'Google Account'
+            });
             saveResult.classList.remove('hidden');
         }
         if (codeInput) codeInput.value = '';
-        showStatus('Gemini CLI credential added to pool.', 'success');
+        showStatus(t('runtime.credential_added_title'), 'success');
         if (typeof loadCredentials === 'function') loadCredentials();
         if (typeof loadModelCatalog === 'function') loadModelCatalog(true);
     } catch (error) {
-        showStatus(`Failed to save Gemini CLI credential: ${error.message}`, 'error');
+        showStatus(t('provider.credential_save_failed', {provider: 'Gemini CLI', error: error.message}), 'error');
     }
 }
 
@@ -196,18 +198,18 @@ async function uploadGeminiCliFiles() {
         if (!response.ok) throw new Error(data.detail || data.error || t('unknown_error'));
 
         if (resultSection && resultText) {
-            resultText.textContent = data.message || `Imported ${data.imported_count} credentials.`;
+            resultText.textContent = data.message || t('runtime.credentials_imported', {count: data.imported_count});
             if (resultDetails && Array.isArray(data.results)) {
                 resultDetails.innerHTML = data.results.map(r => `<div>${r.status === 'success' ? '✅' : '❌'} ${escapeHtml(r.source_filename)}: ${escapeHtml(r.message || r.status)}</div>`).join('');
             }
             resultSection.classList.remove('hidden');
         }
         clearGeminiCliFiles();
-        showStatus('Gemini CLI import completed.', 'success');
+        showStatus(t('provider.import_complete', {provider: 'Gemini CLI'}), 'success');
         if (typeof loadCredentials === 'function') loadCredentials();
         if (typeof loadModelCatalog === 'function') loadModelCatalog(true);
     } catch (error) {
-        showStatus(`Gemini CLI import failed: ${error.message}`, 'error');
+        showStatus(t('provider.import_failed', {provider: 'Gemini CLI', error: error.message}), 'error');
     } finally {
         if (progressSection) setTimeout(() => progressSection.classList.add('hidden'), 1000);
     }

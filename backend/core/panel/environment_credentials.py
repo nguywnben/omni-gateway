@@ -6,10 +6,10 @@ import re
 from typing import Any, Dict, List
 
 from core.credential_pool import upsert_credential_by_email
+from core.i18n import LocalizedJSONResponse as JSONResponse
 from core.storage_adapter import get_storage_adapter
 from core.utils import verify_panel_token
 from fastapi import APIRouter, Depends, HTTPException
-from fastapi.responses import JSONResponse
 from log import log
 
 from .utils import internal_server_error, public_mode_name, validate_mode

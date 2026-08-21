@@ -23,21 +23,21 @@ function buildCredentialContentHtml(filename, content) {
 
     const rows = renderMessageResultRows([
         [t('table_filename'), filename],
-        content?.user_email || content?.email ? ['Email', content.user_email || content.email] : null,
-        content?.project_id ? ['Project ID', content.project_id] : null,
-        content?.expiry ? ['Expiry', content.expiry] : null,
+        content?.user_email || content?.email ? [t('modal.email'), content.user_email || content.email] : null,
+        content?.project_id ? [t('modal.project_id'), content.project_id] : null,
+        content?.expiry ? [t('modal.expiry'), content.expiry] : null,
     ].filter(Boolean));
     const body = JSON.stringify(content, null, 2);
 
     return `
         <div class="message-result-panel">
-            <div class="message-result-intro">This is the stored payload for the selected credential.</div>
+            <div class="message-result-intro">${escapeHtml(t('modal.credential_payload_intro'))}</div>
             <div class="message-result-section">
-                <div class="message-result-section-title">Credential Summary</div>
+                <div class="message-result-section-title">${escapeHtml(t('modal.credential_summary'))}</div>
                 <div class="message-result-summary">${rows}</div>
             </div>
             <div class="message-result-section">
-                <div class="message-result-section-title">Credential Payload</div>
+                <div class="message-result-section-title">${escapeHtml(t('modal.credential_payload'))}</div>
                 <pre class="message-modal-code">${escapeHtml(body)}</pre>
             </div>
         </div>
@@ -49,27 +49,27 @@ function buildCredentialModelsHtml(context) {
 
     const modelIds = Array.isArray(context.modelIds) ? context.modelIds : [];
     const rows = renderMessageResultRows([
-        ['Provider', context.providerName || t('provider_google_ai_studio')],
-        ['Available models', modelIds.length],
+        [t('modal.provider'), context.providerName || t('provider_google_ai_studio')],
+        [t('modal.available_models'), modelIds.length],
     ]);
     const modelButtons = modelIds.map((modelId) => `
-        <button type="button" class="credential-model-item" data-credential-model="${escapeAttribute(modelId)}" title="Copy model ID">
+        <button type="button" class="credential-model-item" data-credential-model="${escapeAttribute(modelId)}" title="${escapeAttribute(t('modal.copy_model_id'))}">
             ${escapeHtml(modelId)}
         </button>
     `).join('');
 
     return `
         <div class="message-result-panel credential-model-panel">
-            <div class="message-result-intro">These models are currently reported as available for this credential.</div>
+            <div class="message-result-intro">${escapeHtml(t('modal.models_intro'))}</div>
             <div class="message-result-section">
-                <div class="message-result-section-title">Credential Summary</div>
+                <div class="message-result-section-title">${escapeHtml(t('modal.credential_summary'))}</div>
                 <div class="message-result-summary">${rows}</div>
             </div>
             <div class="message-result-section">
-                <div class="message-result-section-title">Model IDs</div>
-                <input type="search" class="credential-model-search" placeholder="Filter models" aria-label="Filter available models" autocomplete="off">
+                <div class="message-result-section-title">${escapeHtml(t('modal.model_ids'))}</div>
+                <input type="search" class="credential-model-search" placeholder="${escapeAttribute(t('modal.filter_models'))}" aria-label="${escapeAttribute(t('modal.filter_available_models'))}" autocomplete="off">
                 <div class="credential-model-list">${modelButtons}</div>
-                <div class="modal-empty-state credential-model-empty hidden">No models match this filter.</div>
+                <div class="modal-empty-state credential-model-empty hidden">${escapeHtml(t('modal.no_models_match'))}</div>
             </div>
         </div>
     `;
@@ -78,18 +78,18 @@ function buildCredentialModelsHtml(context) {
 
 async function showCredentialModels(pathId) {
 
-    showStatus('Loading available models...', 'info');
+    showStatus(t('runtime.loading_models'), 'info');
 
     try {
         const context = await loadCredentialModelOptions(pathId);
         const modelIds = context.modelIds;
         if (modelIds.length === 0) {
-            showMessageModal('Available Models', 'No model information is available for this credential.', 'info');
+            showMessageModal(t('available_models_title'), t('no_models_for_credential'), 'info');
             return;
         }
 
         const modal = showMessageModal(
-            'Available Models',
+            t('available_models_title'),
             buildCredentialModelsHtml({ ...context, modelIds }),
             'info',
             { html: true }
@@ -116,9 +116,9 @@ async function showCredentialModels(pathId) {
         });
 
     } catch (error) {
-        const message = error.message || 'Unable to load available models.';
+        const message = error.message || t('modal.models_load_failed');
         showStatus(message, 'error');
-        showMessageModal('Available Models', message, 'error');
+        showMessageModal(t('available_models_title'), message, 'error');
     }
 
 }
@@ -127,7 +127,7 @@ async function loadCredentialModelOptions(pathId) {
 
     const context = getCredentialModalContext(pathId, AppState.primaryCreds);
     const { filename, manager } = context;
-    if (!filename || !manager) throw new Error('Credential information is unavailable.');
+    if (!filename || !manager) throw new Error(t('modal.credential_unavailable'));
 
     const response = await fetch(
         `${manager.getEndpoint('models')}/${encodeURIComponent(filename)}?${manager.getModeParam()}`,
@@ -135,7 +135,7 @@ async function loadCredentialModelOptions(pathId) {
     );
     const data = await response.json().catch(() => ({}));
     if (!response.ok) {
-        throw new Error(data.detail || data.error || 'Unable to load available models.');
+        throw new Error(data.detail || data.error || t('modal.models_load_failed'));
     }
 
     return {
@@ -147,27 +147,27 @@ async function loadCredentialModelOptions(pathId) {
 
 async function showCredentialModelTest(pathId) {
 
-    showStatus('Loading available models...', 'info');
+    showStatus(t('runtime.loading_models'), 'info');
 
     try {
         const context = await loadCredentialModelOptions(pathId);
         if (context.modelIds.length === 0) {
             showMessageModal(
-                'Model Test',
-                'No models are currently available for this credential.',
+                t('modal.model_test_title'),
+                t('modal.no_models_available'),
                 'info'
             );
             return;
         }
 
-        const account = context.accountLabel ? ` for ${context.accountLabel}` : '';
+        const account = context.accountLabel ? ` (${context.accountLabel})` : '';
         await showModelTestModal(
-            `Select a model to test with the ${context.providerName} credential${account}. The test sends a minimal generation request to the provider.`,
+            t('modal.model_test_intro', { provider: context.providerName, account }),
             {
-                title: 'Test Model',
-                label: 'Model',
-                placeholder: 'Select a model',
-                confirmLabel: 'Test',
+                title: t('btn_test_model'),
+                label: t('modal.model'),
+                placeholder: t('modal.select_model'),
+                confirmLabel: t('modal.test'),
                 options: context.modelIds.map((modelId) => ({ value: modelId, label: modelId })),
                 onTest: async (model) => {
                     if (context.manager.type === 'primary') {
@@ -178,9 +178,9 @@ async function showCredentialModelTest(pathId) {
             }
         );
     } catch (error) {
-        const message = error.message || 'Unable to load available models.';
+        const message = error.message || t('modal.models_load_failed');
         showStatus(message, 'error');
-        showMessageModal('Model Test', message, 'error');
+        showMessageModal(t('model_test_title'), message, 'error');
     }
 
 }
@@ -197,14 +197,14 @@ function quotaLevelFromUsedPercentage(usedPercentage) {
 function formatQuotaNumber(value) {
 
     const number = Number(value);
-    return Number.isFinite(number) ? number.toLocaleString('en-US') : 'Unavailable';
+    return Number.isFinite(number) ? number.toLocaleString(getActiveLocale()) : t('modal.unavailable');
 
 }
 
 function formatQuotaResetTime(value) {
 
     const date = new Date(value || '');
-    if (!Number.isFinite(date.getTime())) return 'Reset time unavailable';
+    if (!Number.isFinite(date.getTime())) return t('quota.reset_unavailable');
     return date.toLocaleString(undefined, {
         year: 'numeric',
         month: 'short',
@@ -218,19 +218,19 @@ function formatQuotaResetTime(value) {
 function buildAccountBillingQuotaHtml(filename, data, context = {}) {
 
     const periods = [
-        data.monthly ? { id: 'monthly', label: 'Monthly Credits', ...data.monthly } : null,
-        data.weekly ? { id: 'weekly', label: 'Weekly Usage', ...data.weekly } : null,
+        data.monthly ? { id: 'monthly', label: t('modal.monthly_credits'), ...data.monthly } : null,
+        data.weekly ? { id: 'weekly', label: t('modal.weekly_usage'), ...data.weekly } : null,
     ].filter(Boolean);
     const remainingPercentages = periods
         .map((period) => Number(period.remaining_percentage))
         .filter(Number.isFinite);
     const lowestRemaining = remainingPercentages.length ? Math.min(...remainingPercentages) : null;
     const rows = renderMessageResultRows([
-        ['Provider', context.providerName || t('provider_grok')],
-        context.accountLabel ? ['Account', context.accountLabel] : ['Credential', filename],
-        ['Quota source', 'Grok Build account billing'],
-        ['Billing periods', periods.length],
-        lowestRemaining !== null ? ['Lowest remaining quota', `${lowestRemaining}%`] : null,
+        [t('modal.provider'), context.providerName || t('provider_grok')],
+        context.accountLabel ? [t('modal.account'), context.accountLabel] : [t('modal.credential'), filename],
+        [t('modal.quota_source'), t('modal.grok_billing')],
+        [t('modal.billing_periods'), periods.length],
+        lowestRemaining !== null ? [t('modal.lowest_remaining'), `${lowestRemaining}%`] : null,
     ].filter(Boolean));
 
     const cards = periods.map((period) => {
@@ -238,21 +238,21 @@ function buildAccountBillingQuotaHtml(filename, data, context = {}) {
         const remainingPercentage = Math.max(0, Math.min(100, Number(period.remaining_percentage) || 0));
         const level = quotaLevelFromUsedPercentage(usedPercentage);
         const usageText = period.id === 'monthly'
-            ? `${formatQuotaNumber(period.used)} / ${formatQuotaNumber(period.limit)} credits used`
-            : `${usedPercentage}% used`;
+            ? t('modal.credits_used', { used: formatQuotaNumber(period.used), limit: formatQuotaNumber(period.limit) })
+            : t('modal.percent_used', { value: usedPercentage });
 
         return `
             <div class="modal-quota-card ${level}">
                 <div class="modal-quota-head">
                     <div class="modal-quota-model">${escapeHtml(period.label)}</div>
-                    <div class="modal-quota-percent">${remainingPercentage}% left</div>
+                    <div class="modal-quota-percent">${escapeHtml(t('modal.percent_left', { value: remainingPercentage }))}</div>
                 </div>
                 <div class="modal-quota-bar">
                     <div class="modal-quota-bar-value" style="width: ${remainingPercentage}%;"></div>
                 </div>
                 <div class="modal-quota-foot">
                     <span>${escapeHtml(usageText)}</span>
-                    <span>Resets ${escapeHtml(formatQuotaResetTime(period.reset_time))}</span>
+                    <span>${escapeHtml(t('quota.resets_at', { time: formatQuotaResetTime(period.reset_time) }))}</span>
                 </div>
             </div>
         `;
@@ -260,13 +260,13 @@ function buildAccountBillingQuotaHtml(filename, data, context = {}) {
 
     return `
         <div class="message-result-panel">
-            <div class="message-result-intro">Account quota reported by Grok Build for the selected OAuth credential.</div>
+            <div class="message-result-intro">${escapeHtml(t('modal.grok_quota_intro'))}</div>
             <div class="message-result-section">
-                <div class="message-result-section-title">Quota Summary</div>
+                <div class="message-result-section-title">${escapeHtml(t('modal.quota_summary'))}</div>
                 <div class="message-result-summary">${rows}</div>
             </div>
             <div class="message-result-section">
-                <div class="message-result-section-title">Billing Periods</div>
+                <div class="message-result-section-title">${escapeHtml(t('modal.billing_periods'))}</div>
                 <div class="modal-quota-grid">${cards}</div>
             </div>
         </div>
@@ -286,17 +286,17 @@ function buildAccountRateLimitQuotaHtml(filename, data, context = {}) {
     const availableResetCredits = Number(data.reset_credits?.available_count);
     const hasReviewWindows = windows.some((windowData) => String(windowData.id || '').startsWith('review_'));
     const rows = renderMessageResultRows([
-        ['Provider', context.providerName || 'Codex'],
-        context.accountLabel ? ['Account', context.accountLabel] : ['Credential', filename],
-        ['Plan', plan || 'Unknown'],
-        ['Usage windows', windows.length],
-        lowestRemaining !== null ? ['Lowest remaining quota', `${lowestRemaining}%`] : null,
+        [t('modal.provider'), context.providerName || 'Codex'],
+        context.accountLabel ? [t('modal.account'), context.accountLabel] : [t('modal.credential'), filename],
+        [t('modal.plan'), plan || t('modal.unknown')],
+        [t('modal.usage_windows'), windows.length],
+        lowestRemaining !== null ? [t('modal.lowest_remaining'), `${lowestRemaining}%`] : null,
         Number.isFinite(availableResetCredits)
-            ? ['Rate-limit reset credits', Math.max(0, availableResetCredits)]
+            ? [t('modal.reset_credits'), Math.max(0, availableResetCredits)]
             : null,
-        ['Standard limit', data.limit_reached ? 'Reached' : 'Available'],
+        [t('modal.standard_limit'), data.limit_reached ? t('modal.reached') : t('modal.available')],
         hasReviewWindows
-            ? ['Code review limit', data.review_limit_reached ? 'Reached' : 'Available']
+            ? [t('modal.code_review_limit'), data.review_limit_reached ? t('modal.reached') : t('modal.available')]
             : null,
     ].filter(Boolean));
 
@@ -312,15 +312,15 @@ function buildAccountRateLimitQuotaHtml(filename, data, context = {}) {
         return `
             <div class="modal-quota-card ${level}">
                 <div class="modal-quota-head">
-                    <div class="modal-quota-model">${escapeHtml(windowData.label || 'Usage Limit')}</div>
-                    <div class="modal-quota-percent">${remainingPercentage}% left</div>
+                    <div class="modal-quota-model">${escapeHtml(windowData.label || t('modal.usage_limit'))}</div>
+                    <div class="modal-quota-percent">${escapeHtml(t('modal.percent_left', { value: remainingPercentage }))}</div>
                 </div>
                 <div class="modal-quota-bar">
                     <div class="modal-quota-bar-value" style="width: ${remainingPercentage}%;"></div>
                 </div>
                 <div class="modal-quota-foot">
-                    <span>${usedPercentage}% used</span>
-                    <span>${windowData.reset_time ? `Resets ${escapeHtml(resetTime)}` : escapeHtml(resetTime)}</span>
+                    <span>${escapeHtml(t('modal.percent_used', { value: usedPercentage }))}</span>
+                    <span>${escapeHtml(windowData.reset_time ? t('quota.resets_at', { time: resetTime }) : resetTime)}</span>
                 </div>
             </div>
         `;
@@ -328,13 +328,13 @@ function buildAccountRateLimitQuotaHtml(filename, data, context = {}) {
 
     return `
         <div class="message-result-panel">
-            <div class="message-result-intro">Account rate limits reported by Codex for the selected OAuth credential.</div>
+            <div class="message-result-intro">${escapeHtml(t('modal.codex_quota_intro'))}</div>
             <div class="message-result-section">
-                <div class="message-result-section-title">Quota Summary</div>
+                <div class="message-result-section-title">${escapeHtml(t('modal.quota_summary'))}</div>
                 <div class="message-result-summary">${rows}</div>
             </div>
             <div class="message-result-section">
-                <div class="message-result-section-title">Usage Windows</div>
+                <div class="message-result-section-title">${escapeHtml(t('modal.usage_windows'))}</div>
                 <div class="modal-quota-grid">${cards}</div>
             </div>
         </div>
@@ -360,20 +360,20 @@ function buildCredentialQuotaHtml(filename, data, context = {}) {
         .filter(Boolean);
     const nextReset = resetTimes.length ? resetTimes.sort()[0] : '';
     const rows = renderMessageResultRows([
-        ['Provider', context.providerName || t('provider_antigravity')],
-        context.email ? ['Account', context.email] : ['Credential', filename],
-        ['Tracked models', entries.length],
-        summary.label ? ['Average remaining quota', summary.label] : null,
-        nextReset ? ['Next reset', nextReset] : null,
+        [t('modal.provider'), context.providerName || t('provider_antigravity')],
+        context.email ? [t('modal.account'), context.email] : [t('modal.credential'), filename],
+        [t('modal.tracked_models'), entries.length],
+        summary.label ? [t('modal.average_remaining'), summary.label] : null,
+        nextReset ? [t('quota.next_reset'), nextReset] : null,
     ].filter(Boolean));
 
     if (entries.length === 0) {
 
         return `
             <div class="message-result-panel">
-                <div class="message-result-intro">No quota information is available for this credential yet.</div>
+                <div class="message-result-intro">${escapeHtml(t('modal.no_quota_intro'))}</div>
                 <div class="message-result-section">
-                    <div class="message-result-section-title">Quota Summary</div>
+                    <div class="message-result-section-title">${escapeHtml(t('modal.quota_summary'))}</div>
                     <div class="message-result-summary">${rows}</div>
                 </div>
                 <div class="modal-empty-state">${escapeHtml(t('status_no_quota_info'))}</div>
@@ -394,14 +394,14 @@ function buildCredentialQuotaHtml(filename, data, context = {}) {
             <div class="modal-quota-card ${level}">
                 <div class="modal-quota-head">
                     <div class="modal-quota-model" title="${escapeAttribute(modelName)}">${escapeHtml(modelName)}</div>
-                    <div class="modal-quota-percent">${remainingPercentage}% left</div>
+                    <div class="modal-quota-percent">${escapeHtml(t('modal.percent_left', { value: remainingPercentage }))}</div>
                 </div>
                 <div class="modal-quota-bar">
                     <div class="modal-quota-bar-value" style="width: ${remainingPercentage}%;"></div>
                 </div>
                 <div class="modal-quota-foot">
-                    <span>Used ${usedPercentage}%</span>
-                    <span>${resetTime !== 'N/A' ? `Reset ${escapeHtml(resetTime)}` : 'Reset time unavailable'}</span>
+                    <span>${escapeHtml(t('modal.percent_used', { value: usedPercentage }))}</span>
+                    <span>${escapeHtml(resetTime !== 'N/A' ? t('quota.reset_at', { time: resetTime }) : t('quota.reset_unavailable'))}</span>
                 </div>
             </div>
         `;
@@ -410,13 +410,13 @@ function buildCredentialQuotaHtml(filename, data, context = {}) {
 
     return `
         <div class="message-result-panel">
-            <div class="message-result-intro">Quota usage is grouped by model for the selected credential.</div>
+            <div class="message-result-intro">${escapeHtml(t('modal.model_quota_intro'))}</div>
             <div class="message-result-section">
-                <div class="message-result-section-title">Quota Summary</div>
+                <div class="message-result-section-title">${escapeHtml(t('modal.quota_summary'))}</div>
                 <div class="message-result-summary">${rows}</div>
             </div>
             <div class="message-result-section">
-                <div class="message-result-section-title">Model Quota</div>
+                <div class="message-result-section-title">${escapeHtml(t('modal.model_quota'))}</div>
                 <div class="modal-quota-grid">${cards}</div>
             </div>
         </div>
@@ -431,11 +431,11 @@ function summarizeCredentialQuota(data) {
         const remainingValues = periods
             .map((period) => Number(period.remaining_percentage))
             .filter(Number.isFinite);
-        if (!remainingValues.length) return { level: 'muted', label: 'No quota' };
+        if (!remainingValues.length) return { level: 'muted', label: t('modal.no_quota') };
         const remainingPercentage = Math.min(...remainingValues);
         return {
             level: quotaLevelFromUsedPercentage(100 - remainingPercentage),
-            label: `${remainingPercentage}% left`,
+            label: t('modal.percent_left', { value: remainingPercentage }),
             periodCount: periods.length,
         };
     }
@@ -445,11 +445,11 @@ function summarizeCredentialQuota(data) {
         const remainingValues = windows
             .map((windowData) => Number(windowData.remaining_percentage))
             .filter(Number.isFinite);
-        if (!remainingValues.length) return { level: 'muted', label: 'No quota' };
+        if (!remainingValues.length) return { level: 'muted', label: t('modal.no_quota') };
         const remainingPercentage = Math.min(...remainingValues);
         return {
             level: quotaLevelFromUsedPercentage(100 - remainingPercentage),
-            label: `${remainingPercentage}% left`,
+            label: t('modal.percent_left', { value: remainingPercentage }),
             windowCount: windows.length,
         };
     }
@@ -461,7 +461,7 @@ function summarizeCredentialQuota(data) {
 
         return {
             level: 'muted',
-            label: 'No quota',
+            label: t('modal.no_quota'),
         };
 
     }
@@ -483,7 +483,7 @@ function summarizeCredentialQuota(data) {
 
     return {
         level,
-        label: `${averageRemaining}% left`,
+        label: t('modal.percent_left', { value: averageRemaining }),
         modelCount: entries.length,
     };
 
@@ -492,24 +492,23 @@ function summarizeCredentialQuota(data) {
 function describeCredentialQuotaPreview(summary) {
 
     if (summary.modelCount) {
-        const modelLabel = `model${summary.modelCount === 1 ? '' : 's'}`;
-        return `Average quota: ${summary.label} across ${summary.modelCount} ${modelLabel}.`;
+        return t('modal.average_quota_preview', { quota: summary.label, count: summary.modelCount });
     }
 
     if (summary.periodCount > 1) {
-        return `Lowest account quota: ${summary.label} across ${summary.periodCount} active billing periods.`;
+        return t('modal.lowest_billing_preview', { quota: summary.label, count: summary.periodCount });
     }
 
     if (summary.periodCount === 1) {
-        return `Account quota: ${summary.label} for the active billing period.`;
+        return t('modal.billing_preview', { quota: summary.label });
     }
 
     if (summary.windowCount > 1) {
-        return `Lowest account quota: ${summary.label} across ${summary.windowCount} usage windows.`;
+        return t('modal.lowest_window_preview', { quota: summary.label, count: summary.windowCount });
     }
 
     if (summary.windowCount === 1) {
-        return `Account quota: ${summary.label} for the active usage window.`;
+        return t('modal.window_preview', { quota: summary.label });
     }
 
     return t('btn_view_quota_title');
@@ -577,14 +576,14 @@ function renderCredentialErrorDetails(parsedMsg) {
 
     const rows = [];
 
-    if (error.status) rows.push(['Status', error.status]);
+    if (error.status) rows.push([t('modal.status'), error.status]);
 
     if (Array.isArray(error.details)) {
 
         error.details.forEach((detail, index) => {
 
-            if (detail['@type']) rows.push([`Type ${index + 1}`, detail['@type']]);
-            if (detail.reason) rows.push([`Reason ${index + 1}`, detail.reason]);
+            if (detail['@type']) rows.push([`${t('modal.type')} ${index + 1}`, detail['@type']]);
+            if (detail.reason) rows.push([`${t('modal.reason')} ${index + 1}`, detail.reason]);
 
             if (detail.metadata && typeof detail.metadata === 'object') {
 
@@ -610,16 +609,16 @@ function buildCredentialErrorsHtml(filename, data) {
     const errorMessages = data.error_messages || {};
     const rows = renderMessageResultRows([
         [t('table_filename'), filename],
-        ['Stored errors', errorCodes.length],
+        [t('modal.stored_errors'), errorCodes.length],
     ]);
 
     if (errorCodes.length === 0) {
 
         return `
             <div class="message-result-panel">
-                <div class="message-result-intro">This credential has no stored provider errors.</div>
+                <div class="message-result-intro">${escapeHtml(t('modal.no_errors_intro'))}</div>
                 <div class="message-result-section">
-                    <div class="message-result-section-title">Error Summary</div>
+                    <div class="message-result-section-title">${escapeHtml(t('modal.error_summary'))}</div>
                     <div class="message-result-summary">${rows}</div>
                 </div>
                 <div class="modal-empty-state success">
@@ -663,13 +662,13 @@ function buildCredentialErrorsHtml(filename, data) {
 
     return `
         <div class="message-result-panel">
-            <div class="message-result-intro">These are the latest provider errors recorded for this credential.</div>
+            <div class="message-result-intro">${escapeHtml(t('modal.errors_intro'))}</div>
             <div class="message-result-section">
-                <div class="message-result-section-title">Error Summary</div>
+                <div class="message-result-section-title">${escapeHtml(t('modal.error_summary'))}</div>
                 <div class="message-result-summary">${rows}</div>
             </div>
             <div class="message-result-section">
-                <div class="message-result-section-title">Error Details</div>
+                <div class="message-result-section-title">${escapeHtml(t('error_details'))}</div>
                 <div class="message-error-list">${errorCards}</div>
             </div>
         </div>

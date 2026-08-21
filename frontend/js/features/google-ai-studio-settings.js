@@ -25,7 +25,7 @@ async function loadGoogleAIStudioSettings(options = {}) {
         field.disabled = isLocked;
         field.classList.toggle('env-locked', isLocked);
     } catch (error) {
-        showStatus(`Failed to load Google AI Studio settings: ${error.message}`, 'error');
+        showStatus(t('provider.settings_load_failed', {provider: 'Google AI Studio', error: error.message}), 'error');
     } finally {
         setProviderSettingsLoading(
             ['googleAiStudioSettingsLoading'],
@@ -40,7 +40,7 @@ async function saveGoogleAIStudioSettings() {
     const field = document.getElementById('googleAiStudioApiUrl');
     const apiUrl = field?.value.trim() || '';
     if (!apiUrl) {
-        showStatus('Enter the Google AI Studio API endpoint.', 'error');
+        showStatus(t('provider.endpoint_required', {provider: 'Google AI Studio'}), 'error');
         return;
     }
 
@@ -56,16 +56,16 @@ async function saveGoogleAIStudioSettings() {
         if (!response.ok) {
             throw new Error(data.detail || data.error || t('unknown_error'));
         }
-        showStatus(data.message || 'Google AI Studio settings saved.', 'success');
+        showStatus(data.message || t('provider.settings_saved', {provider: 'Google AI Studio'}), 'success');
         await loadGoogleAIStudioSettings();
     } catch (error) {
-        showStatus(`Failed to save Google AI Studio settings: ${error.message}`, 'error');
+        showStatus(t('provider.settings_save_failed', {provider: 'Google AI Studio', error: error.message}), 'error');
     }
 }
 
 async function resetGoogleAIStudioSettings() {
     const confirmed = await showConfirmModal(
-        'Reset the Google AI Studio endpoint to its default? Environment-managed values will be preserved.',
+        t('provider.reset_confirm', {provider: 'Google AI Studio'}),
         {
             title: t('confirm_reset_google_ai_studio_title'),
             confirmLabel: t('btn_reset_defaults')
@@ -82,10 +82,10 @@ async function resetGoogleAIStudioSettings() {
         if (!response.ok) {
             throw new Error(data.detail || data.error || t('unknown_error'));
         }
-        showStatus(data.message || 'Google AI Studio settings reset to defaults.', 'success');
+        showStatus(data.message || t('provider.settings_reset', {provider: 'Google AI Studio'}), 'success');
         await loadGoogleAIStudioSettings();
     } catch (error) {
-        showStatus(`Failed to reset Google AI Studio settings: ${error.message}`, 'error');
+        showStatus(t('provider.settings_reset_failed', {provider: 'Google AI Studio', error: error.message}), 'error');
     }
 }
 
@@ -96,13 +96,13 @@ async function addGoogleAIStudioCredential(event) {
     const apiKey = keyField?.value.trim() || '';
 
     if (!apiKey) {
-        showStatus('Enter a Google AI Studio API key.', 'error');
+        showStatus(t('provider.api_key_required', {provider: 'Google AI Studio'}), 'error');
         keyField?.focus();
         return;
     }
 
     button.disabled = true;
-    button.textContent = 'Validating...';
+    button.textContent = t('runtime.validating');
     document.getElementById('googleAiStudioSaveResult')?.classList.add('hidden');
 
     try {
@@ -120,12 +120,12 @@ async function addGoogleAIStudioCredential(event) {
         const title = document.getElementById('googleAiStudioSaveResultTitle');
         const text = document.getElementById('googleAiStudioSaveResultText');
         if (title) {
-            title.textContent = data.credential_action === 'updated'
-                ? 'API key updated'
-                : 'API key added to pool';
+            title.textContent = t(data.credential_action === 'updated'
+                ? 'runtime.credential_updated_title'
+                : 'runtime.credential_added_title');
         }
         if (text) {
-            text.textContent = `${data.message} ${data.model_count} generate-content model${data.model_count === 1 ? '' : 's'} available.`;
+            text.textContent = `${data.message} ${t('runtime.models_available', {count: data.model_count})}`;
         }
         result?.classList.remove('hidden');
         keyField.value = '';
@@ -133,10 +133,10 @@ async function addGoogleAIStudioCredential(event) {
         await AppState.primaryCreds.refresh();
         await refreshUsageStats();
     } catch (error) {
-        showStatus(`Failed to add Google AI Studio API key: ${error.message}`, 'error');
+        showStatus(t('provider.api_key_add_failed', {provider: 'Google AI Studio', error: error.message}), 'error');
     } finally {
         button.disabled = false;
-        button.textContent = 'Validate and add';
+        button.textContent = t('runtime.validate_add');
     }
 }
 

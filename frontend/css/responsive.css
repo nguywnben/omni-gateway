@@ -236,6 +236,15 @@
         grid-column: 1 / -1;
     }
 
+    .update-check-action {
+        justify-items: start;
+        width: 100%;
+    }
+
+    .update-guide-link {
+        text-align: left;
+    }
+
     #dashboardTab .page-actions {
         display: block;
         width: auto;
