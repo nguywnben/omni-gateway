@@ -46,6 +46,27 @@ services:
 
       # Optional: Proxy configuration
       - PROXY=${PROXY:-}
+
+      # Routing strategy (balanced, priority, weighted, least_latency, lowest_cost)
+      - ROUTING_STRATEGY=${ROUTING_STRATEGY:-balanced}
+      - PREFERRED_PROVIDER=${PREFERRED_PROVIDER:-}
+
+      # Optional: exact-match response cache
+      - RESPONSE_CACHE_ENABLED=${RESPONSE_CACHE_ENABLED:-false}
+      - RESPONSE_CACHE_TTL_SECONDS=${RESPONSE_CACHE_TTL_SECONDS:-300}
+      - RESPONSE_CACHE_MAX_ENTRIES=${RESPONSE_CACHE_MAX_ENTRIES:-1000}
+
+      # Optional: pre-call guardrails
+      - GUARDRAILS_ENABLED=${GUARDRAILS_ENABLED:-false}
+      - GUARDRAILS_PII_MASKING_ENABLED=${GUARDRAILS_PII_MASKING_ENABLED:-true}
+      - GUARDRAILS_INJECTION_DETECTION_ENABLED=${GUARDRAILS_INJECTION_DETECTION_ENABLED:-true}
+      - GUARDRAILS_BLOCKED_KEYWORDS=${GUARDRAILS_BLOCKED_KEYWORDS:-}
+
+      # Optional: observability
+      - METRICS_TOKEN=${METRICS_TOKEN:-}
+      - LANGFUSE_PUBLIC_KEY=${LANGFUSE_PUBLIC_KEY:-}
+      - LANGFUSE_SECRET_KEY=${LANGFUSE_SECRET_KEY:-}
+      - LANGFUSE_HOST=${LANGFUSE_HOST:-https://cloud.langfuse.com}
     volumes:
       - ${DATA_DIR:-/opt/omni-gateway}/creds:/app/backend/data/creds
       - ${DATA_DIR:-/opt/omni-gateway}/logs:/app/backend/data/logs
