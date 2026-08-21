@@ -24,10 +24,12 @@ def generate_cache_key(
         "messages": payload.get("messages", []),
         "contents": payload.get("contents", []),
         "prompt": payload.get("prompt", ""),
-        "system_instruction": payload.get("system_instruction"),
+        "system_instruction": payload.get("system_instruction") or payload.get("systemInstruction"),
         "temperature": payload.get("temperature"),
         "top_p": payload.get("top_p"),
         "max_tokens": payload.get("max_tokens") or payload.get("max_output_tokens"),
+        "generation_config": payload.get("generationConfig"),
+        "tools": payload.get("tools"),
     }
 
     # Dump deterministically sorted JSON string
@@ -42,16 +44,21 @@ class ResponseCache:
         self.default_ttl_seconds = max(1, default_ttl_seconds)
         self.max_entries = max(1, max_entries)
         self._cache: Dict[str, Tuple[float, Any]] = {}
+        self.hits = 0
+        self.misses = 0
 
     def get(self, key: str) -> Optional[Any]:
         """Retrieve a cached response if valid and unexpired."""
         if key not in self._cache:
+            self.misses += 1
             return None
 
         expires_at, data = self._cache[key]
         if time.time() > expires_at:
             self._cache.pop(key, None)
+            self.misses += 1
             return None
+        self.hits += 1
         return data
 
     def set(self, key: str, data: Any, ttl_seconds: Optional[int] = None) -> None:

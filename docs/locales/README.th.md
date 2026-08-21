@@ -45,7 +45,7 @@
 
 เราเตอร์ AI อเนกประสงค์สำหรับเครื่องมือเขียนโค้ด Omni Gateway มอบระบบสลับข้อมูลสำรองอัตโนมัติอัจฉริยะ (smart auto-fallback), การทำความสะอาดคำขอที่คำนึงถึงโทเค็น, การแสดงผลการใช้งานที่โปร่งใส และการแปลงรูปแบบคำขออย่างไร้รอยต่อ เพื่อให้เอเจนต์ในเครื่อง, ส่วนขยาย IDE และสคริปต์อัตโนมัติสามารถใช้ขีดความสามารถของ LLM ทั้งแบบฟรีและพรีเมียมผ่านอินเทอร์เฟซ API ที่เสถียรเพียงหนึ่งเดียว
 
-> **สถานะโครงการ:** เสถียร เวอร์ชัน `1.3.1` รองรับคอนโซลที่แปลเป็นภาษาท้องถิ่นครบทั้ง 15 ภาษา, เพิ่มข้อความ API การจัดการที่รับรู้ภาษาและคำแนะนำการอัปเดตตามรุ่นที่เผยแพร่ พร้อมทั้งรักษาเส้นทาง SDK ที่เสถียร, เส้นทางการจัดการมาตรฐาน, ชื่อการกำหนดค่า และข้อตกลงรันไทม์แบบอินสแตนซ์เดียวที่สร้างขึ้นใน `1.0.0`
+> **Project status:** Stable. Version `1.4.0` adds enterprise governance and FinOps: virtual API keys with budgets and rate limits, a per-call USD cost ledger backed by a maintained pricing table, optional guardrails and response caching, three new routing strategies, a Prometheus metrics endpoint, Langfuse trace export, and a Helm chart — while preserving the stable SDK routes, canonical management routes, configuration names, and single-instance runtime contract established in `1.0.0`.
 
 ## ทำไมต้อง Omni Gateway
 
@@ -53,14 +53,9 @@
 
 ## <a id="khwam-samart-lak"></a>ความสามารถหลัก
 
-- ระบบสลับข้อมูลสำรองอัตโนมัติอัจฉริยะ: สำรองข้อมูลรับรองล่วงหน้ารายคำขอ, กระจายปริมาณการรับส่งข้อมูลพร้อมกัน, ติดตามทุกความพยายามเพื่อการหมุนเวียนที่ยุติธรรม และกำหนดเส้นทางหลบเลี่ยงความล้มเหลวล่าสุด, คูลดาวน์, การจำกัดอัตรา (rate limit) และโควตาที่หมดลง
-- การทำความสะอาดที่คำนึงถึงโทเค็น: ปรับเพย์โหลดให้เป็นมาตรฐานและตัดแต่งเฉพาะส่วนหน้าของบทสนทนาที่มีขนาดใหญ่เกินไปที่ขอบเขตบทสนทนาที่ปลอดภัย โดยยังคงรักษาคำแนะนำของระบบ (system instructions), คำจำกัดความของเครื่องมือ และบริบทล่าสุดไว้อย่างสมบูรณ์
-- การแปลงรูปแบบ: รองรับ OpenAI Chat Completions และ Responses, คำขอดั้งเดิมของ Gemini และ Anthropic Messages จากนั้นแปลงคำขอและการตอบกลับแบบสตรีมมิ่งข้ามรูปแบบได้อย่างสมบูรณ์
-- การประสานงานข้อมูลรับรอง: จัดการบัญชี OAuth และคีย์ API ของผู้ให้บริการพร้อมสถานะสุขภาพ, การติดตามคูลดาวน์, การตรวจสอบความถูกต้อง, การตัดข้อมูลซ้ำซ้อน และการสลับสำรองที่คำนึงถึงผู้ให้บริการ
-- การกำหนดเส้นทางโมเดลตามระดับข้อมูลรับรอง: จัดเก็บแคตตาล็อกความสามารถแยกต่างหากสำหรับแต่ละข้อมูลรับรอง เพื่อไม่ให้สิทธิ์ของบัญชีหนึ่งส่งคำขอไปยังอีกบัญชีที่ไม่ได้เปิดเผยโมเดลที่เลือก
-- หน่วยความจำสุขภาพของเส้นทาง: บันทึกการตอบกลับไม่พบโมเดล (model-not-found) ที่ขอบเขตของข้อมูลรับรอง และแสดงเส้นทางที่ได้รับผลกระทบเพื่อการกู้คืนจากหน้า Models
-- ความยืดหยุ่นของการสตรีม: รองรับการสตรีม SSE, การจำลองสตรีม (pseudo-streaming) สำหรับไคลเอนต์ที่ต้องการเอาต์พุตแบบสตรีม และการลองใหม่เพื่อป้องกันการตัดทอน (anti-truncation) สำหรับการสร้างข้อความยาว
-- แผงควบคุม: มาพร้อมคอนโซลเว็บสำหรับข้อมูลรับรอง, บันทึกการทำงาน (logs), การกำหนดค่า, ข้อมูลการใช้งาน และข้อมูลเวอร์ชัน
+Omni Gateway records request volume, success rate, credential attribution, provider-reported token usage, estimated context-compression savings, and an estimated USD cost per call computed from a maintained model pricing table. Override or extend prices by placing a `model_pricing.json` file in the credentials directory; prices are USD per one million tokens. Aggregates are available on the dashboard, per virtual key through the `/api/virtual-keys` management API, and for monitoring systems through the Prometheus `/metrics` endpoint. Compression savings and costs are labeled as estimates because provider tokenizers and billing rules remain authoritative.
+
+Virtual API keys let one gateway serve multiple clients under separate limits. Each key carries optional daily and monthly USD budgets enforced from the cost ledger, requests-per-minute and tokens-per-minute sliding windows, an expiry timestamp, and a model allowlist with glob patterns. Keys are stored as SHA-256 hashes; the plaintext secret is shown exactly once at creation time.
 
 ## ตัวอย่างคอนโซล
 
@@ -133,10 +128,10 @@ sudo docker run -d \
   -p 4283:4283 \
   -v /opt/omni-gateway/creds:/app/backend/data/creds \
   -v /opt/omni-gateway/logs:/app/backend/data/logs \
-  nguywnben/omni-gateway:1.3.1
+  nguywnben/omni-gateway:1.4.0
 ```
 
-รุ่นเดียวกันนี้เผยแพร่ไปยัง GitHub Packages ในชื่อ `ghcr.io/nguywnben/omni-gateway:1.3.1` แท็ก `latest` จะติดตามรุ่นเสถียรใหม่ล่าสุด ส่วน `edge` จะติดตามบิลด์ที่ตรวจสอบแล้วแต่ยังไม่เผยแพร่จาก `main` ตรึงแท็กเวอร์ชันหรือไดเจสต์เมื่อต้องการการติดตั้งที่สามารถทำซ้ำได้อย่างแน่นอน
+รุ่นเดียวกันนี้เผยแพร่ไปยัง GitHub Packages ในชื่อ `ghcr.io/nguywnben/omni-gateway:1.4.0` แท็ก `latest` จะติดตามรุ่นเสถียรใหม่ล่าสุด ส่วน `edge` จะติดตามบิลด์ที่ตรวจสอบแล้วแต่ยังไม่เผยแพร่จาก `main` ตรึงแท็กเวอร์ชันหรือไดเจสต์เมื่อต้องการการติดตั้งที่สามารถทำซ้ำได้อย่างแน่นอน
 
 เปิดแผงควบคุมที่:
 
@@ -148,7 +143,7 @@ http://YOUR_SERVER_IP:4283
 
 รหัสผ่านที่จัดการโดยแอปพลิเคชันจะถูกจัดเก็บเป็นแฮช scrypt แบบใส่เกลือ (salted), เซสชันแผงควบคุมใช้คุกกี้ HttpOnly และคำขอ SDK สาธารณะจะยืนยันตัวตนด้วยคีย์ API `sk-ogw-` ที่สร้างขึ้น สำหรับการติดตั้งแบบไม่ต้องโต้ตอบ ให้กำหนดค่า `PANEL_PASSWORD` ล่วงหน้าและข้ามหน้าจอตั้งค่าไปได้เลย
 
-คอนเทนเนอร์ `1.3.1` เผยแพร่สำหรับ `linux/amd64` การเผยแพร่ ARM64 ถูกหยุดชั่วคราวโดยเจตนาจนกว่าการพึ่งพาของผู้ให้บริการทุกราย รวมถึงสแต็กการขนส่ง Vertex จะสามารถสร้างและทดสอบภายใต้ข้อตกลงเดียวกันได้
+คอนเทนเนอร์ `1.4.0` เผยแพร่สำหรับ `linux/amd64` การเผยแพร่ ARM64 ถูกหยุดชั่วคราวโดยเจตนาจนกว่าการพึ่งพาของผู้ให้บริการทุกราย รวมถึงสแต็กการขนส่ง Vertex จะสามารถสร้างและทดสอบภายใต้ข้อตกลงเดียวกันได้
 
 หากไฟร์วอลล์ของเซิร์ฟเวอร์เปิดใช้งานอยู่ ให้อนุญาตพอร์ตเกตเวย์:
 
@@ -183,9 +178,22 @@ sudo mkdir -p /opt/omni-gateway/creds /opt/omni-gateway/logs
 docker compose -f deploy/docker-compose.yml up -d
 ```
 
-ไฟล์ compose ที่ให้มาจะดึง `nguywnben/omni-gateway:latest` และใช้ `/opt/omni-gateway` เป็นค่าเริ่มต้นสำหรับข้อมูลโฮสต์แบบถาวร กำหนด `IMAGE=nguywnben/omni-gateway:1.3.1` เพื่อตรึงรุ่นนี้ และกำหนด `DATA_DIR=/custom/path` เมื่อเซิร์ฟเวอร์ใช้ตำแหน่งที่จัดเก็บอื่น
+ไฟล์ compose ที่ให้มาจะดึง `nguywnben/omni-gateway:latest` และใช้ `/opt/omni-gateway` เป็นค่าเริ่มต้นสำหรับข้อมูลโฮสต์แบบถาวร กำหนด `IMAGE=nguywnben/omni-gateway:1.4.0` เพื่อตรึงรุ่นนี้ และกำหนด `DATA_DIR=/custom/path` เมื่อเซิร์ฟเวอร์ใช้ตำแหน่งที่จัดเก็บอื่น
 
 Compose จะส่งต่อ `API_KEY`, `PANEL_PASSWORD`, `SETUP_TOKEN`, URI การจัดเก็บข้อมูลภายนอก และ `PROXY` จากเชลล์หรือไฟล์ `.env` ที่รูท เว้นว่างไว้เพื่อคงการสร้างคีย์อัตโนมัติ, การตั้งค่าการรันครั้งแรก, ที่จัดเก็บ SQLite ในเครื่อง และเครือข่ายขาออกโดยตรง
+
+
+### Kubernetes (Helm)
+
+A Helm chart is provided at `deploy/helm/omni-gateway` with a persistent volume for credentials and the usage ledger, liveness/readiness probes, optional Ingress, and an optional Prometheus ServiceMonitor wired to `/metrics`:
+
+```bash
+helm install omni-gateway deploy/helm/omni-gateway \
+  --set secrets.panelPassword=change-me
+```
+
+The chart deploys exactly one replica with a `Recreate` strategy because the 1.x runtime holds routing and rate-limit state in process memory. Do not scale the Deployment horizontally.
+
 
 ### การพัฒนาในเครื่อง (Local Development)
 
@@ -250,9 +258,16 @@ Omni Gateway อ่านการกำหนดค่าจากตัวแ�
 | `RETRY_429_INTERVAL` | `1` | ความล่าช้าพื้นฐานระหว่างการลองใหม่ชั่วคราวในหน่วยวินาที |
 | `AUTO_DISABLE` | `false` | ปิดใช้งานข้อมูลรับรองหลังจากความล้มเหลวร้ายแรง (hard failures) ที่กำหนดค่าไว้ |
 | `AUTO_DISABLE_ERROR_CODES` | `403` | รหัสสถานะความล้มเหลวร้ายแรงที่คั่นด้วยเครื่องหมายจุลภาค |
-| `ROUTING_STRATEGY` | `balanced` | นโยบายการเลือกข้อมูลรับรอง: `balanced` หรือ `priority` |
+| `ROUTING_STRATEGY` | `balanced` | Credential selection policy: `balanced`, `priority`, `weighted`, `least_latency`, or `lowest_cost`. |
 | `PREFERRED_PROVIDER` | ว่าง | ผู้ให้บริการที่ต้องการโดยกลยุทธ์ `priority` เช่น `google_antigravity` หรือ `google_ai_studio` |
 | `UPSTREAM_TIMEOUT_SECONDS` | `300` | ระยะเวลาหมดเวลาการอนุมานของผู้ให้บริการ ซึ่งถูกจำกัดระหว่าง 5 ถึง 900 วินาที |
+| `RESPONSE_CACHE_ENABLED` | `false` | Cache deterministic (temperature 0) non-streaming responses in memory. |
+| `RESPONSE_CACHE_TTL_SECONDS` | `300` | Response cache entry lifetime in seconds. |
+| `RESPONSE_CACHE_MAX_ENTRIES` | `1000` | Maximum responses held by the in-memory cache. |
+| `GUARDRAILS_ENABLED` | `false` | Enable the pre-call guardrails pipeline. |
+| `GUARDRAILS_PII_MASKING_ENABLED` | `true` | Mask emails, card numbers, and API keys in outbound request text. |
+| `GUARDRAILS_INJECTION_DETECTION_ENABLED` | `true` | Reject prompt-injection attempts with HTTP 400. |
+| `GUARDRAILS_BLOCKED_KEYWORDS` | empty | Comma-separated case-insensitive keywords that block a request. |
 | `ANTI_TRUNCATION_MAX_ATTEMPTS` | `3` | ความพยายามดำเนินการต่อสูงสุดสำหรับการสตรีมแบบป้องกันการตัดทอน |
 | `TOKEN_COMPRESSION_ENABLED` | `true` | บีบอัดประวัติการสนทนาที่มีขนาดใหญ่เกินไปก่อนการกำหนดเส้นทางไปยังผู้ให้บริการ |
 | `TOKEN_COMPRESSION_THRESHOLD` | `32000` | เกณฑ์โทเค็นอินพุตโดยประมาณที่เปิดใช้งานการบีบอัด |
@@ -286,6 +301,10 @@ Omni Gateway อ่านการกำหนดค่าจากตัวแ�
 | `CLAUDE_USER_AGENT` | `claude-cli/omni-gateway` | การแทนที่ทางเลือกสำหรับ User-Agent สำหรับคำขอ Claude Code และ Claude Platform |
 | `ANTIGRAVITY_USER_AGENT` | `antigravity/cli/1.0.1 windows/amd64` | การแทนที่ทางเลือกสำหรับโปรโตคอล User-Agent ของ Google Antigravity |
 | `ANTIGRAVITY_PAYLOAD_USER_AGENT` | `antigravity` | การแทนที่ทางเลือกสำหรับ userAgent ระดับเพย์โหลดของ Google Antigravity |
+| `METRICS_TOKEN` | empty | Optional bearer token required to scrape `GET /metrics`. |
+| `LANGFUSE_PUBLIC_KEY` | empty | Enables Langfuse trace export together with the secret key. |
+| `LANGFUSE_SECRET_KEY` | empty | Langfuse secret key for trace export. |
+| `LANGFUSE_HOST` | `https://cloud.langfuse.com` | Langfuse ingestion endpoint. |
 | `LOG_LEVEL` | `info` | ระดับบันทึกการทำงานของรันไทม์ |
 | `LOG_MAX_MB` | `10` | ขนาดไฟล์บันทึกที่ใช้งานสูงสุดก่อนการหมุนเวียน (rotation) |
 | `LOG_BACKUP_COUNT` | `3` | จำนวนไฟล์บันทึกที่หมุนเวียนที่คงไว้ |

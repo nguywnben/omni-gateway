@@ -202,7 +202,16 @@ async def authenticate_flexible(
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-    if not secrets.compare_digest(token, api_key):
+    if secrets.compare_digest(token, api_key):
+        log.debug(f"Authentication successful using {auth_method} (master key)")
+        return token
+
+    # Fall back to virtual API keys (per-key budgets, rate limits, scopes).
+    from core.request_context import set_api_key_id
+    from core.virtual_keys import extract_requested_model, virtual_key_manager
+
+    record = await virtual_key_manager.verify(token)
+    if record is None:
         log.debug(f"Authentication failed using {auth_method}")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -210,7 +219,19 @@ async def authenticate_flexible(
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-    log.debug(f"Authentication successful using {auth_method}")
+    requested_model = ""
+    if request.method == "POST":
+        try:
+            body = await request.json()
+        except Exception:
+            body = None
+        requested_model = extract_requested_model(request.url.path, body)
+    else:
+        requested_model = extract_requested_model(request.url.path, None)
+
+    await virtual_key_manager.enforce(record, requested_model=requested_model)
+    set_api_key_id(record.id)
+    log.debug(f"Authentication successful using {auth_method} (virtual key id={record.id})")
     return token
 
 

@@ -11,14 +11,69 @@ from config import (
     get_retry_429_max_retries,
 )
 from core.credential_manager import CredentialManager
-from core.request_context import get_request_elapsed_ms, get_request_id
-from core.usage_stats import record_call
+from core.request_context import get_api_key_id, get_request_elapsed_ms, get_request_id
+from core.usage_stats import normalize_token_usage, record_call
+from core.virtual_keys import virtual_key_manager
 from fastapi import Response
 from log import log
 
 UNASSIGNED_USAGE_FILENAME = "__gateway_unassigned__.json"
 MODEL_NOT_FOUND_COOLDOWN_SECONDS = 2 * 60
 RETRYABLE_UPSTREAM_STATUS_CODES = frozenset({408, 409, 429, 500, 502, 503, 504})
+
+
+def _schedule_trace_export(
+    *,
+    model_name: str,
+    provider: str,
+    token_usage: Optional[Dict[str, Any]],
+    latency_ms: int,
+) -> None:
+    """Export a generation trace to Langfuse without blocking the response.
+
+    Prompt/response bodies are intentionally NOT exported (privacy): only
+    model, provider, token counts, and latency leave the gateway.
+    """
+
+    async def _export() -> None:
+        try:
+            from config import get_telemetry_config
+            from core.telemetry_exporter import TelemetryExporter
+
+            settings = await get_telemetry_config()
+            if not settings["enabled"]:
+                return
+            exporter = TelemetryExporter(
+                langfuse_public_key=settings["langfuse_public_key"],
+                langfuse_secret_key=settings["langfuse_secret_key"],
+                langfuse_host=settings["langfuse_host"],
+            )
+            tokens = normalize_token_usage(token_usage)
+            await exporter.export_trace_to_langfuse(
+                trace_id=get_request_id() or "unknown",
+                name="gateway.generation",
+                model=model_name,
+                input_data=None,
+                output_data=None,
+                latency_ms=float(latency_ms),
+                prompt_tokens=tokens["input_tokens"],
+                completion_tokens=tokens["output_tokens"],
+                metadata={
+                    "provider": provider,
+                    "latency_ms": latency_ms,
+                    "cached_tokens": tokens["cached_tokens"],
+                    "reasoning_tokens": tokens["reasoning_tokens"],
+                },
+            )
+        except Exception as exc:
+            log.debug(f"[telemetry] trace export failed: {exc}")
+
+    try:
+        asyncio.get_running_loop()
+        asyncio.create_task(_export())
+    except RuntimeError:
+        # No running loop (synchronous test context) - skip silently.
+        pass
 
 
 async def check_should_auto_disable(status_code: int) -> bool:
@@ -93,6 +148,7 @@ async def record_api_call_success(
     provider: Optional[str] = None,
 ) -> None:
     if credential_manager and credential_name:
+        api_key_id = get_api_key_id()
         try:
             request_metrics = dict(request_metrics or {})
             request_metrics.setdefault("latency_ms", get_request_elapsed_ms())
@@ -106,9 +162,24 @@ async def record_api_call_success(
                 token_usage=token_usage,
                 request_metrics=request_metrics,
                 request_id=get_request_id(),
+                api_key_id=api_key_id,
             )
         except Exception as e:
             log.error(f"Failed to record usage for {credential_name}: {e}")
+
+        if api_key_id:
+            try:
+                tokens = normalize_token_usage(token_usage)
+                virtual_key_manager.note_tokens(api_key_id, tokens["total_tokens"])
+            except Exception as e:
+                log.debug(f"Failed to feed TPM window for {api_key_id}: {e}")
+
+        _schedule_trace_export(
+            model_name=model_name or "",
+            provider=provider or mode,
+            token_usage=token_usage,
+            latency_ms=int(request_metrics.get("latency_ms") or 0),
+        )
 
         await credential_manager.record_api_call_result(
             credential_name, True, mode=mode, model_name=model_name
@@ -136,6 +207,7 @@ async def record_api_call_error(
                 success=False,
                 token_usage=None,
                 request_id=get_request_id(),
+                api_key_id=get_api_key_id(),
             )
         except Exception as e:
             log.error(f"Failed to record failed usage for {credential_name}: {e}")

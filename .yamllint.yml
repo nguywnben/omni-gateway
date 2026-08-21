@@ -1,5 +1,8 @@
 extends: default
 
+ignore: |
+  deploy/helm/**/templates/
+
 rules:
   document-start: disable
   line-length:

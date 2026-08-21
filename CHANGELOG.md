@@ -4,6 +4,25 @@ All notable user-facing changes are documented in this file. Omni Gateway follow
 
 ## [Unreleased]
 
+## [1.4.0] - 2026-08-21
+
+### Added
+
+- Added virtual API keys with per-key daily and monthly USD budgets, requests-per-minute and tokens-per-minute limits, expiry, and glob model allowlists, managed through the `/api/virtual-keys` panel API. Secrets are stored as SHA-256 hashes and shown exactly once at creation time.
+- Added a per-call USD cost ledger computed from a maintained model pricing table, with operator overrides through `model_pricing.json` in the credentials directory and cost aggregates in the dashboard usage API.
+- Added an optional pre-call guardrails pipeline that rejects prompt-injection attempts and blocked keywords with HTTP 400 and masks emails, card numbers, and API keys from outbound request text.
+- Added an optional exact-match response cache for deterministic (temperature 0) non-streaming requests with configurable TTL and capacity.
+- Added `weighted`, `least_latency`, and `lowest_cost` routing strategies alongside the existing `balanced` and `priority` policies, selectable from the settings page in all 15 console languages.
+- Added a Prometheus `GET /metrics` endpoint with per-provider request, token, cost, and latency counters plus cache statistics, protected by an optional `METRICS_TOKEN` bearer requirement.
+- Added optional Langfuse trace export that emits model, provider, token counts, and latency for successful calls without sending prompt or response bodies.
+- Added dashboard analytics: a provider health matrix, token distribution breakdown, hourly traffic timeline, and pagination for the usage tables.
+- Added a Helm chart at `deploy/helm/omni-gateway` with persistent storage, probes, secret management, optional Ingress, and an optional Prometheus ServiceMonitor.
+
+### Changed
+
+- Usage records now attribute every call to its originating API key and store the estimated call cost for budget enforcement and FinOps reporting.
+- Docker Compose now forwards routing strategy, response cache, guardrails, metrics, and Langfuse configuration from the environment.
+
 ## [1.3.2] - 2026-08-21
 
 ### Fixed
@@ -209,7 +228,8 @@ All notable user-facing changes are documented in this file. Omni Gateway follow
 - Provider credential pool, virtual model routing, context optimization, usage visibility, and the management console.
 - Docker Hub and GitHub Container Registry publishing.
 
-[Unreleased]: https://github.com/nguywnben/omni-gateway/compare/v1.3.2...HEAD
+[Unreleased]: https://github.com/nguywnben/omni-gateway/compare/v1.4.0...HEAD
+[1.4.0]: https://github.com/nguywnben/omni-gateway/compare/v1.3.2...v1.4.0
 [1.3.2]: https://github.com/nguywnben/omni-gateway/compare/v1.3.1...v1.3.2
 [1.3.1]: https://github.com/nguywnben/omni-gateway/compare/v1.3.0...v1.3.1
 [1.3.0]: https://github.com/nguywnben/omni-gateway/compare/v1.2.1...v1.3.0

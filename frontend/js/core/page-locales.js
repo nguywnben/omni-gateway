@@ -1128,3 +1128,171 @@ for (const [locale, values] of Object.entries(PROVIDER_AUTHORIZATION_COPY)) {
         Object.fromEntries(PROVIDER_AUTHORIZATION_KEYS.map((key, index) => [key, values[index]])),
     );
 }
+
+const DASHBOARD_METRICS_ENHANCEMENT_KEYS = [
+    'dashboard.health_matrix_title', 'dashboard.health_matrix_description',
+    'dashboard.status_healthy', 'dashboard.status_idle', 'dashboard.status_issues',
+    'dashboard.status_cooldown', 'dashboard.status_degraded',
+    'dashboard.token_distribution_title', 'dashboard.token_distribution_description',
+    'dashboard.input_tokens', 'dashboard.output_tokens', 'dashboard.cached_tokens', 'dashboard.reasoning_tokens',
+    'dashboard.timeline_traffic', 'dashboard.peak', 'now'
+];
+
+const DASHBOARD_METRICS_ENHANCEMENT_COPY = {
+    en: [
+        'Provider Health & Status Matrix', 'Real-time status, active credentials, and traffic health across all supported AI providers.',
+        'Operational', 'Idle / Ready', 'Issues / Cooldown',
+        'In Cooldown', 'Degraded (<60%)',
+        'Token Consumption & Traffic Distribution', 'Visual breakdown of input, output, cached, and reasoning tokens with estimated cost savings.',
+        'Input', 'Output', 'Cached', 'Reasoning',
+        'Hourly Traffic Volume', 'Peak', 'Now'
+    ],
+    'zh-CN': [
+        '提供商健康状态矩阵', '各 AI 提供商的实时状态、有效凭据与流量健康度。',
+        '正常运行', '就绪 / 空闲', '异常 / 冷却中',
+        '冷却中', '性能下降 (<60%)',
+        '令牌消耗与流量分布', '直观展示输入、输出、缓存及推理令牌以及预估成本节约。',
+        '输入', '输出', '缓存', '推理',
+        '每小时流量分布', '峰值', '现在'
+    ],
+    'zh-TW': [
+        '供應商健康狀態矩陣', '各 AI 供應商的即時狀態、有效憑證與流量健康度。',
+        '正常運作', '就緒 / 閒置', '異常 / 冷卻中',
+        '冷卻中', '效能下降 (<60%)',
+        '權杖消耗與流量分佈', '直觀展示輸入、輸出、快取及推理權杖與預估成本節省。',
+        '輸入', '輸出', '快取', '推理',
+        '每小時流量分佈', '峰值', '現在'
+    ],
+    de: [
+        'Provider-Zustandsmatrix', 'Echtzeit-Status, aktive Zugangsdaten und Datenverkehrszustand aller KI-Provider.',
+        'Betriebsbereit', 'Bereit / Leerlauf', 'Probleme / Wartezeit',
+        'In Wartezeit', 'Beeinträchtigt (<60%)',
+        'Token-Verbrauch & Verkehrsverteilung', 'Visuelle Aufschlüsselung von Eingabe-, Ausgabe-, Cache- und Reasoning-Token mit geschätzten Einsparungen.',
+        'Eingabe', 'Ausgabe', 'Zwischengespeichert', 'Reasoning',
+        'Stündliches Verkehrsaufkommen', 'Spitze', 'Jetzt'
+    ],
+    es: [
+        'Matriz de estado de proveedores', 'Estado en tiempo real, credenciales activas y salud del tráfico en todos los proveedores de IA.',
+        'Operativo', 'Inactivo / Listo', 'Problemas / Enfriamiento',
+        'En enfriamiento', 'Degradado (<60%)',
+        'Consumo de tokens y distribución de tráfico', 'Desglose visual de tokens de entrada, salida, caché y razonamiento con ahorro estimado.',
+        'Entrada', 'Salida', 'En caché', 'Razonamiento',
+        'Volumen de tráfico por hora', 'Pico', 'Ahora'
+    ],
+    fr: [
+        'Matrice d’état des fournisseurs', 'État en temps réel, identifiants actifs et flux de trafic sur tous les fournisseurs d’IA.',
+        'Opérationnel', 'Prêt / Inactif', 'Problèmes / Refroidissement',
+        'En refroidissement', 'Dégradé (<60%)',
+        'Consommation de tokens et distribution du trafic', 'Répartition visuelle des tokens d’entrée, de sortie, de cache et de raisonnement avec économies estimées.',
+        'Entrée', 'Sortie', 'En cache', 'Raisonnement',
+        'Volume de trafic horaire', 'Pic', 'Maintenant'
+    ],
+    id: [
+        'Matriks Kesehatan Penyedia', 'Status waktu nyata, kredensial aktif, dan kesehatan lalu lintas di semua penyedia AI.',
+        'Operasional', 'Siap / Menganggur', 'Masalah / Cooldown',
+        'Dalam Cooldown', 'Menurun (<60%)',
+        'Konsumsi Token & Distribusi Trafik', 'Rincian visual token input, output, cache, dan penalaran dengan estimasi penghematan biaya.',
+        'Input', 'Output', 'Cache', 'Penalaran',
+        'Volume Lalu Lintas Per Jam', 'Puncak', 'Sekarang'
+    ],
+    it: [
+        'Matrice di salute dei provider', 'Stato in tempo reale, credenziali attive e salute del traffico su tutti i provider IA.',
+        'Operativo', 'Pronto / Inattivo', 'Problemi / Cooldown',
+        'In cooldown', 'Degradato (<60%)',
+        'Consumo di token e distribuzione del traffico', 'Ripartizione visiva dei token di input, output, cache e ragionamento con risparmi stimati.',
+        'Input', 'Output', 'In cache', 'Ragionamento',
+        'Volume di traffico orario', 'Picco', 'Ora'
+    ],
+    ja: [
+        'プロバイダー状態マトリックス', '全 AI プロバイダーのリアルタイム状態、有効な認証情報、トラフィック健全性。',
+        '稼働中', '待機中 / 準備完了', '問題 / クールダウン',
+        'クールダウン中', '低下中 (<60%)',
+        'トークン消費とトラフィック分布', '入力、出力、キャッシュ、推論トークンの視覚的内訳と推定コスト削減額。',
+        '入力', '出力', 'キャッシュ', '推論',
+        '1時間あたりのトラフィック量', 'ピーク', '現在'
+    ],
+    ko: [
+        '공급자 상태 매트릭스', '모든 지원 AI 공급자의 실시간 상태, 활성 자격 증명 및 트래픽 상태.',
+        '정상 작동', '대기 중 / 준비됨', '문제 / 쿨다운',
+        '쿨다운 중', '저하됨 (<60%)',
+        '토큰 소비 및 트래픽 분포', '입력, 출력, 캐시 및 추론 토큰의 시각적 분석과 예상 비용 절감.',
+        '입력', '출력', '캐시됨', '추론',
+        '시간별 트래픽 볼륨', '최고치', '지금'
+    ],
+    pt: [
+        'Matriz de saúde dos provedores', 'Status em tempo real, credenciais ativas e integridade do tráfego em todos os provedores de IA.',
+        'Operacional', 'Pronto / Ocioso', 'Problemas / Cooldown',
+        'Em cooldown', 'Degradado (<60%)',
+        'Consumo de tokens e distribuição de tráfego', 'Detalhamento visual de tokens de entrada, saída, cache e raciocínio com economia estimada.',
+        'Entrada', 'Saída', 'Em cache', 'Raciocínio',
+        'Volume de tráfego por hora', 'Pico', 'Agora'
+    ],
+    ru: [
+        'Матрица состояния провайдеров', 'Статус в реальном времени, активные учётные данные и состояние трафика по всем провайдерам ИИ.',
+        'Работает', 'Готов / Ожидание', 'Проблемы / Охлаждение',
+        'Охлаждение', 'Деградация (<60%)',
+        'Потребление токенов и распределение трафика', 'Наглядная разбивка входных, выходных, кэшированных токенов и токенов рассуждений с оценкой экономии.',
+        'Вход', 'Выход', 'Кэш', 'Рассуждения',
+        'Почасовой объём трафика', 'Пик', 'Сейчас'
+    ],
+    th: [
+        'เมทริกซ์สถานะของผู้ให้บริการ', 'สถานะแบบเรียลไทม์ ข้อมูลรับรองที่ใช้งานอยู่ และความสมบูรณ์ของการรับส่งข้อมูลของผู้ให้บริการ AI ทั้งหมด',
+        'ทำงานปกติ', 'พร้อมใช้งาน / ว่าง', 'มีปัญหา / คูลดาวน์',
+        'กำลังคูลดาวน์', 'ประสิทธิภาพลดลง (<60%)',
+        'การใช้โทเค็นและการกระจายข้อมูล', 'การแจกแจงแบบเห็นภาพของโทเค็นอินพุต เอาต์พุต แคช และการใช้เหตุผล พร้อมการประหยัดต้นทุนโดยประมาณ',
+        'อินพุต', 'เอาต์พุต', 'แคชแล้ว', 'การใช้เหตุผล',
+        'ปริมาณทราฟฟิกรายชั่วโมง', 'สูงสุด', 'ตอนนี้'
+    ],
+    tr: [
+        'Sağlayıcı Sağlık ve Durum Matrisi', 'Tüm yapay zekâ sağlayıcılarında gerçek zamanlı durum, etkin kimlik bilgileri ve trafik sağlığı.',
+        'Çalışıyor', 'Hazır / Boşta', 'Sorunlar / Bekleme',
+        'Beklemede', 'Düşük (<%60)',
+        'Belirteç Tüketimi ve Trafik Dağılımı', 'Tahmini maliyet tasarrufu ile giriş, çıkış, önbellek ve akıl yürütme belirteçlerinin görsel dökümü.',
+        'Giriş', 'Çıkış', 'Önbelleğe Alınan', 'Akıl Yürütme',
+        'Saatlik Trafik Hacmi', 'Zirve', 'Şimdi'
+    ],
+    vi: [
+        'Ma trận trạng thái & sức khỏe nhà cung cấp', 'Trạng thái thời gian thực, thông tin xác thực hoạt động và sức khỏe lưu lượng của tất cả nhà cung cấp AI.',
+        'Hoạt động tốt', 'Sẵn sàng / Chờ', 'Gặp sự cố / Hồi nhiệt',
+        'Đang hồi nhiệt', 'Suy giảm (<60%)',
+        'Phân bổ lưu lượng & tiêu thụ Token', 'Trực quan hóa chi tiết token đầu vào, đầu ra, bộ nhớ đệm và suy luận (reasoning) cùng lượng tiết kiệm ước tính.',
+        'Đầu vào', 'Đầu ra', 'Bộ nhớ đệm', 'Suy luận',
+        'Lưu lượng yêu cầu theo giờ', 'Đỉnh điểm', 'Hiện tại'
+    ]
+};
+
+for (const [locale, values] of Object.entries(DASHBOARD_METRICS_ENHANCEMENT_COPY)) {
+    Object.assign(
+        PAGE_LOCALE_TRANSLATIONS[locale],
+        Object.fromEntries(DASHBOARD_METRICS_ENHANCEMENT_KEYS.map((key, index) => [key, values[index]])),
+    );
+}
+
+const ROUTING_STRATEGY_KEYS = [
+    'settings.weighted', 'settings.least_latency', 'settings.lowest_cost'
+];
+
+const ROUTING_STRATEGY_COPY = {
+    en: ['Weighted random', 'Least latency', 'Lowest cost'],
+    'zh-CN': ['加权随机', '最低延迟', '最低成本'],
+    'zh-TW': ['加權隨機', '最低延遲', '最低成本'],
+    de: ['Gewichteter Zufall', 'Geringste Latenz', 'Niedrigste Kosten'],
+    es: ['Aleatorio ponderado', 'Menor latencia', 'Menor costo'],
+    fr: ['Aléatoire pondéré', 'Latence minimale', 'Coût minimal'],
+    id: ['Acak berbobot', 'Latensi terendah', 'Biaya terendah'],
+    it: ['Casuale ponderato', 'Latenza minima', 'Costo minimo'],
+    ja: ['重み付きランダム', '最小レイテンシ', '最低コスト'],
+    ko: ['가중치 무작위', '최소 지연 시간', '최저 비용'],
+    pt: ['Aleatório ponderado', 'Menor latência', 'Menor custo'],
+    ru: ['Взвешенный случайный', 'Минимальная задержка', 'Минимальная стоимость'],
+    th: ['สุ่มตามน้ำหนัก', 'ค่าหน่วงต่ำสุด', 'ต้นทุนต่ำสุด'],
+    tr: ['Ağırlıklı rastgele', 'En düşük gecikme', 'En düşük maliyet'],
+    vi: ['Ngẫu nhiên theo trọng số', 'Độ trễ thấp nhất', 'Chi phí thấp nhất']
+};
+
+for (const [locale, values] of Object.entries(ROUTING_STRATEGY_COPY)) {
+    Object.assign(
+        PAGE_LOCALE_TRANSLATIONS[locale],
+        Object.fromEntries(ROUTING_STRATEGY_KEYS.map((key, index) => [key, values[index]])),
+    );
+}

@@ -402,6 +402,84 @@ async def get_token_compression_config() -> dict[str, Any]:
     }
 
 
+async def get_response_cache_config() -> dict[str, Any]:
+    """Return settings for the exact-match response cache."""
+    enabled = _coerce_bool(
+        await get_config_value("response_cache_enabled", False, "RESPONSE_CACHE_ENABLED"),
+        False,
+    )
+    ttl_seconds = _coerce_bounded_int(
+        await get_config_value("response_cache_ttl_seconds", 300, "RESPONSE_CACHE_TTL_SECONDS"),
+        300,
+        1,
+        86_400,
+    )
+    max_entries = _coerce_bounded_int(
+        await get_config_value("response_cache_max_entries", 1_000, "RESPONSE_CACHE_MAX_ENTRIES"),
+        1_000,
+        1,
+        100_000,
+    )
+    return {"enabled": enabled, "ttl_seconds": ttl_seconds, "max_entries": max_entries}
+
+
+async def get_guardrails_config() -> dict[str, Any]:
+    """Return settings for the pre-call guardrails pipeline."""
+    enabled = _coerce_bool(
+        await get_config_value("guardrails_enabled", False, "GUARDRAILS_ENABLED"),
+        False,
+    )
+    pii_masking = _coerce_bool(
+        await get_config_value(
+            "guardrails_pii_masking_enabled", True, "GUARDRAILS_PII_MASKING_ENABLED"
+        ),
+        True,
+    )
+    injection_detection = _coerce_bool(
+        await get_config_value(
+            "guardrails_injection_detection_enabled",
+            True,
+            "GUARDRAILS_INJECTION_DETECTION_ENABLED",
+        ),
+        True,
+    )
+    raw_keywords = await get_config_value(
+        "guardrails_blocked_keywords", "", "GUARDRAILS_BLOCKED_KEYWORDS"
+    )
+    if isinstance(raw_keywords, str):
+        blocked_keywords = [word.strip() for word in raw_keywords.split(",") if word.strip()]
+    elif isinstance(raw_keywords, list):
+        blocked_keywords = [str(word).strip() for word in raw_keywords if str(word).strip()]
+    else:
+        blocked_keywords = []
+    return {
+        "enabled": enabled,
+        "pii_masking_enabled": pii_masking,
+        "injection_detection_enabled": injection_detection,
+        "blocked_keywords": blocked_keywords,
+    }
+
+
+async def get_telemetry_config() -> dict[str, Any]:
+    """Return Langfuse trace-export settings (disabled unless keys are set)."""
+    public_key = str(
+        await get_config_value("langfuse_public_key", "", "LANGFUSE_PUBLIC_KEY") or ""
+    ).strip()
+    secret_key = str(
+        await get_config_value("langfuse_secret_key", "", "LANGFUSE_SECRET_KEY") or ""
+    ).strip()
+    host = str(
+        await get_config_value("langfuse_host", "https://cloud.langfuse.com", "LANGFUSE_HOST")
+        or "https://cloud.langfuse.com"
+    ).strip()
+    return {
+        "enabled": bool(public_key and secret_key),
+        "langfuse_public_key": public_key,
+        "langfuse_secret_key": secret_key,
+        "langfuse_host": host,
+    }
+
+
 async def get_routing_policy() -> dict[str, str]:
     """Return the cross-provider credential selection policy."""
     strategy = (
@@ -411,7 +489,7 @@ async def get_routing_policy() -> dict[str, str]:
         .strip()
         .lower()
     )
-    if strategy not in {"balanced", "priority"}:
+    if strategy not in {"balanced", "priority", "weighted", "least_latency", "lowest_cost"}:
         strategy = "balanced"
 
     preferred_provider = (

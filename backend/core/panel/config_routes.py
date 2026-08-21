@@ -290,10 +290,19 @@ async def save_config(request: ConfigSaveRequest, token: str = Depends(verify_pa
                 )
 
         if "routing_strategy" in new_config:
-            if new_config["routing_strategy"] not in {"balanced", "priority"}:
+            if new_config["routing_strategy"] not in {
+                "balanced",
+                "priority",
+                "weighted",
+                "least_latency",
+                "lowest_cost",
+            }:
                 raise HTTPException(
                     status_code=400,
-                    detail="Routing strategy must be balanced or priority.",
+                    detail=(
+                        "Routing strategy must be balanced, priority, weighted, "
+                        "least_latency, or lowest_cost."
+                    ),
                 )
         if "preferred_provider" in new_config:
             preferred_provider = new_config["preferred_provider"]

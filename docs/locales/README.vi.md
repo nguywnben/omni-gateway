@@ -45,7 +45,7 @@
 
 Một router AI vạn năng dành cho các công cụ lập trình (coding tools). Omni Gateway cung cấp khả năng tự động chuyển đổi dự phòng thông minh (smart auto-fallback), dọn dẹp ngữ cảnh nhận biết token, minh bạch hóa mức độ sử dụng và chuyển đổi định dạng liền mạch để các agent cục bộ, trợ lý IDE và script tự động hóa có thể tận dụng dung lượng LLM miễn phí lẫn trả phí thông qua một giao diện API ổn định duy nhất.
 
-> **Trạng thái dự án:** Ổn định. Phiên bản `1.3.1` hoàn thiện console bản địa hóa trên 15 ngôn ngữ, bổ sung thông báo API quản lý nhận biết ngôn ngữ và hướng dẫn cập nhật nhận biết bản phát hành, đồng thời bảo toàn các endpoint SDK ổn định, các route quản lý chuẩn tắc, tên cấu hình và runtime đơn tiến trình được thiết lập từ `1.0.0`.
+> **Trạng thái dự án:** Ổn định. Phiên bản `1.4.0` bổ sung quản trị doanh nghiệp và FinOps: khóa API ảo kèm ngân sách và giới hạn tần suất, sổ cái chi phí USD mỗi lượt gọi từ bảng giá mô hình, guardrails và bộ nhớ đệm phản hồi tùy chọn, 3 chiến lược định tuyến mới, endpoint Prometheus `/metrics`, xuất trace sang Langfuse và Helm chart — trong khi vẫn duy trì ổn định các tuyến SDK, tuyến quản trị chuẩn hóa, tên cấu hình và giao ước chạy đơn phiên bản đã thiết lập từ `1.0.0`.
 
 ## Tại sao nên chọn Omni Gateway
 
@@ -53,14 +53,9 @@ Quy trình lập trình hiện đại thường kết hợp nhiều client và p
 
 ## <a id="tinh-nang-cot-loi"></a>Tính năng cốt lõi
 
-- **Tự động chuyển đổi dự phòng thông minh (Smart auto-fallback):** Đặt trước thông tin xác thực cho từng request, phân phối lưu lượng đồng thời, ghi nhận từng lần thử để xoay vòng công bằng và tự động né tránh các lỗi gần nhất, thời gian chờ (cooldown), giới hạn tần suất (rate limits) và tài khoản cạn hạn mức.
-- **Dọn dẹp nhận biết token (Token-aware cleanup):** Chuẩn hóa payload và chỉ cắt tỉa phần đầu hội thoại quá dài tại các ranh giới lượt trò chuyện an toàn, bảo toàn nguyên vẹn hướng dẫn hệ thống (system instructions), định nghĩa tool và ngữ cảnh gần nhất.
-- **Chuyển đổi định dạng:** Tiếp nhận OpenAI Chat Completions và Responses, request Gemini native và Anthropic Messages, sau đó dịch mượt mà giữa các định dạng cả ở chế độ thông thường lẫn streaming.
-- **Điều phối thông tin xác thực (Credential orchestration):** Quản lý tài khoản OAuth và API key của nhà cung cấp kèm trạng thái sức khỏe, theo dõi cooldown, kiểm tra hợp lệ, chống trùng lặp và chuyển đổi dự phòng thông minh theo từng provider.
-- **Định tuyến mô hình theo cấp độ xác thực:** Duy trì danh mục năng lực riêng cho từng credential, ngăn tình trạng quyền hạn của một tài khoản gửi nhầm request sang tài khoản khác không hỗ trợ mô hình đã chọn.
-- **Bộ nhớ sức khỏe định tuyến (Route health memory):** Ghi nhận các phản hồi không tìm thấy mô hình (model-not-found) ở phạm vi credential và hiển thị các route bị ảnh hưởng để phục hồi từ trang Models.
-- **Khả năng phục hồi streaming:** Hỗ trợ SSE streaming, pseudo-streaming cho các client yêu cầu dữ liệu stream bắt buộc, và cơ chế thử lại chống bị ngắt quãng giữa chừng (anti-truncation) cho các lượt sinh văn bản dài.
-- **Bảng điều khiển (Control panel):** Đi kèm bảng điều khiển web để quản lý thông tin xác thực, xem nhật ký log, cấu hình hệ thống, theo dõi mức độ sử dụng và thông tin phiên bản.
+Omni Gateway records request volume, success rate, credential attribution, provider-reported token usage, estimated context-compression savings, and an estimated USD cost per call computed from a maintained model pricing table. Override or extend prices by placing a `model_pricing.json` file in the credentials directory; prices are USD per one million tokens. Aggregates are available on the dashboard, per virtual key through the `/api/virtual-keys` management API, and for monitoring systems through the Prometheus `/metrics` endpoint. Compression savings and costs are labeled as estimates because provider tokenizers and billing rules remain authoritative.
+
+Virtual API keys let one gateway serve multiple clients under separate limits. Each key carries optional daily and monthly USD budgets enforced from the cost ledger, requests-per-minute and tokens-per-minute sliding windows, an expiry timestamp, and a model allowlist with glob patterns. Keys are stored as SHA-256 hashes; the plaintext secret is shown exactly once at creation time.
 
 ## Giao diện Console
 
@@ -133,10 +128,10 @@ sudo docker run -d \
   -p 4283:4283 \
   -v /opt/omni-gateway/creds:/app/backend/data/creds \
   -v /opt/omni-gateway/logs:/app/backend/data/logs \
-  nguywnben/omni-gateway:1.3.1
+  nguywnben/omni-gateway:1.4.0
 ```
 
-Bản phát hành tương tự cũng được xuất bản lên GitHub Packages với định danh `ghcr.io/nguywnben/omni-gateway:1.3.1`. Thẻ `latest` đại diện cho bản phát hành ổn định mới nhất; thẻ `edge` đại diện cho các bản dựng đã xác minh nhưng chưa phát hành từ nhánh `main`. Hãy ghim thẻ phiên bản hoặc digest cụ thể khi cần đảm bảo tính tái lập trong triển khai.
+Bản phát hành tương tự cũng được xuất bản lên GitHub Packages với định danh `ghcr.io/nguywnben/omni-gateway:1.4.0`. Thẻ `latest` đại diện cho bản phát hành ổn định mới nhất; thẻ `edge` đại diện cho các bản dựng đã xác minh nhưng chưa phát hành từ nhánh `main`. Hãy ghim thẻ phiên bản hoặc digest cụ thể khi cần đảm bảo tính tái lập trong triển khai.
 
 Mở bảng điều khiển tại địa chỉ:
 
@@ -148,7 +143,7 @@ Trong lần chạy đầu tiên, hãy tạo mật khẩu bảng điều khiển 
 
 Mật khẩu quản lý bởi ứng dụng được lưu trữ dưới dạng băm scrypt có thêm muối (salted hash), phiên bảng điều khiển sử dụng cookie HttpOnly và các request SDK công khai xác thực thông qua API key định dạng `sk-ogw-` được tạo tự động. Đối với triển khai không tương tác, hãy cấu hình sẵn `PANEL_PASSWORD` để bỏ qua hoàn toàn màn hình thiết lập.
 
-Container `1.3.1` được phát hành cho kiến trúc `linux/amd64`. Việc xuất bản phiên bản ARM64 tạm thời hoãn lại cho đến khi mọi phụ thuộc của nhà cung cấp, bao gồm stack giao vận Vertex, được xây dựng và kiểm thử hoàn chỉnh với cùng tiêu chuẩn.
+Container `1.4.0` được phát hành cho kiến trúc `linux/amd64`. Việc xuất bản phiên bản ARM64 tạm thời hoãn lại cho đến khi mọi phụ thuộc của nhà cung cấp, bao gồm stack giao vận Vertex, được xây dựng và kiểm thử hoàn chỉnh với cùng tiêu chuẩn.
 
 Nếu tường lửa của máy chủ đang bật, hãy mở cổng của gateway:
 
@@ -183,9 +178,20 @@ sudo mkdir -p /opt/omni-gateway/creds /opt/omni-gateway/logs
 docker compose -f deploy/docker-compose.yml up -d
 ```
 
-File compose đi kèm sẽ kéo image `nguywnben/omni-gateway:latest` và sử dụng `/opt/omni-gateway` theo mặc định cho dữ liệu máy chủ bền vững. Đặt `IMAGE=nguywnben/omni-gateway:1.3.1` để ghim bản phát hành này, và đặt `DATA_DIR=/duong/dan/tuy/chinh` khi máy chủ sử dụng vị trí lưu trữ khác.
+File compose đi kèm sẽ kéo image `nguywnben/omni-gateway:latest` và sử dụng `/opt/omni-gateway` theo mặc định cho dữ liệu máy chủ bền vững. Đặt `IMAGE=nguywnben/omni-gateway:1.4.0` để ghim bản phát hành này, và đặt `DATA_DIR=/duong/dan/tuy/chinh` khi máy chủ sử dụng vị trí lưu trữ khác.
 
 Compose sẽ chuyển tiếp `API_KEY`, `PANEL_PASSWORD`, `SETUP_TOKEN`, URI lưu trữ bên ngoài và `PROXY` từ shell hoặc file `.env` ở thư mục gốc. Để trống các biến này nếu muốn giữ cơ chế tự tạo key tự động, thiết lập trong lần chạy đầu, lưu trữ SQLite cục bộ và kết nối mạng ra trực tiếp.
+
+### Kubernetes (Helm)
+
+Helm chart được cung cấp tại `deploy/helm/omni-gateway` kèm ổ lưu trữ bền vững cho thông tin xác thực và sổ cái sử dụng, probe liveness/readiness, Ingress tùy chọn và ServiceMonitor Prometheus nối tới `/metrics`:
+
+```bash
+helm install omni-gateway deploy/helm/omni-gateway \
+  --set secrets.panelPassword=change-me
+```
+
+Chart triển khai chính xác 1 bản sao (replica) với chiến lược `Recreate` vì bản 1.x lưu trạng thái định tuyến và giới hạn tần suất trong bộ nhớ tiến trình. Không mở rộng (scale) Deployment theo chiều ngang.
 
 ### Phát triển cục bộ
 
@@ -250,9 +256,16 @@ Omni Gateway đọc cấu hình ưu tiên từ các biến môi trường trư�
 | `RETRY_429_INTERVAL` | `1` | Độ trễ cơ sở giữa các lần thử lại tạm thời tính bằng giây. |
 | `AUTO_DISABLE` | `false` | Vô hiệu hóa thông tin xác thực sau khi gặp các lỗi nghiêm trọng đã được cấu hình. |
 | `AUTO_DISABLE_ERROR_CODES` | `403` | Danh sách mã trạng thái lỗi nghiêm trọng phân tách bằng dấu phẩy. |
-| `ROUTING_STRATEGY` | `balanced` | Chính sách chọn thông tin xác thực: `balanced` (cân bằng) hoặc `priority` (ưu tiên). |
+| `ROUTING_STRATEGY` | `balanced` | Credential selection policy: `balanced`, `priority`, `weighted`, `least_latency`, or `lowest_cost`. |
 | `PREFERRED_PROVIDER` | trống | Nhà cung cấp được ưu tiên theo chiến lược `priority`, ví dụ `google_antigravity` hoặc `google_ai_studio`. |
 | `UPSTREAM_TIMEOUT_SECONDS` | `300` | Thời gian chờ phản hồi suy luận từ provider, giới hạn từ 5 đến 900 giây. |
+| `RESPONSE_CACHE_ENABLED` | `false` | Lưu đệm trong bộ nhớ các phản hồi non-streaming tất định (temperature 0). |
+| `RESPONSE_CACHE_TTL_SECONDS` | `300` | Thời gian sống của mỗi mục trong bộ nhớ đệm phản hồi tính bằng giây. |
+| `RESPONSE_CACHE_MAX_ENTRIES` | `1000` | Số lượng phản hồi tối đa được giữ trong bộ nhớ đệm trong bộ nhớ. |
+| `GUARDRAILS_ENABLED` | `false` | Bật pipeline guardrails trước khi gọi. |
+| `GUARDRAILS_PII_MASKING_ENABLED` | `true` | Che giấu email, số thẻ và API key trong văn bản request gửi đi. |
+| `GUARDRAILS_INJECTION_DETECTION_ENABLED` | `true` | Từ chối các nỗ lực prompt-injection với HTTP 400. |
+| `GUARDRAILS_BLOCKED_KEYWORDS` | trống | Danh sách từ khóa không phân biệt hoa thường, phân tách bằng dấu phẩy, sẽ chặn request. |
 | `ANTI_TRUNCATION_MAX_ATTEMPTS` | `3` | Số lần thử tiếp tục tối đa cho tính năng streaming chống ngắt quãng (anti-truncation). |
 | `TOKEN_COMPRESSION_ENABLED` | `true` | Nén lịch sử hội thoại quá lớn trước khi định tuyến đến provider. |
 | `TOKEN_COMPRESSION_THRESHOLD` | `32000` | Ngưỡng ước tính token đầu vào để kích hoạt cơ chế nén. |
@@ -286,6 +299,10 @@ Omni Gateway đọc cấu hình ưu tiên từ các biến môi trường trư�
 | `CLAUDE_USER_AGENT` | `claude-cli/omni-gateway` | Ghi đè tùy chọn cho User-Agent đối với các request Claude Code và Claude Platform. |
 | `ANTIGRAVITY_USER_AGENT` | `antigravity/cli/1.0.1 windows/amd64` | Ghi đè tùy chọn cho User-Agent giao thức Google Antigravity. |
 | `ANTIGRAVITY_PAYLOAD_USER_AGENT` | `antigravity` | Ghi đè tùy chọn cho trường userAgent ở cấp payload của Google Antigravity. |
+| `METRICS_TOKEN` | trống | Bearer token tùy chọn bắt buộc để thu thập (scrape) `GET /metrics`. |
+| `LANGFUSE_PUBLIC_KEY` | trống | Bật xuất trace Langfuse cùng với secret key. |
+| `LANGFUSE_SECRET_KEY` | trống | Secret key của Langfuse dùng cho xuất trace. |
+| `LANGFUSE_HOST` | `https://cloud.langfuse.com` | Endpoint tiếp nhận dữ liệu của Langfuse. |
 | `LOG_LEVEL` | `info` | Mức độ chi tiết của nhật ký (log level). |
 | `LOG_MAX_MB` | `10` | Dung lượng tối đa của file log đang hoạt động trước khi xoay vòng (rotation). |
 | `LOG_BACKUP_COUNT` | `3` | Số lượng file log xoay vòng được giữ lại. |
@@ -408,7 +425,10 @@ Các adapter nhà cung cấp sẽ chuẩn hóa các tên tính năng này trư�
 
 ## Mức độ sử dụng và Minh bạch chi phí
 
-Omni Gateway ghi lại lưu lượng request, tỷ lệ thành công, quy gán theo thông tin xác thực, lượng token sử dụng do nhà cung cấp báo cáo và ước tính lượng token được cắt giảm nhờ nén ngữ cảnh cho từng khoảng thời gian trên bảng điều khiển. Lượng tiết kiệm từ việc nén được dán nhãn là ước tính vì bộ tách từ (tokenizer) và quy tắc tính phí của nhà cung cấp luôn giữ vai trò chuẩn mực tối hậu. Việc định tuyến dựa trên giá của nhà cung cấp được chủ động để dành thành một lớp chính sách tương lai để API cốt lõi luôn ổn định khi bổ sung thêm nhiều nhà cung cấp.
+Omni Gateway ghi lại khối lượng yêu cầu, tỷ lệ thành công, phân bổ theo thông tin xác thực, số token do nhà cung cấp báo cáo, lượng token ước tính tiết kiệm được qua nén ngữ cảnh và chi phí USD ước tính mỗi lượt gọi từ bảng giá mô hình. Có thể ghi đè hoặc bổ sung giá bằng cách đặt tệp `model_pricing.json` trong thư mục thông tin xác thực; giá tính theo USD trên một triệu token. Dữ liệu tổng hợp có sẵn trên dashboard, theo từng khóa ảo qua API quản trị `/api/virtual-keys` và cho các hệ thống giám sát qua endpoint Prometheus `/metrics`. Lượng tiết kiệm từ nén và chi phí được gắn nhãn là ước tính vì bộ phân tích cú pháp token và quy tắc thanh toán của nhà cung cấp mới là căn cứ chính xác cuối cùng.
+
+Khóa API ảo (Virtual API Keys) cho phép một gateway phục vụ nhiều client dưới các giới hạn riêng biệt. Mỗi khóa mang ngân sách USD tùy chọn theo ngày và tháng được thực thi từ sổ cái chi phí, cửa sổ trượt giới hạn số yêu cầu mỗi phút (RPM) và số token mỗi phút (TPM), mốc thời gian hết hạn và danh sách mô hình cho phép theo mẫu glob. Các khóa được lưu dưới dạng hàm băm SHA-256; chuỗi bí mật dạng văn bản thuần chỉ hiển thị đúng một lần khi tạo.
+
 
 ## Quy trình làm việc với thông tin xác thực
 
@@ -521,6 +541,7 @@ Nền tảng tiêu chuẩn cho môi trường sản xuất là Python 3.12, và 
 - Cấu hình reverse proxy để bảo toàn `Host` và truyền `X-Forwarded-Proto`; đặt `PANEL_COOKIE_SECURE=true` khi đã đảm bảo đầu cuối HTTPS.
 - Chỉ đặt `TRUST_PROXY_HEADERS=true` khi dịch vụ chỉ có thể truy cập duy nhất qua một proxy đáng tin cậy có ghi đè `X-Forwarded-For` và `X-Forwarded-Proto`.
 - Sử dụng `GET /health` cho kiểm tra tiến trình còn sống (liveness) và `GET /ready` cho kiểm tra sẵn sàng kèm lưu trữ (readiness).
+- Sử dụng `GET /metrics` cho việc thu thập số liệu Prometheus; đặt `METRICS_TOKEN` để bắt buộc xác thực bearer khi ở bên ngoài các mạng đáng tin cậy.
 - Docker image chỉ chạy với quyền root trong khoảng thời gian đủ ngắn để sửa chữa quyền sở hữu thư mục dữ liệu được gắn kết, sau đó chạy dịch vụ dưới người dùng không có đặc quyền `gateway`.
 - Đặt `CORS_ORIGINS` thành các origin đáng tin cậy rõ ràng khi các client trên trình duyệt cần quyền truy cập cross-origin.
 - Luôn sao lưu `/opt/omni-gateway` hoặc thư mục `DATA_DIR` đã chọn trước khi nâng cấp hoặc chuyển máy chủ.

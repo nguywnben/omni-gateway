@@ -45,7 +45,7 @@
 
 Un router IA universale per strumenti di programmazione. Omni Gateway offre failover automatico intelligente (smart auto-fallback), pulizia del contesto sensibile ai token, visibilità sull'utilizzo e conversione fluida dei formati, consentendo ad agenti locali, assistenti IDE e script di automazione di sfruttare la capacità di LLM gratuiti e a pagamento tramite un'unica interfaccia API stabile.
 
-> **Stato del progetto:** Stabile. La versione `1.3.1` completa la console localizzata in 15 lingue, aggiunge messaggi API di gestione sensibili alla lingua e indicazioni di aggiornamento basate sulle release, preservando gli endpoint SDK stabili, i percorsi di gestione canonici, i nomi di configurazione e il runtime a istanza singola stabiliti dalla `1.0.0`.
+> **Project status:** Stable. Version `1.4.0` adds enterprise governance and FinOps: virtual API keys with budgets and rate limits, a per-call USD cost ledger backed by a maintained pricing table, optional guardrails and response caching, three new routing strategies, a Prometheus metrics endpoint, Langfuse trace export, and a Helm chart — while preserving the stable SDK routes, canonical management routes, configuration names, and single-instance runtime contract established in `1.0.0`.
 
 ## Perché scegliere Omni Gateway
 
@@ -133,10 +133,10 @@ sudo docker run -d \
   -p 4283:4283 \
   -v /opt/omni-gateway/creds:/app/backend/data/creds \
   -v /opt/omni-gateway/logs:/app/backend/data/logs \
-  nguywnben/omni-gateway:1.3.1
+  nguywnben/omni-gateway:1.4.0
 ```
 
-La stessa release è pubblicata su GitHub Packages come `ghcr.io/nguywnben/omni-gateway:1.3.1`. Il tag `latest` segue la versione stabile più recente; `edge` segue le build verificate ma non rilasciate dal ramo `main`. Fissare un tag di versione specifico o il digest quando è richiesta la riproducibilità.
+La stessa release è pubblicata su GitHub Packages come `ghcr.io/nguywnben/omni-gateway:1.4.0`. Il tag `latest` segue la versione stabile più recente; `edge` segue le build verificate ma non rilasciate dal ramo `main`. Fissare un tag di versione specifico o il digest quando è richiesta la riproducibilità.
 
 Aprire il pannello di controllo all'indirizzo:
 
@@ -148,7 +148,7 @@ Al primo avvio, creare la password della console nella schermata di configurazio
 
 Le password gestite dall'applicazione sono memorizzate come hash scrypt con salt, le sessioni della console usano cookie HttpOnly e le richieste SDK pubbliche si autenticano tramite chiavi API `sk-ogw-` generate automaticamente. Per distribuzioni non interattive, preconfigurare `PANEL_PASSWORD` per ignorare la schermata iniziale.
 
-Il container `1.3.1` è rilasciato per architettura `linux/amd64`. La pubblicazione ARM64 è temporaneamente sospesa fino a quando tutte le dipendenze dei provider, incluso lo stack di trasporto Vertex, non saranno compilate e testate con gli stessi standard.
+Il container `1.4.0` è rilasciato per architettura `linux/amd64`. La pubblicazione ARM64 è temporaneamente sospesa fino a quando tutte le dipendenze dei provider, incluso lo stack di trasporto Vertex, non saranno compilate e testate con gli stessi standard.
 
 Se il firewall del server è attivo, consentire la porta del gateway:
 
@@ -183,9 +183,21 @@ sudo mkdir -p /opt/omni-gateway/creds /opt/omni-gateway/logs
 docker compose -f deploy/docker-compose.yml up -d
 ```
 
-Il file compose incluso scarica `nguywnben/omni-gateway:latest` e utilizza `/opt/omni-gateway` come predefinito per i dati persistenti. Impostare `IMAGE=nguywnben/omni-gateway:1.3.1` per bloccare la versione, e `DATA_DIR=/percorso/personalizzato` se il server usa una cartella differente.
+Il file compose incluso scarica `nguywnben/omni-gateway:latest` e utilizza `/opt/omni-gateway` come predefinito per i dati persistenti. Impostare `IMAGE=nguywnben/omni-gateway:1.4.0` per bloccare la versione, e `DATA_DIR=/percorso/personalizzato` se il server usa una cartella differente.
 
 Compose inoltra `API_KEY`, `PANEL_PASSWORD`, `SETUP_TOKEN`, URI di storage esterno e `PROXY` dalla shell o dal file `.env` principale. Lasciarli vuoti per mantenere generazione automatica delle chiavi, configurazione al primo avvio, storage SQLite locale e connettività diretta in uscita.
+
+
+### Kubernetes (Helm)
+
+A Helm chart is provided at `deploy/helm/omni-gateway` with a persistent volume for credentials and the usage ledger, liveness/readiness probes, optional Ingress, and an optional Prometheus ServiceMonitor wired to `/metrics`:
+
+```bash
+helm install omni-gateway deploy/helm/omni-gateway \
+  --set secrets.panelPassword=change-me
+```
+
+The chart deploys exactly one replica with a `Recreate` strategy because the 1.x runtime holds routing and rate-limit state in process memory. Do not scale the Deployment horizontally.
 
 ### Sviluppo locale
 
@@ -250,9 +262,16 @@ Omni Gateway assegna priorità alle variabili d'ambiente, seguite dalla configur
 | `RETRY_429_INTERVAL` | `1` | Ritardo base tra i tentativi temporanei in secondi. |
 | `AUTO_DISABLE` | `false` | Disabilita automaticamente le credenziali dopo errori gravi configurati. |
 | `AUTO_DISABLE_ERROR_CODES` | `403` | Elenco separato da virgole dei codici di stato di errore grave. |
-| `ROUTING_STRATEGY` | `balanced` | Criterio di selezione credenziali: `balanced` (bilanciato) o `priority` (priorità). |
+| `ROUTING_STRATEGY` | `balanced` | Credential selection policy: `balanced`, `priority`, `weighted`, `least_latency`, or `lowest_cost`. |
 | `PREFERRED_PROVIDER` | vuoto | Provider preferito per la strategia `priority`, ad esempio `google_antigravity` o `google_ai_studio`. |
 | `UPSTREAM_TIMEOUT_SECONDS` | `300` | Timeout per la risposta di inferenza del provider (da 5 a 900 secondi). |
+| `RESPONSE_CACHE_ENABLED` | `false` | Cache deterministic (temperature 0) non-streaming responses in memory. |
+| `RESPONSE_CACHE_TTL_SECONDS` | `300` | Response cache entry lifetime in seconds. |
+| `RESPONSE_CACHE_MAX_ENTRIES` | `1000` | Maximum responses held by the in-memory cache. |
+| `GUARDRAILS_ENABLED` | `false` | Enable the pre-call guardrails pipeline. |
+| `GUARDRAILS_PII_MASKING_ENABLED` | `true` | Mask emails, card numbers, and API keys in outbound request text. |
+| `GUARDRAILS_INJECTION_DETECTION_ENABLED` | `true` | Reject prompt-injection attempts with HTTP 400. |
+| `GUARDRAILS_BLOCKED_KEYWORDS` | empty | Comma-separated case-insensitive keywords that block a request. |
 | `ANTI_TRUNCATION_MAX_ATTEMPTS` | `3` | Tentativi massimi di continuazione per la funzione di streaming anti-troncamento. |
 | `TOKEN_COMPRESSION_ENABLED` | `true` | Comprime la cronologia di conversazioni troppo ampie prima dell'inoltro al provider. |
 | `TOKEN_COMPRESSION_THRESHOLD` | `32000` | Soglia stimata di token in input per attivare la compressione del contesto. |
@@ -286,6 +305,10 @@ Omni Gateway assegna priorità alle variabili d'ambiente, seguite dalla configur
 | `CLAUDE_USER_AGENT` | `claude-cli/omni-gateway` | Override opzionale per l'User-Agent per richieste Claude Code e Claude Platform. |
 | `ANTIGRAVITY_USER_AGENT` | `antigravity/cli/1.0.1 windows/amd64` | Override opzionale per l'User-Agent a livello di protocollo Google Antigravity. |
 | `ANTIGRAVITY_PAYLOAD_USER_AGENT` | `antigravity` | Override opzionale per il campo userAgent a livello di payload Google Antigravity. |
+| `METRICS_TOKEN` | empty | Optional bearer token required to scrape `GET /metrics`. |
+| `LANGFUSE_PUBLIC_KEY` | empty | Enables Langfuse trace export together with the secret key. |
+| `LANGFUSE_SECRET_KEY` | empty | Langfuse secret key for trace export. |
+| `LANGFUSE_HOST` | `https://cloud.langfuse.com` | Langfuse ingestion endpoint. |
 | `LOG_LEVEL` | `info` | Livello di dettaglio dei log (log level). |
 | `LOG_MAX_MB` | `10` | Dimensione massima in MB del file di log attivo prima della rotazione. |
 | `LOG_BACKUP_COUNT` | `3` | Numero di file di log archiviati dopo la rotazione da conservare. |
@@ -408,7 +431,9 @@ Gli adapter dei provider normalizzano tali identificatori di funzionalità prima
 
 ## Trasparenza su utilizzo e costi
 
-Omni Gateway registra volume di richieste, tassi di successo, attribuzione per singola credenziale, consumo di token comunicato dai provider e risparmio stimato di token ottenuto grazie alla compressione del contesto per ciascun intervallo temporale nella console. I risparmi da compressione sono etichettati come stimati poiché i tokenizer e le regole di tariffazione dei provider costituiscono il riferimento finale vincolante. Il routing dinamico basato sui prezzi dei provider è deliberatamente riservato a un futuro livello di policy per mantenere stabile l'API centrale man mano che vengono aggiunti nuovi provider.
+Omni Gateway records request volume, success rate, credential attribution, provider-reported token usage, estimated context-compression savings, and an estimated USD cost per call computed from a maintained model pricing table. Override or extend prices by placing a `model_pricing.json` file in the credentials directory; prices are USD per one million tokens. Aggregates are available on the dashboard, per virtual key through the `/api/virtual-keys` management API, and for monitoring systems through the Prometheus `/metrics` endpoint. Compression savings and costs are labeled as estimates because provider tokenizers and billing rules remain authoritative.
+
+Virtual API keys let one gateway serve multiple clients under separate limits. Each key carries optional daily and monthly USD budgets enforced from the cost ledger, requests-per-minute and tokens-per-minute sliding windows, an expiry timestamp, and a model allowlist with glob patterns. Keys are stored as SHA-256 hashes; the plaintext secret is shown exactly once at creation time.
 
 ## Flusso di lavoro per le credenziali
 

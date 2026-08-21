@@ -9,6 +9,7 @@ from typing import Iterator
 
 _request_id: ContextVar[str] = ContextVar("request_id", default="")
 _request_started_at: ContextVar[float] = ContextVar("request_started_at", default=0.0)
+_api_key_id: ContextVar[str] = ContextVar("api_key_id", default="")
 
 
 @contextmanager
@@ -32,3 +33,12 @@ def get_request_elapsed_ms() -> int:
     if not started_at:
         return 0
     return max(0, round((time.perf_counter() - started_at) * 1000))
+
+
+def set_api_key_id(api_key_id: str) -> None:
+    """Attribute the current request to a virtual API key for the ledger."""
+    _api_key_id.set(str(api_key_id or ""))
+
+
+def get_api_key_id() -> str:
+    return _api_key_id.get()

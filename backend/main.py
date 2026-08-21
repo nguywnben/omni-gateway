@@ -19,6 +19,7 @@ from core.health import router as health_router
 from core.httpx_client import http_client
 from core.i18n import LocalizedJSONResponse, locale_context, resolve_locale
 from core.keep_alive import keep_alive_service
+from core.metrics import router as metrics_router
 from core.panel import router as panel_router
 from core.panel.setup_security import get_setup_bootstrap_token
 from core.request_context import request_scope
@@ -293,6 +294,9 @@ app.include_router(primary_anthropic_router, prefix="", tags=["Anthropic-compati
 
 
 app.include_router(health_router, prefix="")
+
+
+app.include_router(metrics_router, prefix="")
 
 
 app.include_router(panel_router, prefix="", tags=["Panel Interface"])

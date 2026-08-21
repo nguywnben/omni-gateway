@@ -163,6 +163,14 @@ const AppState = {
 
     usagePeriod: '1d',
 
+    usagePage: 1,
+
+    usagePageSize: 10,
+
+    historicalUsagePage: 1,
+
+    historicalUsagePageSize: 10,
+
     tabLoadTimes: {},
 
     tabLoadPromises: {},
