@@ -225,9 +225,7 @@ class VirtualKeyEnforcementTests(unittest.TestCase):
 class ExtractRequestedModelTests(unittest.TestCase):
     def test_extracts_model_from_gemini_path(self):
         self.assertEqual(
-            extract_requested_model(
-                "/v1beta/models/gemini-2.5-pro:generateContent", None
-            ),
+            extract_requested_model("/v1beta/models/gemini-2.5-pro:generateContent", None),
             "gemini-2.5-pro",
         )
 

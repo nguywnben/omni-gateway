@@ -99,9 +99,7 @@ BUILTIN_MODEL_PRICING: Dict[str, ModelPricing] = {
 
 
 def _pricing_overrides_path() -> Path:
-    credentials_dir = Path(
-        os.getenv("CREDENTIALS_DIR", str(DEFAULT_CREDENTIALS_DIR))
-    ).expanduser()
+    credentials_dir = Path(os.getenv("CREDENTIALS_DIR", str(DEFAULT_CREDENTIALS_DIR))).expanduser()
     return credentials_dir / PRICING_OVERRIDES_FILENAME
 
 
@@ -135,9 +133,7 @@ class _PricingTable:
                 pricing = _parse_override_entry(entry)
                 if pricing is not None:
                     self._merged[_normalize_model_name(model_name)] = pricing
-            log.info(
-                f"[pricing] loaded {len(raw)} model pricing overrides from {path.name}"
-            )
+            log.info(f"[pricing] loaded {len(raw)} model pricing overrides from {path.name}")
         except Exception as exc:
             log.error(f"[pricing] failed to load pricing overrides: {exc}")
 

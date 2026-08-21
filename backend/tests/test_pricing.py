@@ -57,18 +57,12 @@ class CalculateCostTests(unittest.TestCase):
             cached_tokens=200_000,
             reasoning_tokens=50_000,
         )
-        expected = (
-            800_000 * 1.25 + 200_000 * 0.31 + 100_000 * 10.0 + 50_000 * 10.0
-        ) / 1_000_000
+        expected = (800_000 * 1.25 + 200_000 * 0.31 + 100_000 * 10.0 + 50_000 * 10.0) / 1_000_000
         self.assertAlmostEqual(cost, expected, places=8)
 
     def test_cached_tokens_clamped_to_input(self):
-        cost_normal = pricing.calculate_cost_usd(
-            "gpt-4o", input_tokens=100, cached_tokens=100
-        )
-        cost_overflow = pricing.calculate_cost_usd(
-            "gpt-4o", input_tokens=100, cached_tokens=5_000
-        )
+        cost_normal = pricing.calculate_cost_usd("gpt-4o", input_tokens=100, cached_tokens=100)
+        cost_overflow = pricing.calculate_cost_usd("gpt-4o", input_tokens=100, cached_tokens=5_000)
         self.assertAlmostEqual(cost_normal, cost_overflow, places=10)
 
     def test_zero_cost_provider_short_circuits(self):
@@ -78,9 +72,7 @@ class CalculateCostTests(unittest.TestCase):
         self.assertEqual(cost, 0.0)
 
     def test_unknown_model_costs_zero(self):
-        self.assertEqual(
-            pricing.calculate_cost_usd("mystery-model", input_tokens=1_000_000), 0.0
-        )
+        self.assertEqual(pricing.calculate_cost_usd("mystery-model", input_tokens=1_000_000), 0.0)
 
     def test_negative_token_counts_are_sanitized(self):
         self.assertEqual(
@@ -107,9 +99,7 @@ class PricingOverridesTests(unittest.TestCase):
                 encoding="utf-8",
             )
             table = pricing._PricingTable()
-            with patch.object(
-                pricing, "_pricing_overrides_path", return_value=overrides_path
-            ):
+            with patch.object(pricing, "_pricing_overrides_path", return_value=overrides_path):
                 overridden = table.lookup("gpt-4o")
                 custom = table.lookup("custom-house-model")
             self.assertEqual(overridden.input_per_million, 99.0)
@@ -120,9 +110,7 @@ class PricingOverridesTests(unittest.TestCase):
             overrides_path = Path(temp_dir) / pricing.PRICING_OVERRIDES_FILENAME
             overrides_path.write_text("not-json", encoding="utf-8")
             table = pricing._PricingTable()
-            with patch.object(
-                pricing, "_pricing_overrides_path", return_value=overrides_path
-            ):
+            with patch.object(pricing, "_pricing_overrides_path", return_value=overrides_path):
                 entry = table.lookup("gpt-4o")
             # Falls back to the built-in table.
             self.assertEqual(entry.input_per_million, 2.50)

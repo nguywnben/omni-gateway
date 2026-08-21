@@ -24,8 +24,7 @@ def generate_cache_key(
         "messages": payload.get("messages", []),
         "contents": payload.get("contents", []),
         "prompt": payload.get("prompt", ""),
-        "system_instruction": payload.get("system_instruction")
-        or payload.get("systemInstruction"),
+        "system_instruction": payload.get("system_instruction") or payload.get("systemInstruction"),
         "temperature": payload.get("temperature"),
         "top_p": payload.get("top_p"),
         "max_tokens": payload.get("max_tokens") or payload.get("max_output_tokens"),

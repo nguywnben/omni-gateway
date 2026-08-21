@@ -655,7 +655,7 @@ async def get_time_series_stats(period: str = "1d", points: int = 24) -> List[Di
     seconds = USAGE_PERIODS[normalized_period]["seconds"]
     if seconds is None:
         seconds = 30 * 86400  # default to 30 days window if 'all'
-    
+
     now = time.time()
     since = now - int(seconds)
     step = seconds / max(1, points)
@@ -664,16 +664,18 @@ async def get_time_series_stats(period: str = "1d", points: int = 24) -> List[Di
     for i in range(points):
         slot_start = since + (i * step)
         slot_end = slot_start + step
-        time_slots.append({
-            "timestamp": slot_start,
-            "end_timestamp": slot_end,
-            "requests": 0,
-            "successful_requests": 0,
-            "failed_requests": 0,
-            "tokens": 0,
-            "cached_tokens": 0,
-            "cost_usd": 0.0,
-        })
+        time_slots.append(
+            {
+                "timestamp": slot_start,
+                "end_timestamp": slot_end,
+                "requests": 0,
+                "successful_requests": 0,
+                "failed_requests": 0,
+                "tokens": 0,
+                "cached_tokens": 0,
+                "cost_usd": 0.0,
+            }
+        )
 
     with db_lock:
         conn = sqlite3.connect(db_path)

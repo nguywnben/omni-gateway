@@ -231,9 +231,7 @@ async def authenticate_flexible(
 
     await virtual_key_manager.enforce(record, requested_model=requested_model)
     set_api_key_id(record.id)
-    log.debug(
-        f"Authentication successful using {auth_method} (virtual key id={record.id})"
-    )
+    log.debug(f"Authentication successful using {auth_method} (virtual key id={record.id})")
     return token
 
 

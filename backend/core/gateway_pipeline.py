@@ -80,9 +80,7 @@ async def apply_pre_call_guardrails(
     for index, part in enumerate(text_parts):
         result = engine.inspect_and_sanitize(part["text"])
         if not result.is_safe:
-            log.warning(
-                f"[guardrails] request blocked: {', '.join(result.violations)}"
-            )
+            log.warning(f"[guardrails] request blocked: {', '.join(result.violations)}")
             return (
                 Response(
                     content=json.dumps(
@@ -103,9 +101,7 @@ async def apply_pre_call_guardrails(
             if sanitized_body is None:
                 sanitized_body = copy.deepcopy(body)
             _iter_text_parts(sanitized_body)[index]["text"] = result.sanitized_text
-            log.info(
-                f"[guardrails] masked PII in request text ({', '.join(result.violations)})"
-            )
+            log.info(f"[guardrails] masked PII in request text ({', '.join(result.violations)})")
 
     return None, sanitized_body if sanitized_body is not None else body
 

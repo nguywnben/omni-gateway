@@ -54,9 +54,7 @@ def render_prometheus_metrics(provider_rows: List[Dict]) -> str:
         emit_success.append(
             f"omni_requests_success_total{label} {int(row.get('successful_calls') or 0)}"
         )
-        emit_failed.append(
-            f"omni_requests_failed_total{label} {int(row.get('failed_calls') or 0)}"
-        )
+        emit_failed.append(f"omni_requests_failed_total{label} {int(row.get('failed_calls') or 0)}")
         emit_tokens.append(f"omni_tokens_total{label} {int(row.get('total_tokens') or 0)}")
         emit_cost.append(f"omni_cost_usd_total{label} {float(row.get('cost_usd') or 0.0):.6f}")
         emit_latency.append(

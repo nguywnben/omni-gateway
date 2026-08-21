@@ -246,9 +246,7 @@ class SmartCredentialRouter:
             if routing_strategy == "least_latency":
                 strategy_rank = self._latency_rank(key)
             elif routing_strategy == "lowest_cost":
-                strategy_rank = provider_cost_rank(
-                    self._provider_variants.get(key) or provider_id
-                )
+                strategy_rank = provider_cost_rank(self._provider_variants.get(key) or provider_id)
 
             retry_after = failure.retry_after if failure else 0.0
             error_count = len(state.get("error_codes") or [])

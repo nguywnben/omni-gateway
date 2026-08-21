@@ -427,9 +427,7 @@ class VirtualKeyManager:
 
         from core.usage_stats import get_spend_since
 
-        spend_snapshot = await asyncio.to_thread(
-            get_spend_since, now - window_seconds, key_id
-        )
+        spend_snapshot = await asyncio.to_thread(get_spend_since, now - window_seconds, key_id)
         spend = float(spend_snapshot.get("cost_usd") or 0.0)
         self._budget_cache[cache_key] = (now, spend, float(window_seconds))
         return spend
@@ -446,9 +444,7 @@ class VirtualKeyManager:
 
         now = time.time()
         daily = await asyncio.to_thread(get_spend_since, now - DAILY_WINDOW_SECONDS, key_id)
-        monthly = await asyncio.to_thread(
-            get_spend_since, now - MONTHLY_WINDOW_SECONDS, key_id
-        )
+        monthly = await asyncio.to_thread(get_spend_since, now - MONTHLY_WINDOW_SECONDS, key_id)
         return {"daily": daily, "monthly": monthly}
 
     def reset_runtime_state(self) -> None:

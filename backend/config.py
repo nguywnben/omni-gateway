@@ -409,17 +409,13 @@ async def get_response_cache_config() -> dict[str, Any]:
         False,
     )
     ttl_seconds = _coerce_bounded_int(
-        await get_config_value(
-            "response_cache_ttl_seconds", 300, "RESPONSE_CACHE_TTL_SECONDS"
-        ),
+        await get_config_value("response_cache_ttl_seconds", 300, "RESPONSE_CACHE_TTL_SECONDS"),
         300,
         1,
         86_400,
     )
     max_entries = _coerce_bounded_int(
-        await get_config_value(
-            "response_cache_max_entries", 1_000, "RESPONSE_CACHE_MAX_ENTRIES"
-        ),
+        await get_config_value("response_cache_max_entries", 1_000, "RESPONSE_CACHE_MAX_ENTRIES"),
         1_000,
         1,
         100_000,
@@ -473,9 +469,7 @@ async def get_telemetry_config() -> dict[str, Any]:
         await get_config_value("langfuse_secret_key", "", "LANGFUSE_SECRET_KEY") or ""
     ).strip()
     host = str(
-        await get_config_value(
-            "langfuse_host", "https://cloud.langfuse.com", "LANGFUSE_HOST"
-        )
+        await get_config_value("langfuse_host", "https://cloud.langfuse.com", "LANGFUSE_HOST")
         or "https://cloud.langfuse.com"
     ).strip()
     return {
