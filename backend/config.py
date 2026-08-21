@@ -464,6 +464,28 @@ async def get_guardrails_config() -> dict[str, Any]:
     }
 
 
+async def get_telemetry_config() -> dict[str, Any]:
+    """Return Langfuse trace-export settings (disabled unless keys are set)."""
+    public_key = str(
+        await get_config_value("langfuse_public_key", "", "LANGFUSE_PUBLIC_KEY") or ""
+    ).strip()
+    secret_key = str(
+        await get_config_value("langfuse_secret_key", "", "LANGFUSE_SECRET_KEY") or ""
+    ).strip()
+    host = str(
+        await get_config_value(
+            "langfuse_host", "https://cloud.langfuse.com", "LANGFUSE_HOST"
+        )
+        or "https://cloud.langfuse.com"
+    ).strip()
+    return {
+        "enabled": bool(public_key and secret_key),
+        "langfuse_public_key": public_key,
+        "langfuse_secret_key": secret_key,
+        "langfuse_host": host,
+    }
+
+
 async def get_routing_policy() -> dict[str, str]:
     """Return the cross-provider credential selection policy."""
     strategy = (

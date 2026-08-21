@@ -722,6 +722,48 @@ async def get_stats_24h() -> Dict[str, Dict[str, Any]]:
     return await get_stats_for_period("1d")
 
 
+def get_provider_metrics() -> List[Dict[str, Any]]:
+    """Return all-time per-provider aggregates for the /metrics endpoint.
+
+    Synchronous by design: call via ``asyncio.to_thread`` from handlers.
+    """
+    init_db()
+    with db_lock:
+        conn = sqlite3.connect(db_path)
+        try:
+            cursor = conn.execute(
+                """
+                SELECT
+                    COALESCE(NULLIF(provider, ''), 'unknown'),
+                    COUNT(*),
+                    COALESCE(SUM(CASE WHEN success = 1 THEN 1 ELSE 0 END), 0),
+                    COALESCE(SUM(CASE WHEN success = 0 THEN 1 ELSE 0 END), 0),
+                    COALESCE(SUM(total_tokens), 0),
+                    COALESCE(SUM(cost_usd), 0),
+                    COALESCE(SUM(latency_ms), 0)
+                FROM usage_logs
+                GROUP BY COALESCE(NULLIF(provider, ''), 'unknown')
+                """
+            )
+            return [
+                {
+                    "provider": str(row[0]),
+                    "calls": _int_value(row[1]),
+                    "successful_calls": _int_value(row[2]),
+                    "failed_calls": _int_value(row[3]),
+                    "total_tokens": _int_value(row[4]),
+                    "cost_usd": round(float(row[5] or 0.0), 6),
+                    "total_latency_ms": _int_value(row[6]),
+                }
+                for row in cursor.fetchall()
+            ]
+        except Exception as exc:
+            log.error(f"Failed to compute provider metrics: {exc}")
+            return []
+        finally:
+            conn.close()
+
+
 def get_spend_since(since: float, api_key_id: Optional[str] = None) -> Dict[str, Any]:
     """Return the total USD spend and token volume recorded after ``since``.
 
