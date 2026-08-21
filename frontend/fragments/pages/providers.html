@@ -143,16 +143,6 @@
                             </div>
                             <div class="provider-capabilities" aria-label="Ollama" data-i18n-technical><span>Endpoint</span><span>JSON</span><span>ZIP</span></div>
                         </button>
-
-                        <button type="button" class="provider-hero-card provider-selector-button" id="providerSelectorGeminiCli" role="tab" aria-label="Gemini CLI" aria-selected="false" aria-controls="providerWorkspaceGeminiCli" data-ui-action="select-provider" data-provider="gemini_cli" data-provider-name="Gemini CLI">
-                            <div class="provider-logo-frame"><img src="/frontend/assets/providers/gemini-cli-logo.png" alt="Gemini CLI" data-i18n-technical></div>
-                            <div class="provider-summary">
-                                <div class="provider-eyebrow" data-i18n="providers.account_provider">Account Provider</div>
-                                <strong class="provider-name">Gemini CLI</strong>
-                                <p data-i18n="providers.gemini_cli_description">Authorize Google Cloud Code CLI accounts and route Gemini models through the shared pool.</p>
-                            </div>
-                            <div class="provider-capabilities" aria-label="Gemini CLI" data-i18n-technical><span>OAuth</span><span>JSON</span><span>ZIP</span></div>
-                        </button>
                     </div>
 
                     <p id="providerCatalogEmpty" class="provider-catalog-empty hidden" aria-live="polite" data-i18n="providers.no_matches">No providers match your search.</p>
@@ -627,106 +617,6 @@
                             <section class="tool-panel"><h2 class="card-title">Ollama Connection</h2><p class="card-copy provider-tool-copy">Validate an Ollama endpoint, discover its models, and add it to the active pool.</p><form id="ollamaCredentialForm" autocomplete="off"><div class="form-group"><label for="ollamaBaseUrl">Endpoint</label><input type="url" id="ollamaBaseUrl" value="http://localhost:11434" placeholder="http://localhost:11434" autocomplete="off" required></div><div class="form-group"><label for="ollamaApiKey">API key <span class="field-optional">Optional</span></label><input type="password" id="ollamaApiKey" name="ollama-api-key" placeholder="Required only by protected or cloud endpoints" autocomplete="one-time-code" data-1p-ignore data-lpignore="true" data-bwignore="true" autocapitalize="none" spellcheck="false"></div><p class="form-help">Containers cannot reach the host through their own localhost. Use the host gateway or a network-reachable endpoint when Omni Gateway runs in Docker.</p><button type="submit" class="btn" id="addOllamaBtn">Validate and add</button></form><div id="ollamaSaveResult" class="save-result provider-save-result hidden"><div><strong id="ollamaSaveResultTitle">Ollama connection added to pool</strong><p id="ollamaSaveResultText"></p></div><button type="button" class="btn btn-secondary" data-ui-action="switch-tab" data-tab="pool">View</button></div></section>
                             <section class="tool-panel"><h2 class="card-title">Batch Import</h2><p class="card-copy provider-tool-copy">Import Ollama connection JSON files or ZIP archives.</p><button type="button" class="upload-area" id="ollamaUploadArea" aria-describedby="ollamaUploadHelp" data-ui-action="select-ollama-files"><div><div class="upload-title">Drop connection files here</div><p class="upload-copy" id="ollamaUploadHelp">Supports JSON and ZIP archives.</p></div></button><input type="file" id="ollamaFileInput" multiple accept=".json,.zip" class="hidden" data-ui-change="ollama-files"><div id="ollamaFileListSection" class="hidden provider-upload-section"><label>Pending files</label><div class="file-list" id="ollamaFileList"></div><div class="page-actions"><button type="button" class="btn btn-small" data-ui-action="upload-ollama-files">Import</button><button type="button" class="btn btn-secondary btn-small" data-ui-action="clear-ollama-files">Clear</button></div></div><div id="ollamaUploadProgressSection" class="hidden provider-upload-section"><div class="progress-bar"><div class="progress-fill" id="ollamaProgressFill"></div></div><p id="ollamaProgressText" class="page-description provider-progress-copy">0%</p></div><div id="ollamaUploadResult" class="save-result upload-result hidden"><div><strong id="ollamaUploadResultTitle">Import complete</strong><p id="ollamaUploadResultText"></p><div id="ollamaUploadResultDetails" class="upload-result-details"></div></div><button type="button" class="btn btn-secondary" data-ui-action="switch-tab" data-tab="pool">View</button></div></section>
                         </div>
-                    </section>
-                    <section class="provider-workspace hidden" id="providerWorkspaceGeminiCli" role="tabpanel" aria-labelledby="providerSelectorGeminiCli">
-                        <div class="provider-workspace-header">
-                            <div class="provider-workspace-heading">
-                                <div class="provider-workspace-logo"><img src="/frontend/assets/providers/gemini-cli-logo.png" alt=""></div>
-                                <div>
-                                    <h2>Gemini CLI</h2>
-                                    <p>Authorize Google Cloud Code CLI accounts and route Gemini models through the shared pool.</p>
-                                    <a class="provider-site-link" href="https://geminicli.com/" target="_blank" rel="noreferrer">https://geminicli.com/</a>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="provider-tools-grid">
-                            <section class="tool-panel">
-                                <h2 class="card-title">Gemini CLI OAuth</h2>
-                                <p class="card-copy provider-tool-copy">Generate an authorization link, sign in to Google, then paste the authorization code shown by Google.</p>
-                                <div class="page-actions">
-                                    <button type="button" class="btn" id="startGeminiCliOauthBtn" data-ui-action="start-gemini-cli-oauth">Get provider authentication link</button>
-                                </div>
-                                <div id="geminiCliOauthFields" class="hidden provider-reveal-section">
-                                    <div class="auth-link-header">
-                                        <label>Authorization link</label>
-                                        <button type="button" class="btn btn-secondary" title="Copy authorization link" aria-label="Copy authorization link" data-ui-action="copy-gemini-cli-auth-url">Copy</button>
-                                    </div>
-                                    <div class="endpoint-code-card auth-link-card">
-                                        <a id="geminiCliAuthorizationUrl" href="#" target="_blank" rel="noreferrer">Authorization unavailable</a>
-                                    </div>
-                                    <div class="oauth-completion-panel">
-                                        <label for="geminiCliAuthorizationCode">Authorization code</label>
-                                        <p class="card-copy provider-tool-copy">Copy the code shown after authorization and paste it here.</p>
-                                        <input type="text" id="geminiCliAuthorizationCode" placeholder="Paste the Google authorization code" autocomplete="off" spellcheck="false">
-                                    </div>
-                                    <div class="page-actions provider-action-gap">
-                                        <button type="button" class="btn" id="saveGeminiCliOauthBtn" data-ui-action="save-gemini-cli-oauth">Save credential</button>
-                                    </div>
-                                    <div id="geminiCliOauthSaveResult" class="save-result provider-save-result hidden">
-                                        <div>
-                                            <strong id="geminiCliOauthSaveResultTitle">Gemini CLI credential added to pool</strong>
-                                            <p id="geminiCliOauthSaveResultText"></p>
-                                        </div>
-                                        <button type="button" class="btn btn-secondary" data-ui-action="switch-tab" data-tab="pool">View</button>
-                                    </div>
-                                </div>
-                            </section>
-                            <section class="tool-panel">
-                                <h2 class="card-title">Batch Import</h2>
-                                <p class="card-copy provider-tool-copy">Import Gemini CLI OAuth credential JSON files or ZIP archives.</p>
-                                <button type="button" class="upload-area" id="geminiCliUploadArea" aria-describedby="geminiCliUploadHelp" data-ui-action="select-gemini-cli-files">
-                                    <div>
-                                        <div class="upload-title">Drop OAuth credential files here</div>
-                                        <p class="upload-copy" id="geminiCliUploadHelp">Supports JSON and ZIP archives.</p>
-                                    </div>
-                                </button>
-                                <input type="file" id="geminiCliFileInput" multiple accept=".json,.zip" class="hidden" data-ui-change="gemini-cli-files">
-                                <div id="geminiCliFileListSection" class="hidden provider-upload-section">
-                                    <label>Pending files</label>
-                                    <div class="file-list" id="geminiCliFileList"></div>
-                                    <div class="page-actions">
-                                        <button type="button" class="btn btn-small" data-ui-action="upload-gemini-cli-files">Import</button>
-                                        <button type="button" class="btn btn-secondary btn-small" data-ui-action="clear-gemini-cli-files">Clear</button>
-                                    </div>
-                                </div>
-                                <div id="geminiCliUploadProgressSection" class="hidden provider-upload-section">
-                                    <div class="progress-bar"><div class="progress-fill" id="geminiCliProgressFill"></div></div>
-                                    <p id="geminiCliProgressText" class="page-description provider-progress-copy">0%</p>
-                                </div>
-                                <div id="geminiCliUploadResult" class="save-result upload-result hidden">
-                                    <div>
-                                        <strong id="geminiCliUploadResultTitle">Import complete</strong>
-                                        <p id="geminiCliUploadResultText"></p>
-                                        <div id="geminiCliUploadResultDetails" class="upload-result-details"></div>
-                                    </div>
-                                    <button type="button" class="btn btn-secondary" data-ui-action="switch-tab" data-tab="pool">View</button>
-                                </div>
-                            </section>
-                        </div>
-                        <section class="tool-panel provider-settings-panel">
-                            <div class="provider-settings-header">
-                                <div>
-                                    <h2 class="card-title">Gemini CLI Advanced Settings</h2>
-                                    <p class="card-copy provider-tool-copy">Configure the Google Cloud Code API endpoint, OAuth client ID, and token service.</p>
-                                </div>
-                                <div class="page-actions">
-                                    <button type="button" class="btn" data-ui-action="save-gemini-cli-settings">Save</button>
-                                    <button type="button" class="btn btn-secondary" data-ui-action="reset-gemini-cli-settings">Reset defaults</button>
-                                </div>
-                            </div>
-                            <div id="geminiCliSettingsLoading" class="skeleton-config provider-settings-skeleton" role="status" aria-label="Loading Gemini CLI settings" aria-busy="true">
-                                <div class="skeleton-config-group"><div class="skeleton-line title"></div><div class="skeleton-line field"></div></div>
-                            </div>
-                            <div id="geminiCliSettingsForm" class="provider-settings-grid hidden">
-                                <section class="provider-settings-group config-two-column">
-                                    <div class="form-group"><label for="geminiCliApiUrl">Cloud Code API</label><input type="url" id="geminiCliApiUrl" autocomplete="off"></div>
-                                    <div class="form-group"><label for="geminiCliAuthorizeUrl">Authorization service</label><input type="url" id="geminiCliAuthorizeUrl" autocomplete="off"></div>
-                                    <div class="form-group"><label for="geminiCliTokenUrl">Token service</label><input type="url" id="geminiCliTokenUrl" autocomplete="off"></div>
-                                    <div class="form-group"><label for="geminiCliClientId">OAuth client ID</label><input type="text" id="geminiCliClientId" autocomplete="off"></div>
-                                    <div class="form-group"><label for="geminiCliClientSecret">OAuth client secret</label><input type="text" id="geminiCliClientSecret" autocomplete="off"></div>
-                                </section>
-                            </div>
-                        </section>
                     </section>
 
                     <section class="provider-workspace" id="providerWorkspaceGoogleAntigravity" role="tabpanel" aria-labelledby="providerSelectorGoogleAntigravity">

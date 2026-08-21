@@ -4999,25 +4999,25 @@ const PROVIDER_COPY_FALLBACKS = {
 const PROVIDER_LABEL_KEYS = [
     'Batch Import', 'Authorization link', 'Authorization code', 'Save credential',
     'View', 'Pending files', 'Import', 'Import complete', 'Validate and add',
-    'API key added to pool', 'Previous', 'Next'
+    'API key added to pool', 'Previous', 'Next', 'Copy'
 ];
 
 const PROVIDER_LABEL_ROWS = {
-    en: ['Batch Import', 'Authorization link', 'Authorization code', 'Save credential', 'View', 'Pending files', 'Import', 'Import complete', 'Validate and add', 'API key added to pool', 'Previous', 'Next'],
-    'zh-CN': ['批量导入', '授权链接', '授权码', '保存凭据', '查看', '待处理文件', '导入', '导入完成', '验证并添加', 'API 密钥已添加到凭据池', '上一页', '下一页'],
-    'zh-TW': ['批次匯入', '授權連結', '授權碼', '儲存憑證', '檢視', '待處理檔案', '匯入', '匯入完成', '驗證並新增', 'API 金鑰已新增至憑證集區', '上一頁', '下一頁'],
-    de: ['Stapelimport', 'Autorisierungslink', 'Autorisierungscode', 'Zugangsdaten speichern', 'Anzeigen', 'Ausstehende Dateien', 'Importieren', 'Import abgeschlossen', 'Prüfen und hinzufügen', 'API-Schlüssel zum Pool hinzugefügt', 'Zurück', 'Weiter'],
-    es: ['Importación por lotes', 'Enlace de autorización', 'Código de autorización', 'Guardar credencial', 'Ver', 'Archivos pendientes', 'Importar', 'Importación completada', 'Validar y añadir', 'Clave API añadida al grupo', 'Anterior', 'Siguiente'],
-    fr: ['Importation groupée', 'Lien d’autorisation', 'Code d’autorisation', 'Enregistrer l’identifiant', 'Afficher', 'Fichiers en attente', 'Importer', 'Importation terminée', 'Valider et ajouter', 'Clé API ajoutée au pool', 'Précédent', 'Suivant'],
-    id: ['Impor Massal', 'Tautan otorisasi', 'Kode otorisasi', 'Simpan kredensial', 'Lihat', 'File tertunda', 'Impor', 'Impor selesai', 'Validasi dan tambahkan', 'Kunci API ditambahkan ke pool', 'Sebelumnya', 'Berikutnya'],
-    it: ['Importazione in blocco', 'Link di autorizzazione', 'Codice di autorizzazione', 'Salva credenziale', 'Visualizza', 'File in attesa', 'Importa', 'Importazione completata', 'Convalida e aggiungi', 'Chiave API aggiunta al pool', 'Precedente', 'Successivo'],
-    ja: ['一括インポート', '認証リンク', '認証コード', '認証情報を保存', '表示', '保留中のファイル', 'インポート', 'インポート完了', '検証して追加', 'API キーをプールに追加しました', '前へ', '次へ'],
-    ko: ['일괄 가져오기', '인증 링크', '인증 코드', '자격 증명 저장', '보기', '대기 중인 파일', '가져오기', '가져오기 완료', '검증 후 추가', 'API 키를 풀에 추가했습니다', '이전', '다음'],
-    pt: ['Importação em lote', 'Link de autorização', 'Código de autorização', 'Salvar credencial', 'Ver', 'Arquivos pendentes', 'Importar', 'Importação concluída', 'Validar e adicionar', 'Chave de API adicionada ao pool', 'Anterior', 'Próximo'],
-    ru: ['Пакетный импорт', 'Ссылка для авторизации', 'Код авторизации', 'Сохранить учётные данные', 'Открыть', 'Ожидающие файлы', 'Импортировать', 'Импорт завершён', 'Проверить и добавить', 'Ключ API добавлен в пул', 'Назад', 'Далее'],
-    th: ['นำเข้าแบบกลุ่ม', 'ลิงก์การอนุญาต', 'รหัสการอนุญาต', 'บันทึกข้อมูลรับรอง', 'ดู', 'ไฟล์ที่รอดำเนินการ', 'นำเข้า', 'นำเข้าเสร็จแล้ว', 'ตรวจสอบและเพิ่ม', 'เพิ่มคีย์ API ลงในพูลแล้ว', 'ก่อนหน้า', 'ถัดไป'],
-    tr: ['Toplu İçe Aktarma', 'Yetkilendirme bağlantısı', 'Yetkilendirme kodu', 'Kimlik bilgisini kaydet', 'Görüntüle', 'Bekleyen dosyalar', 'İçe aktar', 'İçe aktarma tamamlandı', 'Doğrula ve ekle', 'API anahtarı havuza eklendi', 'Önceki', 'Sonraki'],
-    vi: ['Nhập hàng loạt', 'Liên kết cấp quyền', 'Mã cấp quyền', 'Lưu thông tin xác thực', 'Xem', 'Tệp đang chờ', 'Nhập', 'Đã nhập xong', 'Xác thực và thêm', 'Đã thêm khóa API vào kho', 'Trang trước', 'Trang sau']
+    en: ['Batch Import', 'Authorization link', 'Authorization code', 'Save credential', 'View', 'Pending files', 'Import', 'Import complete', 'Validate and add', 'API key added to pool', 'Previous', 'Next', 'Copy'],
+    'zh-CN': ['批量导入', '授权链接', '授权码', '保存凭据', '查看', '待处理文件', '导入', '导入完成', '验证并添加', 'API 密钥已添加到凭据池', '上一页', '下一页', '复制'],
+    'zh-TW': ['批次匯入', '授權連結', '授權碼', '儲存憑證', '檢視', '待處理檔案', '匯入', '匯入完成', '驗證並新增', 'API 金鑰已新增至憑證集區', '上一頁', '下一頁', '複製'],
+    de: ['Stapelimport', 'Autorisierungslink', 'Autorisierungscode', 'Zugangsdaten speichern', 'Anzeigen', 'Ausstehende Dateien', 'Importieren', 'Import abgeschlossen', 'Prüfen und hinzufügen', 'API-Schlüssel zum Pool hinzugefügt', 'Zurück', 'Weiter', 'Kopieren'],
+    es: ['Importación por lotes', 'Enlace de autorización', 'Código de autorización', 'Guardar credencial', 'Ver', 'Archivos pendientes', 'Importar', 'Importación completada', 'Validar y añadir', 'Clave API añadida al grupo', 'Anterior', 'Siguiente', 'Copiar'],
+    fr: ['Importation groupée', 'Lien d’autorisation', 'Code d’autorisation', 'Enregistrer l’identifiant', 'Afficher', 'Fichiers en attente', 'Importer', 'Importation terminée', 'Valider et ajouter', 'Clé API ajoutée au pool', 'Précédent', 'Suivant', 'Copier'],
+    id: ['Impor Massal', 'Tautan otorisasi', 'Kode otorisasi', 'Simpan kredensial', 'Lihat', 'File tertunda', 'Impor', 'Impor selesai', 'Validasi dan tambahkan', 'Kunci API ditambahkan ke pool', 'Sebelumnya', 'Berikutnya', 'Salin'],
+    it: ['Importazione in blocco', 'Link di autorizzazione', 'Codice di autorizzazione', 'Salva credenziale', 'Visualizza', 'File in attesa', 'Importa', 'Importazione completata', 'Convalida e aggiungi', 'Chiave API aggiunta al pool', 'Precedente', 'Successivo', 'Copia'],
+    ja: ['一括インポート', '認証リンク', '認証コード', '認証情報を保存', '表示', '保留中のファイル', 'インポート', 'インポート完了', '検証して追加', 'API キーをプールに追加しました', '前へ', '次へ', 'コピー'],
+    ko: ['일괄 가져오기', '인증 링크', '인증 코드', '자격 증명 저장', '보기', '대기 중인 파일', '가져오기', '가져오기 완료', '검증 후 추가', 'API 키를 풀에 추가했습니다', '이전', '다음', '복사'],
+    pt: ['Importação em lote', 'Link de autorização', 'Código de autorização', 'Salvar credencial', 'Ver', 'Arquivos pendentes', 'Importar', 'Importação concluída', 'Validar e adicionar', 'Chave de API adicionada ao pool', 'Anterior', 'Próximo', 'Copiar'],
+    ru: ['Пакетный импорт', 'Ссылка для авторизации', 'Код авторизации', 'Сохранить учётные данные', 'Открыть', 'Ожидающие файлы', 'Импортировать', 'Импорт завершён', 'Проверить и добавить', 'Ключ API добавлен в пул', 'Назад', 'Далее', 'Копировать'],
+    th: ['นำเข้าแบบกลุ่ม', 'ลิงก์การอนุญาต', 'รหัสการอนุญาต', 'บันทึกข้อมูลรับรอง', 'ดู', 'ไฟล์ที่รอดำเนินการ', 'นำเข้า', 'นำเข้าเสร็จแล้ว', 'ตรวจสอบและเพิ่ม', 'เพิ่มคีย์ API ลงในพูลแล้ว', 'ก่อนหน้า', 'ถัดไป', 'คัดลอก'],
+    tr: ['Toplu İçe Aktarma', 'Yetkilendirme bağlantısı', 'Yetkilendirme kodu', 'Kimlik bilgisini kaydet', 'Görüntüle', 'Bekleyen dosyalar', 'İçe aktar', 'İçe aktarma tamamlandı', 'Doğrula ve ekle', 'API anahtarı havuza eklendi', 'Önceki', 'Sonraki', 'Kopyala'],
+    vi: ['Nhập hàng loạt', 'Liên kết cấp quyền', 'Mã cấp quyền', 'Lưu thông tin xác thực', 'Xem', 'Tệp đang chờ', 'Nhập', 'Đã nhập xong', 'Xác thực và thêm', 'Đã thêm khóa API vào kho', 'Trang trước', 'Trang sau', 'Sao chép']
 };
 
 const PROVIDER_LABEL_TRANSLATIONS = Object.fromEntries(
@@ -5082,6 +5082,9 @@ function translateProviderCopy(source, locale) {
     if (label) return label;
 
     const normalized = normalizedSource.toLowerCase();
+    if (normalized === 'copy') {
+        return PROVIDER_LABEL_TRANSLATIONS[locale]?.['Copy'] || normalizedSource;
+    }
     const messages = PROVIDER_COPY_FALLBACKS[locale] || PROVIDER_COPY_FALLBACKS.en;
     if (/^(add|connect|authorize|validate|generate|configure|manage|tune|set)\b/.test(normalized)) return messages.configure;
     if (/^(import|batch import)\b/.test(normalized)) return messages.import;

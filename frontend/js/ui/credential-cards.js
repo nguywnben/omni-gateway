@@ -137,20 +137,10 @@ function getCredentialProviderMeta(credInfo, managerType) {
 
     }
 
-    if (provider === 'gemini_cli' || provider === 'google_cloud_code' || provider === 'cloud_code') {
-
-        return {
-            id: 'gemini_cli',
-            name: 'Gemini CLI',
-            logo: '/frontend/assets/providers/gemini-cli-logo.png'
-        };
-
-    }
-
     return {
-        id: 'gemini_cli',
-        name: 'Gemini CLI',
-        logo: '/frontend/assets/providers/gemini-cli-logo.png'
+        id: 'google_antigravity',
+        name: 'Google Antigravity',
+        logo: '/frontend/assets/providers/google-antigravity-logo.png'
     };
 
 }

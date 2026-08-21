@@ -66,7 +66,7 @@ def select_cost_minimized_candidate(candidates: List[Dict[str, Any]]) -> Optiona
     def _tier_score(c: Dict[str, Any]) -> int:
         provider = str(c.get("provider") or "").lower()
         tier = str(c.get("tier") or "").lower()
-        if "free" in tier or "gemini_cli" in provider:
+        if "free" in tier:
             return 100
         if "google_ai_studio" in provider:
             return 80
