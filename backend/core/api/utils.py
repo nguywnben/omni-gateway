@@ -11,8 +11,9 @@ from config import (
     get_retry_429_max_retries,
 )
 from core.credential_manager import CredentialManager
-from core.request_context import get_request_elapsed_ms, get_request_id
-from core.usage_stats import record_call
+from core.request_context import get_api_key_id, get_request_elapsed_ms, get_request_id
+from core.usage_stats import normalize_token_usage, record_call
+from core.virtual_keys import virtual_key_manager
 from fastapi import Response
 from log import log
 
@@ -93,6 +94,7 @@ async def record_api_call_success(
     provider: Optional[str] = None,
 ) -> None:
     if credential_manager and credential_name:
+        api_key_id = get_api_key_id()
         try:
             request_metrics = dict(request_metrics or {})
             request_metrics.setdefault("latency_ms", get_request_elapsed_ms())
@@ -106,9 +108,17 @@ async def record_api_call_success(
                 token_usage=token_usage,
                 request_metrics=request_metrics,
                 request_id=get_request_id(),
+                api_key_id=api_key_id,
             )
         except Exception as e:
             log.error(f"Failed to record usage for {credential_name}: {e}")
+
+        if api_key_id:
+            try:
+                tokens = normalize_token_usage(token_usage)
+                virtual_key_manager.note_tokens(api_key_id, tokens["total_tokens"])
+            except Exception as e:
+                log.debug(f"Failed to feed TPM window for {api_key_id}: {e}")
 
         await credential_manager.record_api_call_result(
             credential_name, True, mode=mode, model_name=model_name
@@ -136,6 +146,7 @@ async def record_api_call_error(
                 success=False,
                 token_usage=None,
                 request_id=get_request_id(),
+                api_key_id=get_api_key_id(),
             )
         except Exception as e:
             log.error(f"Failed to record failed usage for {credential_name}: {e}")

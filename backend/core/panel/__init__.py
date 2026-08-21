@@ -11,6 +11,7 @@ from . import (
     root,
     usage_routes,
     version,
+    virtual_keys,
 )
 from .utils import ConnectionManager, get_env_locked_keys, is_mobile_user_agent, validate_mode
 
@@ -26,6 +27,7 @@ def create_router() -> APIRouter:
     router.include_router(logs.router)
     router.include_router(version.router)
     router.include_router(usage_routes.router)
+    router.include_router(virtual_keys.router)
     router.include_router(providers.router)
     router.include_router(model_pools.router)
 
