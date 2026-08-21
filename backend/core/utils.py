@@ -3,6 +3,7 @@ import os
 import secrets
 import time
 from typing import List, Optional
+from urllib.parse import urlsplit
 
 import jwt
 from config import get_panel_password, trust_proxy_headers_enabled
@@ -222,6 +223,7 @@ authenticate_gemini_flexible = authenticate_flexible
 PANEL_SESSION_AUDIENCE = "panel"
 PANEL_SESSION_ALGORITHM = "HS256"
 PANEL_SESSION_COOKIE = "panel_session"
+PANEL_SAFE_METHODS = {"GET", "HEAD", "OPTIONS"}
 
 
 def _get_panel_session_ttl_seconds() -> int:
@@ -315,13 +317,56 @@ async def verify_panel_token_value(token: str) -> str:
     return token
 
 
+def _normalize_http_origin(value: str) -> str:
+    try:
+        parsed = urlsplit(value.strip())
+    except ValueError:
+        return ""
+    if parsed.scheme not in {"http", "https"} or not parsed.hostname:
+        return ""
+    default_port = 80 if parsed.scheme == "http" else 443
+    port = parsed.port or default_port
+    suffix = "" if port == default_port else f":{port}"
+    return f"{parsed.scheme}://{parsed.hostname.lower()}{suffix}"
+
+
+def _request_origin(request: Request) -> str:
+    scheme = request.url.scheme
+    host = request.headers.get("host", "") or request.url.netloc
+    if trust_proxy_headers_enabled():
+        forwarded_proto = request.headers.get("x-forwarded-proto", "")
+        forwarded_host = request.headers.get("x-forwarded-host", "")
+        if forwarded_proto:
+            scheme = forwarded_proto.split(",", 1)[0].strip()
+        if forwarded_host:
+            host = forwarded_host.split(",", 1)[0].strip()
+    return _normalize_http_origin(f"{scheme}://{host}")
+
+
+def _verify_cookie_request_origin(request: Request) -> None:
+    if request.method.upper() in PANEL_SAFE_METHODS:
+        return
+
+    fetch_site = request.headers.get("sec-fetch-site", "").strip().lower()
+    if fetch_site == "cross-site":
+        raise HTTPException(status_code=403, detail="Cross-site console request rejected.")
+
+    supplied_origin = request.headers.get("origin", "").strip()
+    if not supplied_origin:
+        return
+    if _normalize_http_origin(supplied_origin) != _request_origin(request):
+        raise HTTPException(status_code=403, detail="Cross-site console request rejected.")
+
+
 async def verify_panel_token(
     request: Request,
     credentials: Optional[HTTPAuthorizationCredentials] = Depends(security),
 ) -> str:
     """Validate a cookie session, with Bearer support for legacy clients."""
     token = request.cookies.get(PANEL_SESSION_COOKIE)
-    if not token and credentials:
+    if token:
+        _verify_cookie_request_origin(request)
+    elif credentials:
         token = credentials.credentials
     if not token:
         raise HTTPException(status_code=401, detail="Authentication required.")

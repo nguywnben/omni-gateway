@@ -407,6 +407,25 @@ class PostgreSQLManager:
             log.error(f"Error listing credentials: {e}")
             return []
 
+    async def get_all_credentials(self, mode: str = "code_assist") -> Dict[str, Dict[str, Any]]:
+        self._ensure_initialized()
+        try:
+            table_name = self._get_table_name(mode)
+            async with self._pool.acquire() as conn:
+                rows = await conn.fetch(
+                    f"SELECT filename, credential_data FROM {table_name} ORDER BY rotation_order"
+                )
+            credentials = {}
+            for row in rows:
+                try:
+                    credentials[row["filename"]] = json.loads(row["credential_data"])
+                except (TypeError, json.JSONDecodeError):
+                    log.warning(f"Ignoring invalid credential data for {row['filename']}.")
+            return credentials
+        except Exception as e:
+            log.error(f"Error loading credentials: {e}")
+            return {}
+
     async def delete_credential(self, filename: str, mode: str = "code_assist") -> bool:
         self._ensure_initialized()
         filename = os.path.basename(filename)

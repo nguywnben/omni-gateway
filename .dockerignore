@@ -17,19 +17,33 @@ __pycache__
 .mypy_cache
 .ruff_cache
 .cache
+temp/
+tmp/
+logs/
+logs_*/
+backend/logs/
 skills-lock.json
 
 .env
 .env.*
+*.env
+*.env.*
 !.env.example
+.envrc
 
 backend/data
 backend/tests
 creds
 *.db
+*.db-*
 *.sqlite
 *.sqlite3
+*.sqlite-*
 *.log
+credentials*.json
+*_credentials.json
+google-antigravity-*.json
+google-ai-studio-*.json
 
 node_modules
 docs
@@ -45,5 +59,14 @@ SECURITY.md
 *.crt
 *.p12
 *.pfx
+*.p8
+*.ppk
+*.jks
+*.keystore
 *.token
+id_rsa
+id_ed25519
 secrets
+CLAUDE.md
+GEMINI.md
+.kiro

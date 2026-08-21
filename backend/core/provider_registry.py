@@ -8,6 +8,21 @@ from typing import Any, Dict, Optional
 
 GOOGLE_ANTIGRAVITY = "google_antigravity"
 GOOGLE_AI_STUDIO = "google_ai_studio"
+XAI = "xai"
+GROK = "grok"
+XAI_CONSOLE = "xai_console"
+OPENAI = "openai"
+CODEX = "codex"
+OPENAI_PLATFORM = "openai_platform"
+ANTHROPIC = "anthropic"
+CLAUDE_CODE = "claude_code"
+CLAUDE_PLATFORM = "claude_platform"
+OLLAMA = "ollama"
+MAX_DECLARED_MODELS = 500
+MAX_MODEL_ID_LENGTH = 256
+MODEL_SUPPORT_UNSUPPORTED = 0
+MODEL_SUPPORT_INFERRED = 1
+MODEL_SUPPORT_DECLARED = 2
 
 _PROVIDER_ALIASES = {
     "primary": GOOGLE_ANTIGRAVITY,
@@ -20,11 +35,55 @@ _PROVIDER_ALIASES = {
     "gemini": GOOGLE_AI_STUDIO,
     "google-ai-studio": GOOGLE_AI_STUDIO,
     "google_ai_studio": GOOGLE_AI_STUDIO,
+    "grok": XAI,
+    "xai-oauth": XAI,
+    "xai_oauth": XAI,
+    "x-ai": XAI,
+    "xai": XAI,
+    "xai-grok": XAI,
+    "xai-api-key": XAI,
+    "xai_api_key": XAI,
+    "xai-console": XAI,
+    "xai_console": XAI,
+    "openai": OPENAI,
+    "openai-api": OPENAI,
+    "openai_api": OPENAI,
+    "openai-platform": OPENAI,
+    "openai_platform": OPENAI,
+    "openai-api-key": OPENAI,
+    "openai_api_key": OPENAI,
+    "codex": OPENAI,
+    "openai-codex": OPENAI,
+    "openai_codex": OPENAI,
+    "anthropic": ANTHROPIC,
+    "claude": ANTHROPIC,
+    "claude-code": ANTHROPIC,
+    "claude_code": ANTHROPIC,
+    "claude-platform": ANTHROPIC,
+    "claude_platform": ANTHROPIC,
+    "ollama": OLLAMA,
+    "ollama-cloud": OLLAMA,
+    "ollama_cloud": OLLAMA,
+    "ollama-local": OLLAMA,
+    "ollama_local": OLLAMA,
 }
 
 _PROVIDER_NAMES = {
     GOOGLE_ANTIGRAVITY: "Google Antigravity",
     GOOGLE_AI_STUDIO: "Google AI Studio",
+    XAI: "Grok Build",
+    OPENAI: "OpenAI",
+    ANTHROPIC: "Anthropic",
+    OLLAMA: "Ollama",
+}
+
+_CREDENTIAL_PROVIDER_NAMES = {
+    GROK: "Grok Build",
+    XAI_CONSOLE: "SpaceXAI Console",
+    CODEX: "Codex",
+    OPENAI_PLATFORM: "OpenAI Platform",
+    CLAUDE_CODE: "Claude Code",
+    CLAUDE_PLATFORM: "Claude Platform",
 }
 
 
@@ -64,6 +123,30 @@ _PROVIDER_CAPABILITIES = {
         display_name=_PROVIDER_NAMES[GOOGLE_AI_STUDIO],
         credential_types=("api_key",),
         model_prefixes=("gemini-", "gemma-"),
+    ),
+    XAI: ProviderCapabilities(
+        provider_id=XAI,
+        display_name=_PROVIDER_NAMES[XAI],
+        credential_types=("oauth", "api_key"),
+        model_prefixes=("grok-",),
+    ),
+    ANTHROPIC: ProviderCapabilities(
+        provider_id=ANTHROPIC,
+        display_name=_PROVIDER_NAMES[ANTHROPIC],
+        credential_types=("oauth", "api_key"),
+        model_prefixes=("claude-",),
+    ),
+    OLLAMA: ProviderCapabilities(
+        provider_id=OLLAMA,
+        display_name=_PROVIDER_NAMES[OLLAMA],
+        credential_types=("connection",),
+        model_prefixes=(),
+    ),
+    OPENAI: ProviderCapabilities(
+        provider_id=OPENAI,
+        display_name=_PROVIDER_NAMES[OPENAI],
+        credential_types=("oauth", "api_key"),
+        model_prefixes=(),
     ),
 }
 
@@ -145,9 +228,83 @@ def get_credential_provider(credential_data: Optional[Dict[str, Any]]) -> str:
     return GOOGLE_ANTIGRAVITY
 
 
+def get_provider_routing_id(provider_id: Any) -> str:
+    """Return the routing provider shared by one user-facing provider product."""
+    normalized = str(provider_id or "").strip().lower().replace("-", "_").replace(" ", "_")
+    if normalized in {CLAUDE_CODE, CLAUDE_PLATFORM}:
+        return ANTHROPIC
+    if normalized in {CODEX, OPENAI_PLATFORM}:
+        return OPENAI
+    if normalized in {GROK, XAI_CONSOLE}:
+        return XAI
+    return normalize_provider_id(normalized)
+
+
 def get_provider_display_name(provider_id: Any) -> str:
-    normalized = normalize_provider_id(provider_id)
-    return _PROVIDER_NAMES.get(normalized, str(provider_id or "Provider"))
+    normalized = str(provider_id or "").strip().lower().replace("-", "_").replace(" ", "_")
+    if normalized in _CREDENTIAL_PROVIDER_NAMES:
+        return _CREDENTIAL_PROVIDER_NAMES[normalized]
+    routing_provider = get_provider_routing_id(normalized)
+    return _PROVIDER_NAMES.get(routing_provider, str(provider_id or "Provider"))
+
+
+def get_credential_provider_variant(credential_data: Optional[Dict[str, Any]]) -> str:
+    """Return the user-facing provider variant for a credential payload."""
+    data = credential_data or {}
+    provider_id = get_credential_provider(data)
+    if provider_id == ANTHROPIC:
+        explicit_provider = (
+            str(data.get("provider") or data.get("provider_id") or "")
+            .strip()
+            .lower()
+            .replace("-", "_")
+        )
+        credential_type = str(data.get("credential_type") or "").strip().lower()
+        if credential_type == "oauth" or explicit_provider in {"claude_code", "claude"}:
+            return CLAUDE_CODE
+        return CLAUDE_PLATFORM
+
+    if provider_id != XAI:
+        if provider_id != OPENAI:
+            return provider_id
+
+        explicit_provider = (
+            str(data.get("provider") or data.get("provider_id") or "")
+            .strip()
+            .lower()
+            .replace("-", "_")
+        )
+        credential_type = str(data.get("credential_type") or "").strip().lower()
+        if credential_type == "oauth" or explicit_provider in {
+            "codex",
+            "openai_codex",
+        }:
+            return CODEX
+        return OPENAI_PLATFORM
+
+    explicit_provider = str(data.get("provider") or data.get("provider_id") or "").strip().lower()
+    credential_type = str(data.get("credential_type") or "").strip().lower()
+    if (
+        credential_type == "api_key"
+        or data.get("api_key")
+        or explicit_provider
+        in {
+            "xai_console",
+            "xai-console",
+            "xai_api_key",
+            "xai-api-key",
+        }
+    ):
+        return XAI_CONSOLE
+    return GROK
+
+
+def get_credential_provider_display_name(
+    credential_data: Optional[Dict[str, Any]],
+) -> str:
+    """Return the precise provider name shown for one credential."""
+    variant = get_credential_provider_variant(credential_data)
+    return _CREDENTIAL_PROVIDER_NAMES.get(variant, get_provider_display_name(variant))
 
 
 def get_provider_capabilities(provider_id: Any) -> Optional[ProviderCapabilities]:
@@ -171,7 +328,10 @@ def api_key_fingerprint(api_key: str) -> str:
 def get_static_credential_identity(credential_data: Dict[str, Any]) -> str:
     """Return a deduplication identity that does not require a network lookup."""
     provider_id = get_credential_provider(credential_data)
-    if provider_id != GOOGLE_AI_STUDIO:
+    if provider_id == OLLAMA:
+        fingerprint = str(credential_data.get("connection_fingerprint") or "").strip()
+        return f"{provider_id}:{fingerprint}" if fingerprint else ""
+    if not is_api_key_credential(credential_data):
         return ""
     fingerprint = str(credential_data.get("key_fingerprint") or "").strip()
     if not fingerprint:
@@ -184,25 +344,68 @@ def is_api_key_credential(credential_data: Optional[Dict[str, Any]]) -> bool:
     return bool(data.get("credential_type") == "api_key" and data.get("api_key"))
 
 
+def get_declared_credential_models(
+    credential_data: Optional[Dict[str, Any]],
+) -> list[str]:
+    """Return safe, normalized model IDs declared by a credential."""
+    declared_models = (credential_data or {}).get("model_ids")
+    if not isinstance(declared_models, list):
+        return []
+
+    normalized_models = []
+    seen = set()
+    for value in declared_models:
+        if not isinstance(value, str):
+            continue
+        model_id = value.strip().removeprefix("models/")
+        if (
+            not model_id
+            or len(model_id) > MAX_MODEL_ID_LENGTH
+            or not model_id.isprintable()
+            or model_id in seen
+        ):
+            continue
+        seen.add(model_id)
+        normalized_models.append(model_id)
+        if len(normalized_models) >= MAX_DECLARED_MODELS:
+            break
+    return normalized_models
+
+
 def credential_supports_model(
     credential_data: Dict[str, Any],
     model_name: Optional[str],
     required_provider: Optional[str] = None,
 ) -> bool:
     """Return whether a credential can serve the requested provider and model."""
+    return (
+        credential_model_support_level(
+            credential_data,
+            model_name,
+            required_provider=required_provider,
+        )
+        > MODEL_SUPPORT_UNSUPPORTED
+    )
+
+
+def credential_model_support_level(
+    credential_data: Dict[str, Any],
+    model_name: Optional[str],
+    required_provider: Optional[str] = None,
+) -> int:
+    """Return the strength of the evidence that a credential supports a model."""
     provider_id = get_credential_provider(credential_data)
     if required_provider and provider_id != normalize_provider_id(required_provider):
-        return False
+        return MODEL_SUPPORT_UNSUPPORTED
     capabilities = get_provider_capabilities(provider_id)
     if not capabilities or not capabilities.supports_model(model_name):
-        return False
-    declared_models = credential_data.get("model_ids")
-    if model_name and isinstance(declared_models, list) and declared_models:
+        return MODEL_SUPPORT_UNSUPPORTED
+    declared_models = get_declared_credential_models(credential_data)
+    if model_name and declared_models:
         normalized_model = str(model_name).strip().removeprefix("models/")
-        normalized_declared = {
-            str(value).strip().removeprefix("models/")
-            for value in declared_models
-            if str(value).strip()
-        }
-        return normalized_model in normalized_declared
-    return True
+        return (
+            MODEL_SUPPORT_DECLARED
+            if normalized_model in declared_models
+            else MODEL_SUPPORT_UNSUPPORTED
+        )
+    return MODEL_SUPPORT_INFERRED

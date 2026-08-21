@@ -9,24 +9,51 @@ from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Tuple
 
 from config import (
+    get_anthropic_api_url,
     get_antigravity_api_url,
     get_antigravity_payload_user_agent,
     get_antigravity_stream_to_nonstream,
     get_antigravity_switch_credential_enabled,
-    get_antigravity_user_agent,
     get_auto_disable_error_codes,
+    get_claude_user_agent,
+    get_codex_api_url,
+    get_codex_user_agent,
     get_google_ai_studio_api_url,
+    get_openai_api_url,
     get_token_compression_config,
     get_upstream_timeout_seconds,
+    get_xai_api_url,
+    get_xai_oauth_api_url,
+    get_xai_user_agent,
+)
+from core.anthropic import (
+    anthropic_response_to_gemini,
+    anthropic_stream_line_to_gemini,
+    build_anthropic_headers,
+    fetch_anthropic_model_ids,
+    gemini_request_to_anthropic,
+)
+from core.antigravity import (
+    build_antigravity_headers,
+    fetch_antigravity_model_ids,
 )
 from core.api.utils import (
+    RETRYABLE_UPSTREAM_STATUS_CODES,
     collect_streaming_response,
     get_retry_config,
     handle_error_with_retry,
     parse_and_log_cooldown,
     record_api_call_error,
     record_api_call_success,
+    record_model_route_miss,
     record_unassigned_api_call_error,
+)
+from core.codex import (
+    build_codex_headers,
+    codex_response_to_gemini,
+    codex_stream_line_to_gemini,
+    fetch_codex_model_ids,
+    gemini_request_to_codex,
 )
 from core.credential_manager import credential_manager
 from core.google_ai_studio import (
@@ -36,10 +63,38 @@ from core.google_ai_studio import (
     parse_model_ids,
 )
 from core.httpx_client import get_async, post_async, stream_post_async
+from core.model_blacklist import record_model_not_found
+from core.ollama import (
+    build_ollama_headers,
+    fetch_ollama_model_ids,
+    gemini_request_to_ollama,
+    normalize_ollama_base_url,
+    ollama_response_to_gemini,
+    ollama_stream_line_to_gemini,
+)
+from core.openai_platform import (
+    build_openai_headers,
+    fetch_openai_model_ids,
+    gemini_request_to_openai,
+    openai_response_to_gemini,
+    openai_stream_line_to_gemini,
+)
 from core.provider_registry import (
+    ANTHROPIC,
+    CLAUDE_CODE,
+    CLAUDE_PLATFORM,
+    CODEX,
     GOOGLE_AI_STUDIO,
     GOOGLE_ANTIGRAVITY,
+    GROK,
+    OLLAMA,
+    OPENAI,
+    OPENAI_PLATFORM,
+    XAI,
+    XAI_CONSOLE,
     get_credential_provider,
+    get_credential_provider_variant,
+    get_provider_routing_id,
 )
 from core.storage_adapter import get_storage_adapter
 from core.token_compression import (
@@ -51,12 +106,25 @@ from core.usage_stats import (
     extract_token_usage_from_response,
     extract_token_usage_from_stream_chunk,
 )
+from core.xai import (
+    build_xai_headers,
+    fetch_xai_model_ids,
+    fetch_xai_oauth_model_ids,
+    gemini_request_to_xai,
+    xai_response_to_gemini,
+    xai_stream_line_to_gemini,
+)
 from fastapi import Response
 from log import log
 
 SESSION_TTL_SECONDS = 6 * 60 * 60
 MAX_SESSION_STATES = 1024
 _REDIS_KEY_PREFIX = "primary:session:"
+MAX_MODEL_ROUTE_ATTEMPTS = 128
+MAX_MODEL_DISCOVERY_CONCURRENCY = 8
+MAX_MODEL_DISCOVERY_COHORTS = 32
+MAX_MODEL_DISCOVERY_FAILOVER_ATTEMPTS = 3
+MODEL_DISCOVERY_ROTATION_SECONDS = 5 * 60
 
 
 @dataclass
@@ -67,6 +135,12 @@ class PrimarySessionState:
     step_index: int
     created_at: float
     last_used_at: float
+
+
+@dataclass(frozen=True)
+class CredentialModelDiscovery:
+    model_ids: frozenset[str]
+    refreshed: bool
 
 
 @dataclass(frozen=True)
@@ -272,12 +346,7 @@ async def wrap_cli_request(
 
 
 async def build_primary_headers(access_token: str, model: str = "") -> Dict[str, str]:
-    return {
-        "User-Agent": await get_antigravity_user_agent(),
-        "Authorization": f"Bearer {access_token}",
-        "Content-Type": "application/json",
-        "Accept-Encoding": "gzip",
-    }
+    return await build_antigravity_headers(access_token)
 
 
 async def prepare_provider_request(
@@ -305,6 +374,86 @@ async def prepare_provider_request(
             await get_google_ai_studio_api_url(), model_name, streaming
         )
         auth_headers = build_api_key_headers(api_key)
+    elif provider_id == XAI:
+        access_token = (
+            credential_data.get("api_key")
+            or credential_data.get("access_token")
+            or credential_data.get("token")
+        )
+        if not access_token:
+            raise ValueError("Provider credential does not contain an access token or API key.")
+        compression_result = compress_gemini_request(
+            dict(inner_request),
+            CompressionSettings(**await get_token_compression_config()),
+        )
+        payload = gemini_request_to_xai(dict(compression_result.request), model_name, streaming)
+        is_oauth = (
+            get_credential_provider_variant(credential_data) == GROK
+            or str(credential_data.get("credential_type") or "").strip().lower() == "oauth"
+        )
+        base_url = await get_xai_oauth_api_url() if is_oauth else await get_xai_api_url()
+        target_url = f"{base_url.rstrip('/')}/chat/completions"
+        auth_headers = build_xai_headers(
+            str(access_token),
+            await get_xai_user_agent(),
+            oauth=is_oauth,
+        )
+        if is_oauth and model_name:
+            auth_headers["x-grok-model-override"] = model_name
+    elif provider_id == OPENAI:
+        credential_variant = get_credential_provider_variant(credential_data)
+        access_token = (
+            credential_data.get("api_key")
+            if credential_variant == OPENAI_PLATFORM
+            else credential_data.get("access_token") or credential_data.get("token")
+        )
+        if not access_token:
+            raise ValueError("OpenAI credential does not contain an API key or access token.")
+        compression_result = compress_gemini_request(
+            dict(inner_request),
+            CompressionSettings(**await get_token_compression_config()),
+        )
+        if credential_variant == OPENAI_PLATFORM:
+            payload = gemini_request_to_openai(
+                dict(compression_result.request), model_name, streaming
+            )
+            target_url = f"{(await get_openai_api_url()).rstrip('/')}/chat/completions"
+            auth_headers = build_openai_headers(str(access_token))
+        else:
+            payload = gemini_request_to_codex(
+                dict(compression_result.request), model_name, streaming
+            )
+            target_url = f"{(await get_codex_api_url()).rstrip('/')}/responses"
+            auth_headers = build_codex_headers(
+                str(access_token),
+                str(credential_data.get("account_id") or ""),
+                session_id=str(
+                    inner_request.get("sessionId") or _session_key(inner_request, model_name)
+                ),
+                user_agent=await get_codex_user_agent(),
+            )
+    elif provider_id == ANTHROPIC:
+        compression_result = compress_gemini_request(
+            dict(inner_request),
+            CompressionSettings(**await get_token_compression_config()),
+        )
+        payload = gemini_request_to_anthropic(
+            dict(compression_result.request), model_name, streaming
+        )
+        target_url = f"{(await get_anthropic_api_url()).rstrip('/')}/messages"
+        auth_headers = build_anthropic_headers(
+            credential_data,
+            user_agent=await get_claude_user_agent(),
+        )
+    elif provider_id == OLLAMA:
+        compression_result = compress_gemini_request(
+            dict(inner_request),
+            CompressionSettings(**await get_token_compression_config()),
+        )
+        payload = gemini_request_to_ollama(dict(compression_result.request), model_name, streaming)
+        base_url = normalize_ollama_base_url(str(credential_data.get("base_url") or ""))
+        target_url = f"{base_url}/api/chat"
+        auth_headers = build_ollama_headers(str(credential_data.get("api_key") or ""))
     else:
         access_token = credential_data.get("access_token") or credential_data.get("token")
         if not access_token:
@@ -332,6 +481,40 @@ async def prepare_provider_request(
         if provider_id == GOOGLE_AI_STUDIO:
             auth_headers.pop("Authorization", None)
             auth_headers["x-goog-api-key"] = str(credential_data.get("api_key") or "")
+        elif provider_id == XAI:
+            auth_headers.pop("x-goog-api-key", None)
+            access_token = (
+                credential_data.get("api_key")
+                or credential_data.get("access_token")
+                or credential_data.get("token")
+            )
+            auth_headers["Authorization"] = f"Bearer {access_token}"
+        elif provider_id == OPENAI:
+            auth_headers.pop("x-goog-api-key", None)
+            credential_variant = get_credential_provider_variant(credential_data)
+            access_token = (
+                credential_data.get("api_key")
+                if credential_variant == OPENAI_PLATFORM
+                else credential_data.get("access_token") or credential_data.get("token")
+            )
+            auth_headers["Authorization"] = f"Bearer {access_token}"
+            if credential_variant == CODEX:
+                account_id = str(credential_data.get("account_id") or "").strip()
+                if account_id:
+                    auth_headers["ChatGPT-Account-Id"] = account_id
+        elif provider_id == ANTHROPIC:
+            for header in ("Authorization", "x-api-key", "anthropic-version", "anthropic-beta"):
+                auth_headers.pop(header, None)
+            auth_headers.update(
+                build_anthropic_headers(
+                    credential_data,
+                    user_agent=await get_claude_user_agent(),
+                )
+            )
+        elif provider_id == OLLAMA:
+            auth_headers.pop("x-goog-api-key", None)
+            auth_headers.pop("Authorization", None)
+            auth_headers.update(build_ollama_headers(str(credential_data.get("api_key") or "")))
         else:
             auth_headers.pop("x-goog-api-key", None)
             access_token = credential_data.get("access_token") or credential_data.get("token")
@@ -347,7 +530,7 @@ async def prepare_provider_request(
 
 
 def _is_retryable_status(status_code: int, disable_error_codes: List[int]) -> bool:
-    return status_code in (429, 503) or status_code in disable_error_codes
+    return status_code in RETRYABLE_UPSTREAM_STATUS_CODES or status_code in disable_error_codes
 
 
 def _normalize_model_candidates(
@@ -365,6 +548,13 @@ def _normalize_model_candidates(
     return candidates
 
 
+def _no_credential_error_message(model_name: str) -> str:
+    normalized_model = str(model_name or "").strip()
+    if normalized_model:
+        return f"No enabled credential supports model '{normalized_model}'."
+    return "No credentials are available."
+
+
 async def _switch_credential_for_retry(
     *,
     refresh_credential_fast,
@@ -378,19 +568,47 @@ async def _switch_credential_for_retry(
     return False
 
 
+async def _exclude_missing_model_route(
+    *,
+    credential_route_exclusions: set[tuple[str, str]],
+    credential_name: str,
+    provider_id: str,
+    model_name: str,
+) -> None:
+    """Exclude one failed credential-model route and persist it when possible."""
+    credential_route_exclusions.add((credential_name, model_name))
+    try:
+        await record_model_not_found(
+            provider_id,
+            model_name,
+            credential_name=credential_name,
+        )
+    except Exception as exc:
+        log.error(
+            "Model route blacklist persistence failed "
+            f"(provider={provider_id}, credential={credential_name}, model={model_name}): {exc}"
+        )
+
+
 async def stream_request(
     body: Dict[str, Any],
     native: bool = False,
     headers: Optional[Dict[str, str]] = None,
     model_candidates: Optional[List[str]] = None,
+    model_routing: bool = False,
 ):
     request_started_at = time.perf_counter()
     requested_model = str(body.get("model") or "")
     candidates = _normalize_model_candidates(body, model_candidates)
+    route_exclusions: set[tuple[str, str]] = set()
+    credential_route_exclusions: set[tuple[str, str]] = set()
 
     route_result = await credential_manager.get_valid_model_credential(
         candidates,
         mode="primary",
+        respect_model_blacklist=model_routing,
+        excluded_provider_models=route_exclusions,
+        excluded_credential_models=credential_route_exclusions,
     )
 
     if not route_result:
@@ -399,7 +617,7 @@ async def stream_request(
             status_code=503, mode="primary", model_name=requested_model
         )
         yield Response(
-            content=json.dumps({"error": "No credentials are available."}),
+            content=json.dumps({"error": _no_credential_error_message(requested_model)}),
             status_code=503,
             media_type="application/json",
         )
@@ -446,6 +664,7 @@ async def stream_request(
 
     DISABLE_ERROR_CODES = await get_auto_disable_error_codes()
     last_error_response = None
+    retry_attempt = 0
 
     async def refresh_credential_fast():
         nonlocal model_name, current_file, credential_data, provider_id, request_body
@@ -453,6 +672,9 @@ async def stream_request(
         route_result = await credential_manager.get_valid_model_credential(
             candidates,
             mode="primary",
+            respect_model_blacklist=model_routing,
+            excluded_provider_models=route_exclusions,
+            excluded_credential_models=credential_route_exclusions,
         )
         if not route_result:
             return None
@@ -475,10 +697,12 @@ async def stream_request(
         request_metrics = new_context.request_metrics
         return True
 
-    for attempt in range(max_retries + 1):
+    attempt_limit = max_retries + MAX_MODEL_ROUTE_ATTEMPTS
+    for attempt in range(attempt_limit + 1):
         received_content = False
         stream_token_usage: Dict[str, int] = {}
         need_retry = False
+        model_route_retry = False
 
         try:
             async for chunk in stream_post_async(
@@ -502,7 +726,37 @@ async def stream_request(
                     except Exception:
                         error_body = ""
 
-                    if _is_retryable_status(status_code, DISABLE_ERROR_CODES):
+                    if status_code == 404:
+                        credential_route_exclusions.add((current_file, model_name))
+                        if model_routing:
+                            log.warning(
+                                "[provider stream] model route not found; blacklisting "
+                                f"credential={current_file}, provider={provider_id}, model={model_name}."
+                            )
+                            await _exclude_missing_model_route(
+                                credential_route_exclusions=credential_route_exclusions,
+                                credential_name=current_file,
+                                provider_id=provider_id,
+                                model_name=model_name,
+                            )
+                        else:
+                            log.warning(
+                                "[provider stream] credential could not serve the requested model; "
+                                f"trying another route (credential={current_file}, model={model_name})."
+                            )
+                        await record_model_route_miss(
+                            credential_manager,
+                            current_file,
+                            model_name=model_name,
+                            provider=provider_id,
+                        )
+                        if attempt < attempt_limit:
+                            need_retry = True
+                            model_route_retry = True
+                            break
+                        yield chunk
+                        return
+                    elif _is_retryable_status(status_code, DISABLE_ERROR_CODES):
                         log.warning(
                             f"[provider stream] streaming request failed (status={status_code}), credential={current_file}, response={error_body[:500] if error_body else 'None'}"
                         )
@@ -532,13 +786,14 @@ async def stream_request(
                             status_code,
                             current_file,
                             retry_config["retry_enabled"],
-                            attempt,
+                            retry_attempt,
                             max_retries,
                             retry_interval,
                             mode="primary",
                         )
 
-                        if should_retry and attempt < max_retries:
+                        if should_retry:
+                            retry_attempt += 1
                             need_retry = True
                             break
                         else:
@@ -564,6 +819,28 @@ async def stream_request(
                         yield chunk
                         return
                 else:
+                    if provider_id == XAI:
+                        chunk = xai_stream_line_to_gemini(chunk)
+                        if not chunk:
+                            continue
+                    elif provider_id == OPENAI:
+                        if get_credential_provider_variant(credential_data) == OPENAI_PLATFORM:
+                            chunk = openai_stream_line_to_gemini(chunk)
+                        else:
+                            chunk = codex_stream_line_to_gemini(chunk)
+                        if not chunk:
+                            continue
+                    elif provider_id == ANTHROPIC:
+                        chunk = anthropic_stream_line_to_gemini(
+                            chunk, stream_id=f"{current_file}:{model_name}"
+                        )
+                        if not chunk:
+                            continue
+                    elif provider_id == OLLAMA:
+                        chunk = ollama_stream_line_to_gemini(chunk)
+                        if not chunk:
+                            continue
+
                     if not received_content:
                         received_content = True
                         log.debug(
@@ -612,7 +889,8 @@ async def stream_request(
                     provider=provider_id,
                 )
 
-                if attempt < max_retries:
+                if retry_config["retry_enabled"] and retry_attempt < max_retries:
+                    retry_attempt += 1
                     need_retry = True
                 else:
                     log.error("[provider stream] Empty response reaches maximum number of retries")
@@ -624,11 +902,15 @@ async def stream_request(
                     return
 
             if need_retry:
-                log.info(
-                    f"[provider stream] retrying request (attempt {attempt + 2}/{max_retries + 1})."
-                )
+                if model_route_retry:
+                    log.info("[provider stream] Trying the next compatible model route.")
+                else:
+                    log.info(
+                        "[provider stream] retrying request "
+                        f"(attempt {retry_attempt + 1}/{max_retries + 1})."
+                    )
 
-                if switch_credential_enabled:
+                if model_route_retry or switch_credential_enabled:
                     switched = await _switch_credential_for_retry(
                         refresh_credential_fast=refresh_credential_fast,
                         log_prefix="[provider stream]",
@@ -637,6 +919,9 @@ async def stream_request(
                         log.error(
                             "[provider stream] No credentials or tokens available when retrying"
                         )
+                        if model_route_retry and last_error_response is not None:
+                            yield last_error_response
+                            return
                         yield Response(
                             content=json.dumps({"error": "No credentials are available."}),
                             status_code=503,
@@ -646,22 +931,55 @@ async def stream_request(
                 continue
 
         except Exception as e:
+            exception_status = int(getattr(e, "status_code", 500) or 500)
             log.error(
                 f"[provider stream] Streaming Request Exception: {e}, Credentials: {current_file}"
             )
+            if exception_status == 404:
+                credential_route_exclusions.add((current_file, model_name))
+                if model_routing:
+                    await _exclude_missing_model_route(
+                        credential_route_exclusions=credential_route_exclusions,
+                        credential_name=current_file,
+                        provider_id=provider_id,
+                        model_name=model_name,
+                    )
+                await record_model_route_miss(
+                    credential_manager,
+                    current_file,
+                    model_name=model_name,
+                    provider=provider_id,
+                )
+                if attempt < attempt_limit:
+                    switched = await _switch_credential_for_retry(
+                        refresh_credential_fast=refresh_credential_fast,
+                        log_prefix="[provider stream]",
+                    )
+                    if switched:
+                        continue
+                yield Response(
+                    content=json.dumps(
+                        {"error": "No compatible credential could serve the requested model."}
+                    ),
+                    status_code=404,
+                    media_type="application/json",
+                )
+                return
             await record_api_call_error(
                 credential_manager,
                 current_file,
-                500,
+                exception_status,
                 None,
                 mode="primary",
                 model_name=model_name,
                 error_message=str(e),
                 provider=provider_id,
             )
-            if attempt < max_retries:
+            if retry_config["retry_enabled"] and retry_attempt < max_retries:
+                retry_attempt += 1
                 log.info(
-                    f"[provider stream] retry after abnormality (attempt {attempt + 2}/{max_retries + 1})..."
+                    "[provider stream] retry after abnormality "
+                    f"(attempt {retry_attempt + 1}/{max_retries + 1})..."
                 )
                 await asyncio.sleep(retry_interval)
                 if switch_credential_enabled:
@@ -706,6 +1024,7 @@ async def non_stream_request(
     body: Dict[str, Any],
     headers: Optional[Dict[str, str]] = None,
     model_candidates: Optional[List[str]] = None,
+    model_routing: bool = False,
 ) -> Response:
     request_started_at = time.perf_counter()
 
@@ -717,6 +1036,7 @@ async def non_stream_request(
             native=False,
             headers=headers,
             model_candidates=model_candidates,
+            model_routing=model_routing,
         )
 
         return await collect_streaming_response(stream)
@@ -725,10 +1045,15 @@ async def non_stream_request(
 
     requested_model = str(body.get("model") or "")
     candidates = _normalize_model_candidates(body, model_candidates)
+    route_exclusions: set[tuple[str, str]] = set()
+    credential_route_exclusions: set[tuple[str, str]] = set()
 
     route_result = await credential_manager.get_valid_model_credential(
         candidates,
         mode="primary",
+        respect_model_blacklist=model_routing,
+        excluded_provider_models=route_exclusions,
+        excluded_credential_models=credential_route_exclusions,
     )
 
     if not route_result:
@@ -737,12 +1062,29 @@ async def non_stream_request(
             status_code=503, mode="primary", model_name=requested_model
         )
         return Response(
-            content=json.dumps({"error": "No credentials are available."}),
+            content=json.dumps({"error": _no_credential_error_message(requested_model)}),
             status_code=503,
             media_type="application/json",
         )
 
     model_name, current_file, credential_data = route_result
+    if (
+        get_credential_provider(credential_data) == OPENAI
+        and get_credential_provider_variant(credential_data) == CODEX
+    ):
+        # ChatGPT's Codex endpoint is stream-only. Re-enter through the streaming
+        # path so downstream non-stream clients still receive one collected response.
+        await credential_manager.release_credential(current_file, mode="primary")
+        return await collect_streaming_response(
+            stream_request(
+                body=body,
+                native=False,
+                headers=headers,
+                model_candidates=model_candidates,
+                model_routing=model_routing,
+            )
+        )
+
     request_body = {**body, "model": model_name}
     try:
         context = await prepare_provider_request(
@@ -782,6 +1124,7 @@ async def non_stream_request(
 
     DISABLE_ERROR_CODES = await get_auto_disable_error_codes()
     last_error_response = None
+    retry_attempt = 0
 
     async def refresh_credential_fast():
         nonlocal model_name, current_file, credential_data, provider_id, request_body
@@ -789,6 +1132,9 @@ async def non_stream_request(
         route_result = await credential_manager.get_valid_model_credential(
             candidates,
             mode="primary",
+            respect_model_blacklist=model_routing,
+            excluded_provider_models=route_exclusions,
+            excluded_credential_models=credential_route_exclusions,
         )
         if not route_result:
             return None
@@ -811,7 +1157,8 @@ async def non_stream_request(
         request_metrics = new_context.request_metrics
         return True
 
-    for attempt in range(max_retries + 1):
+    attempt_limit = max_retries + MAX_MODEL_ROUTE_ATTEMPTS
+    for attempt in range(attempt_limit + 1):
         need_retry = False
 
         try:
@@ -841,7 +1188,8 @@ async def non_stream_request(
                         provider=provider_id,
                     )
 
-                    if attempt < max_retries:
+                    if retry_config["retry_enabled"] and retry_attempt < max_retries:
+                        retry_attempt += 1
                         need_retry = True
                     else:
                         log.error("[provider] Empty response reaches maximum number of retries")
@@ -851,7 +1199,102 @@ async def non_stream_request(
                             media_type="application/json",
                         )
                 else:
-                    token_usage = extract_token_usage_from_response(response.content)
+                    response_content = response.content
+                    if provider_id == XAI:
+                        try:
+                            response_content = json.dumps(
+                                xai_response_to_gemini(response.json())
+                            ).encode("utf-8")
+                        except (ValueError, TypeError) as exc:
+                            await record_api_call_error(
+                                credential_manager,
+                                current_file,
+                                502,
+                                None,
+                                mode="primary",
+                                model_name=model_name,
+                                error_message=str(exc),
+                                provider=provider_id,
+                            )
+                            return Response(
+                                content=json.dumps(
+                                    {"error": "Grok Build returned an invalid response."}
+                                ),
+                                status_code=502,
+                                media_type="application/json",
+                            )
+                    elif provider_id == OPENAI:
+                        try:
+                            if get_credential_provider_variant(credential_data) == OPENAI_PLATFORM:
+                                translated = openai_response_to_gemini(response.json())
+                            else:
+                                translated = codex_response_to_gemini(response.json())
+                            response_content = json.dumps(translated).encode("utf-8")
+                        except (ValueError, TypeError) as exc:
+                            await record_api_call_error(
+                                credential_manager,
+                                current_file,
+                                502,
+                                None,
+                                mode="primary",
+                                model_name=model_name,
+                                error_message=str(exc),
+                                provider=provider_id,
+                            )
+                            return Response(
+                                content=json.dumps(
+                                    {"error": "OpenAI returned an invalid response."}
+                                ),
+                                status_code=502,
+                                media_type="application/json",
+                            )
+                    elif provider_id == ANTHROPIC:
+                        try:
+                            response_content = json.dumps(
+                                anthropic_response_to_gemini(response.json())
+                            ).encode("utf-8")
+                        except (ValueError, TypeError) as exc:
+                            await record_api_call_error(
+                                credential_manager,
+                                current_file,
+                                502,
+                                None,
+                                mode="primary",
+                                model_name=model_name,
+                                error_message=str(exc),
+                                provider=provider_id,
+                            )
+                            return Response(
+                                content=json.dumps(
+                                    {"error": "Anthropic returned an invalid response."}
+                                ),
+                                status_code=502,
+                                media_type="application/json",
+                            )
+                    elif provider_id == OLLAMA:
+                        try:
+                            response_content = json.dumps(
+                                ollama_response_to_gemini(response.json())
+                            ).encode("utf-8")
+                        except (ValueError, TypeError) as exc:
+                            await record_api_call_error(
+                                credential_manager,
+                                current_file,
+                                502,
+                                None,
+                                mode="primary",
+                                model_name=model_name,
+                                error_message=str(exc),
+                                provider=provider_id,
+                            )
+                            return Response(
+                                content=json.dumps(
+                                    {"error": "Ollama returned an invalid response."}
+                                ),
+                                status_code=502,
+                                media_type="application/json",
+                            )
+                    token_usage = extract_token_usage_from_response(response_content)
                     await record_api_call_success(
                         credential_manager,
                         current_file,
@@ -867,7 +1310,9 @@ async def non_stream_request(
                         provider=provider_id,
                     )
                     return Response(
-                        content=response.content, status_code=200, headers=dict(response.headers)
+                        content=response_content,
+                        status_code=200,
+                        media_type="application/json",
                     )
 
             if status_code != 200:
@@ -883,7 +1328,34 @@ async def non_stream_request(
                 except Exception:
                     pass
 
-                if _is_retryable_status(status_code, DISABLE_ERROR_CODES):
+                if status_code == 404:
+                    credential_route_exclusions.add((current_file, model_name))
+                    if model_routing:
+                        log.warning(
+                            "[provider] model route not found; blacklisting "
+                            f"credential={current_file}, provider={provider_id}, model={model_name}."
+                        )
+                        await _exclude_missing_model_route(
+                            credential_route_exclusions=credential_route_exclusions,
+                            credential_name=current_file,
+                            provider_id=provider_id,
+                            model_name=model_name,
+                        )
+                    else:
+                        log.warning(
+                            "[provider] credential could not serve the requested model; "
+                            f"trying another route (credential={current_file}, model={model_name})."
+                        )
+                    await record_model_route_miss(
+                        credential_manager,
+                        current_file,
+                        model_name=model_name,
+                        provider=provider_id,
+                    )
+                    if attempt < attempt_limit and await refresh_credential_fast():
+                        continue
+                    return last_error_response
+                elif _is_retryable_status(status_code, DISABLE_ERROR_CODES):
                     log.warning(
                         f"[provider] non-streaming request failed (status={status_code}), credential={current_file}, response={error_text[:500] if error_text else 'None'}"
                     )
@@ -913,13 +1385,14 @@ async def non_stream_request(
                         status_code,
                         current_file,
                         retry_config["retry_enabled"],
-                        attempt,
+                        retry_attempt,
                         max_retries,
                         retry_interval,
                         mode="primary",
                     )
 
-                    if should_retry and attempt < max_retries:
+                    if should_retry:
+                        retry_attempt += 1
                         need_retry = True
                     else:
                         log.error(
@@ -943,7 +1416,9 @@ async def non_stream_request(
                     return last_error_response
 
             if need_retry:
-                log.info(f"[provider] retrying request (attempt {attempt + 2}/{max_retries + 1}).")
+                log.info(
+                    f"[provider] retrying request (attempt {retry_attempt + 1}/{max_retries + 1})."
+                )
 
                 if switch_credential_enabled:
                     switched = await _switch_credential_for_retry(
@@ -973,9 +1448,11 @@ async def non_stream_request(
                 error_message=str(e),
                 provider=provider_id,
             )
-            if attempt < max_retries:
+            if retry_config["retry_enabled"] and retry_attempt < max_retries:
+                retry_attempt += 1
                 log.info(
-                    f"[provider] Retry after exception (attempt {attempt + 2}/{max_retries + 1})..."
+                    "[provider] Retry after exception "
+                    f"(attempt {retry_attempt + 1}/{max_retries + 1})..."
                 )
                 await asyncio.sleep(retry_interval)
                 if switch_credential_enabled:
@@ -986,7 +1463,7 @@ async def non_stream_request(
                     if not switched:
                         return Response(
                             content=json.dumps({"error": "No credentials are available."}),
-                            status_code=500,
+                            status_code=503,
                             media_type="application/json",
                         )
                 continue
@@ -1012,122 +1489,365 @@ async def non_stream_request(
         )
 
 
-async def get_configured_provider_model_ids() -> Dict[str, set[str]]:
-    """Return enabled providers and model metadata already stored per credential."""
+async def _get_enabled_catalog_credentials() -> List[Tuple[str, str, str, Dict[str, Any]]]:
+    """Return enabled credentials with precise product and routing identities."""
     storage_adapter = await get_storage_adapter()
-    provider_models: Dict[str, set[str]] = {}
-    for filename in await storage_adapter.list_credentials(mode="primary"):
-        state = await storage_adapter.get_credential_state(filename, mode="primary")
-        if state.get("disabled"):
-            continue
-        credential_data = await storage_adapter.get_credential(filename, mode="primary")
-        if not credential_data:
-            continue
-        provider_id = get_credential_provider(credential_data)
-        model_ids = provider_models.setdefault(provider_id, set())
-        stored_model_ids = credential_data.get("model_ids")
-        if isinstance(stored_model_ids, list):
-            model_ids.update(
-                str(model_id).removeprefix("models/").strip()
-                for model_id in stored_model_ids
-                if str(model_id or "").strip()
+    credentials: List[Tuple[str, str, str, Dict[str, Any]]] = []
+
+    get_all_credentials = getattr(storage_adapter, "get_all_credentials", None)
+    get_all_states = getattr(storage_adapter, "get_all_credential_states", None)
+    if callable(get_all_credentials) and callable(get_all_states):
+        credential_map, state_map = await asyncio.gather(
+            get_all_credentials(mode="primary"),
+            get_all_states(mode="primary"),
+        )
+        credential_items = credential_map.items()
+    else:
+        filenames = await storage_adapter.list_credentials(mode="primary")
+        credential_items = []
+        state_map = {}
+        for filename in filenames:
+            state_map[filename] = await storage_adapter.get_credential_state(
+                filename, mode="primary"
             )
+            credential_data = await storage_adapter.get_credential(filename, mode="primary")
+            credential_items.append((filename, credential_data))
+
+    for filename, credential_data in credential_items:
+        state = state_map.get(filename) or {}
+        if state.get("disabled") or not credential_data:
+            continue
+        catalog_data = dict(credential_data)
+        if state.get("tier") and not catalog_data.get("tier"):
+            catalog_data["tier"] = state["tier"]
+        credentials.append(
+            (
+                filename,
+                get_credential_provider_variant(catalog_data),
+                get_credential_provider(catalog_data),
+                catalog_data,
+            )
+        )
+    return credentials
+
+
+def _stored_model_ids(credential_data: Dict[str, Any]) -> set[str]:
+    values = credential_data.get("model_ids")
+    if not isinstance(values, list):
+        return set()
+    return {
+        str(model_id).removeprefix("models/").strip()
+        for model_id in values
+        if str(model_id or "").strip()
+    }
+
+
+async def get_configured_provider_model_ids() -> Dict[str, set[str]]:
+    """Return stored model catalogs grouped by precise provider product."""
+    provider_models: Dict[str, set[str]] = {}
+    for _, provider_variant, _, credential_data in await _get_enabled_catalog_credentials():
+        provider_models.setdefault(provider_variant, set()).update(
+            _stored_model_ids(credential_data)
+        )
     return provider_models
 
 
 async def get_configured_provider_ids() -> set[str]:
-    """Return providers with at least one enabled credential."""
+    """Return provider products with at least one enabled credential."""
     return set(await get_configured_provider_model_ids())
+
+
+def _catalog_request_matches(
+    requested_provider: str,
+    provider_variant: str,
+    routing_provider: str,
+) -> bool:
+    requested = str(requested_provider or "").strip().lower().replace("-", "_")
+    if requested in {CODEX, OPENAI_PLATFORM, GROK, XAI_CONSOLE}:
+        return provider_variant == requested
+    return routing_provider == get_provider_routing_id(requested)
+
+
+def _catalog_entitlement_signature(credential_data: Dict[str, Any]) -> str:
+    fields = (
+        "tier",
+        "plan",
+        "plan_type",
+        "subscription_tier",
+        "subscription_plan",
+        "account_type",
+        "access_tier",
+    )
+    values = []
+    for field in fields:
+        value = credential_data.get(field)
+        if isinstance(value, (str, int, float)) and str(value).strip():
+            values.append(f"{field}:{str(value).strip().lower()}")
+    return "|".join(values) or "unknown"
+
+
+def _stored_catalog_signature(credential_data: Dict[str, Any]) -> str:
+    model_ids = sorted(_stored_model_ids(credential_data))
+    if not model_ids:
+        return "uncataloged"
+    payload = "\0".join(model_ids).encode("utf-8")
+    return hashlib.sha256(payload).hexdigest()[:16]
+
+
+def _catalog_cohort_key(
+    credential: Tuple[str, str, str, Dict[str, Any]],
+) -> Tuple[str, str, str]:
+    _, provider_variant, _, credential_data = credential
+    return (
+        provider_variant,
+        _catalog_entitlement_signature(credential_data),
+        _stored_catalog_signature(credential_data),
+    )
+
+
+def _catalog_rotation_score(*parts: str) -> bytes:
+    window = int(time.time() // MODEL_DISCOVERY_ROTATION_SECONDS)
+    value = "|".join((str(window), *parts)).encode("utf-8")
+    return hashlib.sha256(value).digest()
+
+
+def _group_catalog_credentials(
+    credentials: List[Tuple[str, str, str, Dict[str, Any]]],
+) -> Dict[Tuple[str, str, str], List[Tuple[str, str, str, Dict[str, Any]]]]:
+    cohorts: Dict[
+        Tuple[str, str, str],
+        List[Tuple[str, str, str, Dict[str, Any]]],
+    ] = {}
+    for credential in credentials:
+        cohorts.setdefault(_catalog_cohort_key(credential), []).append(credential)
+    return cohorts
+
+
+def _select_catalog_cohorts(
+    cohorts: Dict[
+        Tuple[str, str, str],
+        List[Tuple[str, str, str, Dict[str, Any]]],
+    ],
+) -> List[
+    Tuple[
+        Tuple[str, str, str],
+        List[Tuple[str, str, str, Dict[str, Any]]],
+    ]
+]:
+    """Select a bounded, provider-fair set of cohorts for live discovery."""
+    queues: Dict[
+        str,
+        List[
+            Tuple[
+                Tuple[str, str, str],
+                List[Tuple[str, str, str, Dict[str, Any]]],
+            ]
+        ],
+    ] = {}
+    for key, members in cohorts.items():
+        queues.setdefault(key[0], []).append((key, members))
+    for provider_id, items in queues.items():
+        items.sort(key=lambda item: _catalog_rotation_score(provider_id, *item[0]))
+
+    selected = []
+    provider_ids = sorted(queues)
+    while len(selected) < MAX_MODEL_DISCOVERY_COHORTS:
+        progressed = False
+        for provider_id in provider_ids:
+            queue = queues[provider_id]
+            if not queue:
+                continue
+            selected.append(queue.pop(0))
+            progressed = True
+            if len(selected) >= MAX_MODEL_DISCOVERY_COHORTS:
+                break
+        if not progressed:
+            break
+    return selected
+
+
+async def _discover_credential_model_ids(
+    filename: str,
+    provider_variant: str,
+    credential_data: Dict[str, Any],
+    storage_adapter,
+) -> CredentialModelDiscovery:
+    """Refresh and persist the catalog exposed by one credential."""
+    stored = _stored_model_ids(credential_data)
+    data = credential_data
+    try:
+        if provider_variant == GOOGLE_ANTIGRAVITY:
+            data = await credential_manager.prepare_credential(
+                filename, credential_data, mode="primary"
+            )
+            access_token = (data or {}).get("access_token") or (data or {}).get("token")
+            if not access_token:
+                return CredentialModelDiscovery(frozenset(stored), False)
+            discovered = await fetch_antigravity_model_ids(str(access_token))
+        elif provider_variant == GOOGLE_AI_STUDIO:
+            api_key = str(data.get("api_key") or "")
+            if not api_key:
+                return CredentialModelDiscovery(frozenset(stored), False)
+            response = await get_async(
+                build_models_url(await get_google_ai_studio_api_url()),
+                headers=build_api_key_headers(api_key),
+                timeout=30.0,
+            )
+            if response.status_code != 200:
+                raise RuntimeError(f"HTTP {response.status_code}")
+            discovered = parse_model_ids(response.json())
+        elif provider_variant in {GROK, XAI_CONSOLE}:
+            if provider_variant == GROK:
+                data = await credential_manager.prepare_credential(
+                    filename, credential_data, mode="primary"
+                )
+            access_token = (
+                (data or {}).get("api_key")
+                or (data or {}).get("access_token")
+                or (data or {}).get("token")
+            )
+            if not access_token:
+                return CredentialModelDiscovery(frozenset(stored), False)
+            discovered = (
+                await fetch_xai_oauth_model_ids(str(access_token))
+                if provider_variant == GROK
+                else await fetch_xai_model_ids(str(access_token))
+            )
+        elif provider_variant == CODEX:
+            data = await credential_manager.prepare_credential(
+                filename, credential_data, mode="primary"
+            )
+            access_token = (data or {}).get("access_token") or (data or {}).get("token")
+            if not access_token:
+                return CredentialModelDiscovery(frozenset(stored), False)
+            account_id = str((data or {}).get("account_id") or "")
+            discovered = await fetch_codex_model_ids(str(access_token), account_id)
+        elif provider_variant == OPENAI_PLATFORM:
+            api_key = str(data.get("api_key") or "")
+            if not api_key:
+                return CredentialModelDiscovery(frozenset(stored), False)
+            discovered = await fetch_openai_model_ids(api_key)
+        elif provider_variant in {CLAUDE_CODE, CLAUDE_PLATFORM}:
+            if provider_variant == CLAUDE_CODE:
+                data = await credential_manager.prepare_credential(
+                    filename, credential_data, mode="primary"
+                )
+            if not data:
+                return CredentialModelDiscovery(frozenset(stored), False)
+            discovered = await fetch_anthropic_model_ids(data)
+        elif provider_variant == OLLAMA:
+            base_url = str(data.get("base_url") or "")
+            if not base_url:
+                return CredentialModelDiscovery(frozenset(stored), False)
+            discovered = await fetch_ollama_model_ids(
+                base_url,
+                str(data.get("api_key") or ""),
+            )
+        else:
+            return CredentialModelDiscovery(frozenset(stored), False)
+
+        normalized = {
+            str(model_id).removeprefix("models/").strip()
+            for model_id in discovered
+            if str(model_id or "").strip()
+        }
+        if normalized and normalized != stored:
+            updated = dict(data or credential_data)
+            updated["model_ids"] = sorted(normalized)
+            await storage_adapter.store_credential(filename, updated, mode="primary")
+        return CredentialModelDiscovery(frozenset(normalized or stored), True)
+    except Exception as exc:
+        log.warning(f"{provider_variant} model discovery failed for {filename}: {exc}")
+        return CredentialModelDiscovery(frozenset(stored), False)
+
+
+async def _discover_catalog_models(
+    credentials: List[Tuple[str, str, str, Dict[str, Any]]],
+    storage_adapter,
+) -> Dict[str, set[str]]:
+    """Merge all cached catalogs and refresh only bounded cohort representatives."""
+    provider_models: Dict[str, set[str]] = {}
+    for _, provider_variant, _, credential_data in credentials:
+        provider_models.setdefault(provider_variant, set()).update(
+            _stored_model_ids(credential_data)
+        )
+
+    cohorts = _group_catalog_credentials(credentials)
+    selected = _select_catalog_cohorts(cohorts)
+    skipped_count = len(cohorts) - len(selected)
+    if skipped_count:
+        log.info(
+            "Model discovery deferred %s cohort(s); cached catalogs remain available.",
+            skipped_count,
+        )
+
+    semaphore = asyncio.Semaphore(MAX_MODEL_DISCOVERY_CONCURRENCY)
+
+    async def discover_cohort(key, members):
+        ordered = sorted(
+            members,
+            key=lambda item: _catalog_rotation_score(*key, item[0]),
+        )
+        models: set[str] = set()
+        for filename, provider_variant, _, credential_data in ordered[
+            :MAX_MODEL_DISCOVERY_FAILOVER_ATTEMPTS
+        ]:
+            models.update(_stored_model_ids(credential_data))
+            async with semaphore:
+                result = await _discover_credential_model_ids(
+                    filename,
+                    provider_variant,
+                    credential_data,
+                    storage_adapter,
+                )
+            models.update(result.model_ids)
+            if result.refreshed:
+                break
+        return key[0], models
+
+    results = await asyncio.gather(
+        *(discover_cohort(key, members) for key, members in selected),
+        return_exceptions=True,
+    )
+    for result in results:
+        if isinstance(result, Exception):
+            log.warning(f"Provider model cohort discovery failed: {result}")
+            continue
+        provider_variant, model_ids = result
+        provider_models.setdefault(provider_variant, set()).update(model_ids)
+    return provider_models
 
 
 async def fetch_provider_model_ids(
     provider_id: str,
     stored_model_ids: Optional[set[str]] = None,
 ) -> set[str]:
-    """Discover model IDs exposed by one configured provider."""
-    if stored_model_ids is None:
-        provider_models = await get_configured_provider_model_ids()
-        stored_model_ids = provider_models.get(provider_id, set())
-    model_ids = set(stored_model_ids)
+    """Discover model IDs through bounded representatives of matching cohorts."""
+    fallback = set(stored_model_ids or ())
+    credentials = [
+        credential
+        for credential in await _get_enabled_catalog_credentials()
+        if _catalog_request_matches(provider_id, credential[1], credential[2])
+    ]
+    if not credentials:
+        return fallback
 
-    if provider_id == GOOGLE_ANTIGRAVITY:
-        cred_result = await credential_manager.get_valid_credential(
-            mode="primary", provider_id=GOOGLE_ANTIGRAVITY
-        )
-        if cred_result:
-            current_file, credential_data = cred_result
-            try:
-                access_token = credential_data.get("access_token") or credential_data.get("token")
-                if access_token:
-                    response = await post_async(
-                        url=(
-                            f"{(await get_antigravity_api_url()).rstrip('/')}"
-                            "/v1internal:fetchAvailableModels"
-                        ),
-                        json={},
-                        headers=await build_primary_headers(str(access_token)),
-                    )
-                    if response.status_code == 200:
-                        data = response.json()
-                        if isinstance(data.get("models"), dict):
-                            model_ids.update(data["models"].keys())
-                            if "claude-sonnet-4-6" in data["models"]:
-                                model_ids.add("claude-sonnet-4-6-thinking")
-                            if "claude-opus-4-6-thinking" in data["models"]:
-                                model_ids.add("claude-opus-4-6")
-                    else:
-                        log.warning(
-                            "Google Antigravity model discovery failed with HTTP "
-                            f"{response.status_code}."
-                        )
-            except Exception as exc:
-                log.warning(f"Google Antigravity model discovery failed: {exc}")
-            finally:
-                await credential_manager.release_credential(current_file, mode="primary")
-    elif provider_id == GOOGLE_AI_STUDIO:
-        cred_result = await credential_manager.get_valid_credential(
-            mode="primary", provider_id=GOOGLE_AI_STUDIO
-        )
-        if cred_result:
-            current_file, credential_data = cred_result
-            try:
-                response = await get_async(
-                    build_models_url(await get_google_ai_studio_api_url()),
-                    headers=build_api_key_headers(credential_data.get("api_key", "")),
-                    timeout=30.0,
-                )
-                if response.status_code == 200:
-                    model_ids.update(parse_model_ids(response.json()))
-                else:
-                    log.warning(
-                        f"Google AI Studio model discovery failed with HTTP {response.status_code}."
-                    )
-            except Exception as exc:
-                log.warning(f"Google AI Studio model discovery failed: {exc}")
-            finally:
-                await credential_manager.release_credential(current_file, mode="primary")
-
+    storage_adapter = await get_storage_adapter()
+    provider_models = await _discover_catalog_models(credentials, storage_adapter)
+    model_ids = set(fallback)
+    for values in provider_models.values():
+        model_ids.update(values)
     return model_ids
 
 
 async def fetch_configured_provider_models() -> Dict[str, List[str]]:
-    """Return active provider model catalogs with provider provenance."""
-    stored_provider_models = await get_configured_provider_model_ids()
-    provider_ids = sorted(stored_provider_models)
-    discovered = await asyncio.gather(
-        *(
-            fetch_provider_model_ids(provider_id, stored_provider_models[provider_id])
-            for provider_id in provider_ids
-        ),
-        return_exceptions=True,
-    )
-    provider_models: Dict[str, List[str]] = {}
-    for provider_id, result in zip(provider_ids, discovered):
-        if isinstance(result, Exception):
-            log.warning(f"{provider_id} model discovery failed: {result}")
-            result = stored_provider_models[provider_id]
-        provider_models[provider_id] = sorted(result)
-    return provider_models
+    """Discover bounded provider cohorts while preserving every cached catalog."""
+    credentials = await _get_enabled_catalog_credentials()
+    storage_adapter = await get_storage_adapter()
+    provider_models = await _discover_catalog_models(credentials, storage_adapter)
+    return {
+        provider_id: sorted(model_ids) for provider_id, model_ids in sorted(provider_models.items())
+    }
 
 
 async def fetch_quota_info(access_token: str) -> Dict[str, Any]:

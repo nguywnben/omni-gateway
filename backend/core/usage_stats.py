@@ -9,6 +9,8 @@ from typing import Any, Dict, List, Optional
 from core.provider_registry import (
     GOOGLE_ANTIGRAVITY,
     get_credential_provider,
+    get_credential_provider_display_name,
+    get_credential_provider_variant,
     get_provider_display_name,
     normalize_provider_id,
 )
@@ -30,6 +32,7 @@ USAGE_PERIODS = {
 
 
 TOKEN_COLUMNS = {
+    "request_id": "TEXT DEFAULT ''",
     "model": "TEXT DEFAULT ''",
     "provider": "TEXT DEFAULT ''",
     "status_code": "INTEGER DEFAULT 200",
@@ -60,9 +63,23 @@ def _provider_display_name(value: Any) -> str:
     return get_provider_display_name(normalize_provider_id(value or GOOGLE_ANTIGRAVITY))
 
 
-def deleted_usage_filename(provider: Any) -> str:
+def _credential_provider_display_name(provider: Any, credential_type: Any = "") -> str:
+    return get_credential_provider_display_name(
+        {
+            "provider": provider or GOOGLE_ANTIGRAVITY,
+            "credential_type": credential_type or "",
+        }
+    )
+
+
+def deleted_usage_filename(provider: Any, credential_type: Any = "") -> str:
     """Return the anonymous history bucket for a deleted provider credential."""
-    provider_id = normalize_provider_id(provider or GOOGLE_ANTIGRAVITY)
+    provider_id = get_credential_provider_variant(
+        {
+            "provider": provider or GOOGLE_ANTIGRAVITY,
+            "credential_type": credential_type or "",
+        }
+    )
     safe_provider_id = "".join(
         character if character.isalnum() or character == "_" else "_" for character in provider_id
     ).strip("_")
@@ -91,9 +108,12 @@ def _empty_usage_record(metadata: Dict[str, Any]) -> Dict[str, Any]:
     return {
         "user_email": metadata.get("user_email", ""),
         "credential_label": metadata.get("credential_label", ""),
+        "credential_type": metadata.get("credential_type", ""),
         "provider": provider_id,
-        "provider_name": metadata.get("provider_name") or _provider_display_name(provider_id),
+        "provider_name": metadata.get("provider_name")
+        or _credential_provider_display_name(provider_id, metadata.get("credential_type")),
         "is_deleted": bool(metadata.get("is_deleted", False)),
+        "is_historical": bool(metadata.get("is_historical", False)),
         "calls": 0,
         "successful_calls": 0,
         "failed_calls": 0,
@@ -145,9 +165,12 @@ def _usage_record(
     record = {
         "user_email": existing.get("user_email", ""),
         "credential_label": existing.get("credential_label", ""),
+        "credential_type": existing.get("credential_type", ""),
         "provider": provider_id,
-        "provider_name": existing.get("provider_name") or _provider_display_name(provider_id),
+        "provider_name": existing.get("provider_name")
+        or _credential_provider_display_name(provider_id, existing.get("credential_type")),
         "is_deleted": bool(existing.get("is_deleted", False)),
+        "is_historical": bool(existing.get("is_historical", False)),
         "calls": calls,
         "successful_calls": successful_calls,
         "failed_calls": failed_calls,
@@ -317,6 +340,7 @@ def record_call(
     success: bool = True,
     token_usage: Optional[Dict[str, Any]] = None,
     request_metrics: Optional[Dict[str, Any]] = None,
+    request_id: str = "",
 ):
     filename = os.path.basename(filename)
     if not filename:
@@ -333,6 +357,7 @@ def record_call(
                 INSERT INTO usage_logs (
                     filename,
                     timestamp,
+                    request_id,
                     model,
                     provider,
                     status_code,
@@ -348,11 +373,12 @@ def record_call(
                     latency_ms,
                     retry_count
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     filename,
                     time.time(),
+                    str(request_id or "")[:128],
                     model or "",
                     provider or "",
                     _int_value(status_code or 200),
@@ -376,7 +402,7 @@ def record_call(
             conn.close()
 
 
-def retire_credential_usage(filename: str, provider: Any) -> int:
+def retire_credential_usage(filename: str, provider: Any, *, credential_type: Any = "") -> int:
     """Detach historical usage from a deleted credential without losing totals."""
     source_filename = os.path.basename(str(filename or ""))
     if (
@@ -386,8 +412,13 @@ def retire_credential_usage(filename: str, provider: Any) -> int:
     ):
         return 0
 
-    provider_id = normalize_provider_id(provider or GOOGLE_ANTIGRAVITY)
-    anonymous_filename = deleted_usage_filename(provider_id)
+    provider_id = get_credential_provider_variant(
+        {
+            "provider": provider or GOOGLE_ANTIGRAVITY,
+            "credential_type": credential_type or "",
+        }
+    )
+    anonymous_filename = deleted_usage_filename(provider_id, credential_type)
     init_db()
     with db_lock:
         conn = sqlite3.connect(db_path)
@@ -466,8 +497,9 @@ async def get_credential_usage_metadata() -> Dict[str, Dict[str, str]]:
             metadata[filename] = {
                 "user_email": str(item.get("user_email") or ""),
                 "credential_label": str(credential_data.get("credential_label") or ""),
+                "credential_type": str(credential_data.get("credential_type") or ""),
                 "provider": provider_id,
-                "provider_name": _provider_display_name(provider_id),
+                "provider_name": get_credential_provider_display_name(credential_data),
             }
 
         return metadata
@@ -504,6 +536,7 @@ async def get_stats_for_period(period: str = "1d") -> Dict[str, Dict[str, Any]]:
 
     metadata_by_filename = await get_credential_usage_metadata()
     filenames = await get_all_credential_filenames()
+    active_filenames = set(filenames)
     for name in filenames:
         metadata = metadata_by_filename.get(name, {})
         res[name] = _empty_usage_record(metadata)
@@ -538,17 +571,36 @@ async def get_stats_for_period(period: str = "1d") -> Dict[str, Dict[str, Any]]:
                 params,
             )
             for row in cursor.fetchall():
-                existing = res.get(row[0], {})
-                if is_deleted_usage_filename(row[0]):
-                    provider_id = normalize_provider_id(row[14] or GOOGLE_ANTIGRAVITY)
+                filename = str(row[0] or "")
+                existing = res.get(filename, {})
+                is_deleted = is_deleted_usage_filename(filename)
+                is_historical = (
+                    filename != UNASSIGNED_USAGE_FILENAME and filename not in active_filenames
+                )
+                if is_historical:
+                    raw_provider = str(row[14] or GOOGLE_ANTIGRAVITY)
+                    credential_type = (
+                        "api_key"
+                        if raw_provider in {"google_ai_studio", "openai_platform", "xai_console"}
+                        else "oauth"
+                        if raw_provider in {"grok", "openai"}
+                        else ""
+                    )
+                    provider_id = normalize_provider_id(raw_provider)
                     existing = {
                         "user_email": "",
-                        "credential_label": "Deleted credential",
+                        "credential_label": (
+                            "Deleted credential" if is_deleted else "Unavailable credential"
+                        ),
                         "provider": provider_id,
-                        "provider_name": _provider_display_name(provider_id),
-                        "is_deleted": True,
+                        "provider_name": _credential_provider_display_name(
+                            raw_provider, credential_type
+                        ),
+                        "credential_type": credential_type,
+                        "is_deleted": is_deleted,
+                        "is_historical": True,
                     }
-                res[row[0]] = _usage_record(
+                res[filename] = _usage_record(
                     existing=existing,
                     provider=row[14],
                     calls=row[1],

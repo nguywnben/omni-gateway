@@ -129,6 +129,130 @@ class RequestNormalizationTests(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn("labels", context.payload)
         self.assertEqual(context.payload["contents"], body["request"]["contents"])
 
+    async def test_xai_request_uses_openai_transport_and_bearer_auth(self):
+        credential = {
+            "provider": "xai",
+            "credential_type": "api_key",
+            "api_key": "xai-example-key-value",
+        }
+        body = {
+            "model": "grok-4",
+            "request": {
+                "contents": [{"role": "user", "parts": [{"text": "Hello"}]}],
+                "generationConfig": {"maxOutputTokens": 256},
+            },
+        }
+        with (
+            patch(
+                "core.api.primary.get_xai_api_url",
+                AsyncMock(return_value="https://api.x.ai/v1"),
+            ),
+            patch(
+                "core.api.primary.get_xai_user_agent",
+                AsyncMock(return_value="grok-cli/omni-gateway"),
+            ),
+            patch(
+                "core.api.primary.get_token_compression_config",
+                AsyncMock(
+                    return_value={
+                        "enabled": True,
+                        "threshold_tokens": 32000,
+                        "target_tokens": 24000,
+                        "min_recent_turns": 4,
+                    }
+                ),
+            ),
+        ):
+            context = await prepare_provider_request(credential, body, streaming=False)
+
+        self.assertEqual(context.provider_id, "xai")
+        self.assertEqual(context.target_url, "https://api.x.ai/v1/chat/completions")
+        self.assertEqual(context.headers["Authorization"], "Bearer xai-example-key-value")
+        self.assertEqual(context.headers["User-Agent"], "grok-cli/omni-gateway")
+        self.assertEqual(context.payload["model"], "grok-4")
+        self.assertEqual(context.payload["messages"][0]["content"], "Hello")
+        self.assertEqual(context.payload["max_tokens"], 256)
+
+    async def test_openai_platform_request_uses_chat_completions_transport(self):
+        credential = {
+            "provider": "openai",
+            "credential_type": "api_key",
+            "api_key": "sk-example-key-value",
+        }
+        body = {
+            "model": "gpt-5-mini",
+            "request": {
+                "contents": [{"role": "user", "parts": [{"text": "Hello"}]}],
+            },
+        }
+        with (
+            patch(
+                "core.api.primary.get_openai_api_url",
+                AsyncMock(return_value="https://api.openai.com/v1"),
+            ),
+            patch(
+                "core.api.primary.get_token_compression_config",
+                AsyncMock(
+                    return_value={
+                        "enabled": True,
+                        "threshold_tokens": 32000,
+                        "target_tokens": 24000,
+                        "min_recent_turns": 4,
+                    }
+                ),
+            ),
+        ):
+            context = await prepare_provider_request(credential, body, streaming=False)
+
+        self.assertEqual(context.provider_id, "openai")
+        self.assertEqual(context.target_url, "https://api.openai.com/v1/chat/completions")
+        self.assertEqual(context.headers["Authorization"], "Bearer sk-example-key-value")
+        self.assertEqual(context.payload["model"], "gpt-5-mini")
+        self.assertFalse(context.payload["stream"])
+
+    async def test_codex_request_uses_responses_transport_and_identity_headers(self):
+        credential = {
+            "provider": "openai",
+            "credential_type": "oauth",
+            "access_token": "codex-access-token",
+            "account_id": "account-123",
+        }
+        body = {
+            "model": "gpt-5-codex",
+            "request": {
+                "sessionId": "session-123",
+                "contents": [{"role": "user", "parts": [{"text": "Hello"}]}],
+            },
+        }
+        with (
+            patch(
+                "core.api.primary.get_codex_api_url",
+                AsyncMock(return_value="https://chatgpt.com/backend-api/codex"),
+            ),
+            patch(
+                "core.api.primary.get_codex_user_agent",
+                AsyncMock(return_value="codex_cli_rs/test"),
+            ),
+            patch(
+                "core.api.primary.get_token_compression_config",
+                AsyncMock(
+                    return_value={
+                        "enabled": True,
+                        "threshold_tokens": 32000,
+                        "target_tokens": 24000,
+                        "min_recent_turns": 4,
+                    }
+                ),
+            ),
+        ):
+            context = await prepare_provider_request(credential, body, streaming=False)
+
+        self.assertEqual(context.target_url, "https://chatgpt.com/backend-api/codex/responses")
+        self.assertEqual(context.headers["ChatGPT-Account-Id"], "account-123")
+        self.assertEqual(context.headers["session_id"], "session-123")
+        self.assertEqual(context.headers["User-Agent"], "codex_cli_rs/test")
+        self.assertTrue(context.payload["stream"])
+
 
 if __name__ == "__main__":
     unittest.main()

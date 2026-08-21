@@ -9,10 +9,12 @@ from dataclasses import dataclass
 from typing import Any, Awaitable, Callable, Iterable, Mapping, Optional, Sequence
 
 from core.storage_adapter import get_storage_adapter
+from log import log
 
 DEFAULT_VIRTUAL_MODEL_ALIAS = "omway"
 MODEL_POOL_CONFIG_KEY = "virtual_model_pool"
-MODEL_CATALOG_TTL_SECONDS = 60.0
+MODEL_CATALOG_TTL_SECONDS = 5 * 60.0
+MODEL_CATALOG_STALE_RETRY_SECONDS = 30.0
 MAX_POOL_MODELS = 64
 _MODEL_ID_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:/-]{0,199}$")
 
@@ -94,6 +96,7 @@ class ModelCatalogService:
         self._entries: tuple[ModelCatalogEntry, ...] = ()
         self._expires_at = 0.0
         self._loaded = False
+        self._last_refresh_error = ""
 
     async def get_catalog(self, *, force_refresh: bool = False) -> list[ModelCatalogEntry]:
         now = self._clock()
@@ -105,7 +108,20 @@ class ModelCatalogService:
             if not force_refresh and self._loaded and self._expires_at > now:
                 return list(self._entries)
 
-            provider_models = await self._loader()
+            try:
+                provider_models = await self._loader()
+            except Exception as exc:
+                self._last_refresh_error = str(exc)
+                if not self._loaded:
+                    raise
+                self._expires_at = now + min(
+                    self._ttl_seconds,
+                    MODEL_CATALOG_STALE_RETRY_SECONDS,
+                )
+                log.warning(
+                    f"Provider model discovery failed; serving the last known catalog: {exc}"
+                )
+                return list(self._entries)
             providers_by_model: dict[str, set[str]] = {}
             for provider_id, model_ids in provider_models.items():
                 normalized_provider = str(provider_id or "").strip()
@@ -124,6 +140,7 @@ class ModelCatalogService:
             )
             self._expires_at = now + self._ttl_seconds
             self._loaded = True
+            self._last_refresh_error = ""
             return list(self._entries)
 
     async def invalidate(self) -> None:
@@ -131,6 +148,17 @@ class ModelCatalogService:
             self._entries = ()
             self._expires_at = 0.0
             self._loaded = False
+            self._last_refresh_error = ""
+
+    async def get_diagnostics(self) -> dict[str, Any]:
+        """Return cache health without exposing provider credentials or models."""
+        async with self._lock:
+            return {
+                "loaded": self._loaded,
+                "entries": len(self._entries),
+                "expires_at": self._expires_at,
+                "last_refresh_error": self._last_refresh_error,
+            }
 
 
 model_catalog_service = ModelCatalogService()

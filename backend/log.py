@@ -16,6 +16,7 @@ _REDACTION_PATTERNS = [
     (re.compile(r"sk-ogw-[A-Za-z0-9._-]+"), "sk-ogw-<redacted>"),
     (re.compile(r"\bsk-[A-Za-z0-9_-]{16,}"), "sk-<redacted>"),
     (re.compile(r"\bAIza[0-9A-Za-z_-]{20,}"), "AIza<redacted>"),
+    (re.compile(r"\bGOCSPX-[0-9A-Za-z_-]+"), "GOCSPX-<redacted>"),
     (re.compile(r"\bya29\.[0-9A-Za-z._-]+"), "ya29.<redacted>"),
     (re.compile(r"\b1//[0-9A-Za-z._-]+"), "1//<redacted>"),
     (
