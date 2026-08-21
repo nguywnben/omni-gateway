@@ -52,7 +52,7 @@ async function loadOpenAISettings(options = {}) {
             if (form) form.dataset.loaded = 'true';
         });
     } catch (error) {
-        showStatus(`Failed to load OpenAI provider settings: ${error.message}`, 'error');
+        showStatus(t('provider.settings_load_failed', {provider: 'OpenAI', error: error.message}), 'error');
     } finally {
         setProviderSettingsLoading(loadingIds, formIds, false, preserveContent);
     }
@@ -76,10 +76,10 @@ async function saveOpenAISettings(scope) {
         });
         const data = await response.json().catch(() => ({}));
         if (!response.ok) throw new Error(data.detail || data.error || t('unknown_error'));
-        showStatus(`${group.label} settings saved.`, 'success');
+        showStatus(t('provider.settings_saved', {provider: group.label}), 'success');
         await loadOpenAISettings();
     } catch (error) {
-        showStatus(`Failed to save ${group.label} settings: ${error.message}`, 'error');
+        showStatus(t('provider.settings_save_failed', {provider: group.label, error: error.message}), 'error');
     }
 }
 
@@ -87,8 +87,11 @@ async function resetOpenAISettings(scope) {
     const group = OPENAI_CONFIG_GROUPS[scope];
     if (!group) return;
     const confirmed = await showConfirmModal(
-        `Restore the built-in ${group.label} settings? Environment-managed values will be preserved.`,
-        { title: group.resetTitle, confirmLabel: 'Reset defaults' }
+        t('provider.reset_confirm', {provider: group.label}),
+        {
+            title: t('provider.reset_title', {provider: group.label}),
+            confirmLabel: t('btn_reset_defaults')
+        }
     );
     if (!confirmed) return;
 
@@ -99,10 +102,10 @@ async function resetOpenAISettings(scope) {
         );
         const data = await response.json().catch(() => ({}));
         if (!response.ok) throw new Error(data.detail || data.error || t('unknown_error'));
-        showStatus(data.message || `${group.label} settings reset to defaults.`, 'success');
+        showStatus(data.message || t('provider.settings_reset', {provider: group.label}), 'success');
         await loadOpenAISettings();
     } catch (error) {
-        showStatus(`Failed to reset ${group.label} settings: ${error.message}`, 'error');
+        showStatus(t('provider.settings_reset_failed', {provider: group.label, error: error.message}), 'error');
     }
 }
 
@@ -112,15 +115,14 @@ function showOpenAICredentialSaveResult(kind, data) {
     const result = document.getElementById(`${prefix}SaveResult`);
     const title = document.getElementById(`${prefix}SaveResultTitle`);
     const text = document.getElementById(`${prefix}SaveResultText`);
-    const credentialName = isCodex ? 'Codex credential' : 'OpenAI Platform API key';
     if (title) {
-        title.textContent = data.credential_action === 'updated'
-            ? `${credentialName} updated`
-            : `${credentialName} added to pool`;
+        title.textContent = t(data.credential_action === 'updated'
+            ? 'runtime.credential_updated_title'
+            : 'runtime.credential_added_title');
     }
     if (text) {
         const modelCount = Number(data.model_count) || 0;
-        text.textContent = `${data.message} ${modelCount} model${modelCount === 1 ? '' : 's'} available.`;
+        text.textContent = `${data.message} ${t('runtime.models_available', {count: modelCount})}`;
     }
     result?.classList.remove('hidden');
 }
@@ -131,13 +133,13 @@ async function addOpenAIPlatformCredential(event) {
     const button = document.getElementById('addOpenaiPlatformKeyBtn');
     const apiKey = field?.value.trim() || '';
     if (!apiKey) {
-        showStatus('Enter an OpenAI Platform API key.', 'error');
+        showStatus(t('provider.api_key_required', {provider: 'OpenAI Platform'}), 'error');
         field?.focus();
         return;
     }
 
     button.disabled = true;
-    button.textContent = 'Validating...';
+    button.textContent = t('runtime.validating');
     document.getElementById('openaiPlatformSaveResult')?.classList.add('hidden');
     try {
         const response = await fetch('./api/providers/openai/platform/credentials', {
@@ -154,17 +156,17 @@ async function addOpenAIPlatformCredential(event) {
         await loadModelCatalog(true);
         await refreshUsageStats();
     } catch (error) {
-        showStatus(`Failed to add OpenAI Platform API key: ${error.message}`, 'error');
+        showStatus(t('provider.api_key_add_failed', {provider: 'OpenAI Platform', error: error.message}), 'error');
     } finally {
         button.disabled = false;
-        button.textContent = 'Validate and add';
+        button.textContent = t('runtime.validate_add');
     }
 }
 
 async function startCodexOauth() {
     const button = document.getElementById('startCodexOauthBtn');
     button.disabled = true;
-    button.textContent = 'Generating...';
+    button.textContent = t('runtime.generating');
     document.getElementById('codexOauthSaveResult')?.classList.add('hidden');
     try {
         const response = await fetch('./api/providers/openai/codex/oauth/start', {
@@ -182,17 +184,17 @@ async function startCodexOauth() {
             fields.dataset.pollInterval = String(data.interval || 5);
             fields.classList.remove('hidden');
         }
-        if (code) code.textContent = data.user_code || 'Code unavailable';
+        if (code) code.textContent = data.user_code || t('runtime.code_unavailable');
         if (verification) {
             verification.href = data.verification_uri || '#';
-            verification.textContent = data.verification_uri || 'Verification page unavailable';
+            verification.textContent = data.verification_uri || t('runtime.verification_unavailable');
         }
-        showStatus('Codex device code generated.', 'success');
+        showStatus(t('provider.device_code_ready', {provider: 'Codex'}), 'success');
     } catch (error) {
-        showStatus(`Failed to start Codex authorization: ${error.message}`, 'error');
+        showStatus(t('provider.auth_start_failed', {provider: 'Codex', error: error.message}), 'error');
     } finally {
         button.disabled = false;
-        button.textContent = 'Get authorization code';
+        button.textContent = t('runtime.get_authorization_code');
     }
 }
 
@@ -201,12 +203,12 @@ async function completeCodexOauth() {
     const flowId = fields?.dataset.flowId || '';
     const button = document.getElementById('completeCodexOauthBtn');
     if (!flowId) {
-        showStatus('Generate a new Codex device code before checking authorization.', 'error');
+        showStatus(t('provider.auth_session_required', {provider: 'Codex'}), 'error');
         return;
     }
 
     button.disabled = true;
-    button.textContent = 'Checking...';
+        button.textContent = t('runtime.checking');
     try {
         const response = await fetch('./api/providers/openai/codex/oauth/complete', {
             method: 'POST',
@@ -215,7 +217,7 @@ async function completeCodexOauth() {
         });
         const data = await response.json().catch(() => ({}));
         if (response.status === 202 && data.pending) {
-            showStatus(data.message || 'Codex authorization is still pending.', 'info');
+            showStatus(data.message || t('provider.authorization_pending', {provider: 'Codex'}), 'info');
             return;
         }
         if (!response.ok) throw new Error(data.detail || data.error || t('unknown_error'));
@@ -227,10 +229,10 @@ async function completeCodexOauth() {
         await loadModelCatalog(true);
         await refreshUsageStats();
     } catch (error) {
-        showStatus(`Failed to save Codex credential: ${error.message}`, 'error');
+        showStatus(t('provider.credential_save_failed', {provider: 'Codex', error: error.message}), 'error');
     } finally {
         button.disabled = false;
-        button.textContent = 'Check authorization';
+        button.textContent = t('runtime.check_authorization');
     }
 }
 

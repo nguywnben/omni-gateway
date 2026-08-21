@@ -25,7 +25,7 @@ async function loadXaiSettings(options = {}) {
             if (form) form.dataset.loaded = 'true';
         });
     } catch (error) {
-        showStatus(`Failed to load Grok Build and SpaceXAI Console settings: ${error.message}`, 'error');
+        showStatus(t('provider.settings_load_failed', {provider: 'Grok Build / SpaceXAI Console', error: error.message}), 'error');
     } finally {
         setProviderSettingsLoading(loadingIds, formIds, false, preserveContent);
     }
@@ -48,10 +48,10 @@ async function saveXaiSettings(scope) {
         });
         const data = await response.json().catch(() => ({}));
         if (!response.ok) throw new Error(data.detail || data.error || t('unknown_error'));
-        showStatus(`${group.label} settings saved.`, 'success');
+        showStatus(t('provider.settings_saved', {provider: group.label}), 'success');
         await loadXaiSettings();
     } catch (error) {
-        showStatus(`Failed to save ${group.label} settings: ${error.message}`, 'error');
+        showStatus(t('provider.settings_save_failed', {provider: group.label, error: error.message}), 'error');
     }
 }
 
@@ -59,8 +59,11 @@ async function resetXaiSettings(scope) {
     const group = XAI_CONFIG_GROUPS[scope];
     if (!group) return;
     const confirmed = await showConfirmModal(
-        `Restore the built-in ${group.label} settings?`,
-        { title: group.resetTitle, confirmLabel: 'Reset defaults' }
+        t('provider.reset_confirm', {provider: group.label}),
+        {
+            title: t('provider.reset_title', {provider: group.label}),
+            confirmLabel: t('btn_reset_defaults')
+        }
     );
     if (!confirmed) return;
     try {
@@ -70,10 +73,10 @@ async function resetXaiSettings(scope) {
         });
         const data = await response.json().catch(() => ({}));
         if (!response.ok) throw new Error(data.detail || data.error || t('unknown_error'));
-        showStatus(data.message || `${group.label} settings reset to defaults.`, 'success');
+        showStatus(data.message || t('provider.settings_reset', {provider: group.label}), 'success');
         await loadXaiSettings();
     } catch (error) {
-        showStatus(`Failed to reset ${group.label} settings: ${error.message}`, 'error');
+        showStatus(t('provider.settings_reset_failed', {provider: group.label, error: error.message}), 'error');
     }
 }
 
@@ -83,15 +86,14 @@ function showXaiCredentialSaveResult(kind, data) {
     const result = document.getElementById(`${prefix}SaveResult`);
     const title = document.getElementById(`${prefix}SaveResultTitle`);
     const text = document.getElementById(`${prefix}SaveResultText`);
-    const credentialName = isOauth ? 'Grok Build OAuth credential' : 'SpaceXAI Console API key';
     if (title) {
-        title.textContent = data.credential_action === 'updated'
-            ? `${credentialName} updated`
-            : `${credentialName} added to pool`;
+        title.textContent = t(data.credential_action === 'updated'
+            ? 'runtime.credential_updated_title'
+            : 'runtime.credential_added_title');
     }
     if (text) {
         const modelCount = Number(data.model_count) || 0;
-        text.textContent = `${data.message} ${modelCount} model${modelCount === 1 ? '' : 's'} available.`;
+        text.textContent = `${data.message} ${t('runtime.models_available', {count: modelCount})}`;
     }
     result?.classList.remove('hidden');
 }
@@ -102,12 +104,12 @@ async function addXaiApiKeyCredential(event) {
     const button = document.getElementById('addXaiKeyBtn');
     const apiKey = field?.value.trim() || '';
     if (!apiKey) {
-        showStatus('Enter a SpaceXAI Console API key.', 'error');
+        showStatus(t('provider.api_key_required', {provider: 'SpaceXAI Console'}), 'error');
         field?.focus();
         return;
     }
     button.disabled = true;
-    button.textContent = 'Validating...';
+    button.textContent = t('runtime.validating');
     document.getElementById('xaiApiKeySaveResult')?.classList.add('hidden');
     try {
         const response = await fetch('./api/providers/xai/credentials', {
@@ -124,17 +126,17 @@ async function addXaiApiKeyCredential(event) {
         await loadModelCatalog(true);
         await refreshUsageStats();
     } catch (error) {
-        showStatus(`Failed to add SpaceXAI Console API key: ${error.message}`, 'error');
+        showStatus(t('provider.api_key_add_failed', {provider: 'SpaceXAI Console', error: error.message}), 'error');
     } finally {
         button.disabled = false;
-        button.textContent = 'Validate and add';
+        button.textContent = t('runtime.validate_add');
     }
 }
 
 async function startXaiOauth() {
     const button = document.getElementById('startXaiOauthBtn');
     button.disabled = true;
-    button.textContent = 'Generating...';
+    button.textContent = t('runtime.generating');
     document.getElementById('xaiOauthSaveResult')?.classList.add('hidden');
     try {
         const response = await fetch('./api/providers/xai/oauth/start', {
@@ -145,19 +147,19 @@ async function startXaiOauth() {
         if (!response.ok) throw new Error(data.detail || data.error || t('unknown_error'));
         const authorizationLink = document.getElementById('xaiAuthorizationUrl');
         authorizationLink.href = data.auth_url || '#';
-        authorizationLink.textContent = data.auth_url || 'Authorization unavailable';
+        authorizationLink.textContent = data.auth_url || t('runtime.authorization_unavailable');
         document.getElementById('xaiAuthorizationCode').value = '';
         const oauthFields = document.getElementById('xaiOauthFields');
         if (oauthFields) {
             oauthFields.dataset.state = data.state || '';
             oauthFields.classList.remove('hidden');
         }
-        showStatus('Grok Build authorization link generated.', 'success');
+        showStatus(t('provider.auth_ready', {provider: 'Grok Build'}), 'success');
     } catch (error) {
-        showStatus(`Failed to start Grok Build OAuth: ${error.message}`, 'error');
+        showStatus(t('provider.auth_start_failed', {provider: 'Grok Build', error: error.message}), 'error');
     } finally {
         button.disabled = false;
-        button.textContent = 'Get provider authentication link';
+        button.textContent = t('runtime.get_provider_auth');
     }
 }
 
@@ -168,16 +170,16 @@ async function saveXaiOauth() {
     const oauthFields = document.getElementById('xaiOauthFields');
     const state = oauthFields?.dataset.state || '';
     if (!code) {
-        showStatus('Enter the code shown on the Grok Build authorization page.', 'error');
+        showStatus(t('provider.auth_code_required', {provider: 'Grok Build'}), 'error');
         field?.focus();
         return;
     }
     if (!state) {
-        showStatus('Generate a new Grok Build authorization link before saving the credential.', 'error');
+        showStatus(t('provider.auth_session_required', {provider: 'Grok Build'}), 'error');
         return;
     }
     button.disabled = true;
-    button.textContent = 'Saving...';
+    button.textContent = t('runtime.saving');
     try {
         const response = await fetch('./api/providers/xai/oauth/complete', {
             method: 'POST',
@@ -194,10 +196,10 @@ async function saveXaiOauth() {
         await loadModelCatalog(true);
         await refreshUsageStats();
     } catch (error) {
-        showStatus(`Failed to save Grok Build OAuth credential: ${error.message}`, 'error');
+        showStatus(t('provider.credential_save_failed', {provider: 'Grok Build', error: error.message}), 'error');
     } finally {
         button.disabled = false;
-        button.textContent = 'Save credential';
+        button.textContent = t('runtime.save_credential');
     }
 }
 

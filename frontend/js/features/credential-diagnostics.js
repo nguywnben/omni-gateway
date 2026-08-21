@@ -18,7 +18,7 @@ async function verifyCredential(filename) {
 
             showStatus(data.message || 'Credential verified.', 'success');
 
-            showMessageModal('Credential Verification', buildCredentialVerificationHtml(filename, data), 'success', {html: true});
+            showMessageModal(t('credential_verification_title'), buildCredentialVerificationHtml(filename, data), 'success', {html: true});
 
             await AppState.creds.refresh();
 
@@ -28,7 +28,7 @@ async function verifyCredential(filename) {
 
             showStatus(errorMsg, 'error');
 
-            showMessageModal('Credential Verification', t('verification_failednnerrormsg', {errorMsg: errorMsg}), 'error');
+            showMessageModal(t('credential_verification_title'), t('verification_failednnerrormsg', {errorMsg: errorMsg}), 'error');
 
         }
 
@@ -38,7 +38,7 @@ async function verifyCredential(filename) {
 
         showStatus(errorMsg, 'error');
 
-        showMessageModal('Credential Verification', errorMsg, 'error');
+        showMessageModal(t('credential_verification_title'), errorMsg, 'error');
 
     }
 
@@ -64,7 +64,7 @@ async function verifyProviderCredential(filename) {
 
             showStatus(data.message || 'Credential verified.', 'success');
 
-            showMessageModal('Credential Verification', buildCredentialVerificationHtml(filename, data), 'success', {html: true});
+            showMessageModal(t('credential_verification_title'), buildCredentialVerificationHtml(filename, data), 'success', {html: true});
 
             await AppState.primaryCreds.refresh();
 
@@ -74,7 +74,7 @@ async function verifyProviderCredential(filename) {
 
             showStatus(errorMsg, 'error');
 
-            showMessageModal('Credential Verification', t('verification_failednnerrormsg', {errorMsg: errorMsg}), 'error');
+            showMessageModal(t('credential_verification_title'), t('verification_failednnerrormsg', {errorMsg: errorMsg}), 'error');
 
         }
 
@@ -84,7 +84,7 @@ async function verifyProviderCredential(filename) {
 
         showStatus(errorMsg, 'error');
 
-        showMessageModal('Credential Verification', errorMsg, 'error');
+        showMessageModal(t('credential_verification_title'), errorMsg, 'error');
 
     }
 
@@ -258,7 +258,7 @@ async function configurePreviewChannel(filename) {
 
             showStatus(successMsg.replace(/\n/g, '<br>'), 'success');
 
-            showMessageModal('Preview Channel Configuration', `${t('status_action_success', {action: t('btn_setup_preview')})}\n\n${t('table_filename')}: ${filename}\n\n${data.message}\n\nSetting ID: ${data.setting_id || 'N/A'}\nBinding ID: ${data.binding_id || 'N/A'}`, 'success');
+            showMessageModal(t('preview_configuration_title'), `${t('status_action_success', {action: t('btn_setup_preview')})}\n\n${t('table_filename')}: ${filename}\n\n${data.message}\n\nSetting ID: ${data.setting_id || 'N/A'}\nBinding ID: ${data.binding_id || 'N/A'}`, 'success');
 
             await AppState.creds.refresh();
 
@@ -286,7 +286,7 @@ async function configurePreviewChannel(filename) {
 
             showStatus(errorMsg, 'error');
 
-            showMessageModal('Preview Channel Configuration', alertMsg, 'error');
+            showMessageModal(t('preview_configuration_title'), alertMsg, 'error');
 
         }
 
@@ -296,7 +296,7 @@ async function configurePreviewChannel(filename) {
 
         showStatus(errorMsg, 'error');
 
-        showMessageModal('Preview Channel Configuration', errorMsg, 'error');
+        showMessageModal(t('preview_configuration_title'), errorMsg, 'error');
 
     }
 

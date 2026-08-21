@@ -4,6 +4,44 @@ All notable user-facing changes are documented in this file. Omni Gateway follow
 
 ## [Unreleased]
 
+## [1.3.2] - 2026-08-21
+
+### Fixed
+
+- Replaced the generic localization fallback that could appear as credential-card provider names and action labels in non-English interfaces.
+- Localized credential-card provider labels, concise actions, status badges, and explanatory tooltips across every supported console language.
+
+## [1.3.1] - 2026-08-21
+
+### Added
+
+- Added a conditional update guide in the About page that appears only when a newer Omni Gateway release is available.
+- Added a production-oriented update and rollback guide for pinned Docker and Docker Compose deployments.
+
+### Changed
+
+- Completed the management console localization across the supported languages, including API messages and locale-aware initial selection.
+- Refined Vietnamese navigation terminology so the credential workspace remains concise and consistent with the rest of the console.
+
+## [1.3.0] - 2026-08-20
+
+### Added
+
+- Added Claude Code OAuth credentials, Claude Platform API-key credentials, and Ollama endpoint credentials with provider-native discovery, validation, routing, and JSON/ZIP portability.
+- Added Gemini CLI OAuth credentials with PKCE authorization and Cloud Code-compatible routing for supported Gemini CLI accounts.
+- Added provider-specific assets, catalog entries, documentation links, and credential workspaces for the expanded provider catalog.
+
+### Changed
+
+- Strengthened credential-aware routing, failure classification, request correlation, and outbound HTTP client reuse for more predictable fallback behavior under provider failures.
+- Improved provider catalog navigation and layout so the growing collection of connection types remains searchable and usable across desktop and mobile views.
+- Standardized runtime dependency auditing and CI lockfile validation around immutable, hash-locked production dependencies.
+
+### Fixed
+
+- Kept provider routing and credential diagnostics scoped to each provider implementation instead of applying Google Antigravity assumptions to other credential types.
+- Formatted backend modules consistently with the repository Ruff policy to keep local and CI validation aligned.
+
 ## [1.2.1] - 2026-07-24
 
 ### Changed
@@ -171,7 +209,13 @@ All notable user-facing changes are documented in this file. Omni Gateway follow
 - Provider credential pool, virtual model routing, context optimization, usage visibility, and the management console.
 - Docker Hub and GitHub Container Registry publishing.
 
-[Unreleased]: https://github.com/nguywnben/omni-gateway/compare/v1.1.3...HEAD
+[Unreleased]: https://github.com/nguywnben/omni-gateway/compare/v1.3.2...HEAD
+[1.3.2]: https://github.com/nguywnben/omni-gateway/compare/v1.3.1...v1.3.2
+[1.3.1]: https://github.com/nguywnben/omni-gateway/compare/v1.3.0...v1.3.1
+[1.3.0]: https://github.com/nguywnben/omni-gateway/compare/v1.2.1...v1.3.0
+[1.2.1]: https://github.com/nguywnben/omni-gateway/compare/v1.2.0...v1.2.1
+[1.2.0]: https://github.com/nguywnben/omni-gateway/compare/v1.1.4...v1.2.0
+[1.1.4]: https://github.com/nguywnben/omni-gateway/compare/v1.1.3...v1.1.4
 [1.1.3]: https://github.com/nguywnben/omni-gateway/compare/v1.1.2...v1.1.3
 [1.1.2]: https://github.com/nguywnben/omni-gateway/compare/v1.1.1...v1.1.2
 [1.1.1]: https://github.com/nguywnben/omni-gateway/compare/v1.1.0...v1.1.1

@@ -32,7 +32,10 @@ async function loadAntigravitySettings(options = {}) {
 
         } else {
 
-            showStatus(`Failed to load Google Antigravity settings: ${data.detail || data.error || t('unknown_error')}`, 'error');
+            showStatus(t('provider.settings_load_failed', {
+                provider: 'Google Antigravity',
+                error: data.detail || data.error || t('unknown_error')
+            }), 'error');
 
         }
 
@@ -153,13 +156,16 @@ async function saveAntigravitySettings() {
 
         if (response.ok) {
 
-            showStatus(data.message || 'Google Antigravity settings saved.', 'success');
+            showStatus(data.message || t('provider.settings_saved', {provider: 'Google Antigravity'}), 'success');
 
             setTimeout(() => loadAntigravitySettings(), 600);
 
         } else {
 
-            showStatus(`Failed to save Google Antigravity settings: ${data.detail || data.error || t('unknown_error')}`, 'error');
+            showStatus(t('provider.settings_save_failed', {
+                provider: 'Google Antigravity',
+                error: data.detail || data.error || t('unknown_error')
+            }), 'error');
 
         }
 
@@ -174,7 +180,7 @@ async function saveAntigravitySettings() {
 async function resetAntigravitySettings() {
 
     const confirmed = await showConfirmModal(
-        'Reset Google Antigravity advanced settings to their defaults? Environment-managed values will be preserved.',
+        t('provider.reset_confirm', {provider: 'Google Antigravity'}),
         {
             title: t('confirm_reset_antigravity_title'),
             confirmLabel: t('btn_reset_defaults')
@@ -194,7 +200,7 @@ async function resetAntigravitySettings() {
 
         if (response.ok) {
 
-            showStatus(data.message || 'Google Antigravity settings reset to defaults.', 'success');
+            showStatus(data.message || t('provider.settings_reset', {provider: 'Google Antigravity'}), 'success');
 
             AppState.antigravityConfig = data.config || {};
 
@@ -206,7 +212,10 @@ async function resetAntigravitySettings() {
 
         } else {
 
-            showStatus(`Failed to reset Google Antigravity settings: ${data.detail || data.error || t('unknown_error')}`, 'error');
+            showStatus(t('provider.settings_reset_failed', {
+                provider: 'Google Antigravity',
+                error: data.detail || data.error || t('unknown_error')
+            }), 'error');
 
         }
 

@@ -140,7 +140,7 @@ async function batchVerifyCredentials() {
             credentials: `${successCount}/${selectedFiles.length} ${selectedFiles.length === 1 ? 'credential' : 'credentials'}`
         }), 'success');
 
-        showMessageModal('Batch Verification', summary, 'success');
+        showMessageModal(t('batch_verification_title'), summary, 'success');
 
     } else if (successCount === 0) {
 
@@ -148,13 +148,13 @@ async function batchVerifyCredentials() {
             credentials: formatCountLabel(selectedFiles.length, 'credential')
         }), 'error');
 
-        showMessageModal('Batch Verification', summary, 'error');
+        showMessageModal(t('batch_verification_title'), summary, 'error');
 
     } else {
 
         showStatus(t('batch_verification_completed_succes', {successCount: successCount, selectedFiles_length: selectedFiles.length, failCount: failCount}), 'info');
 
-        showMessageModal('Batch Verification', summary, 'info');
+        showMessageModal(t('batch_verification_title'), summary, 'info');
 
     }
 
@@ -274,7 +274,7 @@ async function batchVerifyProviderCredentials() {
             credentials: `${successCount}/${selectedFiles.length} ${selectedFiles.length === 1 ? 'provider credential' : 'provider credentials'}`
         }), 'success');
 
-        showMessageModal('Provider Batch Verification', summary, 'success');
+        showMessageModal(t('provider_batch_verification_title'), summary, 'success');
 
     } else if (successCount === 0) {
 
@@ -282,13 +282,13 @@ async function batchVerifyProviderCredentials() {
             credentials: formatCountLabel(selectedFiles.length, 'provider credential')
         }), 'error');
 
-        showMessageModal('Provider Batch Verification', summary, 'error');
+        showMessageModal(t('provider_batch_verification_title'), summary, 'error');
 
     } else {
 
         showStatus(t('batch_verification_completed_succes', {successCount: successCount, selectedFiles_length: selectedFiles.length, failCount: failCount}), 'info');
 
-        showMessageModal('Provider Batch Verification', summary, 'info');
+        showMessageModal(t('provider_batch_verification_title'), summary, 'info');
 
     }
 
