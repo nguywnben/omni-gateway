@@ -52,6 +52,30 @@ const PAGE_LOCALE_TRANSLATIONS = {
     }
 };
 
+const UPDATE_GUIDE_KEYS = ['about.update_guide_link'];
+
+const UPDATE_GUIDE_COPY = {
+    en: 'Read the update guide before upgrading.',
+    'zh-CN': '升级前请阅读更新指南。',
+    'zh-TW': '升級前請閱讀更新指南。',
+    de: 'Lesen Sie vor dem Upgrade die Aktualisierungsanleitung.',
+    es: 'Consulta la guía de actualización antes de actualizar.',
+    fr: 'Consultez le guide de mise à jour avant de procéder à la mise à niveau.',
+    id: 'Baca panduan pembaruan sebelum melakukan pembaruan.',
+    it: 'Consulta la guida all’aggiornamento prima di aggiornare.',
+    ja: 'アップグレード前に更新ガイドを確認してください。',
+    ko: '업그레이드하기 전에 업데이트 가이드를 확인하세요.',
+    pt: 'Leia o guia de atualização antes de atualizar.',
+    ru: 'Перед обновлением ознакомьтесь с руководством по обновлению.',
+    th: 'โปรดอ่านคู่มือการอัปเดตก่อนอัปเกรด',
+    tr: 'Yükseltmeden önce güncelleme kılavuzunu okuyun.',
+    vi: 'Đọc hướng dẫn cập nhật trước khi nâng cấp.',
+};
+
+for (const [locale, value] of Object.entries(UPDATE_GUIDE_COPY)) {
+    PAGE_LOCALE_TRANSLATIONS[locale]['about.update_guide_link'] = value;
+}
+
 const SETTINGS_PAGE_KEYS = [
     'settings.storage_note', 'settings.server_access', 'settings.server_access_description', 'settings.bind_host', 'settings.port', 'settings.listener_restart_hint',
     'settings.translation_runtime', 'settings.translation_runtime_description', 'settings.flatten_instructions', 'settings.return_reasoning', 'settings.recovery_attempts',

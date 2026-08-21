@@ -18,6 +18,7 @@ from core.google_ai_studio import (
     build_generation_url,
 )
 from core.google_oauth_api import Credentials, merge_refreshed_credential_data
+from core.i18n import LocalizedJSONResponse as JSONResponse
 from core.model_pool import ModelPoolError, model_catalog_service, normalize_model_id
 from core.models import (
     CredentialModelTestRequest,
@@ -42,7 +43,6 @@ from core.utils import CODE_ASSIST_USER_AGENT, verify_panel_token
 from core.xai import XaiError, refresh_xai_oauth_credential
 from core.xai_billing import fetch_xai_billing_usage
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
-from core.i18n import LocalizedJSONResponse as JSONResponse
 from log import log
 
 from .credential_operations import (

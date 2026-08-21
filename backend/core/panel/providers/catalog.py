@@ -1,9 +1,9 @@
 """Provider catalog routes for the management console."""
 
+from core.i18n import LocalizedJSONResponse as JSONResponse
 from core.provider_registry import list_provider_capabilities
 from core.utils import verify_panel_token
 from fastapi import APIRouter, Depends
-from core.i18n import LocalizedJSONResponse as JSONResponse
 
 router = APIRouter(tags=["provider-catalog"])
 

@@ -6,7 +6,6 @@ import re
 import unittest
 from pathlib import Path
 
-
 ROOT = Path(__file__).resolve().parents[2]
 FRONTEND = ROOT / "frontend"
 LOCALE_SOURCE = (FRONTEND / "js" / "core" / "locales.js").read_text(encoding="utf-8")
@@ -58,24 +57,44 @@ class FrontendLocaleContractTests(unittest.TestCase):
             "PROVIDER_AUTHORIZATION_KEYS",
             "OPERATION_COPY_KEYS",
             "CREDENTIAL_MODAL_KEYS",
+            "UPDATE_GUIDE_KEYS",
         ):
             generated_keys.update(
-                re.findall(r"['\"]([a-z][a-z0-9_.-]+)['\"]", _extract_array(PAGE_LOCALE_SOURCE, variable))
+                re.findall(
+                    r"['\"]([a-z][a-z0-9_.-]+)['\"]", _extract_array(PAGE_LOCALE_SOURCE, variable)
+                )
             )
         missing = sorted(
             key
             for key in references
             if key not in generated_keys
-            and not re.search(rf"(?:['\"]{re.escape(key)}['\"]|\b{re.escape(key)})\s*:", combined_catalog)
+            and not re.search(
+                rf"(?:['\"]{re.escape(key)}['\"]|\b{re.escape(key)})\s*:", combined_catalog
+            )
         )
         self.assertEqual(missing, [], f"Missing English translations: {missing}")
 
     def test_locale_selector_covers_every_supported_locale(self):
         expected = {
-            "en", "zh-CN", "zh-TW", "de", "es", "fr", "id", "it",
-            "ja", "ko", "pt", "ru", "th", "tr", "vi",
+            "en",
+            "zh-CN",
+            "zh-TW",
+            "de",
+            "es",
+            "fr",
+            "id",
+            "it",
+            "ja",
+            "ko",
+            "pt",
+            "ru",
+            "th",
+            "tr",
+            "vi",
         }
-        locale_blocks = set(re.findall(r"^\s{4}(?:'([^']+)'|([a-z]{2})):\s*\{", LOCALE_SOURCE, re.MULTILINE))
+        locale_blocks = set(
+            re.findall(r"^\s{4}(?:'([^']+)'|([a-z]{2})):\s*\{", LOCALE_SOURCE, re.MULTILINE)
+        )
         discovered = {left or right for left, right in locale_blocks}
         self.assertTrue(expected.issubset(discovered))
 

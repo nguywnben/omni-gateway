@@ -9,6 +9,7 @@ from core.auth import (
     get_auth_status_by_state,
     verify_password,
 )
+from core.i18n import LocalizedJSONResponse as JSONResponse
 from core.models import (
     AuthCallbackRequest,
     AuthCallbackUrlRequest,
@@ -27,7 +28,6 @@ from core.utils import (
     verify_panel_token_value,
 )
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
-from core.i18n import LocalizedJSONResponse as JSONResponse
 from log import log
 
 from .auth_support import (

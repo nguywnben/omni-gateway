@@ -13,6 +13,7 @@ from core.anthropic import (
     normalize_anthropic_api_url,
     validate_anthropic_api_key,
 )
+from core.i18n import LocalizedJSONResponse as JSONResponse
 from core.models import ClaudeOAuthCodeRequest, ClaudePlatformCredentialRequest, ConfigSaveRequest
 from core.pool_import import PoolImportError, restore_anthropic_credential
 from core.provider_registry import ANTHROPIC, CLAUDE_CODE, CLAUDE_PLATFORM, api_key_fingerprint
@@ -20,7 +21,6 @@ from core.provider_store import store_claude_platform_credential
 from core.storage_adapter import get_storage_adapter
 from core.utils import verify_panel_token
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
-from core.i18n import LocalizedJSONResponse as JSONResponse
 from log import log
 
 from ..utils import get_env_locked_keys

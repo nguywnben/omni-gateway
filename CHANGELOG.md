@@ -4,6 +4,18 @@ All notable user-facing changes are documented in this file. Omni Gateway follow
 
 ## [Unreleased]
 
+## [1.3.1] - 2026-08-21
+
+### Added
+
+- Added a conditional update guide in the About page that appears only when a newer Omni Gateway release is available.
+- Added a production-oriented update and rollback guide for pinned Docker and Docker Compose deployments.
+
+### Changed
+
+- Completed the management console localization across the supported languages, including API messages and locale-aware initial selection.
+- Refined Vietnamese navigation terminology so the credential workspace remains concise and consistent with the rest of the console.
+
 ## [1.3.0] - 2026-08-20
 
 ### Added
@@ -190,8 +202,12 @@ All notable user-facing changes are documented in this file. Omni Gateway follow
 - Provider credential pool, virtual model routing, context optimization, usage visibility, and the management console.
 - Docker Hub and GitHub Container Registry publishing.
 
-[Unreleased]: https://github.com/nguywnben/omni-gateway/compare/v1.3.0...HEAD
+[Unreleased]: https://github.com/nguywnben/omni-gateway/compare/v1.3.1...HEAD
+[1.3.1]: https://github.com/nguywnben/omni-gateway/compare/v1.3.0...v1.3.1
 [1.3.0]: https://github.com/nguywnben/omni-gateway/compare/v1.2.1...v1.3.0
+[1.2.1]: https://github.com/nguywnben/omni-gateway/compare/v1.2.0...v1.2.1
+[1.2.0]: https://github.com/nguywnben/omni-gateway/compare/v1.1.4...v1.2.0
+[1.1.4]: https://github.com/nguywnben/omni-gateway/compare/v1.1.3...v1.1.4
 [1.1.3]: https://github.com/nguywnben/omni-gateway/compare/v1.1.2...v1.1.3
 [1.1.2]: https://github.com/nguywnben/omni-gateway/compare/v1.1.1...v1.1.2
 [1.1.1]: https://github.com/nguywnben/omni-gateway/compare/v1.1.0...v1.1.1

@@ -6,6 +6,7 @@ import zipfile
 from typing import Any, Dict, List, Tuple
 
 import config
+from core.i18n import LocalizedJSONResponse as JSONResponse
 from core.models import ConfigSaveRequest, XaiCredentialRequest, XaiOAuthCodeRequest
 from core.pool_import import PoolImportError, classify_pool_credential, restore_xai_credential
 from core.provider_registry import XAI, api_key_fingerprint
@@ -21,7 +22,6 @@ from core.xai import (
     validate_xai_api_key,
 )
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
-from core.i18n import LocalizedJSONResponse as JSONResponse
 from log import log
 
 from ..utils import get_env_locked_keys

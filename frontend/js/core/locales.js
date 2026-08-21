@@ -228,7 +228,7 @@ const SUPPORTED_LOCALES = {
     vi: {
         label: 'Tiếng Việt',
         messages: {
-            language: 'Ngôn ngữ', dashboard: 'Tổng quan', pool: 'Kho thông tin xác thực', models: 'Mô hình', providers: 'Nhà cung cấp', settings: 'Cài đặt', logs: 'Nhật ký', about: 'Giới thiệu',
+            language: 'Ngôn ngữ', dashboard: 'Tổng quan', pool: 'Thông tin xác thực', models: 'Mô hình', providers: 'Nhà cung cấp', settings: 'Cài đặt', logs: 'Nhật ký', about: 'Giới thiệu',
             sign_out: 'Đăng xuất', sign_in_title: 'Đăng nhập vào bảng điều khiển', login_copy: 'Quản lý định tuyến, thông tin xác thực, cơ chế dự phòng và chuyển đổi giao thức trong một không gian làm việc tập trung.',
             console_password: 'Mật khẩu bảng điều khiển', enter_password: 'Nhập mật khẩu', continue: 'Tiếp tục', setup_title: 'Tạo mật khẩu bảng điều khiển', setup_copy: 'Bảo vệ phiên bản Omni Gateway mới này trước khi mở bảng điều khiển quản trị.',
             confirm_password: 'Xác nhận mật khẩu', create_password: 'Tạo mật khẩu', footer_tagline: 'Định tuyến AI phổ quát cho công cụ lập trình.',

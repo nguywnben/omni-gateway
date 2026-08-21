@@ -265,7 +265,13 @@ async def serve_oauth_callback(request: Request):
     is_gemini_cli_callback = is_gemini_cli_oauth_state(state)
 
     if error:
-        provider_name = "Claude Code" if is_claude_callback else "Gemini CLI" if is_gemini_cli_callback else "Google"
+        provider_name = (
+            "Claude Code"
+            if is_claude_callback
+            else "Gemini CLI"
+            if is_gemini_cli_callback
+            else "Google"
+        )
         return _oauth_callback_page(
             False,
             translate("oauth.failed_title", provider=provider_name),
