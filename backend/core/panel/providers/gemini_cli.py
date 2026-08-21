@@ -20,7 +20,7 @@ from core.provider_registry import GEMINI_CLI
 from core.storage_adapter import get_storage_adapter
 from core.utils import verify_panel_token
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
-from fastapi.responses import JSONResponse
+from core.i18n import LocalizedJSONResponse as JSONResponse
 from log import log
 
 from ..utils import get_env_locked_keys

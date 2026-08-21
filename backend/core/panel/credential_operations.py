@@ -64,7 +64,7 @@ from core.xai import (
     refresh_xai_oauth_credential,
 )
 from fastapi import HTTPException, Response, UploadFile
-from fastapi.responses import JSONResponse
+from core.i18n import LocalizedJSONResponse as JSONResponse
 from log import log
 
 from .utils import INTERNAL_SERVER_ERROR_DETAIL, validate_credential_filename, validate_mode

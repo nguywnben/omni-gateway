@@ -8,25 +8,21 @@
             </div>
             <h1 class="login-title" data-i18n="setup_title">Create Your Console Password</h1>
             <p class="login-copy" data-i18n="setup_copy">Secure this new Omni Gateway instance before opening the management console.</p>
-            <div class="login-language-control">
-                <label for="setupLanguage" data-i18n="language">Language</label>
-                <select id="setupLanguage" class="lang-switcher"></select>
-            </div>
             <form id="setupForm" class="login-form" autocomplete="on">
                 <input class="password-manager-identity" type="text" name="username" value="admin" autocomplete="username" tabindex="-1" aria-hidden="true">
                 <label for="setupPassword" data-i18n="console_password">Console password</label>
-                <input type="password" id="setupPassword" name="new-password" placeholder="At least 8 characters" autocomplete="new-password">
+                <input type="password" id="setupPassword" name="new-password" data-i18n-placeholder="password_min_placeholder" placeholder="At least 8 characters" autocomplete="new-password">
                 <label for="setupPasswordConfirm" data-i18n="confirm_password">Confirm password</label>
-                <input type="password" id="setupPasswordConfirm" name="confirm-password" placeholder="Re-enter password" autocomplete="new-password">
+                <input type="password" id="setupPasswordConfirm" name="confirm-password" data-i18n-placeholder="password_confirm_placeholder" placeholder="Re-enter password" autocomplete="new-password">
                 <div id="setupTokenGroup" class="setup-token-group hidden">
-                    <label for="setupToken">Setup token</label>
-                    <input type="password" id="setupToken" name="setup-token" placeholder="Enter the token from the application logs" autocomplete="off" spellcheck="false">
-                    <p class="field-hint">Remote setup requires the one-time token printed in the container or application logs.</p>
+                    <label for="setupToken" data-i18n="setup_token">Setup token</label>
+                    <input type="password" id="setupToken" name="setup-token" data-i18n-placeholder="setup_token_placeholder" placeholder="Enter the token from the application logs" autocomplete="off" spellcheck="false">
+                    <p class="field-hint" data-i18n="setup_token_hint">Remote setup requires the one-time token printed in the container or application logs.</p>
                 </div>
                 <button type="submit" class="btn" data-i18n="create_password">Create password</button>
             </form>
         </div>
-        <footer class="login-footer" aria-label="Site footer">
+        <footer class="login-footer" data-i18n-aria-label="site_footer" aria-label="Site footer">
             <span>Omni Gateway</span>
             <span data-i18n="footer_tagline">Universal AI routing for coding tools.</span>
         </footer>

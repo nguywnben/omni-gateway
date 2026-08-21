@@ -1,4 +1,4 @@
-        <aside id="primaryNavigation" class="dashboard-sidebar" aria-label="Primary navigation">
+        <aside id="primaryNavigation" class="dashboard-sidebar" data-i18n-aria-label="primary_navigation" aria-label="Primary navigation">
             <div class="sidebar-brand">
                 <span class="app-mark" aria-hidden="true">
                     <img class="app-mark-image" src="/frontend/assets/logo.png" alt="">
@@ -39,10 +39,9 @@
 
             <div class="sidebar-footer">
                 <div class="sidebar-meta">
-                    <span>Console</span>
-                    <span id="versionText" class="skeleton skeleton-inline" aria-label="Loading version" aria-busy="true"></span>
+                    <span data-i18n="console">Console</span>
+                    <span id="versionText" class="skeleton skeleton-inline" data-i18n-aria-label="loading_version" aria-label="Loading version" aria-busy="true"></span>
                 </div>
-                <select class="lang-switcher sidebar-language-switcher"></select>
                 <button type="button" class="btn btn-secondary btn-small" data-ui-action="logout" data-i18n="sign_out">Sign out</button>
             </div>
         </aside>

@@ -1,10 +1,8 @@
-function getAuthHeaders() {
+function getAuthHeaders(includeContentType = true) {
 
-    return {
-
-        'Content-Type': 'application/json'
-
-    };
+    const headers = {'Accept-Language': getActiveLocale()};
+    if (includeContentType) headers['Content-Type'] = 'application/json';
+    return headers;
 
 }
 
@@ -606,7 +604,7 @@ async function toggleCredDetailsCommon(pathId, manager) {
 
         if (response.ok && data.content) {
 
-            showMessageModal('Credential Details', buildCredentialContentHtml(filename, data.content), 'info', {html: true});
+            showMessageModal(t('credential_details_title'), buildCredentialContentHtml(filename, data.content), 'info', {html: true});
 
         } else {
 
@@ -614,7 +612,7 @@ async function toggleCredDetailsCommon(pathId, manager) {
 
             showStatus(`${t('unable_to_load_file_content')} ${errorMsg}`, 'error');
 
-            showMessageModal('Credential Details', `${t('unable_to_load_file_content')} ${errorMsg}`, 'error');
+            showMessageModal(t('credential_details_title'), `${t('unable_to_load_file_content')} ${errorMsg}`, 'error');
 
         }
 
@@ -624,7 +622,7 @@ async function toggleCredDetailsCommon(pathId, manager) {
 
         showStatus(errorMsg, 'error');
 
-        showMessageModal('Credential Details', errorMsg, 'error');
+        showMessageModal(t('credential_details_title'), errorMsg, 'error');
 
     }
 

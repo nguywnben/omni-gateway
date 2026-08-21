@@ -58,6 +58,33 @@ class ManagementApiRouteTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(canonical.status_code, 401)
         self.assertEqual(legacy.status_code, 404)
 
+    async def test_management_api_negotiates_and_reports_the_console_locale(self):
+        transport = httpx.ASGITransport(app=main.app)
+        async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+            response = await client.get(
+                "/api/route-that-does-not-exist",
+                headers={"Accept-Language": "vi-VN,vi;q=0.9,en;q=0.7"},
+            )
+
+        self.assertEqual(response.status_code, 404)
+        self.assertEqual(response.headers["Content-Language"], "vi")
+        self.assertEqual(
+            response.json()["detail"],
+            "Thông tin được yêu cầu đang thiếu hoặc hiện không khả dụng.",
+        )
+
+    async def test_public_protocol_routes_do_not_localize_error_contracts(self):
+        transport = httpx.ASGITransport(app=main.app)
+        async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+            response = await client.get(
+                "/v1/route-that-does-not-exist",
+                headers={"Accept-Language": "vi"},
+            )
+
+        self.assertEqual(response.status_code, 404)
+        self.assertNotIn("Content-Language", response.headers)
+        self.assertNotIn("Thông tin được yêu cầu", response.text)
+
 
 if __name__ == "__main__":
     unittest.main()

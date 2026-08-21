@@ -16,7 +16,7 @@ from core.models import VirtualModelPoolUpdateRequest
 from core.provider_registry import get_provider_display_name, get_provider_routing_id
 from core.utils import verify_panel_token
 from fastapi import APIRouter, Depends, HTTPException, Path, Query
-from fastapi.responses import JSONResponse
+from core.i18n import LocalizedJSONResponse as JSONResponse
 from log import log
 
 router = APIRouter(tags=["model-pools"])

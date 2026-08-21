@@ -14,32 +14,32 @@
                     <input type="file" id="poolImportArchiveInput" accept=".zip,application/zip" hidden data-ui-change="pool-archive">
 
                     <div class="stats-container">
-                        <div class="stat-item"><span class="stat-number" id="primaryStatTotal">0</span><span class="stat-label">Total credentials</span></div>
-                        <div class="stat-item"><span class="stat-number" id="primaryStatNormal">0</span><span class="stat-label">Active credentials</span></div>
-                        <div class="stat-item"><span class="stat-number" id="primaryStatDisabled">0</span><span class="stat-label">Disabled credentials</span></div>
+                        <div class="stat-item"><span class="stat-number" id="primaryStatTotal">0</span><span class="stat-label" data-i18n="total_credentials">Total credentials</span></div>
+                        <div class="stat-item"><span class="stat-number" id="primaryStatNormal">0</span><span class="stat-label" data-i18n="active_credentials">Active credentials</span></div>
+                        <div class="stat-item"><span class="stat-number" id="primaryStatDisabled">0</span><span class="stat-label" data-i18n="disabled_credentials">Disabled credentials</span></div>
                     </div>
 
                     <div class="batch-controls">
                         <div class="batch-label">
                             <input type="checkbox" id="selectAllPrimaryCheckbox" class="select-all-checkbox" data-ui-change="select-all-primary">
-                            <label for="selectAllPrimaryCheckbox">Select all visible</label>
-                            <span class="selected-count" id="primarySelectedCount">0 selected</span>
+                            <label for="selectAllPrimaryCheckbox" data-i18n="select_all_visible">Select all visible</label>
+                            <span class="selected-count" id="primarySelectedCount" data-i18n-runtime>0 selected</span>
                         </div>
                         <div class="batch-actions">
-                            <button type="button" class="batch-btn batch-enable" id="primaryBatchEnableBtn" data-ui-action="batch-primary" data-batch-action="enable" disabled>Enable</button>
-                            <button type="button" class="batch-btn" id="primaryBatchDisableBtn" data-ui-action="batch-primary" data-batch-action="disable" disabled>Disable</button>
-                            <button type="button" class="batch-btn batch-delete" id="primaryBatchDeleteBtn" data-ui-action="batch-primary" data-batch-action="delete" disabled>Delete</button>
-                            <button type="button" class="batch-btn" id="primaryBatchEnableCreditBtn" data-ui-action="batch-primary" data-batch-action="enable_credit" disabled>Enable credits</button>
-                            <button type="button" class="batch-btn" id="primaryBatchDisableCreditBtn" data-ui-action="batch-primary" data-batch-action="disable_credit" disabled>Disable credits</button>
-                            <button type="button" class="batch-btn" id="primaryBatchVerifyBtn" data-ui-action="batch-verify-primary" disabled>Verify</button>
+                            <button type="button" class="batch-btn batch-enable" id="primaryBatchEnableBtn" data-ui-action="batch-primary" data-batch-action="enable" data-i18n="action_enable" disabled>Enable</button>
+                            <button type="button" class="batch-btn" id="primaryBatchDisableBtn" data-ui-action="batch-primary" data-batch-action="disable" data-i18n="action_disable" disabled>Disable</button>
+                            <button type="button" class="batch-btn batch-delete" id="primaryBatchDeleteBtn" data-ui-action="batch-primary" data-batch-action="delete" data-i18n="action_delete" disabled>Delete</button>
+                            <button type="button" class="batch-btn" id="primaryBatchEnableCreditBtn" data-ui-action="batch-primary" data-batch-action="enable_credit" data-i18n="action_enable_credit" disabled>Enable credits</button>
+                            <button type="button" class="batch-btn" id="primaryBatchDisableCreditBtn" data-ui-action="batch-primary" data-batch-action="disable_credit" data-i18n="action_disable_credit" disabled>Disable credits</button>
+                            <button type="button" class="batch-btn" id="primaryBatchVerifyBtn" data-ui-action="batch-verify-primary" data-i18n="verify" disabled>Verify</button>
                         </div>
                     </div>
 
                     <div class="filter-container">
                         <div class="filter-group">
-                            <label for="primaryProviderFilter">Provider</label>
+                            <label for="primaryProviderFilter" data-i18n="provider">Provider</label>
                             <select id="primaryProviderFilter" class="filter-select" data-ui-change="primary-filter">
-                                <option value="all">All providers</option>
+                                <option value="all" data-i18n="all_providers">All providers</option>
                                 <option value="google_antigravity">Google Antigravity</option>
                                 <option value="google_ai_studio">Google AI Studio</option>
                                 <option value="grok">Grok Build</option>
@@ -52,18 +52,18 @@
                             </select>
                         </div>
                         <div class="filter-group">
-                            <label for="primaryStatusFilter">Status</label>
+                            <label for="primaryStatusFilter" data-i18n="status">Status</label>
                             <select id="primaryStatusFilter" class="filter-select" data-ui-change="primary-filter">
-                                <option value="all">All</option>
-                                <option value="enabled">Enabled</option>
-                                <option value="disabled">Disabled</option>
+                                <option value="all" data-i18n="all">All</option>
+                                <option value="enabled" data-i18n="enabled">Enabled</option>
+                                <option value="disabled" data-i18n="disabled">Disabled</option>
                             </select>
                         </div>
                         <div class="filter-group">
-                            <label for="primaryErrorCodeFilter">Error</label>
+                            <label for="primaryErrorCodeFilter" data-i18n="error">Error</label>
                             <select id="primaryErrorCodeFilter" class="filter-select" data-ui-change="primary-filter">
-                                <option value="all">All</option>
-                                <option value="none">None</option>
+                                <option value="all" data-i18n="all">All</option>
+                                <option value="none" data-i18n="none">None</option>
                                 <option value="400">400</option>
                                 <option value="403">403</option>
                                 <option value="429">429</option>
@@ -71,24 +71,24 @@
                             </select>
                         </div>
                         <div class="filter-group">
-                            <label for="primaryCooldownFilter">Cooldown</label>
+                            <label for="primaryCooldownFilter" data-i18n="cooldown">Cooldown</label>
                             <select id="primaryCooldownFilter" class="filter-select" data-ui-change="primary-filter">
-                                <option value="all">All</option>
-                                <option value="in_cooldown">In cooldown</option>
-                                <option value="no_cooldown">No cooldown</option>
+                                <option value="all" data-i18n="all">All</option>
+                                <option value="in_cooldown" data-i18n="in_cooldown">In cooldown</option>
+                                <option value="no_cooldown" data-i18n="no_cooldown">No cooldown</option>
                             </select>
                         </div>
                         <div class="filter-group">
-                            <label for="primaryTierFilter">Tier</label>
+                            <label for="primaryTierFilter" data-i18n="tier">Tier</label>
                             <select id="primaryTierFilter" class="filter-select" data-ui-change="primary-filter">
-                                <option value="all">All</option>
-                                <option value="free">Free</option>
-                                <option value="pro">Pro</option>
-                                <option value="ultra">Ultra</option>
+                                <option value="all" data-i18n="all">All</option>
+                                <option value="free" data-i18n="free">Free</option>
+                                <option value="pro" data-i18n-technical>Pro</option>
+                                <option value="ultra" data-i18n-technical>Ultra</option>
                             </select>
                         </div>
                         <div class="filter-group">
-                            <label for="primaryPageSizeSelect">Per page</label>
+                            <label for="primaryPageSizeSelect" data-i18n="per_page">Per page</label>
                             <select id="primaryPageSizeSelect" class="page-size-select" data-ui-change="primary-page-size">
                                 <option value="20">20</option>
                                 <option value="50">50</option>
@@ -99,16 +99,16 @@
                     </div>
 
                     <div id="primaryCredsListSection">
-                        <div id="primaryCredsLoading" class="skeleton-list" role="status" aria-label="Loading provider credentials" aria-busy="true">
+                        <div id="primaryCredsLoading" class="skeleton-list" role="status" data-i18n-aria-label="loading_provider_credentials" aria-label="Loading provider credentials" aria-busy="true">
                             <div class="skeleton-item"><div class="skeleton-line title"></div><div class="skeleton-line content"></div><div class="skeleton-line buttons"></div></div>
                             <div class="skeleton-item"><div class="skeleton-line title"></div><div class="skeleton-line content"></div><div class="skeleton-line buttons"></div></div>
                             <div class="skeleton-item"><div class="skeleton-line title"></div><div class="skeleton-line content"></div><div class="skeleton-line buttons"></div></div>
                         </div>
                         <div class="credential-provider-groups" id="primaryCredsList"></div>
                         <div class="pagination-container" id="primaryPaginationContainer" style="display: none;">
-                            <button type="button" class="pagination-btn" id="primaryPrevPageBtn" data-ui-action="change-primary-page" data-page-delta="-1">Previous</button>
-                            <div class="pagination-info" id="primaryPaginationInfo">Page 1 of 1</div>
-                            <button type="button" class="pagination-btn" id="primaryNextPageBtn" data-ui-action="change-primary-page" data-page-delta="1">Next</button>
+                            <button type="button" class="pagination-btn" id="primaryPrevPageBtn" data-ui-action="change-primary-page" data-page-delta="-1" data-i18n="previous">Previous</button>
+                            <div class="pagination-info" id="primaryPaginationInfo" data-i18n-runtime>Page 1 of 1</div>
+                            <button type="button" class="pagination-btn" id="primaryNextPageBtn" data-ui-action="change-primary-page" data-page-delta="1" data-i18n="next">Next</button>
                         </div>
                     </div>
                 </div>

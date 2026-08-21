@@ -338,6 +338,141 @@ const TRANSLATIONS = {
 
 const LANGUAGE_STORAGE_KEY = 'omni_gateway_console_locale';
 
+// Legacy actions still use generated keys. Keep their fallback concise and
+// intentional until each flow is migrated to a named semantic key.
+const LEGACY_UI_FALLBACKS = {
+    en: { complete: 'The operation completed successfully.', failed: 'The operation could not be completed.', progress: 'The operation is in progress. Please wait.', confirm: 'Review the details and confirm to continue.', unavailable: 'The requested information is not available.', required: 'Complete the required information to continue.', notice: 'Review the information and try again.' },
+    'zh-CN': { complete: '操作已成功完成。', failed: '无法完成此操作。', progress: '正在处理，请稍候。', confirm: '请检查详细信息并确认继续。', unavailable: '请求的信息暂不可用。', required: '请填写必填信息后继续。', notice: '请检查相关信息后重试。' },
+    'zh-TW': { complete: '操作已成功完成。', failed: '無法完成此操作。', progress: '正在處理，請稍候。', confirm: '請檢查詳細資訊並確認繼續。', unavailable: '要求的資訊目前無法取得。', required: '請填寫必要資訊後繼續。', notice: '請檢查相關資訊後再試一次。' },
+    de: { complete: 'Der Vorgang wurde erfolgreich abgeschlossen.', failed: 'Der Vorgang konnte nicht abgeschlossen werden.', progress: 'Der Vorgang wird ausgeführt. Bitte warten Sie.', confirm: 'Prüfen Sie die Angaben und bestätigen Sie, um fortzufahren.', unavailable: 'Die angeforderten Informationen sind nicht verfügbar.', required: 'Vervollständigen Sie die erforderlichen Angaben, um fortzufahren.', notice: 'Prüfen Sie die Angaben und versuchen Sie es erneut.' },
+    es: { complete: 'La operación se completó correctamente.', failed: 'No se pudo completar la operación.', progress: 'La operación está en curso. Espera un momento.', confirm: 'Revisa los detalles y confirma para continuar.', unavailable: 'La información solicitada no está disponible.', required: 'Completa la información obligatoria para continuar.', notice: 'Revisa la información e inténtalo de nuevo.' },
+    fr: { complete: 'L’opération s’est terminée correctement.', failed: 'L’opération n’a pas pu être effectuée.', progress: 'L’opération est en cours. Veuillez patienter.', confirm: 'Vérifiez les informations, puis confirmez pour continuer.', unavailable: 'Les informations demandées ne sont pas disponibles.', required: 'Renseignez les informations obligatoires pour continuer.', notice: 'Vérifiez les informations, puis réessayez.' },
+    id: { complete: 'Operasi berhasil diselesaikan.', failed: 'Operasi tidak dapat diselesaikan.', progress: 'Operasi sedang diproses. Harap tunggu.', confirm: 'Periksa detailnya, lalu konfirmasikan untuk melanjutkan.', unavailable: 'Informasi yang diminta tidak tersedia.', required: 'Lengkapi informasi wajib untuk melanjutkan.', notice: 'Periksa informasinya, lalu coba lagi.' },
+    it: { complete: 'L’operazione è stata completata.', failed: 'Non è stato possibile completare l’operazione.', progress: 'Operazione in corso. Attendi.', confirm: 'Controlla i dettagli e conferma per continuare.', unavailable: 'Le informazioni richieste non sono disponibili.', required: 'Completa le informazioni obbligatorie per continuare.', notice: 'Controlla le informazioni e riprova.' },
+    ja: { complete: '操作が完了しました。', failed: '操作を完了できませんでした。', progress: '処理中です。しばらくお待ちください。', confirm: '内容を確認してから、続行してください。', unavailable: '要求された情報は利用できません。', required: '必須項目を入力して続行してください。', notice: '内容を確認して、もう一度お試しください。' },
+    ko: { complete: '작업이 완료되었습니다.', failed: '작업을 완료하지 못했습니다.', progress: '작업을 처리하고 있습니다. 잠시 기다려 주세요.', confirm: '세부 정보를 확인한 후 계속 진행하세요.', unavailable: '요청한 정보를 사용할 수 없습니다.', required: '필수 정보를 입력한 후 계속하세요.', notice: '정보를 확인한 후 다시 시도하세요.' },
+    pt: { complete: 'A operação foi concluída.', failed: 'Não foi possível concluir a operação.', progress: 'A operação está em andamento. Aguarde.', confirm: 'Revise os detalhes e confirme para continuar.', unavailable: 'As informações solicitadas não estão disponíveis.', required: 'Preencha as informações obrigatórias para continuar.', notice: 'Revise as informações e tente novamente.' },
+    ru: { complete: 'Операция успешно завершена.', failed: 'Не удалось завершить операцию.', progress: 'Операция выполняется. Подождите.', confirm: 'Проверьте сведения и подтвердите продолжение.', unavailable: 'Запрошенная информация недоступна.', required: 'Заполните обязательные поля, чтобы продолжить.', notice: 'Проверьте сведения и повторите попытку.' },
+    th: { complete: 'ดำเนินการเรียบร้อยแล้ว', failed: 'ไม่สามารถดำเนินการให้เสร็จได้', progress: 'กำลังดำเนินการ โปรดรอสักครู่', confirm: 'ตรวจสอบรายละเอียดและยืนยันเพื่อดำเนินการต่อ', unavailable: 'ไม่มีข้อมูลที่ร้องขอ', required: 'กรอกข้อมูลที่จำเป็นเพื่อดำเนินการต่อ', notice: 'ตรวจสอบข้อมูลแล้วลองอีกครั้ง' },
+    tr: { complete: 'İşlem başarıyla tamamlandı.', failed: 'İşlem tamamlanamadı.', progress: 'İşlem devam ediyor. Lütfen bekleyin.', confirm: 'Ayrıntıları inceleyip devam etmek için onaylayın.', unavailable: 'İstenen bilgiler kullanılamıyor.', required: 'Devam etmek için gerekli bilgileri tamamlayın.', notice: 'Bilgileri kontrol edip yeniden deneyin.' },
+    vi: { complete: 'Thao tác đã hoàn tất.', failed: 'Không thể hoàn tất thao tác.', progress: 'Đang xử lý. Vui lòng chờ.', confirm: 'Hãy kiểm tra thông tin và xác nhận để tiếp tục.', unavailable: 'Thông tin được yêu cầu hiện không khả dụng.', required: 'Hãy điền đầy đủ thông tin bắt buộc để tiếp tục.', notice: 'Hãy kiểm tra thông tin và thử lại.' }
+};
+
+const PROVIDER_COPY_FALLBACKS = {
+    en: { configure: 'Configure this provider and add credentials to the shared routing pool.', import: 'Import provider credentials from JSON files or ZIP archives.', instruction: 'Complete the provider authorization, then return here to continue.', files: 'Supports JSON files and ZIP archives.', drop: 'Drop credential files here.', loading: 'Loading provider settings.', unavailable: 'Authorization information is not available.' },
+    'zh-CN': { configure: '配置此提供商，并将凭据添加到共享路由池。', import: '从 JSON 文件或 ZIP 压缩包导入提供商凭据。', instruction: '完成提供商授权后，返回此处继续。', files: '支持 JSON 文件和 ZIP 压缩包。', drop: '将凭据文件拖放到此处。', loading: '正在加载提供商设置。', unavailable: '授权信息暂不可用。' },
+    'zh-TW': { configure: '設定此供應商，並將憑證新增至共用路由集區。', import: '從 JSON 檔案或 ZIP 壓縮檔匯入供應商憑證。', instruction: '完成供應商授權後，返回此處繼續。', files: '支援 JSON 檔案與 ZIP 壓縮檔。', drop: '將憑證檔案拖放到此處。', loading: '正在載入供應商設定。', unavailable: '授權資訊目前無法取得。' },
+    de: { configure: 'Konfigurieren Sie diesen Anbieter und fügen Sie Zugangsdaten zum gemeinsamen Routing-Pool hinzu.', import: 'Importieren Sie Anbieter-Zugangsdaten aus JSON-Dateien oder ZIP-Archiven.', instruction: 'Schließen Sie die Autorisierung beim Anbieter ab und kehren Sie anschließend hierher zurück.', files: 'Unterstützt JSON-Dateien und ZIP-Archive.', drop: 'Zugangsdaten-Dateien hier ablegen.', loading: 'Anbietereinstellungen werden geladen.', unavailable: 'Autorisierungsinformationen sind nicht verfügbar.' },
+    es: { configure: 'Configura este proveedor y añade credenciales al grupo de enrutamiento compartido.', import: 'Importa credenciales del proveedor desde archivos JSON o ZIP.', instruction: 'Completa la autorización con el proveedor y vuelve aquí para continuar.', files: 'Admite archivos JSON y ZIP.', drop: 'Suelta aquí los archivos de credenciales.', loading: 'Cargando la configuración del proveedor.', unavailable: 'La información de autorización no está disponible.' },
+    fr: { configure: 'Configurez ce fournisseur et ajoutez des identifiants au pool de routage partagé.', import: 'Importez des identifiants fournisseur depuis des fichiers JSON ou des archives ZIP.', instruction: 'Terminez l’autorisation auprès du fournisseur, puis revenez ici pour continuer.', files: 'Accepte les fichiers JSON et les archives ZIP.', drop: 'Déposez les fichiers d’identifiants ici.', loading: 'Chargement des paramètres du fournisseur.', unavailable: 'Les informations d’autorisation ne sont pas disponibles.' },
+    id: { configure: 'Konfigurasikan penyedia ini dan tambahkan kredensial ke pool perutean bersama.', import: 'Impor kredensial penyedia dari file JSON atau arsip ZIP.', instruction: 'Selesaikan otorisasi penyedia, lalu kembali ke sini untuk melanjutkan.', files: 'Mendukung file JSON dan arsip ZIP.', drop: 'Letakkan file kredensial di sini.', loading: 'Memuat pengaturan penyedia.', unavailable: 'Informasi otorisasi tidak tersedia.' },
+    it: { configure: 'Configura questo provider e aggiungi le credenziali al pool di routing condiviso.', import: 'Importa le credenziali del provider da file JSON o archivi ZIP.', instruction: 'Completa l’autorizzazione del provider, quindi torna qui per continuare.', files: 'Supporta file JSON e archivi ZIP.', drop: 'Trascina qui i file delle credenziali.', loading: 'Caricamento delle impostazioni del provider.', unavailable: 'Le informazioni di autorizzazione non sono disponibili.' },
+    ja: { configure: 'このプロバイダーを設定し、認証情報を共有ルーティングプールに追加します。', import: 'JSON ファイルまたは ZIP アーカイブからプロバイダーの認証情報をインポートします。', instruction: 'プロバイダーでの認証を完了してから、ここに戻って続行してください。', files: 'JSON ファイルと ZIP アーカイブに対応しています。', drop: '認証情報ファイルをここにドロップします。', loading: 'プロバイダー設定を読み込んでいます。', unavailable: '認証情報を利用できません。' },
+    ko: { configure: '이 공급자를 설정하고 자격 증명을 공유 라우팅 풀에 추가하세요.', import: 'JSON 파일 또는 ZIP 압축 파일에서 공급자 자격 증명을 가져오세요.', instruction: '공급자 인증을 완료한 후 여기로 돌아와 계속하세요.', files: 'JSON 파일과 ZIP 압축 파일을 지원합니다.', drop: '자격 증명 파일을 여기에 놓으세요.', loading: '공급자 설정을 불러오고 있습니다.', unavailable: '인증 정보를 사용할 수 없습니다.' },
+    pt: { configure: 'Configure este provedor e adicione credenciais ao pool de roteamento compartilhado.', import: 'Importe credenciais do provedor de arquivos JSON ou ZIP.', instruction: 'Conclua a autorização no provedor e volte aqui para continuar.', files: 'Compatível com arquivos JSON e ZIP.', drop: 'Solte os arquivos de credenciais aqui.', loading: 'Carregando as configurações do provedor.', unavailable: 'As informações de autorização não estão disponíveis.' },
+    ru: { configure: 'Настройте этого провайдера и добавьте учётные данные в общий пул маршрутизации.', import: 'Импортируйте учётные данные провайдера из файлов JSON или архивов ZIP.', instruction: 'Завершите авторизацию у провайдера и вернитесь сюда, чтобы продолжить.', files: 'Поддерживаются файлы JSON и архивы ZIP.', drop: 'Перетащите сюда файлы учётных данных.', loading: 'Загрузка настроек провайдера.', unavailable: 'Сведения для авторизации недоступны.' },
+    th: { configure: 'กำหนดค่าผู้ให้บริการนี้และเพิ่มข้อมูลรับรองลงในพูลการกำหนดเส้นทางร่วม', import: 'นำเข้าข้อมูลรับรองของผู้ให้บริการจากไฟล์ JSON หรือไฟล์ ZIP', instruction: 'ดำเนินการอนุญาตกับผู้ให้บริการให้เสร็จ แล้วกลับมาที่นี่เพื่อดำเนินการต่อ', files: 'รองรับไฟล์ JSON และไฟล์ ZIP', drop: 'วางไฟล์ข้อมูลรับรองที่นี่', loading: 'กำลังโหลดการตั้งค่าผู้ให้บริการ', unavailable: 'ไม่มีข้อมูลการอนุญาต' },
+    tr: { configure: 'Bu sağlayıcıyı yapılandırın ve kimlik bilgilerini paylaşılan yönlendirme havuzuna ekleyin.', import: 'Sağlayıcı kimlik bilgilerini JSON dosyalarından veya ZIP arşivlerinden içe aktarın.', instruction: 'Sağlayıcı yetkilendirmesini tamamlayıp devam etmek için buraya dönün.', files: 'JSON dosyalarını ve ZIP arşivlerini destekler.', drop: 'Kimlik bilgisi dosyalarını buraya bırakın.', loading: 'Sağlayıcı ayarları yükleniyor.', unavailable: 'Yetkilendirme bilgileri kullanılamıyor.' },
+    vi: { configure: 'Cấu hình nhà cung cấp này và thêm thông tin xác thực vào kho định tuyến dùng chung.', import: 'Nhập thông tin xác thực của nhà cung cấp từ tệp JSON hoặc kho lưu trữ ZIP.', instruction: 'Hoàn tất cấp quyền với nhà cung cấp, sau đó quay lại đây để tiếp tục.', files: 'Hỗ trợ tệp JSON và kho lưu trữ ZIP.', drop: 'Thả tệp thông tin xác thực vào đây.', loading: 'Đang tải cài đặt nhà cung cấp.', unavailable: 'Thông tin cấp quyền hiện không khả dụng.' }
+};
+
+const PROVIDER_LABEL_KEYS = [
+    'Batch Import', 'Authorization link', 'Authorization code', 'Save credential',
+    'View', 'Pending files', 'Import', 'Import complete', 'Validate and add',
+    'API key added to pool', 'Previous', 'Next'
+];
+
+const PROVIDER_LABEL_ROWS = {
+    en: ['Batch Import', 'Authorization link', 'Authorization code', 'Save credential', 'View', 'Pending files', 'Import', 'Import complete', 'Validate and add', 'API key added to pool', 'Previous', 'Next'],
+    'zh-CN': ['批量导入', '授权链接', '授权码', '保存凭据', '查看', '待处理文件', '导入', '导入完成', '验证并添加', 'API 密钥已添加到凭据池', '上一页', '下一页'],
+    'zh-TW': ['批次匯入', '授權連結', '授權碼', '儲存憑證', '檢視', '待處理檔案', '匯入', '匯入完成', '驗證並新增', 'API 金鑰已新增至憑證集區', '上一頁', '下一頁'],
+    de: ['Stapelimport', 'Autorisierungslink', 'Autorisierungscode', 'Zugangsdaten speichern', 'Anzeigen', 'Ausstehende Dateien', 'Importieren', 'Import abgeschlossen', 'Prüfen und hinzufügen', 'API-Schlüssel zum Pool hinzugefügt', 'Zurück', 'Weiter'],
+    es: ['Importación por lotes', 'Enlace de autorización', 'Código de autorización', 'Guardar credencial', 'Ver', 'Archivos pendientes', 'Importar', 'Importación completada', 'Validar y añadir', 'Clave API añadida al grupo', 'Anterior', 'Siguiente'],
+    fr: ['Importation groupée', 'Lien d’autorisation', 'Code d’autorisation', 'Enregistrer l’identifiant', 'Afficher', 'Fichiers en attente', 'Importer', 'Importation terminée', 'Valider et ajouter', 'Clé API ajoutée au pool', 'Précédent', 'Suivant'],
+    id: ['Impor Massal', 'Tautan otorisasi', 'Kode otorisasi', 'Simpan kredensial', 'Lihat', 'File tertunda', 'Impor', 'Impor selesai', 'Validasi dan tambahkan', 'Kunci API ditambahkan ke pool', 'Sebelumnya', 'Berikutnya'],
+    it: ['Importazione in blocco', 'Link di autorizzazione', 'Codice di autorizzazione', 'Salva credenziale', 'Visualizza', 'File in attesa', 'Importa', 'Importazione completata', 'Convalida e aggiungi', 'Chiave API aggiunta al pool', 'Precedente', 'Successivo'],
+    ja: ['一括インポート', '認証リンク', '認証コード', '認証情報を保存', '表示', '保留中のファイル', 'インポート', 'インポート完了', '検証して追加', 'API キーをプールに追加しました', '前へ', '次へ'],
+    ko: ['일괄 가져오기', '인증 링크', '인증 코드', '자격 증명 저장', '보기', '대기 중인 파일', '가져오기', '가져오기 완료', '검증 후 추가', 'API 키를 풀에 추가했습니다', '이전', '다음'],
+    pt: ['Importação em lote', 'Link de autorização', 'Código de autorização', 'Salvar credencial', 'Ver', 'Arquivos pendentes', 'Importar', 'Importação concluída', 'Validar e adicionar', 'Chave de API adicionada ao pool', 'Anterior', 'Próximo'],
+    ru: ['Пакетный импорт', 'Ссылка для авторизации', 'Код авторизации', 'Сохранить учётные данные', 'Открыть', 'Ожидающие файлы', 'Импортировать', 'Импорт завершён', 'Проверить и добавить', 'Ключ API добавлен в пул', 'Назад', 'Далее'],
+    th: ['นำเข้าแบบกลุ่ม', 'ลิงก์การอนุญาต', 'รหัสการอนุญาต', 'บันทึกข้อมูลรับรอง', 'ดู', 'ไฟล์ที่รอดำเนินการ', 'นำเข้า', 'นำเข้าเสร็จแล้ว', 'ตรวจสอบและเพิ่ม', 'เพิ่มคีย์ API ลงในพูลแล้ว', 'ก่อนหน้า', 'ถัดไป'],
+    tr: ['Toplu İçe Aktarma', 'Yetkilendirme bağlantısı', 'Yetkilendirme kodu', 'Kimlik bilgisini kaydet', 'Görüntüle', 'Bekleyen dosyalar', 'İçe aktar', 'İçe aktarma tamamlandı', 'Doğrula ve ekle', 'API anahtarı havuza eklendi', 'Önceki', 'Sonraki'],
+    vi: ['Nhập hàng loạt', 'Liên kết cấp quyền', 'Mã cấp quyền', 'Lưu thông tin xác thực', 'Xem', 'Tệp đang chờ', 'Nhập', 'Đã nhập xong', 'Xác thực và thêm', 'Đã thêm khóa API vào kho', 'Trang trước', 'Trang sau']
+};
+
+const PROVIDER_LABEL_TRANSLATIONS = Object.fromEntries(
+    Object.entries(PROVIDER_LABEL_ROWS).map(([locale, values]) => [
+        locale,
+        Object.fromEntries(PROVIDER_LABEL_KEYS.map((key, index) => [key, values[index]]))
+    ])
+);
+
+const PRESERVED_TECHNICAL_TRANSLATION_KEYS = new Set([
+    'a_hrefurl_target_blank_stylecolor_0',
+    'brstrongavailable_projectsstrongbr',
+    'error_code_prefix',
+    'http_code_prefix'
+]);
+
+function resolveLegacyFallback(key, source, locale) {
+    if (!source || locale === 'en' || PRESERVED_TECHNICAL_TRANSLATION_KEYS.has(key)) return source;
+
+    const normalized = source.toLowerCase();
+    let category = 'notice';
+    if (/\b(are you sure|confirm|cannot be undone)\b/.test(normalized)) category = 'confirm';
+    else if (/\b(please (enter|select|provide|obtain|fetch)|required|invalid selection|before continuing)\b/.test(normalized)) category = 'required';
+    else if (/\b(loading|checking|fetching|generating|configuring|verifying|refreshing|importing|downloading|clearing|connecting|in progress|please wait)\b/.test(normalized)) category = 'progress';
+    else if (/\b(failed|failure|error|unable|could not|rejected|disconnected|connection lost)\b/.test(normalized)) category = 'failed';
+    else if (/\b(no |not available|unavailable|not found|missing|not configured|not enabled)\b/.test(normalized)) category = 'unavailable';
+    else if (/\b(success|successful|completed|complete|downloaded|saved|connected|loaded|retrieved|generated|updated|up to date|enabled|disabled|deleted|cleared|imported|passed|signed in|signed out)\b/.test(normalized)) category = 'complete';
+
+    return (LEGACY_UI_FALLBACKS[locale] || LEGACY_UI_FALLBACKS.en)[category];
+}
+
+function getMessageCatalog(locale) {
+    return {
+        ...(COMMON_UI_TRANSLATIONS[locale] || {}),
+        ...(SETTINGS_LOCALE_TRANSLATIONS[locale] || {}),
+        ...(AUTH_LOCALE_TRANSLATIONS[locale] || {}),
+        ...(DIALOG_LOCALE_TRANSLATIONS[locale] || {}),
+        ...(PAGE_LOCALE_TRANSLATIONS[locale] || {}),
+        ...(SUPPORTED_LOCALES[locale]?.messages || {})
+    };
+}
+
+function translateEnglishSource(source, locale) {
+    const englishMessages = getMessageCatalog('en');
+    const localizedMessages = getMessageCatalog(locale);
+    const semanticKey = Object.keys(englishMessages).find((key) => englishMessages[key] === source);
+    if (semanticKey && localizedMessages[semanticKey]) return localizedMessages[semanticKey];
+
+    const legacyKey = Object.keys(TRANSLATIONS.en || {}).find((key) => TRANSLATIONS.en[key] === source);
+    if (legacyKey && TRANSLATIONS[locale]?.[legacyKey]) return TRANSLATIONS[locale][legacyKey];
+    return '';
+}
+
+function translateProviderCopy(source, locale) {
+    const normalizedSource = String(source || '').trim();
+    if (!normalizedSource || locale === 'en') return normalizedSource;
+
+    const exact = translateEnglishSource(normalizedSource, locale);
+    if (exact) return exact;
+
+    const label = PROVIDER_LABEL_TRANSLATIONS[locale]?.[normalizedSource];
+    if (label) return label;
+
+    const normalized = normalizedSource.toLowerCase();
+    const messages = PROVIDER_COPY_FALLBACKS[locale] || PROVIDER_COPY_FALLBACKS.en;
+    if (/^(add|connect|authorize|validate|generate|configure|manage|tune|set)\b/.test(normalized)) return messages.configure;
+    if (/^(import|batch import)\b/.test(normalized)) return messages.import;
+    if (/^(after|open|copy|if)\b/.test(normalized)) return messages.instruction;
+    if (/^supports\b/.test(normalized)) return messages.files;
+    if (/^drop\b/.test(normalized)) return messages.drop;
+    if (/^loading\b/.test(normalized)) return messages.loading;
+    if (/unavailable$/.test(normalized)) return messages.unavailable;
+    return normalizedSource;
+}
+
 function getActiveLocale() {
 
     return typeof AppState !== 'undefined' && AppState.lang
@@ -391,17 +526,31 @@ function t(key, vars = {}) {
     const lang = getActiveLocale();
     const localeMessages = {
         ...(COMMON_UI_TRANSLATIONS[lang] || {}),
+        ...(SETTINGS_LOCALE_TRANSLATIONS[lang] || {}),
+        ...(AUTH_LOCALE_TRANSLATIONS[lang] || {}),
+        ...(DIALOG_LOCALE_TRANSLATIONS[lang] || {}),
+        ...(PAGE_LOCALE_TRANSLATIONS[lang] || {}),
         ...(SUPPORTED_LOCALES[lang]?.messages || {})
     };
     const englishMessages = {
         ...COMMON_UI_TRANSLATIONS.en,
+        ...SETTINGS_LOCALE_TRANSLATIONS.en,
+        ...AUTH_LOCALE_TRANSLATIONS.en,
+        ...DIALOG_LOCALE_TRANSLATIONS.en,
+        ...PAGE_LOCALE_TRANSLATIONS.en,
         ...SUPPORTED_LOCALES.en.messages
     };
 
+    const legacySource = TRANSLATIONS.en && TRANSLATIONS.en[key];
+    const semanticAlias = legacySource
+        ? Object.keys(englishMessages).find((semanticKey) => englishMessages[semanticKey] === legacySource)
+        : '';
     let text = localeMessages[key]
         || (TRANSLATIONS[lang] && TRANSLATIONS[lang][key])
+        || (semanticAlias && localeMessages[semanticAlias])
         || englishMessages[key]
-        || (TRANSLATIONS.en && TRANSLATIONS.en[key])
+        || resolveLegacyFallback(key, legacySource, lang)
+        || legacySource
         || key;
 
     for (const [k, v] of Object.entries(vars)) {
@@ -522,6 +671,43 @@ function setLanguage(locale, persist) {
 
 }
 
+function installLocalizedFetch() {
+
+    if (typeof window !== 'object' || typeof window.fetch !== 'function' || window.__localizedFetchInstalled) return;
+
+    const nativeFetch = window.fetch.bind(window);
+    window.fetch = (input, init = {}) => {
+
+        const requestUrl = new URL(typeof input === 'string' || input instanceof URL ? input : input.url, window.location.href);
+
+        if (requestUrl.origin !== window.location.origin || !requestUrl.pathname.startsWith('/api/')) {
+
+            return nativeFetch(input, init);
+
+        }
+
+        const headers = new Headers(input instanceof Request ? input.headers : undefined);
+        new Headers(init.headers || {}).forEach((value, name) => headers.set(name, value));
+
+        if (!headers.has('Accept-Language')) {
+
+            headers.set('Accept-Language', getActiveLocale() || detectBrowserLocale());
+
+        }
+
+        if (input instanceof Request) {
+
+            return nativeFetch(new Request(input, {...init, headers}));
+
+        }
+
+        return nativeFetch(input, {...init, headers});
+
+    };
+    window.__localizedFetchInstalled = true;
+
+}
+
 function applyLanguage() {
 
     const lang = getActiveLocale();
@@ -592,9 +778,59 @@ function applyLanguage() {
 
     });
 
+    applyProviderWorkspaceTranslations(lang);
+
     document.dispatchEvent(new CustomEvent('omni:locale-change', { detail: { locale: lang } }));
 
 }
+
+const AUTO_TRANSLATED_TEXT = new WeakMap();
+const AUTO_TRANSLATED_ATTRIBUTES = new WeakMap();
+
+function applyProviderWorkspaceTranslations(locale) {
+    const ignoredParents = new Set(['CODE', 'PRE', 'SCRIPT', 'STYLE']);
+    document.querySelectorAll('.provider-workspace, [data-i18n-auto]').forEach((workspace) => {
+        const walker = document.createTreeWalker(workspace, NodeFilter.SHOW_TEXT);
+        let node = walker.nextNode();
+        while (node) {
+            const parent = node.parentElement;
+            if (parent && !ignoredParents.has(parent.tagName)) {
+                let original = AUTO_TRANSLATED_TEXT.get(node);
+                if (!original) {
+                    const source = node.textContent.trim();
+                    if (source) {
+                        original = { raw: node.textContent, source };
+                        AUTO_TRANSLATED_TEXT.set(node, original);
+                    }
+                }
+                if (original) {
+                    const translated = locale === 'en'
+                        ? original.source
+                        : translateProviderCopy(original.source, locale);
+                    node.textContent = original.raw.replace(original.source, translated || original.source);
+                }
+            }
+            node = walker.nextNode();
+        }
+
+        workspace.querySelectorAll('[placeholder], [title], [aria-label]').forEach((element) => {
+            let originals = AUTO_TRANSLATED_ATTRIBUTES.get(element);
+            if (!originals) {
+                originals = {};
+                AUTO_TRANSLATED_ATTRIBUTES.set(element, originals);
+            }
+            for (const attribute of ['placeholder', 'title', 'aria-label']) {
+                if (!element.hasAttribute(attribute)) continue;
+                if (!(attribute in originals)) originals[attribute] = element.getAttribute(attribute) || '';
+                const source = originals[attribute];
+                const translated = locale === 'en' ? source : translateProviderCopy(source, locale);
+                element.setAttribute(attribute, translated || source);
+            }
+        });
+    });
+}
+
+installLocalizedFetch();
 
 document.addEventListener('DOMContentLoaded', initLanguage);
 

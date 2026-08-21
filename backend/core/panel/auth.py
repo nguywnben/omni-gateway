@@ -27,7 +27,7 @@ from core.utils import (
     verify_panel_token_value,
 )
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
-from fastapi.responses import JSONResponse
+from core.i18n import LocalizedJSONResponse as JSONResponse
 from log import log
 
 from .auth_support import (

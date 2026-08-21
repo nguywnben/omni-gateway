@@ -25,7 +25,7 @@ function appendModelProviderBadges(container, providers) {
     if (values.length === 0) {
         const unavailable = document.createElement('span');
         unavailable.className = 'model-provider-badge unavailable';
-        unavailable.textContent = 'Unavailable';
+        unavailable.textContent = t('models.unavailable');
         container.appendChild(unavailable);
         return;
     }
@@ -59,15 +59,15 @@ function updateModelPoolSummary() {
     const status = document.getElementById('modelPoolStatus');
     if (status) {
         const ready = AppState.modelPoolEnabled && AppState.selectedModels.length > 0 && unavailable < AppState.selectedModels.length;
-        status.textContent = ready ? 'Ready' : 'Not configured';
+        status.textContent = t(ready ? 'models.ready' : 'models.not_configured');
         status.className = ready ? 'status-badge success' : 'status-badge muted';
     }
 }
 
 function formatModelBlacklistTime(timestamp) {
     const date = new Date(Number(timestamp || 0) * 1000);
-    if (Number.isNaN(date.getTime())) return 'Unknown time';
-    return new Intl.DateTimeFormat('en', {
+    if (Number.isNaN(date.getTime())) return t('models.unavailable');
+    return new Intl.DateTimeFormat(getActiveLocale(), {
         dateStyle: 'medium',
         timeStyle: 'short'
     }).format(date);
@@ -80,14 +80,14 @@ function renderModelBlacklist() {
     if (!list) return;
 
     const entries = Array.isArray(AppState.modelBlacklist) ? AppState.modelBlacklist : [];
-    if (count) count.textContent = `${entries.length} ${entries.length === 1 ? 'route' : 'routes'}`;
+    if (count) count.textContent = t('models.route_count', {count: entries.length});
     if (clearButton) clearButton.classList.toggle('hidden', entries.length === 0);
     list.replaceChildren();
 
     if (entries.length === 0) {
         const empty = document.createElement('div');
         empty.className = 'model-empty-state';
-        empty.textContent = 'No unavailable model routes are recorded.';
+        empty.textContent = t('models.no_unavailable_routes');
         list.appendChild(empty);
         return;
     }
@@ -123,13 +123,13 @@ function renderModelBlacklist() {
         status.textContent = 'HTTP 404';
         const occurrences = document.createElement('span');
         const failureCount = Math.max(1, Number(entry.failure_count || 1));
-        occurrences.textContent = `${failureCount} ${failureCount === 1 ? 'occurrence' : 'occurrences'}`;
+        occurrences.textContent = t('models.occurrence_count', {count: failureCount});
         const lastSeen = document.createElement('span');
-        lastSeen.textContent = `Last seen ${formatModelBlacklistTime(entry.last_seen_at)}`;
+        lastSeen.textContent = t('models.last_seen', {time: formatModelBlacklistTime(entry.last_seen_at)});
         metadata.append(status, occurrences, lastSeen);
         if (entry.credential_name) {
             const credential = document.createElement('span');
-            credential.textContent = `Credential ${entry.credential_name}`;
+            credential.textContent = t('models.credential_name', {name: entry.credential_name});
             metadata.appendChild(credential);
         }
         details.append(identity, metadata);
@@ -137,10 +137,10 @@ function renderModelBlacklist() {
         const removeButton = document.createElement('button');
         removeButton.type = 'button';
         removeButton.className = 'btn btn-secondary btn-small';
-        removeButton.textContent = 'Remove';
+        removeButton.textContent = t('remove');
         removeButton.title = entry.credential_name
-            ? 'Restore this credential-model route'
-            : 'Restore this provider-model route';
+            ? t('models.restore_credential_route')
+            : t('models.restore_provider_route');
         removeButton.addEventListener('click', () => removeModelBlacklistEntry(
             entry.provider_id,
             entry.model_id,
@@ -163,21 +163,21 @@ async function removeModelBlacklistEntry(providerId, modelId, credentialName, bu
             { method: 'DELETE', headers: getAuthHeaders() }
         );
         const data = await response.json().catch(() => ({}));
-        if (!response.ok) throw new Error(data.detail || data.error || 'Unknown error');
+        if (!response.ok) throw new Error(data.detail || data.error || t('unknown_error'));
         await loadModelCatalog(false, { preserveContent: true });
-        showStatus(data.message || 'Model route removed from blacklist.', 'success');
+        showStatus(data.message || t('models.route_restored'), 'success');
     } catch (error) {
-        showStatus(`Failed to remove the model route: ${error.message}`, 'error');
+        showStatus(t('models.route_restore_failed', {error: error.message}), 'error');
         if (button) button.disabled = false;
     }
 }
 
 async function clearModelBlacklist() {
     const confirmed = await showConfirmModal(
-        'Restore every unavailable model route currently excluded after an upstream 404 response?',
+        t('models.clear_confirm'),
         {
-            title: 'Clear Unavailable Routes',
-            confirmLabel: 'Clear all'
+            title: t('models.clear_title'),
+            confirmLabel: t('clear_all')
         }
     );
     if (!confirmed) return;
@@ -190,11 +190,11 @@ async function clearModelBlacklist() {
             headers: getAuthHeaders()
         });
         const data = await response.json().catch(() => ({}));
-        if (!response.ok) throw new Error(data.detail || data.error || 'Unknown error');
+        if (!response.ok) throw new Error(data.detail || data.error || t('unknown_error'));
         await loadModelCatalog(false, { preserveContent: true });
-        showStatus(data.message || 'Model blacklist cleared.', 'success');
+        showStatus(data.message || t('models.blacklist_cleared'), 'success');
     } catch (error) {
-        showStatus(`Failed to clear the model blacklist: ${error.message}`, 'error');
+        showStatus(t('models.blacklist_clear_failed', {error: error.message}), 'error');
     } finally {
         if (button) button.disabled = false;
     }
@@ -220,7 +220,7 @@ function renderSelectedModels() {
     if (AppState.selectedModels.length === 0) {
         const empty = document.createElement('div');
         empty.className = 'model-empty-state';
-        empty.textContent = 'Select at least one provider model to activate omway.';
+        empty.textContent = t('models.select_one');
         list.appendChild(empty);
         updateModelPoolSummary();
         return;
@@ -247,9 +247,9 @@ function renderSelectedModels() {
         const actions = document.createElement('div');
         actions.className = 'model-order-actions';
         actions.append(
-            createModelOrderButton('Move model up', '↑', index === 0, () => moveSelectedModel(index, -1)),
-            createModelOrderButton('Move model down', '↓', index === AppState.selectedModels.length - 1, () => moveSelectedModel(index, 1)),
-            createModelOrderButton('Remove model', '×', false, () => removeSelectedModel(modelId))
+            createModelOrderButton(t('models.move_up'), '↑', index === 0, () => moveSelectedModel(index, -1)),
+            createModelOrderButton(t('models.move_down'), '↓', index === AppState.selectedModels.length - 1, () => moveSelectedModel(index, 1)),
+            createModelOrderButton(t('models.remove_selected'), '×', false, () => removeSelectedModel(modelId))
         );
 
         item.append(order, details, actions);
@@ -272,9 +272,7 @@ function renderModelCatalog() {
     if (entries.length === 0) {
         const empty = document.createElement('div');
         empty.className = 'model-empty-state';
-        empty.textContent = AppState.modelCatalog.length
-            ? 'No models match this search.'
-            : 'No models are available. Add or enable a provider credential, then refresh the catalog.';
+        empty.textContent = t(AppState.modelCatalog.length ? 'models.no_matches' : 'models.none_available');
         list.appendChild(empty);
         return;
     }
@@ -341,7 +339,7 @@ async function loadModelCatalog(forceRefresh = false, options = {}) {
             headers: getAuthHeaders()
         });
         const data = await response.json().catch(() => ({}));
-        if (!response.ok) throw new Error(data.detail || data.error || 'Unknown error');
+        if (!response.ok) throw new Error(data.detail || data.error || t('unknown_error'));
         AppState.modelCatalog = Array.isArray(data.catalog) ? data.catalog : [];
         AppState.modelCatalogLoaded = true;
         AppState.modelBlacklist = Array.isArray(data.blacklist) ? data.blacklist : [];
@@ -353,9 +351,9 @@ async function loadModelCatalog(forceRefresh = false, options = {}) {
         renderModelCatalog();
         renderModelBlacklist();
         if (workspace) workspace.classList.remove('hidden');
-        if (forceRefresh) showStatus('Provider model catalog refreshed.', 'success');
+        if (forceRefresh) showStatus(t('models.catalog_refreshed'), 'success');
     } catch (error) {
-        showStatus(`Failed to load the provider model catalog: ${error.message}`, 'error');
+        showStatus(t('models.catalog_load_failed', {error: error.message}), 'error');
     } finally {
         if (loading && !preserveContent) loading.classList.add('hidden');
         if (refreshButton) refreshButton.disabled = false;
@@ -375,14 +373,14 @@ async function saveModelPool() {
             })
         });
         const data = await response.json().catch(() => ({}));
-        if (!response.ok) throw new Error(data.detail || data.error || 'Unknown error');
+        if (!response.ok) throw new Error(data.detail || data.error || t('unknown_error'));
         AppState.selectedModels = [...(data.pool?.selected_models || AppState.selectedModels)];
         AppState.modelPoolEnabled = data.pool?.enabled !== false;
         renderSelectedModels();
         renderModelCatalog();
-        showStatus(data.message || 'Virtual model updated.', 'success');
+        showStatus(data.message || t('models.virtual_updated'), 'success');
     } catch (error) {
-        showStatus(`Failed to save omway: ${error.message}`, 'error');
+        showStatus(t('models.virtual_save_failed', {error: error.message}), 'error');
     } finally {
         if (button) button.disabled = false;
     }

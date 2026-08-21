@@ -156,10 +156,10 @@ async function regenerateApiKey() {
                 }
                 showStatus(t('regenerate_success'), 'success');
             } else {
-                showStatus(data.error || 'Failed to regenerate the API key.', 'error');
+                showStatus(data.error || t('api_key.regenerate_failed'), 'error');
             }
         } else {
-            showStatus(data.detail || data.message || 'Failed to regenerate the API key.', 'error');
+            showStatus(data.detail || data.message || t('api_key.regenerate_failed'), 'error');
         }
     } catch (e) {
         console.error("Failed to regenerate the API key.", e);

@@ -3,7 +3,7 @@
 from core.provider_registry import list_provider_capabilities
 from core.utils import verify_panel_token
 from fastapi import APIRouter, Depends
-from fastapi.responses import JSONResponse
+from core.i18n import LocalizedJSONResponse as JSONResponse
 
 router = APIRouter(tags=["provider-catalog"])
 

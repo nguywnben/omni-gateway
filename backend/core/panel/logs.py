@@ -5,7 +5,9 @@ from urllib.parse import urlsplit
 
 from core.utils import PANEL_SESSION_COOKIE, verify_panel_token, verify_panel_token_value
 from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect
-from fastapi.responses import JSONResponse, StreamingResponse
+from fastapi.responses import StreamingResponse
+
+from core.i18n import LocalizedJSONResponse as JSONResponse
 from log import log, redact_text
 from paths import DEFAULT_LOG_FILE
 from starlette.websockets import WebSocketState

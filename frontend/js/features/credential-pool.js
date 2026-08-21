@@ -367,7 +367,7 @@ async function handlePoolImportArchive(event) {
 
     if (!archive.name.toLowerCase().endsWith('.zip')) {
 
-        showStatus('Select a ZIP archive created from the credential pool.', 'error');
+        showStatus(t('import.pool_select_zip'), 'error');
         input.value = '';
         return;
 
@@ -375,14 +375,14 @@ async function handlePoolImportArchive(event) {
 
     if (archive.size > 10 * 1024 * 1024) {
 
-        showStatus('Pool archive exceeds the 10 MB import limit.', 'error');
+        showStatus(t('import.pool_too_large'), 'error');
         input.value = '';
         return;
 
     }
 
     const button = document.getElementById('poolImportArchiveBtn');
-    const originalLabel = button?.textContent || 'Import ZIP';
+    const originalLabel = button?.textContent || t('import_zip');
     const formData = new FormData();
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 15 * 60 * 1000);
@@ -391,11 +391,11 @@ async function handlePoolImportArchive(event) {
     if (button) {
 
         button.disabled = true;
-        button.textContent = 'Importing...';
+        button.textContent = t('runtime.importing');
 
     }
 
-    showStatus('Inspecting the pool archive and validating provider credentials.', 'info');
+    showStatus(t('import.pool_inspecting'), 'info');
 
     try {
 
@@ -408,7 +408,7 @@ async function handlePoolImportArchive(event) {
 
         if (!response.ok) {
 
-            throw new Error(data.detail || data.error || `Pool import failed with HTTP ${response.status}.`);
+            throw new Error(data.detail || data.error || `${t('http_code_prefix')} ${response.status}`);
 
         }
 
@@ -418,18 +418,18 @@ async function handlePoolImportArchive(event) {
                 ? 'info'
                 : 'success';
 
-        showStatus(data.message || 'Pool archive imported.', variant);
-        showMessageModal('Pool Import', buildPoolImportResultHtml(data), variant, { html: true });
+        showStatus(data.message || t('import.pool_complete'), variant);
+        showMessageModal(t('pool_import_title'), buildPoolImportResultHtml(data), variant, { html: true });
         await AppState.primaryCreds.refresh();
         refreshUsageStats();
 
     } catch (error) {
 
         const message = error.name === 'AbortError'
-            ? 'Pool import timed out while validating provider credentials.'
-            : error.message;
+            ? t('status_upload_timeout')
+            : t('import.pool_failed', {error: error.message || t('unknown_error')});
         showStatus(message, 'error');
-        showMessageModal('Pool Import', message, 'error');
+        showMessageModal(t('pool_import_title'), message, 'error');
 
     } finally {
 

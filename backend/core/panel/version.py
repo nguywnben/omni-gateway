@@ -8,7 +8,7 @@ import subprocess
 from dataclasses import asdict, dataclass
 
 from fastapi import APIRouter
-from fastapi.responses import JSONResponse
+from core.i18n import LocalizedJSONResponse as JSONResponse
 from log import log
 from paths import PROJECT_ROOT
 

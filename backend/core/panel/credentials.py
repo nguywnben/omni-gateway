@@ -42,7 +42,7 @@ from core.utils import CODE_ASSIST_USER_AGENT, verify_panel_token
 from core.xai import XaiError, refresh_xai_oauth_credential
 from core.xai_billing import fetch_xai_billing_usage
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
-from fastapi.responses import JSONResponse
+from core.i18n import LocalizedJSONResponse as JSONResponse
 from log import log
 
 from .credential_operations import (

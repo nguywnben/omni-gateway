@@ -12,7 +12,7 @@ from core.provider_registry import OLLAMA, api_key_fingerprint
 from core.provider_store import store_ollama_credential
 from core.utils import verify_panel_token
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
-from fastapi.responses import JSONResponse
+from core.i18n import LocalizedJSONResponse as JSONResponse
 from log import log
 
 from .import_utils import (

@@ -7,7 +7,7 @@ from core.usage_stats import (
 )
 from core.utils import verify_panel_token
 from fastapi import APIRouter, Depends, Query
-from fastapi.responses import JSONResponse
+from core.i18n import LocalizedJSONResponse as JSONResponse
 from log import log
 
 from .utils import INTERNAL_SERVER_ERROR_DETAIL

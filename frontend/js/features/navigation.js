@@ -350,7 +350,10 @@ function updateProviderCatalogPagination() {
         nextButton.disabled = providerCatalogCurrentPage >= totalPages;
     }
     if (infoElement) {
-        infoElement.textContent = `Page ${providerCatalogCurrentPage} of ${totalPages}`;
+        infoElement.textContent = t('pagination.page_of', {
+            page: providerCatalogCurrentPage,
+            total: totalPages
+        });
     }
 }
 

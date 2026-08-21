@@ -8,10 +8,6 @@
             </div>
             <h1 class="login-title" data-i18n="sign_in_title">Sign In to the Console</h1>
             <p class="login-copy" data-i18n="login_copy">Manage routing, credentials, fallback behavior, and protocol translation from one focused workspace.</p>
-            <div class="login-language-control">
-                <label for="loginLanguage" data-i18n="language">Language</label>
-                <select id="loginLanguage" class="lang-switcher"></select>
-            </div>
             <form id="loginForm" class="login-form" autocomplete="on">
                 <input class="password-manager-identity" type="text" name="username" value="admin" autocomplete="username" tabindex="-1" aria-hidden="true">
                 <label for="loginPassword" data-i18n="console_password">Console password</label>
@@ -19,7 +15,7 @@
                 <button type="submit" class="btn" data-i18n="continue">Continue</button>
             </form>
         </div>
-        <footer class="login-footer" aria-label="Site footer">
+        <footer class="login-footer" data-i18n-aria-label="site_footer" aria-label="Site footer">
             <span>Omni Gateway</span>
             <span data-i18n="footer_tagline">Universal AI routing for coding tools.</span>
         </footer>
