@@ -62,6 +62,9 @@ async def get_aggregated_stats(period: str = Query("1d"), token: str = Depends(v
         compressed_messages = sum(
             item.get("compressed_messages", 0) for item in usage_data.values()
         )
+        total_cost_usd = round(
+            sum(item.get("cost_usd", 0.0) for item in usage_data.values()), 6
+        )
         credential_counts = await get_credential_counts()
         total_files = credential_counts["total"]
         active_files = credential_counts["active"]
@@ -102,6 +105,7 @@ async def get_aggregated_stats(period: str = Query("1d"), token: str = Depends(v
                 "estimated_tokens_saved_24h": estimated_tokens_saved,
                 "compressed_messages_24h": compressed_messages,
                 "avg_tokens_per_successful_request": avg_tokens,
+                "total_cost_usd": total_cost_usd,
                 "timeline": await get_time_series_stats(normalized_period, points=24),
             },
         }

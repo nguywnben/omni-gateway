@@ -6,6 +6,7 @@ import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+from core.pricing import calculate_cost_usd
 from core.provider_registry import (
     GOOGLE_ANTIGRAVITY,
     get_credential_provider,
@@ -47,6 +48,8 @@ TOKEN_COLUMNS = {
     "compressed_messages": "INTEGER DEFAULT 0",
     "latency_ms": "INTEGER DEFAULT 0",
     "retry_count": "INTEGER DEFAULT 0",
+    "cost_usd": "REAL DEFAULT 0",
+    "api_key_id": "TEXT DEFAULT ''",
 }
 
 
@@ -127,6 +130,7 @@ def _empty_usage_record(metadata: Dict[str, Any]) -> Dict[str, Any]:
         "compressed_messages": 0,
         "average_latency_ms": 0,
         "retry_count": 0,
+        "cost_usd": 0.0,
         "calls_24h": 0,
         "successful_calls_24h": 0,
         "failed_calls_24h": 0,
@@ -140,6 +144,7 @@ def _empty_usage_record(metadata: Dict[str, Any]) -> Dict[str, Any]:
         "compressed_messages_24h": 0,
         "average_latency_ms_24h": 0,
         "retry_count_24h": 0,
+        "cost_usd_24h": 0.0,
     }
 
 
@@ -160,6 +165,7 @@ def _usage_record(
     compressed_messages: int,
     total_latency_ms: int,
     retry_count: int,
+    cost_usd: float = 0.0,
 ) -> Dict[str, Any]:
     provider_id = normalize_provider_id(existing.get("provider") or provider or GOOGLE_ANTIGRAVITY)
     record = {
@@ -184,6 +190,7 @@ def _usage_record(
         "compressed_messages": compressed_messages,
         "average_latency_ms": round(total_latency_ms / successful_calls) if successful_calls else 0,
         "retry_count": retry_count,
+        "cost_usd": round(float(cost_usd or 0.0), 6),
     }
     record.update(
         {
@@ -200,6 +207,7 @@ def _usage_record(
             "compressed_messages_24h": compressed_messages,
             "average_latency_ms_24h": record["average_latency_ms"],
             "retry_count_24h": retry_count,
+            "cost_usd_24h": record["cost_usd"],
         }
     )
     return record
@@ -341,6 +349,7 @@ def record_call(
     token_usage: Optional[Dict[str, Any]] = None,
     request_metrics: Optional[Dict[str, Any]] = None,
     request_id: str = "",
+    api_key_id: str = "",
 ):
     filename = os.path.basename(filename)
     if not filename:
@@ -348,6 +357,14 @@ def record_call(
 
     tokens = normalize_token_usage(token_usage)
     request_metrics = request_metrics or {}
+    cost_usd = calculate_cost_usd(
+        model,
+        input_tokens=tokens["input_tokens"],
+        output_tokens=tokens["output_tokens"],
+        cached_tokens=tokens["cached_tokens"],
+        reasoning_tokens=tokens["reasoning_tokens"],
+        provider=provider,
+    )
     init_db()
     with db_lock:
         conn = sqlite3.connect(db_path)
@@ -371,9 +388,11 @@ def record_call(
                     estimated_tokens_saved,
                     compressed_messages,
                     latency_ms,
-                    retry_count
+                    retry_count,
+                    cost_usd,
+                    api_key_id
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     filename,
@@ -393,6 +412,8 @@ def record_call(
                     _int_value(request_metrics.get("compressed_messages")),
                     _int_value(request_metrics.get("latency_ms")),
                     _int_value(request_metrics.get("retry_count")),
+                    float(cost_usd),
+                    str(api_key_id or "")[:64],
                 ),
             )
             conn.commit()
@@ -563,7 +584,8 @@ async def get_stats_for_period(period: str = "1d") -> Dict[str, Dict[str, Any]]:
                     COALESCE(SUM(compressed_messages), 0),
                     COALESCE(SUM(latency_ms), 0),
                     COALESCE(SUM(retry_count), 0),
-                    COALESCE(MAX(NULLIF(provider, '')), '')
+                    COALESCE(MAX(NULLIF(provider, '')), ''),
+                    COALESCE(SUM(cost_usd), 0)
                 FROM usage_logs
                 {where_clause}
                 GROUP BY filename
@@ -616,6 +638,7 @@ async def get_stats_for_period(period: str = "1d") -> Dict[str, Dict[str, Any]]:
                     compressed_messages=row[11],
                     total_latency_ms=row[12],
                     retry_count=row[13],
+                    cost_usd=row[15],
                 )
         except Exception as e:
             log.error(f"Failed to fetch usage stats for {normalized_period}: {e}")
@@ -648,7 +671,8 @@ async def get_time_series_stats(period: str = "1d", points: int = 24) -> List[Di
             "successful_requests": 0,
             "failed_requests": 0,
             "tokens": 0,
-            "cached_tokens": 0
+            "cached_tokens": 0,
+            "cost_usd": 0.0,
         })
 
     with db_lock:
@@ -660,7 +684,8 @@ async def get_time_series_stats(period: str = "1d", points: int = 24) -> List[Di
                     timestamp,
                     success,
                     COALESCE(total_tokens, 0),
-                    COALESCE(cached_tokens, 0)
+                    COALESCE(cached_tokens, 0),
+                    COALESCE(cost_usd, 0)
                 FROM usage_logs
                 WHERE timestamp >= ?
                 ORDER BY timestamp ASC
@@ -682,6 +707,9 @@ async def get_time_series_stats(period: str = "1d", points: int = 24) -> List[Di
                         time_slots[idx]["failed_requests"] += 1
                     time_slots[idx]["tokens"] += tokens
                     time_slots[idx]["cached_tokens"] += cached
+                    time_slots[idx]["cost_usd"] = round(
+                        time_slots[idx]["cost_usd"] + float(row[4] or 0.0), 6
+                    )
         except Exception as e:
             log.error(f"Failed to calculate time series stats: {e}")
         finally:
@@ -692,3 +720,43 @@ async def get_time_series_stats(period: str = "1d", points: int = 24) -> List[Di
 
 async def get_stats_24h() -> Dict[str, Dict[str, Any]]:
     return await get_stats_for_period("1d")
+
+
+def get_spend_since(since: float, api_key_id: Optional[str] = None) -> Dict[str, Any]:
+    """Return the total USD spend and token volume recorded after ``since``.
+
+    Used by budget enforcement (per virtual key when ``api_key_id`` is given,
+    gateway-wide otherwise). Synchronous by design: call via
+    ``asyncio.to_thread`` from request handlers.
+    """
+    init_db()
+    where = "WHERE timestamp >= ?"
+    params: tuple = (float(since),)
+    if api_key_id:
+        where += " AND api_key_id = ?"
+        params = (float(since), str(api_key_id))
+
+    with db_lock:
+        conn = sqlite3.connect(db_path)
+        try:
+            row = conn.execute(
+                f"""
+                SELECT
+                    COALESCE(SUM(cost_usd), 0),
+                    COALESCE(SUM(total_tokens), 0),
+                    COUNT(*)
+                FROM usage_logs
+                {where}
+                """,
+                params,
+            ).fetchone()
+            return {
+                "cost_usd": round(float(row[0] or 0.0), 6),
+                "total_tokens": _int_value(row[1]),
+                "calls": _int_value(row[2]),
+            }
+        except Exception as exc:
+            log.error(f"Failed to compute spend since {since}: {exc}")
+            return {"cost_usd": 0.0, "total_tokens": 0, "calls": 0}
+        finally:
+            conn.close()
