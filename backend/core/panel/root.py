@@ -6,11 +6,6 @@ from html import escape
 
 from core.anthropic import AnthropicError, complete_claude_oauth, is_claude_oauth_state
 from core.auth import accept_oauth_callback
-from core.gemini_cli import (
-    GeminiCliError,
-    complete_gemini_cli_oauth,
-    is_gemini_cli_oauth_state,
-)
 from core.i18n import get_locale, translate
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import HTMLResponse, Response
@@ -70,7 +65,6 @@ CONSOLE_SCRIPT_ASSETS = (
     "js/features/environment-credentials.js",
     "js/features/provider-settings-shared.js",
     "js/features/google-ai-studio-settings.js",
-    "js/features/gemini-cli-settings.js",
     "js/features/xai-settings.js",
     "js/features/openai-settings.js",
     "js/features/anthropic-settings.js",
@@ -262,16 +256,9 @@ async def serve_oauth_callback(request: Request):
     state = request.query_params.get("state")
     error = request.query_params.get("error")
     is_claude_callback = is_claude_oauth_state(state)
-    is_gemini_cli_callback = is_gemini_cli_oauth_state(state)
 
     if error:
-        provider_name = (
-            "Claude Code"
-            if is_claude_callback
-            else "Gemini CLI"
-            if is_gemini_cli_callback
-            else "Google"
-        )
+        provider_name = "Claude Code" if is_claude_callback else "Google"
         return _oauth_callback_page(
             False,
             translate("oauth.failed_title", provider=provider_name),
@@ -302,34 +289,6 @@ async def serve_oauth_callback(request: Request):
                 "oauth.credential_saved",
                 provider="Claude Code",
                 account=result.get("account_label") or result.get("label") or "account",
-            ),
-        )
-
-    if is_gemini_cli_callback:
-        try:
-            result = await complete_gemini_cli_oauth(code or "", state or "")
-        except GeminiCliError as exc:
-            log.warning(f"Gemini CLI OAuth callback was rejected: {exc}")
-            return _oauth_callback_page(
-                False,
-                translate("oauth.failed_title", provider="Gemini CLI"),
-                translate("oauth.retry", provider="Gemini CLI"),
-            )
-        except Exception as exc:
-            log.error(f"Failed to complete the Gemini CLI OAuth callback: {exc}")
-            return _oauth_callback_page(
-                False,
-                translate("oauth.failed_title", provider="Gemini CLI"),
-                translate("oauth.internal_error", provider="Gemini CLI"),
-            )
-        user_email = result.get("user_email") or "account"
-        return _oauth_callback_page(
-            True,
-            translate("oauth.success_title", provider="Gemini CLI"),
-            translate(
-                "oauth.credential_saved",
-                provider="Gemini CLI",
-                account=user_email,
             ),
         )
 

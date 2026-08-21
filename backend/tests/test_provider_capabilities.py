@@ -15,7 +15,6 @@ from core.provider_registry import (
     CLAUDE_CODE,
     CLAUDE_PLATFORM,
     CODEX,
-    GEMINI_CLI,
     GOOGLE_AI_STUDIO,
     GOOGLE_ANTIGRAVITY,
     GROK,
@@ -43,7 +42,7 @@ class ProviderCapabilityTests(unittest.TestCase):
 
         self.assertEqual(
             {provider["provider_id"] for provider in providers},
-            {ANTHROPIC, GEMINI_CLI, GOOGLE_ANTIGRAVITY, GOOGLE_AI_STUDIO, OLLAMA, OPENAI, XAI},
+            {ANTHROPIC, GOOGLE_ANTIGRAVITY, GOOGLE_AI_STUDIO, OLLAMA, OPENAI, XAI},
         )
 
     def test_anthropic_credentials_use_precise_user_facing_provider_names(self):

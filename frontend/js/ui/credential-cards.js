@@ -138,9 +138,9 @@ function getCredentialProviderMeta(credInfo, managerType) {
     }
 
     return {
-        id: 'code_assist',
-        name: t('provider_code_assist'),
-        logo: ''
+        id: 'google_antigravity',
+        name: 'Google Antigravity',
+        logo: '/frontend/assets/providers/google-antigravity-logo.png'
     };
 
 }
@@ -310,23 +310,11 @@ function createCredCard(credInfo, manager) {
 
         }
 
-    } else {
-
-        statusBadges += `<span class="status-badge success">${t('status_no_errors')}</span>`;
-
     }
 
-    if (managerType !== 'primary' && credInfo.preview !== undefined) {
+    if (managerType !== 'primary' && credInfo.preview) {
 
-        if (credInfo.preview) {
-
-            statusBadges += `<span class="status-badge success" title="${t('preview_supported_title')}">${t('credential_badge_preview', {state: t('credential_state_on')})}</span>`;
-
-        } else {
-
-            statusBadges += `<span class="status-badge muted" title="${t('preview_not_supported_title')}">${t('credential_badge_preview', {state: t('credential_state_off')})}</span>`;
-
-        }
+        statusBadges += `<span class="status-badge success" title="${t('preview_supported_title')}">${t('credential_badge_preview', {state: t('credential_state_on')})}</span>`;
 
     }
 
@@ -352,21 +340,13 @@ function createCredCard(credInfo, manager) {
 
         const tierClass = tier === 'ultra' ? 'tier-ultra' : (tier === 'free' ? 'tier-free' : 'tier-pro');
 
-        statusBadges += `<span class="status-badge ${tierClass}" title="${escapeAttribute(`${t('tier_badge_title')}: ${tierLabel}`)}">${t('credential_badge_tier', {tier: escapeHtml(tierLabel)})}</span>`;
+        statusBadges += `<span class="status-badge ${tierClass}" title="${escapeAttribute(`${t('tier_badge_title')}: ${tierLabel}`)}">${tierLabel}</span>`;
 
     }
 
-    if (managerType === 'primary' && isAntigravity) {
+    if (managerType === 'primary' && isAntigravity && credInfo.enable_credit) {
 
-        if (credInfo.enable_credit) {
-
-            statusBadges += `<span class="status-badge credit-on" title="${t('credit_enabled_title')}">${t('credential_badge_credits', {state: t('credential_state_on')})}</span>`;
-
-        } else {
-
-            statusBadges += `<span class="status-badge credit-off" title="${t('credit_disabled_title')}">${t('credential_badge_credits', {state: t('credential_state_off')})}</span>`;
-
-        }
+        statusBadges += `<span class="status-badge credit-on" title="${t('credit_enabled_title')}">${t('credential_badge_credits', {state: t('credential_state_on')})}</span>`;
 
     }
 

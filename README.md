@@ -1,4 +1,48 @@
-# Omni Gateway
+<div align="center">
+  <h1>
+    <img src="frontend/assets/logo.png" alt="Omni Gateway Logo" width="48" height="48" style="vertical-align: middle;" />
+    Omni Gateway
+  </h1>
+  <p><b>Universal AI Router & Unified Multi-Provider Gateway for AI Coding Tools</b></p>
+
+  <p>
+    <a href="https://github.com/nguywnben/omni-gateway/releases"><img src="https://img.shields.io/github/v/release/nguywnben/omni-gateway?style=flat-square&color=blue" alt="Release"></a>
+    <a href="https://github.com/nguywnben/omni-gateway/blob/main/LICENSE"><img src="https://img.shields.io/github/license/nguywnben/omni-gateway?style=flat-square&color=green" alt="License"></a>
+    <a href="https://github.com/nguywnben/omni-gateway/actions"><img src="https://img.shields.io/github/actions/workflow/status/nguywnben/omni-gateway/ci.yml?branch=main&style=flat-square&label=CI" alt="CI Status"></a>
+    <a href="https://hub.docker.com/r/nguywnben/omni-gateway"><img src="https://img.shields.io/docker/pulls/nguywnben/omni-gateway?style=flat-square&logo=docker" alt="Docker Pulls"></a>
+    <img src="https://img.shields.io/badge/python-3.12%20%7C%203.14-3776AB?style=flat-square&logo=python&logoColor=white" alt="Python 3.12 | 3.14">
+    <img src="https://img.shields.io/badge/i18n-15%20languages-orange?style=flat-square" alt="15 Languages">
+  </p>
+
+  <p>
+    <a href="#supported-providers"><b>🌐 Supported Providers</b></a> •
+    <a href="#core-capabilities"><b>⚡ Capabilities</b></a> •
+    <a href="#deployment"><b>🐳 Docker Deployment</b></a> •
+    <a href="#quick-start-sdk-integration"><b>🔌 SDK Setup</b></a> •
+    <a href="docs/architecture.md"><b>📖 Architecture</b></a>
+  </p>
+
+  <p>
+    <b>Console & Documentation Languages:</b><br>
+    <b>English</b> •
+    <a href="docs/locales/README.vi.md">Tiếng Việt</a> •
+    <a href="docs/locales/README.zh-CN.md">中文(简体)</a> •
+    <a href="docs/locales/README.zh-TW.md">中文(繁體)</a> •
+    <a href="docs/locales/README.ja.md">日本語</a> •
+    <a href="docs/locales/README.ko.md">한국어</a> •
+    <a href="docs/locales/README.es.md">Español</a> •
+    <a href="docs/locales/README.fr.md">Français</a> •
+    <a href="docs/locales/README.de.md">Deutsch</a> •
+    <a href="docs/locales/README.it.md">Italiano</a> •
+    <a href="docs/locales/README.pt.md">Português</a> •
+    <a href="docs/locales/README.ru.md">Русский</a> •
+    <a href="docs/locales/README.id.md">Indonesia</a> •
+    <a href="docs/locales/README.th.md">ภาษาไทย</a> •
+    <a href="docs/locales/README.tr.md">Türkçe</a>
+  </p>
+</div>
+
+---
 
 A universal AI router for coding tools. Omni Gateway provides smart auto-fallback, token-aware request cleanup, usage visibility, and seamless format translation so local agents, IDE assistants, and automation scripts can use free and premium LLM capacity through one stable API surface.
 
@@ -22,6 +66,22 @@ Modern coding workflows often mix clients and providers: OpenAI-compatible tools
 ## Console Preview
 
 ![Omni Gateway credential pool](docs/assets/screenshots/credential-pool.png)
+
+## Supported Providers
+
+Omni Gateway adapts requests seamlessly across leading AI providers, local runtime engines, and OAuth endpoints:
+
+| Provider | Auth Type | Supported Protocols | Auto-Failover | Streaming |
+| :--- | :---: | :---: | :---: | :---: |
+| <img src="frontend/assets/providers/google-antigravity-logo.png" width="18" height="18" valign="middle" /> **Google Antigravity** | OAuth (Google) | Gemini Native, OpenAI, Anthropic | ✅ | ✅ |
+| <img src="frontend/assets/providers/google-ai-studio-logo.png" width="18" height="18" valign="middle" /> **Google AI Studio** | API Key | Gemini Native, OpenAI, Anthropic | ✅ | ✅ |
+| <img src="frontend/assets/providers/claude-code-logo.png" width="18" height="18" valign="middle" /> **Claude Code** | OAuth (Anthropic) | Anthropic Messages, OpenAI, Gemini | ✅ | ✅ |
+| <img src="frontend/assets/providers/claude-platform-logo.png" width="18" height="18" valign="middle" /> **Claude Platform** | API Key | Anthropic Messages, OpenAI, Gemini | ✅ | ✅ |
+| <img src="frontend/assets/providers/codex-logo.png" width="18" height="18" valign="middle" /> **Codex** | OAuth (OpenAI) | OpenAI Completions & Responses | ✅ | ✅ |
+| <img src="frontend/assets/providers/openai-platform-logo.png" width="18" height="18" valign="middle" /> **OpenAI Platform** | API Key | OpenAI Completions & Responses | ✅ | ✅ |
+| <img src="frontend/assets/providers/grok-build-logo.png" width="18" height="18" valign="middle" /> **Grok Build** | API Key | OpenAI Compatible, Anthropic, Gemini | ✅ | ✅ |
+| <img src="frontend/assets/providers/spacexai-console-logo.png" width="18" height="18" valign="middle" /> **SpaceXAI Console** | API Key | OpenAI Compatible | ✅ | ✅ |
+| <img src="frontend/assets/providers/ollama-logo.png" width="18" height="18" valign="middle" /> **Ollama (Local / Self-hosted)** | Local / Base URL | OpenAI Compatible | ✅ | ✅ |
 
 ## Architecture
 
@@ -481,6 +541,18 @@ The production baseline is Python 3.12, and CI currently verifies Python 3.12 an
 - Report vulnerabilities through the private process in [Security Policy](SECURITY.md).
 - Review [Changelog](CHANGELOG.md) for release-level changes.
 - Follow the [Code of Conduct](CODE_OF_CONDUCT.md) in all project spaces.
+
+## Acknowledgements & Inspirations
+
+Omni Gateway stands on the shoulders of the open-source AI routing, telemetry, and gateway community. We express our gratitude to the creators and maintainers of these projects:
+
+| Project | Description | Stars |
+| :--- | :--- | :---: |
+| [**songquanpeng / one-api**](https://github.com/songquanpeng/one-api) | Inspiration for multi-provider key management and web-based API aggregation | [![Stars](https://img.shields.io/github/stars/songquanpeng/one-api?style=flat-square&color=yellow)](https://github.com/songquanpeng/one-api) |
+| [**router-for-me / CLIProxyAPI**](https://github.com/router-for-me/CLIProxyAPI) | Pioneering multi-format proxy and protocol translation layer for AI coding CLIs | [![Stars](https://img.shields.io/github/stars/router-for-me/CLIProxyAPI?style=flat-square&color=yellow)](https://github.com/router-for-me/CLIProxyAPI) |
+| [**BerriAI / litellm**](https://github.com/BerriAI/litellm) | Standard-setting unified LLM proxy, load balancing, and fallback routing | [![Stars](https://img.shields.io/github/stars/BerriAI/litellm?style=flat-square&color=yellow)](https://github.com/BerriAI/litellm) |
+| [**Portkey-AI / gateway**](https://github.com/Portkey-AI/gateway) | Ultra-fast AI gateway architecture, routing strategies, and resilient fallback patterns | [![Stars](https://img.shields.io/github/stars/Portkey-AI/gateway?style=flat-square&color=yellow)](https://github.com/Portkey-AI/gateway) |
+| [**langfuse / langfuse**](https://github.com/langfuse/langfuse) | Open-source LLM engineering platform, tracing, observability, and metrics ingestion | [![Stars](https://img.shields.io/github/stars/langfuse/langfuse?style=flat-square&color=yellow)](https://github.com/langfuse/langfuse) |
 
 ## License
 
