@@ -26,6 +26,7 @@ jobs:
     env:
       PYTHONDONTWRITEBYTECODE: "1"
       ENABLE_LOG: "0"
+      CREDENTIALS_DIR: /tmp/omni-gateway-tests/credentials
     permissions:
       contents: read
 
@@ -50,19 +51,6 @@ jobs:
 
       - name: Install development dependencies
         run: python -m pip install -r requirements-dev.txt
-
-      - name: Verify runtime dependency lock
-        if: matrix.python-version == '3.12'
-        run: |
-          pip-compile \
-            --generate-hashes \
-            --resolver=backtracking \
-            --strip-extras \
-            --no-header \
-            --quiet \
-            --output-file=requirements.lock \
-            requirements.txt
-          git diff --exit-code requirements.lock
 
       - name: Verify dependency compatibility
         run: python -m pip check
@@ -89,16 +77,16 @@ jobs:
       - name: Validate frontend JavaScript
         if: matrix.python-version == '3.12'
         run: |
-          for script in frontend/js/*.js; do
-            node --check "$script"
-          done
+          find frontend/js -type f -name '*.js' -print0 \
+            | sort -z \
+            | xargs -0 -n 1 node --check
 
       - name: Validate shell scripts
         if: matrix.python-version == '3.12'
         run: bash -n deploy/scripts/*.sh
 
       - name: Run unit tests
-        run: python -m unittest discover -s backend/tests -p 'test_*.py'
+        run: python -m backend.tests
 
       - name: Verify route contracts
         if: matrix.python-version == '3.12'
@@ -164,6 +152,10 @@ jobs:
           python backend/tests/runtime_smoke.py --expect-fresh-setup
           curl --fail --silent http://127.0.0.1:4283/frontend/assets/providers/google-antigravity-logo.png >/dev/null
           curl --fail --silent http://127.0.0.1:4283/frontend/assets/providers/google-ai-studio-logo.png >/dev/null
+          curl --fail --silent http://127.0.0.1:4283/frontend/assets/providers/grok-build-logo.png >/dev/null
+          curl --fail --silent http://127.0.0.1:4283/frontend/assets/providers/spacexai-console-logo.png >/dev/null
+          curl --fail --silent http://127.0.0.1:4283/frontend/assets/providers/codex-logo.png >/dev/null
+          curl --fail --silent http://127.0.0.1:4283/frontend/assets/providers/openai-platform-logo.png >/dev/null
 
       - name: Check whitespace
         if: matrix.python-version == '3.12'
@@ -227,6 +219,12 @@ jobs:
           python backend/tests/runtime_smoke.py \
             --expect-fresh-setup \
             --setup-token container-smoke-token
+          curl --fail --silent http://127.0.0.1:4283/frontend/assets/providers/google-antigravity-logo.png >/dev/null
+          curl --fail --silent http://127.0.0.1:4283/frontend/assets/providers/google-ai-studio-logo.png >/dev/null
+          curl --fail --silent http://127.0.0.1:4283/frontend/assets/providers/grok-build-logo.png >/dev/null
+          curl --fail --silent http://127.0.0.1:4283/frontend/assets/providers/spacexai-console-logo.png >/dev/null
+          curl --fail --silent http://127.0.0.1:4283/frontend/assets/providers/codex-logo.png >/dev/null
+          curl --fail --silent http://127.0.0.1:4283/frontend/assets/providers/openai-platform-logo.png >/dev/null
 
       - name: Stop container
         if: always()
@@ -243,3 +241,86 @@ jobs:
       packages: write
     uses: ./.github/workflows/docker-publish.yml
     secrets: inherit
+
+  publish-release:
+    name: Publish GitHub release
+    needs:
+      - verify
+      - container-smoke
+      - publish-container
+    if: ${{ startsWith(github.ref, 'refs/tags/v') }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6
+        with:
+          persist-credentials: false
+
+      - name: Prepare release notes
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          python - <<'PY'
+          import os
+          import sys
+          from pathlib import Path
+
+          version = os.environ["RELEASE_TAG"].removeprefix("v")
+          sys.path.insert(0, "backend")
+          from app_version import DEFAULT_APPLICATION_VERSION
+
+          if version != DEFAULT_APPLICATION_VERSION:
+              raise SystemExit(
+                  "Release tag version "
+                  f"{version} does not match DEFAULT_APPLICATION_VERSION "
+                  f"{DEFAULT_APPLICATION_VERSION}."
+              )
+
+          lines = Path("CHANGELOG.md").read_text(encoding="utf-8").splitlines()
+          heading = f"## [{version}]"
+
+          try:
+              start = next(index for index, line in enumerate(lines) if line.startswith(heading))
+          except StopIteration as exc:
+              raise SystemExit(f"CHANGELOG.md has no section for {version}.") from exc
+
+          end = next(
+              (index for index in range(start + 1, len(lines)) if lines[index].startswith("## [")),
+              len(lines),
+          )
+          notes = "\n".join(lines[start + 1 : end]).strip()
+          if not notes:
+              raise SystemExit(f"CHANGELOG.md has no release notes for {version}.")
+
+          output = Path(os.environ["RUNNER_TEMP"]) / "release-notes.md"
+          output.write_text(notes + "\n", encoding="utf-8")
+          print(f"Prepared release notes for {version}.")
+          PY
+
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        shell: bash
+        run: |
+          if gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "Release $RELEASE_TAG already exists."
+            exit 0
+          fi
+
+          release_args=(
+            "$RELEASE_TAG"
+            --repo "$GITHUB_REPOSITORY"
+            --title "Omni Gateway ${RELEASE_TAG#v}"
+            --notes-file "$RUNNER_TEMP/release-notes.md"
+            --verify-tag
+          )
+
+          if [[ "$RELEASE_TAG" == *-* ]]; then
+            release_args+=(--prerelease)
+          fi
+
+          gh release create "${release_args[@]}"

@@ -5,8 +5,29 @@ from typing import Set
 
 import config
 from fastapi import HTTPException, WebSocket
-from log import log
+from log import log, redact_text
 from starlette.websockets import WebSocketState
+
+INTERNAL_SERVER_ERROR_DETAIL = (
+    "The request could not be completed because of an internal service error."
+)
+MAX_PUBLIC_ERROR_DETAIL_LENGTH = 8192
+
+
+def internal_server_error() -> HTTPException:
+    """Return a stable 500 response without exposing implementation details."""
+    return HTTPException(status_code=500, detail=INTERNAL_SERVER_ERROR_DETAIL)
+
+
+def public_error_detail(value: object, fallback: str = "The provider request failed.") -> str:
+    """Return bounded provider diagnostics with credentials removed."""
+    detail = redact_text(value).strip()
+    if not detail:
+        return fallback
+    if len(detail) > MAX_PUBLIC_ERROR_DETAIL_LENGTH:
+        return f"{detail[:MAX_PUBLIC_ERROR_DETAIL_LENGTH]}..."
+    return detail
+
 
 # =============================================================================
 

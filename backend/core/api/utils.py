@@ -11,11 +11,14 @@ from config import (
     get_retry_429_max_retries,
 )
 from core.credential_manager import CredentialManager
+from core.request_context import get_request_elapsed_ms, get_request_id
 from core.usage_stats import record_call
 from fastapi import Response
 from log import log
 
 UNASSIGNED_USAGE_FILENAME = "__gateway_unassigned__.json"
+MODEL_NOT_FOUND_COOLDOWN_SECONDS = 2 * 60
+RETRYABLE_UPSTREAM_STATUS_CODES = frozenset({408, 409, 429, 500, 502, 503, 504})
 
 
 async def check_should_auto_disable(status_code: int) -> bool:
@@ -60,7 +63,7 @@ async def handle_error_with_retry(
             return True
         return False
 
-    if status_code in (429, 500, 503) and retry_enabled and attempt < max_retries:
+    if status_code in RETRYABLE_UPSTREAM_STATUS_CODES and retry_enabled and attempt < max_retries:
         log.info(
             f"[{mode.upper()} RETRY] {status_code} error encountered, retrying "
             f"(attempt {attempt + 1}/{max_retries})"
@@ -91,6 +94,8 @@ async def record_api_call_success(
 ) -> None:
     if credential_manager and credential_name:
         try:
+            request_metrics = dict(request_metrics or {})
+            request_metrics.setdefault("latency_ms", get_request_elapsed_ms())
             await asyncio.to_thread(
                 record_call,
                 credential_name,
@@ -100,6 +105,7 @@ async def record_api_call_success(
                 success=True,
                 token_usage=token_usage,
                 request_metrics=request_metrics,
+                request_id=get_request_id(),
             )
         except Exception as e:
             log.error(f"Failed to record usage for {credential_name}: {e}")
@@ -129,6 +135,7 @@ async def record_api_call_error(
                 status_code=status_code,
                 success=False,
                 token_usage=None,
+                request_id=get_request_id(),
             )
         except Exception as e:
             log.error(f"Failed to record failed usage for {credential_name}: {e}")
@@ -142,6 +149,42 @@ async def record_api_call_error(
             model_name=model_name,
             error_message=error_message,
         )
+
+
+async def record_model_route_miss(
+    credential_manager: CredentialManager,
+    credential_name: str,
+    *,
+    model_name: str,
+    provider: str,
+) -> None:
+    """Record and briefly suppress an unsupported credential-model route."""
+    try:
+        cooldown_until = datetime.now(timezone.utc).timestamp() + MODEL_NOT_FOUND_COOLDOWN_SECONDS
+        await credential_manager.set_model_cooldown(
+            credential_name,
+            model_name,
+            cooldown_until,
+            mode="primary",
+        )
+    except Exception as exc:
+        log.error(f"Failed to set model cooldown for {credential_name}: {exc}")
+
+    try:
+        await asyncio.to_thread(
+            record_call,
+            credential_name,
+            model=model_name,
+            provider=provider,
+            status_code=404,
+            success=False,
+            token_usage=None,
+            request_id=get_request_id(),
+        )
+    except Exception as exc:
+        log.error(f"Failed to record model route miss for {credential_name}: {exc}")
+    finally:
+        await credential_manager.release_credential(credential_name, mode="primary")
 
 
 async def record_unassigned_api_call_error(
@@ -160,6 +203,7 @@ async def record_unassigned_api_call_error(
             status_code=status_code,
             success=False,
             token_usage=None,
+            request_id=get_request_id(),
         )
     except Exception as e:
         log.error(f"Failed to record unassigned usage failure: {e}")

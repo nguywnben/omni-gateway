@@ -4,9 +4,10 @@
 
 | Version | Supported |
 | --- | --- |
-| Current `main` branch | Yes |
-| Latest published release | Yes |
-| Older releases | No |
+| Latest `1.x` release | Yes |
+| `main` / `edge` development builds | Best effort |
+| `0.x` beta releases | No |
+| Older `1.x` releases | Upgrade to the latest release |
 
 ## Reporting Vulnerabilities
 
@@ -21,9 +22,11 @@ After a fix is available, coordinate public disclosure through the advisory. Cre
 - Use a unique `PANEL_PASSWORD` for the management console.
 - Use a separate `API_KEY` beginning with `sk-ogw-` for client traffic.
 - Keep the service behind TLS when exposed outside localhost.
+- Keep `MAX_REQUEST_BODY_MB` bounded and configure an equal or lower request-body limit at the reverse proxy.
 - Protect the bootstrap token printed for remote first-run setup, or preconfigure `PANEL_PASSWORD` for non-interactive deployment.
 - Restrict browser cross-origin access with `CORS_ORIGINS`.
 - Preserve `Host` and trust forwarded headers only when a controlled reverse proxy overwrites them.
-- Run exactly one worker and one application replica for `0.2.0-beta`, regardless of storage backend.
+- Run exactly one worker and one application replica for the 1.x series, regardless of storage backend.
+- Protect the credential volume or external database with least-privilege access and platform-level encryption at rest. Provider tokens and API keys must remain retrievable by the router and are not application-encrypted.
 - Never commit `.env`, credential JSON files, database files, or logs.
 - Rotate credentials immediately if GitHub or another scanner reports a public leak.
