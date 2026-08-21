@@ -1,7 +1,6 @@
 <div align="center">
   <h1>
-    <img src="../../frontend/assets/logo.png" alt="Omni Gateway Logo" width="48" height="48" style="vertical-align: middle;" />
-    Omni Gateway
+    <img src="../../frontend/assets/logo.png" alt="Omni Gateway Logo" width="48" height="48" style="vertical-align: middle;" /> <span style="vertical-align: middle;">Omni Gateway</span>
   </h1>
   <p><b>面向 AI 程式設計工具的通用 AI 路由器與多供應商統一閘道</b></p>
 
