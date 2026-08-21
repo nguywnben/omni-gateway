@@ -1267,3 +1267,32 @@ for (const [locale, values] of Object.entries(DASHBOARD_METRICS_ENHANCEMENT_COPY
         Object.fromEntries(DASHBOARD_METRICS_ENHANCEMENT_KEYS.map((key, index) => [key, values[index]])),
     );
 }
+
+const ROUTING_STRATEGY_KEYS = [
+    'settings.weighted', 'settings.least_latency', 'settings.lowest_cost'
+];
+
+const ROUTING_STRATEGY_COPY = {
+    en: ['Weighted random', 'Least latency', 'Lowest cost'],
+    'zh-CN': ['加权随机', '最低延迟', '最低成本'],
+    'zh-TW': ['加權隨機', '最低延遲', '最低成本'],
+    de: ['Gewichteter Zufall', 'Geringste Latenz', 'Niedrigste Kosten'],
+    es: ['Aleatorio ponderado', 'Menor latencia', 'Menor costo'],
+    fr: ['Aléatoire pondéré', 'Latence minimale', 'Coût minimal'],
+    id: ['Acak berbobot', 'Latensi terendah', 'Biaya terendah'],
+    it: ['Casuale ponderato', 'Latenza minima', 'Costo minimo'],
+    ja: ['重み付きランダム', '最小レイテンシ', '最低コスト'],
+    ko: ['가중치 무작위', '최소 지연 시간', '최저 비용'],
+    pt: ['Aleatório ponderado', 'Menor latência', 'Menor custo'],
+    ru: ['Взвешенный случайный', 'Минимальная задержка', 'Минимальная стоимость'],
+    th: ['สุ่มตามน้ำหนัก', 'ค่าหน่วงต่ำสุด', 'ต้นทุนต่ำสุด'],
+    tr: ['Ağırlıklı rastgele', 'En düşük gecikme', 'En düşük maliyet'],
+    vi: ['Ngẫu nhiên theo trọng số', 'Độ trễ thấp nhất', 'Chi phí thấp nhất']
+};
+
+for (const [locale, values] of Object.entries(ROUTING_STRATEGY_COPY)) {
+    Object.assign(
+        PAGE_LOCALE_TRANSLATIONS[locale],
+        Object.fromEntries(ROUTING_STRATEGY_KEYS.map((key, index) => [key, values[index]])),
+    );
+}

@@ -473,7 +473,7 @@ async def get_routing_policy() -> dict[str, str]:
         .strip()
         .lower()
     )
-    if strategy not in {"balanced", "priority"}:
+    if strategy not in {"balanced", "priority", "weighted", "least_latency", "lowest_cost"}:
         strategy = "balanced"
 
     preferred_provider = (

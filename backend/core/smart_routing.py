@@ -8,18 +8,26 @@ from collections import deque
 from dataclasses import dataclass
 from typing import Any, Callable, Deque, Dict, Optional, Set, Tuple
 
+from core.advanced_routing import provider_cost_rank, weighted_order
 from core.provider_registry import (
     credential_model_support_level,
     get_credential_provider,
+    get_credential_provider_variant,
     normalize_provider_id,
 )
-from core.request_context import get_request_id
+from core.request_context import get_request_elapsed_ms, get_request_id
 from core.routing_decision import RouteCandidate, RouteDecision
 from log import log
 
 CredentialResult = Tuple[str, Dict[str, Any]]
 CredentialKey = Tuple[str, str]
 FailureKey = Tuple[str, str, str]
+
+VALID_ROUTING_STRATEGIES = frozenset(
+    {"balanced", "priority", "weighted", "least_latency", "lowest_cost"}
+)
+LATENCY_WINDOW_SIZE = 10
+LATENCY_BUCKET_MS = 100.0
 
 
 @dataclass(frozen=True)
@@ -57,6 +65,8 @@ class SmartCredentialRouter:
         self._providers: Dict[CredentialKey, str] = {}
         self._state_cache: Dict[str, Tuple[float, Dict[str, Dict[str, Any]]]] = {}
         self._recent_decisions: Deque[RouteDecision] = deque(maxlen=100)
+        self._latencies: Dict[CredentialKey, Deque[float]] = {}
+        self._provider_variants: Dict[CredentialKey, str] = {}
 
     def _prune_expired_leases(self, now: float) -> None:
         expires_before = now - self._lease_ttl_seconds
@@ -111,6 +121,27 @@ class SmartCredentialRouter:
             self._max_backoff_seconds,
         )
         return now + backoff
+
+    def _latency_rank(self, key: CredentialKey) -> int:
+        """Bucketed average latency; unknown credentials rank first (0).
+
+        Bucketing (100ms) keeps the sort stable against noise, mirroring the
+        buffer approach in LiteLLM's lowest-latency strategy so traffic does
+        not permanently pin to one credential.
+        """
+        samples = self._latencies.get(key)
+        if not samples:
+            return 0
+        return int((sum(samples) / len(samples)) // LATENCY_BUCKET_MS)
+
+    def _record_latency(self, key: CredentialKey, latency_ms: float) -> None:
+        if latency_ms <= 0:
+            return
+        window = self._latencies.get(key)
+        if window is None:
+            window = deque(maxlen=LATENCY_WINDOW_SIZE)
+            self._latencies[key] = window
+        window.append(float(latency_ms))
 
     @staticmethod
     def _is_model_available(state: Dict[str, Any], model_name: Optional[str], now: float) -> bool:
@@ -210,6 +241,15 @@ class SmartCredentialRouter:
             provider_penalty = 0
             if routing_strategy == "priority" and preferred_provider:
                 provider_penalty = int(self._providers.get(key) != preferred_provider)
+
+            strategy_rank = 0
+            if routing_strategy == "least_latency":
+                strategy_rank = self._latency_rank(key)
+            elif routing_strategy == "lowest_cost":
+                strategy_rank = provider_cost_rank(
+                    self._provider_variants.get(key) or provider_id
+                )
+
             retry_after = failure.retry_after if failure else 0.0
             error_count = len(state.get("error_codes") or [])
             last_selected = max(
@@ -218,6 +258,7 @@ class SmartCredentialRouter:
             )
 
             score = (
+                strategy_rank,
                 provider_penalty,
                 preview_penalty,
                 in_flight,
@@ -259,6 +300,7 @@ class SmartCredentialRouter:
             credential_data = await storage_adapter.get_credential(filename, mode=mode)
             if credential_data:
                 self._providers[key] = get_credential_provider(credential_data)
+                self._provider_variants[key] = get_credential_provider_variant(credential_data)
 
     async def acquire_with_decision(
         self,
@@ -286,9 +328,9 @@ class SmartCredentialRouter:
                     states,
                 )
             await self._load_candidate_providers(storage_adapter, states, mode=mode)
-            normalized_strategy = (
-                "priority" if str(routing_strategy).lower() == "priority" else "balanced"
-            )
+            normalized_strategy = str(routing_strategy or "balanced").strip().lower()
+            if normalized_strategy not in VALID_ROUTING_STRATEGIES:
+                normalized_strategy = "balanced"
             normalized_preferred_provider = (
                 normalize_provider_id(preferred_provider) if preferred_provider else None
             )
@@ -315,6 +357,20 @@ class SmartCredentialRouter:
                 excluded_credential_models=normalized_credential_exclusions,
                 now=now,
             )
+
+            if normalized_strategy == "weighted" and len(ranked) > 1:
+                # Weighted-random spread across healthy credentials using the
+                # optional per-credential ``weight`` state field (default 1).
+                # The selection loop below picks the minimal score, so the
+                # weighted draw order is encoded as the score itself.
+                weighted_items = [
+                    (filename, float(states.get(filename, {}).get("weight") or 1.0))
+                    for _, filename in ranked
+                ]
+                ranked = [
+                    ((position,), filename)
+                    for position, filename in enumerate(weighted_order(weighted_items))
+                ]
 
             selected = None
             for score, filename in ranked:
@@ -394,11 +450,14 @@ class SmartCredentialRouter:
                     request_id=get_request_id(),
                 )
                 self._recent_decisions.append(decision)
+                in_flight_display = score[3] + 1 if len(score) > 5 else "?"
+                calls_display = score[5] if len(score) > 5 else "?"
                 log.debug(
                     f"Smart routing selected {filename} "
                     f"(mode={mode}, model={model_name or ''}, "
                     f"provider={get_credential_provider(credential_data)}, "
-                    f"support={-selected[0][0]}, in_flight={score[2] + 1}, calls={score[4]})."
+                    f"support={-selected[0][0]}, in_flight={in_flight_display}, "
+                    f"calls={calls_display}, strategy={normalized_strategy})."
                 )
                 return (filename, credential_data), decision
 
@@ -470,6 +529,8 @@ class SmartCredentialRouter:
                 self._failures.pop(failure_key, None)
                 if model_name is None:
                     self._failures.pop(self._failure_key(mode, filename), None)
+                # Feed the least-latency strategy with the observed duration.
+                self._record_latency(key, float(get_request_elapsed_ms()))
                 return
 
             failure_kind = self._failure_kind(error_code)
@@ -514,3 +575,5 @@ class SmartCredentialRouter:
             self._providers.clear()
             self._state_cache.clear()
             self._recent_decisions.clear()
+            self._latencies.clear()
+            self._provider_variants.clear()
