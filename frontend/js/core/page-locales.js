@@ -601,6 +601,164 @@ for (const [locale, values] of Object.entries(OPERATION_COPY_VALUES)) {
     Object.assign(PAGE_LOCALE_TRANSLATIONS[locale], Object.fromEntries(OPERATION_COPY_KEYS.map((key, index) => [key, values[index]])));
 }
 
+const CREDENTIAL_CARD_KEYS = [
+    'provider_antigravity', 'provider_google_ai_studio', 'provider_grok', 'provider_xai_console',
+    'provider_codex', 'provider_openai_platform', 'provider_claude_code', 'provider_claude_platform',
+    'provider_ollama', 'provider_code_assist',
+    'btn_view_content', 'btn_view_content_title', 'btn_download', 'btn_view_models', 'btn_view_models_title',
+    'btn_view_quota', 'btn_view_quota_title', 'btn_enable_credit', 'btn_enable_credit_title',
+    'btn_disable_credit', 'btn_disable_credit_title', 'btn_setup_preview', 'btn_setup_preview_title',
+    'btn_verify_id', 'btn_verify_id_title', 'btn_test_model', 'btn_test_model_title',
+    'btn_view_errors', 'btn_view_errors_title', 'credential_count', 'credential_badge_auto_disabled',
+    'credential_badge_preview', 'credential_badge_tier', 'credential_badge_plan', 'credential_badge_credits',
+    'credential_state_on', 'credential_state_off', 'credential_badge_cooldown'
+];
+
+const CREDENTIAL_CARD_VALUES = {
+    en: [
+        'Google Antigravity', 'Google AI Studio', 'Grok Build', 'SpaceXAI Console', 'Codex', 'OpenAI Platform', 'Claude Code', 'Claude Platform', 'Ollama', 'Code Assist',
+        'Details', 'View the stored details and payload for this credential.', 'Download', 'Models', 'View models available through this credential.',
+        'Quota', 'View quota usage information for this credential.', 'Enable credit', 'Allow this credential to use available Google One AI credits.',
+        'Disable credit', 'Prevent this credential from using available Google One AI credits.', 'Configure', 'Configure the Preview channel and enable experimental features.',
+        'Verify', 'Verify this credential and refresh its provider metadata.', 'Test', 'Select a model and test it with this credential.',
+        'Errors', 'View detailed error messages for this credential.', '{count} credentials', 'Auto-disabled',
+        'Preview: {state}', 'Tier: {tier}', 'Plan: {plan}', 'Credits: {state}', 'On', 'Off', 'Cooldown {model}: {time}'
+    ],
+    'zh-CN': [
+        'Google Antigravity', 'Google AI Studio', 'Grok Build', 'SpaceXAI Console', 'Codex', 'OpenAI Platform', 'Claude Code', 'Claude Platform', 'Ollama', 'Code Assist',
+        '详情', '查看此凭据保存的详情和内容。', '下载', '模型', '查看此凭据可用的模型。',
+        '配额', '查看此凭据的配额使用情况。', '启用积分', '允许此凭据使用可用的 Google One AI 积分。',
+        '停用积分', '阻止此凭据使用可用的 Google One AI 积分。', '配置', '配置 Preview 通道并启用实验性功能。',
+        '验证', '验证此凭据并刷新其提供商元数据。', '测试', '选择一个模型并使用此凭据进行测试。',
+        '错误', '查看此凭据的详细错误信息。', '{count} 个凭据', '已自动停用',
+        'Preview：{state}', '层级：{tier}', '套餐：{plan}', '积分：{state}', '开启', '关闭', '冷却 {model}：{time}'
+    ],
+    'zh-TW': [
+        'Google Antigravity', 'Google AI Studio', 'Grok Build', 'SpaceXAI Console', 'Codex', 'OpenAI Platform', 'Claude Code', 'Claude Platform', 'Ollama', 'Code Assist',
+        '詳細資料', '檢視此憑證儲存的詳細資料和內容。', '下載', '模型', '檢視此憑證可用的模型。',
+        '配額', '檢視此憑證的配額使用情況。', '啟用點數', '允許此憑證使用可用的 Google One AI 點數。',
+        '停用點數', '禁止此憑證使用可用的 Google One AI 點數。', '設定', '設定 Preview 頻道並啟用實驗性功能。',
+        '驗證', '驗證此憑證並重新整理其供應商中繼資料。', '測試', '選擇模型並使用此憑證進行測試。',
+        '錯誤', '檢視此憑證的詳細錯誤訊息。', '{count} 個憑證', '已自動停用',
+        'Preview：{state}', '層級：{tier}', '方案：{plan}', '點數：{state}', '開啟', '關閉', '冷卻 {model}：{time}'
+    ],
+    de: [
+        'Google Antigravity', 'Google AI Studio', 'Grok Build', 'SpaceXAI Console', 'Codex', 'OpenAI Platform', 'Claude Code', 'Claude Platform', 'Ollama', 'Code Assist',
+        'Details', 'Gespeicherte Details und Daten dieser Zugangsdaten anzeigen.', 'Herunterladen', 'Modelle', 'Mit diesen Zugangsdaten verfügbare Modelle anzeigen.',
+        'Kontingent', 'Kontingentnutzung dieser Zugangsdaten anzeigen.', 'Guthaben aktivieren', 'Diesen Zugangsdaten die Nutzung verfügbarer Google One AI-Guthaben erlauben.',
+        'Guthaben deaktivieren', 'Diesen Zugangsdaten die Nutzung verfügbarer Google One AI-Guthaben untersagen.', 'Konfigurieren', 'Den Preview-Kanal konfigurieren und experimentelle Funktionen aktivieren.',
+        'Prüfen', 'Diese Zugangsdaten prüfen und die Anbieter-Metadaten aktualisieren.', 'Testen', 'Ein Modell auswählen und mit diesen Zugangsdaten testen.',
+        'Fehler', 'Detaillierte Fehlermeldungen für diese Zugangsdaten anzeigen.', '{count} Zugangsdaten', 'Automatisch deaktiviert',
+        'Vorschau: {state}', 'Stufe: {tier}', 'Tarif: {plan}', 'Guthaben: {state}', 'Ein', 'Aus', 'Wartezeit {model}: {time}'
+    ],
+    es: [
+        'Google Antigravity', 'Google AI Studio', 'Grok Build', 'SpaceXAI Console', 'Codex', 'OpenAI Platform', 'Claude Code', 'Claude Platform', 'Ollama', 'Code Assist',
+        'Detalles', 'Ver los detalles y datos guardados de esta credencial.', 'Descargar', 'Modelos', 'Ver los modelos disponibles mediante esta credencial.',
+        'Cuota', 'Ver el uso de cuota de esta credencial.', 'Activar créditos', 'Permitir que esta credencial use créditos disponibles de Google One AI.',
+        'Desactivar créditos', 'Impedir que esta credencial use créditos disponibles de Google One AI.', 'Configurar', 'Configurar el canal Preview y activar funciones experimentales.',
+        'Verificar', 'Verificar esta credencial y actualizar sus metadatos del proveedor.', 'Probar', 'Seleccionar un modelo y probarlo con esta credencial.',
+        'Errores', 'Ver mensajes de error detallados de esta credencial.', '{count} credenciales', 'Desactivada automáticamente',
+        'Vista previa: {state}', 'Nivel: {tier}', 'Plan: {plan}', 'Créditos: {state}', 'Activado', 'Desactivado', 'En espera {model}: {time}'
+    ],
+    fr: [
+        'Google Antigravity', 'Google AI Studio', 'Grok Build', 'SpaceXAI Console', 'Codex', 'OpenAI Platform', 'Claude Code', 'Claude Platform', 'Ollama', 'Code Assist',
+        'Détails', 'Afficher les détails et les données enregistrées pour cet identifiant.', 'Télécharger', 'Modèles', 'Afficher les modèles disponibles avec cet identifiant.',
+        'Quota', 'Afficher l’utilisation du quota de cet identifiant.', 'Activer les crédits', 'Autoriser cet identifiant à utiliser les crédits Google One AI disponibles.',
+        'Désactiver les crédits', 'Empêcher cet identifiant d’utiliser les crédits Google One AI disponibles.', 'Configurer', 'Configurer le canal Preview et activer les fonctionnalités expérimentales.',
+        'Vérifier', 'Vérifier cet identifiant et actualiser les métadonnées du fournisseur.', 'Tester', 'Sélectionner un modèle et le tester avec cet identifiant.',
+        'Erreurs', 'Afficher les messages d’erreur détaillés pour cet identifiant.', '{count} identifiants', 'Désactivé automatiquement',
+        'Aperçu : {state}', 'Niveau : {tier}', 'Forfait : {plan}', 'Crédits : {state}', 'Activé', 'Désactivé', 'Délai {model} : {time}'
+    ],
+    id: [
+        'Google Antigravity', 'Google AI Studio', 'Grok Build', 'SpaceXAI Console', 'Codex', 'OpenAI Platform', 'Claude Code', 'Claude Platform', 'Ollama', 'Code Assist',
+        'Detail', 'Lihat detail dan data yang tersimpan untuk kredensial ini.', 'Unduh', 'Model', 'Lihat model yang tersedia melalui kredensial ini.',
+        'Kuota', 'Lihat penggunaan kuota untuk kredensial ini.', 'Aktifkan kredit', 'Izinkan kredensial ini menggunakan kredit Google One AI yang tersedia.',
+        'Nonaktifkan kredit', 'Cegah kredensial ini menggunakan kredit Google One AI yang tersedia.', 'Konfigurasi', 'Konfigurasikan kanal Preview dan aktifkan fitur eksperimental.',
+        'Verifikasi', 'Verifikasi kredensial ini dan perbarui metadata penyedianya.', 'Uji', 'Pilih model dan uji dengan kredensial ini.',
+        'Error', 'Lihat pesan error terperinci untuk kredensial ini.', '{count} kredensial', 'Dinonaktifkan otomatis',
+        'Pratinjau: {state}', 'Tingkat: {tier}', 'Paket: {plan}', 'Kredit: {state}', 'Aktif', 'Nonaktif', 'Jeda {model}: {time}'
+    ],
+    it: [
+        'Google Antigravity', 'Google AI Studio', 'Grok Build', 'SpaceXAI Console', 'Codex', 'OpenAI Platform', 'Claude Code', 'Claude Platform', 'Ollama', 'Code Assist',
+        'Dettagli', 'Visualizza i dettagli e i dati salvati per questa credenziale.', 'Scarica', 'Modelli', 'Visualizza i modelli disponibili tramite questa credenziale.',
+        'Quota', 'Visualizza l’utilizzo della quota per questa credenziale.', 'Abilita crediti', 'Consenti a questa credenziale di usare i crediti Google One AI disponibili.',
+        'Disabilita crediti', 'Impedisci a questa credenziale di usare i crediti Google One AI disponibili.', 'Configura', 'Configura il canale Preview e abilita le funzionalità sperimentali.',
+        'Verifica', 'Verifica questa credenziale e aggiorna i relativi metadati del provider.', 'Testa', 'Seleziona un modello e testalo con questa credenziale.',
+        'Errori', 'Visualizza messaggi di errore dettagliati per questa credenziale.', '{count} credenziali', 'Disabilitata automaticamente',
+        'Anteprima: {state}', 'Livello: {tier}', 'Piano: {plan}', 'Crediti: {state}', 'Attivo', 'Disattivo', 'Attesa {model}: {time}'
+    ],
+    ja: [
+        'Google Antigravity', 'Google AI Studio', 'Grok Build', 'SpaceXAI Console', 'Codex', 'OpenAI Platform', 'Claude Code', 'Claude Platform', 'Ollama', 'Code Assist',
+        '詳細', 'この認証情報に保存されている詳細とデータを表示します。', 'ダウンロード', 'モデル', 'この認証情報で利用できるモデルを表示します。',
+        'クォータ', 'この認証情報のクォータ使用状況を表示します。', 'クレジットを有効化', 'この認証情報で利用可能な Google One AI クレジットの使用を許可します。',
+        'クレジットを無効化', 'この認証情報で利用可能な Google One AI クレジットの使用を停止します。', '設定', 'Preview チャネルを設定し、実験的な機能を有効にします。',
+        '検証', 'この認証情報を検証し、プロバイダーのメタデータを更新します。', 'テスト', 'モデルを選択し、この認証情報でテストします。',
+        'エラー', 'この認証情報の詳細なエラーメッセージを表示します。', '{count} 件の認証情報', '自動的に無効化',
+        'プレビュー: {state}', '階層: {tier}', 'プラン: {plan}', 'クレジット: {state}', 'オン', 'オフ', 'クールダウン {model}: {time}'
+    ],
+    ko: [
+        'Google Antigravity', 'Google AI Studio', 'Grok Build', 'SpaceXAI Console', 'Codex', 'OpenAI Platform', 'Claude Code', 'Claude Platform', 'Ollama', 'Code Assist',
+        '세부 정보', '이 자격 증명에 저장된 세부 정보와 데이터를 봅니다.', '다운로드', '모델', '이 자격 증명으로 사용할 수 있는 모델을 봅니다.',
+        '할당량', '이 자격 증명의 할당량 사용량을 봅니다.', '크레딧 사용', '이 자격 증명이 사용 가능한 Google One AI 크레딧을 사용하도록 허용합니다.',
+        '크레딧 해제', '이 자격 증명이 사용 가능한 Google One AI 크레딧을 사용하지 못하도록 합니다.', '구성', 'Preview 채널을 구성하고 실험적 기능을 활성화합니다.',
+        '검증', '이 자격 증명을 검증하고 제공업체 메타데이터를 새로 고칩니다.', '테스트', '모델을 선택하고 이 자격 증명으로 테스트합니다.',
+        '오류', '이 자격 증명의 자세한 오류 메시지를 봅니다.', '자격 증명 {count}개', '자동 비활성화됨',
+        '미리 보기: {state}', '등급: {tier}', '요금제: {plan}', '크레딧: {state}', '사용', '사용 안 함', '대기 {model}: {time}'
+    ],
+    pt: [
+        'Google Antigravity', 'Google AI Studio', 'Grok Build', 'SpaceXAI Console', 'Codex', 'OpenAI Platform', 'Claude Code', 'Claude Platform', 'Ollama', 'Code Assist',
+        'Detalhes', 'Veja os detalhes e os dados salvos desta credencial.', 'Baixar', 'Modelos', 'Veja os modelos disponíveis com esta credencial.',
+        'Cota', 'Veja o uso de cota desta credencial.', 'Ativar créditos', 'Permita que esta credencial use os créditos disponíveis do Google One AI.',
+        'Desativar créditos', 'Impeça que esta credencial use os créditos disponíveis do Google One AI.', 'Configurar', 'Configure o canal Preview e ative recursos experimentais.',
+        'Verificar', 'Verifique esta credencial e atualize os metadados do provedor.', 'Testar', 'Selecione um modelo e teste-o com esta credencial.',
+        'Erros', 'Veja mensagens de erro detalhadas desta credencial.', '{count} credenciais', 'Desativada automaticamente',
+        'Visualização: {state}', 'Nível: {tier}', 'Plano: {plan}', 'Créditos: {state}', 'Ativado', 'Desativado', 'Espera {model}: {time}'
+    ],
+    ru: [
+        'Google Antigravity', 'Google AI Studio', 'Grok Build', 'SpaceXAI Console', 'Codex', 'OpenAI Platform', 'Claude Code', 'Claude Platform', 'Ollama', 'Code Assist',
+        'Сведения', 'Показать сохранённые сведения и данные этих учётных данных.', 'Скачать', 'Модели', 'Показать модели, доступные через эти учётные данные.',
+        'Квота', 'Показать использование квоты для этих учётных данных.', 'Включить кредиты', 'Разрешить этим учётным данным использовать доступные кредиты Google One AI.',
+        'Отключить кредиты', 'Запретить этим учётным данным использовать доступные кредиты Google One AI.', 'Настроить', 'Настроить канал Preview и включить экспериментальные функции.',
+        'Проверить', 'Проверить эти учётные данные и обновить метаданные провайдера.', 'Тестировать', 'Выбрать модель и проверить её с этими учётными данными.',
+        'Ошибки', 'Показать подробные сообщения об ошибках для этих учётных данных.', '{count} учётных данных', 'Автоматически отключено',
+        'Предпросмотр: {state}', 'Уровень: {tier}', 'Тариф: {plan}', 'Кредиты: {state}', 'Вкл.', 'Выкл.', 'Ожидание {model}: {time}'
+    ],
+    th: [
+        'Google Antigravity', 'Google AI Studio', 'Grok Build', 'SpaceXAI Console', 'Codex', 'OpenAI Platform', 'Claude Code', 'Claude Platform', 'Ollama', 'Code Assist',
+        'รายละเอียด', 'ดูรายละเอียดและข้อมูลที่บันทึกไว้สำหรับข้อมูลรับรองนี้', 'ดาวน์โหลด', 'โมเดล', 'ดูโมเดลที่ใช้ได้ผ่านข้อมูลรับรองนี้',
+        'โควตา', 'ดูการใช้โควตาของข้อมูลรับรองนี้', 'เปิดใช้เครดิต', 'อนุญาตให้ข้อมูลรับรองนี้ใช้เครดิต Google One AI ที่มีอยู่',
+        'ปิดใช้เครดิต', 'ป้องกันไม่ให้ข้อมูลรับรองนี้ใช้เครดิต Google One AI ที่มีอยู่', 'ตั้งค่า', 'ตั้งค่าช่องทาง Preview และเปิดใช้ฟีเจอร์ทดลอง',
+        'ตรวจสอบ', 'ตรวจสอบข้อมูลรับรองนี้และรีเฟรชข้อมูลเมตาของผู้ให้บริการ', 'ทดสอบ', 'เลือกโมเดลและทดสอบด้วยข้อมูลรับรองนี้',
+        'ข้อผิดพลาด', 'ดูข้อความข้อผิดพลาดโดยละเอียดสำหรับข้อมูลรับรองนี้', '{count} ข้อมูลรับรอง', 'ปิดใช้งานอัตโนมัติ',
+        'ตัวอย่าง: {state}', 'ระดับ: {tier}', 'แพ็กเกจ: {plan}', 'เครดิต: {state}', 'เปิด', 'ปิด', 'พัก {model}: {time}'
+    ],
+    tr: [
+        'Google Antigravity', 'Google AI Studio', 'Grok Build', 'SpaceXAI Console', 'Codex', 'OpenAI Platform', 'Claude Code', 'Claude Platform', 'Ollama', 'Code Assist',
+        'Ayrıntılar', 'Bu kimlik bilgisinin kaydedilmiş ayrıntılarını ve verilerini görüntüle.', 'İndir', 'Modeller', 'Bu kimlik bilgisiyle kullanılabilen modelleri görüntüle.',
+        'Kota', 'Bu kimlik bilgisinin kota kullanımını görüntüle.', 'Kredileri etkinleştir', 'Bu kimlik bilgisinin kullanılabilir Google One AI kredilerini kullanmasına izin ver.',
+        'Kredileri devre dışı bırak', 'Bu kimlik bilgisinin kullanılabilir Google One AI kredilerini kullanmasını engelle.', 'Yapılandır', 'Preview kanalını yapılandır ve deneysel özellikleri etkinleştir.',
+        'Doğrula', 'Bu kimlik bilgisini doğrula ve sağlayıcı meta verilerini yenile.', 'Test et', 'Bir model seç ve bu kimlik bilgisiyle test et.',
+        'Hatalar', 'Bu kimlik bilgisi için ayrıntılı hata iletilerini görüntüle.', '{count} kimlik bilgisi', 'Otomatik devre dışı bırakıldı',
+        'Ön izleme: {state}', 'Kademe: {tier}', 'Plan: {plan}', 'Krediler: {state}', 'Açık', 'Kapalı', 'Bekleme {model}: {time}'
+    ],
+    vi: [
+        'Google Antigravity', 'Google AI Studio', 'Grok Build', 'SpaceXAI Console', 'Codex', 'OpenAI Platform', 'Claude Code', 'Claude Platform', 'Ollama', 'Code Assist',
+        'Chi tiết', 'Xem chi tiết và dữ liệu đã lưu của thông tin xác thực này.', 'Tải xuống', 'Mô hình', 'Xem các mô hình có thể dùng với thông tin xác thực này.',
+        'Hạn mức', 'Xem mức sử dụng hạn mức của thông tin xác thực này.', 'Bật credit', 'Cho phép thông tin xác thực này sử dụng credit Google One AI hiện có.',
+        'Tắt credit', 'Ngăn thông tin xác thực này sử dụng credit Google One AI hiện có.', 'Cấu hình', 'Cấu hình kênh Preview và bật các tính năng thử nghiệm.',
+        'Xác minh', 'Xác minh thông tin xác thực này và làm mới siêu dữ liệu của nhà cung cấp.', 'Thử model', 'Chọn một model và thử bằng thông tin xác thực này.',
+        'Lỗi', 'Xem thông báo lỗi chi tiết của thông tin xác thực này.', '{count} thông tin xác thực', 'Tự động tắt',
+        'Preview: {state}', 'Cấp: {tier}', 'Gói: {plan}', 'Credit: {state}', 'Bật', 'Tắt', 'Chờ {model}: {time}'
+    ]
+};
+
+for (const [locale, values] of Object.entries(CREDENTIAL_CARD_VALUES)) {
+    if (values.length !== CREDENTIAL_CARD_KEYS.length) {
+        throw new Error(`Invalid credential card catalog for ${locale}.`);
+    }
+    Object.assign(PAGE_LOCALE_TRANSLATIONS[locale], Object.fromEntries(CREDENTIAL_CARD_KEYS.map((key, index) => [key, values[index]])));
+}
+
 const CREDENTIAL_MODAL_KEYS = [
     'modal.email', 'modal.project_id', 'modal.expiry', 'modal.credential_payload_intro',
     'modal.credential_summary', 'modal.credential_payload', 'modal.provider', 'modal.available_models',
