@@ -12,13 +12,13 @@ from core.google_ai_studio import (
     parse_api_key_import_payload,
     validate_api_key,
 )
+from core.i18n import LocalizedJSONResponse as JSONResponse
 from core.models import ConfigSaveRequest, GoogleAIStudioCredentialRequest
 from core.provider_registry import GOOGLE_AI_STUDIO, api_key_fingerprint
 from core.provider_store import store_google_ai_studio_credential
 from core.storage_adapter import get_storage_adapter
 from core.utils import verify_panel_token
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
-from fastapi.responses import JSONResponse
 from log import log
 
 from ..utils import get_env_locked_keys

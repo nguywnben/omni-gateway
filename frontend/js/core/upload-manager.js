@@ -106,7 +106,7 @@ function createUploadManager(type, options = {}) {
                 const moreItem = document.createElement('div');
                 moreItem.className = 'upload-result-message';
                 const hiddenCount = results.length - visibleResults.length;
-                moreItem.textContent = `${hiddenCount} more ${hiddenCount === 1 ? 'result' : 'results'} not shown.`;
+                moreItem.textContent = t('upload.more_results', {count: hiddenCount});
                 details.appendChild(moreItem);
             }
 

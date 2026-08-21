@@ -17,6 +17,7 @@ from config import get_server_host, get_server_port, trust_proxy_headers_enabled
 from core.credential_manager import credential_manager
 from core.health import router as health_router
 from core.httpx_client import http_client
+from core.i18n import LocalizedJSONResponse, locale_context, resolve_locale
 from core.keep_alive import keep_alive_service
 from core.panel import router as panel_router
 from core.panel.setup_security import get_setup_bootstrap_token
@@ -38,7 +39,6 @@ from core.task_manager import shutdown_all_tasks
 from fastapi import FastAPI, Request, Response
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from log import configure_logging, log
 from paths import FRONTEND_DIR
@@ -149,6 +149,7 @@ app = FastAPI(
     description="Universal AI router with smart auto-fallback, token-aware request cleanup, usage visibility, and seamless format translation.",
     version=get_application_version(),
     lifespan=lifespan,
+    default_response_class=LocalizedJSONResponse,
 )
 
 
@@ -179,7 +180,7 @@ async def handle_http_exception(request: Request, exc: StarletteHTTPException):
             detail,
             headers=exc.headers,
         )
-    return JSONResponse(
+    return LocalizedJSONResponse(
         {"detail": exc.detail},
         status_code=exc.status_code,
         headers=exc.headers,
@@ -192,7 +193,7 @@ async def handle_validation_exception(request: Request, exc: RequestValidationEr
     message = _validation_error_message(exc)
     if protocol:
         return protocol_error_response(protocol, 400, message)
-    return JSONResponse({"detail": exc.errors()}, status_code=422)
+    return LocalizedJSONResponse({"detail": message}, status_code=422)
 
 
 cors_origins = _parse_csv_env("CORS_ORIGINS")
@@ -207,6 +208,7 @@ app.add_middleware(
     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allow_headers=[
         "Authorization",
+        "Accept-Language",
         "Content-Type",
         "x-api-key",
         "x-goog-api-key",
@@ -232,9 +234,13 @@ async def add_security_headers(request, call_next):
         else uuid.uuid4().hex
     )
     request.state.request_id = request_id
-    with request_scope(request_id):
+    localize_console = request.url.path.startswith("/api/") or request.url.path == "/callback"
+    locale = resolve_locale(request.headers.get("accept-language"))
+    with request_scope(request_id), locale_context(locale, enabled=localize_console):
         response = await call_next(request)
     response.headers["X-Request-ID"] = request_id
+    if localize_console:
+        response.headers["Content-Language"] = locale
     response.headers["X-Content-Type-Options"] = "nosniff"
     response.headers["X-Frame-Options"] = "DENY"
     response.headers["X-Permitted-Cross-Domain-Policies"] = "none"

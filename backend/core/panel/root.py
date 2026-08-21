@@ -6,11 +6,7 @@ from html import escape
 
 from core.anthropic import AnthropicError, complete_claude_oauth, is_claude_oauth_state
 from core.auth import accept_oauth_callback
-from core.gemini_cli import (
-    GeminiCliError,
-    complete_gemini_cli_oauth,
-    is_gemini_cli_oauth_state,
-)
+from core.i18n import get_locale, translate
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import HTMLResponse, Response
 from log import log
@@ -44,6 +40,8 @@ CONSOLE_STYLE_ASSETS = (
 )
 
 CONSOLE_SCRIPT_ASSETS = (
+    "js/core/locales.js",
+    "js/core/page-locales.js",
     "js/core/i18n.js",
     "js/core/navigation.js",
     "js/core/credential-manager.js",
@@ -67,7 +65,6 @@ CONSOLE_SCRIPT_ASSETS = (
     "js/features/environment-credentials.js",
     "js/features/provider-settings-shared.js",
     "js/features/google-ai-studio-settings.js",
-    "js/features/gemini-cli-settings.js",
     "js/features/xai-settings.js",
     "js/features/openai-settings.js",
     "js/features/anthropic-settings.js",
@@ -158,7 +155,7 @@ def _oauth_callback_page(success: bool, title: str, message: str) -> HTMLRespons
     safe_title = escape(title)
     safe_message = escape(message)
     html = f"""<!doctype html>
-<html lang="en">
+<html lang="{escape(get_locale())}">
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -259,99 +256,54 @@ async def serve_oauth_callback(request: Request):
     state = request.query_params.get("state")
     error = request.query_params.get("error")
     is_claude_callback = is_claude_oauth_state(state)
-    is_gemini_cli_callback = is_gemini_cli_oauth_state(state)
 
     if error:
+        provider_name = "Claude Code" if is_claude_callback else "Google"
         return _oauth_callback_page(
             False,
-            (
-                "Claude Code Authentication Failed"
-                if is_claude_callback
-                else "Gemini CLI Authentication Failed"
-                if is_gemini_cli_callback
-                else "OAuth Authentication Failed"
-            ),
-            (
-                "Claude Code returned an authorization error. Return to Omni Gateway and start "
-                "the Claude Code authentication flow again."
-                if is_claude_callback
-                else "Gemini CLI returned an authorization error. Return to Omni Gateway and start "
-                "the Gemini CLI authentication flow again."
-                if is_gemini_cli_callback
-                else "Google returned an authorization error. Return to Omni Gateway and start "
-                "the provider authentication flow again."
-            ),
+            translate("oauth.failed_title", provider=provider_name),
+            translate("oauth.retry", provider=provider_name),
         )
 
     if is_claude_callback:
         try:
             result = await complete_claude_oauth(code or "", state or "")
         except AnthropicError as exc:
+            log.warning(f"Claude Code OAuth callback was rejected: {exc}")
             return _oauth_callback_page(
                 False,
-                "Claude Code Authentication Failed",
-                f"{exc} Return to Omni Gateway and generate a new Claude Code authorization link.",
+                translate("oauth.failed_title", provider="Claude Code"),
+                translate("oauth.retry", provider="Claude Code"),
             )
         except Exception as exc:
             log.error(f"Failed to complete the Claude Code OAuth callback: {exc}")
             return _oauth_callback_page(
                 False,
-                "Claude Code Authentication Failed",
-                "Omni Gateway could not finish the Claude Code authentication flow. "
-                "Return to the Providers page and try again.",
+                translate("oauth.failed_title", provider="Claude Code"),
+                translate("oauth.internal_error", provider="Claude Code"),
             )
-        model_count = int(result.get("model_count") or 0)
-        credential_action = {
-            "updated": "updated",
-            "skipped": "already current in the provider pool",
-        }.get(result.get("action"), "added to the provider pool")
         return _oauth_callback_page(
             True,
-            "Claude Code Authentication Successful",
-            (
-                f"The Claude Code credential was {credential_action} with {model_count} "
-                f"available model{'s' if model_count != 1 else ''}. You can close this tab "
-                "and return to Omni Gateway."
+            translate("oauth.success_title", provider="Claude Code"),
+            translate(
+                "oauth.credential_saved",
+                provider="Claude Code",
+                account=result.get("account_label") or result.get("label") or "account",
             ),
         )
 
-    if is_gemini_cli_callback:
-        try:
-            result = await complete_gemini_cli_oauth(code or "", state or "")
-        except GeminiCliError as exc:
-            return _oauth_callback_page(
-                False,
-                "Gemini CLI Authentication Failed",
-                f"{exc} Return to Omni Gateway and generate a new Gemini CLI authorization link.",
-            )
-        except Exception as exc:
-            log.error(f"Failed to complete the Gemini CLI OAuth callback: {exc}")
-            return _oauth_callback_page(
-                False,
-                "Gemini CLI Authentication Failed",
-                "Omni Gateway could not finish the Gemini CLI authentication flow. "
-                "Return to the Providers page and try again.",
-            )
-        user_email = result.get("user_email") or "account"
-        return _oauth_callback_page(
-            True,
-            "Gemini CLI Authentication Successful",
-            f"The Gemini CLI credential ({user_email}) was added to the provider pool. "
-            "You can close this tab and return to Omni Gateway.",
-        )
-
-    accepted, message = accept_oauth_callback(code, state)
+    accepted, _message = accept_oauth_callback(code, state)
     if accepted:
         return _oauth_callback_page(
             True,
-            "OAuth Authentication Successful",
-            "Copy this page URL from the browser address bar, return to the Providers page, paste it into the Callback URL field, and save the credential.",
+            translate("oauth.success_title", provider="OAuth"),
+            translate("oauth.copy_callback"),
         )
 
     return _oauth_callback_page(
         False,
-        "OAuth Authentication Failed",
-        f"{message} Return to Omni Gateway and generate a new authorization link.",
+        translate("oauth.failed_title", provider="OAuth"),
+        translate("oauth.retry", provider="OAuth"),
     )
 
 

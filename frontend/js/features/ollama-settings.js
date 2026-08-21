@@ -7,13 +7,13 @@ async function addOllamaCredential(event) {
     const apiKey = apiKeyField?.value.trim() || '';
 
     if (!baseUrl) {
-        showStatus('Enter an Ollama endpoint.', 'error');
+        showStatus(t('provider.endpoint_required', {provider: 'Ollama'}), 'error');
         endpointField?.focus();
         return;
     }
 
     button.disabled = true;
-    button.textContent = 'Connecting...';
+    button.textContent = t('runtime.connecting');
     document.getElementById('ollamaSaveResult')?.classList.add('hidden');
 
     try {
@@ -28,13 +28,13 @@ async function addOllamaCredential(event) {
         const title = document.getElementById('ollamaSaveResultTitle');
         const text = document.getElementById('ollamaSaveResultText');
         if (title) {
-            title.textContent = data.credential_action === 'updated'
-                ? 'Ollama connection updated'
-                : 'Ollama connection added to pool';
+            title.textContent = t(data.credential_action === 'updated'
+                ? 'runtime.credential_updated_title'
+                : 'runtime.credential_added_title');
         }
         if (text) {
             const count = Number(data.model_count) || 0;
-            text.textContent = `${data.message} ${count} model${count === 1 ? '' : 's'} available.`;
+            text.textContent = `${data.message} ${t('runtime.models_available', {count})}`;
         }
         document.getElementById('ollamaSaveResult')?.classList.remove('hidden');
         if (apiKeyField) apiKeyField.value = '';
@@ -43,10 +43,10 @@ async function addOllamaCredential(event) {
         await loadModelCatalog(true);
         await refreshUsageStats();
     } catch (error) {
-        showStatus(`Failed to add Ollama connection: ${error.message}`, 'error');
+        showStatus(t('provider.connection_add_failed', {provider: 'Ollama', error: error.message}), 'error');
     } finally {
         button.disabled = false;
-        button.textContent = 'Validate and add';
+        button.textContent = t('runtime.validate_add');
     }
 }
 

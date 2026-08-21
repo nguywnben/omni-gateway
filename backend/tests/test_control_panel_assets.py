@@ -201,10 +201,10 @@ class ControlPanelAssetTests(unittest.TestCase):
             self.assertIn(endpoint, settings_script)
         self.assertNotIn("./api/providers/xai/oauth/callback", settings_script)
         self.assertIn('id="xaiAuthorizationCode"', body)
-        self.assertIn("Authorization code", body)
+        self.assertIn('data-i18n="provider.authorization_code"', body)
         self.assertNotIn('id="xaiCallbackUrl"', body)
         self.assertIn(
-            "authorizationLink.textContent = data.auth_url || 'Authorization unavailable'",
+            "authorizationLink.textContent = data.auth_url || t('runtime.authorization_unavailable')",
             settings_script,
         )
         self.assertNotIn("Open xAI authorization", body)
@@ -278,10 +278,10 @@ class ControlPanelAssetTests(unittest.TestCase):
         self.assertIn("isAntigravity || isGrokOAuth || isCodexOAuth", card_script)
         self.assertIn("const quotaPreview = supportsQuotaPreview", card_script)
         self.assertIn("data?.quota_type === 'account_billing'", dialog_script)
-        self.assertIn("Billing Periods", dialog_script)
-        self.assertIn("active billing periods", dialog_script)
+        self.assertIn("t('modal.billing_periods')", dialog_script)
+        self.assertIn("t('modal.lowest_billing_preview'", dialog_script)
         self.assertIn("data?.quota_type === 'account_rate_limits'", dialog_script)
-        self.assertIn("Usage Windows", dialog_script)
+        self.assertIn("t('modal.usage_windows')", dialog_script)
 
     def test_subscription_plans_are_rendered_as_credential_badges(self):
         card_script = read_scripts("ui/credential-cards.js")
@@ -289,8 +289,8 @@ class ControlPanelAssetTests(unittest.TestCase):
 
         self.assertIn("renderCredentialSubscriptionBadge", card_script)
         self.assertIn("subscription-plan-${pathId}", card_script)
-        self.assertIn("Plan: ${escapeHtml(plan.label)}", card_script)
-        self.assertIn("Tier: ${escapeHtml(plan.label)}", card_script)
+        self.assertIn("t('credential_badge_plan'", card_script)
+        self.assertIn("t('credential_badge_tier'", card_script)
         self.assertIn("updateCredentialSubscriptionBadge", dialog_script)
         self.assertIn("cached.data?.plan", dialog_script)
         self.assertIn("cardContext.subscriptionPlan", dialog_script)

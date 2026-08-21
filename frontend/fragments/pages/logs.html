@@ -1,32 +1,32 @@
                 <div id="logsTab" class="tab-content">
                     <header class="page-header">
                         <div>
-                            <div class="page-kicker">Logs</div>
-                            <h1 class="page-title">Runtime Log Stream</h1>
-                            <p class="page-description">Watch routing decisions, upstream responses, credential rotation, and application errors.</p>
+                            <div class="page-kicker" data-i18n="logs">Logs</div>
+                            <h1 class="page-title" data-i18n="logs_title">Runtime Log Stream</h1>
+                            <p class="page-description" data-i18n="logs_description">Watch routing decisions, upstream responses, credential rotation, and application errors.</p>
                         </div>
                         <div class="page-actions">
-                            <button type="button" class="btn btn-secondary" data-ui-action="download-logs">Download</button>
-                            <button type="button" class="btn btn-danger" data-ui-action="clear-logs">Clear</button>
+                            <button type="button" class="btn btn-secondary" data-ui-action="download-logs" data-i18n="download">Download</button>
+                            <button type="button" class="btn btn-danger" data-ui-action="clear-logs" data-i18n="clear">Clear</button>
                         </div>
                     </header>
 
                     <div class="filter-container">
                         <div class="filter-group">
-                            <label for="logLevelFilter">Level</label>
+                            <label for="logLevelFilter" data-i18n="level">Level</label>
                             <select id="logLevelFilter" class="filter-select" data-ui-change="log-level">
-                                <option value="all">All</option>
-                                <option value="ERROR">Error</option>
-                                <option value="WARNING">Warning</option>
-                                <option value="INFO">Info</option>
-                                <option value="DEBUG">Debug</option>
+                                <option value="all" data-i18n="all">All</option>
+                                <option value="ERROR" data-i18n="error">Error</option>
+                                <option value="WARNING" data-i18n="warning">Warning</option>
+                                <option value="INFO" data-i18n="info">Info</option>
+                                <option value="DEBUG" data-i18n="debug">Debug</option>
                             </select>
                         </div>
-                        <label class="switch-row"><input type="checkbox" id="autoScroll" class="config-checkbox" checked><span>Auto-scroll</span></label>
+                        <label class="switch-row"><input type="checkbox" id="autoScroll" class="config-checkbox" checked><span data-i18n="auto_scroll">Auto-scroll</span></label>
                     </div>
 
                     <div id="logConnectionStatus" class="status info" style="margin-bottom: 14px;">
-                        <strong>WebSocket:</strong> <span id="connectionStatusText">Not connected</span>
+                        <strong data-i18n="logs.websocket">WebSocket:</strong> <span id="connectionStatusText" data-i18n="logs.not_connected">Not connected</span>
                     </div>
-                    <div id="logContainer"><div id="logContent">Waiting for logs...</div></div>
+                    <div id="logContainer"><div id="logContent" data-i18n="logs.waiting">Waiting for logs...</div></div>
                 </div>
