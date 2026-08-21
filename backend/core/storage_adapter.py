@@ -21,6 +21,8 @@ class StorageBackend(Protocol):
 
     async def list_credentials(self, mode: str = "code_assist") -> List[str]: ...
 
+    async def get_all_credentials(self, mode: str = "code_assist") -> Dict[str, Dict[str, Any]]: ...
+
     async def delete_credential(self, filename: str, mode: str = "code_assist") -> bool: ...
 
     async def update_credential_state(
@@ -68,8 +70,13 @@ class StorageAdapter:
             if self._initialized:
                 return
 
-            postgresql_uri = os.getenv("POSTGRESQL_URI", "")
-            mongodb_uri = os.getenv("MONGODB_URI", "")
+            postgresql_uri = os.getenv("POSTGRESQL_URI", "").strip()
+            mongodb_uri = os.getenv("MONGODB_URI", "").strip()
+
+            if postgresql_uri and mongodb_uri:
+                raise RuntimeError(
+                    "Configure only one external storage backend: POSTGRESQL_URI or MONGODB_URI."
+                )
 
             if postgresql_uri:
                 try:
@@ -77,50 +84,50 @@ class StorageAdapter:
 
                     self._backend = PostgreSQLManager()
                     await self._backend.initialize()
-                    log.info("Using PostgreSQL storage backend")
+                    log.info("Using the PostgreSQL storage backend.")
                 except Exception as e:
                     log.error(f"Failed to initialize PostgreSQL backend: {e}")
-
-                    log.info("Falling back to SQLite storage backend")
-                    try:
-                        from .storage.sqlite_manager import SQLiteManager
-
-                        self._backend = SQLiteManager()
-                        await self._backend.initialize()
-                        log.info("Using SQLite storage backend (fallback)")
-                    except Exception as e2:
-                        log.error(f"Failed to initialize SQLite backend: {e2}")
-                        raise RuntimeError("No storage backend available") from e2
+                    if self._backend:
+                        try:
+                            await self._backend.close()
+                        except Exception:
+                            log.warning(
+                                "Failed to clean up the PostgreSQL backend after startup failure."
+                            )
+                    self._backend = None
+                    raise RuntimeError(
+                        "The configured PostgreSQL storage backend is unavailable."
+                    ) from e
             elif not mongodb_uri:
                 try:
                     from .storage.sqlite_manager import SQLiteManager
 
                     self._backend = SQLiteManager()
                     await self._backend.initialize()
-                    log.info("Using SQLite storage backend")
+                    log.info("Using the SQLite storage backend.")
                 except Exception as e:
                     log.error(f"Failed to initialize SQLite backend: {e}")
-                    raise RuntimeError("No storage backend available") from e
+                    raise RuntimeError("No storage backend is available.") from e
             else:
                 try:
                     from .storage.mongodb_manager import MongoDBManager
 
                     self._backend = MongoDBManager()
                     await self._backend.initialize()
-                    log.info("Using MongoDB storage backend")
+                    log.info("Using the MongoDB storage backend.")
                 except Exception as e:
                     log.error(f"Failed to initialize MongoDB backend: {e}")
-
-                    log.info("Falling back to SQLite storage backend")
-                    try:
-                        from .storage.sqlite_manager import SQLiteManager
-
-                        self._backend = SQLiteManager()
-                        await self._backend.initialize()
-                        log.info("Using SQLite storage backend (fallback)")
-                    except Exception as e2:
-                        log.error(f"Failed to initialize SQLite backend: {e2}")
-                        raise RuntimeError("No storage backend available") from e2
+                    if self._backend:
+                        try:
+                            await self._backend.close()
+                        except Exception:
+                            log.warning(
+                                "Failed to clean up the MongoDB backend after startup failure."
+                            )
+                    self._backend = None
+                    raise RuntimeError(
+                        "The configured MongoDB storage backend is unavailable."
+                    ) from e
 
             self._initialized = True
 
@@ -132,7 +139,7 @@ class StorageAdapter:
 
     def _ensure_initialized(self):
         if not self._initialized or not self._backend:
-            raise RuntimeError("Storage adapter not initialized")
+            raise RuntimeError("The storage adapter is not initialized.")
 
     async def store_credential(
         self, filename: str, credential_data: Dict[str, Any], mode: str = "code_assist"
@@ -149,6 +156,10 @@ class StorageAdapter:
     async def list_credentials(self, mode: str = "code_assist") -> List[str]:
         self._ensure_initialized()
         return await self._backend.list_credentials(mode)
+
+    async def get_all_credentials(self, mode: str = "code_assist") -> Dict[str, Dict[str, Any]]:
+        self._ensure_initialized()
+        return await self._backend.get_all_credentials(mode)
 
     async def delete_credential(self, filename: str, mode: str = "code_assist") -> bool:
         self._ensure_initialized()
@@ -287,14 +298,18 @@ class StorageAdapter:
 
 
 _storage_adapter: Optional[StorageAdapter] = None
+_storage_adapter_lock = asyncio.Lock()
 
 
 async def get_storage_adapter() -> StorageAdapter:
     global _storage_adapter
 
     if _storage_adapter is None:
-        _storage_adapter = StorageAdapter()
-        await _storage_adapter.initialize()
+        async with _storage_adapter_lock:
+            if _storage_adapter is None:
+                adapter = StorageAdapter()
+                await adapter.initialize()
+                _storage_adapter = adapter
 
     return _storage_adapter
 
@@ -302,6 +317,7 @@ async def get_storage_adapter() -> StorageAdapter:
 async def close_storage_adapter():
     global _storage_adapter
 
-    if _storage_adapter:
-        await _storage_adapter.close()
-        _storage_adapter = None
+    async with _storage_adapter_lock:
+        if _storage_adapter:
+            await _storage_adapter.close()
+            _storage_adapter = None

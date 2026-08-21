@@ -1,10 +1,26 @@
+import asyncio
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Set, Tuple
 
 from config import get_routing_policy
 from core.credential_pool import upsert_credential_by_email
-from core.google_oauth_api import Credentials
-from core.provider_registry import get_credential_provider, is_api_key_credential
+from core.google_oauth_api import Credentials, merge_refreshed_credential_data
+from core.model_blacklist import (
+    get_credential_model_blacklist_pairs,
+    get_model_blacklist_pairs,
+)
+from core.provider_registry import (
+    ANTHROPIC,
+    CLAUDE_CODE,
+    CODEX,
+    OLLAMA,
+    OPENAI,
+    XAI,
+    get_credential_provider,
+    get_credential_provider_variant,
+    is_api_key_credential,
+)
+from core.routing_decision import RouteDecision
 from core.smart_routing import SmartCredentialRouter
 from core.storage_adapter import get_storage_adapter
 from core.usage_stats import retire_credential_usage
@@ -40,6 +56,8 @@ class CredentialManager:
         mode: str = "code_assist",
         model_name: Optional[str] = None,
         provider_id: Optional[str] = None,
+        excluded_provider_models: Optional[Set[Tuple[str, str]]] = None,
+        excluded_credential_models: Optional[Set[Tuple[str, str]]] = None,
     ) -> Optional[Tuple[str, Dict[str, Any]]]:
         await self._ensure_initialized()
 
@@ -57,6 +75,8 @@ class CredentialManager:
                 provider_id=provider_id,
                 routing_strategy=routing_policy["strategy"],
                 preferred_provider=routing_policy["preferred_provider"],
+                excluded_provider_models=excluded_provider_models,
+                excluded_credential_models=excluded_credential_models,
             )
 
             if not result:
@@ -92,8 +112,16 @@ class CredentialManager:
         model_names,
         *,
         mode: str = "primary",
+        respect_model_blacklist: bool = False,
+        excluded_provider_models: Optional[Set[Tuple[str, str]]] = None,
+        excluded_credential_models: Optional[Set[Tuple[str, str]]] = None,
     ) -> Optional[Tuple[str, str, Dict[str, Any]]]:
         """Return the first routable model and credential in priority order."""
+        route_exclusions = set(excluded_provider_models or ())
+        credential_route_exclusions = set(excluded_credential_models or ())
+        if respect_model_blacklist:
+            route_exclusions.update(await get_model_blacklist_pairs())
+            credential_route_exclusions.update(await get_credential_model_blacklist_pairs())
         seen = set()
         for value in model_names or ():
             model_name = str(value or "").strip()
@@ -103,6 +131,8 @@ class CredentialManager:
             credential = await self.get_valid_credential(
                 mode=mode,
                 model_name=model_name,
+                excluded_provider_models=route_exclusions,
+                excluded_credential_models=credential_route_exclusions,
             )
             if credential:
                 filename, credential_data = credential
@@ -167,7 +197,11 @@ class CredentialManager:
                 )
                 return False
 
-            retire_credential_usage(credential_name, provider_id)
+            retire_credential_usage(
+                credential_name,
+                provider_id,
+                credential_type=credential_data.get("credential_type", ""),
+            )
             log.info(f"Credential removed (mode={mode}, provider={provider_id}).")
             return True
         except Exception as e:
@@ -177,6 +211,32 @@ class CredentialManager:
     async def release_credential(self, credential_name: str, mode: str = "code_assist") -> None:
         """Release a routing reservation for a non-inference operation."""
         await self._routing.release(credential_name, mode=mode)
+
+    async def get_recent_routing_decisions(self, limit: int = 20) -> tuple[RouteDecision, ...]:
+        """Return secret-free recent routing decisions for management diagnostics."""
+        await self._ensure_initialized()
+        return await self._routing.recent_decisions(limit=limit)
+
+    async def set_model_cooldown(
+        self,
+        credential_name: str,
+        model_name: str,
+        cooldown_until: float,
+        *,
+        mode: str = "primary",
+    ) -> bool:
+        """Temporarily exclude one credential from one model route."""
+        await self._ensure_initialized()
+        backend = self._storage_adapter._backend
+        if not hasattr(backend, "set_model_cooldown"):
+            return False
+        updated = await backend.set_model_cooldown(
+            credential_name,
+            model_name,
+            cooldown_until,
+            mode=mode,
+        )
+        return bool(updated)
 
     async def update_credential_state(
         self, credential_name: str, state_updates: Dict[str, Any], mode: str = "code_assist"
@@ -267,7 +327,7 @@ class CredentialManager:
 
             if token_refreshed:
                 log.info(f"Token automatically refreshed: {credential_name} (mode = {mode})")
-                updated_data = credentials.to_dict()
+                updated_data = merge_refreshed_credential_data(credential_data, credentials)
                 await self._storage_adapter.store_credential(
                     credential_name, updated_data, mode=mode
                 )
@@ -336,11 +396,28 @@ class CredentialManager:
                 mode=mode,
                 success=success,
                 cooldown_until=cooldown_until,
+                model_name=model_name,
+                error_code=error_code,
             )
+
+    async def prepare_credential(
+        self,
+        filename: str,
+        credential_data: Dict[str, Any],
+        *,
+        mode: str = "primary",
+    ) -> Optional[Dict[str, Any]]:
+        """Refresh one stored credential when needed without acquiring a routing lease."""
+        await self._ensure_initialized()
+        if await self._should_refresh_token(credential_data):
+            return await self._refresh_token(credential_data, filename, mode=mode)
+        return credential_data
 
     async def _should_refresh_token(self, credential_data: Dict[str, Any]) -> bool:
         try:
             if is_api_key_credential(credential_data):
+                return False
+            if get_credential_provider(credential_data) == OLLAMA:
                 return False
 
             if not credential_data.get("access_token") and not credential_data.get("token"):
@@ -398,6 +475,34 @@ class CredentialManager:
     ) -> Optional[Dict[str, Any]]:
         await self._ensure_initialized()
         try:
+            provider_id = get_credential_provider(credential_data)
+            if provider_id == XAI:
+                from core.xai import refresh_xai_oauth_credential
+
+                refreshed_data = await refresh_xai_oauth_credential(credential_data)
+                await self._storage_adapter.store_credential(filename, refreshed_data, mode=mode)
+                log.info(f"Grok Build token refreshed and saved: {filename} (mode={mode}).")
+                return refreshed_data
+
+            if provider_id == OPENAI and get_credential_provider_variant(credential_data) == CODEX:
+                from core.codex import refresh_codex_oauth_credential
+
+                refreshed_data = await refresh_codex_oauth_credential(credential_data)
+                await self._storage_adapter.store_credential(filename, refreshed_data, mode=mode)
+                log.info(f"Codex token refreshed and saved: {filename} (mode={mode}).")
+                return refreshed_data
+
+            if (
+                provider_id == ANTHROPIC
+                and get_credential_provider_variant(credential_data) == CLAUDE_CODE
+            ):
+                from core.anthropic import refresh_claude_oauth_credential
+
+                refreshed_data = await refresh_claude_oauth_credential(credential_data)
+                await self._storage_adapter.store_credential(filename, refreshed_data, mode=mode)
+                log.info(f"Claude Code token refreshed and saved: {filename} (mode={mode}).")
+                return refreshed_data
+
             creds = Credentials.from_dict(credential_data)
 
             if not creds.refresh_token:
@@ -415,13 +520,7 @@ class CredentialManager:
             log.debug(f"Refreshing token: {filename} (mode={mode})")
             await creds.refresh()
 
-            if creds.access_token:
-                credential_data["access_token"] = creds.access_token
-
-                credential_data["token"] = creds.access_token
-
-            if creds.expires_at:
-                credential_data["expiry"] = creds.expires_at.isoformat()
+            credential_data = merge_refreshed_credential_data(credential_data, creds)
 
             await self._storage_adapter.store_credential(filename, credential_data, mode=mode)
             log.info(f"Token refreshed and saved: {filename} (mode = {mode}).")
@@ -516,20 +615,28 @@ class CredentialManager:
 
 
 class _CredentialManagerSingleton:
-    _instance: Optional[CredentialManager] = None
-    _lock = None
-
     def __init__(self):
-        self._manager = None
+        self._instance: Optional[CredentialManager] = None
+        self._lock = asyncio.Lock()
 
     async def _get_or_create(self) -> CredentialManager:
         if self._instance is None:
-            if self._instance is None:
-                self._instance = CredentialManager()
-                await self._instance.initialize()
-                log.debug("CredentialManager singleton initialized")
+            async with self._lock:
+                if self._instance is None:
+                    manager = CredentialManager()
+                    await manager.initialize()
+                    self._instance = manager
+                    log.debug("CredentialManager singleton initialized")
 
         return self._instance
+
+    async def close(self) -> None:
+        """Close and clear the process-local manager instance."""
+        async with self._lock:
+            if self._instance is None:
+                return
+            await self._instance.close()
+            self._instance = None
 
     def __getattr__(self, name):
         async def _async_wrapper(*args, **kwargs):
