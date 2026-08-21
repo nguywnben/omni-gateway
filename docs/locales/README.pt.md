@@ -1,6 +1,7 @@
 <div align="center">
   <h1>
-    <img src="../../frontend/assets/logo.png" alt="Omni Gateway Logo" width="48" height="48" style="vertical-align: middle;" /> <span style="vertical-align: middle;">Omni Gateway</span>
+    <img src="../../frontend/assets/logo.png" alt="Omni Gateway Logo" width="48" height="48" style="vertical-align: middle;" />
+    Omni Gateway
   </h1>
   <p><b>Roteador universal de IA e gateway multiprovedor unificado para ferramentas de código com IA</b></p>
 

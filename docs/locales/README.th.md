@@ -1,6 +1,7 @@
 <div align="center">
   <h1>
-    <img src="../../frontend/assets/logo.png" alt="Omni Gateway Logo" width="48" height="48" style="vertical-align: middle;" /> <span style="vertical-align: middle;">Omni Gateway</span>
+    <img src="../../frontend/assets/logo.png" alt="Omni Gateway Logo" width="48" height="48" style="vertical-align: middle;" />
+    Omni Gateway
   </h1>
   <p><b>Universal AI Router & เกตเวย์รวมศูนย์หลายผู้ให้บริการสำหรับเครื่องมือ AI Coding</b></p>
 
