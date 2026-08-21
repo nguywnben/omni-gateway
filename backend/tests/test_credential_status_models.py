@@ -646,7 +646,7 @@ class CredentialStatusModelTests(unittest.IsolatedAsyncioTestCase):
                 AsyncMock(return_value=refreshed_credential),
             ) as refresh_credential,
             patch(
-                "core.panel.credential_operations.fetch_xai_model_ids",
+                "core.panel.credential_operations.fetch_xai_oauth_model_ids",
                 AsyncMock(return_value=["grok-4"]),
             ) as fetch_models,
         ):

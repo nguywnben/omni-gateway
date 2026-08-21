@@ -8,6 +8,7 @@ from config import (
     get_code_assist_endpoint,
     get_google_ai_studio_api_url,
 )
+from core.anthropic import AnthropicError, refresh_claude_oauth_credential
 from core.api.primary import fetch_quota_info
 from core.codex import CodexError, refresh_codex_oauth_credential
 from core.codex_usage import fetch_codex_usage
@@ -17,16 +18,20 @@ from core.google_ai_studio import (
     build_generation_url,
 )
 from core.google_oauth_api import Credentials, merge_refreshed_credential_data
+from core.i18n import LocalizedJSONResponse as JSONResponse
 from core.model_pool import ModelPoolError, model_catalog_service, normalize_model_id
 from core.models import (
     CredentialModelTestRequest,
     CredFileActionRequest,
     CredFileBatchActionRequest,
 )
+from core.ollama import OllamaError
 from core.pool_import import PoolImportError, restore_pool_archive
 from core.provider_registry import (
+    ANTHROPIC,
     GOOGLE_AI_STUDIO,
     GOOGLE_ANTIGRAVITY,
+    OLLAMA,
     OPENAI,
     XAI,
     get_credential_provider,
@@ -38,7 +43,6 @@ from core.utils import CODE_ASSIST_USER_AGENT, verify_panel_token
 from core.xai import XaiError, refresh_xai_oauth_credential
 from core.xai_billing import fetch_xai_billing_usage
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
-from fastapi.responses import JSONResponse
 from log import log
 
 from .credential_operations import (
@@ -632,6 +636,18 @@ async def get_credential_quota(
                 }
             )
 
+        if provider_id in {ANTHROPIC, OLLAMA}:
+            provider_name = "Anthropic" if provider_id == ANTHROPIC else "Ollama"
+            return JSONResponse(
+                content={
+                    "success": True,
+                    "supported": False,
+                    "filename": filename,
+                    "provider": provider_id,
+                    "message": f"{provider_name} does not expose a compatible account quota view for this credential.",
+                }
+            )
+
         if provider_id == OPENAI:
             if is_api_key_credential(credential_data):
                 return JSONResponse(
@@ -767,7 +783,7 @@ async def get_credential_quota(
                 },
             )
 
-    except (CodexError, XaiError) as e:
+    except (AnthropicError, CodexError, OllamaError, XaiError) as e:
         return JSONResponse(
             status_code=502 if e.status_code >= 500 else 400,
             content={"success": False, "filename": filename, "error": str(e)},
@@ -1015,7 +1031,7 @@ async def test_credential(
             )
             access_token = ""
             project_id = ""
-        elif mode == "primary" and provider_id in {XAI, OPENAI}:
+        elif mode == "primary" and provider_id in {XAI, OPENAI, ANTHROPIC, OLLAMA}:
             if provider_id == XAI and not is_api_key_credential(credential_data):
                 credential_data = await refresh_xai_oauth_credential(credential_data)
                 await storage_adapter.store_credential(filename, credential_data, mode=mode)
@@ -1027,6 +1043,13 @@ async def test_credential(
                 credential_data = await refresh_codex_oauth_credential(credential_data)
                 await storage_adapter.store_credential(filename, credential_data, mode=mode)
                 log.info(f"Codex token automatically refreshed: {filename}")
+            elif provider_id == ANTHROPIC and not is_api_key_credential(credential_data):
+                prepared = await credential_manager.prepare_credential(
+                    filename, credential_data, mode=mode
+                )
+                if not prepared:
+                    raise AnthropicError("Claude Code credential could not be refreshed.", 401)
+                credential_data = prepared
             from core.api.primary import prepare_provider_request
 
             context = await prepare_provider_request(
@@ -1060,7 +1083,13 @@ async def test_credential(
                     detail="Credential does not contain a Project ID.",
                 )
 
-        if mode == "primary" and provider_id not in {GOOGLE_AI_STUDIO, XAI, OPENAI}:
+        if mode == "primary" and provider_id not in {
+            GOOGLE_AI_STUDIO,
+            XAI,
+            OPENAI,
+            ANTHROPIC,
+            OLLAMA,
+        }:
             api_base_url = await get_antigravity_api_url()
             from core.api.primary import build_primary_headers
 
@@ -1113,6 +1142,28 @@ async def test_credential(
                 url=request_url,
                 json=request_body,
                 headers=headers,
+                timeout=30.0,
+            )
+            status_code = response.status_code
+
+        if (
+            status_code == 401
+            and mode == "primary"
+            and provider_id == ANTHROPIC
+            and not is_api_key_credential(credential_data)
+            and credential_data.get("refresh_token")
+        ):
+            credential_data = await refresh_claude_oauth_credential(credential_data)
+            await storage_adapter.store_credential(filename, credential_data, mode=mode)
+            context = await prepare_provider_request(
+                credential_data,
+                {"model": test_model, "request": test_request},
+                streaming=False,
+            )
+            response = await post_async(
+                url=context.target_url,
+                json=context.payload,
+                headers=context.headers,
                 timeout=30.0,
             )
             status_code = response.status_code
@@ -1229,7 +1280,7 @@ async def test_credential(
 
     except HTTPException:
         raise
-    except (CodexError, XaiError) as e:
+    except (AnthropicError, CodexError, OllamaError, XaiError) as e:
         return JSONResponse(
             status_code=e.status_code,
             content={

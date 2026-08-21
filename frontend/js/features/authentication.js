@@ -4,7 +4,7 @@ async function refreshSetupStatus() {
 
     try {
 
-        const response = await fetch('./api/auth/setup/status');
+        const response = await fetch('./api/auth/setup/status', {headers: getAuthHeaders(false)});
 
         const data = await response.json();
 
@@ -48,7 +48,7 @@ async function completeInitialSetup() {
 
     if (password.length < 8) {
 
-        showStatus('Password must be at least 8 characters.', 'error');
+        showStatus(t('password_min_error'), 'error');
 
         return;
 
@@ -56,7 +56,7 @@ async function completeInitialSetup() {
 
     if (password !== confirmPassword) {
 
-        showStatus('Passwords do not match.', 'error');
+        showStatus(t('password_match_error'), 'error');
 
         return;
 
@@ -68,7 +68,7 @@ async function completeInitialSetup() {
 
             method: 'POST',
 
-            headers: { 'Content-Type': 'application/json' },
+            headers: getAuthHeaders(),
 
             body: JSON.stringify({
 
@@ -90,7 +90,7 @@ async function completeInitialSetup() {
 
             AppState.authenticated = true;
 
-            showStatus('Initial setup completed.', 'success');
+            showStatus(t('setup_completed'), 'success');
 
             navigate('/dashboard');
 
@@ -98,7 +98,7 @@ async function completeInitialSetup() {
 
         } else {
 
-            showStatus(data.detail || data.error || 'Initial setup failed.', 'error');
+            showStatus(data.detail || data.error || t('setup_failed'), 'error');
 
         }
 
@@ -128,7 +128,7 @@ async function login() {
 
             method: 'POST',
 
-            headers: { 'Content-Type': 'application/json' },
+            headers: getAuthHeaders(),
 
             body: JSON.stringify({ password })
 
@@ -206,7 +206,7 @@ async function logout() {
 
     try {
 
-        await fetch('./api/auth/logout', {method: 'POST'});
+        await fetch('./api/auth/logout', {method: 'POST', headers: getAuthHeaders(false)});
 
     } catch (error) {
 

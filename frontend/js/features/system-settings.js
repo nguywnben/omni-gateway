@@ -249,12 +249,9 @@ async function saveConfig() {
 
         if (response.ok) {
             if (data.restart_required && data.restart_required.length > 0) {
-                showStatus(
-                    data.restart_notice || 'Configuration saved. Restart the application to apply listener or storage changes.',
-                    'info'
-                );
+                showStatus(data.restart_notice || t('settings.restart_to_apply'), 'info');
             } else {
-                showStatus(data.message || 'Configuration saved.', 'success');
+                showStatus(data.message || t('configuration_saved_successfully'), 'success');
             }
 
             setTimeout(() => loadConfig(), 1000);
@@ -288,8 +285,8 @@ function populateAccessCredentialStatus(config) {
     const panelStatus = document.getElementById('panelPasswordStatus');
     if (panelStatus) {
         panelStatus.textContent = panelLocked
-            ? 'Managed by environment'
-            : (config.panel_password_configured ? 'Configured' : 'Not configured');
+            ? t('settings.managed_environment')
+            : (config.panel_password_configured ? t('settings.configured') : t('settings.not_configured'));
     }
     for (const id of ['newPanelPassword', 'confirmPanelPassword']) {
         const field = document.getElementById(id);
@@ -305,16 +302,16 @@ async function saveAccessCredentials() {
     const panelConfirmation = document.getElementById('confirmPanelPassword')?.value || '';
 
     if (!currentPassword) {
-        showStatus('Enter the current console password.', 'error');
+        showStatus(t('settings.current_password_required'), 'error');
         document.getElementById('currentConsolePassword')?.focus();
         return;
     }
     if (!panelPassword) {
-        showStatus('Enter a new console password.', 'error');
+        showStatus(t('settings.new_password_required'), 'error');
         return;
     }
     if (panelPassword !== panelConfirmation) {
-        showStatus('Console password confirmation does not match.', 'error');
+        showStatus(t('settings.password_confirmation_mismatch'), 'error');
         return;
     }
     const button = document.getElementById('updateAccessCredentialsBtn');
@@ -341,10 +338,10 @@ async function saveAccessCredentials() {
             const field = document.getElementById(id);
             if (field) field.value = '';
         }
-        showStatus(data.message || 'Console password updated.', 'success');
+        showStatus(data.message || t('configuration_saved_successfully'), 'success');
         await loadConfig();
     } catch (error) {
-        showStatus(`Failed to update the console password: ${error.message}`, 'error');
+        showStatus(t('settings.password_update_failed', {error: error.message}), 'error');
     } finally {
         if (button) button.disabled = false;
     }
@@ -353,7 +350,7 @@ async function saveAccessCredentials() {
 async function resetConfig() {
 
     const confirmed = await showConfirmModal(
-        'Reset system configuration to defaults? Access passwords and the generated API key will be preserved.',
+        t('settings.reset_confirm'),
         {
             title: t('confirm_reset_system_config_title'),
             confirmLabel: t('btn_reset_defaults')
@@ -374,15 +371,15 @@ async function resetConfig() {
         if (response.ok) {
             const requiresRestart = Array.isArray(data.restart_required) && data.restart_required.length > 0;
             const message = requiresRestart
-                ? `${data.message} Restart the application to apply listener or storage changes.`
-                : (data.message || 'System configuration reset to defaults.');
+                ? `${data.message || t('configuration_saved_successfully')} ${t('settings.restart_to_apply')}`
+                : (data.message || t('configuration_saved_successfully'));
             showStatus(message, requiresRestart ? 'info' : 'success');
 
             setTimeout(() => loadConfig(), 600);
 
         } else {
 
-            showStatus(`Failed to reset system configuration: ${data.detail || data.error || t('unknown_error')}`, 'error');
+            showStatus(t('settings.reset_failed', {error: data.detail || data.error || t('unknown_error')}), 'error');
 
         }
 

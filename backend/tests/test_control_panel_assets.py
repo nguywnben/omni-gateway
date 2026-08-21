@@ -127,6 +127,34 @@ class ControlPanelAssetTests(unittest.TestCase):
             dashboard_script,
         )
 
+    def test_provider_catalog_uses_pagination(self):
+        response = serve_control_panel()
+        body = response.body.decode("utf-8")
+        navigation_script = read_scripts("features/navigation.js")
+        provider_styles = (
+            BACKEND_DIR.parent / "frontend" / "css" / "providers-and-models.css"
+        ).read_text(encoding="utf-8")
+
+        for element_id in (
+            "providerCatalog",
+            "providerCatalogPagination",
+            "providerCatalogPrevBtn",
+            "providerCatalogNextBtn",
+            "providerCatalogPaginationInfo",
+        ):
+            self.assertIn(element_id, body)
+        self.assertIn("provider-workspace-header", body)
+        self.assertIn("change-provider-catalog-page", body)
+        self.assertIn("PROVIDER_CATALOG_PAGE_SIZE = 6", navigation_script)
+        self.assertIn("function changeProviderCatalogPage(delta)", navigation_script)
+        self.assertIn("function updateProviderCatalogPagination()", navigation_script)
+        self.assertIn("grid-template-columns: repeat(3, minmax(0, 1fr))", provider_styles)
+        self.assertIn(".provider-workspace-header", provider_styles)
+        self.assertIn(
+            ".provider-catalog-toolbar strong,\n.provider-catalog-search-label",
+            provider_styles,
+        )
+
     def test_xai_provider_ui_references_existing_assets_and_endpoints(self):
         response = serve_control_panel()
         body = response.body.decode("utf-8")
@@ -173,10 +201,10 @@ class ControlPanelAssetTests(unittest.TestCase):
             self.assertIn(endpoint, settings_script)
         self.assertNotIn("./api/providers/xai/oauth/callback", settings_script)
         self.assertIn('id="xaiAuthorizationCode"', body)
-        self.assertIn("Authorization code", body)
+        self.assertIn('data-i18n="provider.authorization_code"', body)
         self.assertNotIn('id="xaiCallbackUrl"', body)
         self.assertIn(
-            "authorizationLink.textContent = data.auth_url || 'Authorization unavailable'",
+            "authorizationLink.textContent = data.auth_url || t('runtime.authorization_unavailable')",
             settings_script,
         )
         self.assertNotIn("Open xAI authorization", body)
@@ -250,10 +278,10 @@ class ControlPanelAssetTests(unittest.TestCase):
         self.assertIn("isAntigravity || isGrokOAuth || isCodexOAuth", card_script)
         self.assertIn("const quotaPreview = supportsQuotaPreview", card_script)
         self.assertIn("data?.quota_type === 'account_billing'", dialog_script)
-        self.assertIn("Billing Periods", dialog_script)
-        self.assertIn("active billing periods", dialog_script)
+        self.assertIn("t('modal.billing_periods')", dialog_script)
+        self.assertIn("t('modal.lowest_billing_preview'", dialog_script)
         self.assertIn("data?.quota_type === 'account_rate_limits'", dialog_script)
-        self.assertIn("Usage Windows", dialog_script)
+        self.assertIn("t('modal.usage_windows')", dialog_script)
 
     def test_subscription_plans_are_rendered_as_credential_badges(self):
         card_script = read_scripts("ui/credential-cards.js")
@@ -261,8 +289,8 @@ class ControlPanelAssetTests(unittest.TestCase):
 
         self.assertIn("renderCredentialSubscriptionBadge", card_script)
         self.assertIn("subscription-plan-${pathId}", card_script)
-        self.assertIn("Plan: ${escapeHtml(plan.label)}", card_script)
-        self.assertIn("Tier: ${escapeHtml(plan.label)}", card_script)
+        self.assertIn("t('credential_badge_plan'", card_script)
+        self.assertIn("t('credential_badge_tier'", card_script)
         self.assertIn("updateCredentialSubscriptionBadge", dialog_script)
         self.assertIn("cached.data?.plan", dialog_script)
         self.assertIn("cardContext.subscriptionPlan", dialog_script)

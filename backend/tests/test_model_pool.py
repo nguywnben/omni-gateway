@@ -324,6 +324,25 @@ class ModelPoolTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(loader.await_count, 1)
 
+    async def test_catalog_serves_last_known_entries_when_refresh_fails(self):
+        calls = 0
+
+        async def loader():
+            nonlocal calls
+            calls += 1
+            if calls == 1:
+                return {"google_ai_studio": ["gemini-2.5-flash"]}
+            raise RuntimeError("provider unavailable")
+
+        service = ModelCatalogService(loader=loader, ttl_seconds=0)
+        initial = await service.get_catalog()
+        recovered = await service.get_catalog(force_refresh=True)
+        diagnostics = await service.get_diagnostics()
+
+        self.assertEqual(recovered, initial)
+        self.assertEqual(diagnostics["entries"], 1)
+        self.assertEqual(diagnostics["last_refresh_error"], "provider unavailable")
+
     async def test_provider_catalog_unions_models_from_all_enabled_credentials(self):
         storage = FakeCredentialStorage()
         with (

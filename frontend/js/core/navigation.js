@@ -217,7 +217,9 @@ function getTabDataLoader(tabName) {
 
             loadXaiSettings(),
 
-            loadOpenAISettings()
+            loadOpenAISettings(),
+
+            loadAnthropicSettings()
 
         ]),
 

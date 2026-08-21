@@ -69,6 +69,7 @@ function initStaticUiBindings() {
         'save-model-pool': () => saveModelPool(),
         'clear-model-blacklist': () => clearModelBlacklist(),
         'select-provider': (element) => selectProviderWorkspace(element.dataset.provider),
+        'change-provider-catalog-page': (element) => changeProviderCatalogPage(Number(element.dataset.pageDelta)),
         'select-ai-studio-files': () => document.getElementById('googleAiStudioFileInput')?.click(),
         'upload-ai-studio-files': () => uploadGoogleAiStudioFiles(),
         'clear-ai-studio-files': () => clearGoogleAiStudioFiles(),
@@ -96,6 +97,20 @@ function initStaticUiBindings() {
         'clear-openai-platform-files': () => clearOpenAIPlatformFiles(),
         'save-openai-settings': (element) => saveOpenAISettings(element.dataset.openaiScope),
         'reset-openai-settings': (element) => resetOpenAISettings(element.dataset.openaiScope),
+        'start-claude-oauth': () => startClaudeOauth(),
+        'save-claude-oauth': () => saveClaudeOauth(),
+        'select-claude-code-files': () => document.getElementById('claudeCodeFileInput')?.click(),
+        'upload-claude-code-files': () => uploadClaudeCodeFiles(),
+        'clear-claude-code-files': () => clearClaudeCodeFiles(),
+        'select-claude-platform-files': () => document.getElementById('claudePlatformFileInput')?.click(),
+        'upload-claude-platform-files': () => uploadClaudePlatformFiles(),
+        'clear-claude-platform-files': () => clearClaudePlatformFiles(),
+        'save-anthropic-settings': (element) => saveAnthropicSettings(element.dataset.anthropicScope),
+        'reset-anthropic-settings': (element) => resetAnthropicSettings(element.dataset.anthropicScope),
+        'copy-claude-auth-url': () => cpUrl(document.getElementById('claudeAuthorizationUrl')),
+        'select-ollama-files': () => document.getElementById('ollamaFileInput')?.click(),
+        'upload-ollama-files': () => uploadOllamaFiles(),
+        'clear-ollama-files': () => clearOllamaFiles(),
         'copy-codex-device-code': (element) => {
             cpUrl(element);
             element.blur();
@@ -128,6 +143,9 @@ function initStaticUiBindings() {
         'xai-console-files': (_element, event) => handleXaiConsoleFileSelect(event),
         'codex-files': (_element, event) => handleCodexFileSelect(event),
         'openai-platform-files': (_element, event) => handleOpenAIPlatformFileSelect(event),
+        'claude-code-files': (_element, event) => handleClaudeCodeFileSelect(event),
+        'claude-platform-files': (_element, event) => handleClaudePlatformFileSelect(event),
+        'ollama-files': (_element, event) => handleOllamaFileSelect(event),
         'primary-files': (_element, event) => handlePrimaryFileSelect(event),
         'routing-strategy': () => syncRoutingPolicyControls(),
         'log-level': () => filterLogs()
@@ -167,6 +185,8 @@ function initStaticUiBindings() {
     document.getElementById('googleAiStudioCredentialForm')?.addEventListener('submit', addGoogleAIStudioCredential);
     document.getElementById('xaiCredentialForm')?.addEventListener('submit', addXaiApiKeyCredential);
     document.getElementById('openaiPlatformCredentialForm')?.addEventListener('submit', addOpenAIPlatformCredential);
+    document.getElementById('claudePlatformCredentialForm')?.addEventListener('submit', addClaudePlatformCredential);
+    document.getElementById('ollamaCredentialForm')?.addEventListener('submit', addOllamaCredential);
     document.getElementById('accessPasswordForm')?.addEventListener('submit', (event) => {
         event.preventDefault();
         saveAccessCredentials();
@@ -180,6 +200,9 @@ function initStaticUiBindings() {
         ['xaiConsoleUploadArea', handleXaiConsoleFileDrop],
         ['codexUploadArea', handleCodexFileDrop],
         ['openaiPlatformUploadArea', handleOpenAIPlatformFileDrop],
+        ['claudeCodeUploadArea', handleClaudeCodeFileDrop],
+        ['claudePlatformUploadArea', handleClaudePlatformFileDrop],
+        ['ollamaUploadArea', handleOllamaFileDrop],
         ['primaryUploadArea', handlePrimaryFileDrop]
     ]) {
         const area = document.getElementById(areaId);
@@ -190,6 +213,8 @@ function initStaticUiBindings() {
         area?.addEventListener('dragleave', () => area.classList.remove('dragover'));
         area?.addEventListener('drop', dropHandler);
     }
+
+    updateProviderCatalogPagination();
 }
 
 document.addEventListener('DOMContentLoaded', initStaticUiBindings);
@@ -236,25 +261,103 @@ const PROVIDER_WORKSPACES = {
     openai_platform: {
         selectorId: 'providerSelectorOpenAiPlatform',
         panelId: 'providerWorkspaceOpenAiPlatform'
+    },
+    claude_code: {
+        selectorId: 'providerSelectorClaudeCode',
+        panelId: 'providerWorkspaceClaudeCode'
+    },
+    claude_platform: {
+        selectorId: 'providerSelectorClaudePlatform',
+        panelId: 'providerWorkspaceClaudePlatform'
+    },
+    ollama: {
+        selectorId: 'providerSelectorOllama',
+        panelId: 'providerWorkspaceOllama'
     }
 };
 
-function filterProviderCatalog(value = '') {
-    const query = String(value || '').trim().toLowerCase();
+const PROVIDER_CATALOG_PAGE_SIZE = 6;
+let providerCatalogCurrentPage = 1;
+let providerCatalogSearchQuery = '';
+
+function getFilteredProviderCards() {
     const cards = Array.from(document.querySelectorAll('#providerCatalog [data-provider]'));
-    let visibleCount = 0;
-    cards.forEach((card) => {
+    const query = providerCatalogSearchQuery.trim().toLowerCase();
+    if (!query) return cards;
+    return cards.filter((card) => {
         const searchableText = [
             card.dataset.provider,
             card.dataset.providerName,
             card.textContent
         ].join(' ').toLowerCase();
-        const isVisible = !query || searchableText.includes(query);
+        return searchableText.includes(query);
+    });
+}
+
+function updateProviderCatalogPagination() {
+    const allCards = Array.from(document.querySelectorAll('#providerCatalog [data-provider]'));
+    const filteredCards = getFilteredProviderCards();
+    const totalItems = filteredCards.length;
+    const totalPages = Math.max(1, Math.ceil(totalItems / PROVIDER_CATALOG_PAGE_SIZE));
+
+    if (providerCatalogCurrentPage > totalPages) {
+        providerCatalogCurrentPage = totalPages;
+    }
+    if (providerCatalogCurrentPage < 1) {
+        providerCatalogCurrentPage = 1;
+    }
+
+    const startIndex = (providerCatalogCurrentPage - 1) * PROVIDER_CATALOG_PAGE_SIZE;
+    const endIndex = startIndex + PROVIDER_CATALOG_PAGE_SIZE;
+    const visibleCards = new Set(filteredCards.slice(startIndex, endIndex));
+
+    allCards.forEach((card) => {
+        const isVisible = visibleCards.has(card);
         card.classList.toggle('hidden', !isVisible);
         card.setAttribute('aria-hidden', String(!isVisible));
-        visibleCount += isVisible ? 1 : 0;
     });
-    document.getElementById('providerCatalogEmpty')?.classList.toggle('hidden', visibleCount > 0);
+
+    const emptyElement = document.getElementById('providerCatalogEmpty');
+    if (emptyElement) {
+        emptyElement.classList.toggle('hidden', totalItems > 0);
+    }
+
+    const paginationContainer = document.getElementById('providerCatalogPagination');
+    const prevButton = document.getElementById('providerCatalogPrevBtn');
+    const nextButton = document.getElementById('providerCatalogNextBtn');
+    const infoElement = document.getElementById('providerCatalogPaginationInfo');
+
+    if (paginationContainer) {
+        paginationContainer.style.display = totalPages > 1 ? 'flex' : 'none';
+    }
+    if (prevButton) {
+        prevButton.disabled = providerCatalogCurrentPage <= 1;
+    }
+    if (nextButton) {
+        nextButton.disabled = providerCatalogCurrentPage >= totalPages;
+    }
+    if (infoElement) {
+        infoElement.textContent = t('pagination.page_of', {
+            page: providerCatalogCurrentPage,
+            total: totalPages
+        });
+    }
+}
+
+function changeProviderCatalogPage(delta) {
+    const filteredCards = getFilteredProviderCards();
+    const totalPages = Math.max(1, Math.ceil(filteredCards.length / PROVIDER_CATALOG_PAGE_SIZE));
+    const targetPage = providerCatalogCurrentPage + delta;
+    if (targetPage >= 1 && targetPage <= totalPages) {
+        providerCatalogCurrentPage = targetPage;
+        updateProviderCatalogPagination();
+    }
+}
+
+function filterProviderCatalog(value = '') {
+    providerCatalogSearchQuery = String(value || '');
+    providerCatalogCurrentPage = 1;
+    updateProviderCatalogPagination();
 }
 
 function selectProviderWorkspace(providerId, focusSelector = false) {
@@ -262,6 +365,17 @@ function selectProviderWorkspace(providerId, focusSelector = false) {
     if (!selected) return;
 
     AppState.activeProviderWorkspace = providerId;
+
+    const filteredCards = getFilteredProviderCards();
+    const targetCard = document.getElementById(selected.selectorId);
+    if (targetCard && filteredCards.includes(targetCard)) {
+        const cardIndex = filteredCards.indexOf(targetCard);
+        const cardPage = Math.floor(cardIndex / PROVIDER_CATALOG_PAGE_SIZE) + 1;
+        if (cardPage !== providerCatalogCurrentPage) {
+            providerCatalogCurrentPage = cardPage;
+            updateProviderCatalogPagination();
+        }
+    }
 
     Object.entries(PROVIDER_WORKSPACES).forEach(([id, workspace]) => {
         const selector = document.getElementById(workspace.selectorId);
@@ -274,8 +388,17 @@ function selectProviderWorkspace(providerId, focusSelector = false) {
         panel?.classList.toggle('hidden', !isActive);
     });
 
+    const activePanel = document.getElementById(selected.panelId);
+    const header = activePanel?.querySelector('.provider-workspace-header');
+    const pagination = document.getElementById('providerCatalogPagination');
+    if (header && pagination && pagination.parentElement !== header) {
+        header.appendChild(pagination);
+    }
+
     if (focusSelector) {
-        document.getElementById(selected.selectorId)?.focus();
+        const selector = document.getElementById(selected.selectorId);
+        selector?.focus();
+        selector?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
     }
 }
 
@@ -338,6 +461,22 @@ const MODEL_PROVIDER_META = {
     openai_platform: {
         name: 'OpenAI Platform',
         logo: '/frontend/assets/providers/openai-platform-logo.png'
+    },
+    claude_code: {
+        name: 'Claude Code',
+        logo: '/frontend/assets/providers/claude-code-logo.png'
+    },
+    claude_platform: {
+        name: 'Claude Platform',
+        logo: '/frontend/assets/providers/claude-platform-logo.png'
+    },
+    anthropic: {
+        name: 'Anthropic',
+        logo: '/frontend/assets/providers/claude-platform-logo.png'
+    },
+    ollama: {
+        name: 'Ollama',
+        logo: '/frontend/assets/providers/ollama-logo.png'
     },
     xai: {
         name: 'Grok Build',

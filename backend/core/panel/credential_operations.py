@@ -10,6 +10,7 @@ from config import (
     get_antigravity_api_url,
     get_antigravity_user_agent,
 )
+from core.anthropic import AnthropicError, fetch_anthropic_model_ids
 from core.antigravity import AntigravityError, fetch_antigravity_model_ids
 from core.codex import CodexError, fetch_codex_model_ids, refresh_codex_oauth_credential
 from core.credential_manager import credential_manager
@@ -31,6 +32,8 @@ from core.google_oauth_api import (
     merge_refreshed_credential_data,
     select_default_project,
 )
+from core.i18n import LocalizedJSONResponse as JSONResponse
+from core.ollama import OllamaError, fetch_ollama_model_ids
 from core.openai_platform import OpenAIPlatformError, fetch_openai_model_ids
 from core.pool_import import (
     MAX_POOL_ARCHIVE_BYTES,
@@ -39,9 +42,12 @@ from core.pool_import import (
     MAX_POOL_UNCOMPRESSED_BYTES,
 )
 from core.provider_registry import (
+    ANTHROPIC,
+    CLAUDE_CODE,
     CODEX,
     GOOGLE_AI_STUDIO,
     GOOGLE_ANTIGRAVITY,
+    OLLAMA,
     OPENAI,
     OPENAI_PLATFORM,
     XAI,
@@ -52,9 +58,13 @@ from core.provider_registry import (
     normalize_provider_id,
 )
 from core.storage_adapter import get_storage_adapter
-from core.xai import XaiError, fetch_xai_model_ids, refresh_xai_oauth_credential
+from core.xai import (
+    XaiError,
+    fetch_xai_model_ids,
+    fetch_xai_oauth_model_ids,
+    refresh_xai_oauth_credential,
+)
 from fastapi import HTTPException, Response, UploadFile
-from fastapi.responses import JSONResponse
 from log import log
 
 from .utils import INTERNAL_SERVER_ERROR_DETAIL, validate_credential_filename, validate_mode
@@ -488,18 +498,32 @@ async def get_creds_status_common(
         elif raw_provider_filter in {"xai_console", "xai_api_key"}:
             normalized_provider_filter = XAI
             credential_type_filter = "api_key"
+        elif raw_provider_filter in {"codex", "openai_codex"}:
+            normalized_provider_filter = OPENAI
+            credential_type_filter = "oauth"
+        elif raw_provider_filter in {"openai_platform", "openai_api_key"}:
+            normalized_provider_filter = OPENAI
+            credential_type_filter = "api_key"
+        elif raw_provider_filter in {"claude_code", "claude"}:
+            normalized_provider_filter = ANTHROPIC
+            credential_type_filter = "oauth"
+        elif raw_provider_filter == "claude_platform":
+            normalized_provider_filter = ANTHROPIC
+            credential_type_filter = "api_key"
         else:
             normalized_provider_filter = normalize_provider_id(provider_filter)
         if mode != "primary" or normalized_provider_filter not in {
             GOOGLE_ANTIGRAVITY,
             GOOGLE_AI_STUDIO,
             XAI,
+            OPENAI,
+            ANTHROPIC,
+            OLLAMA,
         }:
             raise HTTPException(
                 status_code=400,
                 detail=(
-                    "Provider filter must be all, google_antigravity, google_ai_studio, "
-                    "grok, xai_console, or xai."
+                    "Provider filter must identify a supported provider or credential product."
                 ),
             )
 
@@ -542,6 +566,7 @@ async def get_creds_status_common(
             "credential_label": credential_data.get("credential_label"),
             "credential_type": credential_data.get("credential_type", "oauth"),
             "provider": provider_id,
+            "provider_variant": get_credential_provider_variant(credential_data),
             "model_count": len(get_declared_credential_models(credential_data)),
             "disabled": summary["disabled"],
             "error_codes": summary["error_codes"],
@@ -904,7 +929,11 @@ async def verify_credential_common(filename: str, mode: str = "code_assist") -> 
                 or credential_data.get("access_token")
                 or credential_data.get("token")
             )
-            model_ids = await fetch_xai_model_ids(str(access_token or ""))
+            model_ids = (
+                await fetch_xai_oauth_model_ids(str(access_token or ""))
+                if credential_type == "oauth"
+                else await fetch_xai_model_ids(str(access_token or ""))
+            )
         except XaiError as exc:
             return JSONResponse(
                 status_code=exc.status_code,
@@ -1000,6 +1029,92 @@ async def verify_credential_common(filename: str, mode: str = "code_assist") -> 
                 "model_count": len(model_ids),
                 "message": (
                     f"{credential_name} verified. Available models were refreshed, "
+                    "the credential was enabled, and recorded errors were cleared."
+                ),
+            }
+        )
+
+    if mode == "primary" and provider_id == ANTHROPIC:
+        credential_type = str(credential_data.get("credential_type") or "").strip().lower()
+        try:
+            if get_credential_provider_variant(credential_data) == CLAUDE_CODE:
+                prepared = await credential_manager.prepare_credential(
+                    filename, credential_data, mode=mode
+                )
+                if not prepared:
+                    raise AnthropicError("Claude Code credential could not be refreshed.", 401)
+                credential_data = prepared
+            model_ids = await fetch_anthropic_model_ids(credential_data)
+        except AnthropicError as exc:
+            return JSONResponse(
+                status_code=exc.status_code,
+                content={
+                    "success": False,
+                    "filename": filename,
+                    "provider": provider_id,
+                    "credential_type": credential_type,
+                    "message": str(exc),
+                },
+            )
+        credential_data["model_ids"] = model_ids
+        await storage_adapter.store_credential(filename, credential_data, mode=mode)
+        await storage_adapter.update_credential_state(
+            filename,
+            {"disabled": False, "error_codes": [], "error_messages": {}},
+            mode=mode,
+        )
+        credential_name = (
+            "Claude Code OAuth credential"
+            if credential_type == "oauth"
+            else "Claude Platform API key"
+        )
+        return JSONResponse(
+            content={
+                "success": True,
+                "filename": filename,
+                "provider": provider_id,
+                "credential_type": credential_type,
+                "model_count": len(model_ids),
+                "message": (
+                    f"{credential_name} verified. Available models were refreshed, "
+                    "the credential was enabled, and recorded errors were cleared."
+                ),
+            }
+        )
+
+    if mode == "primary" and provider_id == OLLAMA:
+        try:
+            model_ids = await fetch_ollama_model_ids(
+                str(credential_data.get("base_url") or ""),
+                str(credential_data.get("api_key") or ""),
+            )
+        except (OllamaError, ValueError) as exc:
+            return JSONResponse(
+                status_code=getattr(exc, "status_code", 400),
+                content={
+                    "success": False,
+                    "filename": filename,
+                    "provider": provider_id,
+                    "credential_type": "connection",
+                    "message": str(exc),
+                },
+            )
+        credential_data["model_ids"] = model_ids
+        await storage_adapter.store_credential(filename, credential_data, mode=mode)
+        await storage_adapter.update_credential_state(
+            filename,
+            {"disabled": False, "error_codes": [], "error_messages": {}},
+            mode=mode,
+        )
+        return JSONResponse(
+            content={
+                "success": True,
+                "filename": filename,
+                "provider": provider_id,
+                "credential_type": "connection",
+                "model_count": len(model_ids),
+                "message": (
+                    "Ollama connection verified. Available models were refreshed, "
                     "the credential was enabled, and recorded errors were cleared."
                 ),
             }

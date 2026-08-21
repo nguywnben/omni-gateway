@@ -34,6 +34,7 @@ from core.xai import (
     complete_xai_oauth,
     create_xai_oauth_url,
     fetch_xai_model_ids,
+    fetch_xai_oauth_model_ids,
     gemini_request_to_xai,
     parse_xai_model_ids,
     refresh_xai_oauth_credential,
@@ -103,6 +104,35 @@ class XaiProviderTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(
             request.await_args.kwargs["headers"]["User-Agent"],
             "grok-cli/omni-gateway",
+        )
+
+    async def test_oauth_model_discovery_uses_grok_build_catalog_and_headers(self):
+        request = AsyncMock(return_value=FakeResponse(200, {"models": [{"model": "grok-4"}]}))
+        with (
+            patch("core.xai.get_async", request),
+            patch(
+                "core.xai.get_xai_oauth_api_url",
+                AsyncMock(return_value="https://cli-chat-proxy.grok.com/v1"),
+            ),
+            patch(
+                "core.xai.get_xai_user_agent",
+                AsyncMock(return_value="grok-cli/omni-gateway"),
+            ),
+        ):
+            models = await fetch_xai_oauth_model_ids("grok-oauth-token")
+
+        self.assertEqual(models, ["grok-4"])
+        self.assertEqual(
+            request.await_args.args[0],
+            "https://cli-chat-proxy.grok.com/v1/models-v2",
+        )
+        self.assertEqual(
+            request.await_args.kwargs["headers"]["X-XAI-Token-Auth"],
+            "xai-grok-cli",
+        )
+        self.assertEqual(
+            request.await_args.kwargs["headers"]["x-grok-client-identifier"],
+            "grok-shell",
         )
 
     async def test_oauth_authorization_uses_pkce_and_loopback_callback(self):
@@ -223,7 +253,7 @@ class XaiProviderTests(unittest.IsolatedAsyncioTestCase):
                 exchange,
             ),
             patch(
-                "core.xai.fetch_xai_model_ids",
+                "core.xai.fetch_xai_oauth_model_ids",
                 AsyncMock(return_value=["grok-4", "grok-3"]),
             ),
             patch("core.xai.credential_manager.add_primary_credential", stored),

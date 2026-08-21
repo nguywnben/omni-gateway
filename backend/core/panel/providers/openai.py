@@ -7,6 +7,7 @@ from typing import List, Tuple
 
 import config
 from core.codex import CodexError, complete_codex_device_flow, create_codex_device_flow
+from core.i18n import LocalizedJSONResponse as JSONResponse
 from core.models import (
     CodexOAuthCompleteRequest,
     ConfigSaveRequest,
@@ -23,7 +24,6 @@ from core.provider_store import store_codex_credential, store_openai_platform_cr
 from core.storage_adapter import get_storage_adapter
 from core.utils import verify_panel_token
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
-from fastapi.responses import JSONResponse
 from log import log
 
 from ..utils import get_env_locked_keys

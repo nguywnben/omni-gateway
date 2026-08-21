@@ -342,6 +342,23 @@
     gap: 8px;
 }
 
+.update-check-action {
+    display: grid;
+    justify-items: end;
+    gap: 8px;
+}
+
+.update-guide-link {
+    color: var(--text-muted);
+    font-size: 12px;
+    line-height: 1.45;
+    text-align: right;
+}
+
+.update-guide-link:hover {
+    color: var(--text);
+}
+
 @media (min-width: 1024px) {
     #poolTab .page-actions {
         flex-wrap: nowrap;

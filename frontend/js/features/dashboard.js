@@ -6,7 +6,7 @@ function formatUsageNumber(value, options = {}) {
 
     if (!Number.isFinite(number)) return '0';
 
-    return number.toLocaleString('en-US', {
+    return number.toLocaleString(getActiveLocale(), {
         maximumFractionDigits: options.decimals ?? 0,
         minimumFractionDigits: options.decimals ?? 0,
     });
@@ -18,31 +18,27 @@ function getUsagePeriodConfig(period = AppState.usagePeriod) {
     const periods = {
         '1d': {
             value: '1d',
-            optionLabel: '1 day',
-            metricLabel: 'in the last 24 hours',
-            title: '24-Hour Request Breakdown',
-            description: 'Review provider and credential traffic for the last 24 hours.',
+            optionLabel: t('one_day'),
+            metricLabel: t('dashboard.period_1d'),
+            title: t('dashboard.breakdown_1d'),
         },
         '7d': {
             value: '7d',
-            optionLabel: '7 days',
-            metricLabel: 'in the last 7 days',
-            title: '7-Day Request Breakdown',
-            description: 'Review provider and credential traffic for the last 7 days.',
+            optionLabel: t('seven_days'),
+            metricLabel: t('dashboard.period_7d'),
+            title: t('dashboard.breakdown_7d'),
         },
         '30d': {
             value: '30d',
-            optionLabel: '30 days',
-            metricLabel: 'in the last 30 days',
-            title: '30-Day Request Breakdown',
-            description: 'Review provider and credential traffic for the last 30 days.',
+            optionLabel: t('thirty_days'),
+            metricLabel: t('dashboard.period_30d'),
+            title: t('dashboard.breakdown_30d'),
         },
         all: {
             value: 'all',
-            optionLabel: 'All',
-            metricLabel: 'across all recorded time',
-            title: 'All-Time Request Breakdown',
-            description: 'Review all recorded provider and credential traffic.',
+            optionLabel: t('all'),
+            metricLabel: t('dashboard.period_all'),
+            title: t('dashboard.breakdown_all'),
         },
     };
 
@@ -60,11 +56,11 @@ function updateUsagePeriodLabels() {
 
     const totalCallsLabel = document.getElementById('totalApiCallsLabel');
 
-    if (totalCallsLabel) totalCallsLabel.textContent = `Requests ${periodConfig.metricLabel}`;
+    if (totalCallsLabel) totalCallsLabel.textContent = t('dashboard.requests_period', {period: periodConfig.metricLabel});
 
     const totalTokensLabel = document.getElementById('totalTokensLabel');
 
-    if (totalTokensLabel) totalTokensLabel.textContent = `Tokens ${periodConfig.metricLabel}`;
+    if (totalTokensLabel) totalTokensLabel.textContent = t('dashboard.tokens_period', {period: periodConfig.metricLabel});
 
     const breakdownTitle = document.getElementById('usageBreakdownTitle');
 
@@ -72,7 +68,7 @@ function updateUsagePeriodLabels() {
 
     const breakdownDescription = document.getElementById('usageBreakdownDescription');
 
-    if (breakdownDescription) breakdownDescription.textContent = periodConfig.description;
+    if (breakdownDescription) breakdownDescription.textContent = t('dashboard.breakdown_description', {period: periodConfig.metricLabel});
 
 }
 
@@ -186,41 +182,44 @@ async function refreshUsageStats(options = {}) {
 
             document.getElementById('successRate24h').textContent = `${successRate}%`;
 
-            document.getElementById('successfulApiCalls').textContent = formatUsageNumber(successfulCalls);
-
-            document.getElementById('failedApiCalls').textContent = formatUsageNumber(failedCalls);
+            document.getElementById('requestOutcomeDetail').textContent = t('dashboard.successful_failed', {
+                successful: formatUsageNumber(successfulCalls),
+                failed: formatUsageNumber(failedCalls)
+            });
 
             document.getElementById('successRateDetail').textContent = totalCalls > 0
-                ? `${formatUsageNumber(successfulCalls)} of ${formatUsageNumber(totalCalls)} requests succeeded.`
-                : 'No traffic yet';
+                ? t('dashboard.requests_succeeded', {successful: formatUsageNumber(successfulCalls), total: formatUsageNumber(totalCalls)})
+                : t('dashboard.no_traffic_yet');
 
             document.getElementById('totalFiles').textContent = formatUsageNumber(aggData.total_files);
 
             document.getElementById('activeFiles').textContent = formatUsageNumber(aggData.active_files);
 
-            document.getElementById('disabledFiles').textContent = formatUsageNumber(aggData.disabled_files);
+            document.getElementById('disabledCredentialsDetail').textContent = t('dashboard.disabled_count', {count: formatUsageNumber(aggData.disabled_files)});
 
             document.getElementById('avgCallsPerFile').textContent = formatUsageNumber(
                 aggData.avg_calls_per_file,
                 { decimals: 1 }
             );
 
-            document.getElementById('assignedApiCalls').textContent = formatUsageNumber(aggData.assigned_calls ?? aggData.assigned_calls_24h);
+            document.getElementById('assignedRequestsDetail').textContent = t('dashboard.assigned_requests', {count: formatUsageNumber(aggData.assigned_calls ?? aggData.assigned_calls_24h)});
 
             document.getElementById('totalTokens24h').textContent = formatUsageNumber(aggData.total_tokens ?? aggData.total_tokens_24h);
 
-            document.getElementById('inputTokens24h').textContent = formatUsageNumber(aggData.input_tokens ?? aggData.input_tokens_24h);
-
-            document.getElementById('outputTokens24h').textContent = formatUsageNumber(aggData.output_tokens ?? aggData.output_tokens_24h);
+            document.getElementById('inputOutputDetail').textContent = t('dashboard.input_output', {
+                input: formatUsageNumber(aggData.input_tokens ?? aggData.input_tokens_24h),
+                output: formatUsageNumber(aggData.output_tokens ?? aggData.output_tokens_24h)
+            });
 
             document.getElementById('avgTokensPerRequest').textContent = formatUsageNumber(
                 aggData.avg_tokens_per_successful_request,
                 { decimals: 1 }
             );
 
-            document.getElementById('cachedTokens24h').textContent = formatUsageNumber(aggData.cached_tokens ?? aggData.cached_tokens_24h);
-
-            document.getElementById('estimatedTokensSaved').textContent = formatUsageNumber(aggData.estimated_tokens_saved ?? aggData.estimated_tokens_saved_24h);
+            document.getElementById('cacheSavingsDetail').textContent = t('dashboard.cache_savings', {
+                cached: formatUsageNumber(aggData.cached_tokens ?? aggData.cached_tokens_24h),
+                savings: formatUsageNumber(aggData.estimated_tokens_saved ?? aggData.estimated_tokens_saved_24h)
+            });
 
             renderUsageList();
 
@@ -301,7 +300,7 @@ function createUsageTableRow(filename, stats) {
             credential_type: stats.credential_type
         }, 'usage');
     const accountLabel = isUnassigned
-        ? 'No credential assigned'
+        ? t('dashboard.no_credential')
         : (stats.is_deleted
             ? t('deleted_credential')
             : (stats.is_historical
@@ -324,18 +323,18 @@ function createUsageTableRow(filename, stats) {
         </td>
 
         <td>
-            <div class="usage-cell-primary">${formatUsageNumber(calls)} requests</div>
-            <div class="usage-cell-meta">${formatUsageNumber(successfulCalls)} successful / ${formatUsageNumber(failedCalls)} failed</div>
+            <div class="usage-cell-primary">${escapeHtml(t('dashboard.requests_count', {count: formatUsageNumber(calls)}))}</div>
+            <div class="usage-cell-meta">${escapeHtml(t('dashboard.success_count', {count: formatUsageNumber(successfulCalls), failed: formatUsageNumber(failedCalls)}))}</div>
         </td>
 
         <td>
             <div class="usage-cell-primary">${successRate}%</div>
-            <div class="usage-cell-meta">${calls > 0 ? `${formatUsageNumber(successfulCalls)} of ${formatUsageNumber(calls)} succeeded` : 'No traffic recorded'}</div>
+            <div class="usage-cell-meta">${escapeHtml(calls > 0 ? t('dashboard.succeeded_count', {successful: formatUsageNumber(successfulCalls), total: formatUsageNumber(calls)}) : t('dashboard.no_traffic_recorded'))}</div>
         </td>
 
         <td>
-            <div class="usage-cell-primary">${formatUsageNumber(totalTokens)} total</div>
-            <div class="usage-cell-meta">Input ${formatUsageNumber(inputTokens)} / output ${formatUsageNumber(outputTokens)} / estimated savings ${formatUsageNumber(estimatedTokensSaved)}</div>
+            <div class="usage-cell-primary">${escapeHtml(t('dashboard.tokens_total', {count: formatUsageNumber(totalTokens)}))}</div>
+            <div class="usage-cell-meta">${escapeHtml(t('dashboard.token_details', {input: formatUsageNumber(inputTokens), output: formatUsageNumber(outputTokens), savings: formatUsageNumber(estimatedTokensSaved)}))}</div>
         </td>
 
     `;
@@ -445,7 +444,7 @@ function renderUsageProviderSummary() {
     }
 
     container.hidden = false;
-    const providerOrder = ['google_antigravity', 'google_ai_studio', 'grok', 'xai_console', 'xai', 'code_assist'];
+    const providerOrder = ['google_antigravity', 'google_ai_studio', 'grok', 'xai_console', 'codex', 'openai_platform', 'claude_code', 'claude_platform', 'ollama', 'xai', 'openai', 'anthropic', 'code_assist'];
     const providerItems = Array.from(providers.values()).sort((left, right) => {
         const leftIndex = providerOrder.indexOf(left.meta.id);
         const rightIndex = providerOrder.indexOf(right.meta.id);
@@ -462,8 +461,8 @@ function renderUsageProviderSummary() {
             ? `<img src="${escapeAttribute(provider.meta.logo)}" alt="">`
             : `<span>${escapeHtml(provider.meta.name.charAt(0))}</span>`;
         const credentialLabel = provider.credentials > 0
-            ? `${provider.credentials} active credential${provider.credentials === 1 ? '' : 's'}`
-            : 'No active credentials';
+            ? t(provider.credentials === 1 ? 'dashboard.active_credentials_count' : 'dashboard.active_credentials_count_plural', {count: formatUsageNumber(provider.credentials)})
+            : t('dashboard.no_active_credentials');
 
         return `
             <article class="usage-provider-item">
@@ -475,9 +474,9 @@ function renderUsageProviderSummary() {
                     </div>
                 </div>
                 <dl class="usage-provider-metrics">
-                    <div><dt>Requests</dt><dd>${formatUsageNumber(provider.calls)}</dd></div>
-                    <div><dt>Success</dt><dd>${provider.calls > 0 ? `${successRate}%` : 'No traffic'}</dd></div>
-                    <div><dt>Tokens</dt><dd>${formatUsageNumber(provider.totalTokens)}</dd></div>
+                    <div><dt>${escapeHtml(t('requests'))}</dt><dd>${formatUsageNumber(provider.calls)}</dd></div>
+                    <div><dt>${escapeHtml(t('success'))}</dt><dd>${provider.calls > 0 ? `${successRate}%` : escapeHtml(t('dashboard.no_traffic'))}</dd></div>
+                    <div><dt>${escapeHtml(t('tokens'))}</dt><dd>${formatUsageNumber(provider.totalTokens)}</dd></div>
                 </dl>
             </article>
         `;

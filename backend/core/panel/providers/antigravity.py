@@ -1,11 +1,11 @@
 """Google Antigravity provider configuration routes."""
 
 import config
+from core.i18n import LocalizedJSONResponse as JSONResponse
 from core.models import ConfigSaveRequest
 from core.storage_adapter import get_storage_adapter
 from core.utils import verify_panel_token
 from fastapi import APIRouter, Depends, HTTPException
-from fastapi.responses import JSONResponse
 from log import log
 
 from ..utils import get_env_locked_keys, internal_server_error

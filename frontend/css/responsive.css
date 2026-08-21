@@ -236,6 +236,15 @@
         grid-column: 1 / -1;
     }
 
+    .update-check-action {
+        justify-items: start;
+        width: 100%;
+    }
+
+    .update-guide-link {
+        text-align: left;
+    }
+
     #dashboardTab .page-actions {
         display: block;
         width: auto;
@@ -472,6 +481,17 @@
 
     .credential-provider-groups {
         gap: 18px;
+    }
+
+    .provider-workspace-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 12px;
+    }
+
+    .provider-workspace-header .provider-catalog-pagination {
+        width: 100%;
+        justify-content: flex-end;
     }
 
     .provider-workspace-heading {

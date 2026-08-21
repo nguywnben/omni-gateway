@@ -1,5 +1,6 @@
 import config
 from core.auth import verify_password
+from core.i18n import LocalizedJSONResponse as JSONResponse
 from core.keep_alive import keep_alive_service
 from core.models import AccessCredentialsUpdateRequest, ConfigSaveRequest
 from core.passwords import hash_password
@@ -10,7 +11,6 @@ from core.utils import (
     verify_panel_token,
 )
 from fastapi import APIRouter, Depends, HTTPException, Request
-from fastapi.responses import JSONResponse
 from log import configure_logging, log
 
 from .utils import get_env_locked_keys, internal_server_error
