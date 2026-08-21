@@ -37,5 +37,5 @@ A single custom endpoint would reduce router count but force every client to tra
 
 - Existing SDKs can use their normal base-URL behavior.
 - Route compatibility tests are required before public API changes.
-- Management APIs can evolve independently from inference protocols during beta.
+- Management APIs evolve independently from inference protocols, but documented 1.x routes follow Semantic Versioning and cannot be removed without a major release.
 - Provider additions should extend registry and adapter boundaries without creating provider-specific public namespaces.

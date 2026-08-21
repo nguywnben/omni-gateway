@@ -400,6 +400,46 @@ class GoogleAIStudioCredentialRequest(BaseModel):
     api_key: str
 
 
+class XaiCredentialRequest(BaseModel):
+    api_key: str = Field(min_length=16, max_length=1024)
+
+
+class XaiOAuthCodeRequest(BaseModel):
+    code: str = Field(min_length=1, max_length=4096)
+    state: str = Field(min_length=1, max_length=512)
+
+
+class OpenAIPlatformCredentialRequest(BaseModel):
+    api_key: str = Field(min_length=1, max_length=1024)
+
+
+class ClaudePlatformCredentialRequest(BaseModel):
+    api_key: str = Field(min_length=1, max_length=1024)
+
+
+class ClaudeOAuthCodeRequest(BaseModel):
+    code: str = Field(min_length=1, max_length=4096)
+    state: str = Field(min_length=1, max_length=512)
+
+
+class GeminiCliOAuthCodeRequest(BaseModel):
+    code: str = Field(min_length=1, max_length=4096)
+    state: Optional[str] = Field(default="", max_length=512)
+
+
+class OllamaCredentialRequest(BaseModel):
+    base_url: str = Field(min_length=1, max_length=2048)
+    api_key: str = Field(default="", max_length=4096)
+
+
+class CodexOAuthCompleteRequest(BaseModel):
+    flow_id: str = Field(min_length=1, max_length=256)
+
+
+class CredentialModelTestRequest(BaseModel):
+    model: str = Field(min_length=1, max_length=200)
+
+
 class CredFileActionRequest(BaseModel):
     filename: str
     action: str  # enable, disable, delete

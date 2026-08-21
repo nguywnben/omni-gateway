@@ -1,8 +1,176 @@
 # Changelog
 
-All notable user-facing changes are documented in this file. Omni Gateway follows [Semantic Versioning](https://semver.org/) while allowing breaking changes during the `0.x` beta series.
+All notable user-facing changes are documented in this file. Omni Gateway follows [Semantic Versioning](https://semver.org/). The historical `0.x` beta series allowed breaking changes; compatibility changes after `1.0.0` require an appropriate major version.
 
 ## [Unreleased]
+
+## [1.3.2] - 2026-08-21
+
+### Fixed
+
+- Replaced the generic localization fallback that could appear as credential-card provider names and action labels in non-English interfaces.
+- Localized credential-card provider labels, concise actions, status badges, and explanatory tooltips across every supported console language.
+
+## [1.3.1] - 2026-08-21
+
+### Added
+
+- Added a conditional update guide in the About page that appears only when a newer Omni Gateway release is available.
+- Added a production-oriented update and rollback guide for pinned Docker and Docker Compose deployments.
+
+### Changed
+
+- Completed the management console localization across the supported languages, including API messages and locale-aware initial selection.
+- Refined Vietnamese navigation terminology so the credential workspace remains concise and consistent with the rest of the console.
+
+## [1.3.0] - 2026-08-20
+
+### Added
+
+- Added Claude Code OAuth credentials, Claude Platform API-key credentials, and Ollama endpoint credentials with provider-native discovery, validation, routing, and JSON/ZIP portability.
+- Added Gemini CLI OAuth credentials with PKCE authorization and Cloud Code-compatible routing for supported Gemini CLI accounts.
+- Added provider-specific assets, catalog entries, documentation links, and credential workspaces for the expanded provider catalog.
+
+### Changed
+
+- Strengthened credential-aware routing, failure classification, request correlation, and outbound HTTP client reuse for more predictable fallback behavior under provider failures.
+- Improved provider catalog navigation and layout so the growing collection of connection types remains searchable and usable across desktop and mobile views.
+- Standardized runtime dependency auditing and CI lockfile validation around immutable, hash-locked production dependencies.
+
+### Fixed
+
+- Kept provider routing and credential diagnostics scoped to each provider implementation instead of applying Google Antigravity assumptions to other credential types.
+- Formatted backend modules consistently with the repository Ruff policy to keep local and CI validation aligned.
+
+## [1.2.1] - 2026-07-24
+
+### Changed
+
+- Optimized provider model discovery by sampling representative credential capabilities instead of querying every credential in large pools.
+- Preserved a unified model catalog while labeling each model with its specific provider product and deduplicating only within that provider.
+- Expanded fixed-model response normalization across OpenAI Chat Completions, Responses, Anthropic Messages, and Google GenAI request surfaces.
+- Separated removed credentials from the active 24-hour request breakdown while retaining their historical usage totals.
+
+### Fixed
+
+- Prevented provider selection from routing fixed-model requests through credentials whose discovered catalogs do not support the requested model.
+- Kept provider-specific model support independent when different providers expose the same model identifier.
+- Removed misleading Grok Build tier badges when upstream account metadata does not represent a subscription plan.
+
+## [1.2.0] - 2026-07-19
+
+### Added
+
+- Added Codex device OAuth, account-scoped model discovery, token refresh, Responses transport translation, and JSON/ZIP credential import.
+- Added OpenAI Platform API-key validation, model discovery, Chat Completions routing, and JSON/ZIP credential import.
+- Added provider-native quota, plan, and subscription diagnostics for Codex, Grok Build, Google Antigravity, and supported API-key credentials.
+- Added provider-specific credential verification and model testing across every supported credential type.
+
+### Changed
+
+- Reorganized the Providers page as a searchable, responsive product catalog with separate credential workspaces and settings for every connection type.
+- Renamed xAI Console to SpaceXAI Console and standardized Codex and Grok Build product naming and assets throughout the console.
+- Expanded credential cards with truthful authentication, subscription, health, quota, and model-capability information.
+
+### Fixed
+
+- Routed verification and model tests through each credential's native provider implementation instead of the Google Antigravity transport.
+- Refreshed expired Codex access tokens once before retrying verification, quota, and model-test requests.
+- Kept provider diagnostics and badges aligned with the actual credential payload instead of inferring unsupported account properties.
+
+## [1.1.4] - 2026-07-19
+
+### Added
+
+- Added deployment-aware Google Antigravity model discovery and persisted per-credential model catalogs during verification.
+- Added Grok Build OAuth account billing visibility with monthly credits, weekly usage, reset times, and a conservative remaining-quota badge.
+
+### Changed
+
+- Standardized the Grok OAuth product name as Grok Build across provider contracts, imports, usage reporting, documentation, and the management console.
+
+### Fixed
+
+- Restricted fixed and virtual model routing to credentials whose discovered catalog supports the selected model while preserving fallback through other eligible credentials and providers.
+- Kept unavailable-model memory scoped to the credential and provider route that actually failed, so one account cannot incorrectly suppress another account's valid model deployment.
+
+## [1.1.3] - 2026-07-17
+
+### Added
+
+- Added consistent skeleton loading feedback for credential, model-catalog, dashboard, and configuration data.
+
+### Changed
+
+- Split the management console and provider-settings backend into focused, independently maintained modules without changing public routes.
+- Removed Anime.js and its interface motion so navigation, dialogs, notifications, and mobile controls respond immediately with a smaller frontend payload.
+
+### Fixed
+
+- Reduced page-switching jitter by caching recently loaded tab data, deduplicating concurrent loads, and preserving rendered content during background refreshes.
+- Stabilized console layout dimensions and footer placement across desktop and mobile navigation.
+
+## [1.1.2] - 2026-07-16
+
+### Changed
+
+- Distinguished Grok OAuth accounts from SpaceXAI Console API keys throughout credential storage, usage reporting, imports, and the management console.
+- Prioritized credentials that explicitly declare support for the requested model before routes whose support can only be inferred.
+
+### Fixed
+
+- Retried fixed-model requests through alternate compatible credentials and providers after an upstream `404` without changing the requested model.
+- Kept persistent provider-model blacklisting exclusive to virtual `omway` fallback while applying short credential-model cooldowns to failed fixed routes.
+
+## [1.1.1] - 2026-07-15
+
+### Changed
+
+- Replaced Grok OAuth callback URL entry with the authorization code shown by xAI while preserving PKCE session validation.
+
+## [1.1.0] - 2026-07-15
+
+### Added
+
+- Added Grok OAuth and SpaceXAI Console API-key credentials with model discovery, token refresh, pool backup restoration, and provider-aware routing.
+- Added Grok request and response translation for text, image input, function tools, reasoning content, streaming, and provider-reported token usage.
+
+### Fixed
+
+- Scoped account deduplication by provider so OAuth accounts that share an email address across different providers remain independent.
+
+## [1.0.0] - 2026-07-13
+
+### Added
+
+- Added provider-aware model discovery, credential model testing, virtual `omway` routing, and a manageable blacklist for unavailable virtual-model routes.
+- Added Google AI Studio API-key credentials, JSON/ZIP import, model catalog discovery, credential backup restoration, and provider-specific pool views.
+- Added stable OpenAI, Anthropic, and Google GenAI error envelopes across authentication, validation, upstream, and pre-stream failures.
+- Added bounded request identifiers through `X-Request-ID` for client-side correlation.
+- Added a configurable global request-body ceiling for fixed-length and chunked SDK requests.
+- Added release-based update discovery that compares semantic versions against the latest published GitHub Release.
+- Added first-class architecture, upgrade, security, contribution, and release-checklist documentation for the stable series.
+
+### Changed
+
+- Declared the SDK-compatible routes and canonical `/api/credentials` management routes as the 1.x compatibility baseline.
+- Hardened configuration, credential-manager, and storage initialization so partial failures stop startup instead of exposing a split or misleading runtime state.
+- Made explicit MongoDB or PostgreSQL configuration fail closed when unavailable, and rejected simultaneous external database selections.
+- Moved default-branch container builds to the `edge` channel; `latest` now advances only for verified stable version tags.
+- Pinned the official Python container base image by digest while retaining Dependabot updates.
+- Removed inline browser event handlers and tightened the management console content-security policy.
+- Improved first-run authentication state, bounded login-rate-limit memory, same-origin session enforcement, provider-error redaction, and shutdown cleanup.
+
+### Removed
+
+- Removed the beta `/api/creds` route aliases; integrations must use `/api/credentials`.
+- Removed the ambiguous `PASSWORD`, `CLIENT_ID`, `CLIENT_SECRET`, `API_URL`, and other beta environment aliases in favor of the documented canonical names.
+
+### Fixed
+
+- Standardized "no credentials available" as `503 Service Unavailable` so SDK retry behavior is correct.
+- Prevented startup races when initializing configuration, credential managers, and storage adapters.
+- Prevented unauthenticated console startup probes from generating expected `401` errors in the browser console.
 
 ## [0.2.0-beta] - 2026-07-12
 
@@ -30,6 +198,8 @@ All notable user-facing changes are documented in this file. Omni Gateway follow
 - Rejected unsafe credential filenames and expanded log redaction for connection URIs and provider tokens.
 - Removed duplicate Preview-channel creation requests.
 - Removed query-string authentication from the runtime-log WebSocket and enforced same-origin handshakes.
+- Prevented release tags from generating invalid branch-prefixed container tags.
+- Gated GitHub Releases on verified container publication and sourced release notes from this changelog.
 
 ## [0.1.0-beta] - 2026-07-08
 
@@ -39,6 +209,17 @@ All notable user-facing changes are documented in this file. Omni Gateway follow
 - Provider credential pool, virtual model routing, context optimization, usage visibility, and the management console.
 - Docker Hub and GitHub Container Registry publishing.
 
-[Unreleased]: https://github.com/nguywnben/omni-gateway/compare/v0.2.0-beta...HEAD
+[Unreleased]: https://github.com/nguywnben/omni-gateway/compare/v1.3.2...HEAD
+[1.3.2]: https://github.com/nguywnben/omni-gateway/compare/v1.3.1...v1.3.2
+[1.3.1]: https://github.com/nguywnben/omni-gateway/compare/v1.3.0...v1.3.1
+[1.3.0]: https://github.com/nguywnben/omni-gateway/compare/v1.2.1...v1.3.0
+[1.2.1]: https://github.com/nguywnben/omni-gateway/compare/v1.2.0...v1.2.1
+[1.2.0]: https://github.com/nguywnben/omni-gateway/compare/v1.1.4...v1.2.0
+[1.1.4]: https://github.com/nguywnben/omni-gateway/compare/v1.1.3...v1.1.4
+[1.1.3]: https://github.com/nguywnben/omni-gateway/compare/v1.1.2...v1.1.3
+[1.1.2]: https://github.com/nguywnben/omni-gateway/compare/v1.1.1...v1.1.2
+[1.1.1]: https://github.com/nguywnben/omni-gateway/compare/v1.1.0...v1.1.1
+[1.1.0]: https://github.com/nguywnben/omni-gateway/compare/v1.0.0...v1.1.0
+[1.0.0]: https://github.com/nguywnben/omni-gateway/compare/v0.2.0-beta...v1.0.0
 [0.2.0-beta]: https://github.com/nguywnben/omni-gateway/compare/v0.1.0-beta...v0.2.0-beta
 [0.1.0-beta]: https://github.com/nguywnben/omni-gateway/releases/tag/v0.1.0-beta

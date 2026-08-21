@@ -32,12 +32,18 @@ def run_smoke(base_url: str, expect_fresh_setup: bool, setup_token: str = "") ->
         require_status(dashboard, 200, "Management console")
         if "Content-Security-Policy" not in dashboard.headers:
             raise RuntimeError("Management console response is missing Content-Security-Policy.")
-        if "/frontend/js/core.js" not in dashboard.text:
-            raise RuntimeError("Management console does not reference the split frontend assets.")
-
-        core_asset = client.get("/frontend/js/core.js")
-        require_status(core_asset, 200, "Frontend core asset")
-
+        if "/frontend/console.js" not in dashboard.text:
+            raise RuntimeError("Management console does not reference the JavaScript bundle.")
+        if "/frontend/console.css" not in dashboard.text:
+            raise RuntimeError("Management console does not reference the stylesheet bundle.")
+        script_bundle = client.get("/frontend/console.js?v=smoke")
+        require_status(script_bundle, 200, "Frontend JavaScript bundle")
+        if "function toggleMobileMenu" not in script_bundle.text:
+            raise RuntimeError("Frontend JavaScript bundle is incomplete.")
+        style_bundle = client.get("/frontend/console.css?v=smoke")
+        require_status(style_bundle, 200, "Frontend stylesheet bundle")
+        if "@media" not in style_bundle.text:
+            raise RuntimeError("Frontend stylesheet bundle is incomplete.")
         setup_status = client.get("/api/auth/setup/status")
         require_status(setup_status, 200, "Setup status")
         setup_payload = setup_status.json()
@@ -71,7 +77,7 @@ def run_smoke(base_url: str, expect_fresh_setup: bool, setup_token: str = "") ->
         require_status(canonical_credentials, 200, "Canonical credential route")
 
         legacy_credentials = client.get("/api/creds/status?mode=provider")
-        require_status(legacy_credentials, 200, "Transitional credential route")
+        require_status(legacy_credentials, 404, "Removed beta credential route")
 
         invalid_inference = client.post(
             "/v1/chat/completions",
@@ -82,6 +88,11 @@ def run_smoke(base_url: str, expect_fresh_setup: bool, setup_token: str = "") ->
             },
         )
         require_status(invalid_inference, 401, "Invalid API key rejection")
+        invalid_payload = invalid_inference.json()
+        if invalid_payload.get("error", {}).get("type") != "authentication_error":
+            raise RuntimeError("OpenAI authentication errors do not use the stable SDK schema.")
+        if not invalid_inference.headers.get("x-request-id"):
+            raise RuntimeError("Inference responses must include X-Request-ID.")
 
         logout = client.post("/api/auth/logout")
         require_status(logout, 200, "Logout")

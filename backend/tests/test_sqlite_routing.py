@@ -4,22 +4,25 @@ from __future__ import annotations
 
 import os
 import sys
-import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import patch
 
 BACKEND_DIR = Path(__file__).resolve().parents[1]
+TESTS_DIR = Path(__file__).resolve().parent
 if str(BACKEND_DIR) not in sys.path:
     sys.path.insert(0, str(BACKEND_DIR))
+if str(TESTS_DIR) not in sys.path:
+    sys.path.insert(0, str(TESTS_DIR))
 
 from core.smart_routing import SmartCredentialRouter
 from core.storage.sqlite_manager import SQLiteManager
+from support import workspace_temp_directory
 
 
 class SQLiteRoutingTests(unittest.IsolatedAsyncioTestCase):
     async def test_failed_attempt_updates_fairness_and_changes_selection(self):
-        with tempfile.TemporaryDirectory(dir=Path(__file__).parent) as temp_dir:
+        with workspace_temp_directory() as temp_dir:
             with patch.dict(os.environ, {"CREDENTIALS_DIR": temp_dir}):
                 storage = SQLiteManager()
                 await storage.initialize()
