@@ -1,10 +1,8 @@
-function getAuthHeaders() {
+function getAuthHeaders(includeContentType = true) {
 
-    return {
-
-        'Content-Type': 'application/json'
-
-    };
+    const headers = {'Accept-Language': getActiveLocale()};
+    if (includeContentType) headers['Content-Type'] = 'application/json';
+    return headers;
 
 }
 
@@ -140,9 +138,9 @@ function getCredentialProviderMeta(credInfo, managerType) {
     }
 
     return {
-        id: 'code_assist',
-        name: t('provider_code_assist'),
-        logo: ''
+        id: 'google_antigravity',
+        name: 'Google Antigravity',
+        logo: '/frontend/assets/providers/google-antigravity-logo.png'
     };
 
 }
@@ -161,7 +159,7 @@ function createCredentialProviderGroup(providerMeta, credentials, manager) {
 
         : `<span>${escapeHtml(providerMeta.name.charAt(0))}</span>`;
 
-    const countLabel = `${credentials.length} credential${credentials.length === 1 ? '' : 's'}`;
+    const countLabel = t('credential_count', {count: credentials.length});
 
     section.innerHTML = `
 
@@ -222,8 +220,8 @@ function renderCredentialSubscriptionBadge(pathId, value, kind = 'plan') {
     }
 
     const badgeLabel = plan.kind === 'tier'
-        ? `Tier: ${escapeHtml(plan.label)}`
-        : `Plan: ${escapeHtml(plan.label)}`;
+        ? t('credential_badge_tier', {tier: escapeHtml(plan.label)})
+        : t('credential_badge_plan', {plan: escapeHtml(plan.label)});
     const title = plan.kind === 'tier'
         ? `Access tier reported by the provider: ${plan.label}`
         : `Subscription plan reported by the provider: ${plan.label}`;
@@ -308,27 +306,15 @@ function createCredCard(credInfo, manager) {
 
         if (autoBan.length > 0 && status.disabled) {
 
-            statusBadges += '<span class="status-badge danger">Auto-disabled</span>';
+            statusBadges += `<span class="status-badge danger">${t('credential_badge_auto_disabled')}</span>`;
 
         }
-
-    } else {
-
-        statusBadges += `<span class="status-badge success">${t('status_no_errors')}</span>`;
 
     }
 
-    if (managerType !== 'primary' && credInfo.preview !== undefined) {
+    if (managerType !== 'primary' && credInfo.preview) {
 
-        if (credInfo.preview) {
-
-            statusBadges += `<span class="status-badge success" title="${t('preview_supported_title')}">Preview: ON</span>`;
-
-        } else {
-
-            statusBadges += `<span class="status-badge muted" title="${t('preview_not_supported_title')}">Preview: OFF</span>`;
-
-        }
+        statusBadges += `<span class="status-badge success" title="${t('preview_supported_title')}">${t('credential_badge_preview', {state: t('credential_state_on')})}</span>`;
 
     }
 
@@ -354,21 +340,13 @@ function createCredCard(credInfo, manager) {
 
         const tierClass = tier === 'ultra' ? 'tier-ultra' : (tier === 'free' ? 'tier-free' : 'tier-pro');
 
-        statusBadges += `<span class="status-badge ${tierClass}" title="${escapeAttribute(`${t('tier_badge_title')}: ${tierLabel}`)}">Tier: ${escapeHtml(tierLabel)}</span>`;
+        statusBadges += `<span class="status-badge ${tierClass}" title="${escapeAttribute(`${t('tier_badge_title')}: ${tierLabel}`)}">${tierLabel}</span>`;
 
     }
 
-    if (managerType === 'primary' && isAntigravity) {
+    if (managerType === 'primary' && isAntigravity && credInfo.enable_credit) {
 
-        if (credInfo.enable_credit) {
-
-            statusBadges += `<span class="status-badge credit-on" title="${t('credit_enabled_title')}">Credits: ON</span>`;
-
-        } else {
-
-            statusBadges += `<span class="status-badge credit-off" title="${t('credit_disabled_title')}">Credits: OFF</span>`;
-
-        }
+        statusBadges += `<span class="status-badge credit-on" title="${t('credit_enabled_title')}">${t('credential_badge_credits', {state: t('credential_state_on')})}</span>`;
 
     }
 
@@ -404,7 +382,7 @@ function createCredCard(credInfo, manager) {
 
             activeCooldowns.slice(0, 2).forEach(item => {
 
-                statusBadges += `<span class="cooldown-badge" title="${escapeAttribute(`${t('model_title')}: ${item.fullModel}`)}">Cooldown ${escapeHtml(item.model)}: ${escapeHtml(item.time)}</span>`;
+                statusBadges += `<span class="cooldown-badge" title="${escapeAttribute(`${t('model_title')}: ${item.fullModel}`)}">${t('credential_badge_cooldown', {model: escapeHtml(item.model), time: escapeHtml(item.time)})}</span>`;
 
             });
 
@@ -606,7 +584,7 @@ async function toggleCredDetailsCommon(pathId, manager) {
 
         if (response.ok && data.content) {
 
-            showMessageModal('Credential Details', buildCredentialContentHtml(filename, data.content), 'info', {html: true});
+            showMessageModal(t('credential_details_title'), buildCredentialContentHtml(filename, data.content), 'info', {html: true});
 
         } else {
 
@@ -614,7 +592,7 @@ async function toggleCredDetailsCommon(pathId, manager) {
 
             showStatus(`${t('unable_to_load_file_content')} ${errorMsg}`, 'error');
 
-            showMessageModal('Credential Details', `${t('unable_to_load_file_content')} ${errorMsg}`, 'error');
+            showMessageModal(t('credential_details_title'), `${t('unable_to_load_file_content')} ${errorMsg}`, 'error');
 
         }
 
@@ -624,7 +602,7 @@ async function toggleCredDetailsCommon(pathId, manager) {
 
         showStatus(errorMsg, 'error');
 
-        showMessageModal('Credential Details', errorMsg, 'error');
+        showMessageModal(t('credential_details_title'), errorMsg, 'error');
 
     }
 

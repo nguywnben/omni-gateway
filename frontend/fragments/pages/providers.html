@@ -1,34 +1,34 @@
                 <div id="providersTab" class="tab-content">
                     <header class="page-header">
                         <div>
-                            <div class="page-kicker">Providers</div>
-                            <h1 class="page-title">Add Provider Credentials</h1>
-                            <p class="page-description">Choose a supported provider, authorize an account, or import credential files into the shared routing pool.</p>
+                            <div class="page-kicker" data-i18n="providers">Providers</div>
+                            <h1 class="page-title" data-i18n="providers_title">Add Provider Credentials</h1>
+                            <p class="page-description" data-i18n="providers_description">Choose a supported provider, authorize an account, or import credential files into the shared routing pool.</p>
                         </div>
                     </header>
 
                     <div class="provider-catalog-toolbar" role="search">
                         <div>
-                            <strong>Provider Catalog</strong>
-                            <p>Choose a connection type, then add credentials to the shared routing pool.</p>
+                            <strong data-i18n="providers.catalog">Provider Catalog</strong>
+                            <p data-i18n="providers.catalog_description">Choose a connection type, then add credentials to the shared routing pool.</p>
                         </div>
                         <div class="provider-catalog-search-group">
-                            <label class="provider-catalog-search-label" for="providerCatalogSearch">Find a provider</label>
-                            <input type="search" id="providerCatalogSearch" class="provider-catalog-search" placeholder="Search providers" autocomplete="off" data-ui-input="provider-catalog-search">
+                            <label class="provider-catalog-search-label" for="providerCatalogSearch" data-i18n="providers.find">Find a provider</label>
+                            <input type="search" id="providerCatalogSearch" class="provider-catalog-search" placeholder="Search providers" data-i18n-placeholder="providers.search" autocomplete="off" data-ui-input="provider-catalog-search">
                         </div>
                     </div>
 
-                    <div id="providerCatalog" class="provider-catalog" role="tablist" aria-label="Available providers">
+                    <div id="providerCatalog" class="provider-catalog" role="tablist" data-i18n-aria-label="available_providers" aria-label="Available providers">
                         <button type="button" class="provider-hero-card provider-selector-button active" id="providerSelectorGoogleAntigravity" role="tab" aria-label="Google Antigravity" aria-selected="true" aria-controls="providerWorkspaceGoogleAntigravity" data-ui-action="select-provider" data-provider="google_antigravity">
                             <div class="provider-logo-frame">
-                                <img src="/frontend/assets/providers/google-antigravity-logo.png" alt="Google Antigravity logo">
+                                <img src="/frontend/assets/providers/google-antigravity-logo.png" alt="Google Antigravity" data-i18n-technical>
                             </div>
                             <div class="provider-summary">
-                                <div class="provider-eyebrow">Account Provider</div>
+                                <div class="provider-eyebrow" data-i18n="providers.account_provider">Account Provider</div>
                                 <strong class="provider-name">Google Antigravity</strong>
-                                <p>Connect Google Antigravity accounts through OAuth or import existing credential archives.</p>
+                                <p data-i18n="providers.antigravity_description">Connect Google Antigravity accounts through OAuth or import existing credential archives.</p>
                             </div>
-                            <div class="provider-capabilities" aria-label="Google Antigravity methods">
+                            <div class="provider-capabilities" aria-label="Google Antigravity" data-i18n-technical>
                                 <span>OAuth</span>
                                 <span>JSON</span>
                                 <span>ZIP</span>
@@ -37,14 +37,14 @@
 
                         <button type="button" class="provider-hero-card provider-selector-button" id="providerSelectorGoogleAiStudio" role="tab" aria-label="Google AI Studio" aria-selected="false" aria-controls="providerWorkspaceGoogleAiStudio" data-ui-action="select-provider" data-provider="google_ai_studio">
                             <div class="provider-logo-frame">
-                                <img src="/frontend/assets/providers/google-ai-studio-logo.png" alt="Google AI Studio logo">
+                                <img src="/frontend/assets/providers/google-ai-studio-logo.png" alt="Google AI Studio" data-i18n-technical>
                             </div>
                             <div class="provider-summary">
-                                <div class="provider-eyebrow">API Key Provider</div>
+                                <div class="provider-eyebrow" data-i18n="providers.api_key_provider">API Key Provider</div>
                                 <strong class="provider-name">Google AI Studio</strong>
-                                <p>Add Gemini API keys for native Google model access and automatic provider fallback.</p>
+                                <p data-i18n="providers.ai_studio_description">Add Gemini API keys for native Google model access and automatic provider fallback.</p>
                             </div>
-                            <div class="provider-capabilities" aria-label="Google AI Studio methods">
+                            <div class="provider-capabilities" aria-label="Google AI Studio" data-i18n-technical>
                                 <span>API Key</span>
                                 <span>JSON</span>
                                 <span>ZIP</span>
@@ -53,14 +53,14 @@
 
                         <button type="button" class="provider-hero-card provider-selector-button" id="providerSelectorGrok" role="tab" aria-label="Grok Build" aria-selected="false" aria-controls="providerWorkspaceGrok" data-ui-action="select-provider" data-provider="grok">
                             <div class="provider-logo-frame">
-                                <img src="/frontend/assets/providers/grok-build-logo.png" alt="Grok Build logo">
+                                <img src="/frontend/assets/providers/grok-build-logo.png" alt="Grok Build" data-i18n-technical>
                             </div>
                             <div class="provider-summary">
-                                <div class="provider-eyebrow">Account Provider</div>
+                                <div class="provider-eyebrow" data-i18n="providers.account_provider">Account Provider</div>
                                 <strong class="provider-name">Grok Build</strong>
-                                <p>Connect a Grok Build account through OAuth and route its available models through the shared pool.</p>
+                                <p data-i18n="providers.grok_description">Connect a Grok Build account through OAuth and route its available models through the shared pool.</p>
                             </div>
-                            <div class="provider-capabilities" aria-label="Grok Build methods">
+                            <div class="provider-capabilities" aria-label="Grok Build" data-i18n-technical>
                                 <span>OAuth</span>
                                 <span>JSON</span>
                                 <span>ZIP</span>
@@ -69,14 +69,14 @@
 
                         <button type="button" class="provider-hero-card provider-selector-button" id="providerSelectorXaiConsole" role="tab" aria-label="SpaceXAI Console" aria-selected="false" aria-controls="providerWorkspaceXaiConsole" data-ui-action="select-provider" data-provider="xai_console">
                             <div class="provider-logo-frame">
-                                <img src="/frontend/assets/providers/spacexai-console-logo.png" alt="SpaceXAI Console logo">
+                                <img src="/frontend/assets/providers/spacexai-console-logo.png" alt="SpaceXAI Console" data-i18n-technical>
                             </div>
                             <div class="provider-summary">
-                                <div class="provider-eyebrow">API Key Provider</div>
+                                <div class="provider-eyebrow" data-i18n="providers.api_key_provider">API Key Provider</div>
                                 <strong class="provider-name">SpaceXAI Console</strong>
-                                <p>Add SpaceXAI Console API keys for direct Grok Build model access and automatic provider fallback.</p>
+                                <p data-i18n="providers.spacexai_description">Add SpaceXAI Console API keys for direct Grok Build model access and automatic provider fallback.</p>
                             </div>
-                            <div class="provider-capabilities" aria-label="SpaceXAI Console methods">
+                            <div class="provider-capabilities" aria-label="SpaceXAI Console" data-i18n-technical>
                                 <span>API Key</span>
                                 <span>JSON</span>
                                 <span>ZIP</span>
@@ -85,14 +85,14 @@
 
                         <button type="button" class="provider-hero-card provider-selector-button" id="providerSelectorCodex" role="tab" aria-label="Codex" aria-selected="false" aria-controls="providerWorkspaceCodex" data-ui-action="select-provider" data-provider="codex" data-provider-name="Codex">
                             <div class="provider-logo-frame">
-                                <img src="/frontend/assets/providers/codex-logo.png" alt="Codex logo">
+                                <img src="/frontend/assets/providers/codex-logo.png" alt="Codex" data-i18n-technical>
                             </div>
                             <div class="provider-summary">
-                                <div class="provider-eyebrow">Account Provider</div>
+                                <div class="provider-eyebrow" data-i18n="providers.account_provider">Account Provider</div>
                                 <strong class="provider-name">Codex</strong>
-                                <p>Authorize a ChatGPT account with the OpenAI device flow and route Codex models through the pool.</p>
+                                <p data-i18n="providers.codex_description">Authorize a ChatGPT account with the OpenAI device flow and route Codex models through the pool.</p>
                             </div>
-                            <div class="provider-capabilities" aria-label="Codex methods">
+                            <div class="provider-capabilities" aria-label="Codex" data-i18n-technical>
                                 <span>OAuth</span>
                                 <span>JSON</span>
                                 <span>ZIP</span>
@@ -101,61 +101,51 @@
 
                         <button type="button" class="provider-hero-card provider-selector-button" id="providerSelectorOpenAiPlatform" role="tab" aria-label="OpenAI Platform" aria-selected="false" aria-controls="providerWorkspaceOpenAiPlatform" data-ui-action="select-provider" data-provider="openai_platform" data-provider-name="OpenAI Platform">
                             <div class="provider-logo-frame">
-                                <img src="/frontend/assets/providers/openai-platform-logo.png" alt="OpenAI Platform logo">
+                                <img src="/frontend/assets/providers/openai-platform-logo.png" alt="OpenAI Platform" data-i18n-technical>
                             </div>
                             <div class="provider-summary">
-                                <div class="provider-eyebrow">API Key Provider</div>
+                                <div class="provider-eyebrow" data-i18n="providers.api_key_provider">API Key Provider</div>
                                 <strong class="provider-name">OpenAI Platform</strong>
-                                <p>Validate OpenAI API keys, discover available models, and route requests through the shared pool.</p>
+                                <p data-i18n="providers.openai_description">Validate OpenAI API keys, discover available models, and route requests through the shared pool.</p>
                             </div>
-                            <div class="provider-capabilities" aria-label="OpenAI Platform methods">
+                            <div class="provider-capabilities" aria-label="OpenAI Platform" data-i18n-technical>
                                 <span>API Key</span>
                                 <span>JSON</span>
                                 <span>ZIP</span>
                             </div>
                         </button>
                         <button type="button" class="provider-hero-card provider-selector-button" id="providerSelectorClaudeCode" role="tab" aria-label="Claude Code" aria-selected="false" aria-controls="providerWorkspaceClaudeCode" data-ui-action="select-provider" data-provider="claude_code" data-provider-name="Claude Code">
-                            <div class="provider-logo-frame"><img src="/frontend/assets/providers/claude-code-logo.png" alt="Claude Code logo"></div>
+                            <div class="provider-logo-frame"><img src="/frontend/assets/providers/claude-code-logo.png" alt="Claude Code" data-i18n-technical></div>
                             <div class="provider-summary">
-                                <div class="provider-eyebrow">Account Provider</div>
+                                <div class="provider-eyebrow" data-i18n="providers.account_provider">Account Provider</div>
                                 <strong class="provider-name">Claude Code</strong>
-                                <p>Authorize an Anthropic account and route its available Claude models through the shared pool.</p>
+                                <p data-i18n="providers.claude_code_description">Authorize an Anthropic account and route its available Claude models through the shared pool.</p>
                             </div>
-                            <div class="provider-capabilities" aria-label="Claude Code methods"><span>OAuth</span><span>JSON</span><span>ZIP</span></div>
+                            <div class="provider-capabilities" aria-label="Claude Code" data-i18n-technical><span>OAuth</span><span>JSON</span><span>ZIP</span></div>
                         </button>
 
                         <button type="button" class="provider-hero-card provider-selector-button" id="providerSelectorClaudePlatform" role="tab" aria-label="Claude Platform" aria-selected="false" aria-controls="providerWorkspaceClaudePlatform" data-ui-action="select-provider" data-provider="claude_platform" data-provider-name="Claude Platform">
-                            <div class="provider-logo-frame"><img src="/frontend/assets/providers/claude-platform-logo.png" alt="Claude Platform logo"></div>
+                            <div class="provider-logo-frame"><img src="/frontend/assets/providers/claude-platform-logo.png" alt="Claude Platform" data-i18n-technical></div>
                             <div class="provider-summary">
-                                <div class="provider-eyebrow">API Key Provider</div>
+                                <div class="provider-eyebrow" data-i18n="providers.api_key_provider">API Key Provider</div>
                                 <strong class="provider-name">Claude Platform</strong>
-                                <p>Add Anthropic API keys, discover available Claude models, and route requests through the pool.</p>
+                                <p data-i18n="providers.claude_platform_description">Add Anthropic API keys, discover available Claude models, and route requests through the pool.</p>
                             </div>
-                            <div class="provider-capabilities" aria-label="Claude Platform methods"><span>API Key</span><span>JSON</span><span>ZIP</span></div>
+                            <div class="provider-capabilities" aria-label="Claude Platform" data-i18n-technical><span>API Key</span><span>JSON</span><span>ZIP</span></div>
                         </button>
 
                         <button type="button" class="provider-hero-card provider-selector-button" id="providerSelectorOllama" role="tab" aria-label="Ollama" aria-selected="false" aria-controls="providerWorkspaceOllama" data-ui-action="select-provider" data-provider="ollama" data-provider-name="Ollama">
-                            <div class="provider-logo-frame"><img src="/frontend/assets/providers/ollama-logo.png" alt="Ollama logo"></div>
+                            <div class="provider-logo-frame"><img src="/frontend/assets/providers/ollama-logo.png" alt="Ollama" data-i18n-technical></div>
                             <div class="provider-summary">
-                                <div class="provider-eyebrow">Model Server</div>
+                                <div class="provider-eyebrow" data-i18n="providers.model_server">Model Server</div>
                                 <strong class="provider-name">Ollama</strong>
-                                <p>Connect local, remote, or cloud Ollama endpoints and route every model they expose.</p>
+                                <p data-i18n="providers.ollama_description">Connect local, remote, or cloud Ollama endpoints and route every model they expose.</p>
                             </div>
-                            <div class="provider-capabilities" aria-label="Ollama methods"><span>Endpoint</span><span>JSON</span><span>ZIP</span></div>
-                        </button>
-
-                        <button type="button" class="provider-hero-card provider-selector-button" id="providerSelectorGeminiCli" role="tab" aria-label="Gemini CLI" aria-selected="false" aria-controls="providerWorkspaceGeminiCli" data-ui-action="select-provider" data-provider="gemini_cli" data-provider-name="Gemini CLI">
-                            <div class="provider-logo-frame"><img src="/frontend/assets/providers/gemini-cli-logo.png" alt="Gemini CLI logo"></div>
-                            <div class="provider-summary">
-                                <div class="provider-eyebrow">Account Provider</div>
-                                <strong class="provider-name">Gemini CLI</strong>
-                                <p>Authorize Google Cloud Code CLI accounts and route Gemini models through the shared pool.</p>
-                            </div>
-                            <div class="provider-capabilities" aria-label="Gemini CLI methods"><span>OAuth</span><span>JSON</span><span>ZIP</span></div>
+                            <div class="provider-capabilities" aria-label="Ollama" data-i18n-technical><span>Endpoint</span><span>JSON</span><span>ZIP</span></div>
                         </button>
                     </div>
 
-                    <p id="providerCatalogEmpty" class="provider-catalog-empty hidden" aria-live="polite">No providers match your search.</p>
+                    <p id="providerCatalogEmpty" class="provider-catalog-empty hidden" aria-live="polite" data-i18n="providers.no_matches">No providers match your search.</p>
 
                     <section class="provider-workspace hidden" id="providerWorkspaceGrok" role="tabpanel" aria-labelledby="providerSelectorGrok">
                         <div class="provider-workspace-header">
@@ -185,9 +175,9 @@
                                         <a id="xaiAuthorizationUrl" href="#" target="_blank" rel="noreferrer">Authorization unavailable</a>
                                     </div>
                                     <div class="oauth-completion-panel">
-                                        <label for="xaiAuthorizationCode">Authorization code</label>
+                                        <label for="xaiAuthorizationCode" data-i18n="provider.authorization_code">Authorization code</label>
                                         <p class="card-copy provider-tool-copy">After signing in, copy the code shown on the Grok Build authorization page and paste it here.</p>
-                                        <input type="text" id="xaiAuthorizationCode" placeholder="Paste the Grok Build authorization code" autocomplete="off" spellcheck="false">
+                                        <input type="text" id="xaiAuthorizationCode" data-i18n-placeholder="provider.authorization_code_placeholder" placeholder="Paste the Grok Build authorization code" autocomplete="off" spellcheck="false">
                                     </div>
                                     <div class="page-actions" style="margin-top: 14px;">
                                         <button type="button" class="btn" id="saveXaiOauthBtn" data-ui-action="save-xai-oauth">Save credential</button>
@@ -627,106 +617,6 @@
                             <section class="tool-panel"><h2 class="card-title">Ollama Connection</h2><p class="card-copy provider-tool-copy">Validate an Ollama endpoint, discover its models, and add it to the active pool.</p><form id="ollamaCredentialForm" autocomplete="off"><div class="form-group"><label for="ollamaBaseUrl">Endpoint</label><input type="url" id="ollamaBaseUrl" value="http://localhost:11434" placeholder="http://localhost:11434" autocomplete="off" required></div><div class="form-group"><label for="ollamaApiKey">API key <span class="field-optional">Optional</span></label><input type="password" id="ollamaApiKey" name="ollama-api-key" placeholder="Required only by protected or cloud endpoints" autocomplete="one-time-code" data-1p-ignore data-lpignore="true" data-bwignore="true" autocapitalize="none" spellcheck="false"></div><p class="form-help">Containers cannot reach the host through their own localhost. Use the host gateway or a network-reachable endpoint when Omni Gateway runs in Docker.</p><button type="submit" class="btn" id="addOllamaBtn">Validate and add</button></form><div id="ollamaSaveResult" class="save-result provider-save-result hidden"><div><strong id="ollamaSaveResultTitle">Ollama connection added to pool</strong><p id="ollamaSaveResultText"></p></div><button type="button" class="btn btn-secondary" data-ui-action="switch-tab" data-tab="pool">View</button></div></section>
                             <section class="tool-panel"><h2 class="card-title">Batch Import</h2><p class="card-copy provider-tool-copy">Import Ollama connection JSON files or ZIP archives.</p><button type="button" class="upload-area" id="ollamaUploadArea" aria-describedby="ollamaUploadHelp" data-ui-action="select-ollama-files"><div><div class="upload-title">Drop connection files here</div><p class="upload-copy" id="ollamaUploadHelp">Supports JSON and ZIP archives.</p></div></button><input type="file" id="ollamaFileInput" multiple accept=".json,.zip" class="hidden" data-ui-change="ollama-files"><div id="ollamaFileListSection" class="hidden provider-upload-section"><label>Pending files</label><div class="file-list" id="ollamaFileList"></div><div class="page-actions"><button type="button" class="btn btn-small" data-ui-action="upload-ollama-files">Import</button><button type="button" class="btn btn-secondary btn-small" data-ui-action="clear-ollama-files">Clear</button></div></div><div id="ollamaUploadProgressSection" class="hidden provider-upload-section"><div class="progress-bar"><div class="progress-fill" id="ollamaProgressFill"></div></div><p id="ollamaProgressText" class="page-description provider-progress-copy">0%</p></div><div id="ollamaUploadResult" class="save-result upload-result hidden"><div><strong id="ollamaUploadResultTitle">Import complete</strong><p id="ollamaUploadResultText"></p><div id="ollamaUploadResultDetails" class="upload-result-details"></div></div><button type="button" class="btn btn-secondary" data-ui-action="switch-tab" data-tab="pool">View</button></div></section>
                         </div>
-                    </section>
-                    <section class="provider-workspace hidden" id="providerWorkspaceGeminiCli" role="tabpanel" aria-labelledby="providerSelectorGeminiCli">
-                        <div class="provider-workspace-header">
-                            <div class="provider-workspace-heading">
-                                <div class="provider-workspace-logo"><img src="/frontend/assets/providers/gemini-cli-logo.png" alt=""></div>
-                                <div>
-                                    <h2>Gemini CLI</h2>
-                                    <p>Authorize Google Cloud Code CLI accounts and route Gemini models through the shared pool.</p>
-                                    <a class="provider-site-link" href="https://geminicli.com/" target="_blank" rel="noreferrer">https://geminicli.com/</a>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="provider-tools-grid">
-                            <section class="tool-panel">
-                                <h2 class="card-title">Gemini CLI OAuth</h2>
-                                <p class="card-copy provider-tool-copy">Generate an authorization link, sign in to Google, then paste the authorization code shown by Google.</p>
-                                <div class="page-actions">
-                                    <button type="button" class="btn" id="startGeminiCliOauthBtn" data-ui-action="start-gemini-cli-oauth">Get provider authentication link</button>
-                                </div>
-                                <div id="geminiCliOauthFields" class="hidden provider-reveal-section">
-                                    <div class="auth-link-header">
-                                        <label>Authorization link</label>
-                                        <button type="button" class="btn btn-secondary" title="Copy authorization link" aria-label="Copy authorization link" data-ui-action="copy-gemini-cli-auth-url">Copy</button>
-                                    </div>
-                                    <div class="endpoint-code-card auth-link-card">
-                                        <a id="geminiCliAuthorizationUrl" href="#" target="_blank" rel="noreferrer">Authorization unavailable</a>
-                                    </div>
-                                    <div class="oauth-completion-panel">
-                                        <label for="geminiCliAuthorizationCode">Authorization code</label>
-                                        <p class="card-copy provider-tool-copy">Copy the code shown after authorization and paste it here.</p>
-                                        <input type="text" id="geminiCliAuthorizationCode" placeholder="Paste the Google authorization code" autocomplete="off" spellcheck="false">
-                                    </div>
-                                    <div class="page-actions provider-action-gap">
-                                        <button type="button" class="btn" id="saveGeminiCliOauthBtn" data-ui-action="save-gemini-cli-oauth">Save credential</button>
-                                    </div>
-                                    <div id="geminiCliOauthSaveResult" class="save-result provider-save-result hidden">
-                                        <div>
-                                            <strong id="geminiCliOauthSaveResultTitle">Gemini CLI credential added to pool</strong>
-                                            <p id="geminiCliOauthSaveResultText"></p>
-                                        </div>
-                                        <button type="button" class="btn btn-secondary" data-ui-action="switch-tab" data-tab="pool">View</button>
-                                    </div>
-                                </div>
-                            </section>
-                            <section class="tool-panel">
-                                <h2 class="card-title">Batch Import</h2>
-                                <p class="card-copy provider-tool-copy">Import Gemini CLI OAuth credential JSON files or ZIP archives.</p>
-                                <button type="button" class="upload-area" id="geminiCliUploadArea" aria-describedby="geminiCliUploadHelp" data-ui-action="select-gemini-cli-files">
-                                    <div>
-                                        <div class="upload-title">Drop OAuth credential files here</div>
-                                        <p class="upload-copy" id="geminiCliUploadHelp">Supports JSON and ZIP archives.</p>
-                                    </div>
-                                </button>
-                                <input type="file" id="geminiCliFileInput" multiple accept=".json,.zip" class="hidden" data-ui-change="gemini-cli-files">
-                                <div id="geminiCliFileListSection" class="hidden provider-upload-section">
-                                    <label>Pending files</label>
-                                    <div class="file-list" id="geminiCliFileList"></div>
-                                    <div class="page-actions">
-                                        <button type="button" class="btn btn-small" data-ui-action="upload-gemini-cli-files">Import</button>
-                                        <button type="button" class="btn btn-secondary btn-small" data-ui-action="clear-gemini-cli-files">Clear</button>
-                                    </div>
-                                </div>
-                                <div id="geminiCliUploadProgressSection" class="hidden provider-upload-section">
-                                    <div class="progress-bar"><div class="progress-fill" id="geminiCliProgressFill"></div></div>
-                                    <p id="geminiCliProgressText" class="page-description provider-progress-copy">0%</p>
-                                </div>
-                                <div id="geminiCliUploadResult" class="save-result upload-result hidden">
-                                    <div>
-                                        <strong id="geminiCliUploadResultTitle">Import complete</strong>
-                                        <p id="geminiCliUploadResultText"></p>
-                                        <div id="geminiCliUploadResultDetails" class="upload-result-details"></div>
-                                    </div>
-                                    <button type="button" class="btn btn-secondary" data-ui-action="switch-tab" data-tab="pool">View</button>
-                                </div>
-                            </section>
-                        </div>
-                        <section class="tool-panel provider-settings-panel">
-                            <div class="provider-settings-header">
-                                <div>
-                                    <h2 class="card-title">Gemini CLI Advanced Settings</h2>
-                                    <p class="card-copy provider-tool-copy">Configure the Google Cloud Code API endpoint, OAuth client ID, and token service.</p>
-                                </div>
-                                <div class="page-actions">
-                                    <button type="button" class="btn" data-ui-action="save-gemini-cli-settings">Save</button>
-                                    <button type="button" class="btn btn-secondary" data-ui-action="reset-gemini-cli-settings">Reset defaults</button>
-                                </div>
-                            </div>
-                            <div id="geminiCliSettingsLoading" class="skeleton-config provider-settings-skeleton" role="status" aria-label="Loading Gemini CLI settings" aria-busy="true">
-                                <div class="skeleton-config-group"><div class="skeleton-line title"></div><div class="skeleton-line field"></div></div>
-                            </div>
-                            <div id="geminiCliSettingsForm" class="provider-settings-grid hidden">
-                                <section class="provider-settings-group config-two-column">
-                                    <div class="form-group"><label for="geminiCliApiUrl">Cloud Code API</label><input type="url" id="geminiCliApiUrl" autocomplete="off"></div>
-                                    <div class="form-group"><label for="geminiCliAuthorizeUrl">Authorization service</label><input type="url" id="geminiCliAuthorizeUrl" autocomplete="off"></div>
-                                    <div class="form-group"><label for="geminiCliTokenUrl">Token service</label><input type="url" id="geminiCliTokenUrl" autocomplete="off"></div>
-                                    <div class="form-group"><label for="geminiCliClientId">OAuth client ID</label><input type="text" id="geminiCliClientId" autocomplete="off"></div>
-                                    <div class="form-group"><label for="geminiCliClientSecret">OAuth client secret</label><input type="text" id="geminiCliClientSecret" autocomplete="off"></div>
-                                </section>
-                            </div>
-                        </section>
                     </section>
 
                     <section class="provider-workspace" id="providerWorkspaceGoogleAntigravity" role="tabpanel" aria-labelledby="providerSelectorGoogleAntigravity">

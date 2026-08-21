@@ -1,8 +1,52 @@
-# Omni Gateway
+<div align="center">
+  <h1>
+    <img src="frontend/assets/logo.png" alt="Omni Gateway Logo" width="48" height="48" style="vertical-align: middle;" />
+    Omni Gateway
+  </h1>
+  <p><b>Universal AI Router & Unified Multi-Provider Gateway for AI Coding Tools</b></p>
+
+  <p>
+    <a href="https://github.com/nguywnben/omni-gateway/releases"><img src="https://img.shields.io/github/v/release/nguywnben/omni-gateway?style=flat-square&color=blue" alt="Release"></a>
+    <a href="https://github.com/nguywnben/omni-gateway/blob/main/LICENSE"><img src="https://img.shields.io/github/license/nguywnben/omni-gateway?style=flat-square&color=green" alt="License"></a>
+    <a href="https://github.com/nguywnben/omni-gateway/actions"><img src="https://img.shields.io/github/actions/workflow/status/nguywnben/omni-gateway/ci.yml?branch=main&style=flat-square&label=CI" alt="CI Status"></a>
+    <a href="https://hub.docker.com/r/nguywnben/omni-gateway"><img src="https://img.shields.io/docker/pulls/nguywnben/omni-gateway?style=flat-square&logo=docker" alt="Docker Pulls"></a>
+    <img src="https://img.shields.io/badge/python-3.12%20%7C%203.14-3776AB?style=flat-square&logo=python&logoColor=white" alt="Python 3.12 | 3.14">
+    <img src="https://img.shields.io/badge/i18n-15%20languages-orange?style=flat-square" alt="15 Languages">
+  </p>
+
+  <p>
+    <a href="#supported-providers"><b>🌐 Supported Providers</b></a> •
+    <a href="#core-capabilities"><b>⚡ Capabilities</b></a> •
+    <a href="#deployment"><b>🐳 Docker Deployment</b></a> •
+    <a href="#quick-start-sdk-integration"><b>🔌 SDK Setup</b></a> •
+    <a href="docs/architecture.md"><b>📖 Architecture</b></a>
+  </p>
+
+  <p>
+    <b>Console & Documentation Languages:</b><br>
+    <b>English</b> •
+    <a href="docs/locales/README.vi.md">Tiếng Việt</a> •
+    <a href="docs/locales/README.zh-CN.md">中文(简体)</a> •
+    <a href="docs/locales/README.zh-TW.md">中文(繁體)</a> •
+    <a href="docs/locales/README.ja.md">日本語</a> •
+    <a href="docs/locales/README.ko.md">한국어</a> •
+    <a href="docs/locales/README.es.md">Español</a> •
+    <a href="docs/locales/README.fr.md">Français</a> •
+    <a href="docs/locales/README.de.md">Deutsch</a> •
+    <a href="docs/locales/README.it.md">Italiano</a> •
+    <a href="docs/locales/README.pt.md">Português</a> •
+    <a href="docs/locales/README.ru.md">Русский</a> •
+    <a href="docs/locales/README.id.md">Indonesia</a> •
+    <a href="docs/locales/README.th.md">ภาษาไทย</a> •
+    <a href="docs/locales/README.tr.md">Türkçe</a>
+  </p>
+</div>
+
+---
 
 A universal AI router for coding tools. Omni Gateway provides smart auto-fallback, token-aware request cleanup, usage visibility, and seamless format translation so local agents, IDE assistants, and automation scripts can use free and premium LLM capacity through one stable API surface.
 
-> **Project status:** Stable. Version `1.2.1` improves credential-aware model discovery, fixed-model routing, response compatibility, and historical usage reporting while preserving the stable SDK routes, canonical management routes, configuration names, and single-instance runtime contract established in `1.0.0`.
+> **Project status:** Stable. Version `1.3.1` completes the localized console across 15 languages, adds locale-aware management API messages and release-aware update guidance, and preserves the stable SDK routes, canonical management routes, configuration names, and single-instance runtime contract established in `1.0.0`.
 
 ## Why Omni Gateway
 
@@ -22,6 +66,22 @@ Modern coding workflows often mix clients and providers: OpenAI-compatible tools
 ## Console Preview
 
 ![Omni Gateway credential pool](docs/assets/screenshots/credential-pool.png)
+
+## Supported Providers
+
+Omni Gateway adapts requests seamlessly across leading AI providers, local runtime engines, and OAuth endpoints:
+
+| Provider | Auth Type | Supported Protocols | Auto-Failover | Streaming |
+| :--- | :---: | :---: | :---: | :---: |
+| <img src="frontend/assets/providers/google-antigravity-logo.png" width="18" height="18" valign="middle" /> **Google Antigravity** | OAuth (Google) | Gemini Native, OpenAI, Anthropic | ✅ | ✅ |
+| <img src="frontend/assets/providers/google-ai-studio-logo.png" width="18" height="18" valign="middle" /> **Google AI Studio** | API Key | Gemini Native, OpenAI, Anthropic | ✅ | ✅ |
+| <img src="frontend/assets/providers/claude-code-logo.png" width="18" height="18" valign="middle" /> **Claude Code** | OAuth (Anthropic) | Anthropic Messages, OpenAI, Gemini | ✅ | ✅ |
+| <img src="frontend/assets/providers/claude-platform-logo.png" width="18" height="18" valign="middle" /> **Claude Platform** | API Key | Anthropic Messages, OpenAI, Gemini | ✅ | ✅ |
+| <img src="frontend/assets/providers/codex-logo.png" width="18" height="18" valign="middle" /> **Codex** | OAuth (OpenAI) | OpenAI Completions & Responses | ✅ | ✅ |
+| <img src="frontend/assets/providers/openai-platform-logo.png" width="18" height="18" valign="middle" /> **OpenAI Platform** | API Key | OpenAI Completions & Responses | ✅ | ✅ |
+| <img src="frontend/assets/providers/grok-build-logo.png" width="18" height="18" valign="middle" /> **Grok Build** | API Key | OpenAI Compatible, Anthropic, Gemini | ✅ | ✅ |
+| <img src="frontend/assets/providers/spacexai-console-logo.png" width="18" height="18" valign="middle" /> **SpaceXAI Console** | API Key | OpenAI Compatible | ✅ | ✅ |
+| <img src="frontend/assets/providers/ollama-logo.png" width="18" height="18" valign="middle" /> **Ollama (Local / Self-hosted)** | Local / Base URL | OpenAI Compatible | ✅ | ✅ |
 
 ## Architecture
 
@@ -74,10 +134,10 @@ sudo docker run -d \
   -p 4283:4283 \
   -v /opt/omni-gateway/creds:/app/backend/data/creds \
   -v /opt/omni-gateway/logs:/app/backend/data/logs \
-  nguywnben/omni-gateway:1.2.1
+  nguywnben/omni-gateway:1.3.1
 ```
 
-The same release is published to GitHub Packages as `ghcr.io/nguywnben/omni-gateway:1.2.1`. The `latest` tag tracks the newest stable release; `edge` tracks verified but unreleased builds from `main`. Pin a version tag or digest when reproducible deployment matters.
+The same release is published to GitHub Packages as `ghcr.io/nguywnben/omni-gateway:1.3.1`. The `latest` tag tracks the newest stable release; `edge` tracks verified but unreleased builds from `main`. Pin a version tag or digest when reproducible deployment matters.
 
 Open the control panel at:
 
@@ -89,7 +149,7 @@ On first run, create the console password on the setup screen. No default passwo
 
 Passwords managed by the application are stored as salted scrypt hashes, control-panel sessions use HttpOnly cookies, and public SDK requests authenticate with the generated `sk-ogw-` API key. For a non-interactive deployment, preconfigure `PANEL_PASSWORD` and skip the setup screen entirely.
 
-The `1.2.1` container is published for `linux/amd64`. ARM64 publication is intentionally paused until every provider dependency, including the Vertex transport stack, can be built and tested with the same contract.
+The `1.3.1` container is published for `linux/amd64`. ARM64 publication is intentionally paused until every provider dependency, including the Vertex transport stack, can be built and tested with the same contract.
 
 If the server firewall is enabled, allow the gateway port:
 
@@ -124,7 +184,7 @@ sudo mkdir -p /opt/omni-gateway/creds /opt/omni-gateway/logs
 docker compose -f deploy/docker-compose.yml up -d
 ```
 
-The included compose file pulls `nguywnben/omni-gateway:latest` and uses `/opt/omni-gateway` by default for persistent host data. Set `IMAGE=nguywnben/omni-gateway:1.2.1` to pin this release, and set `DATA_DIR=/custom/path` when the server uses a different storage location.
+The included compose file pulls `nguywnben/omni-gateway:latest` and uses `/opt/omni-gateway` by default for persistent host data. Set `IMAGE=nguywnben/omni-gateway:1.3.1` to pin this release, and set `DATA_DIR=/custom/path` when the server uses a different storage location.
 
 Compose forwards `API_KEY`, `PANEL_PASSWORD`, `SETUP_TOKEN`, external storage URIs, and `PROXY` from the shell or a root `.env` file. Leave them empty to retain automatic key generation, first-run setup, local SQLite storage, and direct outbound networking.
 
@@ -469,6 +529,7 @@ The production baseline is Python 3.12, and CI currently verifies Python 3.12 an
 - Keep `WORKERS=1` and one application replica for the 1.x series; external storage is not a substitute for distributed coordination.
 - Use the canonical `/api/credentials` management routes. The beta `/api/creds` aliases were removed in 1.0.0.
 - Follow [Upgrading to 1.0](docs/upgrading-to-1.0.md) before migrating a beta deployment.
+- Follow the [update guide](docs/updating.md) when upgrading a deployed instance or rolling back a release.
 - Follow the maintained [release checklist](docs/release-checklist.md) before tagging or promoting an image.
 - Keep log retention and credential rotation policies aligned with your usage limits.
 - Rotate credentials immediately if a repository or platform scanner reports a leaked secret.
@@ -480,6 +541,18 @@ The production baseline is Python 3.12, and CI currently verifies Python 3.12 an
 - Report vulnerabilities through the private process in [Security Policy](SECURITY.md).
 - Review [Changelog](CHANGELOG.md) for release-level changes.
 - Follow the [Code of Conduct](CODE_OF_CONDUCT.md) in all project spaces.
+
+## Acknowledgements & Inspirations
+
+Omni Gateway stands on the shoulders of the open-source AI routing, telemetry, and gateway community. We express our gratitude to the creators and maintainers of these projects:
+
+| Project | Description | Stars |
+| :--- | :--- | :---: |
+| [**songquanpeng / one-api**](https://github.com/songquanpeng/one-api) | Inspiration for multi-provider key management and web-based API aggregation | [![Stars](https://img.shields.io/github/stars/songquanpeng/one-api?style=flat-square&color=yellow)](https://github.com/songquanpeng/one-api) |
+| [**router-for-me / CLIProxyAPI**](https://github.com/router-for-me/CLIProxyAPI) | Pioneering multi-format proxy and protocol translation layer for AI coding CLIs | [![Stars](https://img.shields.io/github/stars/router-for-me/CLIProxyAPI?style=flat-square&color=yellow)](https://github.com/router-for-me/CLIProxyAPI) |
+| [**BerriAI / litellm**](https://github.com/BerriAI/litellm) | Standard-setting unified LLM proxy, load balancing, and fallback routing | [![Stars](https://img.shields.io/github/stars/BerriAI/litellm?style=flat-square&color=yellow)](https://github.com/BerriAI/litellm) |
+| [**Portkey-AI / gateway**](https://github.com/Portkey-AI/gateway) | Ultra-fast AI gateway architecture, routing strategies, and resilient fallback patterns | [![Stars](https://img.shields.io/github/stars/Portkey-AI/gateway?style=flat-square&color=yellow)](https://github.com/Portkey-AI/gateway) |
+| [**langfuse / langfuse**](https://github.com/langfuse/langfuse) | Open-source LLM engineering platform, tracing, observability, and metrics ingestion | [![Stars](https://img.shields.io/github/stars/langfuse/langfuse?style=flat-square&color=yellow)](https://github.com/langfuse/langfuse) |
 
 ## License
 
