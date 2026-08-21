@@ -7,6 +7,7 @@ from core.converter.fake_stream import (
 )
 from core.model_pool import ModelPoolError, resolve_model_request
 from core.models import ClaudeRequest, model_to_dict
+from core.router.protocol_errors import adapt_protocol_error_response
 from core.router.stream_passthrough import (
     build_streaming_response_or_error,
     prepend_async_item,
@@ -70,9 +71,12 @@ async def messages(claude_request: ClaudeRequest, _token: str = Depends(authenti
         response = await non_stream_request(
             body=api_request,
             model_candidates=model_candidates,
+            model_routing=model_resolution.is_virtual,
         )
 
         status_code = getattr(response, "status_code", 200)
+        if status_code >= 400:
+            return adapt_protocol_error_response(response, "anthropic")
 
         if hasattr(response, "body"):
             response_body = (
@@ -107,6 +111,7 @@ async def messages(claude_request: ClaudeRequest, _token: str = Depends(authenti
         response = await non_stream_request(
             body=api_request,
             model_candidates=model_candidates,
+            model_routing=model_resolution.is_virtual,
         )
 
         if hasattr(response, "status_code") and response.status_code != 200:
@@ -190,6 +195,7 @@ async def messages(claude_request: ClaudeRequest, _token: str = Depends(authenti
             body=anti_truncation_payload,
             native=False,
             model_candidates=model_candidates,
+            model_routing=model_resolution.is_virtual,
         )
         try:
             first_chunk = await read_first_async_item(first_attempt_stream)
@@ -213,6 +219,7 @@ async def messages(claude_request: ClaudeRequest, _token: str = Depends(authenti
                     body=payload,
                     native=False,
                     model_candidates=model_candidates,
+                    model_routing=model_resolution.is_virtual,
                 )
             return StreamingResponse(stream_gen, media_type="text/event-stream")
 
@@ -245,6 +252,7 @@ async def messages(claude_request: ClaudeRequest, _token: str = Depends(authenti
             body=api_request,
             native=False,
             model_candidates=model_candidates,
+            model_routing=model_resolution.is_virtual,
         )
         try:
             first_chunk = await read_first_async_item(stream_gen)
@@ -290,12 +298,18 @@ async def messages(claude_request: ClaudeRequest, _token: str = Depends(authenti
                 yield anthropic_chunk
 
     if use_fake_streaming:
-        return await build_streaming_response_or_error(fake_stream_generator())
+        return await build_streaming_response_or_error(
+            fake_stream_generator(), error_protocol="anthropic"
+        )
     elif use_anti_truncation:
         log.info("Enabling anti-truncation streaming feature")
-        return await build_streaming_response_or_error(anti_truncation_generator())
+        return await build_streaming_response_or_error(
+            anti_truncation_generator(), error_protocol="anthropic"
+        )
     else:
-        return await build_streaming_response_or_error(normal_stream_generator())
+        return await build_streaming_response_or_error(
+            normal_stream_generator(), error_protocol="anthropic"
+        )
 
 
 @router.post("/v1/messages/count_tokens")

@@ -1,0 +1,677 @@
+function getCredentialModalContext(pathId, manager) {
+
+    const context = AppState.credentialCardIndex[pathId] || {};
+    const resolvedManager = context.managerType === 'primary' ? AppState.primaryCreds : manager;
+
+    if (context.filename) {
+
+        return { ...context, filename: context.filename, manager: resolvedManager };
+
+    }
+
+    const details = document.getElementById('details-' + pathId)
+        || document.getElementById('errors-' + pathId)
+        || document.getElementById('quota-' + pathId);
+
+    const filename = details?.querySelector('[data-filename]')?.getAttribute('data-filename') || '';
+
+    return { filename, manager };
+
+}
+
+function buildCredentialContentHtml(filename, content) {
+
+    const rows = renderMessageResultRows([
+        [t('table_filename'), filename],
+        content?.user_email || content?.email ? [t('modal.email'), content.user_email || content.email] : null,
+        content?.project_id ? [t('modal.project_id'), content.project_id] : null,
+        content?.expiry ? [t('modal.expiry'), content.expiry] : null,
+    ].filter(Boolean));
+    const body = JSON.stringify(content, null, 2);
+
+    return `
+        <div class="message-result-panel">
+            <div class="message-result-intro">${escapeHtml(t('modal.credential_payload_intro'))}</div>
+            <div class="message-result-section">
+                <div class="message-result-section-title">${escapeHtml(t('modal.credential_summary'))}</div>
+                <div class="message-result-summary">${rows}</div>
+            </div>
+            <div class="message-result-section">
+                <div class="message-result-section-title">${escapeHtml(t('modal.credential_payload'))}</div>
+                <pre class="message-modal-code">${escapeHtml(body)}</pre>
+            </div>
+        </div>
+    `;
+
+}
+
+function buildCredentialModelsHtml(context) {
+
+    const modelIds = Array.isArray(context.modelIds) ? context.modelIds : [];
+    const rows = renderMessageResultRows([
+        [t('modal.provider'), context.providerName || t('provider_google_ai_studio')],
+        [t('modal.available_models'), modelIds.length],
+    ]);
+    const modelButtons = modelIds.map((modelId) => `
+        <button type="button" class="credential-model-item" data-credential-model="${escapeAttribute(modelId)}" title="${escapeAttribute(t('modal.copy_model_id'))}">
+            ${escapeHtml(modelId)}
+        </button>
+    `).join('');
+
+    return `
+        <div class="message-result-panel credential-model-panel">
+            <div class="message-result-intro">${escapeHtml(t('modal.models_intro'))}</div>
+            <div class="message-result-section">
+                <div class="message-result-section-title">${escapeHtml(t('modal.credential_summary'))}</div>
+                <div class="message-result-summary">${rows}</div>
+            </div>
+            <div class="message-result-section">
+                <div class="message-result-section-title">${escapeHtml(t('modal.model_ids'))}</div>
+                <input type="search" class="credential-model-search" placeholder="${escapeAttribute(t('modal.filter_models'))}" aria-label="${escapeAttribute(t('modal.filter_available_models'))}" autocomplete="off">
+                <div class="credential-model-list">${modelButtons}</div>
+                <div class="modal-empty-state credential-model-empty hidden">${escapeHtml(t('modal.no_models_match'))}</div>
+            </div>
+        </div>
+    `;
+
+}
+
+async function showCredentialModels(pathId) {
+
+    showStatus(t('runtime.loading_models'), 'info');
+
+    try {
+        const context = await loadCredentialModelOptions(pathId);
+        const modelIds = context.modelIds;
+        if (modelIds.length === 0) {
+            showMessageModal(t('available_models_title'), t('no_models_for_credential'), 'info');
+            return;
+        }
+
+        const modal = showMessageModal(
+            t('available_models_title'),
+            buildCredentialModelsHtml({ ...context, modelIds }),
+            'info',
+            { html: true }
+        );
+        const search = modal.querySelector('.credential-model-search');
+        const items = Array.from(modal.querySelectorAll('[data-credential-model]'));
+        const emptyState = modal.querySelector('.credential-model-empty');
+
+        items.forEach((item) => {
+            item.addEventListener('click', () => {
+                copyTextWithStatus(item.getAttribute('data-credential-model'));
+            });
+        });
+
+        search?.addEventListener('input', () => {
+            const query = search.value.trim().toLowerCase();
+            let visibleCount = 0;
+            items.forEach((item) => {
+                const visible = item.textContent.toLowerCase().includes(query);
+                item.hidden = !visible;
+                if (visible) visibleCount += 1;
+            });
+            if (emptyState) emptyState.classList.toggle('hidden', visibleCount > 0);
+        });
+
+    } catch (error) {
+        const message = error.message || t('modal.models_load_failed');
+        showStatus(message, 'error');
+        showMessageModal(t('available_models_title'), message, 'error');
+    }
+
+}
+
+async function loadCredentialModelOptions(pathId) {
+
+    const context = getCredentialModalContext(pathId, AppState.primaryCreds);
+    const { filename, manager } = context;
+    if (!filename || !manager) throw new Error(t('modal.credential_unavailable'));
+
+    const response = await fetch(
+        `${manager.getEndpoint('models')}/${encodeURIComponent(filename)}?${manager.getModeParam()}`,
+        { headers: getAuthHeaders() }
+    );
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+        throw new Error(data.detail || data.error || t('modal.models_load_failed'));
+    }
+
+    return {
+        ...context,
+        modelIds: Array.isArray(data.model_ids) ? data.model_ids : [],
+    };
+
+}
+
+async function showCredentialModelTest(pathId) {
+
+    showStatus(t('runtime.loading_models'), 'info');
+
+    try {
+        const context = await loadCredentialModelOptions(pathId);
+        if (context.modelIds.length === 0) {
+            showMessageModal(
+                t('modal.model_test_title'),
+                t('modal.no_models_available'),
+                'info'
+            );
+            return;
+        }
+
+        const account = context.accountLabel ? ` (${context.accountLabel})` : '';
+        await showModelTestModal(
+            t('modal.model_test_intro', { provider: context.providerName, account }),
+            {
+                title: t('btn_test_model'),
+                label: t('modal.model'),
+                placeholder: t('modal.select_model'),
+                confirmLabel: t('modal.test'),
+                options: context.modelIds.map((modelId) => ({ value: modelId, label: modelId })),
+                onTest: async (model) => {
+                    if (context.manager.type === 'primary') {
+                        return testPrimaryCredential(context.filename, model);
+                    }
+                    return testCredential(context.filename, model);
+                },
+            }
+        );
+    } catch (error) {
+        const message = error.message || t('modal.models_load_failed');
+        showStatus(message, 'error');
+        showMessageModal(t('model_test_title'), message, 'error');
+    }
+
+}
+
+function quotaLevelFromUsedPercentage(usedPercentage) {
+
+    if (usedPercentage >= 90) return 'danger';
+    if (usedPercentage >= 70) return 'warning';
+    if (usedPercentage >= 50) return 'info';
+    return 'success';
+
+}
+
+function formatQuotaNumber(value) {
+
+    const number = Number(value);
+    return Number.isFinite(number) ? number.toLocaleString(getActiveLocale()) : t('modal.unavailable');
+
+}
+
+function formatQuotaResetTime(value) {
+
+    const date = new Date(value || '');
+    if (!Number.isFinite(date.getTime())) return t('quota.reset_unavailable');
+    return date.toLocaleString(undefined, {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+    });
+
+}
+
+function buildAccountBillingQuotaHtml(filename, data, context = {}) {
+
+    const periods = [
+        data.monthly ? { id: 'monthly', label: t('modal.monthly_credits'), ...data.monthly } : null,
+        data.weekly ? { id: 'weekly', label: t('modal.weekly_usage'), ...data.weekly } : null,
+    ].filter(Boolean);
+    const remainingPercentages = periods
+        .map((period) => Number(period.remaining_percentage))
+        .filter(Number.isFinite);
+    const lowestRemaining = remainingPercentages.length ? Math.min(...remainingPercentages) : null;
+    const rows = renderMessageResultRows([
+        [t('modal.provider'), context.providerName || t('provider_grok')],
+        context.accountLabel ? [t('modal.account'), context.accountLabel] : [t('modal.credential'), filename],
+        [t('modal.quota_source'), t('modal.grok_billing')],
+        [t('modal.billing_periods'), periods.length],
+        lowestRemaining !== null ? [t('modal.lowest_remaining'), `${lowestRemaining}%`] : null,
+    ].filter(Boolean));
+
+    const cards = periods.map((period) => {
+        const usedPercentage = Math.max(0, Math.min(100, Number(period.used_percentage) || 0));
+        const remainingPercentage = Math.max(0, Math.min(100, Number(period.remaining_percentage) || 0));
+        const level = quotaLevelFromUsedPercentage(usedPercentage);
+        const usageText = period.id === 'monthly'
+            ? t('modal.credits_used', { used: formatQuotaNumber(period.used), limit: formatQuotaNumber(period.limit) })
+            : t('modal.percent_used', { value: usedPercentage });
+
+        return `
+            <div class="modal-quota-card ${level}">
+                <div class="modal-quota-head">
+                    <div class="modal-quota-model">${escapeHtml(period.label)}</div>
+                    <div class="modal-quota-percent">${escapeHtml(t('modal.percent_left', { value: remainingPercentage }))}</div>
+                </div>
+                <div class="modal-quota-bar">
+                    <div class="modal-quota-bar-value" style="width: ${remainingPercentage}%;"></div>
+                </div>
+                <div class="modal-quota-foot">
+                    <span>${escapeHtml(usageText)}</span>
+                    <span>${escapeHtml(t('quota.resets_at', { time: formatQuotaResetTime(period.reset_time) }))}</span>
+                </div>
+            </div>
+        `;
+    }).join('');
+
+    return `
+        <div class="message-result-panel">
+            <div class="message-result-intro">${escapeHtml(t('modal.grok_quota_intro'))}</div>
+            <div class="message-result-section">
+                <div class="message-result-section-title">${escapeHtml(t('modal.quota_summary'))}</div>
+                <div class="message-result-summary">${rows}</div>
+            </div>
+            <div class="message-result-section">
+                <div class="message-result-section-title">${escapeHtml(t('modal.billing_periods'))}</div>
+                <div class="modal-quota-grid">${cards}</div>
+            </div>
+        </div>
+    `;
+
+}
+
+function buildAccountRateLimitQuotaHtml(filename, data, context = {}) {
+
+    const windows = Array.isArray(data.windows) ? data.windows : [];
+    const remainingPercentages = windows
+        .map((windowData) => Number(windowData.remaining_percentage))
+        .filter(Number.isFinite);
+    const lowestRemaining = remainingPercentages.length ? Math.min(...remainingPercentages) : null;
+    const rawPlan = String(data.plan || 'unknown').trim().replace(/[_-]+/g, ' ');
+    const plan = rawPlan.replace(/\b\w/g, (character) => character.toUpperCase());
+    const availableResetCredits = Number(data.reset_credits?.available_count);
+    const hasReviewWindows = windows.some((windowData) => String(windowData.id || '').startsWith('review_'));
+    const rows = renderMessageResultRows([
+        [t('modal.provider'), context.providerName || 'Codex'],
+        context.accountLabel ? [t('modal.account'), context.accountLabel] : [t('modal.credential'), filename],
+        [t('modal.plan'), plan || t('modal.unknown')],
+        [t('modal.usage_windows'), windows.length],
+        lowestRemaining !== null ? [t('modal.lowest_remaining'), `${lowestRemaining}%`] : null,
+        Number.isFinite(availableResetCredits)
+            ? [t('modal.reset_credits'), Math.max(0, availableResetCredits)]
+            : null,
+        [t('modal.standard_limit'), data.limit_reached ? t('modal.reached') : t('modal.available')],
+        hasReviewWindows
+            ? [t('modal.code_review_limit'), data.review_limit_reached ? t('modal.reached') : t('modal.available')]
+            : null,
+    ].filter(Boolean));
+
+    const cards = windows.map((windowData) => {
+        const usedPercentage = Math.max(0, Math.min(100, Number(windowData.used_percentage) || 0));
+        const remainingPercentage = Math.max(
+            0,
+            Math.min(100, Number(windowData.remaining_percentage) || 0)
+        );
+        const level = quotaLevelFromUsedPercentage(usedPercentage);
+        const resetTime = formatQuotaResetTime(windowData.reset_time);
+
+        return `
+            <div class="modal-quota-card ${level}">
+                <div class="modal-quota-head">
+                    <div class="modal-quota-model">${escapeHtml(windowData.label || t('modal.usage_limit'))}</div>
+                    <div class="modal-quota-percent">${escapeHtml(t('modal.percent_left', { value: remainingPercentage }))}</div>
+                </div>
+                <div class="modal-quota-bar">
+                    <div class="modal-quota-bar-value" style="width: ${remainingPercentage}%;"></div>
+                </div>
+                <div class="modal-quota-foot">
+                    <span>${escapeHtml(t('modal.percent_used', { value: usedPercentage }))}</span>
+                    <span>${escapeHtml(windowData.reset_time ? t('quota.resets_at', { time: resetTime }) : resetTime)}</span>
+                </div>
+            </div>
+        `;
+    }).join('');
+
+    return `
+        <div class="message-result-panel">
+            <div class="message-result-intro">${escapeHtml(t('modal.codex_quota_intro'))}</div>
+            <div class="message-result-section">
+                <div class="message-result-section-title">${escapeHtml(t('modal.quota_summary'))}</div>
+                <div class="message-result-summary">${rows}</div>
+            </div>
+            <div class="message-result-section">
+                <div class="message-result-section-title">${escapeHtml(t('modal.usage_windows'))}</div>
+                <div class="modal-quota-grid">${cards}</div>
+            </div>
+        </div>
+    `;
+
+}
+
+function buildCredentialQuotaHtml(filename, data, context = {}) {
+
+    if (data?.quota_type === 'account_billing') {
+        return buildAccountBillingQuotaHtml(filename, data, context);
+    }
+
+    if (data?.quota_type === 'account_rate_limits') {
+        return buildAccountRateLimitQuotaHtml(filename, data, context);
+    }
+
+    const models = data.models || {};
+    const entries = Object.entries(models);
+    const summary = summarizeCredentialQuota(data);
+    const resetTimes = entries
+        .map(([, quotaData]) => quotaData?.resetTime)
+        .filter(Boolean);
+    const nextReset = resetTimes.length ? resetTimes.sort()[0] : '';
+    const rows = renderMessageResultRows([
+        [t('modal.provider'), context.providerName || t('provider_antigravity')],
+        context.email ? [t('modal.account'), context.email] : [t('modal.credential'), filename],
+        [t('modal.tracked_models'), entries.length],
+        summary.label ? [t('modal.average_remaining'), summary.label] : null,
+        nextReset ? [t('quota.next_reset'), nextReset] : null,
+    ].filter(Boolean));
+
+    if (entries.length === 0) {
+
+        return `
+            <div class="message-result-panel">
+                <div class="message-result-intro">${escapeHtml(t('modal.no_quota_intro'))}</div>
+                <div class="message-result-section">
+                    <div class="message-result-section-title">${escapeHtml(t('modal.quota_summary'))}</div>
+                    <div class="message-result-summary">${rows}</div>
+                </div>
+                <div class="modal-empty-state">${escapeHtml(t('status_no_quota_info'))}</div>
+            </div>
+        `;
+
+    }
+
+    const cards = entries.map(([modelName, quotaData]) => {
+
+        const remainingFraction = Number(quotaData.remaining || 0);
+        const resetTime = quotaData.resetTime || 'N/A';
+        const usedPercentage = Math.max(0, Math.min(100, Math.round((1 - remainingFraction) * 100)));
+        const remainingPercentage = Math.max(0, Math.min(100, Math.round(remainingFraction * 100)));
+        const level = quotaLevelFromUsedPercentage(usedPercentage);
+
+        return `
+            <div class="modal-quota-card ${level}">
+                <div class="modal-quota-head">
+                    <div class="modal-quota-model" title="${escapeAttribute(modelName)}">${escapeHtml(modelName)}</div>
+                    <div class="modal-quota-percent">${escapeHtml(t('modal.percent_left', { value: remainingPercentage }))}</div>
+                </div>
+                <div class="modal-quota-bar">
+                    <div class="modal-quota-bar-value" style="width: ${remainingPercentage}%;"></div>
+                </div>
+                <div class="modal-quota-foot">
+                    <span>${escapeHtml(t('modal.percent_used', { value: usedPercentage }))}</span>
+                    <span>${escapeHtml(resetTime !== 'N/A' ? t('quota.reset_at', { time: resetTime }) : t('quota.reset_unavailable'))}</span>
+                </div>
+            </div>
+        `;
+
+    }).join('');
+
+    return `
+        <div class="message-result-panel">
+            <div class="message-result-intro">${escapeHtml(t('modal.model_quota_intro'))}</div>
+            <div class="message-result-section">
+                <div class="message-result-section-title">${escapeHtml(t('modal.quota_summary'))}</div>
+                <div class="message-result-summary">${rows}</div>
+            </div>
+            <div class="message-result-section">
+                <div class="message-result-section-title">${escapeHtml(t('modal.model_quota'))}</div>
+                <div class="modal-quota-grid">${cards}</div>
+            </div>
+        </div>
+    `;
+
+}
+
+function summarizeCredentialQuota(data) {
+
+    if (data?.quota_type === 'account_billing') {
+        const periods = [data.monthly, data.weekly].filter(Boolean);
+        const remainingValues = periods
+            .map((period) => Number(period.remaining_percentage))
+            .filter(Number.isFinite);
+        if (!remainingValues.length) return { level: 'muted', label: t('modal.no_quota') };
+        const remainingPercentage = Math.min(...remainingValues);
+        return {
+            level: quotaLevelFromUsedPercentage(100 - remainingPercentage),
+            label: t('modal.percent_left', { value: remainingPercentage }),
+            periodCount: periods.length,
+        };
+    }
+
+    if (data?.quota_type === 'account_rate_limits') {
+        const windows = Array.isArray(data.windows) ? data.windows : [];
+        const remainingValues = windows
+            .map((windowData) => Number(windowData.remaining_percentage))
+            .filter(Number.isFinite);
+        if (!remainingValues.length) return { level: 'muted', label: t('modal.no_quota') };
+        const remainingPercentage = Math.min(...remainingValues);
+        return {
+            level: quotaLevelFromUsedPercentage(100 - remainingPercentage),
+            label: t('modal.percent_left', { value: remainingPercentage }),
+            windowCount: windows.length,
+        };
+    }
+
+    const models = data?.models || {};
+    const entries = Object.entries(models);
+
+    if (!entries.length) {
+
+        return {
+            level: 'muted',
+            label: t('modal.no_quota'),
+        };
+
+    }
+
+    let remainingTotal = 0;
+
+    entries.forEach(([, quotaData]) => {
+
+        const remainingFraction = Number(quotaData?.remaining || 0);
+        const remainingPercentage = Math.max(0, Math.min(100, Math.round(remainingFraction * 100)));
+
+        remainingTotal += remainingPercentage;
+
+    });
+
+    const averageRemaining = Math.round(remainingTotal / entries.length);
+    const usedPercentage = 100 - averageRemaining;
+    const level = quotaLevelFromUsedPercentage(usedPercentage);
+
+    return {
+        level,
+        label: t('modal.percent_left', { value: averageRemaining }),
+        modelCount: entries.length,
+    };
+
+}
+
+function describeCredentialQuotaPreview(summary) {
+
+    if (summary.modelCount) {
+        return t('modal.average_quota_preview', { quota: summary.label, count: summary.modelCount });
+    }
+
+    if (summary.periodCount > 1) {
+        return t('modal.lowest_billing_preview', { quota: summary.label, count: summary.periodCount });
+    }
+
+    if (summary.periodCount === 1) {
+        return t('modal.billing_preview', { quota: summary.label });
+    }
+
+    if (summary.windowCount > 1) {
+        return t('modal.lowest_window_preview', { quota: summary.label, count: summary.windowCount });
+    }
+
+    if (summary.windowCount === 1) {
+        return t('modal.window_preview', { quota: summary.label });
+    }
+
+    return t('btn_view_quota_title');
+
+}
+
+function renderCredentialQuotaPreview(pathId, filename, managerType) {
+
+    if (managerType !== 'primary') return '';
+
+    const cached = AppState.quotaPreviewCache[filename] || {};
+    const chipState = cached.loading
+        ? { level: 'loading', label: t('quota_preview_loading'), title: t('card_loading_quota') }
+        : cached.error
+            ? { level: 'danger', label: t('quota_unavailable'), title: cached.error }
+            : cached.summary
+                ? {
+                    level: cached.summary.level,
+                    label: cached.summary.label,
+                    title: describeCredentialQuotaPreview(cached.summary),
+                }
+                : { level: 'loading', label: t('quota_preview_loading'), title: t('card_loading_quota') };
+
+    return `
+        <button type="button" class="cred-quota-preview ${chipState.level}" id="quota-preview-${pathId}" data-quota-preview title="${escapeAttribute(chipState.title)}">
+            <span>${escapeHtml(chipState.label)}</span>
+        </button>
+    `;
+
+}
+
+function updateCredentialQuotaPreview(pathId, filename) {
+
+    updateCredentialSubscriptionBadge(pathId, filename);
+
+    const chip = document.getElementById(`quota-preview-${pathId}`);
+
+    if (!chip) return;
+
+    chip.outerHTML = renderCredentialQuotaPreview(pathId, filename, 'primary');
+    const updatedChip = document.getElementById(`quota-preview-${pathId}`);
+    if (updatedChip) {
+        updatedChip.addEventListener('click', () => loadPrimaryQuotaPreview(pathId));
+    }
+
+}
+
+function updateCredentialSubscriptionBadge(pathId, filename) {
+
+    const badge = document.getElementById(`subscription-plan-${pathId}`);
+    if (!badge) return;
+
+    const cached = AppState.quotaPreviewCache[filename] || {};
+    const cardContext = AppState.credentialCardIndex[pathId] || {};
+    const plan = cached.data?.plan || cardContext.subscriptionPlan;
+    const kind = cached.data?.plan ? 'plan' : (cardContext.subscriptionKind || 'plan');
+    badge.outerHTML = renderCredentialSubscriptionBadge(pathId, plan, kind);
+
+}
+
+function renderCredentialErrorDetails(parsedMsg) {
+
+    const error = parsedMsg?.error;
+    if (!error) return '';
+
+    const rows = [];
+
+    if (error.status) rows.push([t('modal.status'), error.status]);
+
+    if (Array.isArray(error.details)) {
+
+        error.details.forEach((detail, index) => {
+
+            if (detail['@type']) rows.push([`${t('modal.type')} ${index + 1}`, detail['@type']]);
+            if (detail.reason) rows.push([`${t('modal.reason')} ${index + 1}`, detail.reason]);
+
+            if (detail.metadata && typeof detail.metadata === 'object') {
+
+                Object.entries(detail.metadata).forEach(([key, value]) => {
+                    rows.push([key, String(value)]);
+                });
+
+            }
+
+        });
+
+    }
+
+    if (!rows.length) return '';
+
+    return `<div class="message-error-meta">${renderMessageResultRows(rows)}</div>`;
+
+}
+
+function buildCredentialErrorsHtml(filename, data) {
+
+    const errorCodes = data.error_codes || [];
+    const errorMessages = data.error_messages || {};
+    const rows = renderMessageResultRows([
+        [t('table_filename'), filename],
+        [t('modal.stored_errors'), errorCodes.length],
+    ]);
+
+    if (errorCodes.length === 0) {
+
+        return `
+            <div class="message-result-panel">
+                <div class="message-result-intro">${escapeHtml(t('modal.no_errors_intro'))}</div>
+                <div class="message-result-section">
+                    <div class="message-result-section-title">${escapeHtml(t('modal.error_summary'))}</div>
+                    <div class="message-result-summary">${rows}</div>
+                </div>
+                <div class="modal-empty-state success">
+                    <strong>${escapeHtml(t('status_no_errors'))}</strong>
+                    <span>${escapeHtml(t('status_credential_normal'))}</span>
+                </div>
+            </div>
+        `;
+
+    }
+
+    const errorCards = errorCodes.map((errorCode) => {
+
+        const messageStr = errorMessages[errorCode] || t('no_details_available');
+        let displayMsg = messageStr;
+        let detailsHtml = '';
+
+        try {
+
+            const parsedMsg = JSON.parse(messageStr);
+
+            if (parsedMsg?.error?.message) displayMsg = parsedMsg.error.message;
+
+            detailsHtml = renderCredentialErrorDetails(parsedMsg);
+
+        } catch {
+
+            detailsHtml = '';
+
+        }
+
+        return `
+            <div class="message-error-card">
+                <div class="message-error-title">${escapeHtml(t('error_code_prefix'))} ${escapeHtml(String(errorCode))}</div>
+                <div class="message-error-copy">${highlightHttpLinks(escapeHtml(displayMsg))}</div>
+                ${detailsHtml}
+            </div>
+        `;
+
+    }).join('');
+
+    return `
+        <div class="message-result-panel">
+            <div class="message-result-intro">${escapeHtml(t('modal.errors_intro'))}</div>
+            <div class="message-result-section">
+                <div class="message-result-section-title">${escapeHtml(t('modal.error_summary'))}</div>
+                <div class="message-result-summary">${rows}</div>
+            </div>
+            <div class="message-result-section">
+                <div class="message-result-section-title">${escapeHtml(t('error_details'))}</div>
+                <div class="message-error-list">${errorCards}</div>
+            </div>
+        </div>
+    `;
+
+}

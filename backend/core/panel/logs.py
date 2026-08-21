@@ -3,14 +3,15 @@ import datetime
 import os
 from urllib.parse import urlsplit
 
+from core.i18n import LocalizedJSONResponse as JSONResponse
 from core.utils import PANEL_SESSION_COOKIE, verify_panel_token, verify_panel_token_value
 from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect
-from fastapi.responses import JSONResponse, StreamingResponse
+from fastapi.responses import StreamingResponse
 from log import log, redact_text
 from paths import DEFAULT_LOG_FILE
 from starlette.websockets import WebSocketState
 
-from .utils import ConnectionManager
+from .utils import ConnectionManager, internal_server_error
 
 router = APIRouter(prefix="/api/logs", tags=["logs"])
 
@@ -76,13 +77,13 @@ async def clear_logs(token: str = Depends(verify_panel_token)):
                 )
             except Exception as e:
                 log.error(f"Failed to clear log file: {e}")
-                raise HTTPException(status_code=500, detail=f"Failed to clear log file: {str(e)}")
+                raise internal_server_error() from e
         else:
             return JSONResponse(content={"message": "Log file does not exist."})
 
     except Exception as e:
         log.error(f"Failed to clear log file: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to clear log file: {str(e)}")
+        raise internal_server_error() from e
 
 
 @router.get("/download")
@@ -117,7 +118,7 @@ async def download_logs(token: str = Depends(verify_panel_token)):
         raise
     except Exception as e:
         log.error(f"Failed to download log file: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to download log file: {str(e)}")
+        raise internal_server_error() from e
 
 
 @router.websocket("/stream")
@@ -139,7 +140,7 @@ async def websocket_logs(websocket: WebSocket):
     except HTTPException as e:
         close_code = 4401 if e.status_code in {401, 428} else 4403
         await websocket.close(code=close_code, reason=str(e.detail))
-        log.warning("WebSocket connection denied: token verification failed")
+        log.warning("WebSocket connection denied: token verification failed.")
         return
     except Exception as e:
         await websocket.close(code=1011, reason="Authentication error")

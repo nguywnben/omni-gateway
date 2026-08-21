@@ -10,7 +10,23 @@ BACKEND_DIR = Path(__file__).resolve().parents[1]
 if str(BACKEND_DIR) not in sys.path:
     sys.path.insert(0, str(BACKEND_DIR))
 
-from core.panel.root import serve_control_panel
+from core.panel.root import (
+    CONSOLE_FRAGMENT_PATHS,
+    CONSOLE_SCRIPT_ASSETS,
+    CONSOLE_STYLE_ASSETS,
+    _console_asset_version,
+    _read_console_bundle,
+    serve_control_panel,
+)
+
+FRONTEND_JS = BACKEND_DIR.parent / "frontend" / "js"
+
+
+def read_scripts(*relative_paths: str) -> str:
+    return "\n".join(
+        (FRONTEND_JS / relative_path).read_text(encoding="utf-8")
+        for relative_path in relative_paths
+    )
 
 
 class ControlPanelAssetTests(unittest.TestCase):
@@ -19,19 +35,274 @@ class ControlPanelAssetTests(unittest.TestCase):
         body = response.body.decode("utf-8")
 
         self.assertEqual(response.status_code, 200)
-        self.assertRegex(body, r"/frontend/control-panel\.css\?v=\d+")
-        for asset in (
-            "core",
-            "ui",
-            "console",
-            "credentials",
-            "settings",
-            "dashboard",
-        ):
-            self.assertRegex(body, rf"/frontend/js/{asset}\.js\?v=\d+")
+        self.assertRegex(body, r"/frontend/console\.css\?v=\d+")
+        self.assertRegex(body, r"/frontend/console\.js\?v=\d+")
+        self.assertNotIn("/frontend/vendor/", body)
+        self.assertNotIn("<!-- include:fragments/", body)
+        self.assertNotIn("/frontend/control-panel.css", body)
         self.assertNotIn("/frontend/control-panel.js", body)
         self.assertNotIn("control_panel", body)
         self.assertNotIn("common.js", body)
+
+    def test_console_manifest_covers_every_fragment_and_local_asset(self):
+        response = serve_control_panel()
+        body = response.body.decode("utf-8")
+        frontend_dir = BACKEND_DIR.parent / "frontend"
+
+        for relative_path in CONSOLE_FRAGMENT_PATHS:
+            self.assertTrue((frontend_dir / "fragments" / relative_path).is_file())
+        for relative_path in (
+            *CONSOLE_STYLE_ASSETS,
+            *CONSOLE_SCRIPT_ASSETS,
+        ):
+            self.assertTrue((frontend_dir / relative_path).is_file())
+
+        asset_version = _console_asset_version()
+        style_bundle = _read_console_bundle(CONSOLE_STYLE_ASSETS, asset_version, "\n")
+        script_bundle = _read_console_bundle(CONSOLE_SCRIPT_ASSETS, asset_version, "\n;\n")
+        self.assertIn(":root", style_bundle)
+        self.assertIn("@media", style_bundle)
+        self.assertIn("function applyLanguage", script_bundle)
+        self.assertIn("function toggleMobileMenu", script_bundle)
+        self.assertNotIn("/frontend/js/core/state.js", body)
+        self.assertNotIn("/frontend/css/foundation.css", body)
+
+        for legacy_path in (
+            "control-panel.html",
+            "control-panel.css",
+            "js/core.js",
+            "js/ui.js",
+            "js/console.js",
+            "js/credentials.js",
+            "js/settings.js",
+            "js/dashboard.js",
+        ):
+            self.assertFalse((frontend_dir / legacy_path).exists())
+
+    def test_sidebar_active_state_uses_data_tab_contract(self):
+        response = serve_control_panel()
+        body = response.body.decode("utf-8")
+        navigation_script = read_scripts("core/navigation.js")
+
+        for tab_name in (
+            "dashboard",
+            "pool",
+            "models",
+            "providers",
+            "config",
+            "logs",
+            "about",
+        ):
+            self.assertIn(
+                f'data-ui-action="switch-tab" data-tab="{tab_name}"',
+                body,
+            )
+
+        self.assertIn(
+            'document.querySelector(`.tab[data-tab="${tabName}"]`)',
+            navigation_script,
+        )
+        self.assertNotIn(".tab[onclick*=", navigation_script)
+        self.assertIn("const TAB_DATA_CACHE_MS = 30000", navigation_script)
+        self.assertIn("AppState.tabLoadPromises[tabName]", navigation_script)
+        self.assertIn("void triggerTabDataLoad(tabName)", navigation_script)
+
+        responsive_styles = (BACKEND_DIR.parent / "frontend" / "css" / "responsive.css").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("scrollbar-gutter: stable", responsive_styles)
+
+    def test_dashboard_separates_historical_credential_usage(self):
+        response = serve_control_panel()
+        body = response.body.decode("utf-8")
+        dashboard_script = read_scripts("features/dashboard.js")
+
+        self.assertIn('id="historicalUsageSection"', body)
+        self.assertIn('id="historicalUsageList"', body)
+        self.assertIn("function getCurrentUsageEntriesWithTraffic()", dashboard_script)
+        self.assertIn("function getHistoricalUsageEntriesWithTraffic()", dashboard_script)
+        self.assertIn("Boolean(stats.is_historical || stats.is_deleted)", dashboard_script)
+        self.assertIn(
+            "for (const [filename, stats] of getCurrentUsageEntriesWithTraffic())",
+            dashboard_script,
+        )
+
+    def test_provider_catalog_uses_pagination(self):
+        response = serve_control_panel()
+        body = response.body.decode("utf-8")
+        navigation_script = read_scripts("features/navigation.js")
+        provider_styles = (
+            BACKEND_DIR.parent / "frontend" / "css" / "providers-and-models.css"
+        ).read_text(encoding="utf-8")
+
+        for element_id in (
+            "providerCatalog",
+            "providerCatalogPagination",
+            "providerCatalogPrevBtn",
+            "providerCatalogNextBtn",
+            "providerCatalogPaginationInfo",
+        ):
+            self.assertIn(element_id, body)
+        self.assertIn("provider-workspace-header", body)
+        self.assertIn("change-provider-catalog-page", body)
+        self.assertIn("PROVIDER_CATALOG_PAGE_SIZE = 6", navigation_script)
+        self.assertIn("function changeProviderCatalogPage(delta)", navigation_script)
+        self.assertIn("function updateProviderCatalogPagination()", navigation_script)
+        self.assertIn("grid-template-columns: repeat(3, minmax(0, 1fr))", provider_styles)
+        self.assertIn(".provider-workspace-header", provider_styles)
+        self.assertIn(
+            ".provider-catalog-toolbar strong,\n.provider-catalog-search-label",
+            provider_styles,
+        )
+
+    def test_xai_provider_ui_references_existing_assets_and_endpoints(self):
+        response = serve_control_panel()
+        body = response.body.decode("utf-8")
+        settings_script = read_scripts(
+            "features/provider-settings-shared.js",
+            "features/google-ai-studio-settings.js",
+            "features/xai-settings.js",
+            "features/antigravity-settings.js",
+        )
+        upload_script = read_scripts("core/upload-manager.js", "core/state.js")
+        provider_assets = BACKEND_DIR.parent / "frontend" / "assets" / "providers"
+        self.assertTrue((provider_assets / "grok-build-logo.png").is_file())
+        self.assertTrue((provider_assets / "spacexai-console-logo.png").is_file())
+        for element_id in (
+            "providerSelectorGrok",
+            "providerWorkspaceGrok",
+            "providerSelectorXaiConsole",
+            "providerWorkspaceXaiConsole",
+            "grokUploadArea",
+            "grokFileInput",
+            "xaiConsoleUploadArea",
+            "xaiConsoleFileInput",
+        ):
+            self.assertIn(f'id="{element_id}"', body)
+        self.assertIn("/frontend/assets/providers/grok-build-logo.png", body)
+        self.assertIn("/frontend/assets/providers/spacexai-console-logo.png", body)
+        self.assertIn('<strong class="provider-name">Grok Build</strong>', body)
+        self.assertIn('<strong class="provider-name">SpaceXAI Console</strong>', body)
+        self.assertIn(
+            "./api/providers/xai/credentials/import?credential_type=oauth",
+            upload_script,
+        )
+        self.assertIn(
+            "./api/providers/xai/credentials/import?credential_type=api_key",
+            upload_script,
+        )
+        for endpoint in (
+            "./api/providers/xai/config",
+            "./api/providers/xai/config/reset",
+            "./api/providers/xai/credentials",
+            "./api/providers/xai/oauth/start",
+            "./api/providers/xai/oauth/complete",
+        ):
+            self.assertIn(endpoint, settings_script)
+        self.assertNotIn("./api/providers/xai/oauth/callback", settings_script)
+        self.assertIn('id="xaiAuthorizationCode"', body)
+        self.assertIn('data-i18n="provider.authorization_code"', body)
+        self.assertNotIn('id="xaiCallbackUrl"', body)
+        self.assertIn(
+            "authorizationLink.textContent = data.auth_url || t('runtime.authorization_unavailable')",
+            settings_script,
+        )
+        self.assertNotIn("Open xAI authorization", body)
+        self.assertNotIn("Open xAI authorization", settings_script)
+        self.assertNotIn(">xAI<", body)
+        self.assertNotIn("name: 'xAI'", upload_script)
+        self.assertIn('<option value="xai">Grok Build</option>', body)
+
+    def test_openai_provider_ui_references_existing_assets_and_endpoints(self):
+        response = serve_control_panel()
+        body = response.body.decode("utf-8")
+        settings_script = read_scripts("features/openai-settings.js")
+        upload_script = read_scripts("core/upload-manager.js", "core/state.js")
+        provider_assets = BACKEND_DIR.parent / "frontend" / "assets" / "providers"
+        self.assertTrue((provider_assets / "codex-logo.png").is_file())
+        self.assertTrue((provider_assets / "openai-platform-logo.png").is_file())
+        for element_id in (
+            "providerCatalogSearch",
+            "providerSelectorCodex",
+            "providerWorkspaceCodex",
+            "providerSelectorOpenAiPlatform",
+            "providerWorkspaceOpenAiPlatform",
+            "codexUploadArea",
+            "openaiPlatformUploadArea",
+        ):
+            self.assertIn(f'id="{element_id}"', body)
+        self.assertIn("/frontend/assets/providers/codex-logo.png", body)
+        self.assertIn("/frontend/assets/providers/openai-platform-logo.png", body)
+        self.assertIn('<strong class="provider-name">Codex</strong>', body)
+        self.assertIn('<strong class="provider-name">OpenAI Platform</strong>', body)
+        self.assertIn(
+            'id="codexUserCode" class="endpoint-code-card device-code-button"',
+            body,
+        )
+        self.assertIn('data-ui-action="copy-codex-device-code"', body)
+        self.assertNotIn('data-copy-target="codexUserCode"', body)
+        self.assertIn(
+            'data-ui-action="copy-codex-verification-url">Copy</button>',
+            body,
+        )
+        self.assertIn('class="device-verification-row"', body)
+        self.assertNotIn('class="copy-field-row"', body)
+        self.assertIn("./api/providers/openai/codex/oauth/start", settings_script)
+        self.assertIn("./api/providers/openai/platform/credentials", settings_script)
+        self.assertIn("codexUsageUrl: 'codex_usage_url'", settings_script)
+        self.assertIn('id="codexUsageUrl"', body)
+        self.assertIn(
+            "./api/providers/openai/credentials/import?credential_type=oauth",
+            upload_script,
+        )
+        self.assertIn(
+            "./api/providers/openai/credentials/import?credential_type=api_key",
+            upload_script,
+        )
+
+    def test_credential_verification_uses_provider_neutral_route(self):
+        credential_manager_script = read_scripts("core/credential-manager.js")
+        credential_script = read_scripts("features/credential-diagnostics.js")
+
+        self.assertIn("./api/credentials/verify", credential_manager_script)
+        self.assertIn("./api/credentials/verify/", credential_script)
+        self.assertNotIn("./api/credentials/verify-project", credential_manager_script)
+        self.assertNotIn("./api/credentials/verify-project", credential_script)
+
+    def test_grok_build_oauth_uses_the_shared_quota_dialog(self):
+        card_script = read_scripts("ui/credential-cards.js")
+        dialog_script = read_scripts("ui/credential-dialogs.js")
+
+        self.assertIn("isGrokOAuth", card_script)
+        self.assertIn("isCodexOAuth", card_script)
+        self.assertIn("isAntigravity || isGrokOAuth || isCodexOAuth", card_script)
+        self.assertIn("const quotaPreview = supportsQuotaPreview", card_script)
+        self.assertIn("data?.quota_type === 'account_billing'", dialog_script)
+        self.assertIn("t('modal.billing_periods')", dialog_script)
+        self.assertIn("t('modal.lowest_billing_preview'", dialog_script)
+        self.assertIn("data?.quota_type === 'account_rate_limits'", dialog_script)
+        self.assertIn("t('modal.usage_windows')", dialog_script)
+
+    def test_subscription_plans_are_rendered_as_credential_badges(self):
+        card_script = read_scripts("ui/credential-cards.js")
+        dialog_script = read_scripts("ui/credential-dialogs.js")
+
+        self.assertIn("renderCredentialSubscriptionBadge", card_script)
+        self.assertIn("subscription-plan-${pathId}", card_script)
+        self.assertIn("t('credential_badge_plan'", card_script)
+        self.assertIn("t('credential_badge_tier'", card_script)
+        self.assertIn("updateCredentialSubscriptionBadge", dialog_script)
+        self.assertIn("cached.data?.plan", dialog_script)
+        self.assertIn("cardContext.subscriptionPlan", dialog_script)
+
+    def test_all_supported_credentials_have_an_authentication_badge(self):
+        card_script = read_scripts("ui/credential-cards.js")
+
+        self.assertIn("getCredentialAuthenticationType", card_script)
+        self.assertIn("'google_antigravity', 'grok', 'codex'", card_script)
+        self.assertIn("'google_ai_studio', 'xai_console', 'openai_platform'", card_script)
+        self.assertIn("renderCredentialAuthenticationBadge", card_script)
+        self.assertIn("${authenticationType}", card_script)
 
 
 if __name__ == "__main__":

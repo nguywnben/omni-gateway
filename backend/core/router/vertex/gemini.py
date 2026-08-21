@@ -1,4 +1,5 @@
 from core.models import GeminiRequest, model_to_dict
+from core.router.protocol_errors import adapt_protocol_error_response
 from core.router.stream_passthrough import build_streaming_response_or_error
 from core.token_estimator import estimate_input_tokens
 from core.utils import authenticate_gemini_flexible
@@ -34,8 +35,7 @@ async def generate_content(
     from core.api.vertex import non_stream_request
 
     response = await non_stream_request(body=api_request)
-
-    return response
+    return adapt_protocol_error_response(response, "gemini")
 
 
 @router.post("/vertex/v1beta/models/{model:path}:streamGenerateContent")
@@ -69,19 +69,22 @@ async def stream_generate_content(
             if isinstance(chunk, (str, bytes)):
                 yield chunk if isinstance(chunk, bytes) else chunk.encode("utf-8")
 
-    return await build_streaming_response_or_error(stream_generator())
+    return await build_streaming_response_or_error(stream_generator(), error_protocol="gemini")
 
 
 @router.post("/vertex/v1beta/models/{model:path}:countTokens")
 @router.post("/vertex/v1/models/{model:path}:countTokens")
 async def count_tokens(
-    request: Request = None,
-    api_key: str = Depends(authenticate_gemini_flexible),
+    request: Request,
+    _api_key: str = Depends(authenticate_gemini_flexible),
 ):
     try:
         request_data = await request.json()
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=f"Invalid JSON: {str(e)}")
+    except Exception as exc:
+        raise HTTPException(
+            status_code=400,
+            detail="The request body must contain valid JSON.",
+        ) from exc
 
     payload = request_data.get("generateContentRequest", request_data)
     return JSONResponse(content={"totalTokens": estimate_input_tokens(payload)})

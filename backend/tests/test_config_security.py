@@ -90,6 +90,14 @@ class ConfigResponseSecurityTests(unittest.TestCase):
 
 
 class RuntimePolicyConfigTests(unittest.IsolatedAsyncioTestCase):
+    def setUp(self):
+        self.cache_patch = patch.object(config, "_config_cache", {})
+        self.initialized_patch = patch.object(config, "_config_initialized", True)
+        self.cache_patch.start()
+        self.initialized_patch.start()
+        self.addCleanup(self.initialized_patch.stop)
+        self.addCleanup(self.cache_patch.stop)
+
     async def test_upstream_timeout_is_bounded(self):
         with patch.dict(os.environ, {"UPSTREAM_TIMEOUT_SECONDS": "1"}):
             self.assertEqual(await config.get_upstream_timeout_seconds(), 5.0)
@@ -127,9 +135,12 @@ class AccessCredentialUpdateTests(unittest.IsolatedAsyncioTestCase):
             panel_password_confirm="new-panel-password",
         )
 
-        with patch(
-            "core.panel.config_routes.verify_password",
-            new=AsyncMock(return_value=False),
+        with (
+            patch.dict(os.environ, {"PANEL_PASSWORD": ""}),
+            patch(
+                "core.panel.config_routes.verify_password",
+                new=AsyncMock(return_value=False),
+            ),
         ):
             with self.assertRaises(HTTPException) as context:
                 await update_access_credentials(
@@ -149,6 +160,7 @@ class AccessCredentialUpdateTests(unittest.IsolatedAsyncioTestCase):
         )
 
         with (
+            patch.dict(os.environ, {"PANEL_PASSWORD": ""}),
             patch(
                 "core.panel.config_routes.verify_password",
                 new=AsyncMock(return_value=True),
@@ -189,9 +201,12 @@ class AccessCredentialUpdateTests(unittest.IsolatedAsyncioTestCase):
             panel_password_confirm="different-password",
         )
 
-        with patch(
-            "core.panel.config_routes.verify_password",
-            new=AsyncMock(return_value=True),
+        with (
+            patch.dict(os.environ, {"PANEL_PASSWORD": ""}),
+            patch(
+                "core.panel.config_routes.verify_password",
+                new=AsyncMock(return_value=True),
+            ),
         ):
             with self.assertRaises(HTTPException) as context:
                 await update_access_credentials(

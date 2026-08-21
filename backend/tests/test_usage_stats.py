@@ -4,16 +4,19 @@ from __future__ import annotations
 
 import sqlite3
 import sys
-import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import AsyncMock, patch
 
 BACKEND_DIR = Path(__file__).resolve().parents[1]
+TESTS_DIR = Path(__file__).resolve().parent
 if str(BACKEND_DIR) not in sys.path:
     sys.path.insert(0, str(BACKEND_DIR))
+if str(TESTS_DIR) not in sys.path:
+    sys.path.insert(0, str(TESTS_DIR))
 
 from core import usage_stats
+from support import workspace_temp_directory
 
 
 class UsageStatsTests(unittest.TestCase):
@@ -26,10 +29,21 @@ class UsageStatsTests(unittest.TestCase):
             usage_stats._provider_display_name("Google Antigravity"),
             "Google Antigravity",
         )
+        self.assertEqual(usage_stats._provider_display_name("xai"), "Grok Build")
+
+    def test_credential_display_names_distinguish_grok_from_xai_console(self):
+        self.assertEqual(
+            usage_stats._credential_provider_display_name("xai", "oauth"),
+            "Grok Build",
+        )
+        self.assertEqual(
+            usage_stats._credential_provider_display_name("xai", "api_key"),
+            "SpaceXAI Console",
+        )
 
     def test_record_call_persists_provider_and_compression_metrics(self):
         original_db_path = usage_stats.db_path
-        with tempfile.TemporaryDirectory(dir=Path(__file__).parent) as temp_dir:
+        with workspace_temp_directory() as temp_dir:
             try:
                 usage_stats.db_path = str(Path(temp_dir) / "usage.db")
                 usage_stats.record_call(
@@ -48,13 +62,14 @@ class UsageStatsTests(unittest.TestCase):
                         "latency_ms": 125,
                         "retry_count": 2,
                     },
+                    request_id="request-123",
                 )
 
                 connection = sqlite3.connect(usage_stats.db_path)
                 try:
                     row = connection.execute(
                         """
-                        SELECT input_tokens, output_tokens, total_tokens,
+                        SELECT request_id, input_tokens, output_tokens, total_tokens,
                                estimated_input_tokens, estimated_tokens_saved,
                                compressed_messages, latency_ms, retry_count
                         FROM usage_logs
@@ -63,7 +78,7 @@ class UsageStatsTests(unittest.TestCase):
                 finally:
                     connection.close()
 
-                self.assertEqual(row, (120, 30, 150, 100, 40, 6, 125, 2))
+                self.assertEqual(row, ("request-123", 120, 30, 150, 100, 40, 6, 125, 2))
             finally:
                 usage_stats.db_path = original_db_path
 
@@ -71,7 +86,7 @@ class UsageStatsTests(unittest.TestCase):
 class UsageAggregationTests(unittest.IsolatedAsyncioTestCase):
     async def test_deleted_credential_usage_is_retained_anonymously(self):
         original_db_path = usage_stats.db_path
-        with tempfile.TemporaryDirectory(dir=Path(__file__).parent) as temp_dir:
+        with workspace_temp_directory() as temp_dir:
             try:
                 usage_stats.db_path = str(Path(temp_dir) / "usage.db")
                 usage_stats.record_call(
@@ -109,15 +124,50 @@ class UsageAggregationTests(unittest.IsolatedAsyncioTestCase):
                 self.assertEqual(result[deleted_filename]["credential_label"], "Deleted credential")
                 self.assertEqual(result[deleted_filename]["user_email"], "")
                 self.assertTrue(result[deleted_filename]["is_deleted"])
+                self.assertTrue(result[deleted_filename]["is_historical"])
                 self.assertEqual(result[deleted_filename]["provider"], "google_ai_studio")
                 self.assertEqual(result[deleted_filename]["calls"], 1)
                 self.assertEqual(result[deleted_filename]["total_tokens"], 50)
             finally:
                 usage_stats.db_path = original_db_path
 
+    async def test_unavailable_credential_usage_is_classified_as_historical(self):
+        original_db_path = usage_stats.db_path
+        with workspace_temp_directory() as temp_dir:
+            try:
+                usage_stats.db_path = str(Path(temp_dir) / "usage.db")
+                usage_stats.record_call(
+                    "legacy-account.json",
+                    provider="grok",
+                    token_usage={"totalTokenCount": 25},
+                )
+
+                with (
+                    patch.object(
+                        usage_stats,
+                        "get_credential_usage_metadata",
+                        AsyncMock(return_value={}),
+                    ),
+                    patch.object(
+                        usage_stats,
+                        "get_all_credential_filenames",
+                        AsyncMock(return_value=[]),
+                    ),
+                ):
+                    result = await usage_stats.get_stats_for_period("all")
+
+                record = result["legacy-account.json"]
+                self.assertFalse(record["is_deleted"])
+                self.assertTrue(record["is_historical"])
+                self.assertEqual(record["credential_label"], "Unavailable credential")
+                self.assertEqual(record["provider_name"], "Grok Build")
+                self.assertEqual(record["total_tokens"], 25)
+            finally:
+                usage_stats.db_path = original_db_path
+
     async def test_readded_credential_does_not_reclaim_deleted_history(self):
         original_db_path = usage_stats.db_path
-        with tempfile.TemporaryDirectory(dir=Path(__file__).parent) as temp_dir:
+        with workspace_temp_directory() as temp_dir:
             try:
                 usage_stats.db_path = str(Path(temp_dir) / "usage.db")
                 filename = "google-antigravity-account.json"
@@ -151,12 +201,13 @@ class UsageAggregationTests(unittest.IsolatedAsyncioTestCase):
                 deleted_filename = usage_stats.deleted_usage_filename("google_antigravity")
                 self.assertEqual(result[deleted_filename]["calls"], 1)
                 self.assertTrue(result[deleted_filename]["is_deleted"])
+                self.assertTrue(result[deleted_filename]["is_historical"])
             finally:
                 usage_stats.db_path = original_db_path
 
     async def test_deleted_credentials_are_aggregated_by_provider(self):
         original_db_path = usage_stats.db_path
-        with tempfile.TemporaryDirectory(dir=Path(__file__).parent) as temp_dir:
+        with workspace_temp_directory() as temp_dir:
             try:
                 usage_stats.db_path = str(Path(temp_dir) / "usage.db")
                 usage_stats.record_call("account-a.json", provider="google_antigravity")
@@ -192,7 +243,7 @@ class UsageAggregationTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_usage_records_return_stable_provider_identity(self):
         original_db_path = usage_stats.db_path
-        with tempfile.TemporaryDirectory(dir=Path(__file__).parent) as temp_dir:
+        with workspace_temp_directory() as temp_dir:
             try:
                 usage_stats.db_path = str(Path(temp_dir) / "usage.db")
                 usage_stats.record_call(
@@ -234,7 +285,7 @@ class UsageAggregationTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_period_aggregation_returns_compression_metrics(self):
         original_db_path = usage_stats.db_path
-        with tempfile.TemporaryDirectory(dir=Path(__file__).parent) as temp_dir:
+        with workspace_temp_directory() as temp_dir:
             try:
                 usage_stats.db_path = str(Path(temp_dir) / "usage.db")
                 usage_stats.record_call(

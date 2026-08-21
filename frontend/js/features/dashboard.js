@@ -1,0 +1,604 @@
+// Omni Gateway management console: dashboard.
+
+function formatUsageNumber(value, options = {}) {
+
+    const number = Number(value || 0);
+
+    if (!Number.isFinite(number)) return '0';
+
+    return number.toLocaleString(getActiveLocale(), {
+        maximumFractionDigits: options.decimals ?? 0,
+        minimumFractionDigits: options.decimals ?? 0,
+    });
+
+}
+
+function getUsagePeriodConfig(period = AppState.usagePeriod) {
+
+    const periods = {
+        '1d': {
+            value: '1d',
+            optionLabel: t('one_day'),
+            metricLabel: t('dashboard.period_1d'),
+            title: t('dashboard.breakdown_1d'),
+        },
+        '7d': {
+            value: '7d',
+            optionLabel: t('seven_days'),
+            metricLabel: t('dashboard.period_7d'),
+            title: t('dashboard.breakdown_7d'),
+        },
+        '30d': {
+            value: '30d',
+            optionLabel: t('thirty_days'),
+            metricLabel: t('dashboard.period_30d'),
+            title: t('dashboard.breakdown_30d'),
+        },
+        all: {
+            value: 'all',
+            optionLabel: t('all'),
+            metricLabel: t('dashboard.period_all'),
+            title: t('dashboard.breakdown_all'),
+        },
+    };
+
+    return periods[period] || periods['1d'];
+
+}
+
+function updateUsagePeriodLabels() {
+
+    const periodConfig = getUsagePeriodConfig();
+
+    const periodSelect = document.getElementById('usagePeriodSelect');
+
+    if (periodSelect) periodSelect.value = periodConfig.value;
+
+    const totalCallsLabel = document.getElementById('totalApiCallsLabel');
+
+    if (totalCallsLabel) totalCallsLabel.textContent = t('dashboard.requests_period', {period: periodConfig.metricLabel});
+
+    const totalTokensLabel = document.getElementById('totalTokensLabel');
+
+    if (totalTokensLabel) totalTokensLabel.textContent = t('dashboard.tokens_period', {period: periodConfig.metricLabel});
+
+    const breakdownTitle = document.getElementById('usageBreakdownTitle');
+
+    if (breakdownTitle) breakdownTitle.textContent = periodConfig.title;
+
+    const breakdownDescription = document.getElementById('usageBreakdownDescription');
+
+    if (breakdownDescription) breakdownDescription.textContent = t('dashboard.breakdown_description', {period: periodConfig.metricLabel});
+
+}
+
+function setUsagePeriod(period) {
+
+    const nextPeriod = getUsagePeriodConfig(period).value;
+
+    if (AppState.usagePeriod === nextPeriod) {
+
+        updateUsagePeriodLabels();
+
+        return;
+
+    }
+
+    AppState.usagePeriod = nextPeriod;
+
+    updateUsagePeriodLabels();
+
+    refreshUsageStats();
+
+}
+
+async function refreshUsageStats(options = {}) {
+
+    const loading = document.getElementById('usageLoading');
+
+    const list = document.getElementById('usageList');
+
+    const providerSummary = document.getElementById('usageProviderSummary');
+
+    const historicalSection = document.getElementById('historicalUsageSection');
+
+    const historicalList = document.getElementById('historicalUsageList');
+
+    const statsContainer = document.getElementById('dashboardStats');
+
+    const tableWrapper = document.querySelector('#dashboardTab .usage-table-wrapper');
+
+    const preserveContent = options.preserveContent ?? AppState.usageStatsLoaded;
+
+    updateUsagePeriodLabels();
+
+    try {
+
+        if (loading && !preserveContent) loading.hidden = false;
+
+        if (statsContainer && !preserveContent) statsContainer.setAttribute('aria-busy', 'true');
+
+        if (tableWrapper && !preserveContent) tableWrapper.hidden = true;
+
+        if (!preserveContent) list.innerHTML = '';
+
+        if (providerSummary && !preserveContent) {
+
+            providerSummary.innerHTML = '';
+            providerSummary.hidden = true;
+
+        }
+
+        if (!preserveContent) {
+
+            if (historicalList) historicalList.innerHTML = '';
+            if (historicalSection) historicalSection.hidden = true;
+
+        }
+
+        const usagePeriod = getUsagePeriodConfig().value;
+
+        const usagePeriodQuery = `period=${encodeURIComponent(usagePeriod)}`;
+
+        const [statsResponse, aggregatedResponse] = await Promise.all([
+
+            fetch(`./api/usage/stats?${usagePeriodQuery}`, { headers: getAuthHeaders() }),
+
+            fetch(`./api/usage/aggregated?${usagePeriodQuery}`, { headers: getAuthHeaders() })
+
+        ]);
+
+        if (statsResponse.status === 401 || aggregatedResponse.status === 401) {
+
+            showStatus(t('authentication_failed_please_log_in'), 'error');
+
+            setTimeout(() => location.reload(), 1500);
+
+            return;
+
+        }
+
+        const statsData = await statsResponse.json();
+
+        const aggregatedData = await aggregatedResponse.json();
+
+        if (statsResponse.ok && aggregatedResponse.ok) {
+
+            AppState.usageStatsData = statsData.success ? statsData.data : statsData;
+
+            AppState.usageStatsLoaded = true;
+
+            const aggData = aggregatedData.success ? aggregatedData.data : aggregatedData;
+
+            const totalCalls = Number(aggData.total_calls ?? aggData.total_calls_24h ?? 0);
+
+            const successfulCalls = Number(aggData.successful_calls ?? aggData.successful_calls_24h ?? 0);
+
+            const failedCalls = Number(aggData.failed_calls ?? aggData.failed_calls_24h ?? 0);
+
+            const successRate = totalCalls > 0 ? Math.round((successfulCalls / totalCalls) * 100) : 0;
+
+            document.getElementById('totalApiCalls').textContent = formatUsageNumber(totalCalls);
+
+            document.getElementById('successRate24h').textContent = `${successRate}%`;
+
+            document.getElementById('requestOutcomeDetail').textContent = t('dashboard.successful_failed', {
+                successful: formatUsageNumber(successfulCalls),
+                failed: formatUsageNumber(failedCalls)
+            });
+
+            document.getElementById('successRateDetail').textContent = totalCalls > 0
+                ? t('dashboard.requests_succeeded', {successful: formatUsageNumber(successfulCalls), total: formatUsageNumber(totalCalls)})
+                : t('dashboard.no_traffic_yet');
+
+            document.getElementById('totalFiles').textContent = formatUsageNumber(aggData.total_files);
+
+            document.getElementById('activeFiles').textContent = formatUsageNumber(aggData.active_files);
+
+            document.getElementById('disabledCredentialsDetail').textContent = t('dashboard.disabled_count', {count: formatUsageNumber(aggData.disabled_files)});
+
+            document.getElementById('avgCallsPerFile').textContent = formatUsageNumber(
+                aggData.avg_calls_per_file,
+                { decimals: 1 }
+            );
+
+            document.getElementById('assignedRequestsDetail').textContent = t('dashboard.assigned_requests', {count: formatUsageNumber(aggData.assigned_calls ?? aggData.assigned_calls_24h)});
+
+            document.getElementById('totalTokens24h').textContent = formatUsageNumber(aggData.total_tokens ?? aggData.total_tokens_24h);
+
+            document.getElementById('inputOutputDetail').textContent = t('dashboard.input_output', {
+                input: formatUsageNumber(aggData.input_tokens ?? aggData.input_tokens_24h),
+                output: formatUsageNumber(aggData.output_tokens ?? aggData.output_tokens_24h)
+            });
+
+            document.getElementById('avgTokensPerRequest').textContent = formatUsageNumber(
+                aggData.avg_tokens_per_successful_request,
+                { decimals: 1 }
+            );
+
+            document.getElementById('cacheSavingsDetail').textContent = t('dashboard.cache_savings', {
+                cached: formatUsageNumber(aggData.cached_tokens ?? aggData.cached_tokens_24h),
+                savings: formatUsageNumber(aggData.estimated_tokens_saved ?? aggData.estimated_tokens_saved_24h)
+            });
+
+            renderUsageList();
+
+            // showStatus(t('loaded_usage_statistics_for_aggdata', {aggData_total_files____Object_keys_AppState_usageStatsData__length: aggData.total_files || Object.keys(AppState.usageStatsData).length}), 'success');
+
+        } else {
+
+            const errorMsg = statsData.detail || aggregatedData.detail || t('failed_to_load_usage_statistics');
+
+            showStatus(t('error_errormsg', {errorMsg: errorMsg}), 'error');
+
+        }
+
+    } catch (error) {
+
+        showStatus(t('status_net_error', {error: error.message}), 'error');
+
+    } finally {
+
+        if (loading) loading.hidden = true;
+
+        if (statsContainer && !preserveContent) statsContainer.setAttribute('aria-busy', 'false');
+
+        if (tableWrapper && !preserveContent) tableWrapper.hidden = false;
+
+    }
+
+}
+
+function getUsageCallCount(stats = {}) {
+
+    return Number(stats.calls ?? stats.calls_24h ?? 0);
+
+}
+
+function getUsageEntriesWithTraffic() {
+
+    return Object.entries(AppState.usageStatsData || {}).filter(([, stats]) => getUsageCallCount(stats) > 0);
+
+}
+
+function isHistoricalUsageEntry([filename, stats]) {
+
+    return filename !== '__gateway_unassigned__.json'
+        && Boolean(stats.is_historical || stats.is_deleted);
+
+}
+
+function getCurrentUsageEntriesWithTraffic() {
+
+    return getUsageEntriesWithTraffic().filter((entry) => !isHistoricalUsageEntry(entry));
+
+}
+
+function getHistoricalUsageEntriesWithTraffic() {
+
+    return getUsageEntriesWithTraffic().filter(isHistoricalUsageEntry);
+
+}
+
+function createUsageTableRow(filename, stats) {
+
+    const tr = document.createElement('tr');
+
+    const calls = getUsageCallCount(stats);
+    const successfulCalls = stats.successful_calls ?? stats.successful_calls_24h ?? 0;
+    const failedCalls = stats.failed_calls ?? stats.failed_calls_24h ?? 0;
+    const inputTokens = stats.input_tokens ?? stats.input_tokens_24h ?? 0;
+    const outputTokens = stats.output_tokens ?? stats.output_tokens_24h ?? 0;
+    const totalTokens = stats.total_tokens ?? stats.total_tokens_24h ?? 0;
+    const estimatedTokensSaved = stats.estimated_tokens_saved ?? stats.estimated_tokens_saved_24h ?? 0;
+    const successRate = calls > 0 ? Math.round((successfulCalls / calls) * 100) : 0;
+    const isUnassigned = filename === '__gateway_unassigned__.json';
+    const providerMeta = isUnassigned
+        ? { name: 'Gateway', logo: '/frontend/assets/logo.png' }
+        : getCredentialProviderMeta({
+            provider: stats.provider || stats.provider_name,
+            credential_type: stats.credential_type
+        }, 'usage');
+    const accountLabel = isUnassigned
+        ? t('dashboard.no_credential')
+        : (stats.is_deleted
+            ? t('deleted_credential')
+            : (stats.is_historical
+                ? (stats.credential_label || t('unavailable_credential'))
+                : (stats.credential_label || stats.user_email || t('email_not_fetched'))));
+    const providerLogo = providerMeta.logo
+        ? `<img src="${escapeAttribute(providerMeta.logo)}" alt="${escapeAttribute(providerMeta.name)} logo">`
+        : `<span>${escapeHtml(providerMeta.name.charAt(0))}</span>`;
+
+    tr.innerHTML = `
+
+        <td>
+            <div class="usage-credential-identity">
+                <div class="cred-provider-logo" aria-hidden="true">${providerLogo}</div>
+                <div class="usage-credential-copy">
+                    <div class="usage-credential-name">${escapeHtml(accountLabel)}</div>
+                    <div class="usage-credential-meta">${escapeHtml(providerMeta.name)}</div>
+                </div>
+            </div>
+        </td>
+
+        <td>
+            <div class="usage-cell-primary">${escapeHtml(t('dashboard.requests_count', {count: formatUsageNumber(calls)}))}</div>
+            <div class="usage-cell-meta">${escapeHtml(t('dashboard.success_count', {count: formatUsageNumber(successfulCalls), failed: formatUsageNumber(failedCalls)}))}</div>
+        </td>
+
+        <td>
+            <div class="usage-cell-primary">${successRate}%</div>
+            <div class="usage-cell-meta">${escapeHtml(calls > 0 ? t('dashboard.succeeded_count', {successful: formatUsageNumber(successfulCalls), total: formatUsageNumber(calls)}) : t('dashboard.no_traffic_recorded'))}</div>
+        </td>
+
+        <td>
+            <div class="usage-cell-primary">${escapeHtml(t('dashboard.tokens_total', {count: formatUsageNumber(totalTokens)}))}</div>
+            <div class="usage-cell-meta">${escapeHtml(t('dashboard.token_details', {input: formatUsageNumber(inputTokens), output: formatUsageNumber(outputTokens), savings: formatUsageNumber(estimatedTokensSaved)}))}</div>
+        </td>
+
+    `;
+
+    return tr;
+
+}
+
+function renderUsageTableRows(list, entries, emptyMessage = '') {
+
+    list.innerHTML = '';
+
+    if (entries.length === 0) {
+
+        if (!emptyMessage) return;
+
+        const tr = document.createElement('tr');
+
+        tr.innerHTML = `<td colspan="4" style="text-align: center; color: var(--text-muted); padding: 18px 12px;">${escapeHtml(emptyMessage)}</td>`;
+
+        list.appendChild(tr);
+
+        return;
+
+    }
+
+    for (const [filename, stats] of entries) {
+
+        list.appendChild(createUsageTableRow(filename, stats));
+
+    }
+
+}
+
+function renderHistoricalUsageList() {
+
+    const section = document.getElementById('historicalUsageSection');
+    const list = document.getElementById('historicalUsageList');
+
+    if (!section || !list) return;
+
+    const entries = getHistoricalUsageEntriesWithTraffic();
+
+    section.hidden = entries.length === 0;
+    renderUsageTableRows(list, entries);
+
+}
+
+function renderUsageList() {
+
+    const list = document.getElementById('usageList');
+
+    if (!list) return;
+
+    renderUsageProviderSummary();
+    renderUsageTableRows(
+        list,
+        getCurrentUsageEntriesWithTraffic(),
+        t('status_no_filter_data')
+    );
+    renderHistoricalUsageList();
+
+}
+
+function renderUsageProviderSummary() {
+
+    const container = document.getElementById('usageProviderSummary');
+
+    if (!container) return;
+
+    const providers = new Map();
+
+    for (const [filename, stats] of getCurrentUsageEntriesWithTraffic()) {
+
+        if (filename === '__gateway_unassigned__.json') continue;
+
+        const providerMeta = getCredentialProviderMeta(
+            {
+                provider: stats.provider || stats.provider_name,
+                credential_type: stats.credential_type
+            },
+            'usage'
+        );
+
+        const current = providers.get(providerMeta.id) || {
+            meta: providerMeta,
+            credentials: 0,
+            calls: 0,
+            successfulCalls: 0,
+            totalTokens: 0,
+        };
+
+        if (!stats.is_deleted) current.credentials += 1;
+        current.calls += getUsageCallCount(stats);
+        current.successfulCalls += Number(stats.successful_calls ?? stats.successful_calls_24h ?? 0);
+        current.totalTokens += Number(stats.total_tokens ?? stats.total_tokens_24h ?? 0);
+        providers.set(providerMeta.id, current);
+
+    }
+
+    if (providers.size === 0) {
+
+        container.innerHTML = '';
+        container.hidden = true;
+        return;
+
+    }
+
+    container.hidden = false;
+    const providerOrder = ['google_antigravity', 'google_ai_studio', 'grok', 'xai_console', 'codex', 'openai_platform', 'claude_code', 'claude_platform', 'ollama', 'xai', 'openai', 'anthropic', 'code_assist'];
+    const providerItems = Array.from(providers.values()).sort((left, right) => {
+        const leftIndex = providerOrder.indexOf(left.meta.id);
+        const rightIndex = providerOrder.indexOf(right.meta.id);
+        return (leftIndex === -1 ? providerOrder.length : leftIndex)
+            - (rightIndex === -1 ? providerOrder.length : rightIndex);
+    });
+
+    container.innerHTML = providerItems.map((provider) => {
+
+        const successRate = provider.calls > 0
+            ? Math.round((provider.successfulCalls / provider.calls) * 100)
+            : 0;
+        const logo = provider.meta.logo
+            ? `<img src="${escapeAttribute(provider.meta.logo)}" alt="">`
+            : `<span>${escapeHtml(provider.meta.name.charAt(0))}</span>`;
+        const credentialLabel = provider.credentials > 0
+            ? t(provider.credentials === 1 ? 'dashboard.active_credentials_count' : 'dashboard.active_credentials_count_plural', {count: formatUsageNumber(provider.credentials)})
+            : t('dashboard.no_active_credentials');
+
+        return `
+            <article class="usage-provider-item">
+                <div class="usage-provider-identity">
+                    <div class="usage-provider-logo" aria-hidden="true">${logo}</div>
+                    <div>
+                        <div class="usage-provider-name">${escapeHtml(provider.meta.name)}</div>
+                        <div class="usage-provider-meta">${credentialLabel}</div>
+                    </div>
+                </div>
+                <dl class="usage-provider-metrics">
+                    <div><dt>${escapeHtml(t('requests'))}</dt><dd>${formatUsageNumber(provider.calls)}</dd></div>
+                    <div><dt>${escapeHtml(t('success'))}</dt><dd>${provider.calls > 0 ? `${successRate}%` : escapeHtml(t('dashboard.no_traffic'))}</dd></div>
+                    <div><dt>${escapeHtml(t('tokens'))}</dt><dd>${formatUsageNumber(provider.totalTokens)}</dd></div>
+                </dl>
+            </article>
+        `;
+
+    }).join('');
+
+}
+
+// =====================================================================
+
+// =====================================================================
+
+function startCooldownTimer() {
+
+    if (AppState.cooldownTimerInterval) {
+
+        clearInterval(AppState.cooldownTimerInterval);
+
+    }
+
+    AppState.cooldownTimerInterval = setInterval(() => {
+
+        updateCooldownDisplays();
+
+    }, 1000);
+
+}
+
+function stopCooldownTimer() {
+
+    if (AppState.cooldownTimerInterval) {
+
+        clearInterval(AppState.cooldownTimerInterval);
+
+        AppState.cooldownTimerInterval = null;
+
+    }
+
+}
+
+function updateCooldownDisplays() {
+
+    let needsRefresh = false;
+
+    for (const credInfo of Object.values(AppState.creds.data)) {
+
+        if (credInfo.model_cooldowns && Object.keys(credInfo.model_cooldowns).length > 0) {
+
+            const currentTime = Date.now() / 1000;
+
+            const hasExpiredCooldowns = Object.entries(credInfo.model_cooldowns).some(([, until]) => until <= currentTime);
+
+            if (hasExpiredCooldowns) {
+
+                needsRefresh = true;
+
+                break;
+
+            }
+
+        }
+
+    }
+
+    if (needsRefresh) {
+
+        AppState.creds.renderList();
+
+        return;
+
+    }
+
+    document.querySelectorAll('.cooldown-badge').forEach(badge => {
+
+        const card = badge.closest('.cred-card');
+
+        const filenameEl = card?.querySelector('.cred-filename');
+
+        if (!filenameEl) return;
+
+        const filename = filenameEl.textContent;
+
+        const credInfo = Object.values(AppState.creds.data).find(c => c.filename === filename);
+
+        if (credInfo && credInfo.model_cooldowns) {
+
+            const currentTime = Date.now() / 1000;
+
+            const titleMatch = badge.getAttribute('title')?.match(/: (.+)/);
+
+            if (titleMatch) {
+
+                const model = titleMatch[1];
+
+                const cooldownUntil = credInfo.model_cooldowns[model];
+
+                if (cooldownUntil) {
+
+                    const remaining = Math.max(0, Math.floor(cooldownUntil - currentTime));
+
+                    if (remaining > 0) {
+
+                        const shortModel = model.replace('gemini-', '').replace('-exp', '')
+
+                            .replace('2.0-', '2-').replace('1.5-', '1.5-');
+
+                        const timeDisplay = formatCooldownTime(remaining).replace(/s$/, '').replace(/ /g, '');
+
+                        badge.textContent = `Cooldown ${shortModel}: ${timeDisplay}`;
+
+                    }
+
+                }
+
+            }
+
+        }
+
+    });
+
+}
+
+// =====================================================================
+
+// =====================================================================

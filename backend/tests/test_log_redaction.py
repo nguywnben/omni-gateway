@@ -35,13 +35,15 @@ class LogRedactionTests(unittest.TestCase):
     def test_redacts_provider_tokens_without_field_names(self):
         output = redact_text(
             "Tokens: ya29.access-token 1//refresh-token "
-            "sk-provider-secret-1234567890 AIzaSyExampleApiKey1234567890123"
+            "sk-provider-secret-1234567890 AIzaSyExampleApiKey1234567890123 "
+            "GOCSPX-ExampleOAuthClientSecret"
         )
 
         self.assertNotIn("access-token", output)
         self.assertNotIn("refresh-token", output)
         self.assertNotIn("provider-secret", output)
         self.assertNotIn("ExampleApiKey", output)
+        self.assertNotIn("ExampleOAuthClientSecret", output)
 
 
 if __name__ == "__main__":

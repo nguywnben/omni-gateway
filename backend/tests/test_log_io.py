@@ -3,13 +3,15 @@
 from __future__ import annotations
 
 import sys
-import tempfile
 import unittest
 from pathlib import Path
 
 BACKEND_DIR = Path(__file__).resolve().parents[1]
+TESTS_DIR = Path(__file__).resolve().parent
 if str(BACKEND_DIR) not in sys.path:
     sys.path.insert(0, str(BACKEND_DIR))
+if str(TESTS_DIR) not in sys.path:
+    sys.path.insert(0, str(TESTS_DIR))
 
 from core.panel.logs import (
     _clear_log_file,
@@ -17,11 +19,12 @@ from core.panel.logs import (
     _read_log_chunk,
     _read_recent_log_lines,
 )
+from support import workspace_temp_directory
 
 
 class LogFileHelperTests(unittest.TestCase):
     def test_clear_log_file_truncates_existing_file(self):
-        with tempfile.TemporaryDirectory(dir=Path(__file__).parent) as temp_dir:
+        with workspace_temp_directory() as temp_dir:
             path = Path(temp_dir) / "runtime.log"
             path.write_text("sensitive line\n", encoding="utf-8")
 
@@ -30,7 +33,7 @@ class LogFileHelperTests(unittest.TestCase):
             self.assertEqual(path.read_text(encoding="utf-8"), "")
 
     def test_missing_log_file_is_reported_without_creation(self):
-        with tempfile.TemporaryDirectory(dir=Path(__file__).parent) as temp_dir:
+        with workspace_temp_directory() as temp_dir:
             path = Path(temp_dir) / "missing.log"
 
             self.assertFalse(_clear_log_file(str(path)))
@@ -38,7 +41,7 @@ class LogFileHelperTests(unittest.TestCase):
             self.assertEqual(_read_recent_log_lines(str(path), 50), [])
 
     def test_recent_lines_and_binary_offsets_are_stable(self):
-        with tempfile.TemporaryDirectory(dir=Path(__file__).parent) as temp_dir:
+        with workspace_temp_directory() as temp_dir:
             path = Path(temp_dir) / "runtime.log"
             path.write_bytes(b"first\nsecond\nthird\n")
 
