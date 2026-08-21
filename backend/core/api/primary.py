@@ -56,6 +56,11 @@ from core.codex import (
     gemini_request_to_codex,
 )
 from core.credential_manager import credential_manager
+from core.gateway_pipeline import (
+    apply_pre_call_guardrails,
+    lookup_response_cache,
+    store_response_cache,
+)
 from core.google_ai_studio import (
     build_api_key_headers,
     build_generation_url,
@@ -597,6 +602,29 @@ async def stream_request(
     model_candidates: Optional[List[str]] = None,
     model_routing: bool = False,
 ):
+    """Public streaming entry point: guardrails first, then upstream dispatch."""
+    guard_response, body = await apply_pre_call_guardrails(body)
+    if guard_response is not None:
+        yield guard_response
+        return
+
+    async for item in _stream_request_upstream(
+        body,
+        native=native,
+        headers=headers,
+        model_candidates=model_candidates,
+        model_routing=model_routing,
+    ):
+        yield item
+
+
+async def _stream_request_upstream(
+    body: Dict[str, Any],
+    native: bool = False,
+    headers: Optional[Dict[str, str]] = None,
+    model_candidates: Optional[List[str]] = None,
+    model_routing: bool = False,
+):
     request_started_at = time.perf_counter()
     requested_model = str(body.get("model") or "")
     candidates = _normalize_model_candidates(body, model_candidates)
@@ -1026,12 +1054,42 @@ async def non_stream_request(
     model_candidates: Optional[List[str]] = None,
     model_routing: bool = False,
 ) -> Response:
+    """Public non-streaming entry point: guardrails, cache, then upstream."""
+    guard_response, body = await apply_pre_call_guardrails(body)
+    if guard_response is not None:
+        return guard_response
+
+    cache_key, cached_response = await lookup_response_cache(body)
+    if cached_response is not None:
+        return cached_response
+
+    response = await _non_stream_request_upstream(
+        body,
+        headers=headers,
+        model_candidates=model_candidates,
+        model_routing=model_routing,
+    )
+
+    if cache_key:
+        try:
+            store_response_cache(cache_key, response)
+        except Exception as exc:
+            log.debug(f"[response-cache] failed to store response: {exc}")
+    return response
+
+
+async def _non_stream_request_upstream(
+    body: Dict[str, Any],
+    headers: Optional[Dict[str, str]] = None,
+    model_candidates: Optional[List[str]] = None,
+    model_routing: bool = False,
+) -> Response:
     request_started_at = time.perf_counter()
 
     if await get_antigravity_stream_to_nonstream():
         log.debug("[provider] Streaming collection mode for non-streaming requests")
 
-        stream = stream_request(
+        stream = _stream_request_upstream(
             body=body,
             native=False,
             headers=headers,
@@ -1076,7 +1134,7 @@ async def non_stream_request(
         # path so downstream non-stream clients still receive one collected response.
         await credential_manager.release_credential(current_file, mode="primary")
         return await collect_streaming_response(
-            stream_request(
+            _stream_request_upstream(
                 body=body,
                 native=False,
                 headers=headers,
