@@ -12,23 +12,25 @@ import random
 from typing import Any, Dict, List, Optional
 
 
-def select_weighted_candidate(candidates: List[Dict[str, Any]], weights: Optional[Dict[str, float]] = None) -> Optional[Dict[str, Any]]:
+def select_weighted_candidate(
+    candidates: List[Dict[str, Any]], weights: Optional[Dict[str, float]] = None
+) -> Optional[Dict[str, Any]]:
     """Select a candidate based on assigned weights."""
     if not candidates:
         return None
     if len(candidates) == 1:
         return candidates[0]
-        
+
     weights_map = weights or {}
     total_weight = 0.0
     item_weights = []
-    
+
     for c in candidates:
         name = str(c.get("filename") or c.get("name") or "")
         w = max(0.000001, float(weights_map.get(name, 1.0)))
         item_weights.append(w)
         total_weight += w
-        
+
     r = random.uniform(0, total_weight)
     upto = 0.0
     for c, w in zip(candidates, item_weights):
@@ -47,10 +49,10 @@ def select_lowest_latency_candidate(
         return None
     if len(candidates) == 1:
         return candidates[0]
-        
+
     return min(
         candidates,
-        key=lambda c: latency_history.get(str(c.get("filename") or c.get("name") or ""), 9999.0)
+        key=lambda c: latency_history.get(str(c.get("filename") or c.get("name") or ""), 9999.0),
     )
 
 

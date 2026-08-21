@@ -23,18 +23,20 @@ def simulate_sandbox_inspection(
 
     # 2. Virtual model mapping
     concrete_model = target_model.strip()
-    
+
     # 3. Simulate candidate matching
     compatible_candidates = []
     for cred in available_credentials:
         # Check if provider can serve the model
         provider = cred.get("provider", "unknown")
-        compatible_candidates.append({
-            "filename": cred.get("filename", "unknown"),
-            "provider": provider,
-            "tier": cred.get("tier", "standard"),
-            "status": "healthy" if not cred.get("disabled") else "disabled",
-        })
+        compatible_candidates.append(
+            {
+                "filename": cred.get("filename", "unknown"),
+                "provider": provider,
+                "tier": cred.get("tier", "standard"),
+                "status": "healthy" if not cred.get("disabled") else "disabled",
+            }
+        )
 
     return {
         "format": detected_format,

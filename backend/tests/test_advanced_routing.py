@@ -21,7 +21,7 @@ class AdvancedRoutingTests(unittest.TestCase):
     def test_select_lowest_latency(self) -> None:
         candidates = [{"filename": "fast.json"}, {"filename": "slow.json"}]
         latency_map = {"fast.json": 120.5, "slow.json": 850.0}
-        
+
         selected = select_lowest_latency_candidate(candidates, latency_map)
         self.assertEqual(selected["filename"], "fast.json")
 
@@ -36,7 +36,7 @@ class AdvancedRoutingTests(unittest.TestCase):
     def test_select_weighted(self) -> None:
         candidates = [{"filename": "heavy.json"}, {"filename": "light.json"}]
         weights = {"heavy.json": 1000.0, "light.json": 0.0001}
-        
+
         selected = select_weighted_candidate(candidates, weights)
         self.assertEqual(selected["filename"], "heavy.json")
 

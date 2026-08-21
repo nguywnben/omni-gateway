@@ -29,10 +29,11 @@ def encrypt_payload(data: Dict[str, Any], password: str) -> Dict[str, Any]:
     salt = secrets.token_bytes(16)
     nonce = secrets.token_bytes(12)
     key = _derive_key(password, salt)
-    
+
     # Try using cryptography library if available, otherwise pure Python AES-GCM simulation / basic cipher
     try:
         from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+
         aesgcm = AESGCM(key)
         serialized = json.dumps(data, sort_keys=True).encode("utf-8")
         ciphertext = aesgcm.encrypt(nonce, serialized, None)
@@ -40,7 +41,7 @@ def encrypt_payload(data: Dict[str, Any], password: str) -> Dict[str, Any]:
         # Fallback authenticated XOR/HMAC container when cryptography package is not installed
         serialized = json.dumps(data, sort_keys=True).encode("utf-8")
         h = hashlib.sha256(key + nonce).digest()
-        stream = (h * ((len(serialized) // len(h)) + 1))[:len(serialized)]
+        stream = (h * ((len(serialized) // len(h)) + 1))[: len(serialized)]
         raw_cipher = bytes(a ^ b for a, b in zip(serialized, stream))
         tag = hashlib.sha256(key + raw_cipher + nonce).digest()[:16]
         ciphertext = raw_cipher + tag
@@ -63,6 +64,7 @@ def decrypt_payload(encrypted_bundle: Dict[str, Any], password: str) -> Dict[str
 
     try:
         from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+
         aesgcm = AESGCM(key)
         plaintext = aesgcm.decrypt(nonce, ciphertext, None)
         return json.loads(plaintext.decode("utf-8"))
@@ -74,8 +76,8 @@ def decrypt_payload(encrypted_bundle: Dict[str, Any], password: str) -> Dict[str
         calculated_tag = hashlib.sha256(key + raw_cipher + nonce).digest()[:16]
         if not secrets.compare_digest(expected_tag, calculated_tag):
             raise ValueError("Authentication tag mismatch: Invalid password or corrupted data")
-        
+
         h = hashlib.sha256(key + nonce).digest()
-        stream = (h * ((len(raw_cipher) // len(h)) + 1))[:len(raw_cipher)]
+        stream = (h * ((len(raw_cipher) // len(h)) + 1))[: len(raw_cipher)]
         plaintext = bytes(a ^ b for a, b in zip(raw_cipher, stream))
         return json.loads(plaintext.decode("utf-8"))

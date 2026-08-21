@@ -24,8 +24,10 @@ class GuardrailsEngine:
     # Common PII regular expressions
     EMAIL_REGEX = re.compile(r"[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+")
     CREDIT_CARD_REGEX = re.compile(r"\b(?:\d[ -]*?){13,16}\b")
-    API_KEY_REGEX = re.compile(r"\b(sk-[a-zA-Z0-9]{32,}|ghp_[a-zA-Z0-9]{36}|AIza[0-9A-Za-z-_]{35})\b")
-    
+    API_KEY_REGEX = re.compile(
+        r"\b(sk-[a-zA-Z0-9]{32,}|ghp_[a-zA-Z0-9]{36}|AIza[0-9A-Za-z-_]{35})\b"
+    )
+
     # Prompt injection patterns
     INJECTION_PATTERNS = [
         re.compile(r"ignore\s+all\s+previous\s+instructions", re.IGNORECASE),
@@ -53,14 +55,18 @@ class GuardrailsEngine:
             for pattern in self.INJECTION_PATTERNS:
                 if pattern.search(text):
                     violations.append("prompt_injection_detected")
-                    return GuardrailResult(is_safe=False, sanitized_text=sanitized, violations=violations)
+                    return GuardrailResult(
+                        is_safe=False, sanitized_text=sanitized, violations=violations
+                    )
 
         # 2. Blocked keywords check
         lower_text = text.lower()
         for word in self.custom_blocked_words:
             if word in lower_text:
                 violations.append(f"blocked_keyword:{word}")
-                return GuardrailResult(is_safe=False, sanitized_text=sanitized, violations=violations)
+                return GuardrailResult(
+                    is_safe=False, sanitized_text=sanitized, violations=violations
+                )
 
         # 3. PII Masking
         if self.enable_pii_masking:

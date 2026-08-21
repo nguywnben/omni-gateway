@@ -31,7 +31,9 @@ class BaseStateStore(abc.ABC):
         pass
 
     @abc.abstractmethod
-    async def increment(self, key: str, amount: int = 1, ttl_seconds: Optional[float] = None) -> int:
+    async def increment(
+        self, key: str, amount: int = 1, ttl_seconds: Optional[float] = None
+    ) -> int:
         """Atomically increment a counter."""
         pass
 
@@ -73,7 +75,9 @@ class InMemoryStateStore(BaseStateStore):
         async with self._async_lock:
             self._store.pop(key, None)
 
-    async def increment(self, key: str, amount: int = 1, ttl_seconds: Optional[float] = None) -> int:
+    async def increment(
+        self, key: str, amount: int = 1, ttl_seconds: Optional[float] = None
+    ) -> int:
         async with self._async_lock:
             current = 0
             if key in self._store:
@@ -109,6 +113,7 @@ class RedisStateStore(BaseStateStore):
     async def _get_client(self) -> Any:
         if self._client is None:
             import redis.asyncio as redis
+
             self._client = redis.from_url(self.redis_url, decode_responses=True)
         return self._client
 
@@ -127,7 +132,9 @@ class RedisStateStore(BaseStateStore):
         client = await self._get_client()
         await client.delete(key)
 
-    async def increment(self, key: str, amount: int = 1, ttl_seconds: Optional[float] = None) -> int:
+    async def increment(
+        self, key: str, amount: int = 1, ttl_seconds: Optional[float] = None
+    ) -> int:
         client = await self._get_client()
         val = await client.incrby(key, amount)
         if ttl_seconds is not None:

@@ -60,7 +60,9 @@ class BaseProviderAdapter(abc.ABC):
         return credential_data
 
     @abc.abstractmethod
-    def transform_request(self, request: NormalizedRequest, credential_data: Dict[str, Any]) -> Tuple[str, Dict[str, str], Dict[str, Any]]:
+    def transform_request(
+        self, request: NormalizedRequest, credential_data: Dict[str, Any]
+    ) -> Tuple[str, Dict[str, str], Dict[str, Any]]:
         """Transform normalized request into (url, headers, payload)."""
         pass
 
@@ -70,7 +72,9 @@ class BaseProviderAdapter(abc.ABC):
         pass
 
     @abc.abstractmethod
-    def transform_stream_chunk(self, raw_chunk_str: str, model: str) -> Optional[NormalizedStreamChunk]:
+    def transform_stream_chunk(
+        self, raw_chunk_str: str, model: str
+    ) -> Optional[NormalizedStreamChunk]:
         """Convert provider SSE chunk into gateway standard chunk."""
         pass
 
@@ -81,11 +85,14 @@ class ProviderRegistry:
     _adapters: Dict[str, Type[BaseProviderAdapter]] = {}
 
     @classmethod
-    def register(cls, provider_id: str) -> Callable[[Type[BaseProviderAdapter]], Type[BaseProviderAdapter]]:
+    def register(
+        cls, provider_id: str
+    ) -> Callable[[Type[BaseProviderAdapter]], Type[BaseProviderAdapter]]:
         def decorator(subclass: Type[BaseProviderAdapter]) -> Type[BaseProviderAdapter]:
             subclass.provider_id = provider_id
             cls._adapters[provider_id.lower()] = subclass
             return subclass
+
         return decorator
 
     @classmethod
@@ -109,7 +116,9 @@ class GenericOpenAIAdapter(BaseProviderAdapter):
     async def refresh_auth(self, credential_data: Dict[str, Any]) -> Dict[str, Any]:
         return credential_data
 
-    def transform_request(self, request: NormalizedRequest, credential_data: Dict[str, Any]) -> Tuple[str, Dict[str, str], Dict[str, Any]]:
+    def transform_request(
+        self, request: NormalizedRequest, credential_data: Dict[str, Any]
+    ) -> Tuple[str, Dict[str, str], Dict[str, Any]]:
         base_url = credential_data.get("base_url", "https://api.openai.com/v1").rstrip("/")
         url = f"{base_url}/chat/completions"
         headers = {
@@ -145,8 +154,11 @@ class GenericOpenAIAdapter(BaseProviderAdapter):
             raw_response=raw_json,
         )
 
-    def transform_stream_chunk(self, raw_chunk_str: str, model: str) -> Optional[NormalizedStreamChunk]:
+    def transform_stream_chunk(
+        self, raw_chunk_str: str, model: str
+    ) -> Optional[NormalizedStreamChunk]:
         import json
+
         clean_str = raw_chunk_str.strip()
         if clean_str.startswith("data:"):
             clean_str = clean_str[5:].strip()

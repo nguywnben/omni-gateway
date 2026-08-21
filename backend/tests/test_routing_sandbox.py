@@ -20,7 +20,7 @@ class RoutingSandboxTests(unittest.TestCase):
             {"filename": "acc2.json", "provider": "google_ai_studio", "tier": "free"},
         ]
         payload = {"messages": [{"role": "user", "content": "hello test"}]}
-        
+
         res = simulate_sandbox_inspection(
             request_format="openai",
             target_model="gpt-5.4",

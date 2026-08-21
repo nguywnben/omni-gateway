@@ -30,7 +30,9 @@ class LLMRequestMetrics:
         if self.first_token_time is None:
             self.first_token_time = time.time()
 
-    def complete(self, output_tokens: int = 0, status_code: int = 200, error: Optional[str] = None) -> None:
+    def complete(
+        self, output_tokens: int = 0, status_code: int = 200, error: Optional[str] = None
+    ) -> None:
         """Finalize the request execution metrics."""
         self.end_time = time.time()
         self.output_tokens = max(0, output_tokens)

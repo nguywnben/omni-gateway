@@ -33,7 +33,7 @@ class ObservabilityTests(unittest.TestCase):
         metrics.complete(output_tokens=50, status_code=200)
 
         self.assertGreater(metrics.tokens_per_second, 0.0)
-        
+
         span = metrics.to_otel_span()
         self.assertEqual(span["attributes"]["gen_ai.request.model"], "gpt-5.4")
         self.assertEqual(span["status"], "OK")

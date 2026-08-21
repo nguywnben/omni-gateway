@@ -29,7 +29,7 @@ def generate_cache_key(
         "top_p": payload.get("top_p"),
         "max_tokens": payload.get("max_tokens") or payload.get("max_output_tokens"),
     }
-    
+
     # Dump deterministically sorted JSON string
     serialized = json.dumps(normalized_data, sort_keys=True, separators=(",", ":"))
     return hashlib.sha256(serialized.encode("utf-8")).hexdigest()
@@ -47,7 +47,7 @@ class ResponseCache:
         """Retrieve a cached response if valid and unexpired."""
         if key not in self._cache:
             return None
-        
+
         expires_at, data = self._cache[key]
         if time.time() > expires_at:
             self._cache.pop(key, None)
@@ -56,14 +56,18 @@ class ResponseCache:
 
     def set(self, key: str, data: Any, ttl_seconds: Optional[int] = None) -> None:
         """Store a response in cache with TTL."""
-        ttl = ttl_seconds if (ttl_seconds is not None and ttl_seconds > 0) else self.default_ttl_seconds
+        ttl = (
+            ttl_seconds
+            if (ttl_seconds is not None and ttl_seconds > 0)
+            else self.default_ttl_seconds
+        )
         expires_at = time.time() + ttl
-        
+
         # Evict oldest entry if capacity is reached
         if len(self._cache) >= self.max_entries and key not in self._cache:
             first_key = next(iter(self._cache))
             self._cache.pop(first_key, None)
-            
+
         self._cache[key] = (expires_at, data)
 
     def clear(self) -> None:
