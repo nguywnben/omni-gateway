@@ -45,7 +45,7 @@
 
 Router AI universal untuk alat pemrograman. Omni Gateway menyediakan auto-fallback cerdas, pembersihan permintaan sadar token, visibilitas penggunaan, dan penerjemahan format mulus sehingga agen lokal, asisten IDE, dan skrip otomatisasi dapat menggunakan kapasitas LLM gratis dan premium melalui satu permukaan API yang stabil.
 
-> **Status proyek:** Stabil. Versi `1.3.1` melengkapi konsol yang dilokalkan dalam 15 bahasa, menambahkan pesan API manajemen yang sadar lokal dan panduan pembaruan berbasis rilis, serta mempertahankan rute SDK yang stabil, rute manajemen kanonikal, nama konfigurasi, dan kontrak runtime instans tunggal yang ditetapkan pada `1.0.0`.
+> **Project status:** Stable. Version `1.4.0` adds enterprise governance and FinOps: virtual API keys with budgets and rate limits, a per-call USD cost ledger backed by a maintained pricing table, optional guardrails and response caching, three new routing strategies, a Prometheus metrics endpoint, Langfuse trace export, and a Helm chart — while preserving the stable SDK routes, canonical management routes, configuration names, and single-instance runtime contract established in `1.0.0`.
 
 ## Mengapa Omni Gateway
 
@@ -53,14 +53,9 @@ Alur kerja coding modern sering menggabungkan berbagai klien dan penyedia: alat 
 
 ## Kemampuan Utama
 
-- Auto-fallback cerdas: mereservasi kredensial per permintaan, menyebarkan lalu lintas bersamaan, melacak setiap percobaan untuk rotasi yang adil, dan merutekan pengalihan dari kegagalan terkini, cooldown, batas laju (rate limit), dan kapasitas yang habis.
-- Pembersihan sadar token: menormalkan muatan (payload) dan hanya memangkas awalan percakapan yang terlalu besar pada batas giliran yang aman sambil mempertahankan instruksi sistem, definisi alat, dan konteks terkini.
-- Penerjemahan format: menerima OpenAI Chat Completions dan Responses, permintaan native Gemini, dan Anthropic Messages, lalu menerjemahkan permintaan serta respons streaming lintas format.
-- Orkestrasi kredensial: mengelola akun OAuth dan kunci API penyedia dengan status kesehatan, pelacakan cooldown, verifikasi, deduplikasi, dan fallback berbasis penyedia.
-- Perutean model tingkat kredensial: memelihara katalog kemampuan terpisah untuk setiap kredensial, sehingga hak akses satu akun tidak dapat mengirim permintaan ke akun lain yang tidak mengekspos model yang dipilih.
-- Memori kesehatan rute: mencatat respons model-tidak-ditemukan pada cakupan kredensial dan menampilkan rute yang terpengaruh untuk pemulihan dari halaman Models.
-- Ketahanan streaming: mendukung SSE streaming, pseudo-streaming untuk klien yang memerlukan output streaming, dan percobaan ulang anti-pemotongan (anti-truncation) untuk generasi panjang.
-- Panel kontrol: dilengkapi dengan konsol web untuk kredensial, log, konfigurasi, penggunaan, dan informasi versi.
+Omni Gateway records request volume, success rate, credential attribution, provider-reported token usage, estimated context-compression savings, and an estimated USD cost per call computed from a maintained model pricing table. Override or extend prices by placing a `model_pricing.json` file in the credentials directory; prices are USD per one million tokens. Aggregates are available on the dashboard, per virtual key through the `/api/virtual-keys` management API, and for monitoring systems through the Prometheus `/metrics` endpoint. Compression savings and costs are labeled as estimates because provider tokenizers and billing rules remain authoritative.
+
+Virtual API keys let one gateway serve multiple clients under separate limits. Each key carries optional daily and monthly USD budgets enforced from the cost ledger, requests-per-minute and tokens-per-minute sliding windows, an expiry timestamp, and a model allowlist with glob patterns. Keys are stored as SHA-256 hashes; the plaintext secret is shown exactly once at creation time.
 
 ## Pratinjau Konsol
 
@@ -133,10 +128,10 @@ sudo docker run -d \
   -p 4283:4283 \
   -v /opt/omni-gateway/creds:/app/backend/data/creds \
   -v /opt/omni-gateway/logs:/app/backend/data/logs \
-  nguywnben/omni-gateway:1.3.1
+  nguywnben/omni-gateway:1.4.0
 ```
 
-Rilis yang sama dipublikasikan ke GitHub Packages sebagai `ghcr.io/nguywnben/omni-gateway:1.3.1`. Tag `latest` melacak rilis stabil terbaru; `edge` melacak build terverifikasi tetapi belum dirilis dari `main`. Sematkan tag versi atau digest saat penerapan yang dapat direproduksi diperlukan.
+Rilis yang sama dipublikasikan ke GitHub Packages sebagai `ghcr.io/nguywnben/omni-gateway:1.4.0`. Tag `latest` melacak rilis stabil terbaru; `edge` melacak build terverifikasi tetapi belum dirilis dari `main`. Sematkan tag versi atau digest saat penerapan yang dapat direproduksi diperlukan.
 
 Buka panel kontrol di:
 
@@ -148,7 +143,7 @@ Pada peluncuran pertama, buat kata sandi konsol di layar pengaturan. Tidak ada k
 
 Kata sandi yang dikelola oleh aplikasi disimpan sebagai hash scrypt bergaram (salted), sesi panel kontrol menggunakan cookie HttpOnly, dan permintaan SDK publik mengautentikasi dengan kunci API `sk-ogw-` yang dihasilkan. Untuk penerapan non-interaktif, konfigurasikan `PANEL_PASSWORD` sebelumnya dan lewati layar pengaturan sepenuhnya.
 
-Kontainer `1.3.1` dipublikasikan untuk `linux/amd64`. Publikasi ARM64 sengaja dijeda hingga setiap dependensi penyedia, termasuk tumpukan transportasi Vertex, dapat dibangun dan diuji dengan kontrak yang sama.
+Kontainer `1.4.0` dipublikasikan untuk `linux/amd64`. Publikasi ARM64 sengaja dijeda hingga setiap dependensi penyedia, termasuk tumpukan transportasi Vertex, dapat dibangun dan diuji dengan kontrak yang sama.
 
 Jika firewall server aktif, izinkan port gateway:
 
@@ -183,9 +178,22 @@ sudo mkdir -p /opt/omni-gateway/creds /opt/omni-gateway/logs
 docker compose -f deploy/docker-compose.yml up -d
 ```
 
-File compose yang disertakan menarik `nguywnben/omni-gateway:latest` dan menggunakan `/opt/omni-gateway` secara default untuk data host persisten. Tetapkan `IMAGE=nguywnben/omni-gateway:1.3.1` untuk menyematkan rilis ini, dan tetapkan `DATA_DIR=/jalur/kustom` saat server menggunakan lokasi penyimpanan yang berbeda.
+File compose yang disertakan menarik `nguywnben/omni-gateway:latest` dan menggunakan `/opt/omni-gateway` secara default untuk data host persisten. Tetapkan `IMAGE=nguywnben/omni-gateway:1.4.0` untuk menyematkan rilis ini, dan tetapkan `DATA_DIR=/jalur/kustom` saat server menggunakan lokasi penyimpanan yang berbeda.
 
 Compose meneruskan `API_KEY`, `PANEL_PASSWORD`, `SETUP_TOKEN`, URI penyimpanan eksternal, dan `PROXY` dari shell atau file `.env` root. Biarkan kosong untuk mempertahankan pembuatan kunci otomatis, penyiapan pertama kali, penyimpanan SQLite lokal, dan jaringan keluar langsung.
+
+
+### Kubernetes (Helm)
+
+A Helm chart is provided at `deploy/helm/omni-gateway` with a persistent volume for credentials and the usage ledger, liveness/readiness probes, optional Ingress, and an optional Prometheus ServiceMonitor wired to `/metrics`:
+
+```bash
+helm install omni-gateway deploy/helm/omni-gateway \
+  --set secrets.panelPassword=change-me
+```
+
+The chart deploys exactly one replica with a `Recreate` strategy because the 1.x runtime holds routing and rate-limit state in process memory. Do not scale the Deployment horizontally.
+
 
 ### Pengembangan Lokal
 
@@ -250,9 +258,16 @@ Omni Gateway membaca konfigurasi dari variabel lingkungan terlebih dahulu, kemud
 | `RETRY_429_INTERVAL` | `1` | Penundaan dasar antar percobaan ulang sementara dalam detik. |
 | `AUTO_DISABLE` | `false` | Nonaktifkan kredensial setelah kegagalan berat (hard failure) yang dikonfigurasi. |
 | `AUTO_DISABLE_ERROR_CODES` | `403` | Kode status kegagalan berat yang dipisahkan koma. |
-| `ROUTING_STRATEGY` | `balanced` | Kebijakan pemilihan kredensial: `balanced` atau `priority`. |
+| `ROUTING_STRATEGY` | `balanced` | Credential selection policy: `balanced`, `priority`, `weighted`, `least_latency`, or `lowest_cost`. |
 | `PREFERRED_PROVIDER` | kosong | Penyedia yang disukai oleh strategi `priority`, seperti `google_antigravity` atau `google_ai_studio`. |
 | `UPSTREAM_TIMEOUT_SECONDS` | `300` | Batas waktu inferensi penyedia, dibatasi antara 5 dan 900 detik. |
+| `RESPONSE_CACHE_ENABLED` | `false` | Cache deterministic (temperature 0) non-streaming responses in memory. |
+| `RESPONSE_CACHE_TTL_SECONDS` | `300` | Response cache entry lifetime in seconds. |
+| `RESPONSE_CACHE_MAX_ENTRIES` | `1000` | Maximum responses held by the in-memory cache. |
+| `GUARDRAILS_ENABLED` | `false` | Enable the pre-call guardrails pipeline. |
+| `GUARDRAILS_PII_MASKING_ENABLED` | `true` | Mask emails, card numbers, and API keys in outbound request text. |
+| `GUARDRAILS_INJECTION_DETECTION_ENABLED` | `true` | Reject prompt-injection attempts with HTTP 400. |
+| `GUARDRAILS_BLOCKED_KEYWORDS` | empty | Comma-separated case-insensitive keywords that block a request. |
 | `ANTI_TRUNCATION_MAX_ATTEMPTS` | `3` | Upaya kelanjutan maksimum untuk streaming anti-pemotongan. |
 | `TOKEN_COMPRESSION_ENABLED` | `true` | Kompres riwayat percakapan yang terlalu besar sebelum perutean ke penyedia. |
 | `TOKEN_COMPRESSION_THRESHOLD` | `32000` | Ambang perkiraan token input yang mengaktifkan kompresi. |
@@ -286,6 +301,10 @@ Omni Gateway membaca konfigurasi dari variabel lingkungan terlebih dahulu, kemud
 | `CLAUDE_USER_AGENT` | `claude-cli/omni-gateway` | Penimpaan opsional User-Agent untuk permintaan Claude Code dan Claude Platform. |
 | `ANTIGRAVITY_USER_AGENT` | `antigravity/cli/1.0.1 windows/amd64` | Penimpaan opsional protokol User-Agent Google Antigravity. |
 | `ANTIGRAVITY_PAYLOAD_USER_AGENT` | `antigravity` | Penimpaan opsional userAgent tingkat payload Google Antigravity. |
+| `METRICS_TOKEN` | empty | Optional bearer token required to scrape `GET /metrics`. |
+| `LANGFUSE_PUBLIC_KEY` | empty | Enables Langfuse trace export together with the secret key. |
+| `LANGFUSE_SECRET_KEY` | empty | Langfuse secret key for trace export. |
+| `LANGFUSE_HOST` | `https://cloud.langfuse.com` | Langfuse ingestion endpoint. |
 | `LOG_LEVEL` | `info` | Tingkat log runtime. |
 | `LOG_MAX_MB` | `10` | Ukuran file log aktif maksimum sebelum rotasi. |
 | `LOG_BACKUP_COUNT` | `3` | Jumlah file log terotasi yang dipertahankan. |

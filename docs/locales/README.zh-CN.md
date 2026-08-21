@@ -45,7 +45,7 @@
 
 面向编程工具的通用 AI 路由器。Omni Gateway 提供智能自动故障转移、令牌感知上下文清理、使用量可视化和无缝格式转换，让本地 Agent、IDE 助手和自动化脚本可以通过一个稳定的 API 接口调用各种免费与付费的 LLM 算力。
 
-> **项目状态：** 稳定。版本 `1.3.1` 完善了支持 15 种语言的本地化控制台，新增感知语言环境的管理 API 提示信息和版本更新指南，并保留了从 `1.0.0` 确立的稳定 SDK 路由、规范管理路由、配置命名和单实例运行契约。
+> **项目状态：** 稳定。版本 `1.4.0` 完善了支持 15 种语言的本地化控制台，新增感知语言环境的管理 API 提示信息和版本更新指南，并保留了从 `1.0.0` 确立的稳定 SDK 路由、规范管理路由、配置命名和单实例运行契约。
 
 ## 为什么选择 Omni Gateway
 
@@ -53,14 +53,9 @@
 
 ## 核心能力
 
-- 智能自动故障转移：按请求预留凭据，均衡并发流量，追踪每次调用以实现公平轮询，并自动绕过近期故障、冷却期、速率限制及额度耗尽的凭据。
-- 令牌感知清理：规范化请求负载，仅在安全的对话轮次边界处修剪过长的历史前缀，同时完整保留系统指令、工具定义和最近上下文。
-- 格式协议转换：接收 OpenAI Chat Completions 与 Responses、Gemini 原生请求及 Anthropic Messages，并在不同格式与流式响应之间双向转译。
-- 凭据生命周期编排：管理 OAuth 账户与供应商 API 密钥，提供健康状态检查、冷却追踪、有效性校验、去重和供应商感知故障转移。
-- 凭据级模型路由：为每个凭据维护独立的能力目录，防止某个账户的模型权限将请求误发到不支持该模型的其他账户。
-- 路由健康记忆：在凭据级别记录模型未找到（404）响应，并在模型管理页面展示受影响的路由以便恢复。
-- 流式传输弹性：支持 SSE 流式传输、为强制要求流式输出的客户端提供伪流式（pseudo-streaming），并为长文本生成提供防截断重试。
-- Web 控制面板：自带 Web 控制台，用于凭据管理、日志查看、系统配置、使用量统计和版本信息查看。
+Omni Gateway records request volume, success rate, credential attribution, provider-reported token usage, estimated context-compression savings, and an estimated USD cost per call computed from a maintained model pricing table. Override or extend prices by placing a `model_pricing.json` file in the credentials directory; prices are USD per one million tokens. Aggregates are available on the dashboard, per virtual key through the `/api/virtual-keys` management API, and for monitoring systems through the Prometheus `/metrics` endpoint. Compression savings and costs are labeled as estimates because provider tokenizers and billing rules remain authoritative.
+
+Virtual API keys let one gateway serve multiple clients under separate limits. Each key carries optional daily and monthly USD budgets enforced from the cost ledger, requests-per-minute and tokens-per-minute sliding windows, an expiry timestamp, and a model allowlist with glob patterns. Keys are stored as SHA-256 hashes; the plaintext secret is shown exactly once at creation time.
 
 ## 控制台预览
 
@@ -133,10 +128,10 @@ sudo docker run -d \
   -p 4283:4283 \
   -v /opt/omni-gateway/creds:/app/backend/data/creds \
   -v /opt/omni-gateway/logs:/app/backend/data/logs \
-  nguywnben/omni-gateway:1.3.1
+  nguywnben/omni-gateway:1.4.0
 ```
 
-同一版本也已发布至 GitHub Packages：`ghcr.io/nguywnben/omni-gateway:1.3.1`。`latest` 标签跟踪最新的稳定版本；`edge` 标签跟踪经测试但尚未正式发布的 `main` 分支构建。在需要环境可复现的场景下，建议固定具体版本号或镜像摘要。
+同一版本也已发布至 GitHub Packages：`ghcr.io/nguywnben/omni-gateway:1.4.0`。`latest` 标签跟踪最新的稳定版本；`edge` 标签跟踪经测试但尚未正式发布的 `main` 分支构建。在需要环境可复现的场景下，建议固定具体版本号或镜像摘要。
 
 打开浏览器访问控制台：
 
@@ -148,7 +143,7 @@ http://你的服务器IP:4283
 
 系统管理的密码均以加盐 scrypt 哈希安全存储，控制台会话使用 HttpOnly Cookie，公共 SDK 请求则使用自动生成的 `sk-ogw-` API 密钥进行鉴权。如需非交互式部署，可预先配置 `PANEL_PASSWORD` 直接跳过初始化引导界面。
 
-`1.3.1` 镜像针对 `linux/amd64` 平台构建发布。ARM64 镜像发布暂缓，直到包括 Vertex 传输栈在内的所有供应商依赖均能在同一标准下构建并通过测试。
+`1.4.0` 镜像针对 `linux/amd64` 平台构建发布。ARM64 镜像发布暂缓，直到包括 Vertex 传输栈在内的所有供应商依赖均能在同一标准下构建并通过测试。
 
 若服务器启用了防火墙，请放行网关端口：
 
@@ -183,9 +178,22 @@ sudo mkdir -p /opt/omni-gateway/creds /opt/omni-gateway/logs
 docker compose -f deploy/docker-compose.yml up -d
 ```
 
-附带的 Compose 文件默认拉取 `nguywnben/omni-gateway:latest` 并使用 `/opt/omni-gateway` 存储宿主机数据。可通过设置 `IMAGE=nguywnben/omni-gateway:1.3.1` 来锁定该版本，或设置 `DATA_DIR=/自定义路径` 使用不同的存储路径。
+附带的 Compose 文件默认拉取 `nguywnben/omni-gateway:latest` 并使用 `/opt/omni-gateway` 存储宿主机数据。可通过设置 `IMAGE=nguywnben/omni-gateway:1.4.0` 来锁定该版本，或设置 `DATA_DIR=/自定义路径` 使用不同的存储路径。
 
 Compose 会从 Shell 环境变量或根目录 `.env` 文件传递 `API_KEY`、`PANEL_PASSWORD`、`SETUP_TOKEN`、外部存储 URI 和 `PROXY`。留空即可保持自动生成密钥、首次引导配置、本地 SQLite 存储和直接网络出站的默认行为。
+
+
+### Kubernetes (Helm)
+
+A Helm chart is provided at `deploy/helm/omni-gateway` with a persistent volume for credentials and the usage ledger, liveness/readiness probes, optional Ingress, and an optional Prometheus ServiceMonitor wired to `/metrics`:
+
+```bash
+helm install omni-gateway deploy/helm/omni-gateway \
+  --set secrets.panelPassword=change-me
+```
+
+The chart deploys exactly one replica with a `Recreate` strategy because the 1.x runtime holds routing and rate-limit state in process memory. Do not scale the Deployment horizontally.
+
 
 ### 本地开发
 
@@ -250,9 +258,16 @@ Omni Gateway 读取配置的优先级为：环境变量 > 已保存配置 > 默�
 | `RETRY_429_INTERVAL` | `1` | 临时重试的基础退避间隔（秒）。 |
 | `AUTO_DISABLE` | `false` | 在发生配置的严重错误后自动禁用对应凭据。 |
 | `AUTO_DISABLE_ERROR_CODES` | `403` | 逗号分隔的严重错误状态码列表。 |
-| `ROUTING_STRATEGY` | `balanced` | 凭据选择策略：`balanced`（均衡）或 `priority`（优先级）。 |
+| `ROUTING_STRATEGY` | `balanced` | Credential selection policy: `balanced`, `priority`, `weighted`, `least_latency`, or `lowest_cost`. |
 | `PREFERRED_PROVIDER` | 空 | `priority` 策略优先选用的供应商，例如 `google_antigravity` 或 `google_ai_studio`。 |
 | `UPSTREAM_TIMEOUT_SECONDS` | `300` | 供应商推理超时时间，限制在 5 到 900 秒之间。 |
+| `RESPONSE_CACHE_ENABLED` | `false` | Cache deterministic (temperature 0) non-streaming responses in memory. |
+| `RESPONSE_CACHE_TTL_SECONDS` | `300` | Response cache entry lifetime in seconds. |
+| `RESPONSE_CACHE_MAX_ENTRIES` | `1000` | Maximum responses held by the in-memory cache. |
+| `GUARDRAILS_ENABLED` | `false` | Enable the pre-call guardrails pipeline. |
+| `GUARDRAILS_PII_MASKING_ENABLED` | `true` | Mask emails, card numbers, and API keys in outbound request text. |
+| `GUARDRAILS_INJECTION_DETECTION_ENABLED` | `true` | Reject prompt-injection attempts with HTTP 400. |
+| `GUARDRAILS_BLOCKED_KEYWORDS` | empty | Comma-separated case-insensitive keywords that block a request. |
 | `ANTI_TRUNCATION_MAX_ATTEMPTS` | `3` | 防截断流式传输的最大续写重试次数。 |
 | `TOKEN_COMPRESSION_ENABLED` | `true` | 在路由至供应商前压缩超长对话历史。 |
 | `TOKEN_COMPRESSION_THRESHOLD` | `32000` | 触发上下文压缩的预估输入令牌阈值。 |
@@ -286,6 +301,10 @@ Omni Gateway 读取配置的优先级为：环境变量 > 已保存配置 > 默�
 | `CLAUDE_USER_AGENT` | `claude-cli/omni-gateway` | Claude Code 与 Claude Platform 请求的可选 User-Agent 覆盖值。 |
 | `ANTIGRAVITY_USER_AGENT` | `antigravity/cli/1.0.1 windows/amd64` | Google Antigravity 协议级请求的可选 User-Agent 覆盖值。 |
 | `ANTIGRAVITY_PAYLOAD_USER_AGENT` | `antigravity` | Google Antigravity 载荷层 userAgent 的可选覆盖值。 |
+| `METRICS_TOKEN` | empty | Optional bearer token required to scrape `GET /metrics`. |
+| `LANGFUSE_PUBLIC_KEY` | empty | Enables Langfuse trace export together with the secret key. |
+| `LANGFUSE_SECRET_KEY` | empty | Langfuse secret key for trace export. |
+| `LANGFUSE_HOST` | `https://cloud.langfuse.com` | Langfuse ingestion endpoint. |
 | `LOG_LEVEL` | `info` | 运行时日志记录级别。 |
 | `LOG_MAX_MB` | `10` | 单个活动日志文件在轮转前的最大体积（MB）。 |
 | `LOG_BACKUP_COUNT` | `3` | 保留的历史轮转日志文件数量。 |

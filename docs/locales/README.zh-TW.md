@@ -45,7 +45,7 @@
 
 面向程式設計工具的通用 AI 路由器。Omni Gateway 提供智慧自動容錯移轉、權杖感知上下文清理、使用量視覺化與無縫格式轉換，讓本地 Agent、IDE 助手與自動化腳本能透過單一穩定的 API 介面調用各類免費與付費的 LLM 算力。
 
-> **專案狀態：** 穩定。版本 `1.3.1` 完善了支援 15 種語言的在地化控制台，新增感知語系環境的管理 API 提示訊息與版本更新指南，並保留了自 `1.0.0` 確立的穩定 SDK 路由、規範管理路由、配置命名與單實例執行契約。
+> **專案狀態：** 穩定。版本 `1.4.0` 完善了支援 15 種語言的在地化控制台，新增感知語系環境的管理 API 提示訊息與版本更新指南，並保留了自 `1.0.0` 確立的穩定 SDK 路由、規範管理路由、配置命名與單實例執行契約。
 
 ## 為什麼選擇 Omni Gateway
 
@@ -133,10 +133,10 @@ sudo docker run -d \
   -p 4283:4283 \
   -v /opt/omni-gateway/creds:/app/backend/data/creds \
   -v /opt/omni-gateway/logs:/app/backend/data/logs \
-  nguywnben/omni-gateway:1.3.1
+  nguywnben/omni-gateway:1.4.0
 ```
 
-同一版本亦已發布至 GitHub Packages：`ghcr.io/nguywnben/omni-gateway:1.3.1`。`latest` 標籤追蹤最新的穩定版本；`edge` 標籤追蹤經測試但尚未正式發布的 `main` 分支組建。在需要環境可重現的場景下，建議固定具體版本號或映像檔摘要。
+同一版本亦已發布至 GitHub Packages：`ghcr.io/nguywnben/omni-gateway:1.4.0`。`latest` 標籤追蹤最新的穩定版本；`edge` 標籤追蹤經測試但尚未正式發布的 `main` 分支組建。在需要環境可重現的場景下，建議固定具體版本號或映像檔摘要。
 
 開啟瀏覽器造訪控制台：
 
@@ -148,7 +148,7 @@ http://你的伺服器IP:4283
 
 系統管理的密碼均以加鹽 scrypt 雜湊安全儲存，控制台工作階段使用 HttpOnly Cookie，公共 SDK 請求則使用自動產生的 `sk-ogw-` API 金鑰進行鑑權。如需非互動式部署，可預先配置 `PANEL_PASSWORD` 直接略過初始化引導介面。
 
-`1.3.1` 映像檔針對 `linux/amd64` 平台建置發布。ARM64 映像檔發布暫緩，直到包括 Vertex 傳輸堆疊在內的所有供應商依賴均能在同一標準下建置並通過測試。
+`1.4.0` 映像檔針對 `linux/amd64` 平台建置發布。ARM64 映像檔發布暫緩，直到包括 Vertex 傳輸堆疊在內的所有供應商依賴均能在同一標準下建置並通過測試。
 
 若伺服器啟用了防火牆，請放行閘道連接埠：
 
@@ -183,9 +183,21 @@ sudo mkdir -p /opt/omni-gateway/creds /opt/omni-gateway/logs
 docker compose -f deploy/docker-compose.yml up -d
 ```
 
-隨附的 Compose 檔案預設拉取 `nguywnben/omni-gateway:latest` 並使用 `/opt/omni-gateway` 儲存宿主機資料。可透過設定 `IMAGE=nguywnben/omni-gateway:1.3.1` 來鎖定該版本，或設定 `DATA_DIR=/自訂路徑` 使用不同的儲存路徑。
+隨附的 Compose 檔案預設拉取 `nguywnben/omni-gateway:latest` 並使用 `/opt/omni-gateway` 儲存宿主機資料。可透過設定 `IMAGE=nguywnben/omni-gateway:1.4.0` 來鎖定該版本，或設定 `DATA_DIR=/自訂路徑` 使用不同的儲存路徑。
 
 Compose 會從 Shell 環境變數或根目錄 `.env` 檔案傳遞 `API_KEY`、`PANEL_PASSWORD`、`SETUP_TOKEN`、外部儲存 URI 與 `PROXY`。留空即可保持自動產生金鑰、首次引導配置、本地 SQLite 儲存與直接網路出站的預設行為。
+
+
+### Kubernetes (Helm)
+
+A Helm chart is provided at `deploy/helm/omni-gateway` with a persistent volume for credentials and the usage ledger, liveness/readiness probes, optional Ingress, and an optional Prometheus ServiceMonitor wired to `/metrics`:
+
+```bash
+helm install omni-gateway deploy/helm/omni-gateway \
+  --set secrets.panelPassword=change-me
+```
+
+The chart deploys exactly one replica with a `Recreate` strategy because the 1.x runtime holds routing and rate-limit state in process memory. Do not scale the Deployment horizontally.
 
 ### 本地開發
 
@@ -250,9 +262,16 @@ Omni Gateway 讀取配置的優先順序為：環境變數 > 已儲存配置 > �
 | `RETRY_429_INTERVAL` | `1` | 暫時性重試的基礎退避間隔（秒）。 |
 | `AUTO_DISABLE` | `false` | 在發生配置的嚴重錯誤後自動停用對應憑證。 |
 | `AUTO_DISABLE_ERROR_CODES` | `403` | 逗號分隔的嚴重錯誤狀態碼列表。 |
-| `ROUTING_STRATEGY` | `balanced` | 憑證選擇策略：`balanced`（均衡）或 `priority`（優先級）。 |
+| `ROUTING_STRATEGY` | `balanced` | Credential selection policy: `balanced`, `priority`, `weighted`, `least_latency`, or `lowest_cost`. |
 | `PREFERRED_PROVIDER` | 空 | `priority` 策略優先選用的供應商，例如 `google_antigravity` 或 `google_ai_studio`。 |
 | `UPSTREAM_TIMEOUT_SECONDS` | `300` | 供應商推論逾時時間，限制在 5 到 900 秒之間。 |
+| `RESPONSE_CACHE_ENABLED` | `false` | Cache deterministic (temperature 0) non-streaming responses in memory. |
+| `RESPONSE_CACHE_TTL_SECONDS` | `300` | Response cache entry lifetime in seconds. |
+| `RESPONSE_CACHE_MAX_ENTRIES` | `1000` | Maximum responses held by the in-memory cache. |
+| `GUARDRAILS_ENABLED` | `false` | Enable the pre-call guardrails pipeline. |
+| `GUARDRAILS_PII_MASKING_ENABLED` | `true` | Mask emails, card numbers, and API keys in outbound request text. |
+| `GUARDRAILS_INJECTION_DETECTION_ENABLED` | `true` | Reject prompt-injection attempts with HTTP 400. |
+| `GUARDRAILS_BLOCKED_KEYWORDS` | empty | Comma-separated case-insensitive keywords that block a request. |
 | `ANTI_TRUNCATION_MAX_ATTEMPTS` | `3` | 防截斷串流傳輸的最大續寫重試次數。 |
 | `TOKEN_COMPRESSION_ENABLED` | `true` | 在路由至供應商前壓縮超長對話歷史。 |
 | `TOKEN_COMPRESSION_THRESHOLD` | `32000` | 觸發上下文壓縮的預估輸入權杖閾值。 |
@@ -286,6 +305,10 @@ Omni Gateway 讀取配置的優先順序為：環境變數 > 已儲存配置 > �
 | `CLAUDE_USER_AGENT` | `claude-cli/omni-gateway` | Claude Code 與 Claude Platform 請求的可選 User-Agent 覆蓋值。 |
 | `ANTIGRAVITY_USER_AGENT` | `antigravity/cli/1.0.1 windows/amd64` | Google Antigravity 協定層級請求的可選 User-Agent 覆蓋值。 |
 | `ANTIGRAVITY_PAYLOAD_USER_AGENT` | `antigravity` | Google Antigravity 負載層 userAgent 的可選覆蓋值。 |
+| `METRICS_TOKEN` | empty | Optional bearer token required to scrape `GET /metrics`. |
+| `LANGFUSE_PUBLIC_KEY` | empty | Enables Langfuse trace export together with the secret key. |
+| `LANGFUSE_SECRET_KEY` | empty | Langfuse secret key for trace export. |
+| `LANGFUSE_HOST` | `https://cloud.langfuse.com` | Langfuse ingestion endpoint. |
 | `LOG_LEVEL` | `info` | 執行階段日誌記錄層級。 |
 | `LOG_MAX_MB` | `10` | 單一活動日誌檔案在輪替前的最大體積（MB）。 |
 | `LOG_BACKUP_COUNT` | `3` | 保留的歷史輪替日誌檔案數量。 |
@@ -408,7 +431,9 @@ Omni Gateway 支援在模型名稱中解析特性前綴與後綴：
 
 ## 使用量與成本透明度
 
-Omni Gateway 在控制台各時間跨度內記錄請求量、成功率、憑證歸屬、供應商回報的 Token 使用量，以及上下文壓縮所節省的預估 Token 數量。壓縮節省量標為預估值，因為供應商的分詞器（Tokenizer）與計費規則具有最終權威。基於供應商價格的動態路由被特意留作未來的策略層，以確保核心 API 在接入更多供應商時保持極簡與穩定。
+Omni Gateway records request volume, success rate, credential attribution, provider-reported token usage, estimated context-compression savings, and an estimated USD cost per call computed from a maintained model pricing table. Override or extend prices by placing a `model_pricing.json` file in the credentials directory; prices are USD per one million tokens. Aggregates are available on the dashboard, per virtual key through the `/api/virtual-keys` management API, and for monitoring systems through the Prometheus `/metrics` endpoint. Compression savings and costs are labeled as estimates because provider tokenizers and billing rules remain authoritative.
+
+Virtual API keys let one gateway serve multiple clients under separate limits. Each key carries optional daily and monthly USD budgets enforced from the cost ledger, requests-per-minute and tokens-per-minute sliding windows, an expiry timestamp, and a model allowlist with glob patterns. Keys are stored as SHA-256 hashes; the plaintext secret is shown exactly once at creation time.
 
 ## 憑證配置工作流程
 

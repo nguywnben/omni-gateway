@@ -45,7 +45,7 @@
 
 コーディングツールのためのユニバーサル AI ルーター。Omni Gateway は、スマートな自動フォールバック、トークン対応のコンテキストクリーンアップ、利用状況の可視化、シームレスなフォーマット変換を提供し、ローカルエージェント、IDE アシスタント、自動化スクリプトが単一の安定した API インターフェースを通じて無料および有料の LLM 処理能力を活用できるようにします。
 
-> **プロジェクト状況:** 安定版。バージョン `1.3.1` では 15 言語に対応したローカライズ済みコンソールが完成し、ロケール対応の管理 API メッセージおよびリリース連動のアップデートガイドが追加されました。また、`1.0.0` で確立された安定した SDK ルート、正規管理ルート、設定名、および単一インスタンス実行コントラクトが維持されています。
+> **Project status:** Stable. Version `1.4.0` adds enterprise governance and FinOps: virtual API keys with budgets and rate limits, a per-call USD cost ledger backed by a maintained pricing table, optional guardrails and response caching, three new routing strategies, a Prometheus metrics endpoint, Langfuse trace export, and a Helm chart — while preserving the stable SDK routes, canonical management routes, configuration names, and single-instance runtime contract established in `1.0.0`.
 
 ## Omni Gateway を選ぶ理由
 
@@ -133,10 +133,10 @@ sudo docker run -d \
   -p 4283:4283 \
   -v /opt/omni-gateway/creds:/app/backend/data/creds \
   -v /opt/omni-gateway/logs:/app/backend/data/logs \
-  nguywnben/omni-gateway:1.3.1
+  nguywnben/omni-gateway:1.4.0
 ```
 
-同一リリースは GitHub Packages にも公開されています: `ghcr.io/nguywnben/omni-gateway:1.3.1`。`latest` タグは最新の安定版リリースを追跡し、`edge` タグは検証済みだが未リリースの `main` ブランチビルドを追跡します。環境の再現性が必要な場合は、特定のバージョンタグまたはダイジェストを固定してください。
+同一リリースは GitHub Packages にも公開されています: `ghcr.io/nguywnben/omni-gateway:1.4.0`。`latest` タグは最新の安定版リリースを追跡し、`edge` タグは検証済みだが未リリースの `main` ブランチビルドを追跡します。環境の再現性が必要な場合は、特定のバージョンタグまたはダイジェストを固定してください。
 
 ブラウザでコントロールパネルを開きます:
 
@@ -148,7 +148,7 @@ http://サーバーのIPアドレス:4283
 
 システム管理パスワードはソルト付き scrypt ハッシュで安全に保存され、コンソールセッションには HttpOnly Cookie が使用され、公開 SDK リクエストは自動生成される `sk-ogw-` API キーで認証されます。非対話型デプロイの場合は、`PANEL_PASSWORD` を事前設定することで初期設定画面を完全にスキップできます。
 
-`1.3.1` イメージは `linux/amd64` 向けにビルド・公開されています。Vertex トランスポートスタックを含むすべてのプロバイダー依存関係が同一基準でビルドおよびテスト可能になるまで、ARM64 イメージの公開は保留されています。
+`1.4.0` イメージは `linux/amd64` 向けにビルド・公開されています。Vertex トランスポートスタックを含むすべてのプロバイダー依存関係が同一基準でビルドおよびテスト可能になるまで、ARM64 イメージの公開は保留されています。
 
 サーバーのファイアウォールが有効な場合は、ゲートウェイポートを開放してください:
 
@@ -183,9 +183,22 @@ sudo mkdir -p /opt/omni-gateway/creds /opt/omni-gateway/logs
 docker compose -f deploy/docker-compose.yml up -d
 ```
 
-付属の Compose ファイルはデフォルトで `nguywnben/omni-gateway:latest` をプルし、ホストデータの永続化に `/opt/omni-gateway` を使用します。このリリースを固定するには `IMAGE=nguywnben/omni-gateway:1.3.1` を設定し、別の保存先を使用する場合は `DATA_DIR=/カスタムパス` を設定します。
+付属の Compose ファイルはデフォルトで `nguywnben/omni-gateway:latest` をプルし、ホストデータの永続化に `/opt/omni-gateway` を使用します。このリリースを固定するには `IMAGE=nguywnben/omni-gateway:1.4.0` を設定し、別の保存先を使用する場合は `DATA_DIR=/カスタムパス` を設定します。
 
 Compose はシェル環境変数またはルートの `.env` ファイルから `API_KEY`、`PANEL_PASSWORD`、`SETUP_TOKEN`、外部ストレージ URI、`PROXY` を渡します。自動キー生成、初回セットアップ、ローカル SQLite ストレージ、直接アウトバウンド通信のデフォルト動作を維持する場合は、これらを空のままにしてください。
+
+
+### Kubernetes (Helm)
+
+A Helm chart is provided at `deploy/helm/omni-gateway` with a persistent volume for credentials and the usage ledger, liveness/readiness probes, optional Ingress, and an optional Prometheus ServiceMonitor wired to `/metrics`:
+
+```bash
+helm install omni-gateway deploy/helm/omni-gateway \
+  --set secrets.panelPassword=change-me
+```
+
+The chart deploys exactly one replica with a `Recreate` strategy because the 1.x runtime holds routing and rate-limit state in process memory. Do not scale the Deployment horizontally.
+
 
 ### ローカル開発
 
@@ -250,9 +263,16 @@ Omni Gateway は、環境変数 > 保存された設定 > デフォルト値の�
 | `RETRY_429_INTERVAL` | `1` | 一時的リトライの基本バックオフ間隔（秒）。 |
 | `AUTO_DISABLE` | `false` | 設定された重大なエラーの発生時に認証情報を自動無効化。 |
 | `AUTO_DISABLE_ERROR_CODES` | `403` | 重大なエラーとみなすステータスコードのカンマ区切りリスト。 |
-| `ROUTING_STRATEGY` | `balanced` | 認証情報選択ポリシー: `balanced`（均等）または `priority`（優先度順）。 |
+| `ROUTING_STRATEGY` | `balanced` | Credential selection policy: `balanced`, `priority`, `weighted`, `least_latency`, or `lowest_cost`. |
 | `PREFERRED_PROVIDER` | 空 | `priority` ポリシーで優先されるプロバイダー（例: `google_antigravity`、`google_ai_studio`）。 |
 | `UPSTREAM_TIMEOUT_SECONDS` | `300` | プロバイダー推論タイムアウト（5〜900 秒）。 |
+| `RESPONSE_CACHE_ENABLED` | `false` | Cache deterministic (temperature 0) non-streaming responses in memory. |
+| `RESPONSE_CACHE_TTL_SECONDS` | `300` | Response cache entry lifetime in seconds. |
+| `RESPONSE_CACHE_MAX_ENTRIES` | `1000` | Maximum responses held by the in-memory cache. |
+| `GUARDRAILS_ENABLED` | `false` | Enable the pre-call guardrails pipeline. |
+| `GUARDRAILS_PII_MASKING_ENABLED` | `true` | Mask emails, card numbers, and API keys in outbound request text. |
+| `GUARDRAILS_INJECTION_DETECTION_ENABLED` | `true` | Reject prompt-injection attempts with HTTP 400. |
+| `GUARDRAILS_BLOCKED_KEYWORDS` | empty | Comma-separated case-insensitive keywords that block a request. |
 | `ANTI_TRUNCATION_MAX_ATTEMPTS` | `3` | ストリーミング途切れ防止機能の最大継続リトライ回数。 |
 | `TOKEN_COMPRESSION_ENABLED` | `true` | プロバイダーへのルーティング前に長大な会話履歴を圧縮。 |
 | `TOKEN_COMPRESSION_THRESHOLD` | `32000` | コンテキスト圧縮を開始する推定入力トークンしきい値。 |
@@ -286,6 +306,10 @@ Omni Gateway は、環境変数 > 保存された設定 > デフォルト値の�
 | `CLAUDE_USER_AGENT` | `claude-cli/omni-gateway` | Claude Code および Claude Platform リクエスト用のオプションの User-Agent 上書き。 |
 | `ANTIGRAVITY_USER_AGENT` | `antigravity/cli/1.0.1 windows/amd64` | Google Antigravity プロトコルレベルリクエスト用のオプションの User-Agent 上書き。 |
 | `ANTIGRAVITY_PAYLOAD_USER_AGENT` | `antigravity` | Google Antigravity ペイロード層 userAgent フィールドのオプションの上書き。 |
+| `METRICS_TOKEN` | empty | Optional bearer token required to scrape `GET /metrics`. |
+| `LANGFUSE_PUBLIC_KEY` | empty | Enables Langfuse trace export together with the secret key. |
+| `LANGFUSE_SECRET_KEY` | empty | Langfuse secret key for trace export. |
+| `LANGFUSE_HOST` | `https://cloud.langfuse.com` | Langfuse ingestion endpoint. |
 | `LOG_LEVEL` | `info` | 実行時のログレベル。 |
 | `LOG_MAX_MB` | `10` | ログファイルがローテーションされるまでの最大サイズ（MB）。 |
 | `LOG_BACKUP_COUNT` | `3` | 保持するローテーションログファイルの世代数。 |
@@ -408,7 +432,9 @@ Omni Gateway は、モデル名に含まれる機能プレフィックスおよ�
 
 ## 利用状況とコストの透明性
 
-Omni Gateway は、コンソール上の各期間において、リクエストトラフィック、成功率、認証情報ごとの帰属、プロバイダー報告のトークン使用量、およびコンテキスト圧縮によって節約された推定トークン数を記録します。トークナイザーおよび課金ルールはプロバイダー側に最終権限があるため、圧縮による節約量は推定値として表示されます。プロバイダーの価格に基づく動的ルーティングは、将来のポリシーレイヤーとして意図的に分離されており、プロバイダーが追加されてもコア API の安定性が保たれます。
+Omni Gateway records request volume, success rate, credential attribution, provider-reported token usage, estimated context-compression savings, and an estimated USD cost per call computed from a maintained model pricing table. Override or extend prices by placing a `model_pricing.json` file in the credentials directory; prices are USD per one million tokens. Aggregates are available on the dashboard, per virtual key through the `/api/virtual-keys` management API, and for monitoring systems through the Prometheus `/metrics` endpoint. Compression savings and costs are labeled as estimates because provider tokenizers and billing rules remain authoritative.
+
+Virtual API keys let one gateway serve multiple clients under separate limits. Each key carries optional daily and monthly USD budgets enforced from the cost ledger, requests-per-minute and tokens-per-minute sliding windows, an expiry timestamp, and a model allowlist with glob patterns. Keys are stored as SHA-256 hashes; the plaintext secret is shown exactly once at creation time.
 
 ## 認証情報の設定ワークフロー
 

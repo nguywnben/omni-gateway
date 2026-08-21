@@ -45,7 +45,7 @@
 
 Kodlama araçları için evrensel bir yapay zeka yönlendiricisi. Omni Gateway; akıllı otomatik yük devretme (auto-fallback), belirteç (token) duyarlı istek temizleme, kullanım görünürlüğü ve kusursuz format dönüşümü sağlayarak yerel ajanların, IDE asistanlarının ve otomasyon betiklerinin tek bir kararlı API yüzeyi üzerinden ücretsiz ve premium LLM kapasitesini kullanmasına olanak tanır.
 
-> **Proje durumu:** Kararlı. Sürüm `1.3.1`, 15 dilde yerelleştirilmiş konsolu tamamlar, yerel ayarlara duyarlı yönetim API mesajları ve sürüme duyarlı güncelleme rehberliği ekler; `1.0.0` ile oluşturulan kararlı SDK rotalarını, kurallı yönetim rotalarını, yapılandırma adlarını ve tek örnekli çalışma zamanı sözleşmesini korur.
+> **Project status:** Stable. Version `1.4.0` adds enterprise governance and FinOps: virtual API keys with budgets and rate limits, a per-call USD cost ledger backed by a maintained pricing table, optional guardrails and response caching, three new routing strategies, a Prometheus metrics endpoint, Langfuse trace export, and a Helm chart — while preserving the stable SDK routes, canonical management routes, configuration names, and single-instance runtime contract established in `1.0.0`.
 
 ## Neden Omni Gateway
 
@@ -53,14 +53,9 @@ Modern kodlama iş akışları genellikle istemcileri ve sağlayıcıları bir a
 
 ## <a id="temel-yetenekler"></a>Temel Yetenekler
 
-- Akıllı otomatik yük devretme: istek başına kimlik bilgilerini rezerve eder, eşzamanlı trafiği dağıtır, adil rotasyon için her denemeyi izler ve son hataları, bekleme sürelerini (cooldown), hız sınırlarını (rate limit) ve tükenen kapasiteleri otomatik olarak atlatır.
-- Belirteç duyarlı temizleme: yükleri normalleştirir ve sistem talimatlarını, araç tanımlarını ve son bağlamı korurken yalnızca aşırı büyük konuşma öneklerini güvenli tur sınırlarında kırpar.
-- Format dönüştürme: OpenAI Chat Completions ve Responses, Gemini yerel istekleri ve Anthropic Messages formatlarını kabul eder; ardından istekleri ve akış yanıtlarını formatlar arasında sorunsuz şekilde dönüştürür.
-- Kimlik bilgisi orkestrasyonu: OAuth hesaplarını ve sağlayıcı API anahtarlarını sağlık durumu, bekleme süresi takibi, doğrulama, tekilleştirme ve sağlayıcıya duyarlı yük devretme ile yönetir.
-- Kimlik bilgisi düzeyinde model yönlendirmesi: her kimlik bilgisi için ayrı bir yetenek kataloğu tutar, böylece bir hesabın yetkisi, seçilen modeli sunmayan başka bir hesaba istek gönderemez.
-- Rota sağlık belleği: kimlik bilgisi kapsamında model bulunamadı (model-not-found) yanıtlarını kaydeder ve Models sayfasından kurtarma için etkilenen rotaları gösterir.
-- Akış esnekliği: SSE akışını, akış çıktısı gerektiren istemciler için sözde akışı (pseudo-streaming) ve uzun üretimler için kesilmeyi önleyici (anti-truncation) yeniden denemeleri destekler.
-- Kontrol paneli: kimlik bilgileri, günlükler, yapılandırma, kullanım ve sürüm bilgileri için bir web konsolu ile birlikte gelir.
+Omni Gateway records request volume, success rate, credential attribution, provider-reported token usage, estimated context-compression savings, and an estimated USD cost per call computed from a maintained model pricing table. Override or extend prices by placing a `model_pricing.json` file in the credentials directory; prices are USD per one million tokens. Aggregates are available on the dashboard, per virtual key through the `/api/virtual-keys` management API, and for monitoring systems through the Prometheus `/metrics` endpoint. Compression savings and costs are labeled as estimates because provider tokenizers and billing rules remain authoritative.
+
+Virtual API keys let one gateway serve multiple clients under separate limits. Each key carries optional daily and monthly USD budgets enforced from the cost ledger, requests-per-minute and tokens-per-minute sliding windows, an expiry timestamp, and a model allowlist with glob patterns. Keys are stored as SHA-256 hashes; the plaintext secret is shown exactly once at creation time.
 
 ## Konsol Önizlemesi
 
@@ -133,10 +128,10 @@ sudo docker run -d \
   -p 4283:4283 \
   -v /opt/omni-gateway/creds:/app/backend/data/creds \
   -v /opt/omni-gateway/logs:/app/backend/data/logs \
-  nguywnben/omni-gateway:1.3.1
+  nguywnben/omni-gateway:1.4.0
 ```
 
-Aynı sürüm GitHub Packages üzerinde `ghcr.io/nguywnben/omni-gateway:1.3.1` olarak da yayınlanır. `latest` etiketi en yeni kararlı sürümü izler; `edge`, `main` dalındaki doğrulanmış ancak yayınlanmamış derlemeleri izler. Tekrarlanabilir dağıtım önemli olduğunda belirli bir sürüm etiketini veya özetini (digest) sabitleyin.
+Aynı sürüm GitHub Packages üzerinde `ghcr.io/nguywnben/omni-gateway:1.4.0` olarak da yayınlanır. `latest` etiketi en yeni kararlı sürümü izler; `edge`, `main` dalındaki doğrulanmış ancak yayınlanmamış derlemeleri izler. Tekrarlanabilir dağıtım önemli olduğunda belirli bir sürüm etiketini veya özetini (digest) sabitleyin.
 
 Kontrol panelini şu adresten açın:
 
@@ -148,7 +143,7 @@ http://SUNUCU_IP_ADRESINIZ:4283
 
 Uygulama tarafından yönetilen şifreler tuzlanmış scrypt karmaları (salted hashes) olarak saklanır, kontrol paneli oturumları HttpOnly çerezleri kullanır ve genel SDK istekleri oluşturulan `sk-ogw-` API anahtarıyla kimlik doğrulaması yapar. Etkileşimsiz bir dağıtım için `PANEL_PASSWORD` değişkenini önceden yapılandırın ve kurulum ekranını tamamen atlayın.
 
-`1.3.1` konteyneri `linux/amd64` için yayınlanmıştır. Vertex aktarım yığını dahil tüm sağlayıcı bağımlılıkları aynı sözleşmeyle derlenip test edilene kadar ARM64 yayını kasıtlı olarak duraklatılmıştır.
+`1.4.0` konteyneri `linux/amd64` için yayınlanmıştır. Vertex aktarım yığını dahil tüm sağlayıcı bağımlılıkları aynı sözleşmeyle derlenip test edilene kadar ARM64 yayını kasıtlı olarak duraklatılmıştır.
 
 Sunucu güvenlik duvarı etkinse ağ geçidi bağlantı noktasına izin verin:
 
@@ -183,9 +178,22 @@ sudo mkdir -p /opt/omni-gateway/creds /opt/omni-gateway/logs
 docker compose -f deploy/docker-compose.yml up -d
 ```
 
-Birlikte gelen compose dosyası `nguywnben/omni-gateway:latest` imajını çeker ve kalıcı ana makine verileri için varsayılan olarak `/opt/omni-gateway` kullanır. Bu sürümü sabitlemek için `IMAGE=nguywnben/omni-gateway:1.3.1` olarak ayarlayın ve sunucu farklı bir depolama konumu kullandığında `DATA_DIR=/ozel/yol` olarak ayarlayın.
+Birlikte gelen compose dosyası `nguywnben/omni-gateway:latest` imajını çeker ve kalıcı ana makine verileri için varsayılan olarak `/opt/omni-gateway` kullanır. Bu sürümü sabitlemek için `IMAGE=nguywnben/omni-gateway:1.4.0` olarak ayarlayın ve sunucu farklı bir depolama konumu kullandığında `DATA_DIR=/ozel/yol` olarak ayarlayın.
 
 Compose; `API_KEY`, `PANEL_PASSWORD`, `SETUP_TOKEN`, harici depolama URI'leri ve `PROXY` değişkenlerini kabuktan veya kök dizindeki `.env` dosyasından iletir. Otomatik anahtar oluşturma, ilk çalıştırma kurulumu, yerel SQLite depolaması ve doğrudan giden ağ bağlantısını korumak için bunları boş bırakın.
+
+
+### Kubernetes (Helm)
+
+A Helm chart is provided at `deploy/helm/omni-gateway` with a persistent volume for credentials and the usage ledger, liveness/readiness probes, optional Ingress, and an optional Prometheus ServiceMonitor wired to `/metrics`:
+
+```bash
+helm install omni-gateway deploy/helm/omni-gateway \
+  --set secrets.panelPassword=change-me
+```
+
+The chart deploys exactly one replica with a `Recreate` strategy because the 1.x runtime holds routing and rate-limit state in process memory. Do not scale the Deployment horizontally.
+
 
 ### Yerel Geliştirme
 
@@ -250,9 +258,16 @@ Omni Gateway, yapılandırmayı önce ortam değişkenlerinden, ardından kayded
 | `RETRY_429_INTERVAL` | `1` | Saniye cinsinden geçici yeniden denemeler arasındaki temel gecikme. |
 | `AUTO_DISABLE` | `false` | Yapılandırılmış kritik hatalardan (hard failures) sonra kimlik bilgilerini devre dışı bırakın. |
 | `AUTO_DISABLE_ERROR_CODES` | `403` | Virgülle ayrılmış kritik hata durum kodları. |
-| `ROUTING_STRATEGY` | `balanced` | Kimlik bilgisi seçim politikası: `balanced` (dengeli) veya `priority` (öncelikli). |
+| `ROUTING_STRATEGY` | `balanced` | Credential selection policy: `balanced`, `priority`, `weighted`, `least_latency`, or `lowest_cost`. |
 | `PREFERRED_PROVIDER` | boş | `priority` stratejisi tarafından tercih edilen sağlayıcı, örneğin `google_antigravity` veya `google_ai_studio`. |
 | `UPSTREAM_TIMEOUT_SECONDS` | `300` | Sağlayıcı çıkarım zaman aşımı, 5 ile 900 saniye arasında sınırlandırılmıştır. |
+| `RESPONSE_CACHE_ENABLED` | `false` | Cache deterministic (temperature 0) non-streaming responses in memory. |
+| `RESPONSE_CACHE_TTL_SECONDS` | `300` | Response cache entry lifetime in seconds. |
+| `RESPONSE_CACHE_MAX_ENTRIES` | `1000` | Maximum responses held by the in-memory cache. |
+| `GUARDRAILS_ENABLED` | `false` | Enable the pre-call guardrails pipeline. |
+| `GUARDRAILS_PII_MASKING_ENABLED` | `true` | Mask emails, card numbers, and API keys in outbound request text. |
+| `GUARDRAILS_INJECTION_DETECTION_ENABLED` | `true` | Reject prompt-injection attempts with HTTP 400. |
+| `GUARDRAILS_BLOCKED_KEYWORDS` | empty | Comma-separated case-insensitive keywords that block a request. |
 | `ANTI_TRUNCATION_MAX_ATTEMPTS` | `3` | Kesilmeyi önleyici akış için maksimum devam denemesi. |
 | `TOKEN_COMPRESSION_ENABLED` | `true` | Sağlayıcı yönlendirmesinden önce aşırı büyük konuşma geçmişini sıkıştırın. |
 | `TOKEN_COMPRESSION_THRESHOLD` | `32000` | Sıkıştırmayı etkinleştiren tahmini giriş belirteci eşiği. |
@@ -286,6 +301,10 @@ Omni Gateway, yapılandırmayı önce ortam değişkenlerinden, ardından kayded
 | `CLAUDE_USER_AGENT` | `claude-cli/omni-gateway` | Claude Code ve Claude Platform istekleri için isteğe bağlı User-Agent geçersiz kılması. |
 | `ANTIGRAVITY_USER_AGENT` | `antigravity/cli/1.0.1 windows/amd64` | Google Antigravity protokolü User-Agent geçersiz kılması. |
 | `ANTIGRAVITY_PAYLOAD_USER_AGENT` | `antigravity` | Google Antigravity yük düzeyi userAgent geçersiz kılması. |
+| `METRICS_TOKEN` | empty | Optional bearer token required to scrape `GET /metrics`. |
+| `LANGFUSE_PUBLIC_KEY` | empty | Enables Langfuse trace export together with the secret key. |
+| `LANGFUSE_SECRET_KEY` | empty | Langfuse secret key for trace export. |
+| `LANGFUSE_HOST` | `https://cloud.langfuse.com` | Langfuse ingestion endpoint. |
 | `LOG_LEVEL` | `info` | Çalışma zamanı günlük seviyesi. |
 | `LOG_MAX_MB` | `10` | Döndürmeden (rotation) önceki maksimum aktif günlük dosyası boyutu. |
 | `LOG_BACKUP_COUNT` | `3` | Saklanan döndürülmüş günlük dosyası sayısı. |

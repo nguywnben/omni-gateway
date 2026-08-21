@@ -45,7 +45,7 @@
 
 코딩 도구를 위한 범용 AI 라우터입니다. Omni Gateway는 스마트 자동 장애 조치(auto-fallback), 토큰 인식 컨텍스트 정리, 사용량 가시성 및 원활한 포맷 변환을 제공하여 로컬 에이전트, IDE 어시스턴트 및 자동화 스크립트가 단일 안정적인 API 인터페이스를 통해 무료 및 유료 LLM 용량을 활용할 수 있도록 합니다.
 
-> **프로젝트 상태:** 안정됨. 버전 `1.3.1`에서는 15개 언어 현지화 콘솔을 완성하고, 로케일 인식 관리 API 메시지 및 릴리스 인식 업데이트 가이드를 추가했으며, `1.0.0`에서 확립된 안정적인 SDK 라우트, 표준 관리 라우트, 설정 이름 및 단일 인스턴스 런타임 계약을 유지합니다.
+> **Project status:** Stable. Version `1.4.0` adds enterprise governance and FinOps: virtual API keys with budgets and rate limits, a per-call USD cost ledger backed by a maintained pricing table, optional guardrails and response caching, three new routing strategies, a Prometheus metrics endpoint, Langfuse trace export, and a Helm chart — while preserving the stable SDK routes, canonical management routes, configuration names, and single-instance runtime contract established in `1.0.0`.
 
 ## Omni Gateway를 선택하는 이유
 
@@ -53,14 +53,9 @@
 
 ## 핵심 기능
 
-- 스마트 자동 장애 조치: 요청별로 자격 증명을 예약하고, 동시 트래픽을 분산하며, 공정한 라운드로빈을 위해 모든 시도를 추적하고, 최근 오류, 쿨다운, 요청 속도 제한(rate limits) 및 소진된 용량을 자동으로 우회합니다.
-- 토큰 인식 정리: 페이로드를 정규화하고 안전한 턴 경계에서만 과도한 대화 접두사를 잘라내며 시스템 지침, 도구 정의 및 최근 컨텍스트를 온전히 보존합니다.
-- 포맷 변환: OpenAI Chat Completions 및 Responses, Gemini 네이티브 요청 및 Anthropic Messages를 수신하고 일반 및 스트리밍 모드 모두에서 포맷 간 양방향 변환을 수행합니다.
-- 자격 증명 오케스트레이션: 상태 확인, 쿨다운 추적, 유효성 검사, 중복 제거 및 제공자 인식 장애 조치를 통해 OAuth 계정 및 제공자 API 키를 관리합니다.
-- 자격 증명 수준 모델 라우팅: 자격 증명마다 별도의 기능 카탈로그를 유지하여 한 계정의 권한이 선택된 모델을 지원하지 않는 다른 계정으로 요청을 잘못 보내지 않도록 방지합니다.
-- 라우트 헬스 메모리: 자격 증명 범위에서 모델 미발견(404) 응답을 기록하고 영향을 받는 라우트를 모델 페이지에서 복구할 수 있도록 표시합니다.
-- 스트리밍 복원력: SSE 스트리밍, 스트림 출력이 필수인 클라이언트를 위한 의사 스트리밍(pseudo-streaming), 긴 생성 시 끊김 방지(anti-truncation) 재시도를 지원합니다.
-- 제어판: 자격 증명 관리, 로그 확인, 시스템 설정, 사용량 모니터링 및 버전 정보를 확인할 수 있는 웹 콘솔이 포함되어 있습니다.
+Omni Gateway records request volume, success rate, credential attribution, provider-reported token usage, estimated context-compression savings, and an estimated USD cost per call computed from a maintained model pricing table. Override or extend prices by placing a `model_pricing.json` file in the credentials directory; prices are USD per one million tokens. Aggregates are available on the dashboard, per virtual key through the `/api/virtual-keys` management API, and for monitoring systems through the Prometheus `/metrics` endpoint. Compression savings and costs are labeled as estimates because provider tokenizers and billing rules remain authoritative.
+
+Virtual API keys let one gateway serve multiple clients under separate limits. Each key carries optional daily and monthly USD budgets enforced from the cost ledger, requests-per-minute and tokens-per-minute sliding windows, an expiry timestamp, and a model allowlist with glob patterns. Keys are stored as SHA-256 hashes; the plaintext secret is shown exactly once at creation time.
 
 ## 콘솔 미리보기
 
@@ -133,10 +128,10 @@ sudo docker run -d \
   -p 4283:4283 \
   -v /opt/omni-gateway/creds:/app/backend/data/creds \
   -v /opt/omni-gateway/logs:/app/backend/data/logs \
-  nguywnben/omni-gateway:1.3.1
+  nguywnben/omni-gateway:1.4.0
 ```
 
-동일한 릴리스가 GitHub Packages(`ghcr.io/nguywnben/omni-gateway:1.3.1`)에도 게시됩니다. `latest` 태그는 최신 안정 릴리스를 추적하고, `edge` 태그는 검증되었으나 아직 릴리스되지 않은 `main` 브랜치 빌드를 추적합니다. 재현 가능한 환경이 필요한 경우 특정 버전 태그나 다이제스트를 고정하세요.
+동일한 릴리스가 GitHub Packages(`ghcr.io/nguywnben/omni-gateway:1.4.0`)에도 게시됩니다. `latest` 태그는 최신 안정 릴리스를 추적하고, `edge` 태그는 검증되었으나 아직 릴리스되지 않은 `main` 브랜치 빌드를 추적합니다. 재현 가능한 환경이 필요한 경우 특정 버전 태그나 다이제스트를 고정하세요.
 
 브라우저에서 제어판에 접속합니다:
 
@@ -148,7 +143,7 @@ http://서버_IP_주소:4283
 
 시스템이 관리하는 비밀번호는 솔트가 적용된 scrypt 해시로 안전하게 저장되며, 콘솔 세션은 HttpOnly 쿠키를 사용하고, 공개 SDK 요청은 자동 생성된 `sk-ogw-` API 키로 인증됩니다. 비대화형 배포의 경우 `PANEL_PASSWORD`를 미리 구성하여 초기 설정 화면을 건너뛸 수 있습니다.
 
-`1.3.1` 이미지는 `linux/amd64`용으로 빌드 및 게시되었습니다. Vertex 전송 스택을 포함한 모든 제공자 의존성이 동일한 기준에서 빌드 및 테스트될 때까지 ARM64 이미지 게시는 보류됩니다.
+`1.4.0` 이미지는 `linux/amd64`용으로 빌드 및 게시되었습니다. Vertex 전송 스택을 포함한 모든 제공자 의존성이 동일한 기준에서 빌드 및 테스트될 때까지 ARM64 이미지 게시는 보류됩니다.
 
 서버 방화벽이 활성화되어 있다면 게이트웨이 포트를 허용합니다:
 
@@ -183,9 +178,22 @@ sudo mkdir -p /opt/omni-gateway/creds /opt/omni-gateway/logs
 docker compose -f deploy/docker-compose.yml up -d
 ```
 
-동봉된 Compose 파일은 기본적으로 `nguywnben/omni-gateway:latest`를 가져오고 호스트 데이터 영구 보관을 위해 `/opt/omni-gateway`를 사용합니다. 이 릴리스를 고정하려면 `IMAGE=nguywnben/omni-gateway:1.3.1`을 설정하고, 다른 저장 위치를 사용하는 경우 `DATA_DIR=/사용자_정의_경로`를 지정하세요.
+동봉된 Compose 파일은 기본적으로 `nguywnben/omni-gateway:latest`를 가져오고 호스트 데이터 영구 보관을 위해 `/opt/omni-gateway`를 사용합니다. 이 릴리스를 고정하려면 `IMAGE=nguywnben/omni-gateway:1.4.0`을 설정하고, 다른 저장 위치를 사용하는 경우 `DATA_DIR=/사용자_정의_경로`를 지정하세요.
 
 Compose는 셸 환경 변수 또는 루트 `.env` 파일에서 `API_KEY`, `PANEL_PASSWORD`, `SETUP_TOKEN`, 외부 스토리지 URI 및 `PROXY`를 전달합니다. 자동 키 생성, 최초 설정, 로컬 SQLite 스토리지 및 직접 아웃바운드 연결의 기본 동작을 유지하려면 이 값들을 비워 두세요.
+
+
+### Kubernetes (Helm)
+
+A Helm chart is provided at `deploy/helm/omni-gateway` with a persistent volume for credentials and the usage ledger, liveness/readiness probes, optional Ingress, and an optional Prometheus ServiceMonitor wired to `/metrics`:
+
+```bash
+helm install omni-gateway deploy/helm/omni-gateway \
+  --set secrets.panelPassword=change-me
+```
+
+The chart deploys exactly one replica with a `Recreate` strategy because the 1.x runtime holds routing and rate-limit state in process memory. Do not scale the Deployment horizontally.
+
 
 ### 로컬 개발
 
@@ -250,9 +258,16 @@ Omni Gateway는 환경 변수 > 저장된 설정 > 기본값 순서의 우선순
 | `RETRY_429_INTERVAL` | `1` | 일시적 재시도의 기본 백오프 간격(초). |
 | `AUTO_DISABLE` | `false` | 구성된 치명적 오류 발생 시 해당 자격 증명을 자동으로 비활성화. |
 | `AUTO_DISABLE_ERROR_CODES` | `403` | 치명적 오류로 간주할 상태 코드 목록(쉼표 구분). |
-| `ROUTING_STRATEGY` | `balanced` | 자격 증명 선택 정책: `balanced`(균등) 또는 `priority`(우선순위). |
+| `ROUTING_STRATEGY` | `balanced` | Credential selection policy: `balanced`, `priority`, `weighted`, `least_latency`, or `lowest_cost`. |
 | `PREFERRED_PROVIDER` | 비어 있음 | `priority` 정책에서 우선 선택할 제공자(예: `google_antigravity`, `google_ai_studio`). |
 | `UPSTREAM_TIMEOUT_SECONDS` | `300` | 제공자 추론 타임아웃(5~900초). |
+| `RESPONSE_CACHE_ENABLED` | `false` | Cache deterministic (temperature 0) non-streaming responses in memory. |
+| `RESPONSE_CACHE_TTL_SECONDS` | `300` | Response cache entry lifetime in seconds. |
+| `RESPONSE_CACHE_MAX_ENTRIES` | `1000` | Maximum responses held by the in-memory cache. |
+| `GUARDRAILS_ENABLED` | `false` | Enable the pre-call guardrails pipeline. |
+| `GUARDRAILS_PII_MASKING_ENABLED` | `true` | Mask emails, card numbers, and API keys in outbound request text. |
+| `GUARDRAILS_INJECTION_DETECTION_ENABLED` | `true` | Reject prompt-injection attempts with HTTP 400. |
+| `GUARDRAILS_BLOCKED_KEYWORDS` | empty | Comma-separated case-insensitive keywords that block a request. |
 | `ANTI_TRUNCATION_MAX_ATTEMPTS` | `3` | 스트리밍 끊김 방지 기능의 최대 연속 재시도 횟수. |
 | `TOKEN_COMPRESSION_ENABLED` | `true` | 제공자로 라우팅하기 전에 과도한 대화 기록을 압축. |
 | `TOKEN_COMPRESSION_THRESHOLD` | `32000` | 컨텍스트 압축을 트리거할 예상 입력 토큰 임계값. |
@@ -286,6 +301,10 @@ Omni Gateway는 환경 변수 > 저장된 설정 > 기본값 순서의 우선순
 | `CLAUDE_USER_AGENT` | `claude-cli/omni-gateway` | Claude Code 및 Claude Platform 요청을 위한 선택적 User-Agent 재정의. |
 | `ANTIGRAVITY_USER_AGENT` | `antigravity/cli/1.0.1 windows/amd64` | Google Antigravity 프로토콜 레벨 요청을 위한 선택적 User-Agent 재정의. |
 | `ANTIGRAVITY_PAYLOAD_USER_AGENT` | `antigravity` | Google Antigravity 페이로드 레벨 userAgent 필드에 대한 선택적 재정의. |
+| `METRICS_TOKEN` | empty | Optional bearer token required to scrape `GET /metrics`. |
+| `LANGFUSE_PUBLIC_KEY` | empty | Enables Langfuse trace export together with the secret key. |
+| `LANGFUSE_SECRET_KEY` | empty | Langfuse secret key for trace export. |
+| `LANGFUSE_HOST` | `https://cloud.langfuse.com` | Langfuse ingestion endpoint. |
 | `LOG_LEVEL` | `info` | 런타임 로그 레벨. |
 | `LOG_MAX_MB` | `10` | 로그 파일이 로테이션되기 전 최대 크기(MB). |
 | `LOG_BACKUP_COUNT` | `3` | 보관할 로테이션 로그 파일 개수. |
