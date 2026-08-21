@@ -6,7 +6,7 @@ and explains routing decisions without making actual outbound API calls.
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 
 def simulate_sandbox_inspection(

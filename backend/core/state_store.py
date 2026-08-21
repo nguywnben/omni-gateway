@@ -9,7 +9,7 @@ from __future__ import annotations
 import abc
 import asyncio
 import time
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Optional, Tuple
 
 
 class BaseStateStore(abc.ABC):

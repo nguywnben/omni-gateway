@@ -9,9 +9,8 @@ from __future__ import annotations
 import base64
 import hashlib
 import json
-import os
 import secrets
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict
 
 
 def _derive_key(password: str, salt: bytes, iterations: int = 100_000) -> bytes:
@@ -37,7 +36,6 @@ def encrypt_payload(data: Dict[str, Any], password: str) -> Dict[str, Any]:
         aesgcm = AESGCM(key)
         serialized = json.dumps(data, sort_keys=True).encode("utf-8")
         ciphertext = aesgcm.encrypt(nonce, serialized, None)
-        has_tag = False  # Tag is already appended in ciphertext by cryptography
     except ImportError:
         # Fallback authenticated XOR/HMAC container when cryptography package is not installed
         serialized = json.dumps(data, sort_keys=True).encode("utf-8")
@@ -46,7 +44,6 @@ def encrypt_payload(data: Dict[str, Any], password: str) -> Dict[str, Any]:
         raw_cipher = bytes(a ^ b for a, b in zip(serialized, stream))
         tag = hashlib.sha256(key + raw_cipher + nonce).digest()[:16]
         ciphertext = raw_cipher + tag
-        has_tag = True
 
     return {
         "version": 1,

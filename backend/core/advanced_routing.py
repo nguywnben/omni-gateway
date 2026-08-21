@@ -9,7 +9,6 @@ Supports:
 from __future__ import annotations
 
 import random
-import time
 from typing import Any, Dict, List, Optional
 
 
@@ -26,7 +25,7 @@ def select_weighted_candidate(candidates: List[Dict[str, Any]], weights: Optiona
     
     for c in candidates:
         name = str(c.get("filename") or c.get("name") or "")
-        w = max(0.1, float(weights_map.get(name, 1.0)))
+        w = max(0.000001, float(weights_map.get(name, 1.0)))
         item_weights.append(w)
         total_weight += w
         

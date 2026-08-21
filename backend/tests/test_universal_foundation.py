@@ -11,7 +11,7 @@ if str(BACKEND_DIR) not in sys.path:
     sys.path.insert(0, str(BACKEND_DIR))
 
 from core.guardrails import GuardrailsEngine
-from core.provider_adapter import GenericOpenAIAdapter, NormalizedRequest, ProviderRegistry
+from core.provider_adapter import NormalizedRequest, ProviderRegistry
 from core.semantic_cache import SemanticCache
 from core.telemetry_exporter import TelemetryExporter
 
