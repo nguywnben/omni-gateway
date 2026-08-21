@@ -625,5 +625,70 @@ async def get_stats_for_period(period: str = "1d") -> Dict[str, Dict[str, Any]]:
     return res
 
 
+async def get_time_series_stats(period: str = "1d", points: int = 24) -> List[Dict[str, Any]]:
+    """Return time-series aggregated request counts and token volume for charts."""
+    init_db()
+    normalized_period = normalize_usage_period(period)
+    seconds = USAGE_PERIODS[normalized_period]["seconds"]
+    if seconds is None:
+        seconds = 30 * 86400  # default to 30 days window if 'all'
+    
+    now = time.time()
+    since = now - int(seconds)
+    step = seconds / max(1, points)
+
+    time_slots = []
+    for i in range(points):
+        slot_start = since + (i * step)
+        slot_end = slot_start + step
+        time_slots.append({
+            "timestamp": slot_start,
+            "end_timestamp": slot_end,
+            "requests": 0,
+            "successful_requests": 0,
+            "failed_requests": 0,
+            "tokens": 0,
+            "cached_tokens": 0
+        })
+
+    with db_lock:
+        conn = sqlite3.connect(db_path)
+        try:
+            cursor = conn.execute(
+                """
+                SELECT
+                    timestamp,
+                    success,
+                    COALESCE(total_tokens, 0),
+                    COALESCE(cached_tokens, 0)
+                FROM usage_logs
+                WHERE timestamp >= ?
+                ORDER BY timestamp ASC
+                """,
+                (since,),
+            )
+            for row in cursor.fetchall():
+                ts = float(row[0])
+                success = int(row[1]) == 1
+                tokens = int(row[2] or 0)
+                cached = int(row[3] or 0)
+
+                idx = int((ts - since) / step)
+                if 0 <= idx < points:
+                    time_slots[idx]["requests"] += 1
+                    if success:
+                        time_slots[idx]["successful_requests"] += 1
+                    else:
+                        time_slots[idx]["failed_requests"] += 1
+                    time_slots[idx]["tokens"] += tokens
+                    time_slots[idx]["cached_tokens"] += cached
+        except Exception as e:
+            log.error(f"Failed to calculate time series stats: {e}")
+        finally:
+            conn.close()
+
+    return time_slots
+
+
 async def get_stats_24h() -> Dict[str, Dict[str, Any]]:
     return await get_stats_for_period("1d")

@@ -3,6 +3,7 @@ from core.usage_stats import (
     UNASSIGNED_USAGE_FILENAME,
     get_credential_counts,
     get_stats_for_period,
+    get_time_series_stats,
     get_usage_period_metadata,
     normalize_usage_period,
 )
@@ -101,6 +102,7 @@ async def get_aggregated_stats(period: str = Query("1d"), token: str = Depends(v
                 "estimated_tokens_saved_24h": estimated_tokens_saved,
                 "compressed_messages_24h": compressed_messages,
                 "avg_tokens_per_successful_request": avg_tokens,
+                "timeline": await get_time_series_stats(normalized_period, points=24),
             },
         }
     except Exception as exc:

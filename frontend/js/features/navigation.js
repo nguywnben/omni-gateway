@@ -65,6 +65,8 @@ function initStaticUiBindings() {
         'batch-primary': (element) => batchPrimaryAction(element.dataset.batchAction),
         'batch-verify-primary': () => batchVerifyProviderCredentials(),
         'change-primary-page': (element) => changePrimaryPage(Number(element.dataset.pageDelta)),
+        'change-usage-page': (element) => changeUsagePage(Number(element.dataset.pageDelta)),
+        'change-historical-usage-page': (element) => changeHistoricalUsagePage(Number(element.dataset.pageDelta)),
         'refresh-model-catalog': () => loadModelCatalog(true),
         'save-model-pool': () => saveModelPool(),
         'clear-model-blacklist': () => clearModelBlacklist(),
