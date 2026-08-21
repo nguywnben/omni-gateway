@@ -159,7 +159,7 @@ function createCredentialProviderGroup(providerMeta, credentials, manager) {
 
         : `<span>${escapeHtml(providerMeta.name.charAt(0))}</span>`;
 
-    const countLabel = `${credentials.length} credential${credentials.length === 1 ? '' : 's'}`;
+    const countLabel = t('credential_count', {count: credentials.length});
 
     section.innerHTML = `
 
@@ -220,8 +220,8 @@ function renderCredentialSubscriptionBadge(pathId, value, kind = 'plan') {
     }
 
     const badgeLabel = plan.kind === 'tier'
-        ? `Tier: ${escapeHtml(plan.label)}`
-        : `Plan: ${escapeHtml(plan.label)}`;
+        ? t('credential_badge_tier', {tier: escapeHtml(plan.label)})
+        : t('credential_badge_plan', {plan: escapeHtml(plan.label)});
     const title = plan.kind === 'tier'
         ? `Access tier reported by the provider: ${plan.label}`
         : `Subscription plan reported by the provider: ${plan.label}`;
@@ -306,7 +306,7 @@ function createCredCard(credInfo, manager) {
 
         if (autoBan.length > 0 && status.disabled) {
 
-            statusBadges += '<span class="status-badge danger">Auto-disabled</span>';
+            statusBadges += `<span class="status-badge danger">${t('credential_badge_auto_disabled')}</span>`;
 
         }
 
@@ -320,11 +320,11 @@ function createCredCard(credInfo, manager) {
 
         if (credInfo.preview) {
 
-            statusBadges += `<span class="status-badge success" title="${t('preview_supported_title')}">Preview: ON</span>`;
+            statusBadges += `<span class="status-badge success" title="${t('preview_supported_title')}">${t('credential_badge_preview', {state: t('credential_state_on')})}</span>`;
 
         } else {
 
-            statusBadges += `<span class="status-badge muted" title="${t('preview_not_supported_title')}">Preview: OFF</span>`;
+            statusBadges += `<span class="status-badge muted" title="${t('preview_not_supported_title')}">${t('credential_badge_preview', {state: t('credential_state_off')})}</span>`;
 
         }
 
@@ -352,7 +352,7 @@ function createCredCard(credInfo, manager) {
 
         const tierClass = tier === 'ultra' ? 'tier-ultra' : (tier === 'free' ? 'tier-free' : 'tier-pro');
 
-        statusBadges += `<span class="status-badge ${tierClass}" title="${escapeAttribute(`${t('tier_badge_title')}: ${tierLabel}`)}">Tier: ${escapeHtml(tierLabel)}</span>`;
+        statusBadges += `<span class="status-badge ${tierClass}" title="${escapeAttribute(`${t('tier_badge_title')}: ${tierLabel}`)}">${t('credential_badge_tier', {tier: escapeHtml(tierLabel)})}</span>`;
 
     }
 
@@ -360,11 +360,11 @@ function createCredCard(credInfo, manager) {
 
         if (credInfo.enable_credit) {
 
-            statusBadges += `<span class="status-badge credit-on" title="${t('credit_enabled_title')}">Credits: ON</span>`;
+            statusBadges += `<span class="status-badge credit-on" title="${t('credit_enabled_title')}">${t('credential_badge_credits', {state: t('credential_state_on')})}</span>`;
 
         } else {
 
-            statusBadges += `<span class="status-badge credit-off" title="${t('credit_disabled_title')}">Credits: OFF</span>`;
+            statusBadges += `<span class="status-badge credit-off" title="${t('credit_disabled_title')}">${t('credential_badge_credits', {state: t('credential_state_off')})}</span>`;
 
         }
 
@@ -402,7 +402,7 @@ function createCredCard(credInfo, manager) {
 
             activeCooldowns.slice(0, 2).forEach(item => {
 
-                statusBadges += `<span class="cooldown-badge" title="${escapeAttribute(`${t('model_title')}: ${item.fullModel}`)}">Cooldown ${escapeHtml(item.model)}: ${escapeHtml(item.time)}</span>`;
+                statusBadges += `<span class="cooldown-badge" title="${escapeAttribute(`${t('model_title')}: ${item.fullModel}`)}">${t('credential_badge_cooldown', {model: escapeHtml(item.model), time: escapeHtml(item.time)})}</span>`;
 
             });
 

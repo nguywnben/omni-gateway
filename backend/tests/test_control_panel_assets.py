@@ -289,8 +289,8 @@ class ControlPanelAssetTests(unittest.TestCase):
 
         self.assertIn("renderCredentialSubscriptionBadge", card_script)
         self.assertIn("subscription-plan-${pathId}", card_script)
-        self.assertIn("Plan: ${escapeHtml(plan.label)}", card_script)
-        self.assertIn("Tier: ${escapeHtml(plan.label)}", card_script)
+        self.assertIn("t('credential_badge_plan'", card_script)
+        self.assertIn("t('credential_badge_tier'", card_script)
         self.assertIn("updateCredentialSubscriptionBadge", dialog_script)
         self.assertIn("cached.data?.plan", dialog_script)
         self.assertIn("cardContext.subscriptionPlan", dialog_script)

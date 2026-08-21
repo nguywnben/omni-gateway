@@ -4,6 +4,13 @@ All notable user-facing changes are documented in this file. Omni Gateway follow
 
 ## [Unreleased]
 
+## [1.3.2] - 2026-08-21
+
+### Fixed
+
+- Replaced the generic localization fallback that could appear as credential-card provider names and action labels in non-English interfaces.
+- Localized credential-card provider labels, concise actions, status badges, and explanatory tooltips across every supported console language.
+
 ## [1.3.1] - 2026-08-21
 
 ### Added
@@ -202,7 +209,8 @@ All notable user-facing changes are documented in this file. Omni Gateway follow
 - Provider credential pool, virtual model routing, context optimization, usage visibility, and the management console.
 - Docker Hub and GitHub Container Registry publishing.
 
-[Unreleased]: https://github.com/nguywnben/omni-gateway/compare/v1.3.1...HEAD
+[Unreleased]: https://github.com/nguywnben/omni-gateway/compare/v1.3.2...HEAD
+[1.3.2]: https://github.com/nguywnben/omni-gateway/compare/v1.3.1...v1.3.2
 [1.3.1]: https://github.com/nguywnben/omni-gateway/compare/v1.3.0...v1.3.1
 [1.3.0]: https://github.com/nguywnben/omni-gateway/compare/v1.2.1...v1.3.0
 [1.2.1]: https://github.com/nguywnben/omni-gateway/compare/v1.2.0...v1.2.1
