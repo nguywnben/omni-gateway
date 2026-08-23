@@ -17,6 +17,10 @@ from core.quality_policy import (
     preview_policy,
     settings_from_legacy,
 )
+from core.quality_policy_runtime import (
+    apply_environment_overrides,
+    read_legacy_quality_settings,
+)
 from core.storage_adapter import get_storage_adapter
 from core.utils import verify_panel_token
 from fastapi import APIRouter, Depends
@@ -65,39 +69,26 @@ def _unavailable(operation: str, exc: Exception) -> JSONResponse:
     )
 
 
-async def read_legacy_quality_settings() -> dict[str, Any]:
-    compression = await config.get_token_compression_config()
-    guardrails = await config.get_guardrails_config()
-    response_cache = await config.get_response_cache_config()
-    return {
-        "compatibility_mode_enabled": await config.get_compatibility_mode_enabled(),
-        "return_thoughts_to_frontend": await config.get_return_thoughts_to_frontend(),
-        "anti_truncation_max_attempts": await config.get_anti_truncation_max_attempts(),
-        "token_compression_enabled": compression["enabled"],
-        "token_compression_threshold": compression["threshold_tokens"],
-        "token_compression_target": compression["target_tokens"],
-        "token_compression_min_recent_turns": compression["min_recent_turns"],
-        "guardrails_enabled": guardrails["enabled"],
-        "guardrails_pii_masking_enabled": guardrails["pii_masking_enabled"],
-        "guardrails_injection_detection_enabled": guardrails["injection_detection_enabled"],
-        "guardrails_blocked_keywords": guardrails["blocked_keywords"],
-        "response_cache_enabled": response_cache["enabled"],
-        "response_cache_ttl_seconds": response_cache["ttl_seconds"],
-        "response_cache_max_entries": response_cache["max_entries"],
-    }
-
-
 async def _load_current_policy(storage, legacy: dict[str, Any]) -> dict[str, Any]:
     stored = await storage.get_config(POLICY_STORAGE_KEY, None)
     return load_policy_document(stored, legacy)
 
 
-def _policy_response(policy: dict[str, Any], env_locked: set[str]) -> dict[str, Any]:
+def _policy_response(
+    policy: dict[str, Any], legacy: dict[str, Any], env_locked: set[str]
+) -> dict[str, Any]:
+    effective_settings, overrides = apply_environment_overrides(
+        policy["settings"], legacy, env_locked
+    )
     return {
         "policy": policy,
+        "effective_settings": effective_settings,
         "env_locked": sorted(env_locked & set(LOCKED_SETTING_PATHS)),
-        "runtime_active": False,
-        "runtime_source": "legacy_compatibility_bridge",
+        "environment_overrides": overrides,
+        "runtime_active": True,
+        "runtime_source": (
+            "versioned_policy" if policy["source"] == "stored" else "legacy_projection"
+        ),
     }
 
 
@@ -108,7 +99,7 @@ async def get_quality_policy(token: str = Depends(verify_panel_token)):
         storage = await get_storage_adapter()
         legacy = await read_legacy_quality_settings()
         policy = await _load_current_policy(storage, legacy)
-        return JSONResponse(content=_policy_response(policy, get_env_locked_keys()))
+        return JSONResponse(content=_policy_response(policy, legacy, get_env_locked_keys()))
     except QualityPolicyError as exc:
         return _error(500, exc.code, str(exc))
     except Exception as exc:
@@ -161,12 +152,13 @@ async def update_quality_policy(
                 return _error(
                     500, "quality_policy_write_failed", "The quality policy was not saved."
                 )
+            config.set_cached_config_value(POLICY_STORAGE_KEY, desired)
     except QualityPolicyError as exc:
         return _error(500, exc.code, str(exc))
     except Exception as exc:
         return _unavailable("update", exc)
 
-    return JSONResponse(content=_policy_response(desired, get_env_locked_keys()))
+    return JSONResponse(content=_policy_response(desired, legacy, get_env_locked_keys()))
 
 
 @router.post("/preview")

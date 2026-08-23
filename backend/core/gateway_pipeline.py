@@ -63,8 +63,25 @@ async def apply_pre_call_guardrails(
     try:
         settings = await get_guardrails_config()
     except Exception as exc:
-        log.error(f"[guardrails] failed to load config, failing open: {exc}")
-        return None, body
+        log.error(
+            f"[guardrails] policy resolution failed ({type(exc).__name__}); "
+            "blocking the request because enforcement state is unknown."
+        )
+        return (
+            Response(
+                content=json.dumps(
+                    {
+                        "error": {
+                            "message": "Gateway guardrails are temporarily unavailable.",
+                            "type": "guardrails_unavailable",
+                        }
+                    }
+                ),
+                status_code=503,
+                media_type="application/json",
+            ),
+            body,
+        )
 
     if not settings["enabled"]:
         return None, body

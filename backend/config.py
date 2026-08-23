@@ -103,6 +103,13 @@ ENV_MAPPINGS = {
     "TOKEN_COMPRESSION_THRESHOLD": "token_compression_threshold",
     "TOKEN_COMPRESSION_TARGET": "token_compression_target",
     "TOKEN_COMPRESSION_MIN_RECENT_TURNS": "token_compression_min_recent_turns",
+    "RESPONSE_CACHE_ENABLED": "response_cache_enabled",
+    "RESPONSE_CACHE_TTL_SECONDS": "response_cache_ttl_seconds",
+    "RESPONSE_CACHE_MAX_ENTRIES": "response_cache_max_entries",
+    "GUARDRAILS_ENABLED": "guardrails_enabled",
+    "GUARDRAILS_PII_MASKING_ENABLED": "guardrails_pii_masking_enabled",
+    "GUARDRAILS_INJECTION_DETECTION_ENABLED": "guardrails_injection_detection_enabled",
+    "GUARDRAILS_BLOCKED_KEYWORDS": "guardrails_blocked_keywords",
     "ROUTING_STRATEGY": "routing_strategy",
     "PREFERRED_PROVIDER": "preferred_provider",
     "UPSTREAM_TIMEOUT_SECONDS": "upstream_timeout_seconds",
@@ -209,6 +216,11 @@ async def reload_config():
         values = await storage_adapter.get_all_config()
         _config_cache = values
         _config_initialized = True
+
+
+def set_cached_config_value(key: str, value: Any) -> None:
+    """Synchronize a successfully persisted value with the single-worker runtime cache."""
+    _config_cache[key] = value
 
 
 def _get_cached_config(key: str, default: Any = None) -> Any:
@@ -324,7 +336,7 @@ async def get_retry_429_interval() -> float:
     return float(await get_config_value("retry_429_interval", 1))
 
 
-async def get_anti_truncation_max_attempts() -> int:
+async def get_legacy_anti_truncation_max_attempts() -> int:
     """
     Get maximum attempts for anti-truncation continuation.
 
@@ -332,14 +344,26 @@ async def get_anti_truncation_max_attempts() -> int:
     Database config key: anti_truncation_max_attempts
     Default: 3
     """
-    env_value = os.getenv("ANTI_TRUNCATION_MAX_ATTEMPTS")
-    if env_value:
-        try:
-            return int(env_value)
-        except ValueError:
-            pass
+    return _coerce_bounded_int(
+        await get_config_value("anti_truncation_max_attempts", 3, "ANTI_TRUNCATION_MAX_ATTEMPTS"),
+        3,
+        1,
+        10,
+    )
 
-    return int(await get_config_value("anti_truncation_max_attempts", 3))
+
+async def get_anti_truncation_max_attempts() -> int:
+    """Return the effective policy value, falling back to the legacy value safely."""
+    try:
+        from core.quality_policy_runtime import get_effective_quality_settings
+
+        return int((await get_effective_quality_settings())["anti_truncation_max_attempts"])
+    except Exception as exc:
+        log.error(
+            f"Quality policy anti-truncation resolution failed ({type(exc).__name__}); "
+            "using the legacy value."
+        )
+        return await get_legacy_anti_truncation_max_attempts()
 
 
 def _coerce_bool(value: Any, default: bool) -> bool:
@@ -362,7 +386,7 @@ def _coerce_bounded_int(value: Any, default: int, minimum: int, maximum: int) ->
     return min(maximum, max(minimum, parsed))
 
 
-async def get_token_compression_config() -> dict[str, Any]:
+async def get_legacy_token_compression_config() -> dict[str, Any]:
     """Return validated settings for bounded conversation-history compression."""
     enabled = _coerce_bool(
         await get_config_value("token_compression_enabled", True, "TOKEN_COMPRESSION_ENABLED"),
@@ -402,7 +426,28 @@ async def get_token_compression_config() -> dict[str, Any]:
     }
 
 
-async def get_response_cache_config() -> dict[str, Any]:
+async def get_token_compression_config() -> dict[str, Any]:
+    """Return effective compression settings; disable compression on policy failure."""
+    try:
+        from core.quality_policy_runtime import get_effective_quality_settings
+
+        compression = (await get_effective_quality_settings())["compression"]
+        return {
+            "enabled": compression["enabled"],
+            "threshold_tokens": compression["threshold_tokens"],
+            "target_tokens": compression["target_tokens"],
+            "min_recent_turns": compression["min_recent_turns"],
+        }
+    except Exception as exc:
+        log.error(
+            f"Quality policy compression resolution failed ({type(exc).__name__}); "
+            "compression is disabled for this request."
+        )
+        legacy = await get_legacy_token_compression_config()
+        return {**legacy, "enabled": False}
+
+
+async def get_legacy_response_cache_config() -> dict[str, Any]:
     """Return settings for the exact-match response cache."""
     enabled = _coerce_bool(
         await get_config_value("response_cache_enabled", False, "RESPONSE_CACHE_ENABLED"),
@@ -423,7 +468,22 @@ async def get_response_cache_config() -> dict[str, Any]:
     return {"enabled": enabled, "ttl_seconds": ttl_seconds, "max_entries": max_entries}
 
 
-async def get_guardrails_config() -> dict[str, Any]:
+async def get_response_cache_config() -> dict[str, Any]:
+    """Return effective cache settings; bypass the cache on policy failure."""
+    try:
+        from core.quality_policy_runtime import get_effective_quality_settings
+
+        return dict((await get_effective_quality_settings())["response_cache"])
+    except Exception as exc:
+        log.error(
+            f"Quality policy response-cache resolution failed ({type(exc).__name__}); "
+            "the cache is bypassed for this request."
+        )
+        legacy = await get_legacy_response_cache_config()
+        return {**legacy, "enabled": False}
+
+
+async def get_legacy_guardrails_config() -> dict[str, Any]:
     """Return settings for the pre-call guardrails pipeline."""
     enabled = _coerce_bool(
         await get_config_value("guardrails_enabled", False, "GUARDRAILS_ENABLED"),
@@ -458,6 +518,13 @@ async def get_guardrails_config() -> dict[str, Any]:
         "injection_detection_enabled": injection_detection,
         "blocked_keywords": blocked_keywords,
     }
+
+
+async def get_guardrails_config() -> dict[str, Any]:
+    """Return effective guardrails; callers must fail closed if resolution fails."""
+    from core.quality_policy_runtime import get_effective_quality_settings
+
+    return dict((await get_effective_quality_settings())["guardrails"])
 
 
 async def get_telemetry_config() -> dict[str, Any]:
@@ -616,20 +683,44 @@ async def get_code_assist_endpoint() -> str:
     )
 
 
-async def get_compatibility_mode_enabled() -> bool:
-    env_value = os.getenv("COMPATIBILITY_MODE")
-    if env_value:
-        return env_value.lower() in ("true", "1", "yes", "on")
+async def get_legacy_compatibility_mode_enabled() -> bool:
+    return _coerce_bool(
+        await get_config_value("compatibility_mode_enabled", False, "COMPATIBILITY_MODE"),
+        False,
+    )
 
-    return bool(await get_config_value("compatibility_mode_enabled", False))
+
+async def get_compatibility_mode_enabled() -> bool:
+    try:
+        from core.quality_policy_runtime import get_effective_quality_settings
+
+        return bool((await get_effective_quality_settings())["compatibility_mode"])
+    except Exception as exc:
+        log.error(
+            f"Quality policy compatibility resolution failed ({type(exc).__name__}); "
+            "using the legacy value."
+        )
+        return await get_legacy_compatibility_mode_enabled()
+
+
+async def get_legacy_return_thoughts_to_frontend() -> bool:
+    return _coerce_bool(
+        await get_config_value("return_thoughts_to_frontend", True, "RETURN_THOUGHTS_TO_FRONTEND"),
+        True,
+    )
 
 
 async def get_return_thoughts_to_frontend() -> bool:
-    env_value = os.getenv("RETURN_THOUGHTS_TO_FRONTEND")
-    if env_value:
-        return env_value.lower() in ("true", "1", "yes", "on")
+    try:
+        from core.quality_policy_runtime import get_effective_quality_settings
 
-    return bool(await get_config_value("return_thoughts_to_frontend", True))
+        return bool((await get_effective_quality_settings())["return_reasoning"])
+    except Exception as exc:
+        log.error(
+            f"Quality policy reasoning resolution failed ({type(exc).__name__}); "
+            "using the legacy value."
+        )
+        return await get_legacy_return_thoughts_to_frontend()
 
 
 async def get_stream_to_nonstream() -> bool:

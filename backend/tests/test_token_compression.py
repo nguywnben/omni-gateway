@@ -19,6 +19,16 @@ def text_content(role: str, text: str):
 
 
 class TokenCompressionTests(unittest.TestCase):
+    def test_settings_reject_values_outside_policy_bounds(self):
+        invalid_settings = (
+            {"threshold_tokens": 2_000_001},
+            {"target_tokens": 2_000_000, "threshold_tokens": 2_000_001},
+            {"min_recent_turns": 51},
+        )
+        for overrides in invalid_settings:
+            with self.subTest(overrides=overrides), self.assertRaises(ValueError):
+                CompressionSettings(**overrides)
+
     def test_request_below_threshold_is_preserved(self):
         payload = {
             "systemInstruction": {"parts": [{"text": "Keep this instruction."}]},
@@ -91,6 +101,58 @@ class TokenCompressionTests(unittest.TestCase):
         first_part = result.request["contents"][0]["parts"][0]
         self.assertNotIn("functionResponse", first_part)
         self.assertEqual(result.request["contents"], contents[-2:])
+
+    def test_compression_skips_an_unmatched_tool_result_history(self):
+        payload = {
+            "contents": [
+                text_content("user", "old request " + "x" * 300),
+                {
+                    "role": "user",
+                    "parts": [{"functionResponse": {"name": "lookup", "response": {"value": 1}}}],
+                },
+                text_content("model", "old answer " + "y" * 300),
+                text_content("user", "new request " + "z" * 300),
+                text_content("model", "new answer " + "q" * 300),
+            ]
+        }
+
+        result = compress_gemini_request(
+            payload,
+            CompressionSettings(
+                enabled=True,
+                threshold_tokens=180,
+                target_tokens=120,
+                min_recent_turns=1,
+            ),
+        )
+
+        self.assertFalse(result.applied)
+        self.assertEqual(result.reason, "invalid_tool_history")
+        self.assertIs(result.request, payload)
+
+    def test_compression_skips_malformed_history_instead_of_guessing(self):
+        payload = {
+            "contents": [
+                text_content("user", "old request " + "x" * 300),
+                {"role": "model", "parts": "not-a-list"},
+                text_content("user", "new request " + "z" * 300),
+                text_content("model", "new answer " + "q" * 300),
+            ]
+        }
+
+        result = compress_gemini_request(
+            payload,
+            CompressionSettings(
+                enabled=True,
+                threshold_tokens=180,
+                target_tokens=120,
+                min_recent_turns=1,
+            ),
+        )
+
+        self.assertFalse(result.applied)
+        self.assertEqual(result.reason, "invalid_history")
+        self.assertIs(result.request, payload)
 
     def test_estimator_accounts_for_structured_payload_overhead(self):
         plain = {"contents": [text_content("user", "a" * 40)]}

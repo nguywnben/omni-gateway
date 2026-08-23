@@ -37,8 +37,20 @@ PROVIDER_SPECIFIC_CONFIG_KEYS = {
     "xai_client_id",
     "xai_user_agent",
 }
+POLICY_ONLY_CONFIG_KEYS = {
+    "guardrails_enabled",
+    "guardrails_pii_masking_enabled",
+    "guardrails_injection_detection_enabled",
+    "guardrails_blocked_keywords",
+    "response_cache_enabled",
+    "response_cache_ttl_seconds",
+    "response_cache_max_entries",
+}
 ALLOWED_CONFIG_KEYS = (
-    set(config.ENV_MAPPINGS.values()) - ACCESS_SECRET_KEYS - PROVIDER_SPECIFIC_CONFIG_KEYS
+    set(config.ENV_MAPPINGS.values())
+    - ACCESS_SECRET_KEYS
+    - PROVIDER_SPECIFIC_CONFIG_KEYS
+    - POLICY_ONLY_CONFIG_KEYS
 )
 DEFAULT_BACKED_CONFIG_KEYS = {
     "code_assist_client_id",

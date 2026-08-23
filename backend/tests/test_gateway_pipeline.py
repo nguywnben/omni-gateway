@@ -90,14 +90,16 @@ class GuardrailsPipelineTests(unittest.TestCase):
             blocking, _ = _run(gateway_pipeline.apply_pre_call_guardrails(body))
         self.assertIsNotNone(blocking)
 
-    def test_config_failure_fails_open(self):
+    def test_enabled_security_policy_failure_fails_closed(self):
         body = _gemini_body("hello world")
         with patch(
             "config.get_guardrails_config",
             new=AsyncMock(side_effect=RuntimeError("storage down")),
         ):
             blocking, result = _run(gateway_pipeline.apply_pre_call_guardrails(body))
-        self.assertIsNone(blocking)
+        self.assertIsNotNone(blocking)
+        self.assertEqual(blocking.status_code, 503)
+        self.assertEqual(json.loads(blocking.body)["error"]["type"], "guardrails_unavailable")
         self.assertIs(result, body)
 
 

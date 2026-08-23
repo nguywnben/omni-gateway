@@ -17,14 +17,16 @@ class CompressionSettings:
     min_recent_turns: int = 4
 
     def __post_init__(self) -> None:
-        if self.threshold_tokens < 128:
-            raise ValueError("Compression threshold must be at least 128 tokens.")
-        if self.target_tokens < 64:
-            raise ValueError("Compression target must be at least 64 tokens.")
+        if not isinstance(self.enabled, bool):
+            raise ValueError("Compression enabled must be a boolean.")
+        if isinstance(self.threshold_tokens, bool) or not 128 <= self.threshold_tokens <= 2_000_000:
+            raise ValueError("Compression threshold must be between 128 and 2000000 tokens.")
+        if isinstance(self.target_tokens, bool) or not 64 <= self.target_tokens <= 1_999_999:
+            raise ValueError("Compression target must be between 64 and 1999999 tokens.")
         if self.target_tokens >= self.threshold_tokens:
             raise ValueError("Compression target must be lower than the threshold.")
-        if self.min_recent_turns < 1:
-            raise ValueError("At least one recent turn must be preserved.")
+        if isinstance(self.min_recent_turns, bool) or not 1 <= self.min_recent_turns <= 50:
+            raise ValueError("Between 1 and 50 recent turns must be preserved.")
 
 
 @dataclass(frozen=True)
@@ -68,6 +70,50 @@ def _is_safe_turn_start(content: Any) -> bool:
     )
 
 
+def _function_name(part: Dict[str, Any], *keys: str) -> str | None:
+    for key in keys:
+        value = part.get(key)
+        if isinstance(value, dict):
+            name = value.get("name")
+            if isinstance(name, str) and name.strip():
+                return name.strip()
+    return None
+
+
+def _analyze_history(contents: list[Any]) -> tuple[str | None, list[int]]:
+    """Find cut boundaries that cannot depend on a removed tool call."""
+    safe_starts: list[int] = []
+    pending_tool_calls: list[str] = []
+    for index, content in enumerate(contents):
+        if not isinstance(content, dict) or content.get("role") not in {"user", "model"}:
+            return "invalid_history", []
+        parts = content.get("parts")
+        if not isinstance(parts, list) or any(not isinstance(part, dict) for part in parts):
+            return "invalid_history", []
+
+        if _is_safe_turn_start(content) and not pending_tool_calls:
+            safe_starts.append(index)
+
+        for part in parts:
+            call_name = _function_name(part, "functionCall", "function_call")
+            response_name = _function_name(part, "functionResponse", "function_response")
+            if ("functionCall" in part or "function_call" in part) and call_name is None:
+                return "invalid_tool_history", []
+            if (
+                "functionResponse" in part or "function_response" in part
+            ) and response_name is None:
+                return "invalid_tool_history", []
+            if call_name is not None:
+                pending_tool_calls.append(call_name)
+            if response_name is not None:
+                try:
+                    pending_tool_calls.remove(response_name)
+                except ValueError:
+                    return "invalid_tool_history", []
+
+    return None, safe_starts
+
+
 def _unchanged_result(
     request: Dict[str, Any], estimated_tokens: int, reason: str
 ) -> CompressionResult:
@@ -95,7 +141,9 @@ def compress_gemini_request(
     if not isinstance(contents, list) or len(contents) < 2:
         return _unchanged_result(request, original_estimate, "no_history")
 
-    safe_starts = [index for index, content in enumerate(contents) if _is_safe_turn_start(content)]
+    invalid_reason, safe_starts = _analyze_history(contents)
+    if invalid_reason:
+        return _unchanged_result(request, original_estimate, invalid_reason)
     if len(safe_starts) <= settings.min_recent_turns:
         return _unchanged_result(request, original_estimate, "minimum_history")
 

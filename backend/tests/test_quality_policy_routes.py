@@ -76,6 +76,9 @@ class QualityPolicyRouteTests(unittest.IsolatedAsyncioTestCase):
         body = response_json(response)
         self.assertEqual(body["policy"]["source"], "legacy_projection")
         self.assertEqual(body["policy"]["revision"], 0)
+        self.assertTrue(body["runtime_active"])
+        self.assertEqual(body["runtime_source"], "legacy_projection")
+        self.assertEqual(body["effective_settings"], body["policy"]["settings"])
         self.assertEqual(storage.values, {})
 
     async def test_update_uses_optimistic_revision_and_preserves_legacy_keys(self):
@@ -91,6 +94,7 @@ class QualityPolicyRouteTests(unittest.IsolatedAsyncioTestCase):
                 new=AsyncMock(return_value=balanced_legacy()),
             ),
             patch("core.panel.quality_policy.get_env_locked_keys", return_value=set()),
+            patch("core.panel.quality_policy.config.set_cached_config_value"),
         ):
             response = await update_quality_policy(request, token="session")
 
