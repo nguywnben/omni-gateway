@@ -68,7 +68,7 @@ async function checkForUpdates() {
 
     if (!checkBtn.dataset.defaultText) {
 
-        checkBtn.dataset.defaultText = checkBtn.textContent.trim() || 'Check for updates';
+        checkBtn.dataset.defaultText = checkBtn.textContent.trim() || t('check_for_updates');
 
     }
 

@@ -195,11 +195,11 @@ function showModelTestModal(message, options = {}) {
         const modal = document.createElement('div');
         modal.className = 'message-modal-overlay';
 
-        const title = options.title || 'Test Model';
-        const confirmLabel = options.confirmLabel || 'Test';
+        const title = options.title || t('modal.model_test_title');
+        const confirmLabel = options.confirmLabel || t('modal.test');
         const cancelLabel = options.cancelLabel || t('btn_cancel');
-        const label = options.label || 'Model';
-        const placeholder = options.placeholder || 'Select a model';
+        const label = options.label || t('modal.model');
+        const placeholder = options.placeholder || t('modal.select_model');
         const choices = Array.isArray(options.options) ? options.options : [];
         const optionHtml = choices.map((choice) => `
             <option value="${escapeAttribute(choice.value)}">${escapeHtml(choice.label)}</option>
@@ -294,16 +294,16 @@ function showModelTestModal(message, options = {}) {
                 if (!settled) renderResult(result);
             } catch (error) {
                 if (settled) return;
-                const errorMessage = error?.message || 'The selected model test could not be completed.';
+                const errorMessage = error?.message || t('verification_failed');
                 renderResult({
                     type: 'error',
                     html: buildApiResultHtml({
-                        intro: 'The selected model test could not be completed.',
+                        intro: t('verification_failed'),
                         rows: [
-                            ['Result', 'Failed'],
-                            ['Model', model],
+                            [t('status'), t('failed')],
+                            [t('modal.model'), model],
                         ],
-                        summaryLabel: 'Failure summary',
+                        summaryLabel: t('modal.error_summary'),
                         note: errorMessage,
                     }),
                 });

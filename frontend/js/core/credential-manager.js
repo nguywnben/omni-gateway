@@ -182,8 +182,7 @@ function createCredsManager(type) {
 
                     this.updatePagination();
 
-                    const credentialType = type === 'primary' ? 'provider credential' : 'credential';
-                    const credentialLabel = `${data.total} ${credentialType}${data.total === 1 ? '' : 's'}`;
+                    const credentialLabel = `${data.total} ${t('credential')}`;
                     let msg = t('status_loaded_creds', {credentials: credentialLabel});
 
                     if (this.currentStatusFilter !== 'all') {

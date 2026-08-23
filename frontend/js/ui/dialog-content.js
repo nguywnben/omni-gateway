@@ -142,7 +142,7 @@ function buildMessageResultDetails(label, value, options = {}) {
 
     return `
         <details class="message-result-details"${options.open ? ' open' : ''}>
-            <summary>${escapeHtml(label || 'Details')}</summary>
+            <summary>${escapeHtml(label || t('runtime.details'))}</summary>
             <pre>${escapeHtml(text)}</pre>
         </details>
     `;
@@ -162,7 +162,7 @@ function buildApiResultHtml(options = {}) {
     const summaryHtml = options.rows?.length
         ? `
             <div class="message-result-section">
-                <div class="message-result-section-title">${escapeHtml(options.summaryLabel || 'Summary')}</div>
+                <div class="message-result-section-title">${escapeHtml(options.summaryLabel || t('runtime.summary'))}</div>
                 <div class="message-result-summary">${renderMessageResultRows(options.rows)}</div>
             </div>
         `
@@ -173,7 +173,7 @@ function buildApiResultHtml(options = {}) {
         : '';
 
     const detailsHtml = buildMessageResultDetails(
-        options.detailsLabel || 'Details',
+        options.detailsLabel || t('runtime.details'),
         options.details,
         { open: options.detailsOpen }
     );
@@ -218,13 +218,13 @@ function buildCredentialTestErrorHtml(filename, data, response) {
 
     const summaryRows = [
         [t('table_filename'), filename],
-        ['HTTP code', httpCode],
+        [t('http_code_prefix'), httpCode],
         [t('credential_status_label').replace(':', ''), statusText],
-        data.provider ? ['Provider', getCredentialProviderMeta(data, 'usage').name] : null,
-        data.model ? ['Model', data.model] : null,
-        reason ? ['Reason', reason] : null,
-        permission ? ['Permission', permission] : null,
-        resource ? ['Resource', resource] : null,
+        data.provider ? [t('provider'), getCredentialProviderMeta(data, 'usage').name] : null,
+        data.model ? [t('modal.model'), data.model] : null,
+        reason ? [t('modal.reason'), reason] : null,
+        permission ? [t('runtime.permission'), permission] : null,
+        resource ? [t('runtime.resource'), resource] : null,
     ].filter(Boolean);
 
     const troubleshooterHtml = troubleshooterUrl
@@ -232,11 +232,11 @@ function buildCredentialTestErrorHtml(filename, data, response) {
         : '';
 
     return buildApiResultHtml({
-        intro: 'The selected model test did not complete successfully. Review the provider status and error response below.',
+        intro: t('credentials.test_failed', {error: statusText}),
         rows: summaryRows,
-        summaryLabel: 'Failure summary',
+        summaryLabel: t('modal.error_summary'),
         extraHtml: troubleshooterHtml,
-        detailsLabel: 'Error details',
+        detailsLabel: t('error_details'),
         details: rawDetails,
         detailsOpen: true,
     });
@@ -253,18 +253,18 @@ function buildCredentialTestResultHtml(filename, data, response, options = {}) {
 
     return buildApiResultHtml({
         intro: isRateLimited
-            ? 'The credential responded, but the provider reported a temporary rate limit. The router can continue with another available credential.'
-            : 'The credential completed a live model test successfully.',
+            ? t('credential_rate_limited')
+            : t('test_successful'),
         rows: [
-            ['Result', isRateLimited ? 'Rate limited' : 'Successful'],
+            [t('status'), t(isRateLimited ? 'runtime.rate_limited' : 'success')],
             [t('table_filename'), filename],
-            ['HTTP code', logicalStatus || response.status],
+            [t('http_code_prefix'), logicalStatus || response.status],
             [t('credential_status_label').replace(':', ''), statusMessage],
-            data.provider ? ['Provider', getCredentialProviderMeta(data, 'usage').name] : null,
-            data.model ? ['Model', data.model] : null,
-            options.mode ? ['Mode', options.mode] : null,
+            data.provider ? [t('provider'), getCredentialProviderMeta(data, 'usage').name] : null,
+            data.model ? [t('modal.model'), data.model] : null,
+            options.mode ? [t('runtime.mode'), options.mode] : null,
         ].filter(Boolean),
-        summaryLabel: 'Test summary',
+        summaryLabel: t('modal.model_test_title'),
     });
 
 }
@@ -281,21 +281,21 @@ function normalizeVerificationMessage(message) {
 function buildCredentialVerificationHtml(filename, data) {
 
     const rows = [
-        ['Result', 'Successful'],
+        [t('status'), t('success')],
         [t('table_filename'), filename],
-        data.project_id ? ['Project ID', data.project_id] : null,
-        data.subscription_tier ? ['Tier', data.subscription_tier] : null,
-        data.credit_amount !== undefined && data.credit_amount !== null ? ['Credit', data.credit_amount] : null,
-        data.provider ? ['Provider', getCredentialProviderMeta({ provider: data.provider }, 'usage').name] : null,
-        Number.isFinite(Number(data.model_count)) ? ['Available models', Number(data.model_count)] : null,
+        data.project_id ? [t('modal.project_id'), data.project_id] : null,
+        data.subscription_tier ? [t('tier'), data.subscription_tier] : null,
+        data.credit_amount !== undefined && data.credit_amount !== null ? [t('credits_label'), data.credit_amount] : null,
+        data.provider ? [t('provider'), getCredentialProviderMeta({ provider: data.provider }, 'usage').name] : null,
+        Number.isFinite(Number(data.model_count)) ? [t('modal.available_models'), Number(data.model_count)] : null,
     ].filter(Boolean);
 
     const detailMessage = normalizeVerificationMessage(data.message);
 
     return buildApiResultHtml({
-        intro: 'The credential was verified and its provider metadata was refreshed.',
+        intro: t('credentials.verified'),
         rows,
-        summaryLabel: 'Verification summary',
+        summaryLabel: t('credential_verification_title'),
         note: detailMessage,
     });
 

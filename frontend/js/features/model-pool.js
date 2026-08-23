@@ -1,6 +1,6 @@
 function modelProviderMeta(providerId) {
     if (MODEL_PROVIDER_META[providerId]) return MODEL_PROVIDER_META[providerId];
-    const name = String(providerId || 'Provider')
+    const name = String(providerId || t('provider'))
         .split(/[_-]+/)
         .filter(Boolean)
         .map(word => ['ai', 'api'].includes(word.toLowerCase())

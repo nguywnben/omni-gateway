@@ -22,7 +22,7 @@ function setMobileMenuState(isOpen) {
 
     if (menuButton) {
         menuButton.setAttribute('aria-expanded', String(isOpen));
-        menuButton.setAttribute('aria-label', isOpen ? 'Close navigation' : 'Open navigation');
+        menuButton.setAttribute('aria-label', t(isOpen ? 'close_navigation' : 'open_navigation'));
     }
 }
 

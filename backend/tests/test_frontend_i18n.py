@@ -114,6 +114,59 @@ class FrontendLocaleContractTests(unittest.TestCase):
         self.assertIn("const AUTO_TRANSLATED_TEXT = new WeakMap()", I18N_SOURCE)
         self.assertIn("locale === 'en'", I18N_SOURCE)
 
+    def test_runtime_ui_does_not_embed_known_english_copy(self):
+        runtime_source = "\n".join(
+            path.read_text(encoding="utf-8")
+            for path in sorted((FRONTEND / "js").rglob("*.js"))
+            if path.name not in {"i18n.js", "locales.js", "page-locales.js"}
+        )
+        forbidden_literals = {
+            "Close navigation",
+            "Open navigation",
+            "Credential file",
+            "Credential import",
+            "Import completed.",
+            "Provider Summary",
+            "Check for updates",
+            "Test Model",
+            "Select a model",
+            "The selected model test could not be completed.",
+            "The credential completed a live model test successfully.",
+            "The credential responded, but the provider reported a temporary rate limit. The router can continue with another available credential.",
+            "Failure summary",
+            "Test summary",
+            "Rate limited",
+            "Successful",
+            "Verification failed.",
+            "Credential verified.",
+            "Verified",
+            "Details",
+            "Error details",
+            "Summary",
+            "Setting ID",
+            "Binding ID",
+            "provider credential",
+            "credential files",
+            "email addresses",
+        }
+        offenders = sorted(
+            literal
+            for literal in forbidden_literals
+            if re.search(rf"(['\"`]){re.escape(literal)}\1", runtime_source)
+        )
+
+        self.assertEqual(offenders, [], f"Unlocalized runtime UI copy: {offenders}")
+
+    def test_pre_state_factories_do_not_translate_during_app_state_initialization(self):
+        upload_source = (FRONTEND / "js" / "core" / "upload-manager.js").read_text(encoding="utf-8")
+        factory_prelude = upload_source.split("return {", 1)[0]
+
+        self.assertNotIn(
+            "t(",
+            factory_prelude,
+            "createUploadManager runs while AppState is in its temporal dead zone",
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

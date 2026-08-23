@@ -16,7 +16,7 @@ async function verifyCredential(filename) {
 
         if (response.ok && data.success) {
 
-            showStatus(data.message || 'Credential verified.', 'success');
+            showStatus(data.message || t('credentials.verified'), 'success');
 
             showMessageModal(t('credential_verification_title'), buildCredentialVerificationHtml(filename, data), 'success', {html: true});
 
@@ -62,7 +62,7 @@ async function verifyProviderCredential(filename) {
 
         if (response.ok && data.success) {
 
-            showStatus(data.message || 'Credential verified.', 'success');
+            showStatus(data.message || t('credentials.verified'), 'success');
 
             showMessageModal(t('credential_verification_title'), buildCredentialVerificationHtml(filename, data), 'success', {html: true});
 
@@ -148,13 +148,13 @@ async function testCredential(filename, model) {
         return {
             type: 'error',
             html: buildApiResultHtml({
-                intro: 'The selected model test could not be completed.',
+                intro: t('verification_failed'),
                 rows: [
                     ['Result', 'Failed'],
                     [t('table_filename'), filename],
                     ['Model', model],
                 ],
-                summaryLabel: 'Failure summary',
+                summaryLabel: t('modal.error_summary'),
                 note: errorMsg,
             })
         };
@@ -221,13 +221,13 @@ async function testPrimaryCredential(filename, model) {
         return {
             type: 'error',
             html: buildApiResultHtml({
-                intro: 'The selected model test could not be completed.',
+                intro: t('verification_failed'),
                 rows: [
                     ['Result', 'Failed'],
                     [t('table_filename'), filename],
                     ['Model', model],
                 ],
-                summaryLabel: 'Failure summary',
+                summaryLabel: t('modal.error_summary'),
                 note: errorMsg,
             })
         };
@@ -258,7 +258,7 @@ async function configurePreviewChannel(filename) {
 
             showStatus(successMsg.replace(/\n/g, '<br>'), 'success');
 
-            showMessageModal(t('preview_configuration_title'), `${t('status_action_success', {action: t('btn_setup_preview')})}\n\n${t('table_filename')}: ${filename}\n\n${data.message}\n\nSetting ID: ${data.setting_id || 'N/A'}\nBinding ID: ${data.binding_id || 'N/A'}`, 'success');
+            showMessageModal(t('preview_configuration_title'), `${t('status_action_success', {action: t('btn_setup_preview')})}\n\n${t('table_filename')}: ${filename}\n\n${data.message}\n\n${t('runtime.setting_id')}: ${data.setting_id || 'N/A'}\n${t('runtime.binding_id')}: ${data.binding_id || 'N/A'}`, 'success');
 
             await AppState.creds.refresh();
 

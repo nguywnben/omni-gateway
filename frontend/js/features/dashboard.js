@@ -638,7 +638,7 @@ function renderTimelineChart(timeline = []) {
 
     const maxRequests = Math.max(...timeline.map(slot => slot.requests || 0), 1);
     if (maxInfo) {
-        maxInfo.textContent = `${t('dashboard.peak') || 'Peak'}: ${formatUsageNumber(maxRequests)} req/slot`;
+        maxInfo.textContent = t('dashboard.peak_requests', {count: formatUsageNumber(maxRequests)});
     }
 
     wrapper.innerHTML = timeline.map((slot) => {
@@ -879,7 +879,7 @@ function updateCooldownDisplays() {
 
                         const timeDisplay = formatCooldownTime(remaining).replace(/s$/, '').replace(/ /g, '');
 
-                        badge.textContent = `Cooldown ${shortModel}: ${timeDisplay}`;
+                        badge.textContent = t('credential_badge_cooldown', {model: shortModel, time: timeDisplay});
 
                     }
 
