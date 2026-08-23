@@ -127,6 +127,9 @@ function initStaticUiBindings() {
         'clear-primary-files': () => clearPrimaryFiles(),
         'save-antigravity-settings': () => saveAntigravitySettings(),
         'reset-antigravity-settings': () => resetAntigravitySettings(),
+        'save-quality-policy': () => saveQualityPolicy(),
+        'reset-quality-policy': () => resetQualityPolicy(),
+        'preview-quality-policy': () => previewQualityPolicy(),
         'save-config': () => saveConfig(),
         'reset-config': () => resetConfig(),
         'set-current-keepalive-url': () => autoSetKeepaliveUrl(),
@@ -150,6 +153,7 @@ function initStaticUiBindings() {
         'ollama-files': (_element, event) => handleOllamaFileSelect(event),
         'primary-files': (_element, event) => handlePrimaryFileSelect(event),
         'routing-strategy': () => syncRoutingPolicyControls(),
+        'quality-profile': (element) => selectQualityProfile(element.value),
         'log-level': () => filterLogs()
     };
 
@@ -168,6 +172,10 @@ function initStaticUiBindings() {
     });
 
     document.addEventListener('input', (event) => {
+        if (event.target.matches('[data-quality-control]')) {
+            syncQualityPolicyControls();
+            document.getElementById('qualityPreviewResult')?.classList.add('hidden');
+        }
         if (event.target.matches('[data-ui-input="model-catalog-search"]')) {
             renderModelCatalog();
         }

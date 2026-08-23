@@ -205,7 +205,7 @@ function getTabDataLoader(tabName) {
 
         dashboard: () => refreshUsageStats(),
 
-        quality: () => loadConfig(),
+        quality: () => loadQualityPolicy(),
 
         access: () => updateEndpointUrls(),
 

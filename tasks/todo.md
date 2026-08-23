@@ -40,7 +40,7 @@
   - Acceptance: authenticated, versioned, bounded, environment-lock aware.
   - Verify: management API contract and error-envelope tests.
   - Files: panel route, schemas/domain, router composition, tests.
-- [ ] Strengthen compression and enabled-security failure behavior.
+- [x] Strengthen compression and enabled-security failure behavior.
   - Acceptance: protected structures survive; every skip/apply has a reason; enabled guardrails do
     not fail open.
   - Verify: adversarial long-context/tool-pair tests and gateway-pipeline tests.

@@ -1,10 +1,10 @@
 async function loadConfig(options = {}) {
 
-    const loadingElements = ['configLoading', 'qualityLoading']
+    const loadingElements = ['configLoading']
         .map(id => document.getElementById(id))
         .filter(Boolean);
 
-    const formElements = ['configForm', 'qualityForm']
+    const formElements = ['configForm']
         .map(id => document.getElementById(id))
         .filter(Boolean);
 
@@ -81,20 +81,6 @@ function populateConfigForm() {
     setConfigField('retry429MaxRetries', c.retry_429_max_retries ?? 5);
 
     setConfigField('retry429Interval', c.retry_429_interval ?? 1);
-
-    setConfigCheckbox('compatibilityModeEnabled', Boolean(c.compatibility_mode_enabled));
-
-    setConfigCheckbox('returnThoughtsToFrontend', Boolean(c.return_thoughts_to_frontend !== false));
-
-    setConfigField('antiTruncationMaxAttempts', c.anti_truncation_max_attempts || 3);
-
-    setConfigCheckbox('tokenCompressionEnabled', Boolean(c.token_compression_enabled !== false));
-
-    setConfigField('tokenCompressionThreshold', c.token_compression_threshold ?? 32000);
-
-    setConfigField('tokenCompressionTarget', c.token_compression_target ?? 24000);
-
-    setConfigField('tokenCompressionMinRecentTurns', c.token_compression_min_recent_turns ?? 4);
 
     setConfigField('routingStrategy', c.routing_strategy || 'balanced');
 
@@ -206,20 +192,6 @@ async function saveConfig() {
             retry_429_max_retries: getInt('retry429MaxRetries', 5),
 
             retry_429_interval: getFloat('retry429Interval', 1),
-
-            compatibility_mode_enabled: getChecked('compatibilityModeEnabled'),
-
-            return_thoughts_to_frontend: getChecked('returnThoughtsToFrontend'),
-
-            anti_truncation_max_attempts: getInt('antiTruncationMaxAttempts', 3),
-
-            token_compression_enabled: getChecked('tokenCompressionEnabled', true),
-
-            token_compression_threshold: getInt('tokenCompressionThreshold', 32000),
-
-            token_compression_target: getInt('tokenCompressionTarget', 24000),
-
-            token_compression_min_recent_turns: getInt('tokenCompressionMinRecentTurns', 4),
 
             routing_strategy: getValue('routingStrategy', 'balanced'),
 

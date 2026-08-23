@@ -275,6 +275,14 @@ def build_policy_document(
     }
 
 
+def get_profile_defaults() -> dict[str, dict[str, Any]]:
+    """Return validated copies of every operator-selectable preset."""
+    return {
+        profile: build_policy_document(profile=profile, revision=0)["settings"]
+        for profile in ("quality", "balanced", "capacity")
+    }
+
+
 def project_legacy_policy(legacy: Mapping[str, Any]) -> dict[str, Any]:
     settings = settings_from_legacy(legacy)
     profile = "balanced" if settings == validate_settings(BALANCED_SETTINGS) else "custom"

@@ -25,6 +25,32 @@ def _frontend_sources() -> list[Path]:
 
 
 class FrontendLocaleContractTests(unittest.TestCase):
+    def test_quality_policy_catalog_is_complete_for_every_locale(self):
+        block = PAGE_LOCALE_SOURCE.split(
+            "const QUALITY_POLICY_EXTENDED_MESSAGES = {", 1
+        )[1].split("\n};", 1)[0]
+        locale_matches = list(
+            re.finditer(
+                r"^    (?:'([^']+)'|([a-z]{2})): \{",
+                block,
+                re.MULTILINE,
+            )
+        )
+        catalogs = {}
+        for index, match in enumerate(locale_matches):
+            locale = match.group(1) or match.group(2)
+            end = locale_matches[index + 1].start() if index + 1 < len(locale_matches) else len(block)
+            catalogs[locale] = set(re.findall(r"'((?:quality)\.[a-z0-9_]+)'\s*:", block[match.start():end]))
+
+        expected_locales = {
+            "en", "zh-CN", "zh-TW", "de", "es", "fr", "id", "it",
+            "ja", "ko", "pt", "ru", "th", "tr", "vi",
+        }
+        self.assertEqual(set(catalogs), expected_locales)
+        for locale in expected_locales:
+            with self.subTest(locale=locale):
+                self.assertEqual(catalogs[locale], catalogs["en"])
+
     def test_language_control_only_appears_in_settings(self):
         locations = []
         for path in _frontend_sources():

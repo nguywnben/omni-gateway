@@ -131,6 +131,16 @@ const AppState = {
 
     envLockedFields: new Set(),
 
+    qualityPolicy: null,
+
+    qualityEffectiveSettings: null,
+
+    qualityProfileDefaults: {},
+
+    qualityEnvLockedFields: new Set(),
+
+    qualityPolicyLoaded: false,
+
     antigravityConfig: {},
 
     antigravityConfigLoaded: false,

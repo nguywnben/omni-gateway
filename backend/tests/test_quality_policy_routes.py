@@ -79,6 +79,8 @@ class QualityPolicyRouteTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(body["runtime_active"])
         self.assertEqual(body["runtime_source"], "legacy_projection")
         self.assertEqual(body["effective_settings"], body["policy"]["settings"])
+        self.assertEqual(set(body["profile_defaults"]), {"quality", "balanced", "capacity"})
+        self.assertFalse(body["profile_defaults"]["quality"]["compression"]["enabled"])
         self.assertEqual(storage.values, {})
 
     async def test_update_uses_optimistic_revision_and_preserves_legacy_keys(self):
@@ -126,7 +128,9 @@ class QualityPolicyRouteTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_update_rejects_changes_to_environment_locked_policy_fields(self):
         storage = FakePolicyStorage()
-        request = QualityPolicyUpdateRequest(revision=0, profile="quality")
+        custom = build_policy_document(profile="balanced", revision=0)["settings"]
+        custom["compression"]["enabled"] = False
+        request = QualityPolicyUpdateRequest(revision=0, profile="custom", settings=custom)
         with (
             patch(
                 "core.panel.quality_policy.get_storage_adapter",
@@ -148,6 +152,31 @@ class QualityPolicyRouteTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(body["error"]["code"], "quality_policy_environment_locked")
         self.assertEqual(body["error"]["fields"], ["token_compression_enabled"])
         self.assertEqual(storage.values, {})
+
+    async def test_preset_can_be_saved_while_environment_retains_effective_precedence(self):
+        storage = FakePolicyStorage()
+        request = QualityPolicyUpdateRequest(revision=0, profile="quality")
+        with (
+            patch(
+                "core.panel.quality_policy.get_storage_adapter",
+                new=AsyncMock(return_value=storage),
+            ),
+            patch(
+                "core.panel.quality_policy.read_legacy_quality_settings",
+                new=AsyncMock(return_value=balanced_legacy()),
+            ),
+            patch(
+                "core.panel.quality_policy.get_env_locked_keys",
+                return_value={"token_compression_enabled"},
+            ),
+            patch("core.panel.quality_policy.config.set_cached_config_value"),
+        ):
+            response = await update_quality_policy(request, token="session")
+
+        body = response_json(response)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(body["policy"]["profile"], "quality")
+        self.assertEqual(body["environment_overrides"], ["token_compression_enabled"])
 
     async def test_preview_does_not_write_policy(self):
         storage = FakePolicyStorage()
@@ -207,8 +236,11 @@ class QualityPolicyRouteTests(unittest.IsolatedAsyncioTestCase):
             response = await preview_quality_policy(request, token="session")
 
         body = response_json(response)
-        self.assertFalse(body["can_apply"])
+        self.assertTrue(body["can_apply"])
+        self.assertTrue(body["applies_with_environment_overrides"])
         self.assertEqual(body["environment_conflicts"], ["token_compression_enabled"])
+        self.assertEqual(body["preview"]["decision"]["reason"], "structural_compression_candidate")
+        self.assertEqual(body["preview"]["decision"]["estimated_tokens_after"], 24_000)
         self.assertEqual(storage.values, {})
 
     async def test_get_returns_stable_sanitized_error_when_storage_is_unavailable(self):

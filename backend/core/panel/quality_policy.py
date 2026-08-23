@@ -13,6 +13,7 @@ from core.quality_policy import (
     QualityPolicyError,
     build_policy_document,
     changed_locked_fields,
+    get_profile_defaults,
     load_policy_document,
     preview_policy,
     settings_from_legacy,
@@ -85,6 +86,7 @@ def _policy_response(
         "effective_settings": effective_settings,
         "env_locked": sorted(env_locked & set(LOCKED_SETTING_PATHS)),
         "environment_overrides": overrides,
+        "profile_defaults": get_profile_defaults(),
         "runtime_active": True,
         "runtime_source": (
             "versioned_policy" if policy["source"] == "stored" else "legacy_projection"
@@ -140,7 +142,7 @@ async def update_quality_policy(
                 desired["settings"],
                 get_env_locked_keys(),
             )
-            if locked:
+            if locked and request.profile == "custom":
                 return _error(
                     423,
                     "quality_policy_environment_locked",
@@ -184,8 +186,12 @@ async def preview_quality_policy(
             settings=request.settings,
             source="preview",
         )
+        env_locked = get_env_locked_keys()
+        effective_settings, conflicts = apply_environment_overrides(
+            proposed["settings"], legacy, env_locked
+        )
         preview = preview_policy(
-            proposed,
+            {**proposed, "settings": effective_settings},
             {
                 "estimated_input_tokens": request.estimated_input_tokens,
                 "message_count": request.message_count,
@@ -193,12 +199,6 @@ async def preview_quality_policy(
                 "has_system_instruction": request.has_system_instruction,
                 "has_tool_pairs": request.has_tool_pairs,
             },
-        )
-        env_locked = get_env_locked_keys()
-        conflicts = changed_locked_fields(
-            settings_from_legacy(legacy),
-            proposed["settings"],
-            env_locked,
         )
     except QualityPolicyError as exc:
         return _error(400, exc.code, str(exc))
@@ -208,7 +208,8 @@ async def preview_quality_policy(
     return JSONResponse(
         content={
             "preview": preview,
-            "can_apply": not conflicts,
+            "can_apply": request.profile != "custom" or not conflicts,
+            "applies_with_environment_overrides": bool(conflicts),
             "environment_conflicts": conflicts,
             "env_locked": sorted(env_locked & set(LOCKED_SETTING_PATHS)),
         }
