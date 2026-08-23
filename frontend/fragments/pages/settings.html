@@ -42,22 +42,6 @@
                                     <p class="field-hint" data-i18n="settings.listener_restart_hint">Listener changes require an application restart. Docker port publishing must be updated separately.</p>
                                 </section>
 
-                                <section class="config-group">
-                                    <h2 class="card-title" data-i18n="settings.translation_runtime">Translation and Runtime</h2>
-                                    <p class="card-copy card-title-copy" data-i18n="settings.translation_runtime_description">Adjust compatibility translation and response recovery behavior.</p>
-                                    <label class="switch-row"><input type="checkbox" id="compatibilityModeEnabled" class="config-checkbox"><span data-i18n="settings.flatten_instructions">Flatten system instructions for compatibility</span></label>
-                                    <label class="switch-row" style="margin-top: 12px;"><input type="checkbox" id="returnThoughtsToFrontend" class="config-checkbox"><span data-i18n="settings.return_reasoning">Return reasoning content when available</span></label>
-                                    <div class="form-group" style="margin-top: 14px;"><label for="antiTruncationMaxAttempts" data-i18n="settings.recovery_attempts">Truncation recovery attempts</label><input type="number" id="antiTruncationMaxAttempts" min="1" max="10"></div>
-                                </section>
-
-                                <section class="config-group">
-                                    <h2 class="card-title" data-i18n="settings.context_optimization">Context Optimization</h2>
-                                    <p class="card-copy card-title-copy" data-i18n="settings.context_optimization_description">Reduce oversized conversation history while preserving system instructions, tool definitions, and recent turns.</p>
-                                    <label class="switch-row"><input type="checkbox" id="tokenCompressionEnabled" class="config-checkbox"><span data-i18n="settings.compress_history">Compress oversized conversation history</span></label>
-                                    <div class="form-group" style="margin-top: 14px;"><label for="tokenCompressionThreshold" data-i18n="settings.compression_threshold">Compression threshold in tokens</label><input type="number" id="tokenCompressionThreshold" min="128" max="2000000"></div>
-                                    <div class="form-group"><label for="tokenCompressionTarget" data-i18n="settings.compression_target">Target size in tokens</label><input type="number" id="tokenCompressionTarget" min="64" max="1999999"></div>
-                                    <div class="form-group"><label for="tokenCompressionMinRecentTurns" data-i18n="settings.recent_turns">Recent turns to preserve</label><input type="number" id="tokenCompressionMinRecentTurns" min="1" max="50"></div>
-                                </section>
                                 </div>
 
                                 <div class="config-column">

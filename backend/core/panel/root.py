@@ -20,6 +20,7 @@ CONSOLE_FRAGMENT_PATHS = (
     "layout/sidebar.html",
     "layout/mobile-header.html",
     "pages/dashboard.html",
+    "pages/ai-quality.html",
     "pages/access.html",
     "pages/pool.html",
     "pages/models.html",
@@ -327,6 +328,7 @@ async def serve_oauth_callback(request: Request):
 @router.get("/login", response_class=HTMLResponse, include_in_schema=False)
 @router.get("/setup", response_class=HTMLResponse, include_in_schema=False)
 @router.get("/dashboard", response_class=HTMLResponse, include_in_schema=False)
+@router.get("/ai-quality", response_class=HTMLResponse, include_in_schema=False)
 @router.get("/access", response_class=HTMLResponse, include_in_schema=False)
 @router.get("/code_assist", response_class=HTMLResponse, include_in_schema=False)
 @router.get("/pool", response_class=HTMLResponse, include_in_schema=False)

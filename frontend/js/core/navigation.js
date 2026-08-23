@@ -6,6 +6,8 @@ const ROUTE_MAP = {
 
     '/dashboard': 'dashboard',
 
+    '/ai-quality': 'quality',
+
     '/access': 'access',
 
     '/pool': 'pool',
@@ -30,6 +32,7 @@ const ROUTE_MAP = {
 
 const TAB_MAP = {
     dashboard: '/dashboard',
+    quality: '/ai-quality',
     access: '/access',
     pool: '/pool',
     models: '/models',
@@ -201,6 +204,8 @@ function getTabDataLoader(tabName) {
     const loaders = {
 
         dashboard: () => refreshUsageStats(),
+
+        quality: () => loadConfig(),
 
         access: () => updateEndpointUrls(),
 

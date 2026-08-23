@@ -143,6 +143,7 @@ class ControlPanelAssetTests(unittest.TestCase):
 
         for tab_name in (
             "dashboard",
+            "quality",
             "access",
             "pool",
             "models",
@@ -200,6 +201,42 @@ class ControlPanelAssetTests(unittest.TestCase):
         self.assertIn("t('access.api_key_managed_env')", integration_script)
         self.assertNotIn("'API key. Copy API key.'", integration_script)
         self.assertNotIn("'Hide API key'", integration_script)
+
+    def test_ai_quality_page_owns_output_and_context_controls(self):
+        response = serve_control_panel()
+        body = response.body.decode("utf-8")
+        frontend_dir = BACKEND_DIR.parent / "frontend"
+        settings_fragment = (frontend_dir / "fragments" / "pages" / "settings.html").read_text(
+            encoding="utf-8"
+        )
+        quality_fragment = (frontend_dir / "fragments" / "pages" / "ai-quality.html").read_text(
+            encoding="utf-8"
+        )
+        navigation_script = read_scripts("core/navigation.js")
+        settings_script = read_scripts("features/system-settings.js")
+        root_source = (BACKEND_DIR / "core" / "panel" / "root.py").read_text(encoding="utf-8")
+
+        self.assertIn('id="qualityTab"', body)
+        self.assertIn('data-ui-action="switch-tab" data-tab="quality"', body)
+        for control_id in (
+            "compatibilityModeEnabled",
+            "returnThoughtsToFrontend",
+            "antiTruncationMaxAttempts",
+            "tokenCompressionEnabled",
+            "tokenCompressionThreshold",
+            "tokenCompressionTarget",
+            "tokenCompressionMinRecentTurns",
+        ):
+            self.assertNotIn(f'id="{control_id}"', settings_fragment)
+            self.assertIn(f'id="{control_id}"', quality_fragment)
+        self.assertIn('data-i18n="quality.title"', quality_fragment)
+        self.assertIn('data-ui-action="save-config"', quality_fragment)
+        self.assertIn("'/ai-quality': 'quality'", navigation_script)
+        self.assertIn("quality: '/ai-quality'", navigation_script)
+        self.assertIn("quality: () => loadConfig()", navigation_script)
+        self.assertIn("qualityLoading", settings_script)
+        self.assertIn("qualityForm", settings_script)
+        self.assertIn('@router.get("/ai-quality"', root_source)
 
     def test_dashboard_separates_historical_credential_usage(self):
         response = serve_control_panel()

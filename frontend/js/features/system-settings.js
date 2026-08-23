@@ -1,16 +1,20 @@
 async function loadConfig(options = {}) {
 
-    const loading = document.getElementById('configLoading');
+    const loadingElements = ['configLoading', 'qualityLoading']
+        .map(id => document.getElementById(id))
+        .filter(Boolean);
 
-    const form = document.getElementById('configForm');
+    const formElements = ['configForm', 'qualityForm']
+        .map(id => document.getElementById(id))
+        .filter(Boolean);
 
     const preserveContent = options.preserveContent ?? AppState.configLoaded;
 
     try {
 
-        if (loading && !preserveContent) loading.hidden = false;
+        if (!preserveContent) loadingElements.forEach(element => { element.hidden = false; });
 
-        if (!preserveContent) form.classList.add('hidden');
+        if (!preserveContent) formElements.forEach(element => element.classList.add('hidden'));
 
         const response = await fetch('./api/config/get', { headers: getAuthHeaders() });
 
@@ -26,7 +30,7 @@ async function loadConfig(options = {}) {
 
             populateConfigForm();
 
-            form.classList.remove('hidden');
+            formElements.forEach(element => element.classList.remove('hidden'));
 
             // showStatus(t('configuration_loaded_successfully'), 'success');
 
@@ -42,7 +46,7 @@ async function loadConfig(options = {}) {
 
     } finally {
 
-        if (loading) loading.hidden = true;
+        loadingElements.forEach(element => { element.hidden = true; });
 
     }
 
