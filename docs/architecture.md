@@ -159,3 +159,6 @@ Current decisions:
 - [ADR-001: Preserve SDK-Compatible API Boundaries](decisions/001-sdk-compatible-api-boundaries.md)
 - [ADR-002: Secure First Run and Enforce Single-Worker Operation](decisions/002-secure-first-run-and-single-worker.md)
 - [ADR-003: Deployment-Scoped Model Eligibility and Negative Route Cache](decisions/003-deployment-scoped-model-eligibility.md)
+- [ADR-004: Versioned AI Quality Policy Plane](decisions/004-versioned-ai-quality-policy-plane.md)
+- [ADR-005: Provider-Declared Credential Operation Capabilities](decisions/005-provider-operation-capabilities.md)
+- [ADR-006: Separate Durable Data from Coordinated Runtime State](decisions/006-durable-and-coordinated-enterprise-state.md)
