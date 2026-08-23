@@ -1296,3 +1296,25 @@ for (const [locale, values] of Object.entries(ROUTING_STRATEGY_COPY)) {
         Object.fromEntries(ROUTING_STRATEGY_KEYS.map((key, index) => [key, values[index]])),
     );
 }
+
+const THEME_MESSAGES = {
+    en: { 'theme.label': 'Theme', 'theme.system': 'System', 'theme.light': 'Light', 'theme.dark': 'Dark', 'theme.hint': 'Controls the console color scheme on this device.' },
+    'zh-CN': { 'theme.label': '主题', 'theme.system': '跟随系统', 'theme.light': '浅色', 'theme.dark': '深色', 'theme.hint': '控制此设备上的控制台配色。' },
+    'zh-TW': { 'theme.label': '主題', 'theme.system': '跟隨系統', 'theme.light': '淺色', 'theme.dark': '深色', 'theme.hint': '控制此裝置上的主控台配色。' },
+    de: { 'theme.label': 'Design', 'theme.system': 'System', 'theme.light': 'Hell', 'theme.dark': 'Dunkel', 'theme.hint': 'Steuert das Farbschema der Konsole auf diesem Gerät.' },
+    es: { 'theme.label': 'Tema', 'theme.system': 'Sistema', 'theme.light': 'Claro', 'theme.dark': 'Oscuro', 'theme.hint': 'Controla el esquema de color de la consola en este dispositivo.' },
+    fr: { 'theme.label': 'Thème', 'theme.system': 'Système', 'theme.light': 'Clair', 'theme.dark': 'Sombre', 'theme.hint': 'Contrôle le jeu de couleurs de la console sur cet appareil.' },
+    id: { 'theme.label': 'Tema', 'theme.system': 'Sistem', 'theme.light': 'Terang', 'theme.dark': 'Gelap', 'theme.hint': 'Mengatur skema warna konsol di perangkat ini.' },
+    it: { 'theme.label': 'Tema', 'theme.system': 'Sistema', 'theme.light': 'Chiaro', 'theme.dark': 'Scuro', 'theme.hint': 'Controlla lo schema colori della console su questo dispositivo.' },
+    ja: { 'theme.label': 'テーマ', 'theme.system': 'システム', 'theme.light': 'ライト', 'theme.dark': 'ダーク', 'theme.hint': 'このデバイスでのコンソールの配色を設定します。' },
+    ko: { 'theme.label': '테마', 'theme.system': '시스템', 'theme.light': '라이트', 'theme.dark': '다크', 'theme.hint': '이 기기에서 콘솔 색상 구성을 설정합니다.' },
+    pt: { 'theme.label': 'Tema', 'theme.system': 'Sistema', 'theme.light': 'Claro', 'theme.dark': 'Escuro', 'theme.hint': 'Controla o esquema de cores do console neste dispositivo.' },
+    ru: { 'theme.label': 'Тема', 'theme.system': 'Системная', 'theme.light': 'Светлая', 'theme.dark': 'Тёмная', 'theme.hint': 'Управляет цветовой схемой консоли на этом устройстве.' },
+    th: { 'theme.label': 'ธีม', 'theme.system': 'ตามระบบ', 'theme.light': 'สว่าง', 'theme.dark': 'มืด', 'theme.hint': 'ควบคุมชุดสีของคอนโซลบนอุปกรณ์นี้' },
+    tr: { 'theme.label': 'Tema', 'theme.system': 'Sistem', 'theme.light': 'Açık', 'theme.dark': 'Koyu', 'theme.hint': 'Bu cihazdaki konsol renk düzenini kontrol eder.' },
+    vi: { 'theme.label': 'Giao diện', 'theme.system': 'Theo hệ thống', 'theme.light': 'Sáng', 'theme.dark': 'Tối', 'theme.hint': 'Điều khiển bảng màu của bảng điều khiển trên thiết bị này.' }
+};
+
+for (const [locale, messages] of Object.entries(THEME_MESSAGES)) {
+    Object.assign(PAGE_LOCALE_TRANSLATIONS[locale], messages);
+}

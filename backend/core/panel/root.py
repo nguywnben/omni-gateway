@@ -39,6 +39,8 @@ CONSOLE_STYLE_ASSETS = (
     "css/responsive.css",
 )
 
+CONSOLE_EARLY_SCRIPT_ASSETS = ("js/core/theme.js",)
+
 CONSOLE_SCRIPT_ASSETS = (
     "js/core/locales.js",
     "js/core/page-locales.js",
@@ -82,6 +84,7 @@ def _console_asset_paths():
         FRONTEND_DIR / asset
         for asset in (
             *CONSOLE_STYLE_ASSETS,
+            *CONSOLE_EARLY_SCRIPT_ASSETS,
             *CONSOLE_SCRIPT_ASSETS,
         )
     )
@@ -135,6 +138,18 @@ def serve_console_styles(request: Request):
     return Response(
         content=content,
         media_type="text/css",
+        headers=_bundle_cache_headers(request),
+    )
+
+
+@router.get("/frontend/theme.js", include_in_schema=False)
+def serve_theme_script(request: Request):
+    """Serve the blocking theme bootstrap separately to prevent a wrong-theme flash."""
+    asset_version = _console_asset_version()
+    content = _read_console_bundle(CONSOLE_EARLY_SCRIPT_ASSETS, asset_version, "\n;\n")
+    return Response(
+        content=content,
+        media_type="text/javascript",
         headers=_bundle_cache_headers(request),
     )
 
@@ -329,6 +344,11 @@ def serve_control_panel():
         html_content = re.sub(
             r'href="/frontend/console\.css(?:\?v=[^"]*)?"',
             f'href="/frontend/console.css?v={asset_version}"',
+            html_content,
+        )
+        html_content = re.sub(
+            r'src="/frontend/theme\.js(?:\?v=[^"]*)?"',
+            f'src="/frontend/theme.js?v={asset_version}"',
             html_content,
         )
         html_content = re.sub(

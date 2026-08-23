@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 import sys
 import unittest
 from pathlib import Path
@@ -35,14 +36,70 @@ class ControlPanelAssetTests(unittest.TestCase):
         body = response.body.decode("utf-8")
 
         self.assertEqual(response.status_code, 200)
+        self.assertRegex(body, r"/frontend/theme\.js\?v=\d+")
         self.assertRegex(body, r"/frontend/console\.css\?v=\d+")
         self.assertRegex(body, r"/frontend/console\.js\?v=\d+")
+        self.assertLess(
+            body.index("/frontend/theme.js"),
+            body.index("/frontend/console.css"),
+            "Theme preference must be applied before styles to prevent a color-scheme flash.",
+        )
         self.assertNotIn("/frontend/vendor/", body)
         self.assertNotIn("<!-- include:fragments/", body)
         self.assertNotIn("/frontend/control-panel.css", body)
         self.assertNotIn("/frontend/control-panel.js", body)
         self.assertNotIn("control_panel", body)
         self.assertNotIn("common.js", body)
+
+    def test_theme_supports_system_light_and_dark_preferences(self):
+        response = serve_control_panel()
+        body = response.body.decode("utf-8")
+        frontend_dir = BACKEND_DIR.parent / "frontend"
+        theme_script = (frontend_dir / "js" / "core" / "theme.js").read_text(encoding="utf-8")
+        foundation_styles = (frontend_dir / "css" / "foundation.css").read_text(encoding="utf-8")
+
+        self.assertIn('id="themePreference"', body)
+        self.assertIn('data-i18n="theme.label"', body)
+        for mode in ("system", "light", "dark"):
+            self.assertIn(f'<option value="{mode}"', body)
+        self.assertIn("omni_gateway_theme", theme_script)
+        self.assertIn("window.matchMedia('(prefers-color-scheme: dark)')", theme_script)
+        self.assertIn("document.documentElement.dataset.theme", theme_script)
+        self.assertIn("localStorage.setItem", theme_script)
+        self.assertIn('[data-theme="dark"]', foundation_styles)
+        self.assertIn("color-scheme: dark", foundation_styles)
+
+    def test_theme_text_tokens_meet_wcag_normal_text_contrast(self):
+        foundation_styles = (BACKEND_DIR.parent / "frontend" / "css" / "foundation.css").read_text(
+            encoding="utf-8"
+        )
+
+        def selector_tokens(selector: str) -> dict[str, str]:
+            block = re.search(rf"{re.escape(selector)}\s*\{{(.*?)\}}", foundation_styles, re.DOTALL)
+            self.assertIsNotNone(block)
+            return dict(re.findall(r"(--[\w-]+):\s*(#[0-9a-fA-F]{6})", block.group(1)))
+
+        def contrast_ratio(foreground: str, background: str) -> float:
+            def luminance(value: str) -> float:
+                channels = [int(value[index : index + 2], 16) / 255 for index in (1, 3, 5)]
+                linear = [
+                    channel / 12.92 if channel <= 0.04045 else ((channel + 0.055) / 1.055) ** 2.4
+                    for channel in channels
+                ]
+                return 0.2126 * linear[0] + 0.7152 * linear[1] + 0.0722 * linear[2]
+
+            lighter, darker = sorted((luminance(foreground), luminance(background)), reverse=True)
+            return (lighter + 0.05) / (darker + 0.05)
+
+        light = selector_tokens(":root")
+        dark = selector_tokens('[data-theme="dark"]')
+        for palette_name, palette in (("light", light), ("dark", dark)):
+            for token in ("--text", "--text-muted", "--text-soft"):
+                with self.subTest(palette=palette_name, token=token):
+                    self.assertGreaterEqual(
+                        contrast_ratio(palette[token], palette["--bg"]),
+                        4.5,
+                    )
 
     def test_console_manifest_covers_every_fragment_and_local_asset(self):
         response = serve_control_panel()
