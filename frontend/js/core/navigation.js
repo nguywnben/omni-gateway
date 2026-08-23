@@ -6,6 +6,8 @@ const ROUTE_MAP = {
 
     '/dashboard': 'dashboard',
 
+    '/access': 'access',
+
     '/pool': 'pool',
 
     '/models': 'models',
@@ -28,6 +30,7 @@ const ROUTE_MAP = {
 
 const TAB_MAP = {
     dashboard: '/dashboard',
+    access: '/access',
     pool: '/pool',
     models: '/models',
     providers: '/providers',
@@ -197,13 +200,9 @@ function getTabDataLoader(tabName) {
 
     const loaders = {
 
-        dashboard: () => {
+        dashboard: () => refreshUsageStats(),
 
-            updateEndpointUrls();
-
-            return refreshUsageStats();
-
-        },
+        access: () => updateEndpointUrls(),
 
         pool: () => AppState.primaryCreds.refresh(),
 

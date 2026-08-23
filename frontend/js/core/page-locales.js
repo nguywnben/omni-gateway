@@ -1318,3 +1318,47 @@ const THEME_MESSAGES = {
 for (const [locale, messages] of Object.entries(THEME_MESSAGES)) {
     Object.assign(PAGE_LOCALE_TRANSLATIONS[locale], messages);
 }
+
+const ACCESS_MESSAGES = {
+    en: { 'access.label': 'Access', 'access.title': 'API Access', 'access.description': 'Connect SDK clients with the root integration key and protocol-specific base URLs.', 'access.root_key': 'Root integration key', 'access.root_key_description': 'This deployment-wide key has unrestricted inference access. Rotate it deliberately and update every connected client.' },
+    'zh-CN': { 'access.label': '访问控制', 'access.title': 'API 访问', 'access.description': '使用根集成密钥和各协议的基础 URL 连接 SDK 客户端。', 'access.root_key': '根集成密钥', 'access.root_key_description': '此部署级密钥拥有不受限的推理访问权限。轮换前请做好计划，并更新所有已连接客户端。' },
+    'zh-TW': { 'access.label': '存取控制', 'access.title': 'API 存取', 'access.description': '使用根整合金鑰和各通訊協定的基礎 URL 連接 SDK 用戶端。', 'access.root_key': '根整合金鑰', 'access.root_key_description': '此部署層級金鑰具有不受限制的推論存取權。輪替前請先規劃，並更新所有已連接的用戶端。' },
+    de: { 'access.label': 'Zugriff', 'access.title': 'API-Zugriff', 'access.description': 'Verbinden Sie SDK-Clients mit dem Root-Integrationsschlüssel und protokollspezifischen Basis-URLs.', 'access.root_key': 'Root-Integrationsschlüssel', 'access.root_key_description': 'Dieser installationsweite Schlüssel erlaubt uneingeschränkte Inferenzzugriffe. Rotieren Sie ihn geplant und aktualisieren Sie alle verbundenen Clients.' },
+    es: { 'access.label': 'Acceso', 'access.title': 'Acceso a la API', 'access.description': 'Conecta clientes SDK con la clave raíz de integración y las URL base de cada protocolo.', 'access.root_key': 'Clave raíz de integración', 'access.root_key_description': 'Esta clave para toda la implementación permite inferencia sin restricciones. Rótala de forma planificada y actualiza todos los clientes conectados.' },
+    fr: { 'access.label': 'Accès', 'access.title': 'Accès API', 'access.description': 'Connectez les clients SDK avec la clé d’intégration racine et les URL de base propres à chaque protocole.', 'access.root_key': 'Clé d’intégration racine', 'access.root_key_description': 'Cette clé valable pour tout le déploiement donne un accès sans restriction à l’inférence. Planifiez sa rotation et mettez à jour chaque client connecté.' },
+    id: { 'access.label': 'Akses', 'access.title': 'Akses API', 'access.description': 'Hubungkan klien SDK dengan kunci integrasi root dan URL dasar khusus protokol.', 'access.root_key': 'Kunci integrasi root', 'access.root_key_description': 'Kunci tingkat deployment ini memiliki akses inferensi tanpa batas. Rotasikan secara terencana dan perbarui setiap klien yang terhubung.' },
+    it: { 'access.label': 'Accesso', 'access.title': 'Accesso API', 'access.description': 'Collega i client SDK con la chiave di integrazione root e gli URL di base specifici del protocollo.', 'access.root_key': 'Chiave di integrazione root', 'access.root_key_description': 'Questa chiave valida per l’intero deployment consente inferenza senza restrizioni. Pianificane la rotazione e aggiorna tutti i client connessi.' },
+    ja: { 'access.label': 'アクセス', 'access.title': 'API アクセス', 'access.description': 'ルート統合キーとプロトコル別のベース URL を使って SDK クライアントを接続します。', 'access.root_key': 'ルート統合キー', 'access.root_key_description': 'このデプロイ全体のキーには制限のない推論アクセス権があります。計画的にローテーションし、接続済みの全クライアントを更新してください。' },
+    ko: { 'access.label': '접근 관리', 'access.title': 'API 접근', 'access.description': '루트 통합 키와 프로토콜별 기본 URL로 SDK 클라이언트를 연결합니다.', 'access.root_key': '루트 통합 키', 'access.root_key_description': '이 배포 전체 키에는 제한 없는 추론 접근 권한이 있습니다. 계획적으로 교체하고 연결된 모든 클라이언트를 업데이트하세요.' },
+    pt: { 'access.label': 'Acesso', 'access.title': 'Acesso à API', 'access.description': 'Conecte clientes SDK com a chave raiz de integração e as URLs base específicas de cada protocolo.', 'access.root_key': 'Chave raiz de integração', 'access.root_key_description': 'Esta chave de todo o deployment permite inferência sem restrições. Faça a rotação de forma planejada e atualize todos os clientes conectados.' },
+    ru: { 'access.label': 'Доступ', 'access.title': 'Доступ к API', 'access.description': 'Подключайте SDK-клиенты с помощью корневого ключа интеграции и базовых URL для каждого протокола.', 'access.root_key': 'Корневой ключ интеграции', 'access.root_key_description': 'Этот ключ действует на всё развёртывание и предоставляет неограниченный доступ к инференсу. Планируйте его ротацию и обновляйте все подключённые клиенты.' },
+    th: { 'access.label': 'การเข้าถึง', 'access.title': 'การเข้าถึง API', 'access.description': 'เชื่อมต่อไคลเอนต์ SDK ด้วยคีย์การผสานรวมหลักและ URL ฐานเฉพาะโปรโตคอล', 'access.root_key': 'คีย์การผสานรวมหลัก', 'access.root_key_description': 'คีย์ระดับการติดตั้งนี้มีสิทธิ์เรียกใช้โมเดลโดยไม่จำกัด ควรวางแผนหมุนเวียนคีย์และอัปเดตไคลเอนต์ที่เชื่อมต่อทั้งหมด' },
+    tr: { 'access.label': 'Erişim', 'access.title': 'API Erişimi', 'access.description': 'SDK istemcilerini kök entegrasyon anahtarı ve protokole özel temel URL’lerle bağlayın.', 'access.root_key': 'Kök entegrasyon anahtarı', 'access.root_key_description': 'Dağıtım genelindeki bu anahtar sınırsız çıkarım erişimine sahiptir. Planlı biçimde yenileyin ve bağlı tüm istemcileri güncelleyin.' },
+    vi: { 'access.label': 'Quyền truy cập', 'access.title': 'Truy cập API', 'access.description': 'Kết nối ứng dụng khách SDK bằng khóa tích hợp gốc và URL cơ sở riêng cho từng giao thức.', 'access.root_key': 'Khóa tích hợp gốc', 'access.root_key_description': 'Khóa dùng chung cho toàn bộ bản triển khai này có quyền suy luận không giới hạn. Hãy chủ động lên kế hoạch xoay vòng và cập nhật mọi ứng dụng khách đang kết nối.' }
+};
+
+for (const [locale, messages] of Object.entries(ACCESS_MESSAGES)) {
+    Object.assign(PAGE_LOCALE_TRANSLATIONS[locale], messages);
+}
+
+const ACCESS_DYNAMIC_MESSAGES = {
+    en: { 'access.api_key_copy_label': 'API key. Copy API key.', 'access.hide_api_key': 'Hide API key', 'access.api_key_managed_env': 'API key is managed by the API_KEY environment variable' },
+    'zh-CN': { 'access.api_key_copy_label': 'API 密钥。复制 API 密钥。', 'access.hide_api_key': '隐藏 API 密钥', 'access.api_key_managed_env': 'API 密钥由 API_KEY 环境变量管理' },
+    'zh-TW': { 'access.api_key_copy_label': 'API 金鑰。複製 API 金鑰。', 'access.hide_api_key': '隱藏 API 金鑰', 'access.api_key_managed_env': 'API 金鑰由 API_KEY 環境變數管理' },
+    de: { 'access.api_key_copy_label': 'API-Schlüssel. API-Schlüssel kopieren.', 'access.hide_api_key': 'API-Schlüssel ausblenden', 'access.api_key_managed_env': 'Der API-Schlüssel wird durch die Umgebungsvariable API_KEY verwaltet' },
+    es: { 'access.api_key_copy_label': 'Clave de API. Copiar clave de API.', 'access.hide_api_key': 'Ocultar clave de API', 'access.api_key_managed_env': 'La clave de API se administra mediante la variable de entorno API_KEY' },
+    fr: { 'access.api_key_copy_label': 'Clé API. Copier la clé API.', 'access.hide_api_key': 'Masquer la clé API', 'access.api_key_managed_env': 'La clé API est gérée par la variable d’environnement API_KEY' },
+    id: { 'access.api_key_copy_label': 'Kunci API. Salin kunci API.', 'access.hide_api_key': 'Sembunyikan kunci API', 'access.api_key_managed_env': 'Kunci API dikelola oleh variabel lingkungan API_KEY' },
+    it: { 'access.api_key_copy_label': 'Chiave API. Copia chiave API.', 'access.hide_api_key': 'Nascondi chiave API', 'access.api_key_managed_env': 'La chiave API è gestita dalla variabile di ambiente API_KEY' },
+    ja: { 'access.api_key_copy_label': 'API キー。API キーをコピー。', 'access.hide_api_key': 'API キーを隠す', 'access.api_key_managed_env': 'API キーは環境変数 API_KEY で管理されています' },
+    ko: { 'access.api_key_copy_label': 'API 키. API 키 복사.', 'access.hide_api_key': 'API 키 숨기기', 'access.api_key_managed_env': 'API 키는 API_KEY 환경 변수에서 관리됩니다' },
+    pt: { 'access.api_key_copy_label': 'Chave de API. Copiar chave de API.', 'access.hide_api_key': 'Ocultar chave de API', 'access.api_key_managed_env': 'A chave de API é gerenciada pela variável de ambiente API_KEY' },
+    ru: { 'access.api_key_copy_label': 'Ключ API. Копировать ключ API.', 'access.hide_api_key': 'Скрыть ключ API', 'access.api_key_managed_env': 'Ключ API управляется переменной окружения API_KEY' },
+    th: { 'access.api_key_copy_label': 'คีย์ API คัดลอกคีย์ API', 'access.hide_api_key': 'ซ่อนคีย์ API', 'access.api_key_managed_env': 'คีย์ API จัดการโดยตัวแปรสภาพแวดล้อม API_KEY' },
+    tr: { 'access.api_key_copy_label': 'API anahtarı. API anahtarını kopyala.', 'access.hide_api_key': 'API anahtarını gizle', 'access.api_key_managed_env': 'API anahtarı API_KEY ortam değişkeni tarafından yönetiliyor' },
+    vi: { 'access.api_key_copy_label': 'Khóa API. Sao chép khóa API.', 'access.hide_api_key': 'Ẩn khóa API', 'access.api_key_managed_env': 'Khóa API do biến môi trường API_KEY quản lý' }
+};
+
+for (const [locale, messages] of Object.entries(ACCESS_DYNAMIC_MESSAGES)) {
+    Object.assign(PAGE_LOCALE_TRANSLATIONS[locale], messages);
+}

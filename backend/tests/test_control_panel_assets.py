@@ -143,6 +143,7 @@ class ControlPanelAssetTests(unittest.TestCase):
 
         for tab_name in (
             "dashboard",
+            "access",
             "pool",
             "models",
             "providers",
@@ -168,6 +169,37 @@ class ControlPanelAssetTests(unittest.TestCase):
             encoding="utf-8"
         )
         self.assertIn("scrollbar-gutter: stable", responsive_styles)
+
+    def test_access_page_owns_root_key_and_sdk_integration(self):
+        response = serve_control_panel()
+        body = response.body.decode("utf-8")
+        frontend_dir = BACKEND_DIR.parent / "frontend"
+        dashboard_fragment = (frontend_dir / "fragments" / "pages" / "dashboard.html").read_text(
+            encoding="utf-8"
+        )
+        access_fragment = (frontend_dir / "fragments" / "pages" / "access.html").read_text(
+            encoding="utf-8"
+        )
+        navigation_script = read_scripts("core/navigation.js")
+        integration_script = read_scripts("ui/api-integration.js")
+        root_source = (BACKEND_DIR / "core" / "panel" / "root.py").read_text(encoding="utf-8")
+
+        self.assertIn('id="accessTab"', body)
+        self.assertIn('data-ui-action="switch-tab" data-tab="access"', body)
+        self.assertNotIn('id="apiKey"', dashboard_fragment)
+        self.assertNotIn('data-ui-action="regenerate-api-key"', dashboard_fragment)
+        self.assertIn('id="apiKey"', access_fragment)
+        self.assertIn('data-ui-action="regenerate-api-key"', access_fragment)
+        self.assertIn('data-i18n="access.title"', access_fragment)
+        self.assertIn("'/access': 'access'", navigation_script)
+        self.assertIn("access: '/access'", navigation_script)
+        self.assertIn("access: () => updateEndpointUrls()", navigation_script)
+        self.assertIn('@router.get("/access"', root_source)
+        self.assertIn("t('access.api_key_copy_label')", integration_script)
+        self.assertIn("t('access.hide_api_key')", integration_script)
+        self.assertIn("t('access.api_key_managed_env')", integration_script)
+        self.assertNotIn("'API key. Copy API key.'", integration_script)
+        self.assertNotIn("'Hide API key'", integration_script)
 
     def test_dashboard_separates_historical_credential_usage(self):
         response = serve_control_panel()
