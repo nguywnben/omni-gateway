@@ -15,6 +15,8 @@ class CompressionSettings:
     threshold_tokens: int = 32_000
     target_tokens: int = 24_000
     min_recent_turns: int = 4
+    quality_profile: str = ""
+    quality_policy_revision: int = 0
 
     def __post_init__(self) -> None:
         if not isinstance(self.enabled, bool):
@@ -37,16 +39,21 @@ class CompressionResult:
     removed_contents: int
     applied: bool
     reason: str
+    quality_profile: str = ""
+    quality_policy_revision: int = 0
 
     @property
     def estimated_tokens_saved(self) -> int:
         return max(0, self.original_estimated_tokens - self.final_estimated_tokens)
 
-    def as_metrics(self) -> Dict[str, int]:
+    def as_metrics(self) -> Dict[str, Any]:
         return {
             "estimated_input_tokens": self.final_estimated_tokens,
             "estimated_tokens_saved": self.estimated_tokens_saved,
             "compressed_messages": self.removed_contents,
+            "quality_profile": self.quality_profile,
+            "quality_policy_revision": self.quality_policy_revision,
+            "compression_reason": self.reason,
         }
 
 
@@ -115,7 +122,7 @@ def _analyze_history(contents: list[Any]) -> tuple[str | None, list[int]]:
 
 
 def _unchanged_result(
-    request: Dict[str, Any], estimated_tokens: int, reason: str
+    request: Dict[str, Any], estimated_tokens: int, reason: str, settings: CompressionSettings
 ) -> CompressionResult:
     return CompressionResult(
         request=request,
@@ -124,6 +131,8 @@ def _unchanged_result(
         removed_contents=0,
         applied=False,
         reason=reason,
+        quality_profile=settings.quality_profile,
+        quality_policy_revision=settings.quality_policy_revision,
     )
 
 
@@ -133,24 +142,24 @@ def compress_gemini_request(
     """Prune an old conversation prefix while preserving recent complete turns."""
     original_estimate = estimate_input_tokens(request)
     if not settings.enabled:
-        return _unchanged_result(request, original_estimate, "disabled")
+        return _unchanged_result(request, original_estimate, "disabled", settings)
     if original_estimate <= settings.threshold_tokens:
-        return _unchanged_result(request, original_estimate, "below_threshold")
+        return _unchanged_result(request, original_estimate, "below_threshold", settings)
 
     contents = request.get("contents")
     if not isinstance(contents, list) or len(contents) < 2:
-        return _unchanged_result(request, original_estimate, "no_history")
+        return _unchanged_result(request, original_estimate, "no_history", settings)
 
     invalid_reason, safe_starts = _analyze_history(contents)
     if invalid_reason:
-        return _unchanged_result(request, original_estimate, invalid_reason)
+        return _unchanged_result(request, original_estimate, invalid_reason, settings)
     if len(safe_starts) <= settings.min_recent_turns:
-        return _unchanged_result(request, original_estimate, "minimum_history")
+        return _unchanged_result(request, original_estimate, "minimum_history", settings)
 
     latest_allowed_cut = safe_starts[-settings.min_recent_turns]
     cut_candidates = [index for index in safe_starts[1:] if index <= latest_allowed_cut]
     if not cut_candidates:
-        return _unchanged_result(request, original_estimate, "no_safe_boundary")
+        return _unchanged_result(request, original_estimate, "no_safe_boundary", settings)
 
     estimate_cache: Dict[int, int] = {}
 
@@ -177,7 +186,7 @@ def compress_gemini_request(
             low = middle + 1
 
     if selected_estimate >= original_estimate:
-        return _unchanged_result(request, original_estimate, "no_savings")
+        return _unchanged_result(request, original_estimate, "no_savings", settings)
 
     selected_source = dict(request)
     selected_source["contents"] = contents[selected_cut:]
@@ -194,4 +203,6 @@ def compress_gemini_request(
             if selected_estimate <= settings.target_tokens
             else "minimum_history_reached"
         ),
+        quality_profile=settings.quality_profile,
+        quality_policy_revision=settings.quality_policy_revision,
     )

@@ -45,7 +45,7 @@
     not fail open.
   - Verify: adversarial long-context/tool-pair tests and gateway-pipeline tests.
   - Files: compression, pipeline, config, focused tests.
-- [ ] Build AI Quality page.
+- [x] Build AI Quality page.
   - Acceptance: profiles, dependencies, preview, impact copy, save/reset all work.
   - Verify: API/browser workflow, accessibility tree, responsive screenshots, clean console.
   - Files: page fragment, feature JS, CSS, locale/test assets.

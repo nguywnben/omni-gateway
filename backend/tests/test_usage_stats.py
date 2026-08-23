@@ -59,6 +59,9 @@ class UsageStatsTests(unittest.TestCase):
                         "estimated_input_tokens": 100,
                         "estimated_tokens_saved": 40,
                         "compressed_messages": 6,
+                        "quality_profile": "balanced",
+                        "quality_policy_revision": 7,
+                        "compression_reason": "target_reached",
                         "latency_ms": 125,
                         "retry_count": 2,
                     },
@@ -71,14 +74,22 @@ class UsageStatsTests(unittest.TestCase):
                         """
                         SELECT request_id, input_tokens, output_tokens, total_tokens,
                                estimated_input_tokens, estimated_tokens_saved,
-                               compressed_messages, latency_ms, retry_count
+                               compressed_messages, quality_profile,
+                               quality_policy_revision, compression_reason,
+                               latency_ms, retry_count
                         FROM usage_logs
                         """
                     ).fetchone()
                 finally:
                     connection.close()
 
-                self.assertEqual(row, ("request-123", 120, 30, 150, 100, 40, 6, 125, 2))
+                self.assertEqual(
+                    row,
+                    (
+                        "request-123", 120, 30, 150, 100, 40, 6,
+                        "balanced", 7, "target_reached", 125, 2,
+                    ),
+                )
             finally:
                 usage_stats.db_path = original_db_path
 

@@ -62,6 +62,8 @@ class TokenCompressionTests(unittest.TestCase):
             threshold_tokens=300,
             target_tokens=220,
             min_recent_turns=2,
+            quality_profile="balanced",
+            quality_policy_revision=9,
         )
 
         result = compress_gemini_request(payload, settings)
@@ -72,6 +74,9 @@ class TokenCompressionTests(unittest.TestCase):
         self.assertEqual(result.request["contents"], contents[-4:])
         self.assertEqual(result.removed_contents, 6)
         self.assertGreater(result.estimated_tokens_saved, 0)
+        self.assertEqual(result.as_metrics()["quality_profile"], "balanced")
+        self.assertEqual(result.as_metrics()["quality_policy_revision"], 9)
+        self.assertEqual(result.as_metrics()["compression_reason"], result.reason)
 
     def test_compression_never_starts_with_an_orphaned_tool_result(self):
         contents = [

@@ -11,6 +11,7 @@ from config import (
     get_retry_429_max_retries,
 )
 from core.credential_manager import CredentialManager
+from core.quality_decision import normalize_quality_decision
 from core.request_context import get_api_key_id, get_request_elapsed_ms, get_request_id
 from core.usage_stats import normalize_token_usage, record_call
 from core.virtual_keys import virtual_key_manager
@@ -22,12 +23,30 @@ MODEL_NOT_FOUND_COOLDOWN_SECONDS = 2 * 60
 RETRYABLE_UPSTREAM_STATUS_CODES = frozenset({408, 409, 429, 500, 502, 503, 504})
 
 
+def _generation_trace_metadata(
+    *,
+    provider: str,
+    latency_ms: int,
+    tokens: Dict[str, int],
+    request_metrics: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
+    decision = normalize_quality_decision(request_metrics)
+    return {
+        "provider": provider,
+        "latency_ms": latency_ms,
+        "cached_tokens": tokens["cached_tokens"],
+        "reasoning_tokens": tokens["reasoning_tokens"],
+        **decision,
+    }
+
+
 def _schedule_trace_export(
     *,
     model_name: str,
     provider: str,
     token_usage: Optional[Dict[str, Any]],
     latency_ms: int,
+    request_metrics: Optional[Dict[str, Any]] = None,
 ) -> None:
     """Export a generation trace to Langfuse without blocking the response.
 
@@ -58,12 +77,12 @@ def _schedule_trace_export(
                 latency_ms=float(latency_ms),
                 prompt_tokens=tokens["input_tokens"],
                 completion_tokens=tokens["output_tokens"],
-                metadata={
-                    "provider": provider,
-                    "latency_ms": latency_ms,
-                    "cached_tokens": tokens["cached_tokens"],
-                    "reasoning_tokens": tokens["reasoning_tokens"],
-                },
+                metadata=_generation_trace_metadata(
+                    provider=provider,
+                    latency_ms=latency_ms,
+                    tokens=tokens,
+                    request_metrics=request_metrics,
+                ),
             )
         except Exception as exc:
             log.debug(f"[telemetry] trace export failed: {exc}")
@@ -179,6 +198,7 @@ async def record_api_call_success(
             provider=provider or mode,
             token_usage=token_usage,
             latency_ms=int(request_metrics.get("latency_ms") or 0),
+            request_metrics=request_metrics,
         )
 
         await credential_manager.record_api_call_result(

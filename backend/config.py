@@ -429,14 +429,17 @@ async def get_legacy_token_compression_config() -> dict[str, Any]:
 async def get_token_compression_config() -> dict[str, Any]:
     """Return effective compression settings; disable compression on policy failure."""
     try:
-        from core.quality_policy_runtime import get_effective_quality_settings
+        from core.quality_policy_runtime import resolve_quality_policy
 
-        compression = (await get_effective_quality_settings())["compression"]
+        resolved = await resolve_quality_policy()
+        compression = resolved["effective_settings"]["compression"]
         return {
             "enabled": compression["enabled"],
             "threshold_tokens": compression["threshold_tokens"],
             "target_tokens": compression["target_tokens"],
             "min_recent_turns": compression["min_recent_turns"],
+            "quality_profile": resolved["policy"]["profile"],
+            "quality_policy_revision": resolved["policy"]["revision"],
         }
     except Exception as exc:
         log.error(
@@ -444,7 +447,12 @@ async def get_token_compression_config() -> dict[str, Any]:
             "compression is disabled for this request."
         )
         legacy = await get_legacy_token_compression_config()
-        return {**legacy, "enabled": False}
+        return {
+            **legacy,
+            "enabled": False,
+            "quality_profile": "unavailable",
+            "quality_policy_revision": 0,
+        }
 
 
 async def get_legacy_response_cache_config() -> dict[str, Any]:

@@ -15,6 +15,7 @@ from core.provider_registry import (
     get_provider_display_name,
     normalize_provider_id,
 )
+from core.quality_decision import normalize_quality_decision
 from log import log
 from paths import DEFAULT_CREDENTIALS_DIR
 
@@ -46,6 +47,9 @@ TOKEN_COLUMNS = {
     "estimated_input_tokens": "INTEGER DEFAULT 0",
     "estimated_tokens_saved": "INTEGER DEFAULT 0",
     "compressed_messages": "INTEGER DEFAULT 0",
+    "quality_profile": "TEXT DEFAULT ''",
+    "quality_policy_revision": "INTEGER DEFAULT 0",
+    "compression_reason": "TEXT DEFAULT ''",
     "latency_ms": "INTEGER DEFAULT 0",
     "retry_count": "INTEGER DEFAULT 0",
     "cost_usd": "REAL DEFAULT 0",
@@ -357,6 +361,7 @@ def record_call(
 
     tokens = normalize_token_usage(token_usage)
     request_metrics = request_metrics or {}
+    quality_decision = normalize_quality_decision(request_metrics)
     cost_usd = calculate_cost_usd(
         model,
         input_tokens=tokens["input_tokens"],
@@ -387,12 +392,15 @@ def record_call(
                     estimated_input_tokens,
                     estimated_tokens_saved,
                     compressed_messages,
+                    quality_profile,
+                    quality_policy_revision,
+                    compression_reason,
                     latency_ms,
                     retry_count,
                     cost_usd,
                     api_key_id
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     filename,
@@ -410,6 +418,9 @@ def record_call(
                     _int_value(request_metrics.get("estimated_input_tokens")),
                     _int_value(request_metrics.get("estimated_tokens_saved")),
                     _int_value(request_metrics.get("compressed_messages")),
+                    quality_decision["quality_profile"],
+                    quality_decision["quality_policy_revision"],
+                    quality_decision["compression_reason"],
                     _int_value(request_metrics.get("latency_ms")),
                     _int_value(request_metrics.get("retry_count")),
                     float(cost_usd),
