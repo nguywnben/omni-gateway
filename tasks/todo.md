@@ -17,26 +17,26 @@
 
 ## Phase 1 — UI Foundation
 
-- [ ] Implement light/dark/system theme.
+- [x] Implement light/dark/system theme.
   - Acceptance: no flash; preference persists; all pages meet contrast/focus requirements.
   - Verify: browser at 360/768/1024/1440, clean console, theme unit/asset tests.
   - Files: theme core JS, foundation CSS, shell fragments, frontend tests.
-- [ ] Add AI Quality and Access navigation; simplify Overview.
+- [x] Add AI Quality and Access navigation; simplify Overview.
   - Acceptance: old deep links work; root-key mutation no longer lives on Overview.
   - Verify: route/asset tests and keyboard navigation browser flow.
   - Files: sidebar, page fragments, navigation JS, root manifest/tests.
-- [ ] Add keyed localization and literal-leak gate.
+- [x] Add keyed localization and literal-leak gate.
   - Acceptance: 15 locales complete; known Vietnamese English leaks removed.
   - Verify: all i18n audits plus new user-visible-literal audit.
   - Files: locale catalogs, i18n tests/tooling, affected fragments/JS.
 
 ## Phase 2 — AI Quality
 
-- [ ] Add versioned quality-policy domain and migration.
+- [x] Add versioned quality-policy domain and migration.
   - Acceptance: existing config maps to `balanced/custom` without changing behavior.
   - Verify: policy validation, precedence, and migration tests.
   - Files: policy module, config bridge, focused tests, ADR.
-- [ ] Add quality-policy read/update/preview API.
+- [x] Add quality-policy read/update/preview API.
   - Acceptance: authenticated, versioned, bounded, environment-lock aware.
   - Verify: management API contract and error-envelope tests.
   - Files: panel route, schemas/domain, router composition, tests.
