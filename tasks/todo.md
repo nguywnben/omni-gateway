@@ -4,6 +4,38 @@
 
 - [x] Approve `docs/specs/enterprise-overhaul.md` and `tasks/plan.md`.
 
+## Current Execution Gate
+
+- Program progress: 10/28 original checklist items complete (including specification approval),
+  approximately 36%. Wave execution-slice checkboxes below refine existing phase items and do not
+  change that denominator.
+- [x] Complete Wave 1 / Phases 0–2 at implementation commit `39fb9da`.
+- [x] Record wave governance, recovery order, and the Wave 2 execution slices in repository docs.
+- [ ] Obtain explicit human approval before implementing Wave 2.
+  - State: paused; documentation work is allowed, feature implementation is not.
+  - Resume: read `tasks/current.md`, then verify `git status`, `git log`, tests, and runtime health.
+
+## Wave 2 — Credential Operations Execution Queue
+
+- [ ] W2.1 Inventory credential variants and operation capabilities.
+- [ ] W2.2 Add the authenticated additive capability catalog contract.
+- [ ] W2.3 Enforce capabilities for single-credential operations.
+- [ ] W2.4 Add bounded batch preview and typed per-item execution outcomes.
+- [ ] W2.5 Add credential-scoped redacted audit and bounded operation telemetry foundations.
+- [ ] Checkpoint W2-A: contracts, compatibility, safety, and evidence gates pass.
+- [ ] W2.6 Add the faceted fleet query and stable all-matching selection contract.
+- [ ] W2.7 Add persistent responsive filters and page/all-results selection.
+- [ ] W2.8 Add the context-aware toolbar, preview, and localized result workflow.
+- [ ] Checkpoint W2-B: mixed-provider API/browser/accessibility matrix passes.
+- [ ] W2.9 Define and enforce the shared provider form contract.
+- [ ] W2.10 Correct Google-family provider forms and flows.
+- [ ] W2.11 Correct OpenAI, xAI, Anthropic, and Ollama forms and flows.
+- [ ] Checkpoint W2-C: Phase 3 acceptance and all repository quality gates pass.
+- [ ] Report Wave 2 evidence and obtain human acceptance before Wave 3.
+
+These queue items refine Phase 3. W2.5 is a reusable foundation only: it does not complete the
+Phase 4 audit item or the Phase 5 request-trace item.
+
 ## Phase 0 — Decisions
 
 - [x] Write policy-plane ADR.

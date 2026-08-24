@@ -6,6 +6,50 @@ Deliver the enterprise overhaul as reversible vertical slices. The first release
 UX and policy foundation, the second governs credentials and access, the third adds operational
 evidence, and the final program phases earn multi-tenant and multi-replica claims.
 
+## Execution Governance
+
+This repository, not chat history, is the source of truth. A new human or agent resumes work in
+this order:
+
+1. Read `docs/specs/enterprise-overhaul.md` for product boundaries and success criteria.
+2. Read applicable accepted ADRs in `docs/decisions/` before changing a contract.
+3. Read this file for dependency order, wave scope, checkpoints, and approval gates.
+4. Read `tasks/todo.md` for the authoritative completion checklist.
+5. Read `tasks/current.md`, then verify its claims against `git status` and `git log`.
+
+A task is complete only when its acceptance and verification evidence pass. Writing code, adding
+a route, or rendering a page is not completion by itself. Every checkpoint must leave the branch
+deployable and reversible, with a clean worktree and an atomic commit.
+
+Implementation pauses at every wave boundary for human approval. Work borrowed from a later phase
+may establish a reusable foundation, but the later phase remains incomplete until its full
+acceptance criteria pass. No task is silently re-scoped or checked off to improve the progress
+number.
+
+## Delivery Waves
+
+| Wave | Phase coverage | Outcome | Status |
+| --- | --- | --- | --- |
+| 1 — Policy and console foundation | Phases 0–2 | Decisions, theme/i18n/navigation, governed AI Quality | Complete |
+| 2 — Credential operations | Phase 3 plus credential-scoped audit/telemetry foundations | Capability-correct provider and credential fleet | Awaiting approval |
+| 3 — Access and operational evidence | Phases 4–5 | Access governance, complete audit, traces, SLOs | Not started |
+| 4 — Identity and scale | Phase 6 | RBAC/OIDC, durable state, coordinated HA | Not started |
+| 5 — Production release | Phase 7 | Security/performance hardening and staged launch | Not started |
+
+Wave boundaries organize delivery; phase checkboxes continue to describe product completion.
+Wave 2 may introduce credential mutation audit hooks and bounded operation telemetry because batch
+operations are not enterprise-safe without evidence. This does not complete Phase 4 audit coverage
+or Phase 5 request tracing.
+
+## Current Approval Gate
+
+- Implementation baseline: commit `39fb9da` (`feat: record AI quality decision telemetry`).
+- Completed product scope: Phases 0–2.
+- Proposed next scope: Wave 2 only.
+- State: **PAUSED — human approval required before Wave 2 implementation**.
+- Out of scope until later approval: virtual-key governance, complete audit/trace consoles,
+  RBAC/OIDC, distributed state, multiple workers/replicas, and release activation.
+
 ## Architecture Decisions
 
 - Preserve the stable 1.x SDK boundary and evolve management APIs additively.
@@ -33,6 +77,138 @@ Baseline + ADRs
        -> Redis coordination
        -> multi-worker/replica enablement
 ```
+
+## Wave 2 Execution Slices
+
+These slices refine Phase 3 into reviewable increments. Each slice targets at most one cohesive
+contract or user workflow and receives its own test evidence and commit.
+
+### W2.1 — Credential variant and operation inventory
+
+Document every console-visible provider variant and map its currently supported operations before
+changing behavior. Undeclared operations are unsupported.
+
+- Acceptance: the inventory covers every provider/variant and resolves ambiguous legacy modes.
+- Verification: registry consistency tests fail for a missing variant or operation declaration.
+- Dependencies: ADR-005; none of the later Wave 2 slices.
+- Likely files: `backend/core/provider_registry.py`, provider registry tests, ADR-005 notes.
+
+### W2.2 — Capability catalog contract
+
+Expose the authoritative variant/operation contract additively for management clients while
+preserving existing provider catalog fields.
+
+- Acceptance: typed, authenticated, bounded response; old clients remain compatible.
+- Verification: API contract, authentication, unknown-provider, and serialization tests.
+- Dependencies: W2.1.
+- Likely files: provider catalog route/schema and focused tests.
+
+### W2.3 — Capability-enforced single operations
+
+Route existing single-credential actions through one service that validates variant capability,
+authorization, state, environment locks, and filename safety before side effects.
+
+- Acceptance: crafted unsupported actions fail with stable typed errors; supported legacy routes
+  keep their 1.x behavior.
+- Verification: provider/action matrix plus compatibility and malformed-input tests.
+- Dependencies: W2.1–W2.2.
+- Likely files: credential operation domain/route and focused tests.
+
+### W2.4 — Batch preview and typed execution outcomes
+
+Add a bounded selection contract, side-effect-free preview, idempotency boundary, and per-item
+result envelope. Preview and execution re-evaluate capabilities server-side.
+
+- Acceptance: mixed batches never claim unsupported work succeeded; destructive/high-volume work
+  requires a matching preview contract.
+- Verification: partial success, stale selection, duplicate, limit, timeout, and dry-run tests.
+- Dependencies: W2.3.
+- Likely files: batch schema/service/route and focused tests.
+
+### W2.5 — Credential operation evidence foundation
+
+Emit append-only, redacted credential mutation events and bounded operation metrics from the common
+service. Never record credential content, prompt content, tokens, or secrets.
+
+- Acceptance: every Wave 2 mutation has request ID, actor, action, target fingerprint, outcome,
+  duration, and redacted summary.
+- Verification: allowlist/redaction, failure-path, cardinality, and duplicate-event tests.
+- Dependencies: W2.3–W2.4.
+- Likely files: operation service, minimal audit/telemetry boundary, focused tests.
+
+Checkpoint W2-A follows W2.1–W2.5: capability contracts are stable, existing routes are compatible,
+and operation safety/evidence gates pass before fleet UI work begins.
+
+### W2.6 — Faceted fleet query contract
+
+Add provider variant, credential kind, health, cooldown, quota state, tier, and source filters with
+stable pagination and an explicit all-matching selection token.
+
+- Acceptance: filters compose deterministically and never return secret fields.
+- Verification: empty, large, changing, invalid, and mixed-provider fixtures.
+- Dependencies: W2.1–W2.2.
+- Likely files: credential query domain/route and focused tests.
+
+### W2.7 — Persistent filter and selection workflow
+
+Build the responsive filter surface and distinguish current-page selection from all matching
+results. Restore filters without restoring stale secret-bearing data.
+
+- Acceptance: URL/session state is bounded; pagination and refresh preserve valid filters;
+  keyboard and mobile workflows remain complete.
+- Verification: frontend contract tests and browser checks at 360/768/1024/1440.
+- Dependencies: W2.6.
+- Likely files: pool fragment, credential manager/filter JavaScript, pool CSS/tests.
+
+### W2.8 — Context-aware operation toolbar
+
+Render only the intersection of supported actions, explain unavailable actions, preview work, and
+show localized per-item results with recovery guidance.
+
+- Acceptance: UI availability never exceeds server capability; stale previews are rejected and
+  refreshed; destructive actions require explicit confirmation.
+- Verification: mixed-provider browser matrix, accessibility tree, clean console/network, and API
+  adversarial tests.
+- Dependencies: W2.4, W2.5, W2.7.
+- Likely files: batch-action/credential-card JavaScript, pool fragment/CSS, locales/tests.
+
+Checkpoint W2-B follows W2.6–W2.8: the complete mixed-provider fleet workflow passes API,
+responsive, theme, locale, keyboard, and accessibility gates.
+
+### W2.9 — Shared provider form contract
+
+Define reusable rules for field type, required state, bounds, autocomplete, secret lifetime,
+environment locks, help, advanced sections, validation, and reset behavior.
+
+- Acceptance: shared behavior is declarative and does not erase provider-specific constraints.
+- Verification: form manifest/static audit tests detect missing labels, secret handling, or bounds.
+- Dependencies: W2.1.
+- Likely files: provider form metadata/shared JavaScript and focused tests.
+
+### W2.10 — Google-family provider form correction
+
+Apply the shared contract to Antigravity, Google AI Studio, and related OAuth/import flows without
+changing credential compatibility.
+
+- Acceptance: all Google-family fields and flows meet the W2.9 contract.
+- Verification: contract tests plus keyboard, secret-lifetime, reset, and import browser flows.
+- Dependencies: W2.9.
+- Likely files: Google provider fragment/features, locales, focused tests.
+
+### W2.11 — OpenAI, xAI, Anthropic, and Ollama form correction
+
+Apply the shared contract to remaining provider variants, including endpoint and advanced
+transport fields.
+
+- Acceptance: every console provider variant passes the form contract with no English literal
+  leak in any supported locale.
+- Verification: provider contract tests, 15-locale audit, and representative browser flows.
+- Dependencies: W2.9.
+- Likely files: remaining provider fragment/features, locales, focused tests.
+
+Checkpoint W2-C closes Wave 2 only when Phase 3 acceptance passes end-to-end, all repository quality
+gates pass, the worktree is clean, the service restarts from the checkpoint commit, and the human
+accepts the completion report. Phase 4 and Phase 5 remain open except for their reusable foundations.
 
 ## Phase 0: Baseline and Decision Records
 
