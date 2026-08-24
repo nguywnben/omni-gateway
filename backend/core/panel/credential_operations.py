@@ -52,8 +52,10 @@ from core.provider_registry import (
     OPENAI_PLATFORM,
     XAI,
     canonicalize_antigravity_credential_filename,
+    credential_supports_operation,
     get_credential_provider,
     get_credential_provider_variant,
+    get_credential_variant_capabilities,
     get_declared_credential_models,
     normalize_provider_id,
 )
@@ -68,6 +70,37 @@ from fastapi import HTTPException, Response, UploadFile
 from log import log
 
 from .utils import INTERNAL_SERVER_ERROR_DETAIL, validate_credential_filename, validate_mode
+
+
+def reject_unsupported_credential_operation(
+    credential_data: dict,
+    operation: str,
+    *,
+    mode: str,
+) -> JSONResponse | None:
+    """Return a stable, secret-free rejection for an unsupported pool operation.
+
+    Code Assist keeps its legacy operation contract. The shared provider pool is
+    fail-closed so an unknown or mismatched credential variant cannot reach an
+    operation merely by crafting an API request.
+    """
+    if mode != "primary" or credential_supports_operation(credential_data, operation):
+        return None
+
+    inferred_variant = get_credential_provider_variant(credential_data)
+    capabilities = get_credential_variant_capabilities(inferred_variant)
+    variant_id = capabilities.variant_id if capabilities else "unknown"
+    return JSONResponse(
+        status_code=422,
+        content={
+            "error": {
+                "code": "credential_operation_unsupported",
+                "message": "This operation is not supported for the credential variant.",
+                "operation": operation,
+                "variant_id": variant_id,
+            }
+        },
+    )
 
 
 def _count_label(count: int, singular: str, plural: str | None = None) -> str:
@@ -882,6 +915,14 @@ async def verify_credential_common(filename: str, mode: str = "code_assist") -> 
     credential_data = await storage_adapter.get_credential(filename, mode=mode)
     if not credential_data:
         raise HTTPException(status_code=404, detail="Credential does not exist.")
+
+    rejection = reject_unsupported_credential_operation(
+        credential_data,
+        "verify",
+        mode=mode,
+    )
+    if rejection:
+        return rejection
 
     provider_id = get_credential_provider(credential_data)
     if mode == "primary" and provider_id == GOOGLE_AI_STUDIO:

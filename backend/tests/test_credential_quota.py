@@ -68,7 +68,7 @@ class CredentialQuotaRouteTests(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn("access_token", payload)
         fetch.assert_awaited_once_with("active-token", "account-123")
 
-    async def test_openai_platform_api_key_reports_codex_quota_as_unsupported(self):
+    async def test_openai_platform_api_key_rejects_unsupported_quota_operation(self):
         storage = AsyncMock()
         storage.get_credential.return_value = {
             "provider": "openai",
@@ -87,9 +87,9 @@ class CredentialQuotaRouteTests(unittest.IsolatedAsyncioTestCase):
             )
 
         payload = json.loads(response.body)
-        self.assertTrue(payload["success"])
-        self.assertFalse(payload["supported"])
-        self.assertEqual(payload["provider"], "openai")
+        self.assertEqual(response.status_code, 422)
+        self.assertEqual(payload["error"]["code"], "credential_operation_unsupported")
+        self.assertEqual(payload["error"]["operation"], "quota")
         self.assertNotIn("api_key", payload)
 
     async def test_expired_codex_token_is_refreshed_once_before_quota_retry(self):
@@ -201,7 +201,7 @@ class CredentialQuotaRouteTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(payload["monthly"]["remaining"], 3000)
         self.assertNotIn("access_token", payload)
 
-    async def test_xai_console_api_key_reports_quota_as_unsupported(self):
+    async def test_xai_console_api_key_rejects_unsupported_quota_operation(self):
         storage = AsyncMock()
         storage.get_credential.return_value = {
             "provider": "xai",
@@ -220,9 +220,9 @@ class CredentialQuotaRouteTests(unittest.IsolatedAsyncioTestCase):
             )
 
         payload = json.loads(response.body)
-        self.assertTrue(payload["success"])
-        self.assertFalse(payload["supported"])
-        self.assertEqual(payload["provider"], "xai")
+        self.assertEqual(response.status_code, 422)
+        self.assertEqual(payload["error"]["code"], "credential_operation_unsupported")
+        self.assertEqual(payload["error"]["operation"], "quota")
         self.assertNotIn("api_key", payload)
 
     async def test_expired_grok_build_token_is_refreshed_once_before_retry(self):

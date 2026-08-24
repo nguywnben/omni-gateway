@@ -53,6 +53,7 @@ from .credential_operations import (
     fetch_user_email_common,
     get_creds_status_common,
     refresh_all_user_emails_common,
+    reject_unsupported_credential_operation,
     upload_credentials_common,
     verify_credential_common,
 )
@@ -225,11 +226,27 @@ async def creds_action(
 
         storage_adapter = await get_storage_adapter()
 
-        if action != "delete":
-            credential_data = await storage_adapter.get_credential(filename, mode=mode)
-            if not credential_data:
-                log.error(f"Credential not found: {filename} (mode={mode})")
-                raise HTTPException(status_code=404, detail="Credential file does not exist.")
+        credential_data = await storage_adapter.get_credential(filename, mode=mode)
+        if not credential_data:
+            log.error(f"Credential not found: {filename} (mode={mode})")
+            raise HTTPException(status_code=404, detail="Credential file does not exist.")
+
+        operation_by_action = {
+            "enable": "toggle",
+            "disable": "toggle",
+            "delete": "delete",
+            "enable_credit": "credit_mode",
+            "disable_credit": "credit_mode",
+        }
+        operation = operation_by_action.get(action)
+        if operation:
+            rejection = reject_unsupported_credential_operation(
+                credential_data,
+                operation,
+                mode=mode,
+            )
+            if rejection:
+                return rejection
 
         if action == "enable":
             log.info(f"Enabling credential {filename} (mode={mode}).")
@@ -476,6 +493,14 @@ async def download_cred_file(
         if not credential_data:
             raise HTTPException(status_code=404, detail="Credential file does not exist.")
 
+        rejection = reject_unsupported_credential_operation(
+            credential_data,
+            "export",
+            mode=mode,
+        )
+        if rejection:
+            return rejection
+
         content = json.dumps(credential_data, ensure_ascii=False, indent=2)
         download_filename = await _get_download_filename(
             storage_adapter,
@@ -619,6 +644,14 @@ async def get_credential_quota(
         credential_data = await storage_adapter.get_credential(filename, mode=mode)
         if not credential_data:
             raise HTTPException(status_code=404, detail="Credential does not exist.")
+
+        rejection = reject_unsupported_credential_operation(
+            credential_data,
+            "quota",
+            mode=mode,
+        )
+        if rejection:
+            return rejection
 
         provider_id = get_credential_provider(credential_data)
         if provider_id == GOOGLE_AI_STUDIO:
@@ -996,6 +1029,14 @@ async def test_credential(
         credential_data = await storage_adapter.get_credential(filename, mode=mode)
         if not credential_data:
             raise HTTPException(status_code=404, detail="Credential does not exist.")
+
+        rejection = reject_unsupported_credential_operation(
+            credential_data,
+            "test",
+            mode=mode,
+        )
+        if rejection:
+            return rejection
 
         from core.httpx_client import post_async
 
