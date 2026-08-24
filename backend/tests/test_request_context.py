@@ -10,12 +10,25 @@ BACKEND_DIR = Path(__file__).resolve().parents[1]
 if str(BACKEND_DIR) not in sys.path:
     sys.path.insert(0, str(BACKEND_DIR))
 
-from core.request_context import get_request_elapsed_ms, get_request_id, request_scope
+from core.request_context import (
+    get_api_key_id,
+    get_request_elapsed_ms,
+    get_request_id,
+    request_scope,
+    set_api_key_id,
+)
 
 
 class RequestContextTests(unittest.TestCase):
     def test_scope_exposes_and_resets_request_metadata(self):
         self.assertEqual(get_request_id(), "")
+
+    def test_scope_resets_virtual_key_attribution(self):
+        with request_scope("request-virtual-key"):
+            set_api_key_id("vk_example")
+            self.assertEqual(get_api_key_id(), "vk_example")
+
+        self.assertEqual(get_api_key_id(), "")
         with request_scope("request-123"):
             self.assertEqual(get_request_id(), "request-123")
             self.assertGreaterEqual(get_request_elapsed_ms(), 0)

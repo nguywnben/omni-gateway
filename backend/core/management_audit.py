@@ -308,12 +308,21 @@ async def record_classified_management_response(
     """Append a mutation already resolved from trusted request routing metadata."""
 
     from core.audit_service import get_audit_service
+    from core.request_context import get_api_key_id
 
     outcome = _outcome_for_status(status_code)
     unauthenticated_action = mutation.action in {"auth.login", "auth.setup"}
     denied = outcome == "denied"
-    actor_type = "system" if unauthenticated_action or denied else "panel_session"
-    actor_identifier = "unauthenticated-control-plane" if actor_type == "system" else "panel-owner"
+    virtual_key_id = get_api_key_id()
+    if unauthenticated_action or denied:
+        actor_type = "system"
+        actor_identifier = "unauthenticated-control-plane"
+    elif virtual_key_id:
+        actor_type = "virtual_key"
+        actor_identifier = virtual_key_id
+    else:
+        actor_type = "panel_session"
+        actor_identifier = "panel-owner"
     return await get_audit_service().record(
         mutation,
         request_id=request_id,

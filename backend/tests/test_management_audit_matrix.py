@@ -17,6 +17,7 @@ from core.management_audit import (
     classify_management_mutation,
     record_management_response,
 )
+from core.request_context import request_scope, set_api_key_id
 from main import app
 
 
@@ -109,6 +110,25 @@ class ManagementAuditResponseTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(kwargs["outcome"], "denied")
         self.assertEqual(kwargs["actor_type"], "system")
         self.assertEqual(kwargs["actor_identifier"], "unauthenticated-control-plane")
+
+    async def test_scoped_virtual_key_is_attributed_to_its_stable_key_id(self):
+        service = AsyncMock()
+
+        with (
+            request_scope("request-virtual-key"),
+            patch("core.audit_service.get_audit_service", return_value=service),
+        ):
+            set_api_key_id("vk_operations")
+            await record_management_response(
+                method="POST",
+                path="/api/config/save",
+                status_code=200,
+                request_id="request-virtual-key",
+            )
+
+        kwargs = service.record.await_args.kwargs
+        self.assertEqual(kwargs["actor_type"], "virtual_key")
+        self.assertEqual(kwargs["actor_identifier"], "vk_operations")
 
     async def test_excluded_route_does_not_touch_audit_service(self):
         with patch("core.audit_service.get_audit_service") as get_service:

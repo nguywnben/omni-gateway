@@ -85,7 +85,9 @@ def _int_or_none(value: Any) -> Optional[int]:
     return parsed if parsed > 0 else None
 
 
-def _normalize_scopes(value: Any, *, legacy_default: bool = False) -> Tuple[str, ...]:
+def normalize_virtual_key_scopes(
+    value: Any, *, legacy_default: bool = False
+) -> Tuple[str, ...]:
     if value is None and legacy_default:
         return DEFAULT_INFERENCE_SCOPES
     if not isinstance(value, (list, tuple)):
@@ -101,7 +103,7 @@ def _normalize_scopes(value: Any, *, legacy_default: bool = False) -> Tuple[str,
     return tuple(scope for scope in VIRTUAL_KEY_SCOPES if scope in requested)
 
 
-def _normalize_model_patterns(value: Any) -> List[str]:
+def normalize_model_patterns(value: Any) -> List[str]:
     if value is None:
         return []
     if not isinstance(value, (list, tuple)):
@@ -121,7 +123,9 @@ def _normalize_model_patterns(value: Any) -> List[str]:
     return normalized
 
 
-def _normalize_pricing_policy(policy: Any, fallback: Any) -> Tuple[str, Optional[float]]:
+def normalize_unknown_pricing_policy(
+    policy: Any, fallback: Any
+) -> Tuple[str, Optional[float]]:
     normalized_policy = str(policy or "deny").strip().lower()
     if normalized_policy not in UNKNOWN_PRICING_POLICIES:
         raise ValueError("Unknown pricing policy must be deny, warn, or fallback.")
@@ -130,7 +134,7 @@ def _normalize_pricing_policy(policy: Any, fallback: Any) -> Tuple[str, Optional
         raise ValueError("Unknown-pricing fallback price exceeds the supported maximum.")
     if normalized_policy == "fallback" and normalized_fallback is None:
         raise ValueError("A positive fallback price is required for fallback pricing policy.")
-    if normalized_policy != "fallback" and fallback not in {None, ""}:
+    if normalized_policy != "fallback" and fallback is not None and fallback != "":
         raise ValueError("A fallback price is only valid with fallback pricing policy.")
     return normalized_policy, normalized_fallback
 
@@ -205,9 +209,11 @@ class VirtualKey:
         if not is_legacy and raw_version != VIRTUAL_KEY_SCHEMA_VERSION:
             return None
         try:
-            scopes = _normalize_scopes(raw.get("scopes"), legacy_default=is_legacy)
-            allowed_models = _normalize_model_patterns(raw.get("allowed_models") or [])
-            pricing_policy, fallback_price = _normalize_pricing_policy(
+            scopes = normalize_virtual_key_scopes(
+                raw.get("scopes"), legacy_default=is_legacy
+            )
+            allowed_models = normalize_model_patterns(raw.get("allowed_models") or [])
+            pricing_policy, fallback_price = normalize_unknown_pricing_policy(
                 raw.get("unknown_pricing_policy"),
                 raw.get("fallback_price_usd_per_million"),
             )
@@ -367,11 +373,11 @@ class VirtualKeyManager:
         clean_name = str(name or "").strip()
         if not clean_name:
             raise ValueError("Virtual key name is required.")
-        normalized_scopes = _normalize_scopes(
+        normalized_scopes = normalize_virtual_key_scopes(
             list(DEFAULT_INFERENCE_SCOPES) if scopes is None else scopes
         )
-        normalized_models = _normalize_model_patterns(allowed_models or [])
-        pricing_policy, fallback_price = _normalize_pricing_policy(
+        normalized_models = normalize_model_patterns(allowed_models or [])
+        pricing_policy, fallback_price = normalize_unknown_pricing_policy(
             unknown_pricing_policy,
             fallback_price_usd_per_million,
         )
@@ -407,22 +413,30 @@ class VirtualKeyManager:
             if record is None:
                 return None
             normalized_scopes = (
-                _normalize_scopes(patch.get("scopes")) if "scopes" in patch else None
+                normalize_virtual_key_scopes(patch.get("scopes"))
+                if "scopes" in patch
+                else None
             )
             normalized_models = (
-                _normalize_model_patterns(patch.get("allowed_models"))
+                normalize_model_patterns(patch.get("allowed_models"))
                 if "allowed_models" in patch
                 else None
             )
             pricing_policy = record.unknown_pricing_policy
             fallback_price = record.fallback_price_usd_per_million
             if "unknown_pricing_policy" in patch or "fallback_price_usd_per_million" in patch:
-                pricing_policy, fallback_price = _normalize_pricing_policy(
-                    patch.get("unknown_pricing_policy", record.unknown_pricing_policy),
-                    patch.get(
-                        "fallback_price_usd_per_million",
-                        record.fallback_price_usd_per_million,
-                    ),
+                requested_policy = patch.get(
+                    "unknown_pricing_policy", record.unknown_pricing_policy
+                )
+                if "fallback_price_usd_per_million" in patch:
+                    requested_fallback = patch.get("fallback_price_usd_per_million")
+                elif str(requested_policy).strip().lower() == "fallback":
+                    requested_fallback = record.fallback_price_usd_per_million
+                else:
+                    requested_fallback = None
+                pricing_policy, fallback_price = normalize_unknown_pricing_policy(
+                    requested_policy,
+                    requested_fallback,
                 )
             if "name" in patch:
                 new_name = str(patch.get("name") or "").strip()

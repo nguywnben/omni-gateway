@@ -17,9 +17,11 @@ def request_scope(request_id: str) -> Iterator[None]:
     """Attach a sanitized request ID to work performed in this async context."""
     request_token: Token[str] = _request_id.set(str(request_id or ""))
     start_token: Token[float] = _request_started_at.set(time.perf_counter())
+    api_key_token: Token[str] = _api_key_id.set("")
     try:
         yield
     finally:
+        _api_key_id.reset(api_key_token)
         _request_id.reset(request_token)
         _request_started_at.reset(start_token)
 

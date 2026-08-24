@@ -208,6 +208,7 @@ async def authenticate_flexible(
 
     # Fall back to virtual API keys (per-key budgets, rate limits, scopes).
     from core.request_context import set_api_key_id
+    from core.router.protocol_errors import protocol_for_path
     from core.virtual_keys import extract_requested_model, virtual_key_manager
 
     record = await virtual_key_manager.verify(token)
@@ -229,7 +230,12 @@ async def authenticate_flexible(
     else:
         requested_model = extract_requested_model(request.url.path, None)
 
-    await virtual_key_manager.enforce(record, requested_model=requested_model)
+    await virtual_key_manager.enforce(
+        record,
+        protocol=protocol_for_path(request.url.path) or "",
+        requested_model=requested_model,
+    )
+    await virtual_key_manager.note_last_used(record)
     set_api_key_id(record.id)
     log.debug(f"Authentication successful using {auth_method} (virtual key id={record.id})")
     return token
@@ -383,12 +389,31 @@ async def verify_panel_token(
     request: Request,
     credentials: Optional[HTTPAuthorizationCredentials] = Depends(security),
 ) -> str:
-    """Validate a cookie session, with Bearer support for legacy clients."""
+    """Validate a cookie session or an explicitly scoped management key."""
     token = request.cookies.get(PANEL_SESSION_COOKIE)
     if token:
         _verify_cookie_request_origin(request)
-    elif credentials:
-        token = credentials.credentials
-    if not token:
+        return await verify_panel_token_value(token)
+
+    if not credentials:
         raise HTTPException(status_code=401, detail="Authentication required.")
-    return await verify_panel_token_value(token)
+
+    token = credentials.credentials
+    from config import API_KEY_PREFIX
+
+    if not token.startswith(f"{API_KEY_PREFIX}vk-"):
+        return await verify_panel_token_value(token)
+
+    from core.request_context import set_api_key_id
+    from core.virtual_keys import virtual_key_manager
+
+    record = await virtual_key_manager.verify(token)
+    if record is None:
+        raise HTTPException(status_code=401, detail="Invalid API key.")
+    virtual_key_manager.authorize_management(
+        record,
+        write=request.method.upper() not in PANEL_SAFE_METHODS,
+    )
+    await virtual_key_manager.note_last_used(record)
+    set_api_key_id(record.id)
+    return token

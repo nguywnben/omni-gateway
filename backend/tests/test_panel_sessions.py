@@ -25,6 +25,7 @@ from core.utils import (
     set_panel_session_cookie,
     verify_panel_token,
 )
+from core.virtual_keys import VirtualKey
 
 
 def build_request(
@@ -169,6 +170,67 @@ class PanelSessionCookieTests(unittest.IsolatedAsyncioTestCase):
             token = await verify_panel_token(build_request(), credentials=credentials)
 
         self.assertEqual(token, "legacy-session")
+
+    async def test_virtual_key_bearer_authorizes_management_read_scope(self):
+        credentials = HTTPAuthorizationCredentials(
+            scheme="Bearer",
+            credentials="sk-ogw-vk-management-reader",
+        )
+        record = VirtualKey(
+            id="vk_reader",
+            name="reader",
+            key_hash="hash",
+            key_preview="sk-ogw-vk-...ader",
+            scopes=("management:read",),
+        )
+        with (
+            patch(
+                "core.virtual_keys.virtual_key_manager.verify",
+                new=AsyncMock(return_value=record),
+            ) as verify,
+            patch(
+                "core.virtual_keys.virtual_key_manager.authorize_management"
+            ) as authorize,
+            patch(
+                "core.virtual_keys.virtual_key_manager.note_last_used",
+                new=AsyncMock(),
+            ) as note_last_used,
+        ):
+            token = await verify_panel_token(build_request(), credentials=credentials)
+
+        self.assertEqual(token, credentials.credentials)
+        verify.assert_awaited_once_with(credentials.credentials)
+        authorize.assert_called_once_with(record, write=False)
+        note_last_used.assert_awaited_once_with(record)
+
+    async def test_virtual_key_bearer_uses_write_scope_for_unsafe_method(self):
+        credentials = HTTPAuthorizationCredentials(
+            scheme="Bearer",
+            credentials="sk-ogw-vk-management-writer",
+        )
+        record = VirtualKey(
+            id="vk_writer",
+            name="writer",
+            key_hash="hash",
+            key_preview="sk-ogw-vk-...iter",
+            scopes=("management:read", "management:write"),
+        )
+        with (
+            patch(
+                "core.virtual_keys.virtual_key_manager.verify",
+                new=AsyncMock(return_value=record),
+            ),
+            patch(
+                "core.virtual_keys.virtual_key_manager.authorize_management"
+            ) as authorize,
+            patch(
+                "core.virtual_keys.virtual_key_manager.note_last_used",
+                new=AsyncMock(),
+            ),
+        ):
+            await verify_panel_token(build_request(method="POST"), credentials=credentials)
+
+        authorize.assert_called_once_with(record, write=True)
 
     async def test_same_origin_cookie_request_is_accepted(self):
         request = build_request(
