@@ -406,6 +406,14 @@ class ControlPanelAssetTests(unittest.TestCase):
         self.assertNotIn("./api/credentials/verify-project", credential_manager_script)
         self.assertNotIn("./api/credentials/verify-project", credential_script)
 
+    def test_batch_client_previews_guarded_work_and_sends_idempotency_key(self):
+        credential_manager_script = read_scripts("core/credential-manager.js")
+
+        self.assertIn("preview: true", credential_manager_script)
+        self.assertIn("preview_token: previewData.preview_token", credential_manager_script)
+        self.assertIn("idempotency_key: idempotencyKey", credential_manager_script)
+        self.assertIn("crypto.randomUUID()", credential_manager_script)
+
     def test_grok_build_oauth_uses_the_shared_quota_dialog(self):
         card_script = read_scripts("ui/credential-cards.js")
         dialog_script = read_scripts("ui/credential-dialogs.js")

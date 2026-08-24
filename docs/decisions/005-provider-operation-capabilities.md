@@ -49,12 +49,31 @@ The initial conservative inventory is:
 not declared for the current shared provider pool. They cannot be invoked through the Wave 2 fleet
 service until a variant explicitly earns support through contract and failure-path tests.
 
+### Wave 2 batch boundary
+
+The initial fleet implementation accepts 1–100 explicit targets. Deletion and batches of 20 or
+more targets require a side-effect-free preview issued within the previous five minutes. The
+opaque preview token is bound to the normalized mode, action, and ordered target selection, and
+the server reloads every credential and re-evaluates capabilities during execution. Each item has
+a five-second execution boundary and an independent typed result; duplicate targets are reported
+without executing twice.
+
+Guarded execution also requires an 8–128 character idempotency key. Completed responses and
+in-flight reservations are bounded to 256 entries, contain no credential content, and prevent
+concurrent requests with the same key from executing a mutation twice. This coordination state is
+process-local by design while Omni Gateway remains single-worker. It is not permission to enable
+multiple workers; Phase 6 must move preview and idempotency coordination behind the accepted
+distributed-state boundary first.
+
 ## Compatibility and Rollback
 
 - Existing provider metadata is mapped to a conservative default set derived from current server
   routes; an undeclared capability is unsupported.
 - Current single-item routes remain available during 1.x and delegate to the capability-aware
   operation service.
+- The existing batch route remains available and preserves `success_count`, `total_count`,
+  `errors`, and `message` while additively returning preview and per-item result fields. The 1.x
+  console now performs the preview/idempotency handshake before execution.
 - The console can fall back to current per-card controls while the new batch surface is disabled.
 
 ## Consequences

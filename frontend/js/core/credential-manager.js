@@ -617,13 +617,47 @@ function createCredsManager(type) {
 
                 showStatus(t('status_batch_in_progress', {action: actionLabel}), 'info');
 
+                const previewResponse = await fetch(`${this.getEndpoint('batchAction')}?${this.getModeParam()}`, {
+
+                    method: 'POST',
+
+                    headers: getAuthHeaders(),
+
+                    body: JSON.stringify({ action, filenames: selectedFiles, preview: true })
+
+                });
+
+                const previewData = await previewResponse.json();
+
+                if (!previewResponse.ok) {
+
+                    const previewError = previewData.error?.message || previewData.detail || t('unknown_error');
+
+                    showStatus(t('status_batch_failed', {error: previewError}), 'error');
+
+                    return;
+
+                }
+
+                const idempotencyKey = crypto.randomUUID();
+
                 const response = await fetch(`${this.getEndpoint('batchAction')}?${this.getModeParam()}`, {
 
                     method: 'POST',
 
                     headers: getAuthHeaders(),
 
-                    body: JSON.stringify({ action, filenames: selectedFiles })
+                    body: JSON.stringify({
+
+                        action,
+
+                        filenames: selectedFiles,
+
+                        preview_token: previewData.preview_token,
+
+                        idempotency_key: idempotencyKey
+
+                    })
 
                 });
 
@@ -631,7 +665,7 @@ function createCredsManager(type) {
 
                 if (response.ok) {
 
-                    const successCount = data.success_count || data.succeeded;
+                    const successCount = data.success_count ?? data.succeeded ?? 0;
 
                     showStatus(t('status_batch_complete', {success: successCount, total: selectedFiles.length}), 'success');
 
@@ -661,7 +695,9 @@ function createCredsManager(type) {
 
                 } else {
 
-                    showStatus(t('status_batch_failed', {error: data.detail || data.error || t('unknown_error')}), 'error');
+                    const operationError = data.error?.message || data.detail || t('unknown_error');
+
+                    showStatus(t('status_batch_failed', {error: operationError}), 'error');
 
                 }
 

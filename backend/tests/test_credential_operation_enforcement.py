@@ -8,6 +8,8 @@ import unittest
 from pathlib import Path
 from unittest.mock import AsyncMock, patch
 
+from fastapi import HTTPException
+
 BACKEND_DIR = Path(__file__).resolve().parents[1]
 if str(BACKEND_DIR) not in sys.path:
     sys.path.insert(0, str(BACKEND_DIR))
@@ -72,6 +74,31 @@ class CredentialOperationEnforcementTests(unittest.IsolatedAsyncioTestCase):
         body = json.loads(response.body)
         self.assertEqual(response.status_code, 422)
         self.assertEqual(body["error"]["operation"], "credit_mode")
+        storage.update_credential_state.assert_not_awaited()
+
+    async def test_code_assist_credential_cannot_receive_credit_state(self):
+        storage = AsyncMock()
+        storage.get_credential.return_value = {
+            "provider": "google_antigravity",
+            "credential_type": "oauth",
+            "access_token": "must-not-leak",
+        }
+
+        with patch(
+            "core.panel.credentials.get_storage_adapter",
+            AsyncMock(return_value=storage),
+        ):
+            with self.assertRaises(HTTPException) as raised:
+                await creds_action(
+                    CredFileActionRequest(
+                        filename="code-assist.json",
+                        action="enable_credit",
+                    ),
+                    token="session",
+                    mode="code_assist",
+                )
+
+        self.assertEqual(raised.exception.status_code, 400)
         storage.update_credential_state.assert_not_awaited()
 
     async def test_unknown_provider_credential_cannot_be_exported(self):

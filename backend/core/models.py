@@ -1,4 +1,4 @@
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List, Literal, Optional, Union
 
 from pydantic import BaseModel, Field
 
@@ -446,8 +446,53 @@ class CredFileActionRequest(BaseModel):
 
 
 class CredFileBatchActionRequest(BaseModel):
-    action: str  # "enable", "disable", "delete"
-    filenames: List[str]
+    action: Literal[
+        "enable",
+        "disable",
+        "delete",
+        "enable_credit",
+        "disable_credit",
+    ]
+    filenames: List[str] = Field(min_length=1, max_length=100)
+    preview: bool = False
+    preview_token: Optional[str] = Field(default=None, min_length=16, max_length=256)
+    idempotency_key: Optional[str] = Field(default=None, min_length=8, max_length=128)
+
+
+class CredentialBatchItemResult(BaseModel):
+    target_index: int = Field(ge=0, le=99)
+    filename: Optional[str] = None
+    variant_id: str
+    operation: str
+    status: Literal[
+        "eligible",
+        "succeeded",
+        "unsupported",
+        "not_found",
+        "invalid",
+        "duplicate",
+        "timed_out",
+        "failed",
+    ]
+    code: str
+
+
+class CredentialBatchOperationResponse(BaseModel):
+    success: bool
+    preview: bool
+    action: str
+    operation: str
+    requires_preview: bool
+    requested_count: int = Field(ge=1, le=100)
+    success_count: int = Field(ge=0, le=100)
+    total_count: int = Field(ge=1, le=100)
+    outcome_counts: Dict[str, int]
+    results: List[CredentialBatchItemResult]
+    errors: List[str]
+    message: str
+    preview_token: Optional[str] = None
+    preview_expires_in_seconds: Optional[int] = None
+    history_retained_anonymously: Optional[bool] = None
 
 
 class ConfigSaveRequest(BaseModel):
