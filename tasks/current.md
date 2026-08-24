@@ -10,9 +10,10 @@
   approval), approximately 36%; Wave 2 execution-slice checkboxes are refinements and are not added
   to that denominator.
 - Active scope: Wave 2 — Credential Operations.
-- Control state: **IN PROGRESS — Checkpoint W2-A verification**.
+- Control state: **IN PROGRESS — W2.6**.
 - Expected worktree state at this checkpoint: clean after the latest checkpoint commit.
-- Expected runtime: Omni Gateway on `http://127.0.0.1:4283`, `/health` returns HTTP 200.
+- Expected runtime: Omni Gateway PID 1364 on `http://127.0.0.1:4283`; `/health` and `/ready`
+  return HTTP 200.
 - Last verified full suite: 508 tests passed; Ruff, compileall, JS syntax, and diff-check passed.
 
 Wave 2 was approved by the human on 2026-08-24. Do not expand beyond its documented scope.
@@ -59,6 +60,10 @@ silently choosing a new design.
   event per target; HMAC fingerprints replace names, raw failure details are withheld, retention is
   bounded, idempotent retries do not duplicate events, and Prometheus exposes fixed-cardinality
   outcome counters and duration histograms; 508 full-suite tests passed.
+- W2-A evidence: committed checkpoint `7b2fbc2` restarted as the only listener on port 4283;
+  `/health`, `/ready`, and `/metrics` returned HTTP 200; credential operation counter/histogram
+  families were present; the real Vietnamese login shell had a clean browser console and no
+  horizontal overflow at 360/768/1024/1440 widths.
 
 ## Approved vs. Proposed Scope
 
@@ -98,8 +103,8 @@ checkboxes to be marked complete.
 
 ## Immediate Next Action
 
-Commit W2.5, restart the committed checkpoint, verify health and metrics, complete the W2-A review
-gate, then begin W2.6 faceted fleet queries.
+Implement W2.6 with test-first evidence: add the faceted fleet query and stable all-matching
+selection contract without returning credential secrets.
 
 ## Update Rule
 

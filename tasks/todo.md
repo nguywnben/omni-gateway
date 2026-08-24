@@ -22,7 +22,7 @@
 - [x] W2.3 Enforce capabilities for single-credential operations.
 - [x] W2.4 Add bounded batch preview and typed per-item execution outcomes.
 - [x] W2.5 Add credential-scoped redacted audit and bounded operation telemetry foundations.
-- [ ] Checkpoint W2-A: contracts, compatibility, safety, and evidence gates pass.
+- [x] Checkpoint W2-A: contracts, compatibility, safety, and evidence gates pass.
 - [ ] W2.6 Add the faceted fleet query and stable all-matching selection contract.
 - [ ] W2.7 Add persistent responsive filters and page/all-results selection.
 - [ ] W2.8 Add the context-aware toolbar, preview, and localized result workflow.
