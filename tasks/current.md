@@ -4,17 +4,18 @@
 
 - Updated: 2026-08-24 (Asia/Saigon).
 - Branch: `codex/enterprise-overhaul`.
-- Implementation baseline: `7024f4e fix: resolve audit targets before route execution`.
-- Completed scope: Waves 1–2 / Phases 0–3, plus Wave 3 slices W3.1–W3.3.
+- Implementation baseline: `cb2bd95 fix: enforce audit retention after every append`.
+- Completed scope: Waves 1–2 / Phases 0–3, plus Wave 3 slices W3.1–W3.4.
 - Original program progress: 14/28 approved checklist items complete (including specification
   approval), exactly 50%; Wave 2 execution-slice checkboxes are refinements and are not added
   to that denominator.
-- Active scope: Wave 3 — Access and Operational Evidence; W3.4 audit APIs are next.
+- Active scope: Wave 3 — Access and Operational Evidence; W3.5 audit console is next.
 - Control state: **IMPLEMENTING — WAVE 3**.
-- Expected worktree state at this checkpoint: clean after the W3.3 documentation commit.
+- Expected worktree state at this checkpoint: clean after the W3.4 documentation commit.
 - Expected runtime: one Omni Gateway listener on `http://127.0.0.1:4283`; `/health` and `/ready`
   return HTTP 200.
-- Last verified full suite: 577 tests passed; Ruff check, compileall, focused W3.3 format, and
+- Last verified full suite: 596 tests passed; Ruff check, compileall, focused W3.4 format, pip
+  dependency consistency, 36 JavaScript syntax checks, and
   diff-check passed. The repository-wide format check still reports 16 pre-existing Wave 2 files
   that differ from the currently installed Ruff formatter; they remain isolated from the Wave 3
   implementation commits.
@@ -143,6 +144,17 @@ silently choosing a new design.
   before route execution. All 577 tests, Ruff, compileall, and diff-check passed. Runtime smoke found
   and removed stale PID 3540, then verified PID 11312 as the only listener; health/ready returned
   200 and request `w3-committed-smoke` persisted one `auth.logout` success event in SQLite.
+- W3.4 evidence: commits `a274a5b`, `bf74e17`, and `6c6e541` add a strict durable retention
+  policy service, authenticated audit query/retention routes, and bounded JSONL/CSV export.
+  Repeated exact filters cover time, actor, action, target, outcome, and request ID; pages use
+  signed opaque cursors and a 200-event maximum. Retention is persisted before exact policy prune
+  and commit `cb2bd95` enforces it after every append. Exports reject rather than truncate above
+  10,000 events or 8 MiB, CSV cells are formula-safe, filenames are server-generated, and only
+  redacted event records cross the response boundary. Successful exports append correlated
+  `audit.export` evidence before release. Fresh review commit `f49a5a6` added typed OpenAPI
+  responses, CSV-header byte enforcement, and fail-closed startup ordering. All 596 tests passed;
+  Ruff, compileall, focused format, pip consistency, 36 JavaScript syntax checks, and diff-check
+  are clean. The maintained API contract is `docs/audit-api.md`.
 
 ## Approved vs. Proposed Scope
 
@@ -190,10 +202,11 @@ checkboxes to be marked complete.
 
 ## Immediate Next Action
 
-Implement W3.4 incrementally against the committed W3.3 evidence path: add authenticated bounded
-query and retention contracts first, then cursor pagination and formula-safe size-bounded JSONL/CSV
-exports. Query/export must consume the repository service rather than mutable configuration, and
-the audit console remains out of scope until W3.4 passes and is committed.
+Implement W3.5 against the committed W3.4 API: add a localized Audit surface under Observability
+with saved-safe filters, redacted event detail, request-ID pivot, retention visibility, and bounded
+export controls. Verify 15-locale parity, keyboard/accessibility behavior, responsive layouts, and
+secret lifetime in a real browser before closing checkpoint W3-A. Do not begin virtual-key scope
+changes in W3.6 until W3.5 and the checkpoint gates are committed.
 
 ## Update Rule
 

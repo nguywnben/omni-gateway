@@ -78,10 +78,14 @@ Model eligibility is evaluated before a request is sent. A declared model catalo
 
 The default single-instance mode stores credentials, configuration, and usage data under `backend/data/creds`, with logs under `backend/data/logs`. Both locations must be persisted in containers.
 
-Credential fleet mutations emit allowlisted structured evidence into the append-only log stream
-and a bounded process-local diagnostic mirror. Prometheus operation counters and latency
-histograms use only fixed capability dimensions. This Wave 2 foundation is not the durable audit
-repository; full retention, query, export, and actor identity remain Phase 4 work.
+Control-plane mutations emit versioned evidence into the selected durable audit repository.
+Actor and target identifiers become stable HMAC fingerprints before storage; stored records use
+allowlisted actions, outcomes, and change codes. Authenticated management routes provide bounded
+exact filters, signed opaque cursor pagination, policy-driven age/count retention, and formula-safe
+size-bounded JSONL/CSV export. Retention is persisted before pruning and is enforced after each
+append. The [audit API contract](audit-api.md) defines the public surface and safety limits.
+Credential operation counters and latency histograms continue to use only fixed capability
+dimensions.
 
 `WORKERS=1` and one application replica are the supported process model for the 1.x series. MongoDB and PostgreSQL can replace local SQLite storage, but shared storage alone does not coordinate reservations, cooldowns, sessions, or usage aggregation across workers. The service rejects `WORKERS` values other than `1` instead of presenting an unsafe scale-out configuration as supported.
 
