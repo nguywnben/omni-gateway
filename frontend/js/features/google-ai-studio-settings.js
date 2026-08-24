@@ -21,9 +21,7 @@ async function loadGoogleAIStudioSettings(options = {}) {
         }
         field.value = data.config?.google_ai_studio_api_url || '';
         field.dataset.loaded = 'true';
-        const isLocked = (data.env_locked || []).includes('google_ai_studio_api_url');
-        field.disabled = isLocked;
-        field.classList.toggle('env-locked', isLocked);
+        applyProviderEnvironmentLocks('google-ai-studio.settings', data.env_locked);
     } catch (error) {
         showStatus(t('provider.settings_load_failed', {provider: 'Google AI Studio', error: error.message}), 'error');
     } finally {
@@ -39,10 +37,7 @@ async function loadGoogleAIStudioSettings(options = {}) {
 async function saveGoogleAIStudioSettings() {
     const field = document.getElementById('googleAiStudioApiUrl');
     const apiUrl = field?.value.trim() || '';
-    if (!apiUrl) {
-        showStatus(t('provider.endpoint_required', {provider: 'Google AI Studio'}), 'error');
-        return;
-    }
+    if (!validateProviderFormScope('google-ai-studio.settings')) return;
 
     try {
         const response = await fetch('./api/providers/google-ai-studio/config', {
@@ -95,11 +90,7 @@ async function addGoogleAIStudioCredential(event) {
     const button = document.getElementById('addGoogleAiStudioKeyBtn');
     const apiKey = keyField?.value.trim() || '';
 
-    if (!apiKey) {
-        showStatus(t('provider.api_key_required', {provider: 'Google AI Studio'}), 'error');
-        keyField?.focus();
-        return;
-    }
+    if (!validateProviderFormScope('google-ai-studio.credential')) return;
 
     button.disabled = true;
     button.textContent = t('runtime.validating');
@@ -128,7 +119,7 @@ async function addGoogleAIStudioCredential(event) {
             text.textContent = `${data.message} ${t('runtime.models_available', {count: data.model_count})}`;
         }
         result?.classList.remove('hidden');
-        keyField.value = '';
+        resetProviderTransientSecrets('google-ai-studio.credential');
         showStatus(data.message, 'success');
         await AppState.primaryCreds.refresh();
         await refreshUsageStats();

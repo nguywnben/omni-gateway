@@ -65,6 +65,21 @@ SECRET_FIELDS = {
     "antigravityOauthClientSecret",
 }
 
+GOOGLE_HELP_FIELDS = {
+    "googleAiStudioApiKey",
+    "googleAiStudioApiUrl",
+    "primaryCallbackUrlInput",
+    "antigravityOauthClientId",
+    "antigravityOauthClientSecret",
+    "antigravityApiUrl",
+    "antigravityOauthUrl",
+    "antigravityGoogleApisUrl",
+    "antigravityResourceManagerUrl",
+    "antigravityServiceUsageUrl",
+    "antigravityUserAgent",
+    "antigravityPayloadUserAgent",
+}
+
 
 class ProviderFormContractTests(unittest.TestCase):
     def test_manifest_covers_every_supported_provider_field(self):
@@ -141,6 +156,31 @@ class ProviderFormContractTests(unittest.TestCase):
             },
         )
         self.assertIn("values.length !== PROVIDER_FORM_KEYS.length", LOCALE_SOURCE)
+
+    def test_google_family_fields_expose_contextual_help(self):
+        for field_id in GOOGLE_HELP_FIELDS:
+            with self.subTest(field_id=field_id):
+                self.assertIn(f'id="{field_id}Help"', PROVIDER_HTML)
+
+        google_script = (ROOT / "frontend/js/features/google-ai-studio-settings.js").read_text(
+            encoding="utf-8"
+        )
+        antigravity_script = (ROOT / "frontend/js/features/antigravity-settings.js").read_text(
+            encoding="utf-8"
+        )
+        authentication_script = (
+            ROOT / "frontend/js/features/antigravity-authentication.js"
+        ).read_text(encoding="utf-8")
+        self.assertIn("validateProviderFormScope('google-ai-studio.settings')", google_script)
+        self.assertIn("validateProviderFormScope('google-ai-studio.credential')", google_script)
+        self.assertIn("applyProviderEnvironmentLocks('google-ai-studio.settings'", google_script)
+        self.assertIn("resetProviderTransientSecrets('google-ai-studio.credential')", google_script)
+        self.assertIn("validateProviderFormScope('antigravity.settings')", antigravity_script)
+        self.assertRegex(
+            antigravity_script,
+            r"applyProviderEnvironmentLocks\(\s*'antigravity\.settings'",
+        )
+        self.assertIn("resetProviderTransientSecrets('antigravity.oauth')", authentication_script)
 
 
 if __name__ == "__main__":

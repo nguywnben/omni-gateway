@@ -359,6 +359,7 @@
                                 <div class="form-group">
                                     <label for="googleAiStudioApiKey">API key</label>
                                     <input type="password" id="googleAiStudioApiKey" name="google-ai-studio-api-key" placeholder="Enter a Google AI Studio API key" autocomplete="one-time-code" data-1p-ignore data-lpignore="true" data-bwignore="true" autocapitalize="none" spellcheck="false" required>
+                                    <p class="form-help" id="googleAiStudioApiKeyHelp" data-i18n="provider.form.api_key_help">The key is validated, sent once, and then cleared from this form.</p>
                                 </div>
                                 <div class="page-actions">
                                     <button type="submit" class="btn" id="addGoogleAiStudioKeyBtn">Validate and add</button>
@@ -430,7 +431,8 @@
                                     <p class="card-copy provider-tool-copy">Set the Google Generative Language API host used for validation and inference.</p>
                                     <div class="form-group">
                                         <label for="googleAiStudioApiUrl">Google AI Studio API</label>
-                                        <input type="url" id="googleAiStudioApiUrl" placeholder="https://generativelanguage.googleapis.com">
+                                        <input type="url" id="googleAiStudioApiUrl" placeholder="https://generativelanguage.googleapis.com" autocomplete="url" required>
+                                        <p class="form-help" id="googleAiStudioApiUrlHelp" data-i18n="provider.form.endpoint_help">Use a complete HTTP or HTTPS URL.</p>
                                     </div>
                                 </section>
                             </div>
@@ -655,7 +657,8 @@
                                 <div id="primaryCallbackUrlSection" class="oauth-completion-panel hidden">
                                     <label for="primaryCallbackUrlInput">Callback URL</label>
                                     <p class="card-copy provider-tool-copy">If Google opens a localhost callback page after sign-in, copy the full URL from that tab and paste it here.</p>
-                                    <textarea id="primaryCallbackUrlInput" rows="3" placeholder="http://localhost:4283/callback?state=...&code=..."></textarea>
+                                    <textarea id="primaryCallbackUrlInput" rows="3" placeholder="http://localhost:4283/callback?state=...&code=..." autocomplete="off" spellcheck="false"></textarea>
+                                    <p class="form-help" id="primaryCallbackUrlInputHelp" data-i18n="provider.form.callback_url_help">Paste the complete callback URL. It is cleared after submission.</p>
                                 </div>
 
                                 <div class="page-actions" style="margin-top: 14px;">
@@ -737,25 +740,25 @@
                                 <section class="provider-settings-group">
                                     <h3>OAuth Client</h3>
                                     <p class="card-copy provider-tool-copy">Manage the OAuth application used for Google Antigravity authorization.</p>
-                                    <div class="form-group"><label for="antigravityOauthClientId">Client ID</label><input type="text" id="antigravityOauthClientId" autocomplete="off"></div>
-                                    <div class="form-group"><label for="antigravityOauthClientSecret">Client secret</label><input type="text" id="antigravityOauthClientSecret" autocomplete="off"></div>
+                                    <div class="form-group"><label for="antigravityOauthClientId">Client ID</label><input type="text" id="antigravityOauthClientId" autocomplete="off" required><p class="form-help" id="antigravityOauthClientIdHelp" data-i18n="provider.form.client_id_help">Public OAuth application identifier.</p></div>
+                                    <div class="form-group"><label for="antigravityOauthClientSecret">Client secret</label><input type="password" id="antigravityOauthClientSecret" autocomplete="new-password" data-1p-ignore data-lpignore="true" data-bwignore="true" required><p class="form-help" id="antigravityOauthClientSecretHelp" data-i18n="provider.form.client_secret_help">Stored provider setting; the value is masked in this form.</p></div>
                                 </section>
 
                                 <section class="provider-settings-group">
                                     <h3>Upstream Endpoints</h3>
                                     <p class="card-copy provider-tool-copy">Configure provider and Google API hosts used by Google Antigravity requests.</p>
-                                    <div class="form-group"><label for="antigravityApiUrl">Google Antigravity API</label><input type="text" id="antigravityApiUrl"></div>
-                                    <div class="form-group"><label for="antigravityOauthUrl">OAuth API</label><input type="text" id="antigravityOauthUrl"></div>
-                                    <div class="form-group"><label for="antigravityGoogleApisUrl">Google APIs</label><input type="text" id="antigravityGoogleApisUrl"></div>
-                                    <div class="form-group"><label for="antigravityResourceManagerUrl">Resource Manager API</label><input type="text" id="antigravityResourceManagerUrl"></div>
-                                    <div class="form-group"><label for="antigravityServiceUsageUrl">Service Usage API</label><input type="text" id="antigravityServiceUsageUrl"></div>
+                                    <div class="form-group"><label for="antigravityApiUrl">Google Antigravity API</label><input type="url" id="antigravityApiUrl" autocomplete="url" required><p class="form-help" id="antigravityApiUrlHelp" data-i18n="provider.form.endpoint_help">Use a complete HTTP or HTTPS URL.</p></div>
+                                    <div class="form-group"><label for="antigravityOauthUrl">OAuth API</label><input type="url" id="antigravityOauthUrl" autocomplete="url" required><p class="form-help" id="antigravityOauthUrlHelp" data-i18n="provider.form.endpoint_help">Use a complete HTTP or HTTPS URL.</p></div>
+                                    <div class="form-group"><label for="antigravityGoogleApisUrl">Google APIs</label><input type="url" id="antigravityGoogleApisUrl" autocomplete="url" required><p class="form-help" id="antigravityGoogleApisUrlHelp" data-i18n="provider.form.endpoint_help">Use a complete HTTP or HTTPS URL.</p></div>
+                                    <div class="form-group"><label for="antigravityResourceManagerUrl">Resource Manager API</label><input type="url" id="antigravityResourceManagerUrl" autocomplete="url" required><p class="form-help" id="antigravityResourceManagerUrlHelp" data-i18n="provider.form.endpoint_help">Use a complete HTTP or HTTPS URL.</p></div>
+                                    <div class="form-group"><label for="antigravityServiceUsageUrl">Service Usage API</label><input type="url" id="antigravityServiceUsageUrl" autocomplete="url" required><p class="form-help" id="antigravityServiceUsageUrlHelp" data-i18n="provider.form.endpoint_help">Use a complete HTTP or HTTPS URL.</p></div>
                                 </section>
 
                                 <section class="provider-settings-group">
                                     <h3>Protocol Behavior</h3>
                                     <p class="card-copy provider-tool-copy">Tune headers, streaming conversion, and retry credential switching.</p>
-                                    <div class="form-group"><label for="antigravityUserAgent">HTTP User-Agent</label><input type="text" id="antigravityUserAgent" autocomplete="off" autocapitalize="none" spellcheck="false"></div>
-                                    <div class="form-group"><label for="antigravityPayloadUserAgent">Payload user agent</label><input type="text" id="antigravityPayloadUserAgent" autocomplete="off" autocapitalize="none" spellcheck="false"></div>
+                                    <div class="form-group"><label for="antigravityUserAgent">HTTP User-Agent</label><input type="text" id="antigravityUserAgent" autocomplete="off" autocapitalize="none" spellcheck="false" required><p class="form-help" id="antigravityUserAgentHelp" data-i18n="provider.form.user_agent_help">HTTP identity sent to the upstream provider.</p></div>
+                                    <div class="form-group"><label for="antigravityPayloadUserAgent">Payload user agent</label><input type="text" id="antigravityPayloadUserAgent" autocomplete="off" autocapitalize="none" spellcheck="false" required><p class="form-help" id="antigravityPayloadUserAgentHelp" data-i18n="provider.form.user_agent_help">HTTP identity sent to the upstream provider.</p></div>
                                     <label class="switch-row"><input type="checkbox" id="antigravityStreamToNonstream" class="config-checkbox"><span>Collect streaming responses for non-stream clients</span></label>
                                     <label class="switch-row" style="margin-top: 12px;"><input type="checkbox" id="antigravitySwitchCredential" class="config-checkbox"><span>Switch Google Antigravity credentials during retries</span></label>
                                 </section>

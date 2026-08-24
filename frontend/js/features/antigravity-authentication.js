@@ -143,6 +143,7 @@ async function completePrimaryCredentialSave(data) {
 
     AppState.primaryAuthInProgress = false;
     setPrimaryCallbackUrlSectionVisible(false);
+    resetProviderTransientSecrets('antigravity.oauth');
 
     const saveResult = document.getElementById('primarySaveResult');
     const saveResultTitle = document.getElementById('primarySaveResultTitle');

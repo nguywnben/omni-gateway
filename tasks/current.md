@@ -10,11 +10,11 @@
   approval), approximately 36%; Wave 2 execution-slice checkboxes are refinements and are not added
   to that denominator.
 - Active scope: Wave 2 — Credential Operations.
-- Control state: **IN PROGRESS — W2.10**.
-- Expected worktree state at this checkpoint: W2.9 changes prepared for an atomic commit.
+- Control state: **IN PROGRESS — W2.11**.
+- Expected worktree state at this checkpoint: W2.10 changes prepared for an atomic commit.
 - Expected runtime: Omni Gateway PID 3800 on `http://127.0.0.1:4283`; `/health` and `/ready`
   return HTTP 200.
-- Last verified full suite: 528 tests passed; Ruff, compileall, changed JavaScript syntax, and
+- Last verified full suite: 532 tests passed; Ruff, compileall, changed JavaScript syntax, and
   diff-check passed.
 
 Wave 2 was approved by the human on 2026-08-24. Do not expand beyond its documented scope.
@@ -93,6 +93,11 @@ silently choosing a new design.
   environment locks, help, advanced status, validation, and reset behavior; runtime helpers apply
   the contract without browser persistence. Static audits enforce coverage, labels, secret safety,
   and a curated 15-locale catalog. The full suite reached 528 tests.
+- W2.10 evidence: Google AI Studio and Google Antigravity now consume shared validation,
+  environment-lock, help, and transient-secret reset behavior. Endpoint inputs use bounded URL
+  semantics, callback content is cleared after submission, and Antigravity client secrets are no
+  longer reflected by GET, save, or reset responses; a configured-state marker preserves unchanged
+  secrets safely. Focused response-contract and form audits passed; the full suite reached 532 tests.
 
 ## Approved vs. Proposed Scope
 
@@ -132,8 +137,8 @@ checkboxes to be marked complete.
 
 ## Immediate Next Action
 
-Implement W2.10 with test-first evidence: apply the shared contract to Google Antigravity and Google
-AI Studio settings, credential, OAuth/callback, reset, and environment-lock flows.
+Implement W2.11 with test-first evidence: apply the shared contract to OpenAI, xAI, Anthropic, and
+Ollama settings, credential, OAuth, import, reset, and environment-lock flows.
 
 ## Update Rule
 

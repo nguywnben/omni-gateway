@@ -26,6 +26,8 @@ async function loadAntigravitySettings(options = {}) {
 
             AppState.antigravityEnvLockedFields = new Set(data.env_locked || []);
 
+            AppState.antigravityConfiguredSecrets = new Set(data.configured_secrets || []);
+
             populateAntigravitySettings();
 
             form.classList.remove('hidden');
@@ -57,7 +59,16 @@ function populateAntigravitySettings() {
 
     setAntigravityConfigField('antigravityOauthClientId', c.antigravity_client_id || '');
 
-    setAntigravityConfigField('antigravityOauthClientSecret', c.antigravity_client_secret || '');
+    const secretField = document.getElementById('antigravityOauthClientSecret');
+    if (secretField) {
+        secretField.value = '';
+        secretField.dataset.secretConfigured = String(
+            AppState.antigravityConfiguredSecrets?.has('antigravity_client_secret')
+        );
+        secretField.placeholder = secretField.dataset.secretConfigured === 'true'
+            ? t('provider.form.client_secret_help')
+            : '';
+    }
 
     setAntigravityConfigField('antigravityApiUrl', c.antigravity_api_url || '');
 
@@ -76,6 +87,11 @@ function populateAntigravitySettings() {
     setAntigravityConfigCheckbox('antigravityStreamToNonstream', Boolean(c.stream_to_nonstream !== false));
 
     setAntigravityConfigCheckbox('antigravitySwitchCredential', Boolean(c.switch_credential_enabled));
+
+    applyProviderEnvironmentLocks(
+        'antigravity.settings',
+        Array.from(AppState.antigravityEnvLockedFields || [])
+    );
 
 }
 
@@ -121,6 +137,8 @@ async function saveAntigravitySettings() {
 
     try {
 
+        if (!validateProviderFormScope('antigravity.settings')) return;
+
         const getValue = (id, def = '') => document.getElementById(id)?.value.trim() || def;
 
         const getChecked = (id, def = false) => {
@@ -130,7 +148,6 @@ async function saveAntigravitySettings() {
 
         const config = {
             antigravity_client_id: getValue('antigravityOauthClientId'),
-            antigravity_client_secret: getValue('antigravityOauthClientSecret'),
             antigravity_api_url: getValue('antigravityApiUrl'),
             oauth_url: getValue('antigravityOauthUrl'),
             google_apis_url: getValue('antigravityGoogleApisUrl'),
@@ -141,6 +158,9 @@ async function saveAntigravitySettings() {
             stream_to_nonstream: getChecked('antigravityStreamToNonstream', true),
             switch_credential_enabled: getChecked('antigravitySwitchCredential')
         };
+
+        const clientSecret = getValue('antigravityOauthClientSecret');
+        if (clientSecret) config.antigravity_client_secret = clientSecret;
 
         const response = await fetch('./api/providers/antigravity/config', {
 
@@ -205,6 +225,8 @@ async function resetAntigravitySettings() {
             AppState.antigravityConfig = data.config || {};
 
             AppState.antigravityEnvLockedFields = new Set(data.env_locked || []);
+
+            AppState.antigravityConfiguredSecrets = new Set(data.configured_secrets || []);
 
             populateAntigravitySettings();
 

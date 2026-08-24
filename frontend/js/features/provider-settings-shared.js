@@ -243,7 +243,11 @@ function validateProviderFormScope(scope, {report = true} = {}) {
         if (!field || field.disabled || definition.type === 'checkbox') return;
         const value = field.value.trim();
         let errorKey = '';
-        if (definition.required && !value) errorKey = 'provider.form.required_error';
+        const configuredSecret = definition.secretLifetime === 'edit-session'
+            && field.dataset.secretConfigured === 'true';
+        if (definition.required && !value && !configuredSecret) {
+            errorKey = 'provider.form.required_error';
+        }
         else if (value && definition.minLength > 0 && value.length < definition.minLength) {
             errorKey = 'provider.form.too_short_error';
         } else if (definition.maxLength > 0 && value.length > definition.maxLength) {
