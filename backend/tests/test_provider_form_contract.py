@@ -137,6 +137,8 @@ class ProviderFormContractTests(unittest.TestCase):
         self.assertIn("document.addEventListener('DOMContentLoaded', applyProviderFormContract", CONTRACT_SOURCE)
         self.assertIn("field.dataset.secretLifetime", CONTRACT_SOURCE)
         self.assertIn("field.setCustomValidity", CONTRACT_SOURCE)
+        self.assertIn("document.createElement('p')", CONTRACT_SOURCE)
+        self.assertIn("field.insertAdjacentElement('afterend', help)", CONTRACT_SOURCE)
         self.assertNotIn("localStorage", CONTRACT_SOURCE)
         self.assertNotIn("sessionStorage", CONTRACT_SOURCE)
 
@@ -181,6 +183,59 @@ class ProviderFormContractTests(unittest.TestCase):
             r"applyProviderEnvironmentLocks\(\s*'antigravity\.settings'",
         )
         self.assertIn("resetProviderTransientSecrets('antigravity.oauth')", authentication_script)
+
+    def test_remaining_provider_families_consume_the_shared_contract(self):
+        scripts = {
+            name: (ROOT / f"frontend/js/features/{name}-settings.js").read_text(encoding="utf-8")
+            for name in ("xai", "openai", "anthropic", "ollama")
+        }
+        expected_calls = {
+            "xai": (
+                "validateProviderFormScope(contractScope)",
+                "applyProviderEnvironmentLocks(['grok.settings', 'xai.settings']",
+                "resetProviderTransientSecrets('xai.credential')",
+                "resetProviderTransientSecrets('grok.oauth')",
+            ),
+            "openai": (
+                "validateProviderFormScope(contractScope)",
+                "applyProviderEnvironmentLocks(['codex.settings', 'openai-platform.settings']",
+                "resetProviderTransientSecrets('openai-platform.credential')",
+            ),
+            "anthropic": (
+                "validateProviderFormScope(contractScope)",
+                "applyProviderEnvironmentLocks(['claude-code.settings', 'claude-platform.settings']",
+                "resetProviderTransientSecrets('claude-platform.credential')",
+                "resetProviderTransientSecrets('claude-code.oauth')",
+            ),
+            "ollama": (
+                "validateProviderFormScope('ollama.credential')",
+                "resetProviderTransientSecrets('ollama.credential')",
+            ),
+        }
+        for family, calls in expected_calls.items():
+            for call in calls:
+                with self.subTest(family=family, call=call):
+                    self.assertIn(call, scripts[family])
+
+        google_script = (ROOT / "frontend/js/features/google-ai-studio-settings.js").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("const XAI_CONFIG_FIELDS", scripts["xai"])
+        self.assertNotIn("const XAI_CONFIG_FIELDS", google_script)
+
+    def test_provider_specific_secret_bounds_are_preserved(self):
+        expected_bounds = {
+            "xaiApiKey": (16, 1024),
+            "googleAiStudioApiKey": (1, 4096),
+            "openaiPlatformApiKey": (1, 1024),
+            "claudePlatformApiKey": (1, 1024),
+            "ollamaApiKey": (0, 4096),
+        }
+        for field_id, (minimum, maximum) in expected_bounds.items():
+            with self.subTest(field_id=field_id):
+                field_entry = CONTRACT_SOURCE.split(f"id: '{field_id}'", 1)[1].split("}", 1)[0]
+                self.assertIn(f"minLength: {minimum}", field_entry)
+                self.assertIn(f"maxLength: {maximum}", field_entry)
 
 
 if __name__ == "__main__":

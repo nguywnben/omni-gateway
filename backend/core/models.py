@@ -391,13 +391,13 @@ class AuthCallbackRequest(BaseModel):
 
 
 class AuthCallbackUrlRequest(BaseModel):
-    callback_url: str
+    callback_url: str = Field(min_length=8, max_length=8192)
     project_id: Optional[str] = None
     mode: Optional[str] = "code_assist"
 
 
 class GoogleAIStudioCredentialRequest(BaseModel):
-    api_key: str
+    api_key: str = Field(min_length=1, max_length=4096)
 
 
 class XaiCredentialRequest(BaseModel):

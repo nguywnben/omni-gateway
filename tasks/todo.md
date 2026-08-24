@@ -29,7 +29,7 @@
 - [x] Checkpoint W2-B: mixed-provider API/browser/accessibility matrix passes.
 - [x] W2.9 Define and enforce the shared provider form contract.
 - [x] W2.10 Correct Google-family provider forms and flows.
-- [ ] W2.11 Correct OpenAI, xAI, Anthropic, and Ollama forms and flows.
+- [x] W2.11 Correct OpenAI, xAI, Anthropic, and Ollama forms and flows.
 - [ ] Checkpoint W2-C: Phase 3 acceptance and all repository quality gates pass.
 - [ ] Report Wave 2 evidence and obtain human acceptance before Wave 3.
 

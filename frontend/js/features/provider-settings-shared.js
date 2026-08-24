@@ -11,7 +11,7 @@ function defineProviderField(options) {
 const PROVIDER_FORM_CONTRACT = Object.freeze({
     'grok.oauth': Object.freeze([
         defineProviderField({
-            id: 'xaiAuthorizationCode', type: 'password', required: true, minLength: 4,
+            id: 'xaiAuthorizationCode', type: 'password', required: true, minLength: 1,
             maxLength: 4096, autocomplete: 'one-time-code', secretLifetime: 'submit',
             environmentLock: false, helpKey: 'provider.form.oauth_code_help', advanced: false,
             validation: 'secret', resetBehavior: 'clear'
@@ -27,8 +27,8 @@ const PROVIDER_FORM_CONTRACT = Object.freeze({
     ]),
     'xai.credential': Object.freeze([
         defineProviderField({
-            id: 'xaiApiKey', type: 'password', required: true, minLength: 8,
-            maxLength: 4096, autocomplete: 'one-time-code', secretLifetime: 'submit',
+            id: 'xaiApiKey', type: 'password', required: true, minLength: 16,
+            maxLength: 1024, autocomplete: 'one-time-code', secretLifetime: 'submit',
             environmentLock: false, helpKey: 'provider.form.api_key_help', advanced: false,
             validation: 'secret', resetBehavior: 'clear'
         })
@@ -43,7 +43,7 @@ const PROVIDER_FORM_CONTRACT = Object.freeze({
     ]),
     'google-ai-studio.credential': Object.freeze([
         defineProviderField({
-            id: 'googleAiStudioApiKey', type: 'password', required: true, minLength: 8,
+            id: 'googleAiStudioApiKey', type: 'password', required: true, minLength: 1,
             maxLength: 4096, autocomplete: 'one-time-code', secretLifetime: 'submit',
             environmentLock: false, helpKey: 'provider.form.api_key_help', advanced: false,
             validation: 'secret', resetBehavior: 'clear'
@@ -73,8 +73,8 @@ const PROVIDER_FORM_CONTRACT = Object.freeze({
     ]),
     'openai-platform.credential': Object.freeze([
         defineProviderField({
-            id: 'openaiPlatformApiKey', type: 'password', required: true, minLength: 8,
-            maxLength: 4096, autocomplete: 'one-time-code', secretLifetime: 'submit',
+            id: 'openaiPlatformApiKey', type: 'password', required: true, minLength: 1,
+            maxLength: 1024, autocomplete: 'one-time-code', secretLifetime: 'submit',
             environmentLock: false, helpKey: 'provider.form.api_key_help', advanced: false,
             validation: 'secret', resetBehavior: 'clear'
         })
@@ -86,7 +86,7 @@ const PROVIDER_FORM_CONTRACT = Object.freeze({
     ]),
     'claude-code.oauth': Object.freeze([
         defineProviderField({
-            id: 'claudeAuthorizationCode', type: 'password', required: true, minLength: 4,
+            id: 'claudeAuthorizationCode', type: 'password', required: true, minLength: 1,
             maxLength: 4096, autocomplete: 'one-time-code', secretLifetime: 'submit',
             environmentLock: false, helpKey: 'provider.form.oauth_code_help', advanced: false,
             validation: 'secret', resetBehavior: 'clear'
@@ -111,8 +111,8 @@ const PROVIDER_FORM_CONTRACT = Object.freeze({
     ]),
     'claude-platform.credential': Object.freeze([
         defineProviderField({
-            id: 'claudePlatformApiKey', type: 'password', required: true, minLength: 8,
-            maxLength: 4096, autocomplete: 'one-time-code', secretLifetime: 'submit',
+            id: 'claudePlatformApiKey', type: 'password', required: true, minLength: 1,
+            maxLength: 1024, autocomplete: 'one-time-code', secretLifetime: 'submit',
             environmentLock: false, helpKey: 'provider.form.api_key_help', advanced: false,
             validation: 'secret', resetBehavior: 'clear'
         })
@@ -213,11 +213,17 @@ function applyProviderFormContract() {
             field.dataset.environmentLock = String(definition.environmentLock);
             field.dataset.advanced = String(definition.advanced);
             field.dataset.helpKey = definition.helpKey;
-            const help = document.getElementById(`${definition.id}Help`);
-            if (help) {
-                help.dataset.i18n = definition.helpKey;
-                field.setAttribute('aria-describedby', help.id);
+            let help = document.getElementById(`${definition.id}Help`);
+            if (!help && definition.type !== 'checkbox') {
+                help = document.createElement('p');
+                help.id = `${definition.id}Help`;
+                help.className = 'form-help provider-field-help';
+                field.insertAdjacentElement('afterend', help);
             }
+            if (!help) return;
+            help.dataset.i18n = definition.helpKey;
+            help.textContent = t(definition.helpKey);
+            field.setAttribute('aria-describedby', help.id);
         });
     });
 }

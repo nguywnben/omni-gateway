@@ -6,11 +6,7 @@ async function addOllamaCredential(event) {
     const baseUrl = endpointField?.value.trim() || '';
     const apiKey = apiKeyField?.value.trim() || '';
 
-    if (!baseUrl) {
-        showStatus(t('provider.endpoint_required', {provider: 'Ollama'}), 'error');
-        endpointField?.focus();
-        return;
-    }
+    if (!validateProviderFormScope('ollama.credential')) return;
 
     button.disabled = true;
     button.textContent = t('runtime.connecting');
@@ -37,7 +33,7 @@ async function addOllamaCredential(event) {
             text.textContent = `${data.message} ${t('runtime.models_available', {count})}`;
         }
         document.getElementById('ollamaSaveResult')?.classList.remove('hidden');
-        if (apiKeyField) apiKeyField.value = '';
+        resetProviderTransientSecrets('ollama.credential');
         showStatus(data.message, 'success');
         await AppState.primaryCreds.refresh();
         await loadModelCatalog(true);

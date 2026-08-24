@@ -1,3 +1,21 @@
+const XAI_CONFIG_FIELDS = {
+    xaiClientId: 'xai_client_id',
+    xaiOauthIssuer: 'xai_oauth_issuer',
+    xaiApiUrl: 'xai_api_url',
+    xaiUserAgent: 'xai_user_agent'
+};
+
+const XAI_CONFIG_GROUPS = {
+    oauth: {
+        label: 'Grok Build',
+        fieldIds: ['xaiClientId', 'xaiOauthIssuer']
+    },
+    api: {
+        label: 'Grok Build and SpaceXAI Console transport',
+        fieldIds: ['xaiApiUrl', 'xaiUserAgent']
+    }
+};
+
 async function loadXaiSettings(options = {}) {
     if (!Object.keys(XAI_CONFIG_FIELDS).some(fieldId => document.getElementById(fieldId))) return;
 
@@ -12,14 +30,12 @@ async function loadXaiSettings(options = {}) {
         const response = await fetch('./api/providers/xai/config', { headers: getAuthHeaders() });
         const data = await response.json().catch(() => ({}));
         if (!response.ok) throw new Error(data.detail || data.error || t('unknown_error'));
-        const locked = new Set(data.env_locked || []);
         Object.entries(XAI_CONFIG_FIELDS).forEach(([fieldId, configKey]) => {
             const field = document.getElementById(fieldId);
             if (!field) return;
             field.value = data.config?.[configKey] || '';
-            field.disabled = locked.has(configKey);
-            field.classList.toggle('env-locked', field.disabled);
         });
+        applyProviderEnvironmentLocks(['grok.settings', 'xai.settings'], data.env_locked);
         formIds.forEach((id) => {
             const form = document.getElementById(id);
             if (form) form.dataset.loaded = 'true';
@@ -34,6 +50,8 @@ async function loadXaiSettings(options = {}) {
 async function saveXaiSettings(scope) {
     const group = XAI_CONFIG_GROUPS[scope];
     if (!group) return;
+    const contractScope = scope === 'oauth' ? 'grok.settings' : 'xai.settings';
+    if (!validateProviderFormScope(contractScope)) return;
     const config = {};
     group.fieldIds.forEach((fieldId) => {
         const configKey = XAI_CONFIG_FIELDS[fieldId];
@@ -103,11 +121,7 @@ async function addXaiApiKeyCredential(event) {
     const field = document.getElementById('xaiApiKey');
     const button = document.getElementById('addXaiKeyBtn');
     const apiKey = field?.value.trim() || '';
-    if (!apiKey) {
-        showStatus(t('provider.api_key_required', {provider: 'SpaceXAI Console'}), 'error');
-        field?.focus();
-        return;
-    }
+    if (!validateProviderFormScope('xai.credential')) return;
     button.disabled = true;
     button.textContent = t('runtime.validating');
     document.getElementById('xaiApiKeySaveResult')?.classList.add('hidden');
@@ -119,7 +133,7 @@ async function addXaiApiKeyCredential(event) {
         });
         const data = await response.json().catch(() => ({}));
         if (!response.ok) throw new Error(data.detail || data.error || t('unknown_error'));
-        field.value = '';
+        resetProviderTransientSecrets('xai.credential');
         showXaiCredentialSaveResult('api-key', data);
         showStatus(data.message, 'success');
         await AppState.primaryCreds.refresh();
@@ -169,11 +183,7 @@ async function saveXaiOauth() {
     const code = field?.value.trim() || '';
     const oauthFields = document.getElementById('xaiOauthFields');
     const state = oauthFields?.dataset.state || '';
-    if (!code) {
-        showStatus(t('provider.auth_code_required', {provider: 'Grok Build'}), 'error');
-        field?.focus();
-        return;
-    }
+    if (!validateProviderFormScope('grok.oauth')) return;
     if (!state) {
         showStatus(t('provider.auth_session_required', {provider: 'Grok Build'}), 'error');
         return;
@@ -188,7 +198,7 @@ async function saveXaiOauth() {
         });
         const data = await response.json().catch(() => ({}));
         if (!response.ok) throw new Error(data.detail || data.error || t('unknown_error'));
-        field.value = '';
+        resetProviderTransientSecrets('grok.oauth');
         delete oauthFields.dataset.state;
         showXaiCredentialSaveResult('oauth', data);
         showStatus(data.message, 'success');

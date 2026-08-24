@@ -39,14 +39,12 @@ async function loadOpenAISettings(options = {}) {
         const data = await response.json().catch(() => ({}));
         if (!response.ok) throw new Error(data.detail || data.error || t('unknown_error'));
 
-        const locked = new Set(data.env_locked || []);
         Object.entries(OPENAI_CONFIG_FIELDS).forEach(([fieldId, configKey]) => {
             const field = document.getElementById(fieldId);
             if (!field) return;
             field.value = data.config?.[configKey] || '';
-            field.disabled = locked.has(configKey);
-            field.classList.toggle('env-locked', field.disabled);
         });
+        applyProviderEnvironmentLocks(['codex.settings', 'openai-platform.settings'], data.env_locked);
         formIds.forEach((id) => {
             const form = document.getElementById(id);
             if (form) form.dataset.loaded = 'true';
@@ -61,6 +59,8 @@ async function loadOpenAISettings(options = {}) {
 async function saveOpenAISettings(scope) {
     const group = OPENAI_CONFIG_GROUPS[scope];
     if (!group) return;
+    const contractScope = scope === 'platform' ? 'openai-platform.settings' : 'codex.settings';
+    if (!validateProviderFormScope(contractScope)) return;
     const config = {};
     group.fieldIds.forEach((fieldId) => {
         const configKey = OPENAI_CONFIG_FIELDS[fieldId];
@@ -132,11 +132,7 @@ async function addOpenAIPlatformCredential(event) {
     const field = document.getElementById('openaiPlatformApiKey');
     const button = document.getElementById('addOpenaiPlatformKeyBtn');
     const apiKey = field?.value.trim() || '';
-    if (!apiKey) {
-        showStatus(t('provider.api_key_required', {provider: 'OpenAI Platform'}), 'error');
-        field?.focus();
-        return;
-    }
+    if (!validateProviderFormScope('openai-platform.credential')) return;
 
     button.disabled = true;
     button.textContent = t('runtime.validating');
@@ -149,7 +145,7 @@ async function addOpenAIPlatformCredential(event) {
         });
         const data = await response.json().catch(() => ({}));
         if (!response.ok) throw new Error(data.detail || data.error || t('unknown_error'));
-        field.value = '';
+        resetProviderTransientSecrets('openai-platform.credential');
         showOpenAICredentialSaveResult('platform', data);
         showStatus(data.message, 'success');
         await AppState.primaryCreds.refresh();

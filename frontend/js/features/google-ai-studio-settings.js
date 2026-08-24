@@ -130,23 +130,3 @@ async function addGoogleAIStudioCredential(event) {
         button.textContent = t('runtime.validate_add');
     }
 }
-
-const XAI_CONFIG_FIELDS = {
-    xaiClientId: 'xai_client_id',
-    xaiOauthIssuer: 'xai_oauth_issuer',
-    xaiApiUrl: 'xai_api_url',
-    xaiUserAgent: 'xai_user_agent'
-};
-
-const XAI_CONFIG_GROUPS = {
-    oauth: {
-        label: 'Grok Build',
-        resetTitle: 'Reset Grok Build Settings',
-        fieldIds: ['xaiClientId', 'xaiOauthIssuer']
-    },
-    api: {
-        label: 'Grok Build and SpaceXAI Console transport',
-        resetTitle: 'Reset Grok Build and SpaceXAI Console Transport Settings',
-        fieldIds: ['xaiApiUrl', 'xaiUserAgent']
-    }
-};

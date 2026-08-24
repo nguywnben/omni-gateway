@@ -10,11 +10,11 @@
   approval), approximately 36%; Wave 2 execution-slice checkboxes are refinements and are not added
   to that denominator.
 - Active scope: Wave 2 — Credential Operations.
-- Control state: **IN PROGRESS — W2.11**.
-- Expected worktree state at this checkpoint: W2.10 changes prepared for an atomic commit.
+- Control state: **IN PROGRESS — CHECKPOINT W2-C**.
+- Expected worktree state at this checkpoint: W2.11 changes prepared for an atomic commit.
 - Expected runtime: Omni Gateway PID 3800 on `http://127.0.0.1:4283`; `/health` and `/ready`
   return HTTP 200.
-- Last verified full suite: 532 tests passed; Ruff, compileall, changed JavaScript syntax, and
+- Last verified full suite: 534 tests passed; Ruff, compileall, all JavaScript syntax, and
   diff-check passed.
 
 Wave 2 was approved by the human on 2026-08-24. Do not expand beyond its documented scope.
@@ -98,6 +98,11 @@ silently choosing a new design.
   semantics, callback content is cleared after submission, and Antigravity client secrets are no
   longer reflected by GET, save, or reset responses; a configured-state marker preserves unchanged
   secrets safely. Focused response-contract and form audits passed; the full suite reached 532 tests.
+- W2.11 evidence: OpenAI Platform, Codex, Grok Build, SpaceXAI Console, Claude Code, Claude
+  Platform, and Ollama now use the same declarative validation, environment-lock, generated help,
+  and transient-secret lifecycle. Provider-specific API-key bounds remain aligned with backend
+  request models. xAI metadata moved out of the Google AI Studio script, removing an implicit load-
+  order dependency. Provider, locale, and syntax audits passed; the full suite reached 534 tests.
 
 ## Approved vs. Proposed Scope
 
@@ -137,8 +142,9 @@ checkboxes to be marked complete.
 
 ## Immediate Next Action
 
-Implement W2.11 with test-first evidence: apply the shared contract to OpenAI, xAI, Anthropic, and
-Ollama settings, credential, OAuth, import, reset, and environment-lock flows.
+Close Checkpoint W2-C: commit W2.11, restart from committed code, run authenticated real-browser
+provider-form checks across responsive widths, themes, representative locales, and keyboard paths,
+then repeat repository gates and record the clean Wave 2 handoff.
 
 ## Update Rule
 
