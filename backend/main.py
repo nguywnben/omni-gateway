@@ -20,7 +20,10 @@ from core.health import router as health_router
 from core.httpx_client import http_client
 from core.i18n import LocalizedJSONResponse, locale_context, resolve_locale
 from core.keep_alive import keep_alive_service
-from core.management_audit import record_management_response
+from core.management_audit import (
+    classify_management_mutation,
+    record_classified_management_response,
+)
 from core.metrics import router as metrics_router
 from core.panel import router as panel_router
 from core.panel.setup_security import get_setup_bootstrap_token
@@ -252,17 +255,21 @@ async def add_security_headers(request, call_next):
         else uuid.uuid4().hex
     )
     request.state.request_id = request_id
+    management_mutation = classify_management_mutation(
+        request.method,
+        request.scope.get("path", request.url.path),
+    )
     localize_console = request.url.path.startswith("/api/") or request.url.path == "/callback"
     locale = resolve_locale(request.headers.get("accept-language"))
     with request_scope(request_id), locale_context(locale, enabled=localize_console):
         response = await call_next(request)
         try:
-            await record_management_response(
-                method=request.method,
-                path=request.url.path,
-                status_code=response.status_code,
-                request_id=request_id,
-            )
+            if management_mutation is not None:
+                await record_classified_management_response(
+                    management_mutation,
+                    status_code=response.status_code,
+                    request_id=request_id,
+                )
         except Exception as exc:
             log.critical(
                 "Durable management audit append failed "

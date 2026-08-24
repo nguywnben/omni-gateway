@@ -289,6 +289,21 @@ async def record_management_response(
     mutation = classify_management_mutation(method, path)
     if mutation is None:
         return None
+    return await record_classified_management_response(
+        mutation,
+        status_code=status_code,
+        request_id=request_id,
+    )
+
+
+async def record_classified_management_response(
+    mutation: ManagementMutation,
+    *,
+    status_code: int,
+    request_id: str,
+):
+    """Append a mutation already resolved from trusted request routing metadata."""
+
     from core.audit_service import get_audit_service
 
     outcome = _outcome_for_status(status_code)

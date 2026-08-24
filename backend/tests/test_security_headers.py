@@ -41,7 +41,7 @@ class SecurityHeaderTests(unittest.IsolatedAsyncioTestCase):
             return JSONResponse({"ok": False}, status_code=409)
 
         audit_response = AsyncMock()
-        with patch("main.record_management_response", audit_response):
+        with patch("main.record_classified_management_response", audit_response):
             response = await add_security_headers(
                 build_request("/api/config/save", method="POST"),
                 next_handler,
@@ -50,8 +50,8 @@ class SecurityHeaderTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(response.status_code, 409)
         audit_response.assert_awaited_once()
         kwargs = audit_response.await_args.kwargs
-        self.assertEqual(kwargs["method"], "POST")
-        self.assertEqual(kwargs["path"], "/api/config/save")
+        mutation = audit_response.await_args.args[0]
+        self.assertEqual(mutation.action, "config.update")
         self.assertEqual(kwargs["status_code"], 409)
         self.assertEqual(kwargs["request_id"], response.headers["x-request-id"])
 
