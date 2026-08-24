@@ -28,9 +28,9 @@ _ALLOWED_ACTIONS = {
 }
 _ALLOWED_OPERATIONS = set(CREDENTIAL_OPERATIONS)
 _ALLOWED_MODES = {"code_assist", "provider"}
-_ALLOWED_VARIANTS = {
-    item["variant_id"] for item in list_credential_variant_capabilities()
-} | {"unknown"}
+_ALLOWED_VARIANTS = {item["variant_id"] for item in list_credential_variant_capabilities()} | {
+    "unknown"
+}
 _ALLOWED_OUTCOMES = {
     "succeeded",
     "unsupported",
@@ -126,6 +126,28 @@ def record_credential_mutation(
     return dict(event)
 
 
+async def record_durable_credential_mutation(**values: Any) -> dict[str, Any]:
+    """Retain W2 telemetry while appending the same logical result durably once."""
+
+    event = record_credential_mutation(**values)
+    try:
+        from core.audit_service import record_credential_response
+
+        await record_credential_response(
+            request_id=event["request_id"],
+            action=event["action"],
+            mode=event["mode"],
+            filename=str(values.get("filename") or ""),
+            outcome=event["outcome"],
+        )
+    except Exception as exc:
+        log.critical(
+            "Durable credential audit append failed "
+            f"(request_id={event['request_id']}, error_type={type(exc).__name__})."
+        )
+    return event
+
+
 def get_credential_audit_events() -> tuple[dict[str, Any], ...]:
     """Return immutable copies for internal diagnostics and focused tests."""
     with _evidence_lock:
@@ -194,7 +216,4 @@ def _metric_label(key: tuple[str, str, str, str]) -> str:
 
 def _metric_label_values(key: tuple[str, str, str, str]) -> str:
     operation, outcome, mode, variant_id = key
-    return (
-        f'operation="{operation}",outcome="{outcome}",'
-        f'mode="{mode}",variant="{variant_id}"'
-    )
+    return f'operation="{operation}",outcome="{outcome}",mode="{mode}",variant="{variant_id}"'

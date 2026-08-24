@@ -17,6 +17,7 @@ from core.credential_operation_evidence import (
     clear_credential_operation_evidence_for_testing,
     get_credential_audit_events,
     record_credential_mutation,
+    record_durable_credential_mutation,
     render_credential_operation_metrics,
 )
 from core.models import CredFileActionRequest, CredFileBatchActionRequest
@@ -134,6 +135,58 @@ class CredentialOperationEvidenceIntegrationTests(unittest.IsolatedAsyncioTestCa
     def setUp(self):
         clear_credential_operation_evidence_for_testing()
 
+    async def test_durable_bridge_is_awaited_once_without_changing_w2_telemetry(self):
+        durable_append = AsyncMock()
+        with (
+            request_scope("bridge-request"),
+            patch(
+                "core.audit_service.record_credential_response",
+                durable_append,
+            ),
+        ):
+            event = await record_durable_credential_mutation(
+                action="disable",
+                operation="toggle",
+                mode="provider",
+                filename="private.json",
+                variant_id="google_ai_studio",
+                outcome="succeeded",
+                duration_ms=1,
+                summary_code="operation_succeeded",
+            )
+
+        durable_append.assert_awaited_once_with(
+            request_id="bridge-request",
+            action="disable",
+            mode="provider",
+            filename="private.json",
+            outcome="succeeded",
+        )
+        self.assertEqual(get_credential_audit_events(), (event,))
+
+    async def test_durable_outage_is_secret_free_and_does_not_duplicate_legacy_event(self):
+        with (
+            request_scope("outage-request"),
+            patch(
+                "core.audit_service.record_credential_response",
+                AsyncMock(side_effect=RuntimeError("database contains private.json")),
+            ),
+            patch("core.credential_operation_evidence.log.critical") as critical,
+        ):
+            await record_durable_credential_mutation(
+                action="delete",
+                operation="delete",
+                mode="provider",
+                filename="private.json",
+                variant_id="google_ai_studio",
+                outcome="succeeded",
+                duration_ms=1,
+                summary_code="operation_succeeded",
+            )
+
+        self.assertEqual(len(get_credential_audit_events()), 1)
+        self.assertNotIn("private.json", critical.call_args.args[0])
+
     async def test_single_mutation_emits_exactly_one_redacted_event(self):
         storage = AsyncMock()
         storage.get_credential.return_value = {
@@ -177,6 +230,7 @@ class CredentialOperationEvidenceIntegrationTests(unittest.IsolatedAsyncioTestCa
             filenames=["studio.json"],
             idempotency_key="evidence-retry-001",
         )
+        durable_append = AsyncMock()
         with (
             request_scope("batch-request-1"),
             patch(
@@ -187,6 +241,10 @@ class CredentialOperationEvidenceIntegrationTests(unittest.IsolatedAsyncioTestCa
                 "core.panel.credentials.credential_manager.set_cred_disabled",
                 new=AsyncMock(return_value=True),
             ),
+            patch(
+                "core.audit_service.record_credential_response",
+                durable_append,
+            ),
         ):
             await creds_batch_action(request, token="session", mode="provider")
             await creds_batch_action(request, token="session", mode="provider")
@@ -194,6 +252,7 @@ class CredentialOperationEvidenceIntegrationTests(unittest.IsolatedAsyncioTestCa
         events = get_credential_audit_events()
         self.assertEqual(len(events), 1)
         self.assertEqual(events[0]["outcome"], "succeeded")
+        durable_append.assert_awaited_once()
 
     async def test_unsupported_mutation_emits_one_typed_event_without_secrets(self):
         storage = AsyncMock()

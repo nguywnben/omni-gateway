@@ -33,7 +33,7 @@ from core.credential_fleet_query import (
     select_credential_filenames,
 )
 from core.credential_manager import credential_manager
-from core.credential_operation_evidence import record_credential_mutation
+from core.credential_operation_evidence import record_durable_credential_mutation
 from core.google_ai_studio import (
     build_api_key_headers,
     build_generation_url,
@@ -357,7 +357,7 @@ async def _execute_credential_action(
         summary_code = f"http_{exc.status_code}"
         raise
     finally:
-        record_credential_mutation(
+        await record_durable_credential_mutation(
             action=action,
             operation=operation,
             mode=mode,
@@ -384,7 +384,7 @@ async def creds_action(
         try:
             filename = validate_credential_filename(request.filename)
         except HTTPException:
-            record_credential_mutation(
+            await record_durable_credential_mutation(
                 action=request.action,
                 operation=BATCH_ACTION_OPERATIONS.get(request.action, "unknown"),
                 mode=mode,
@@ -403,7 +403,7 @@ async def creds_action(
         storage_adapter = await get_storage_adapter()
         credential_data = await storage_adapter.get_credential(filename, mode=mode)
         if not credential_data:
-            record_credential_mutation(
+            await record_durable_credential_mutation(
                 action=request.action,
                 operation=BATCH_ACTION_OPERATIONS.get(request.action, "unknown"),
                 mode=mode,
@@ -427,7 +427,7 @@ async def creds_action(
         raise
     except Exception as e:
         if not evidence_emitted:
-            record_credential_mutation(
+            await record_durable_credential_mutation(
                 action=request.action,
                 operation=BATCH_ACTION_OPERATIONS.get(request.action, "unknown"),
                 mode=evidence_mode,
@@ -601,7 +601,7 @@ async def creds_batch_action(
 
         for item in results:
             if item["status"] != "eligible":
-                record_credential_mutation(
+                await record_durable_credential_mutation(
                     action=action,
                     operation=item["operation"],
                     mode=mode,
@@ -663,7 +663,7 @@ async def creds_batch_action(
     except Exception as e:
         if not request.preview and not planning_complete:
             for filename in filenames:
-                record_credential_mutation(
+                await record_durable_credential_mutation(
                     action=request.action,
                     operation=BATCH_ACTION_OPERATIONS.get(request.action, "unknown"),
                     mode=evidence_mode,

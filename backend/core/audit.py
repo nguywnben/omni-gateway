@@ -41,6 +41,7 @@ AUDIT_ACTIONS = frozenset(
         "auth.setup",
         "config.update",
         "config.reset",
+        "root_key.rotate",
         "provider.create",
         "provider.update",
         "provider.delete",
@@ -54,6 +55,8 @@ AUDIT_ACTIONS = frozenset(
         "credential.export",
         "credential.credit_mode",
         "credential.batch",
+        "credential.import",
+        "credential.email_refresh",
         "virtual_key.create",
         "virtual_key.update",
         "virtual_key.rotate",
@@ -64,6 +67,9 @@ AUDIT_ACTIONS = frozenset(
         "backup.export",
         "audit.retention_update",
         "audit.export",
+        "model_blacklist.clear",
+        "model_pool.update",
+        "logs.clear",
     }
 )
 AUDIT_TARGET_TYPES = frozenset(
@@ -76,6 +82,10 @@ AUDIT_TARGET_TYPES = frozenset(
         "quality_policy",
         "backup",
         "audit_policy",
+        "root_key",
+        "model_blacklist",
+        "model_pool",
+        "log_store",
     }
 )
 AUDIT_OUTCOMES = frozenset(

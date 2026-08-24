@@ -55,6 +55,8 @@ class ApplicationLifecycleTests(unittest.IsolatedAsyncioTestCase):
         with (
             patch.dict(sys.modules, {"config": config_module}),
             patch("main.credential_manager._get_or_create", new=AsyncMock()),
+            patch("main.initialize_audit_service", new=AsyncMock()),
+            patch("main.close_audit_service", new=AsyncMock()) as close_audit,
             patch("main.credential_manager.close", new=AsyncMock()) as close_manager,
             patch("main.close_storage_adapter", new=AsyncMock()) as close_storage,
             patch("main.keep_alive_service.start", new=AsyncMock()),
@@ -66,6 +68,7 @@ class ApplicationLifecycleTests(unittest.IsolatedAsyncioTestCase):
 
         stop_keep_alive.assert_awaited_once_with()
         shutdown_tasks.assert_awaited_once_with(timeout=10.0)
+        close_audit.assert_awaited_once_with()
         close_manager.assert_awaited_once_with()
         close_storage.assert_awaited_once_with()
 
@@ -82,6 +85,33 @@ class ApplicationLifecycleTests(unittest.IsolatedAsyncioTestCase):
                     pass
 
         initialize_manager.assert_not_awaited()
+
+    async def test_audit_initialization_failure_aborts_before_keep_alive(self):
+        config_module = MagicMock()
+        config_module.init_config = AsyncMock()
+        config_module.get_log_config = AsyncMock(
+            return_value={"level": "info", "max_mb": 10, "backup_count": 3}
+        )
+        config_module.has_password_configured = AsyncMock(return_value=True)
+
+        with (
+            patch.dict(sys.modules, {"config": config_module}),
+            patch("main.credential_manager._get_or_create", new=AsyncMock()),
+            patch(
+                "main.initialize_audit_service",
+                new=AsyncMock(side_effect=RuntimeError("secret storage detail")),
+            ),
+            patch("main.credential_manager.close", new=AsyncMock()) as close_manager,
+            patch("main.close_storage_adapter", new=AsyncMock()) as close_storage,
+            patch("main.keep_alive_service.start", new=AsyncMock()) as start_keep_alive,
+        ):
+            with self.assertRaisesRegex(RuntimeError, "Audit service initialization failed"):
+                async with lifespan(app):
+                    pass
+
+        close_manager.assert_awaited_once_with()
+        close_storage.assert_awaited_once_with()
+        start_keep_alive.assert_not_awaited()
 
 
 if __name__ == "__main__":

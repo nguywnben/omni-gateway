@@ -14,11 +14,13 @@ from app_version import get_application_version
 from config import get_server_host, get_server_port, trust_proxy_headers_enabled
 
 # Import managers and utilities
+from core.audit_service import close_audit_service, initialize_audit_service
 from core.credential_manager import credential_manager
 from core.health import router as health_router
 from core.httpx_client import http_client
 from core.i18n import LocalizedJSONResponse, locale_context, resolve_locale
 from core.keep_alive import keep_alive_service
+from core.management_audit import record_management_response
 from core.metrics import router as metrics_router
 from core.panel import router as panel_router
 from core.panel.setup_security import get_setup_bootstrap_token
@@ -104,6 +106,15 @@ async def lifespan(app: FastAPI):
         raise RuntimeError("Credential storage initialization failed.") from e
 
     try:
+        await initialize_audit_service()
+        log.info("Durable audit service initialized.")
+    except Exception as e:
+        log.critical(f"Audit service initialization failed: {type(e).__name__}")
+        await credential_manager.close()
+        await close_storage_adapter()
+        raise RuntimeError("Audit service initialization failed.") from e
+
+    try:
         await keep_alive_service.start()
     except Exception as e:
         log.error(f"Failed to start the keep-alive service: {e}")
@@ -123,6 +134,12 @@ async def lifespan(app: FastAPI):
             log.info("All asynchronous tasks have been shut down.")
         except Exception as e:
             log.error(f"Error while shutting down asynchronous tasks: {e}")
+
+        try:
+            await close_audit_service()
+            log.info("Audit service closed.")
+        except Exception as e:
+            log.error(f"Error while closing the audit service: {e}")
 
         try:
             await credential_manager.close()
@@ -239,6 +256,18 @@ async def add_security_headers(request, call_next):
     locale = resolve_locale(request.headers.get("accept-language"))
     with request_scope(request_id), locale_context(locale, enabled=localize_console):
         response = await call_next(request)
+        try:
+            await record_management_response(
+                method=request.method,
+                path=request.url.path,
+                status_code=response.status_code,
+                request_id=request_id,
+            )
+        except Exception as exc:
+            log.critical(
+                "Durable management audit append failed "
+                f"(request_id={request_id}, error_type={type(exc).__name__})."
+            )
     response.headers["X-Request-ID"] = request_id
     if localize_console:
         response.headers["Content-Language"] = locale
