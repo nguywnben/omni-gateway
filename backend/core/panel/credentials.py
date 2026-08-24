@@ -122,6 +122,11 @@ async def get_creds_status(
     preview_filter: str = "all",
     tier_filter: str = "all",
     provider_filter: str = "all",
+    provider_variant_filter: str = "all",
+    credential_kind_filter: str = "all",
+    health_filter: str = "all",
+    quota_state_filter: str = "all",
+    source_filter: str = "all",
     mode: str = "code_assist",
 ):
     try:
@@ -136,6 +141,11 @@ async def get_creds_status(
             preview_filter=preview_filter,
             tier_filter=tier_filter,
             provider_filter=provider_filter,
+            provider_variant_filter=provider_variant_filter,
+            credential_kind_filter=credential_kind_filter,
+            health_filter=health_filter,
+            quota_state_filter=quota_state_filter,
+            source_filter=source_filter,
         )
     except HTTPException:
         raise

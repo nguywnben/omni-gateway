@@ -10,11 +10,11 @@
   approval), approximately 36%; Wave 2 execution-slice checkboxes are refinements and are not added
   to that denominator.
 - Active scope: Wave 2 — Credential Operations.
-- Control state: **IN PROGRESS — W2.6**.
-- Expected worktree state at this checkpoint: clean after the latest checkpoint commit.
+- Control state: **IN PROGRESS — W2.7**.
+- Expected worktree state at this checkpoint: W2.6 changes staged for an atomic commit.
 - Expected runtime: Omni Gateway PID 1364 on `http://127.0.0.1:4283`; `/health` and `/ready`
   return HTTP 200.
-- Last verified full suite: 508 tests passed; Ruff, compileall, JS syntax, and diff-check passed.
+- Last verified full suite: 515 tests passed; focused Ruff, compileall, and diff-check passed.
 
 Wave 2 was approved by the human on 2026-08-24. Do not expand beyond its documented scope.
 
@@ -64,6 +64,11 @@ silently choosing a new design.
   `/health`, `/ready`, and `/metrics` returned HTTP 200; credential operation counter/histogram
   families were present; the real Vietnamese login shell had a clean browser console and no
   horizontal overflow at 360/768/1024/1440 widths.
+- W2.6 evidence: credential status queries now compose exact provider variant, credential kind,
+  health, cooldown, quota state, tier, source, status, error, and preview filters before stable
+  sorting/pagination; responses expose safe facets and a bounded five-minute opaque all-matching
+  token that retains only normalized filters. Empty, 125-record, changing-data, invalid, conflict,
+  tamper, cross-mode, and secret-exclusion tests passed; the full suite reached 515 tests.
 
 ## Approved vs. Proposed Scope
 
@@ -103,8 +108,8 @@ checkboxes to be marked complete.
 
 ## Immediate Next Action
 
-Implement W2.6 with test-first evidence: add the faceted fleet query and stable all-matching
-selection contract without returning credential secrets.
+Implement W2.7 with test-first evidence: persist the responsive filter state and make page-only
+versus all-matching selection explicit without storing credential names in the URL or session.
 
 ## Update Rule
 
