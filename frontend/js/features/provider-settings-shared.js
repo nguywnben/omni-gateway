@@ -184,11 +184,25 @@ const PROVIDER_FORM_CONTRACT = Object.freeze({
     ])
 });
 
+const PROVIDER_FORM_COPY_CONTRACT = Object.freeze([
+    {selector: '#providerWorkspaceClaudeCode .provider-settings-header h2', key: 'advanced_settings', provider: 'Claude Code'},
+    {selector: '#claudeCodeSettingsForm label[for="claudeAuthorizeUrl"]', key: 'authorization_service'},
+    {selector: '#claudeCodeSettingsForm label[for="claudeTokenUrl"]', key: 'token_service'},
+    {selector: '#claudeCodeSettingsForm label[for="claudeClientId"]', key: 'oauth_client_id'},
+    {selector: '#providerWorkspaceClaudePlatform .provider-tools-grid .tool-panel:first-child h2', key: 'api_key_title', provider: 'Claude Platform'},
+    {selector: '#providerWorkspaceClaudePlatform .provider-settings-header h2', key: 'advanced_settings', provider: 'Claude Platform'},
+    {selector: '#providerWorkspaceOllama .provider-tools-grid .tool-panel:first-child h2', key: 'connection_title', provider: 'Ollama'},
+    {selector: '#ollamaCredentialForm label[for="ollamaBaseUrl"]', key: 'endpoint_label'},
+    {selector: '#ollamaCredentialForm .field-optional', key: 'optional'},
+    {selector: '#ollamaCredentialForm > .form-help:not(.provider-field-help)', key: 'ollama_docker_help'}
+]);
+
 function getProviderFormFields(scope) {
     return PROVIDER_FORM_CONTRACT[scope] || [];
 }
 
 function applyProviderFormContract() {
+    applyProviderFormCopy();
     Object.entries(PROVIDER_FORM_CONTRACT).forEach(([scope, definitions]) => {
         definitions.forEach((definition) => {
             const field = document.getElementById(definition.id);
@@ -213,6 +227,9 @@ function applyProviderFormContract() {
             field.dataset.environmentLock = String(definition.environmentLock);
             field.dataset.advanced = String(definition.advanced);
             field.dataset.helpKey = definition.helpKey;
+            if (definition.secretLifetime === 'submit') {
+                field.placeholder = t(definition.helpKey);
+            }
             let help = document.getElementById(`${definition.id}Help`);
             if (!help && definition.type !== 'checkbox') {
                 help = document.createElement('p');
@@ -225,6 +242,25 @@ function applyProviderFormContract() {
             help.textContent = t(definition.helpKey);
             field.setAttribute('aria-describedby', help.id);
         });
+    });
+}
+
+function applyProviderFormCopy() {
+    PROVIDER_FORM_COPY_CONTRACT.forEach((definition) => {
+        document.querySelectorAll(definition.selector).forEach((element) => {
+            element.textContent = t(`provider.form.${definition.key}`, {
+                provider: definition.provider || ''
+            });
+        });
+    });
+    document.querySelectorAll('[data-provider-form-copy]').forEach((element) => {
+        const key = `provider.form.${element.dataset.providerFormCopy}`;
+        element.textContent = t(key, {provider: element.dataset.providerName || ''});
+    });
+    Object.values(PROVIDER_FORM_CONTRACT).flat().forEach((definition) => {
+        if (definition.secretLifetime !== 'submit') return;
+        const field = document.getElementById(definition.id);
+        if (field) field.placeholder = t(definition.helpKey);
     });
 }
 
@@ -298,3 +334,4 @@ function setProviderSettingsLoading(loadingIds, formIds, isLoading, preserveCont
 }
 
 document.addEventListener('DOMContentLoaded', applyProviderFormContract, {once: true});
+document.addEventListener('omni:locale-change', applyProviderFormCopy);

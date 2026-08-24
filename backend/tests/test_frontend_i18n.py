@@ -82,6 +82,7 @@ class FrontendLocaleContractTests(unittest.TestCase):
             "PROVIDER_DIALOG_KEYS",
             "PROVIDER_AUTHORIZATION_KEYS",
             "PROVIDER_FORM_KEYS",
+            "PROVIDER_FORM_LABEL_KEYS",
             "DASHBOARD_METRICS_ENHANCEMENT_KEYS",
             "ROUTING_STRATEGY_KEYS",
             "OPERATION_COPY_KEYS",

@@ -6,13 +6,13 @@
 - Branch: `codex/enterprise-overhaul`.
 - Implementation baseline: `39fb9da feat: record AI quality decision telemetry`.
 - Completed scope: Wave 1 / Phases 0–2.
-- Original program progress: 10/28 approved checklist items complete (including specification
-  approval), approximately 36%; Wave 2 execution-slice checkboxes are refinements and are not added
+- Original program progress: 14/28 approved checklist items complete (including specification
+  approval), exactly 50%; Wave 2 execution-slice checkboxes are refinements and are not added
   to that denominator.
 - Active scope: Wave 2 — Credential Operations.
-- Control state: **IN PROGRESS — CHECKPOINT W2-C**.
-- Expected worktree state at this checkpoint: W2.11 changes prepared for an atomic commit.
-- Expected runtime: Omni Gateway PID 3800 on `http://127.0.0.1:4283`; `/health` and `/ready`
+- Control state: **AWAITING HUMAN ACCEPTANCE — WAVE 2**.
+- Expected worktree state at this checkpoint: clean after the final W2-C checkpoint commit.
+- Expected runtime: one Omni Gateway listener on `http://127.0.0.1:4283`; `/health` and `/ready`
   return HTTP 200.
 - Last verified full suite: 534 tests passed; Ruff, compileall, all JavaScript syntax, and
   diff-check passed.
@@ -103,6 +103,14 @@ silently choosing a new design.
   and transient-secret lifecycle. Provider-specific API-key bounds remain aligned with backend
   request models. xAI metadata moved out of the Google AI Studio script, removing an implicit load-
   order dependency. Provider, locale, and syntax audits passed; the full suite reached 534 tests.
+- W2-C evidence: all 534 tests, Ruff, compileall, every frontend JavaScript syntax check, and
+  diff-check passed. The final checkpoint service restarted as the only listener and health/ready
+  returned 200. Authenticated browser checks verified no horizontal overflow at 360/768/1024/1440, 23
+  generated field-help nodes with ARIA associations, correct light/dark/system rendering,
+  Vietnamese/English/Simplified-Chinese live locale changes, masked/empty Antigravity secret state,
+  provider-specific secret bounds, and ArrowRight focus/selection from Antigravity to AI Studio;
+  the browser console was empty. English literal leaks discovered in advanced provider forms were
+  corrected before closing this checkpoint.
 
 ## Approved vs. Proposed Scope
 
@@ -142,9 +150,8 @@ checkboxes to be marked complete.
 
 ## Immediate Next Action
 
-Close Checkpoint W2-C: commit W2.11, restart from committed code, run authenticated real-browser
-provider-form checks across responsive widths, themes, representative locales, and keyboard paths,
-then repeat repository gates and record the clean Wave 2 handoff.
+Report the completed Wave 2 evidence and wait for explicit human acceptance. Do not start Wave 3 or
+mark its scope approved until that acceptance is recorded.
 
 ## Update Rule
 

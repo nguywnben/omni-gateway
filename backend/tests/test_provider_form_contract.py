@@ -159,6 +159,18 @@ class ProviderFormContractTests(unittest.TestCase):
         )
         self.assertIn("values.length !== PROVIDER_FORM_KEYS.length", LOCALE_SOURCE)
 
+        label_block = LOCALE_SOURCE.split(
+            "const PROVIDER_FORM_LABEL_VALUES = {", 1
+        )[1].split("\n};", 1)[0]
+        label_locales = {
+            left or right
+            for left, right in re.findall(
+                r"^    (?:'([^']+)'|([a-z]{2})):\s*\[", label_block, re.MULTILINE
+            )
+        }
+        self.assertEqual(label_locales, locales)
+        self.assertIn("values.length !== PROVIDER_FORM_LABEL_KEYS.length", LOCALE_SOURCE)
+
     def test_google_family_fields_expose_contextual_help(self):
         for field_id in GOOGLE_HELP_FIELDS:
             with self.subTest(field_id=field_id):

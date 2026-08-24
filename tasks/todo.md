@@ -30,7 +30,7 @@
 - [x] W2.9 Define and enforce the shared provider form contract.
 - [x] W2.10 Correct Google-family provider forms and flows.
 - [x] W2.11 Correct OpenAI, xAI, Anthropic, and Ollama forms and flows.
-- [ ] Checkpoint W2-C: Phase 3 acceptance and all repository quality gates pass.
+- [x] Checkpoint W2-C: Phase 3 acceptance and all repository quality gates pass.
 - [ ] Report Wave 2 evidence and obtain human acceptance before Wave 3.
 
 These queue items refine Phase 3. W2.5 is a reusable foundation only: it does not complete the
@@ -84,19 +84,19 @@ Phase 4 audit item or the Phase 5 request-trace item.
 
 ## Phase 3 — Credential Fleet
 
-- [ ] Extend provider operation capabilities.
+- [x] Extend provider operation capabilities.
   - Acceptance: every console provider/variant declares a complete operation set.
   - Verify: registry consistency and provider contract tests.
   - Files: provider registry/catalog, focused tests, docs.
-- [ ] Enforce capability-aware single/batch operations.
+- [x] Enforce capability-aware single/batch operations.
   - Acceptance: unsupported crafted actions fail; mixed batches return typed per-item outcomes.
   - Verify: action matrix and dry-run tests.
   - Files: credential operation route/domain, schemas, tests.
-- [ ] Add faceted filters and context-aware batch toolbar.
+- [x] Add faceted filters and context-aware batch toolbar.
   - Acceptance: filters persist; page/all-result selection differs; only common actions are enabled.
   - Verify: large mixed-provider fixture and desktop/mobile browser flow.
   - Files: pool fragment, credential manager/cards/actions JS, CSS/tests.
-- [ ] Audit and correct all provider inputs.
+- [x] Audit and correct all provider inputs.
   - Acceptance: input type, required, bounds, secret masking, help, and reset are correct.
   - Verify: provider form contract tests and keyboard/browser checks.
   - Files: provider fragment/features, locale catalog, frontend tests.

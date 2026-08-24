@@ -231,7 +231,7 @@
                         <section class="tool-panel provider-settings-panel">
                             <div class="provider-settings-header">
                                 <div>
-                                    <h2 class="card-title">Grok Build Advanced Settings</h2>
+                                    <h2 class="card-title" data-provider-form-copy="advanced_settings" data-provider-name="Grok Build">Grok Build Advanced Settings</h2>
                                     <p class="card-copy provider-tool-copy">Configure the public OAuth client and authorization issuer used for Grok Build accounts.</p>
                                 </div>
                                 <div class="page-actions">
@@ -244,8 +244,8 @@
                                 <div class="skeleton-config-group"><div class="skeleton-line title"></div><div class="skeleton-line field"></div></div>
                             </div>
                             <div id="grokSettingsForm" class="config-grid provider-config-grid hidden">
-                                <div class="form-group"><label for="xaiClientId">OAuth client ID</label><input type="text" id="xaiClientId" autocomplete="off"></div>
-                                <div class="form-group"><label for="xaiOauthIssuer">OAuth issuer</label><input type="url" id="xaiOauthIssuer" autocomplete="off"></div>
+                                <div class="form-group"><label for="xaiClientId" data-provider-form-copy="oauth_client_id">OAuth client ID</label><input type="text" id="xaiClientId" autocomplete="off"></div>
+                                <div class="form-group"><label for="xaiOauthIssuer" data-provider-form-copy="oauth_issuer">OAuth issuer</label><input type="url" id="xaiOauthIssuer" autocomplete="off"></div>
                             </div>
                         </section>
                     </section>
@@ -264,7 +264,7 @@
 
                         <div class="provider-tools-grid">
                             <section class="tool-panel">
-                                <h2 class="card-title">SpaceXAI Console API Key</h2>
+                                <h2 class="card-title" data-provider-form-copy="api_key_title" data-provider-name="SpaceXAI Console">SpaceXAI Console API Key</h2>
                                 <p class="card-copy provider-tool-copy">Validate a SpaceXAI Console API key, discover its available models, and add it to the active pool.</p>
                                 <form id="xaiCredentialForm" autocomplete="off">
                                     <div class="form-group">
@@ -321,7 +321,7 @@
                         <section class="tool-panel provider-settings-panel">
                             <div class="provider-settings-header">
                                 <div>
-                                    <h2 class="card-title">Grok Build and SpaceXAI Console Transport Settings</h2>
+                                    <h2 class="card-title" data-provider-form-copy="advanced_settings" data-provider-name="Grok Build / SpaceXAI Console">Grok Build and SpaceXAI Console Transport Settings</h2>
                                     <p class="card-copy provider-tool-copy">Configure the API endpoint and HTTP identity shared by Grok Build OAuth accounts and SpaceXAI Console API keys.</p>
                                 </div>
                                 <div class="page-actions">
@@ -353,7 +353,7 @@
                         </div>
                         <div class="provider-tools-grid">
                         <section class="tool-panel">
-                            <h2 class="card-title">Google AI Studio API Key</h2>
+                            <h2 class="card-title" data-provider-form-copy="api_key_title" data-provider-name="Google AI Studio">Google AI Studio API Key</h2>
                             <p class="card-copy provider-tool-copy">Validate a Gemini API key and add it to the active provider pool.</p>
                             <form id="googleAiStudioCredentialForm" autocomplete="off">
                                 <div class="form-group">
@@ -414,7 +414,7 @@
                         <section class="tool-panel provider-advanced-panel">
                             <div class="provider-settings-header">
                                 <div>
-                                    <h2 class="card-title">Google AI Studio Advanced Settings</h2>
+                                    <h2 class="card-title" data-provider-form-copy="advanced_settings" data-provider-name="Google AI Studio">Google AI Studio Advanced Settings</h2>
                                     <p class="card-copy provider-tool-copy">Configure the upstream endpoint used to validate API keys and route Google AI Studio requests.</p>
                                 </div>
                                 <div class="page-actions">
@@ -427,7 +427,7 @@
                             </div>
                             <div id="googleAiStudioSettingsForm" class="provider-settings-grid provider-settings-grid-single hidden">
                                 <section class="provider-settings-group">
-                                    <h3>Upstream Endpoint</h3>
+                                    <h3 data-provider-form-copy="upstream_endpoint">Upstream Endpoint</h3>
                                     <p class="card-copy provider-tool-copy">Set the Google Generative Language API host used for validation and inference.</p>
                                     <div class="form-group">
                                         <label for="googleAiStudioApiUrl">Google AI Studio API</label>
@@ -491,7 +491,7 @@
                         <section class="tool-panel provider-settings-panel">
                             <div class="provider-settings-header">
                                 <div>
-                                    <h2 class="card-title">Codex Advanced Settings</h2>
+                                    <h2 class="card-title" data-provider-form-copy="advanced_settings" data-provider-name="Codex">Codex Advanced Settings</h2>
                                     <p class="card-copy provider-tool-copy">Configure authorization, inference, model discovery, and account quota services for Codex credentials.</p>
                                 </div>
                                 <div class="page-actions">
@@ -506,9 +506,9 @@
                             <div id="codexSettingsForm" class="provider-settings-grid provider-settings-grid-single hidden">
                                 <section class="provider-settings-group config-two-column">
                                     <div class="form-group"><label for="codexApiUrl">Codex API</label><input type="url" id="codexApiUrl" autocomplete="off"></div>
-                                    <div class="form-group"><label for="codexUsageUrl">Usage API</label><input type="url" id="codexUsageUrl" autocomplete="off"></div>
-                                    <div class="form-group"><label for="codexAuthBase">Authorization service</label><input type="url" id="codexAuthBase" autocomplete="off"></div>
-                                    <div class="form-group"><label for="codexClientId">OAuth client ID</label><input type="text" id="codexClientId" autocomplete="off"></div>
+                                    <div class="form-group"><label for="codexUsageUrl" data-provider-form-copy="usage_api">Usage API</label><input type="url" id="codexUsageUrl" autocomplete="off"></div>
+                                    <div class="form-group"><label for="codexAuthBase" data-provider-form-copy="authorization_service">Authorization service</label><input type="url" id="codexAuthBase" autocomplete="off"></div>
+                                    <div class="form-group"><label for="codexClientId" data-provider-form-copy="oauth_client_id">OAuth client ID</label><input type="text" id="codexClientId" autocomplete="off"></div>
                                     <div class="form-group"><label for="codexUserAgent">HTTP User-Agent</label><input type="text" id="codexUserAgent" autocomplete="off"></div>
                                 </section>
                             </div>
@@ -525,7 +525,7 @@
 
                         <div class="provider-tools-grid">
                             <section class="tool-panel">
-                                <h2 class="card-title">OpenAI Platform API Key</h2>
+                                <h2 class="card-title" data-provider-form-copy="api_key_title" data-provider-name="OpenAI Platform">OpenAI Platform API Key</h2>
                                 <p class="card-copy provider-tool-copy">Validate an API key against the model catalog, then add it to the active pool.</p>
                                 <form id="openaiPlatformCredentialForm" autocomplete="off"><div class="form-group"><label for="openaiPlatformApiKey">API key</label><input type="password" id="openaiPlatformApiKey" name="openai-platform-api-key" placeholder="Enter an OpenAI API key" autocomplete="one-time-code" data-1p-ignore data-lpignore="true" data-bwignore="true" autocapitalize="none" spellcheck="false" required></div><button type="submit" class="btn" id="addOpenaiPlatformKeyBtn">Validate and add</button></form>
                                 <div id="openaiPlatformSaveResult" class="save-result provider-save-result hidden"><div><strong id="openaiPlatformSaveResultTitle">API key added to pool</strong><p id="openaiPlatformSaveResultText"></p></div><button type="button" class="btn btn-secondary" data-ui-action="switch-tab" data-tab="pool">View</button></div>
@@ -545,7 +545,7 @@
                         <section class="tool-panel provider-settings-panel">
                             <div class="provider-settings-header">
                                 <div>
-                                    <h2 class="card-title">OpenAI Platform Advanced Settings</h2>
+                                    <h2 class="card-title" data-provider-form-copy="advanced_settings" data-provider-name="OpenAI Platform">OpenAI Platform Advanced Settings</h2>
                                     <p class="card-copy provider-tool-copy">Configure the API endpoint used for key validation, model discovery, and inference.</p>
                                 </div>
                                 <div class="page-actions">
@@ -721,7 +721,7 @@
                         <section class="tool-panel provider-advanced-panel">
                             <div class="provider-settings-header">
                                 <div>
-                                    <h2 class="card-title">Google Antigravity Advanced Settings</h2>
+                                    <h2 class="card-title" data-provider-form-copy="advanced_settings" data-provider-name="Google Antigravity">Google Antigravity Advanced Settings</h2>
                                     <p class="card-copy provider-tool-copy">Configure the OAuth client, upstream endpoints, protocol headers, and runtime behavior used by the Google Antigravity provider.</p>
                                 </div>
                                 <div class="page-actions">
@@ -738,14 +738,14 @@
 
                             <div id="antigravitySettingsForm" class="provider-settings-grid hidden">
                                 <section class="provider-settings-group">
-                                    <h3>OAuth Client</h3>
+                                    <h3 data-provider-form-copy="oauth_client">OAuth Client</h3>
                                     <p class="card-copy provider-tool-copy">Manage the OAuth application used for Google Antigravity authorization.</p>
                                     <div class="form-group"><label for="antigravityOauthClientId">Client ID</label><input type="text" id="antigravityOauthClientId" autocomplete="off" required><p class="form-help" id="antigravityOauthClientIdHelp" data-i18n="provider.form.client_id_help">Public OAuth application identifier.</p></div>
                                     <div class="form-group"><label for="antigravityOauthClientSecret">Client secret</label><input type="password" id="antigravityOauthClientSecret" autocomplete="new-password" data-1p-ignore data-lpignore="true" data-bwignore="true" required><p class="form-help" id="antigravityOauthClientSecretHelp" data-i18n="provider.form.client_secret_help">Stored provider setting; the value is masked in this form.</p></div>
                                 </section>
 
                                 <section class="provider-settings-group">
-                                    <h3>Upstream Endpoints</h3>
+                                    <h3 data-provider-form-copy="upstream_endpoints">Upstream Endpoints</h3>
                                     <p class="card-copy provider-tool-copy">Configure provider and Google API hosts used by Google Antigravity requests.</p>
                                     <div class="form-group"><label for="antigravityApiUrl">Google Antigravity API</label><input type="url" id="antigravityApiUrl" autocomplete="url" required><p class="form-help" id="antigravityApiUrlHelp" data-i18n="provider.form.endpoint_help">Use a complete HTTP or HTTPS URL.</p></div>
                                     <div class="form-group"><label for="antigravityOauthUrl">OAuth API</label><input type="url" id="antigravityOauthUrl" autocomplete="url" required><p class="form-help" id="antigravityOauthUrlHelp" data-i18n="provider.form.endpoint_help">Use a complete HTTP or HTTPS URL.</p></div>
@@ -755,12 +755,12 @@
                                 </section>
 
                                 <section class="provider-settings-group">
-                                    <h3>Protocol Behavior</h3>
+                                    <h3 data-provider-form-copy="protocol_behavior">Protocol Behavior</h3>
                                     <p class="card-copy provider-tool-copy">Tune headers, streaming conversion, and retry credential switching.</p>
                                     <div class="form-group"><label for="antigravityUserAgent">HTTP User-Agent</label><input type="text" id="antigravityUserAgent" autocomplete="off" autocapitalize="none" spellcheck="false" required><p class="form-help" id="antigravityUserAgentHelp" data-i18n="provider.form.user_agent_help">HTTP identity sent to the upstream provider.</p></div>
-                                    <div class="form-group"><label for="antigravityPayloadUserAgent">Payload user agent</label><input type="text" id="antigravityPayloadUserAgent" autocomplete="off" autocapitalize="none" spellcheck="false" required><p class="form-help" id="antigravityPayloadUserAgentHelp" data-i18n="provider.form.user_agent_help">HTTP identity sent to the upstream provider.</p></div>
-                                    <label class="switch-row"><input type="checkbox" id="antigravityStreamToNonstream" class="config-checkbox"><span>Collect streaming responses for non-stream clients</span></label>
-                                    <label class="switch-row" style="margin-top: 12px;"><input type="checkbox" id="antigravitySwitchCredential" class="config-checkbox"><span>Switch Google Antigravity credentials during retries</span></label>
+                                    <div class="form-group"><label for="antigravityPayloadUserAgent" data-provider-form-copy="payload_user_agent">Payload user agent</label><input type="text" id="antigravityPayloadUserAgent" autocomplete="off" autocapitalize="none" spellcheck="false" required><p class="form-help" id="antigravityPayloadUserAgentHelp" data-i18n="provider.form.user_agent_help">HTTP identity sent to the upstream provider.</p></div>
+                                    <label class="switch-row"><input type="checkbox" id="antigravityStreamToNonstream" class="config-checkbox"><span data-provider-form-copy="stream_to_nonstream">Collect streaming responses for non-stream clients</span></label>
+                                    <label class="switch-row" style="margin-top: 12px;"><input type="checkbox" id="antigravitySwitchCredential" class="config-checkbox"><span data-provider-form-copy="switch_credential">Switch Google Antigravity credentials during retries</span></label>
                                 </section>
                             </div>
                         </section>
