@@ -142,6 +142,15 @@ class AuditExportTests(unittest.IsolatedAsyncioTestCase):
                 max_bytes=10,
             )
 
+        csv_header_limited = _PagedService([])
+        with self.assertRaisesRegex(AuditExportLimitError, "byte limit"):
+            await build_audit_export(
+                csv_header_limited,
+                AuditQuery(),
+                export_format="csv",
+                max_bytes=10,
+            )
+
     async def test_export_rejects_unsupported_format_and_input_cursor(self):
         service = _PagedService([])
         with self.assertRaises(ValueError):

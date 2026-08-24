@@ -83,6 +83,18 @@ class AuditRouteTests(unittest.IsolatedAsyncioTestCase):
         paths = main.app.openapi()["paths"]
         self.assertIn("/api/audit/events", paths)
         self.assertIn("/api/audit/retention", paths)
+        self.assertEqual(
+            paths["/api/audit/events"]["get"]["responses"]["200"]["content"]["application/json"][
+                "schema"
+            ]["$ref"],
+            "#/components/schemas/AuditPageResponse",
+        )
+        self.assertEqual(
+            paths["/api/audit/retention"]["put"]["responses"]["200"]["content"]["application/json"][
+                "schema"
+            ]["$ref"],
+            "#/components/schemas/AuditRetentionUpdateResponse",
+        )
 
         transport = httpx.ASGITransport(app=main.app)
         async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:

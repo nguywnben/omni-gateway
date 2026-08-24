@@ -100,6 +100,52 @@ class AuditRetentionUpdateRequest(BaseModel):
         )
 
 
+class AuditEventResponse(BaseModel):
+    schema_version: int
+    event_id: str
+    occurred_at: str
+    request_id: str
+    actor_type: str
+    actor_fingerprint: str
+    action: str
+    target_type: str
+    target_fingerprint: str
+    outcome: str
+    change_codes: list[str]
+
+
+class AuditPageResponse(BaseModel):
+    events: list[AuditEventResponse]
+    next_cursor: str | None
+    page_size: int = Field(ge=1, le=200)
+    has_more: bool
+
+
+class AuditRetentionPolicyResponse(BaseModel):
+    retention_days: int
+    max_events: int
+
+
+class AuditLimitBoundsResponse(BaseModel):
+    minimum: int
+    maximum: int
+
+
+class AuditRetentionBoundsResponse(BaseModel):
+    retention_days: AuditLimitBoundsResponse
+    max_events: AuditLimitBoundsResponse
+
+
+class AuditRetentionReadResponse(BaseModel):
+    policy: AuditRetentionPolicyResponse
+    bounds: AuditRetentionBoundsResponse
+
+
+class AuditRetentionUpdateResponse(BaseModel):
+    policy: AuditRetentionPolicyResponse
+    removed_events: int = Field(ge=0)
+
+
 def _error(status_code: int, code: str, message: str) -> JSONResponse:
     return JSONResponse(
         status_code=status_code,
@@ -126,7 +172,7 @@ def _policy_record(policy: AuditRetentionPolicy) -> dict[str, int]:
     }
 
 
-@router.get("/events")
+@router.get("/events", response_model=AuditPageResponse)
 async def get_audit_events(
     params: Annotated[AuditQueryParams, Query()],
     token: str = Depends(verify_panel_token),
@@ -152,7 +198,7 @@ async def get_audit_events(
     )
 
 
-@router.get("/retention")
+@router.get("/retention", response_model=AuditRetentionReadResponse)
 async def get_audit_retention(token: str = Depends(verify_panel_token)):
     del token
     try:
@@ -233,7 +279,7 @@ async def export_audit_events(
     )
 
 
-@router.put("/retention")
+@router.put("/retention", response_model=AuditRetentionUpdateResponse)
 async def update_audit_retention(
     request: AuditRetentionUpdateRequest,
     token: str = Depends(verify_panel_token),

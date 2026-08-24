@@ -100,6 +100,8 @@ async def build_audit_export(
     event_count = 0
     if export_format == "csv":
         header = _csv_line(list(_EXPORT_COLUMNS))
+        if len(header) > max_bytes:
+            raise AuditExportLimitError("Audit export byte limit exceeded.")
         chunks.append(header)
         byte_count = len(header)
 

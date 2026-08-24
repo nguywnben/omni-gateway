@@ -159,6 +159,7 @@ class AuditServiceTests(unittest.IsolatedAsyncioTestCase):
                 with self.assertRaisesRegex(RuntimeError, "retention policy"):
                     await AuditService.create(storage)
                 self.assertEqual(storage.repositories, [])
+                self.assertEqual(storage.set_calls, [])
 
     async def test_retention_update_persists_policy_before_exact_prune(self):
         storage = _Storage()

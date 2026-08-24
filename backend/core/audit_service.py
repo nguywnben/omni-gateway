@@ -87,6 +87,9 @@ class AuditService:
 
     @classmethod
     async def create(cls, storage: Any) -> "AuditService":
+        retention_policy = _decode_retention_policy(
+            await storage.get_config(AUDIT_RETENTION_CONFIG, None)
+        )
         encoded_master = await storage.get_config(AUDIT_MASTER_KEY_CONFIG, None)
         if encoded_master is None:
             encoded_master = _encode_master_key(secrets.token_bytes(_MASTER_KEY_BYTES))
@@ -94,9 +97,6 @@ class AuditService:
                 raise RuntimeError("Unable to persist the audit master key.")
             encoded_master = await storage.get_config(AUDIT_MASTER_KEY_CONFIG, None)
         master_key = _decode_master_key(encoded_master)
-        retention_policy = _decode_retention_policy(
-            await storage.get_config(AUDIT_RETENTION_CONFIG, None)
-        )
         cursor_key = _derive_key(master_key, _CURSOR_DOMAIN)
         repository = await storage.create_audit_repository(
             cursor_signing_key=cursor_key,
