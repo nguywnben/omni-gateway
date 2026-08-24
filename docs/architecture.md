@@ -83,7 +83,11 @@ Actor and target identifiers become stable HMAC fingerprints before storage; sto
 allowlisted actions, outcomes, and change codes. Authenticated management routes provide bounded
 exact filters, signed opaque cursor pagination, policy-driven age/count retention, and formula-safe
 size-bounded JSONL/CSV export. Retention is persisted before pruning and is enforced after each
-append. The [audit API contract](audit-api.md) defines the public surface and safety limits.
+append. The Observability audit console revalidates this redacted response boundary before using
+text-only DOM rendering. It persists only category filters and page size; request IDs,
+fingerprints, time bounds, cursors, and event records remain session-only. Retention changes
+require explicit confirmation, and exports use the applied filter snapshot rather than draft form
+values. The [audit API contract](audit-api.md) defines the public surface and safety limits.
 Credential operation counters and latency histograms continue to use only fixed capability
 dimensions.
 
@@ -122,12 +126,13 @@ frontend/
     providers-and-models.css
     forms-and-data.css
     components.css
+    audit.css              Audit filters, event stream, detail dialog, and retention layout
     dialogs.css
     responsive.css         Breakpoint overrides loaded last
   js/
     core/                  Localization, navigation, state, and managers
     ui/                    Notifications, dialogs, API-key UI, and credential views
-    features/              Authentication, pool, models, providers, settings, and logs
+    features/              Authentication, audit, pool, models, providers, settings, and logs
 
 backend/core/panel/
   credentials.py          Credential HTTP routes

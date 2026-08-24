@@ -45,6 +45,9 @@ Phase 4 audit item or the Phase 5 request-trace item.
 - [x] W3.3 Cover every management mutation with correlated redacted audit evidence.
 - [x] W3.4 Add bounded audit query, retention, and export APIs.
 - [ ] W3.5 Build the localized audit operations console.
+  - Implementation complete at `9d581ae`; 15-locale/static/security gates pass. Real-browser
+    verification remains open because the in-app browser blocks loopback and no Chrome extension
+    connection is available in this task.
 - [ ] Checkpoint W3-A: audit durability, coverage, redaction, export, and browser gates pass.
 - [ ] W3.6 Add the backward-compatible scoped virtual-key model and pricing policy.
 - [ ] W3.7 Add atomic reserve/commit/release rate and budget enforcement.

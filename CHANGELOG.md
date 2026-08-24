@@ -4,6 +4,12 @@ All notable user-facing changes are documented in this file. Omni Gateway follow
 
 ## [Unreleased]
 
+### Added
+
+- Added a localized Audit surface under Observability with safe category filters, cursor
+  pagination, redacted event details, request-ID pivots, confirmed retention controls, and
+  bounded JSONL/CSV export.
+
 ## [1.4.0] - 2026-08-21
 
 ### Added
