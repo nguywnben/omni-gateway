@@ -31,8 +31,8 @@ number.
 | Wave | Phase coverage | Outcome | Status |
 | --- | --- | --- | --- |
 | 1 — Policy and console foundation | Phases 0–2 | Decisions, theme/i18n/navigation, governed AI Quality | Complete |
-| 2 — Credential operations | Phase 3 plus credential-scoped audit/telemetry foundations | Capability-correct provider and credential fleet | Awaiting approval |
-| 3 — Access and operational evidence | Phases 4–5 | Access governance, complete audit, traces, SLOs | Not started |
+| 2 — Credential operations | Phase 3 plus credential-scoped audit/telemetry foundations | Capability-correct provider and credential fleet | Complete |
+| 3 — Access and operational evidence | Phases 4–5 | Access governance, complete audit, traces, SLOs | In progress |
 | 4 — Identity and scale | Phase 6 | RBAC/OIDC, durable state, coordinated HA | Not started |
 | 5 — Production release | Phase 7 | Security/performance hardening and staged launch | Not started |
 
@@ -43,12 +43,12 @@ or Phase 5 request tracing.
 
 ## Current Approval Gate
 
-- Implementation baseline: commit `39fb9da` (`feat: record AI quality decision telemetry`).
-- Completed product scope: Phases 0–2.
-- Proposed next scope: Wave 2 only.
-- State: **PAUSED — human approval required before Wave 2 implementation**.
-- Out of scope until later approval: virtual-key governance, complete audit/trace consoles,
-  RBAC/OIDC, distributed state, multiple workers/replicas, and release activation.
+- Wave 2 completion checkpoint: commit `578fbb4` (`fix: complete provider form localization`).
+- Completed product scope: Phases 0–3.
+- Active approved scope: Wave 3 / Phases 4–5 only.
+- State: **IMPLEMENTING — WAVE 3**; approved by the human on 2026-08-24 after Wave 2 was pushed.
+- Out of scope until later approval: RBAC/OIDC, distributed-state activation, multiple
+  workers/replicas, destructive migration, and production release activation.
 
 ## Architecture Decisions
 
@@ -209,6 +209,160 @@ transport fields.
 Checkpoint W2-C closes Wave 2 only when Phase 3 acceptance passes end-to-end, all repository quality
 gates pass, the worktree is clean, the service restarts from the checkpoint commit, and the human
 accepts the completion report. Phase 4 and Phase 5 remain open except for their reusable foundations.
+
+## Wave 3 Execution Slices
+
+Wave 3 converts the partial in-memory evidence and virtual-key implementation into an enterprise
+access and operations plane. Audit precedes authorization changes; reservation semantics precede
+new key controls; bounded trace storage precedes the Observability UI. Each slice is additive and
+keeps the supported single-worker rollback path.
+
+### W3.1 — Audit event and repository contract
+
+Define the versioned append-only event schema, actor/action/target/outcome vocabularies, redacted
+change-summary boundary, query cursor contract, retention policy, and repository interface.
+
+- Acceptance: invalid or sensitive fields fail closed before crossing the repository boundary;
+  callers cannot update or delete individual events.
+- Verification: focused schema, redaction, immutability, cursor, and bounds tests fail before the
+  contract exists and pass after implementation.
+- Dependencies: ADR-006 and the W2.5 credential evidence vocabulary.
+- Likely files: audit domain module and focused tests.
+
+### W3.2 — Durable audit repositories
+
+Implement additive append/list/export/prune semantics for SQLite, PostgreSQL, and MongoDB without
+storing audit history inside the mutable configuration document.
+
+- Acceptance: ordering and cursor behavior match across backends; restart preserves events; prune
+  is policy-driven and never an individual-event mutation.
+- Verification: backend contract, migration, restart, rollback-note, and failure tests.
+- Dependencies: W3.1.
+- Likely files: storage protocol and three backend managers, migrations, focused tests.
+
+### W3.3 — Correlated management-mutation coverage
+
+Attach normalized actor and request context to login, configuration, provider, credential, key,
+policy, backup, and destructive mutations, then bridge W2 credential evidence into the audit
+repository without duplicate events.
+
+- Acceptance: the mutation matrix emits exactly one attributable, redacted event for success and
+  failure paths, including idempotent retries.
+- Verification: management-route mutation matrix, request-ID, actor, redaction, and outage tests.
+- Dependencies: W3.2.
+- Likely files: request context/middleware, panel mutation hooks, audit service, tests.
+
+### W3.4 — Audit query, retention, and export API
+
+Expose authenticated, bounded filtering by time/action/target/outcome/actor/request ID, opaque
+cursor pagination, retention configuration, and streaming JSONL/CSV export.
+
+- Acceptance: exports are formula-safe, secret-free, size-bounded, and consistent with filters;
+  retention cannot silently erase events outside policy.
+- Verification: API contract, tamper, pagination, export-injection, redaction, and limit tests.
+- Dependencies: W3.3.
+- Likely files: audit panel routes/models, retention service, export tests.
+
+### W3.5 — Audit operations console
+
+Add an Audit surface under Observability with saved-safe filters, event detail, request-ID pivot,
+retention visibility, and bounded export controls.
+
+- Acceptance: operators can investigate every management mutation without prompt, credential, or
+  plaintext-key content reaching the DOM.
+- Verification: 15-locale, desktop/mobile, keyboard, accessibility, console/network, and secret-
+  lifetime browser checks.
+- Dependencies: W3.4.
+- Likely files: Observability fragment/features/CSS/locales and frontend tests.
+
+Checkpoint W3-A follows W3.1–W3.5: complete management mutation coverage, durable audit parity,
+redaction, retention, export, API, and browser gates pass before key governance expands.
+
+### W3.6 — Backward-compatible scoped virtual-key model
+
+Add inference-protocol and management read/write scopes, explicit unknown-pricing policy, status,
+last-used metadata, model-pattern validation, and versioned migration of existing keys.
+
+- Acceptance: existing keys preserve current inference access; new keys default to least privilege;
+  unknown or malformed scopes fail closed.
+- Verification: migration, compatibility, scope matrix, pricing-policy, and malformed-input tests.
+- Dependencies: W3-A.
+- Likely files: virtual-key domain/routes/auth and focused tests.
+
+### W3.7 — Reservation-aware rate and budget enforcement
+
+Extend the state-store semantic boundary with atomic reserve/commit/release operations for RPM,
+TPM, and estimated/actual cost in the supported single-worker implementation.
+
+- Acceptance: concurrent requests cannot knowingly exceed a hard limit; cancellations and provider
+  failures release reservations; unknown pricing follows deny/warn/fallback policy.
+- Verification: concurrency, cancellation, retry, expiry, reconciliation, and overspend tests.
+- Dependencies: W3.6 and ADR-006.
+- Likely files: state-store contract, virtual-key enforcement, usage integration, tests.
+
+### W3.8 — Safe key lifecycle
+
+Add revoke, rotate, one-time reveal, last-used/usage summaries, and optimistic concurrency while
+retaining hashed-at-rest secrets and stable existing routes.
+
+- Acceptance: plaintext is returned only by create/rotate and cannot be recovered later; stale
+  updates conflict; lifecycle actions are audited.
+- Verification: API compatibility, plaintext lifetime, race, replay, and audit tests.
+- Dependencies: W3.7.
+- Likely files: virtual-key domain/routes, audit hooks, tests.
+
+### W3.9 — Complete Access page
+
+Build virtual-key list/create/edit/rotate/revoke flows with scopes, budgets, rate limits, expiry,
+model patterns, status, usage, explicit unknown-pricing policy, and one-time reveal dismissal.
+
+- Acceptance: root guidance and the whole virtual-key lifecycle work without persisting plaintext
+  in browser storage or retaining it in the DOM after dismissal.
+- Verification: desktop/mobile, theme, 15-locale, keyboard/accessibility, console/network, and
+  secret-lifetime browser tests.
+- Dependencies: W3.8.
+- Likely files: Access fragment/features/CSS/locales and frontend tests.
+
+Checkpoint W3-B follows W3.6–W3.9: scope, budget/rate concurrency, compatibility, audit, and Access
+browser matrices pass before request tracing begins.
+
+### W3.10 — Bounded request decision trace
+
+Define and persist allowlisted trace summaries for routing attempts, fallback, retry, cooldown,
+compression, guardrails, cache, tokens, cost, latency, and outcome without request content.
+
+- Acceptance: one request ID explains the decision path across supported protocols and failures;
+  trace retention is bounded and independent from raw logs.
+- Verification: protocol/failure matrix, redaction, retention, cardinality, and restart tests.
+- Dependencies: W3-B.
+- Likely files: trace domain/repository, gateway hooks, storage backends, tests.
+
+### W3.11 — Trace search and raw-log separation
+
+Evolve Logs into Observability with trace search/detail, request-ID pivots, safe export, and a
+visually and semantically separate bounded raw-log viewer.
+
+- Acceptance: on-call can answer routing and failure questions from traces while raw logs remain
+  explicitly diagnostic and redacted.
+- Verification: API/browser/filter/export, websocket security, locale, and accessibility tests.
+- Dependencies: W3.10.
+- Likely files: observability routes/fragments/features/CSS/locales and tests.
+
+### W3.12 — SLOs, health views, exporters, and runbooks
+
+Add low-cardinality RED signals, provider/model-route health, budget/quota exhaustion views,
+Prometheus/OpenTelemetry export controls, symptom-based alert rules, and linked runbooks.
+
+- Acceptance: operators can answer rate/error/duration and exhaustion questions without
+  high-cardinality metric labels or externally enabled telemetry by default.
+- Verification: metric contract/cardinality, induced-failure, exporter-disabled-default, alert,
+  dashboard, and runbook-link tests.
+- Dependencies: W3.11.
+- Likely files: metrics/telemetry, health APIs/UI, deployment rules, runbooks, tests.
+
+Checkpoint W3-C closes Wave 3 only when Phase 4–5 acceptance passes end-to-end, all repository
+quality gates pass, the committed service restarts cleanly, and the human accepts the completion
+report. Phase 6 remains unapproved and multi-worker/multi-replica mode remains disabled.
 
 ## Phase 0: Baseline and Decision Records
 

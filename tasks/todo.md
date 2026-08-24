@@ -6,8 +6,8 @@
 
 ## Current Execution Gate
 
-- Program progress: 10/28 original checklist items complete (including specification approval),
-  approximately 36%. Wave execution-slice checkboxes below refine existing phase items and do not
+- Program progress: 14/28 original checklist items complete (including specification approval),
+  exactly 50%. Wave execution-slice checkboxes below refine existing phase items and do not
   change that denominator.
 - [x] Complete Wave 1 / Phases 0–2 at implementation commit `39fb9da`.
 - [x] Record wave governance, recovery order, and the Wave 2 execution slices in repository docs.
@@ -31,10 +31,34 @@
 - [x] W2.10 Correct Google-family provider forms and flows.
 - [x] W2.11 Correct OpenAI, xAI, Anthropic, and Ollama forms and flows.
 - [x] Checkpoint W2-C: Phase 3 acceptance and all repository quality gates pass.
-- [ ] Report Wave 2 evidence and obtain human acceptance before Wave 3.
+- [x] Report Wave 2 evidence and obtain human acceptance before Wave 3.
+  - Accepted: 2026-08-24 after commit `578fbb4` was pushed to
+    `origin/codex/enterprise-overhaul`.
 
 These queue items refine Phase 3. W2.5 is a reusable foundation only: it does not complete the
 Phase 4 audit item or the Phase 5 request-trace item.
+
+## Wave 3 — Access and Operational Evidence Execution Queue
+
+- [ ] W3.1 Define the versioned append-only audit event and repository contract.
+- [ ] W3.2 Implement durable audit repositories for SQLite, PostgreSQL, and MongoDB.
+- [ ] W3.3 Cover every management mutation with correlated redacted audit evidence.
+- [ ] W3.4 Add bounded audit query, retention, and export APIs.
+- [ ] W3.5 Build the localized audit operations console.
+- [ ] Checkpoint W3-A: audit durability, coverage, redaction, export, and browser gates pass.
+- [ ] W3.6 Add the backward-compatible scoped virtual-key model and pricing policy.
+- [ ] W3.7 Add atomic reserve/commit/release rate and budget enforcement.
+- [ ] W3.8 Add audited revoke, rotate, one-time reveal, last-used, and conflict semantics.
+- [ ] W3.9 Complete the Access page virtual-key lifecycle.
+- [ ] Checkpoint W3-B: scope, concurrency, compatibility, audit, and Access gates pass.
+- [ ] W3.10 Persist bounded redacted request decision traces.
+- [ ] W3.11 Build trace search/detail and keep raw logs separate.
+- [ ] W3.12 Add SLOs, health views, safe exporters, alert rules, and runbooks.
+- [ ] Checkpoint W3-C: Phase 4–5 acceptance and all repository quality gates pass.
+- [ ] Report Wave 3 evidence and obtain human acceptance before Wave 4.
+
+These queue items refine Phases 4–5 and do not add to the 28-item program denominator. Phase 6,
+distributed activation, multiple workers/replicas, and release activation remain unapproved.
 
 ## Phase 0 — Decisions
 

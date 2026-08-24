@@ -5,19 +5,21 @@
 - Updated: 2026-08-24 (Asia/Saigon).
 - Branch: `codex/enterprise-overhaul`.
 - Implementation baseline: `39fb9da feat: record AI quality decision telemetry`.
-- Completed scope: Wave 1 / Phases 0–2.
+- Completed scope: Waves 1–2 / Phases 0–3.
 - Original program progress: 14/28 approved checklist items complete (including specification
   approval), exactly 50%; Wave 2 execution-slice checkboxes are refinements and are not added
   to that denominator.
-- Active scope: Wave 2 — Credential Operations.
-- Control state: **AWAITING HUMAN ACCEPTANCE — WAVE 2**.
-- Expected worktree state at this checkpoint: clean after the final W2-C checkpoint commit.
+- Active scope: Wave 3 — Access and Operational Evidence; W3.1 audit contract is next.
+- Control state: **IMPLEMENTING — WAVE 3**.
+- Expected worktree state at this checkpoint: documentation changes for Wave 3 planning, followed
+  by the focused W3.1 implementation.
 - Expected runtime: one Omni Gateway listener on `http://127.0.0.1:4283`; `/health` and `/ready`
   return HTTP 200.
 - Last verified full suite: 534 tests passed; Ruff, compileall, all JavaScript syntax, and
   diff-check passed.
 
-Wave 2 was approved by the human on 2026-08-24. Do not expand beyond its documented scope.
+Wave 2 was accepted and pushed by the human on 2026-08-24. Wave 3 / Phases 4–5 was approved for
+implementation on the same date. Do not expand into Phase 6 or release activation.
 
 ## Authoritative Reading Order
 
@@ -118,7 +120,7 @@ silently choosing a new design.
 
 - Everything checked in Phases 0–2 of `tasks/todo.md`.
 
-### Approved and active
+### Approved and complete
 
 - Wave 2 slices W2.1–W2.11 in `tasks/plan.md`.
 - Phase 3 completion: provider capability contract, safe single/batch operations, fleet filtering,
@@ -126,32 +128,42 @@ silently choosing a new design.
 - Minimal credential-scoped audit and operation telemetry foundations required to make new batch
   mutations diagnosable and safe.
 
+### Approved and active
+
+- Wave 3 slices W3.1–W3.12 in `tasks/plan.md`.
+- Phase 4: complete audit coverage, durable audit storage, virtual-key governance, reservation-
+  aware enforcement, and the Access lifecycle.
+- Phase 5: bounded request traces, Observability separation, health/SLO views, safe exporters,
+  alert rules, and runbooks.
+
 ### Explicitly not approved yet
 
-- Full Phase 4 audit coverage and virtual-key governance.
-- Full Phase 5 request traces, Observability console, SLOs, and alerting.
 - Phase 6 RBAC/OIDC, Redis coordination, durable HA migration, or multiple workers/replicas.
 - Phase 7 release activation, production deployment, or destructive migration.
 
 Foundations borrowed from Phase 4 or Phase 5 remain partial and must not cause those phase
 checkboxes to be marked complete.
 
-## Wave 2 Checkpoint Protocol
+## Wave 3 Checkpoint Protocol
 
-1. W2-A: capability contract, single/batch operation service, preview, redacted evidence.
-2. W2-B: faceted backend query, persistent selection/filter UX, contextual operation toolbar.
-3. W2-C: shared provider form contract and all provider-family corrections.
+1. W3-A: append-only audit contract, durable repositories, full mutation coverage, query/export,
+   and audit console.
+2. W3-B: scoped virtual keys, atomic rate/budget reservations, safe lifecycle, and Access page.
+3. W3-C: bounded request traces, trace/raw-log separation, health/SLOs, exporters, alerts, and
+   runbooks.
 4. At each checkpoint: focused tests, full regression tests, Ruff/compile/JS/i18n gates, diff and
    secret review, atomic commit, clean worktree, and runtime smoke when applicable.
 5. Browser-facing checkpoints require 360/768/1024/1440 widths, light/dark/system themes,
    representative locales, keyboard/accessibility verification, and clean console/network.
-6. At the Wave 2 boundary: restart from the committed checkpoint, verify health, report evidence,
-   and pause for human acceptance before Wave 3.
+6. At the Wave 3 boundary: restart from the committed checkpoint, verify health, report evidence,
+   and pause for human acceptance before Wave 4.
 
 ## Immediate Next Action
 
-Report the completed Wave 2 evidence and wait for explicit human acceptance. Do not start Wave 3 or
-mark its scope approved until that acceptance is recorded.
+Implement W3.1 with a failing focused test first: define the versioned append-only audit event,
+redaction boundary, bounded query/cursor semantics, retention policy, and repository interface.
+Do not add runtime mutation hooks or durable backend implementations until the W3.1 contract passes
+and is committed.
 
 ## Update Rule
 
