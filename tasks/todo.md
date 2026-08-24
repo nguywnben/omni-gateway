@@ -41,7 +41,7 @@ Phase 4 audit item or the Phase 5 request-trace item.
 ## Wave 3 — Access and Operational Evidence Execution Queue
 
 - [x] W3.1 Define the versioned append-only audit event and repository contract.
-- [ ] W3.2 Implement durable audit repositories for SQLite, PostgreSQL, and MongoDB.
+- [x] W3.2 Implement durable audit repositories for SQLite, PostgreSQL, and MongoDB.
 - [ ] W3.3 Cover every management mutation with correlated redacted audit evidence.
 - [ ] W3.4 Add bounded audit query, retention, and export APIs.
 - [ ] W3.5 Build the localized audit operations console.

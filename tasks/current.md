@@ -4,20 +4,20 @@
 
 - Updated: 2026-08-24 (Asia/Saigon).
 - Branch: `codex/enterprise-overhaul`.
-- Implementation baseline: `39fb9da feat: record AI quality decision telemetry`.
-- Completed scope: Waves 1–2 / Phases 0–3.
+- Implementation baseline: `55dfce4 feat: connect audit repositories to storage backends`.
+- Completed scope: Waves 1–2 / Phases 0–3, plus Wave 3 slices W3.1–W3.2.
 - Original program progress: 14/28 approved checklist items complete (including specification
   approval), exactly 50%; Wave 2 execution-slice checkboxes are refinements and are not added
   to that denominator.
-- Active scope: Wave 3 — Access and Operational Evidence; W3.2 durable repositories are next.
+- Active scope: Wave 3 — Access and Operational Evidence; W3.3 mutation coverage is next.
 - Control state: **IMPLEMENTING — WAVE 3**.
-- Expected worktree state at this checkpoint: clean after the W3.1 contract commit.
+- Expected worktree state at this checkpoint: clean after the W3.2 documentation commit.
 - Expected runtime: one Omni Gateway listener on `http://127.0.0.1:4283`; `/health` and `/ready`
   return HTTP 200.
-- Last verified full suite: 542 tests passed; Ruff check, compileall, focused W3.1 format, and
+- Last verified full suite: 562 tests passed; Ruff check, compileall, focused W3.2 format, and
   diff-check passed. The repository-wide format check still reports 16 pre-existing Wave 2 files
-  that differ from the currently installed Ruff formatter; they remain untouched to keep the W3.1
-  commit atomic.
+  that differ from the currently installed Ruff formatter; they remain isolated from the W3.2
+  implementation commits.
 
 Wave 2 was accepted and pushed by the human on 2026-08-24. Wave 3 / Phases 4–5 was approved for
 implementation on the same date. Do not expand into Phase 6 or release activation.
@@ -121,6 +121,16 @@ silently choosing a new design.
   driven prune only—never individual update/delete. Two RED cycles proved the missing module and
   direct-construction redaction bypass before implementation; 8 focused tests and all 542 tests
   passed.
+- W3.2 evidence: additive, append-only audit repositories now exist for SQLite (`c722f9b`),
+  PostgreSQL (`343903d`), and MongoDB (`bdf766f`). All three enforce unique event IDs, stable
+  newest-first ordering, exact bounded filters, signed cursor pagination, strict stored-record
+  revalidation, and policy-only age/count pruning. SQL writes and filters are parameterized;
+  PostgreSQL prunes transactionally; MongoDB deliberately has no TTL index so records cannot be
+  deleted outside the explicit retention policy. Commit `55dfce4` exposes the selected repository
+  through the existing storage adapter without persisting its cursor-signing key. Backend parity,
+  restart persistence, UTC boundaries, duplicate normalization, corrupted-record failure, and
+  uninitialized fail-closed behavior are covered; all 562 tests passed with Ruff and compileall
+  clean.
 
 ## Approved vs. Proposed Scope
 
@@ -168,10 +178,11 @@ checkboxes to be marked complete.
 
 ## Immediate Next Action
 
-Implement W3.2 incrementally against the committed W3.1 contract: add backend contract tests first,
-then SQLite, PostgreSQL, and MongoDB append/query/policy-prune implementations with additive schema
-initialization and restart/order/cursor parity. Do not add runtime mutation hooks until W3.2 passes
-and is committed.
+Implement W3.3 incrementally against the committed W3.2 repositories: define the management-
+mutation coverage matrix first, add one fail-closed audit service boundary with request/actor
+correlation, then instrument every authenticated management mutation with redacted success and
+failure evidence. Do not add query/export routes or the audit console until W3.3 passes and is
+committed.
 
 ## Update Rule
 
