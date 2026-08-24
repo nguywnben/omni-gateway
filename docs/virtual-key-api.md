@@ -1,0 +1,81 @@
+# Virtual-Key Management API
+
+Virtual keys provide independently revocable, hashed-at-rest credentials for inference clients and
+explicitly authorized management automation. The plaintext credential is returned only when a key
+is created. List, update, usage, and delete responses never expose it.
+
+## Authentication and scope model
+
+Inference routes accept a virtual key through the same SDK-compatible credential locations as the
+root integration key. Management routes accept either the browser panel session, the legacy signed
+Bearer session, or a virtual key in the `Authorization: Bearer <virtual-key>` header. Virtual keys
+are not accepted from management query parameters or cookies.
+
+Supported scopes are closed and versioned by the server:
+
+| Scope | Permission |
+| --- | --- |
+| `inference:openai` | OpenAI-compatible inference and model routes |
+| `inference:anthropic` | Anthropic-compatible inference routes |
+| `inference:gemini` | Gemini-compatible inference routes |
+| `management:read` | Safe management methods: `GET`, `HEAD`, and `OPTIONS` |
+| `management:write` | Management mutation methods; requires `management:read` |
+
+New keys default to the three inference scopes and no management access. This is least privilege
+for the existing inference-key purpose while preserving the create API's prior behavior. Callers
+must explicitly request management scopes. An unknown, empty, malformed, or internally inconsistent
+scope set is rejected; authorization never treats an unknown scope as a wildcard.
+
+Successful inference and management authentication updates `last_used_at` at most once per minute.
+Management mutations performed by a virtual key are attributed to its stable key ID before the
+audit service converts that identifier to a non-reversible fingerprint.
+
+## Record contract and migration
+
+Stored records use `schema_version: 2`. Existing unversioned keys migrate to version 2 with all
+three inference scopes, preserving their previous inference access and adding no management access.
+The migration writes only when every stored record is valid; a malformed record or unknown future
+schema version fails closed and prevents a partial rewrite that could discard data.
+
+Public records contain:
+
+- `schema_version`, stable `id`, `name`, and masked `key_preview`;
+- `enabled`, derived `status` (`active`, `disabled`, or `expired`), `created_at`, `expires_at`, and
+  `last_used_at`;
+- daily/monthly USD budgets and RPM/TPM limits;
+- bounded `allowed_models` patterns and ordered `scopes`;
+- `unknown_pricing_policy` and optional `fallback_price_usd_per_million`.
+
+Model patterns use a bounded safe glob subset: letters, digits, `.`, `_`, `:`, `/`, `+`, `*`, `?`,
+and `-`. Each pattern is at most 128 characters, at most 64 patterns are accepted, and bracket
+classes or other regex-like syntax are rejected. Matching is case-insensitive.
+
+## Unknown-pricing policy
+
+Every key declares one of these policies:
+
+| Policy | Contract |
+| --- | --- |
+| `deny` | Fail closed when an enforceable price is unavailable; default for new and migrated keys |
+| `warn` | Permit with explicit unknown-pricing telemetry |
+| `fallback` | Use the positive configured fallback price per one million tokens |
+
+Fallback prices are valid only with `fallback`, must be positive, and cannot exceed 100,000 USD per
+one million tokens. W3.6 persists and validates this policy. Atomic price reservation and runtime
+deny/warn/fallback enforcement belong to W3.7; operators must not interpret W3.6 metadata alone as
+a concurrency-safe spending guarantee.
+
+## Management routes
+
+| Method and route | Required virtual-key scope | Behavior |
+| --- | --- | --- |
+| `GET /api/virtual-keys` | `management:read` | List public records |
+| `POST /api/virtual-keys` | `management:write` | Create and reveal plaintext once |
+| `PATCH /api/virtual-keys/{key_id}` | `management:write` | Update supplied fields |
+| `DELETE /api/virtual-keys/{key_id}` | `management:write` | Delete the record |
+| `GET /api/virtual-keys/{key_id}/usage` | `management:read` | Read key-attributed usage |
+
+Create accepts all public policy fields except server-owned identity, status, timestamps, preview,
+and usage metadata. Update is partial. Domain validation failures return HTTP 400; a missing key
+returns HTTP 404. Lifecycle-safe rotation, one-time reveal dismissal semantics, optimistic
+concurrency, and audited revoke/rotate workflows are intentionally delivered in W3.8.

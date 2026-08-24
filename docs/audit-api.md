@@ -6,8 +6,10 @@ prompt content. SQLite, PostgreSQL, and MongoDB use the same repository contract
 
 ## Authentication and errors
 
-All routes require the existing panel session cookie or legacy bearer session token. Credentials
-are never accepted in query parameters. Audit-specific handled errors use the management envelope:
+All routes require the existing panel session cookie, a legacy bearer session token, or a virtual
+key with the required management read/write scope. Virtual keys are accepted only through the
+Bearer header; credentials are never accepted in query parameters. Audit-specific handled errors
+use the management envelope:
 
 ```json
 {"error":{"code":"audit_query_invalid","message":"The audit query contains an invalid filter or cursor."}}

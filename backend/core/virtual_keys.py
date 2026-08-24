@@ -85,9 +85,7 @@ def _int_or_none(value: Any) -> Optional[int]:
     return parsed if parsed > 0 else None
 
 
-def normalize_virtual_key_scopes(
-    value: Any, *, legacy_default: bool = False
-) -> Tuple[str, ...]:
+def normalize_virtual_key_scopes(value: Any, *, legacy_default: bool = False) -> Tuple[str, ...]:
     if value is None and legacy_default:
         return DEFAULT_INFERENCE_SCOPES
     if not isinstance(value, (list, tuple)):
@@ -123,9 +121,7 @@ def normalize_model_patterns(value: Any) -> List[str]:
     return normalized
 
 
-def normalize_unknown_pricing_policy(
-    policy: Any, fallback: Any
-) -> Tuple[str, Optional[float]]:
+def normalize_unknown_pricing_policy(policy: Any, fallback: Any) -> Tuple[str, Optional[float]]:
     normalized_policy = str(policy or "deny").strip().lower()
     if normalized_policy not in UNKNOWN_PRICING_POLICIES:
         raise ValueError("Unknown pricing policy must be deny, warn, or fallback.")
@@ -209,9 +205,7 @@ class VirtualKey:
         if not is_legacy and raw_version != VIRTUAL_KEY_SCHEMA_VERSION:
             return None
         try:
-            scopes = normalize_virtual_key_scopes(
-                raw.get("scopes"), legacy_default=is_legacy
-            )
+            scopes = normalize_virtual_key_scopes(raw.get("scopes"), legacy_default=is_legacy)
             allowed_models = normalize_model_patterns(raw.get("allowed_models") or [])
             pricing_policy, fallback_price = normalize_unknown_pricing_policy(
                 raw.get("unknown_pricing_policy"),
@@ -413,9 +407,7 @@ class VirtualKeyManager:
             if record is None:
                 return None
             normalized_scopes = (
-                normalize_virtual_key_scopes(patch.get("scopes"))
-                if "scopes" in patch
-                else None
+                normalize_virtual_key_scopes(patch.get("scopes")) if "scopes" in patch else None
             )
             normalized_models = (
                 normalize_model_patterns(patch.get("allowed_models"))

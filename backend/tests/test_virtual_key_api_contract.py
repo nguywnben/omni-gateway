@@ -18,6 +18,7 @@ from core.panel.virtual_keys import (
 )
 from core.utils import authenticate_flexible
 from core.virtual_keys import DEFAULT_INFERENCE_SCOPES, VirtualKey
+from main import app
 from pydantic import ValidationError
 from starlette.requests import Request
 
@@ -38,6 +39,14 @@ def _request(path: str, *, method: str = "GET") -> Request:
 
 
 class VirtualKeyRequestModelTests(unittest.TestCase):
+    def test_openapi_create_contract_exposes_scope_and_pricing_policy(self):
+        schema = app.openapi()
+        request_schema = schema["components"]["schemas"]["CreateVirtualKeyRequest"]
+
+        self.assertIn("scopes", request_schema["properties"])
+        self.assertIn("unknown_pricing_policy", request_schema["properties"])
+        self.assertIn("fallback_price_usd_per_million", request_schema["properties"])
+
     def test_create_contract_defaults_to_inference_only(self):
         payload = CreateVirtualKeyRequest(name="automation")
 

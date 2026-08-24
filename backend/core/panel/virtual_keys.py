@@ -73,9 +73,7 @@ class UpdateVirtualKeyRequest(BaseModel):
     rpm_limit: Optional[int] = Field(default=None, ge=0)
     tpm_limit: Optional[int] = Field(default=None, ge=0)
     expires_at: Optional[float] = Field(default=None, ge=0)
-    allowed_models: Optional[List[str]] = Field(
-        default=None, max_length=MAX_MODEL_PATTERNS
-    )
+    allowed_models: Optional[List[str]] = Field(default=None, max_length=MAX_MODEL_PATTERNS)
     scopes: Optional[List[str]] = Field(default=None, min_length=1, max_length=5)
     unknown_pricing_policy: Optional[str] = None
     fallback_price_usd_per_million: Optional[float] = Field(

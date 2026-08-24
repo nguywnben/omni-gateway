@@ -4,17 +4,18 @@
 
 - Updated: 2026-08-24 (Asia/Saigon).
 - Branch: `codex/enterprise-overhaul`.
-- Implementation baseline: `9d581ae feat: add audit operations console`.
-- Completed scope: Waves 1–2 / Phases 0–3 and Wave 3 checkpoint W3-A (W3.1–W3.5).
+- Implementation baseline: `f8513cf feat: enforce scoped virtual-key access`.
+- Completed scope: Waves 1–2 / Phases 0–3, Wave 3 checkpoint W3-A, and W3.6.
 - Original program progress: 15/28 approved checklist items complete (including specification
   approval), approximately 53.6%; wave execution-slice checkboxes are refinements and are not
   added to that denominator.
-- Active scope: Wave 3 — Access and Operational Evidence; W3.6 scoped virtual-key model is next.
-- Control state: **READY — W3.6**.
-- Expected worktree state at this checkpoint: clean after the W3-A closure commit.
+- Active scope: Wave 3 — Access and Operational Evidence; W3.7 reservation-aware enforcement is
+  next.
+- Control state: **READY — W3.7**.
+- Expected worktree state at this checkpoint: clean after the W3.6 closure commit.
 - Expected runtime: one Omni Gateway listener on `http://127.0.0.1:4283`; `/health` and `/ready`
   return HTTP 200.
-- Last verified full suite: 603 tests passed; Ruff lint/format, compileall, pip dependency
+- Last verified full suite: 623 tests passed; Ruff lint/format, compileall, pip dependency
   consistency, pip-audit, all 38 JavaScript syntax checks, and diff-check passed. The 14 remaining
   Wave 2 formatter differences were normalized mechanically in commit `1abbb15`; the repository-
   wide formatter gate is now clean. Runtime `/audit`, `/health`, and `/ready` return HTTP 200.
@@ -177,6 +178,16 @@ silently choosing a new design.
   control had an accessible name, every `aria-labelledby` relationship resolved, and the Audit DOM
   contained no password/secret-named inputs or recognized key-like plaintext. W3.5 and W3-A are
   complete; the original Phase 4 append-only audit item is also complete.
+- W3.6 evidence: commits `1bb6596` and `f8513cf` add schema-version-2 virtual-key records,
+  backward-compatible migration, protocol-specific inference and explicit management scopes,
+  fail-closed scope and model-pattern validation, status/last-used metadata, and bounded unknown-
+  pricing policy. Existing unversioned keys retain all prior inference access and gain no
+  management permission; new keys default to inference-only access. Scoped management Bearer keys
+  are separated into read/write methods and management audit evidence is attributed to the stable
+  key ID before fingerprinting. The maintained contract is `docs/virtual-key-api.md`. All 623 tests,
+  Ruff lint/format, compileall, pip consistency, vulnerability audit, 38 JavaScript syntax checks,
+  and diff-check pass. W3.7 reservation enforcement, W3.8 lifecycle concurrency, and W3.9 UI remain
+  intentionally open.
 
 ## Approved vs. Proposed Scope
 
@@ -224,11 +235,11 @@ checkboxes to be marked complete.
 
 ## Immediate Next Action
 
-Begin W3.6 with tests for versioned migration and backward compatibility of existing virtual keys,
-then add inference-protocol and management read/write scopes, least-privilege defaults for new keys,
-explicit unknown-pricing policy, status/last-used metadata, and bounded model-pattern validation.
-Keep existing inference access unchanged during migration and fail closed on unknown or malformed
-scope values. Do not begin reservation enforcement (W3.7) until W3.6 is independently committed.
+Begin W3.7 with RED concurrency tests around the state-store boundary, then implement atomic
+reserve/commit/release for RPM, TPM, and estimated/actual cost in the supported single-worker
+runtime. Cancellation and provider failure must release reservations, reconciliation must be
+bounded, and the W3.6 deny/warn/fallback policy must determine unknown-price behavior. Do not begin
+W3.8 rotate/revoke concurrency semantics until W3.7 is independently committed.
 
 ## Update Rule
 

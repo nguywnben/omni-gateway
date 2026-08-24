@@ -91,6 +91,14 @@ values. The [audit API contract](audit-api.md) defines the public surface and sa
 Credential operation counters and latency histograms continue to use only fixed capability
 dimensions.
 
+Virtual keys use a versioned, fail-closed record contract with hashed-at-rest secrets. Protocol-
+specific inference scopes are separate from management read/write scopes; existing unversioned
+keys migrate with their prior inference access and no management permission. Bounded model globs,
+expiry/status, throttled last-used metadata, and explicit unknown-pricing policy are part of the
+record boundary. Request-scoped key attribution prevents management automation from being audited
+as the browser owner. The [virtual-key API contract](virtual-key-api.md) defines the supported
+scope matrix, migration behavior, and the reservation-enforcement boundary.
+
 `WORKERS=1` and one application replica are the supported process model for the 1.x series. MongoDB and PostgreSQL can replace local SQLite storage, but shared storage alone does not coordinate reservations, cooldowns, sessions, or usage aggregation across workers. The service rejects `WORKERS` values other than `1` instead of presenting an unsafe scale-out configuration as supported.
 
 The Render Blueprint deliberately uses a paid persistent disk. Free Render services have ephemeral filesystems and are not suitable for durable credential storage.

@@ -188,9 +188,7 @@ class PanelSessionCookieTests(unittest.IsolatedAsyncioTestCase):
                 "core.virtual_keys.virtual_key_manager.verify",
                 new=AsyncMock(return_value=record),
             ) as verify,
-            patch(
-                "core.virtual_keys.virtual_key_manager.authorize_management"
-            ) as authorize,
+            patch("core.virtual_keys.virtual_key_manager.authorize_management") as authorize,
             patch(
                 "core.virtual_keys.virtual_key_manager.note_last_used",
                 new=AsyncMock(),
@@ -220,9 +218,7 @@ class PanelSessionCookieTests(unittest.IsolatedAsyncioTestCase):
                 "core.virtual_keys.virtual_key_manager.verify",
                 new=AsyncMock(return_value=record),
             ),
-            patch(
-                "core.virtual_keys.virtual_key_manager.authorize_management"
-            ) as authorize,
+            patch("core.virtual_keys.virtual_key_manager.authorize_management") as authorize,
             patch(
                 "core.virtual_keys.virtual_key_manager.note_last_used",
                 new=AsyncMock(),

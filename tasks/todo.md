@@ -48,7 +48,10 @@ Phase 4 audit item or the Phase 5 request-trace item.
   - Implementation complete at `9d581ae`; static/security gates and the authenticated real-browser
     matrix pass at 360/768/1024/1440, light/dark/system, and all 15 supported locales.
 - [x] Checkpoint W3-A: audit durability, coverage, redaction, export, and browser gates pass.
-- [ ] W3.6 Add the backward-compatible scoped virtual-key model and pricing policy.
+- [x] W3.6 Add the backward-compatible scoped virtual-key model and pricing policy.
+  - Complete at `1bb6596` and `f8513cf`; versioned migration, inference/management scope matrix,
+    pricing-policy metadata, last-used/status, bounded model patterns, auth integration, and audit
+    attribution pass the W3.6 contract and compatibility gates.
 - [ ] W3.7 Add atomic reserve/commit/release rate and budget enforcement.
 - [ ] W3.8 Add audited revoke, rotate, one-time reveal, last-used, and conflict semantics.
 - [ ] W3.9 Complete the Access page virtual-key lifecycle.
