@@ -8,12 +8,21 @@ import binascii
 import hashlib
 import hmac
 import secrets
+from datetime import datetime, timezone
 from typing import Any
 
-from core.audit import AuditEvent, AuditRepository, create_audit_event
+from core.audit import (
+    AuditEvent,
+    AuditPage,
+    AuditQuery,
+    AuditRepository,
+    AuditRetentionPolicy,
+    create_audit_event,
+)
 from core.management_audit import ManagementMutation
 
 AUDIT_MASTER_KEY_CONFIG = "_internal_audit_master_key_v1"
+AUDIT_RETENTION_CONFIG = "_internal_audit_retention_v1"
 _MASTER_KEY_BYTES = 32
 _FINGERPRINT_DOMAIN = b"omni-gateway:audit:fingerprint:v1"
 _CURSOR_DOMAIN = b"omni-gateway:audit:cursor:v1"
@@ -43,12 +52,38 @@ def _derive_key(master_key: bytes, domain: bytes) -> bytes:
     return hmac.new(master_key, domain, hashlib.sha256).digest()
 
 
+def _decode_retention_policy(value: Any) -> AuditRetentionPolicy:
+    if value is None:
+        return AuditRetentionPolicy()
+    if not isinstance(value, dict) or set(value) != {"retention_days", "max_events"}:
+        raise RuntimeError("Stored audit retention policy is invalid.")
+    if type(value["retention_days"]) is not int or type(value["max_events"]) is not int:
+        raise RuntimeError("Stored audit retention policy is invalid.")
+    try:
+        return AuditRetentionPolicy(
+            retention_days=value["retention_days"],
+            max_events=value["max_events"],
+        )
+    except ValueError as exc:
+        raise RuntimeError("Stored audit retention policy is invalid.") from exc
+
+
 class AuditService:
     """Create redacted immutable events and append them to selected durable storage."""
 
-    def __init__(self, repository: AuditRepository, *, fingerprint_key: bytes) -> None:
+    def __init__(
+        self,
+        repository: AuditRepository,
+        *,
+        storage: Any,
+        fingerprint_key: bytes,
+        retention_policy: AuditRetentionPolicy,
+    ) -> None:
         self._repository = repository
+        self._storage = storage
         self._fingerprint_key = fingerprint_key
+        self._retention_policy = retention_policy
+        self._retention_lock = asyncio.Lock()
 
     @classmethod
     async def create(cls, storage: Any) -> "AuditService":
@@ -59,14 +94,50 @@ class AuditService:
                 raise RuntimeError("Unable to persist the audit master key.")
             encoded_master = await storage.get_config(AUDIT_MASTER_KEY_CONFIG, None)
         master_key = _decode_master_key(encoded_master)
+        retention_policy = _decode_retention_policy(
+            await storage.get_config(AUDIT_RETENTION_CONFIG, None)
+        )
         cursor_key = _derive_key(master_key, _CURSOR_DOMAIN)
         repository = await storage.create_audit_repository(
             cursor_signing_key=cursor_key,
         )
         return cls(
             repository,
+            storage=storage,
             fingerprint_key=_derive_key(master_key, _FINGERPRINT_DOMAIN),
+            retention_policy=retention_policy,
         )
+
+    @property
+    def retention_policy(self) -> AuditRetentionPolicy:
+        return self._retention_policy
+
+    async def query(self, query: AuditQuery) -> AuditPage:
+        if not isinstance(query, AuditQuery):
+            raise ValueError("A validated AuditQuery is required.")
+        return await self._repository.query(query)
+
+    async def update_retention(
+        self,
+        policy: AuditRetentionPolicy,
+        *,
+        now: datetime | None = None,
+    ) -> int:
+        if not isinstance(policy, AuditRetentionPolicy):
+            raise ValueError("A validated AuditRetentionPolicy is required.")
+        prune_time = now or datetime.now(timezone.utc)
+        if not isinstance(prune_time, datetime) or prune_time.tzinfo is None:
+            raise ValueError("Audit retention timestamp must be timezone-aware.")
+        prune_time = prune_time.astimezone(timezone.utc)
+        record = {
+            "retention_days": policy.retention_days,
+            "max_events": policy.max_events,
+        }
+        async with self._retention_lock:
+            if not await self._storage.set_config(AUDIT_RETENTION_CONFIG, record):
+                raise RuntimeError("Unable to persist the audit retention policy.")
+            self._retention_policy = policy
+            return await self._repository.prune(policy, now=prune_time)
 
     async def record(
         self,
