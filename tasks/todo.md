@@ -18,7 +18,7 @@
 ## Wave 2 — Credential Operations Execution Queue
 
 - [x] W2.1 Inventory credential variants and operation capabilities.
-- [ ] W2.2 Add the authenticated additive capability catalog contract.
+- [x] W2.2 Add the authenticated additive capability catalog contract.
 - [ ] W2.3 Enforce capabilities for single-credential operations.
 - [ ] W2.4 Add bounded batch preview and typed per-item execution outcomes.
 - [ ] W2.5 Add credential-scoped redacted audit and bounded operation telemetry foundations.

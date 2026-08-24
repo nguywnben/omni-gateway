@@ -10,10 +10,10 @@
   approval), approximately 36%; Wave 2 execution-slice checkboxes are refinements and are not added
   to that denominator.
 - Active scope: Wave 2 — Credential Operations.
-- Control state: **IN PROGRESS — W2.2**.
+- Control state: **IN PROGRESS — W2.3**.
 - Expected worktree state at this checkpoint: clean after the latest checkpoint commit.
 - Expected runtime: Omni Gateway on `http://127.0.0.1:4283`, `/health` returns HTTP 200.
-- Last verified full suite: 473 tests passed; Ruff, compileall, and diff-check passed.
+- Last verified full suite: 475 tests passed; Ruff, compileall, and diff-check passed.
 
 Wave 2 was approved by the human on 2026-08-24. Do not expand beyond its documented scope.
 
@@ -46,6 +46,8 @@ silently choosing a new design.
 - Service restart evidence: `/health` returned HTTP 200 after the checkpoint restart.
 - W2.1 evidence: all nine console credential variants have an exact, fail-closed operation
   inventory; 473 full-suite tests passed before its checkpoint commit.
+- W2.2 evidence: the authenticated provider catalog exposes typed additive variant/operation
+  metadata without changing existing provider records; 475 full-suite tests passed.
 
 ## Approved vs. Proposed Scope
 
@@ -85,8 +87,8 @@ checkboxes to be marked complete.
 
 ## Immediate Next Action
 
-Implement W2.2 with test-first evidence: expose the authenticated additive capability catalog
-contract without changing existing provider fields.
+Implement W2.3 with test-first evidence: enforce the server-authoritative capability contract for
+single-credential mutations while keeping compatible 1.x routes.
 
 ## Update Rule
 
