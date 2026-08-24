@@ -161,7 +161,12 @@ class AuditService:
             change_codes=mutation.change_codes,
             fingerprint_key=self._fingerprint_key,
         )
-        await self._repository.append(event)
+        async with self._retention_lock:
+            await self._repository.append(event)
+            await self._repository.prune(
+                self._retention_policy,
+                now=datetime.now(timezone.utc),
+            )
         return event
 
 

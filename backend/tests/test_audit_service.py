@@ -87,6 +87,11 @@ class AuditServiceTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(storage.set_calls[0][0], AUDIT_MASTER_KEY_CONFIG)
         self.assertEqual(len(storage.cursor_keys[0]), 32)
         self.assertEqual(storage.repositories[0].events, [event])
+        self.assertEqual(
+            storage.repositories[0].prune_calls[0][0],
+            AuditRetentionPolicy(),
+        )
+        self.assertEqual(storage.repositories[0].prune_calls[0][1].tzinfo, timezone.utc)
         self.assertNotIn("vk_plaintext-target", repr(event.to_record()))
         self.assertNotIn("panel-owner", repr(event.to_record()))
 
@@ -177,6 +182,16 @@ class AuditServiceTests(unittest.IsolatedAsyncioTestCase):
         )
         self.assertEqual(storage.repositories[0].prune_calls, [(policy, now)])
         self.assertEqual(service.retention_policy, policy)
+
+        mutation = classify_management_mutation("POST", "/api/config/save")
+        await service.record(
+            mutation,
+            request_id="request-after-policy-update",
+            actor_type="panel_session",
+            actor_identifier="panel-owner",
+            outcome="succeeded",
+        )
+        self.assertEqual(storage.repositories[0].prune_calls[-1][0], policy)
 
     async def test_retention_update_does_not_prune_when_policy_cannot_be_persisted(self):
         storage = _Storage()
