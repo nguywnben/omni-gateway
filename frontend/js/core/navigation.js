@@ -24,6 +24,8 @@ const ROUTE_MAP = {
 
     '/config': 'config',
 
+    '/audit': 'audit',
+
     '/logs': 'logs',
 
     '/about': 'about'
@@ -38,6 +40,7 @@ const TAB_MAP = {
     models: '/models',
     providers: '/providers',
     config: '/config',
+    audit: '/audit',
     logs: '/logs',
     about: '/about'
 };
@@ -228,6 +231,8 @@ function getTabDataLoader(tabName) {
         ]),
 
         config: () => loadConfig(),
+
+        audit: () => loadAuditConsole(),
 
         logs: () => {
 

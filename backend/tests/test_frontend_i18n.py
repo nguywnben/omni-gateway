@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import re
 import unittest
 from pathlib import Path
@@ -10,6 +11,7 @@ ROOT = Path(__file__).resolve().parents[2]
 FRONTEND = ROOT / "frontend"
 LOCALE_SOURCE = (FRONTEND / "js" / "core" / "locales.js").read_text(encoding="utf-8")
 PAGE_LOCALE_SOURCE = (FRONTEND / "js" / "core" / "page-locales.js").read_text(encoding="utf-8")
+AUDIT_LOCALE_SOURCE = (FRONTEND / "js" / "core" / "audit-locales.js").read_text(encoding="utf-8")
 I18N_SOURCE = (FRONTEND / "js" / "core" / "i18n.js").read_text(encoding="utf-8")
 
 
@@ -25,10 +27,51 @@ def _frontend_sources() -> list[Path]:
 
 
 class FrontendLocaleContractTests(unittest.TestCase):
+    def test_audit_catalog_is_complete_for_every_locale(self):
+        keys = re.findall(
+            r"^    '(audit\.[a-z0-9_]+)',?$",
+            AUDIT_LOCALE_SOURCE.split("const AUDIT_KEYS = [", 1)[1].split("];", 1)[0],
+            re.MULTILINE,
+        )
+        values_block = AUDIT_LOCALE_SOURCE.split("const AUDIT_LOCALE_VALUES = {", 1)[1].split(
+            "\n};", 1
+        )[0]
+        catalogs = {
+            match.group(1) or match.group(2): json.loads(match.group(3))
+            for match in re.finditer(
+                r"^    (?:'([^']+)'|([a-z]{2})): (\[.*\]),?$",
+                values_block,
+                re.MULTILINE,
+            )
+        }
+
+        expected_locales = {
+            "en",
+            "zh-CN",
+            "zh-TW",
+            "de",
+            "es",
+            "fr",
+            "id",
+            "it",
+            "ja",
+            "ko",
+            "pt",
+            "ru",
+            "th",
+            "tr",
+            "vi",
+        }
+        self.assertEqual(set(catalogs), expected_locales)
+        for locale in expected_locales:
+            with self.subTest(locale=locale):
+                self.assertEqual(len(catalogs[locale]), len(keys))
+                self.assertTrue(all(isinstance(value, str) and value for value in catalogs[locale]))
+
     def test_quality_policy_catalog_is_complete_for_every_locale(self):
-        block = PAGE_LOCALE_SOURCE.split(
-            "const QUALITY_POLICY_EXTENDED_MESSAGES = {", 1
-        )[1].split("\n};", 1)[0]
+        block = PAGE_LOCALE_SOURCE.split("const QUALITY_POLICY_EXTENDED_MESSAGES = {", 1)[1].split(
+            "\n};", 1
+        )[0]
         locale_matches = list(
             re.finditer(
                 r"^    (?:'([^']+)'|([a-z]{2})): \{",
@@ -39,12 +82,29 @@ class FrontendLocaleContractTests(unittest.TestCase):
         catalogs = {}
         for index, match in enumerate(locale_matches):
             locale = match.group(1) or match.group(2)
-            end = locale_matches[index + 1].start() if index + 1 < len(locale_matches) else len(block)
-            catalogs[locale] = set(re.findall(r"'((?:quality)\.[a-z0-9_]+)'\s*:", block[match.start():end]))
+            end = (
+                locale_matches[index + 1].start() if index + 1 < len(locale_matches) else len(block)
+            )
+            catalogs[locale] = set(
+                re.findall(r"'((?:quality)\.[a-z0-9_]+)'\s*:", block[match.start() : end])
+            )
 
         expected_locales = {
-            "en", "zh-CN", "zh-TW", "de", "es", "fr", "id", "it",
-            "ja", "ko", "pt", "ru", "th", "tr", "vi",
+            "en",
+            "zh-CN",
+            "zh-TW",
+            "de",
+            "es",
+            "fr",
+            "id",
+            "it",
+            "ja",
+            "ko",
+            "pt",
+            "ru",
+            "th",
+            "tr",
+            "vi",
         }
         self.assertEqual(set(catalogs), expected_locales)
         for locale in expected_locales:
@@ -71,7 +131,7 @@ class FrontendLocaleContractTests(unittest.TestCase):
             for pattern in patterns:
                 references.update(pattern.findall(source))
 
-        combined_catalog = LOCALE_SOURCE + PAGE_LOCALE_SOURCE + I18N_SOURCE
+        combined_catalog = LOCALE_SOURCE + PAGE_LOCALE_SOURCE + AUDIT_LOCALE_SOURCE + I18N_SOURCE
         generated_keys: set[str] = set()
         for variable in (
             "SETTINGS_PAGE_KEYS",
@@ -92,11 +152,11 @@ class FrontendLocaleContractTests(unittest.TestCase):
             "CREDENTIAL_FLEET_KEYS",
             "CREDENTIAL_OPERATION_KEYS",
             "CREDENTIAL_TIER_KEYS",
+            "AUDIT_KEYS",
         ):
+            source = AUDIT_LOCALE_SOURCE if variable == "AUDIT_KEYS" else PAGE_LOCALE_SOURCE
             generated_keys.update(
-                re.findall(
-                    r"['\"]([a-z][a-z0-9_.-]+)['\"]", _extract_array(PAGE_LOCALE_SOURCE, variable)
-                )
+                re.findall(r"['\"]([a-z][a-z0-9_.-]+)['\"]", _extract_array(source, variable))
             )
         missing = sorted(
             key
@@ -149,7 +209,7 @@ class FrontendLocaleContractTests(unittest.TestCase):
         runtime_source = "\n".join(
             path.read_text(encoding="utf-8")
             for path in sorted((FRONTEND / "js").rglob("*.js"))
-            if path.name not in {"i18n.js", "locales.js", "page-locales.js"}
+            if path.name not in {"i18n.js", "locales.js", "page-locales.js", "audit-locales.js"}
         )
         forbidden_literals = {
             "Close navigation",

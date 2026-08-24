@@ -26,6 +26,7 @@ CONSOLE_FRAGMENT_PATHS = (
     "pages/models.html",
     "pages/providers.html",
     "pages/settings.html",
+    "pages/audit.html",
     "pages/logs.html",
     "pages/about.html",
     "layout/footer.html",
@@ -37,6 +38,7 @@ CONSOLE_STYLE_ASSETS = (
     "css/providers-and-models.css",
     "css/forms-and-data.css",
     "css/quality-policy.css",
+    "css/audit.css",
     "css/components.css",
     "css/dialogs.css",
     "css/responsive.css",
@@ -47,6 +49,7 @@ CONSOLE_EARLY_SCRIPT_ASSETS = ("js/core/theme.js",)
 CONSOLE_SCRIPT_ASSETS = (
     "js/core/locales.js",
     "js/core/page-locales.js",
+    "js/core/audit-locales.js",
     "js/core/i18n.js",
     "js/core/navigation.js",
     "js/core/credential-manager.js",
@@ -59,6 +62,7 @@ CONSOLE_SCRIPT_ASSETS = (
     "js/ui/credential-dialogs.js",
     "js/ui/credential-cards.js",
     "js/features/authentication.js",
+    "js/features/audit.js",
     "js/features/navigation.js",
     "js/features/model-pool.js",
     "js/features/code-assist-authentication.js",
@@ -340,6 +344,7 @@ async def serve_oauth_callback(request: Request):
 @router.get("/oauth", response_class=HTMLResponse, include_in_schema=False)
 @router.get("/upload", response_class=HTMLResponse, include_in_schema=False)
 @router.get("/config", response_class=HTMLResponse, include_in_schema=False)
+@router.get("/audit", response_class=HTMLResponse, include_in_schema=False)
 @router.get("/logs", response_class=HTMLResponse, include_in_schema=False)
 @router.get("/about", response_class=HTMLResponse, include_in_schema=False)
 def serve_control_panel():
