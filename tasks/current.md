@@ -5,14 +5,13 @@
 - Updated: 2026-08-24 (Asia/Saigon).
 - Branch: `codex/enterprise-overhaul`.
 - Implementation baseline: `9d581ae feat: add audit operations console`.
-- Completed scope: Waves 1–2 / Phases 0–3, Wave 3 slices W3.1–W3.4, and the W3.5
-  implementation. W3.5 remains unchecked until its real-browser matrix passes.
-- Original program progress: 14/28 approved checklist items complete (including specification
-  approval), exactly 50%; Wave 2 execution-slice checkboxes are refinements and are not added
-  to that denominator.
-- Active scope: Wave 3 — Access and Operational Evidence; verify W3.5 and close W3-A.
-- Control state: **VERIFYING — CHECKPOINT W3-A**.
-- Expected worktree state at this checkpoint: clean after the W3.5 documentation commit.
+- Completed scope: Waves 1–2 / Phases 0–3 and Wave 3 checkpoint W3-A (W3.1–W3.5).
+- Original program progress: 15/28 approved checklist items complete (including specification
+  approval), approximately 53.6%; wave execution-slice checkboxes are refinements and are not
+  added to that denominator.
+- Active scope: Wave 3 — Access and Operational Evidence; W3.6 scoped virtual-key model is next.
+- Control state: **READY — W3.6**.
+- Expected worktree state at this checkpoint: clean after the W3-A closure commit.
 - Expected runtime: one Omni Gateway listener on `http://127.0.0.1:4283`; `/health` and `/ready`
   return HTTP 200.
 - Last verified full suite: 603 tests passed; Ruff lint/format, compileall, pip dependency
@@ -23,12 +22,9 @@
 Wave 2 was accepted and pushed by the human on 2026-08-24. Wave 3 / Phases 4–5 was approved for
 implementation on the same date. Do not expand into Phase 6 or release activation.
 
-The W3.5 real-browser gate is currently tooling-blocked: the selected in-app browser rejects both
-`localhost:4283` and `127.0.0.1:4283` with `ERR_BLOCKED_BY_CLIENT`, while no connected Chrome
-browser is available. This does not indicate an application HTTP failure—the same routes return
-200 in runtime smoke tests—but it prevents honest claims about 360/768/1024/1440 layout, keyboard,
-accessibility tree, theme, console/network, and secret lifetime. Do not mark W3.5 or W3-A complete
-until those checks run in a connected real browser.
+The W3.5 browser blocker cleared on retry. The authenticated loopback console completed its full
+W3-A browser matrix without requiring a code change; the browser was returned to its default
+viewport with Vietnamese locale, system theme, cleared filters, and no open dialog.
 
 ## Authoritative Reading Order
 
@@ -162,7 +158,7 @@ silently choosing a new design.
   responses, CSV-header byte enforcement, and fail-closed startup ordering. All 596 tests passed;
   Ruff, compileall, focused format, pip consistency, 36 JavaScript syntax checks, and diff-check
   are clean. The maintained API contract is `docs/audit-api.md`.
-- W3.5 implementation evidence: commit `9d581ae` adds `/audit` under an Observability navigation
+- W3.5/W3-A evidence: commit `9d581ae` adds `/audit` under an Observability navigation
   group with exact action/actor/target/outcome/time/request/fingerprint filters, session-only
   opaque cursor history, redacted event detail, request-ID copy/pivot, confirmed retention updates,
   and bounded JSONL/CSV downloads. Only category filters and page size enter local storage. The
@@ -171,8 +167,16 @@ silently choosing a new design.
   cannot replace newly filtered evidence. A dedicated keyed catalog supplies curated copy for all
   15 supported locales. Static contracts forbid sensitive fields and unsafe DOM insertion; all 603
   tests, Ruff lint/format, compileall, pip consistency, vulnerability audit, 38 JavaScript syntax
-  checks, and runtime audit/health/readiness smoke tests pass. The real-browser matrix remains the
-  only open W3.5/W3-A gate due to the browser tooling limitation recorded above.
+  checks, and runtime audit/health/readiness smoke tests pass. The authenticated real-browser
+  closure covered 360/768/1024/1440 widths with no horizontal overflow and correct mobile/desktop
+  navigation; light/dark/system themes; all 15 supported locales with correct `html lang` and no
+  untranslated audit keys; semantic headings, labels, live regions, tab order, native dialog focus
+  containment and return; request-ID pivot, outcome filtering and clear; retention warning followed
+  by cancel with unchanged 90-day/1,000,000-event policy; and a successful JSONL export that added
+  `audit.export` to the refreshed stream. The console had no warning/error entries, every visible
+  control had an accessible name, every `aria-labelledby` relationship resolved, and the Audit DOM
+  contained no password/secret-named inputs or recognized key-like plaintext. W3.5 and W3-A are
+  complete; the original Phase 4 append-only audit item is also complete.
 
 ## Approved vs. Proposed Scope
 
@@ -220,11 +224,11 @@ checkboxes to be marked complete.
 
 ## Immediate Next Action
 
-Connect a controllable Chrome browser (or another real-browser surface that can reach loopback),
-then verify W3.5 at 360/768/1024/1440 widths, light/dark/system themes, representative live locale
-changes, keyboard/dialog focus, accessibility relationships, clean console/network, and absence of
-credential/plaintext-key content in the DOM. Mark W3.5 and W3-A complete only after that evidence
-is recorded and committed. Do not begin W3.6 before the checkpoint closes.
+Begin W3.6 with tests for versioned migration and backward compatibility of existing virtual keys,
+then add inference-protocol and management read/write scopes, least-privilege defaults for new keys,
+explicit unknown-pricing policy, status/last-used metadata, and bounded model-pattern validation.
+Keep existing inference access unchanged during migration and fail closed on unknown or malformed
+scope values. Do not begin reservation enforcement (W3.7) until W3.6 is independently committed.
 
 ## Update Rule
 
