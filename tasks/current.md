@@ -4,19 +4,19 @@
 
 - Updated: 2026-08-24 (Asia/Saigon).
 - Branch: `codex/enterprise-overhaul`.
-- Implementation baseline: `55dfce4 feat: connect audit repositories to storage backends`.
-- Completed scope: Waves 1–2 / Phases 0–3, plus Wave 3 slices W3.1–W3.2.
+- Implementation baseline: `7024f4e fix: resolve audit targets before route execution`.
+- Completed scope: Waves 1–2 / Phases 0–3, plus Wave 3 slices W3.1–W3.3.
 - Original program progress: 14/28 approved checklist items complete (including specification
   approval), exactly 50%; Wave 2 execution-slice checkboxes are refinements and are not added
   to that denominator.
-- Active scope: Wave 3 — Access and Operational Evidence; W3.3 mutation coverage is next.
+- Active scope: Wave 3 — Access and Operational Evidence; W3.4 audit APIs are next.
 - Control state: **IMPLEMENTING — WAVE 3**.
-- Expected worktree state at this checkpoint: clean after the W3.2 documentation commit.
+- Expected worktree state at this checkpoint: clean after the W3.3 documentation commit.
 - Expected runtime: one Omni Gateway listener on `http://127.0.0.1:4283`; `/health` and `/ready`
   return HTTP 200.
-- Last verified full suite: 562 tests passed; Ruff check, compileall, focused W3.2 format, and
+- Last verified full suite: 577 tests passed; Ruff check, compileall, focused W3.3 format, and
   diff-check passed. The repository-wide format check still reports 16 pre-existing Wave 2 files
-  that differ from the currently installed Ruff formatter; they remain isolated from the W3.2
+  that differ from the currently installed Ruff formatter; they remain isolated from the Wave 3
   implementation commits.
 
 Wave 2 was accepted and pushed by the human on 2026-08-24. Wave 3 / Phases 4–5 was approved for
@@ -131,6 +131,18 @@ silently choosing a new design.
   restart persistence, UTC boundaries, duplicate normalization, corrupted-record failure, and
   uninitialized fail-closed behavior are covered; all 562 tests passed with Ruff and compileall
   clean.
+- W3.3 evidence: commit `d42ba90` adds a declarative coverage gate for all 57 control-plane write
+  routes. Fifty durable mutations resolve through one correlated response boundary, single/batch
+  credential actions bridge the existing per-target W2 evidence without duplicating idempotent
+  retries, and the five remaining preview/OAuth-start routes are explicitly proven side-effect
+  free. Actor, action, target, outcome, and change vocabularies are allowlisted; semantic provider,
+  credential, key, configuration, and model targets are HMAC-redacted before append. A generated
+  internal master key persists across restart and derives separate fingerprint/cursor keys without
+  entering management config responses. Startup fails closed if audit cannot initialize, while
+  append outages are surfaced with secret-free critical evidence. Commit `7024f4e` resolves targets
+  before route execution. All 577 tests, Ruff, compileall, and diff-check passed. Runtime smoke found
+  and removed stale PID 3540, then verified PID 11312 as the only listener; health/ready returned
+  200 and request `w3-committed-smoke` persisted one `auth.logout` success event in SQLite.
 
 ## Approved vs. Proposed Scope
 
@@ -178,11 +190,10 @@ checkboxes to be marked complete.
 
 ## Immediate Next Action
 
-Implement W3.3 incrementally against the committed W3.2 repositories: define the management-
-mutation coverage matrix first, add one fail-closed audit service boundary with request/actor
-correlation, then instrument every authenticated management mutation with redacted success and
-failure evidence. Do not add query/export routes or the audit console until W3.3 passes and is
-committed.
+Implement W3.4 incrementally against the committed W3.3 evidence path: add authenticated bounded
+query and retention contracts first, then cursor pagination and formula-safe size-bounded JSONL/CSV
+exports. Query/export must consume the repository service rather than mutable configuration, and
+the audit console remains out of scope until W3.4 passes and is committed.
 
 ## Update Rule
 
