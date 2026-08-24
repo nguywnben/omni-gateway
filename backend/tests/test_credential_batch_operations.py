@@ -15,12 +15,193 @@ BACKEND_DIR = Path(__file__).resolve().parents[1]
 if str(BACKEND_DIR) not in sys.path:
     sys.path.insert(0, str(BACKEND_DIR))
 
+from core.credential_fleet_query import (  # noqa: E402
+    CredentialFleetFilters,
+    credential_selection_registry,
+)
 from core.models import CredFileBatchActionRequest
 from core.panel.credentials import creds_batch_action
 from core.panel.credentials import router as credentials_router
 
 
 class CredentialBatchOperationTests(unittest.IsolatedAsyncioTestCase):
+    @staticmethod
+    def _fleet_summary(*filenames: str) -> dict:
+        return {
+            "items": [
+                {
+                    "filename": filename,
+                    "user_email": f"{filename}@example.com",
+                    "disabled": False,
+                    "error_codes": [],
+                    "last_success": 1,
+                    "model_cooldowns": {},
+                    "tier": "pro",
+                    "enable_credit": False,
+                }
+                for filename in filenames
+            ],
+            "total": len(filenames),
+            "stats": {"total": len(filenames), "normal": len(filenames), "disabled": 0},
+        }
+
+    @staticmethod
+    def _fleet_storage(*summaries: dict):
+        backend = AsyncMock()
+        backend.get_credentials_summary.side_effect = list(summaries)
+        storage = AsyncMock()
+        storage._backend = backend
+        storage.get_backend_info.return_value = {"backend_type": "sqlite"}
+        storage.get_credential.return_value = {
+            "provider": "google_ai_studio",
+            "credential_type": "api_key",
+            "api_key": "must-not-leak",
+        }
+        return storage
+
+    async def test_all_matching_selection_is_resolved_against_fresh_fleet_data(self):
+        storage = self._fleet_storage(self._fleet_summary("b.json", "a.json"))
+        selection_token = credential_selection_registry.issue(
+            CredentialFleetFilters(provider_variant="google_ai_studio"),
+            mode="primary",
+        )
+
+        with (
+            patch("core.panel.credentials.get_storage_adapter", AsyncMock(return_value=storage)),
+            patch(
+                "core.panel.credentials.credential_manager.set_cred_disabled",
+                new=AsyncMock(return_value=True),
+            ) as mutate,
+        ):
+            response = await creds_batch_action(
+                CredFileBatchActionRequest(
+                    action="disable",
+                    selection_token=selection_token,
+                ),
+                token="session",
+                mode="provider",
+            )
+
+        body = json.loads(response.body)
+        self.assertEqual(body["requested_count"], 2)
+        self.assertEqual(body["success_count"], 2)
+        self.assertEqual([item["filename"] for item in body["results"]], ["a.json", "b.json"])
+        self.assertEqual(mutate.await_count, 2)
+        self.assertNotIn("must-not-leak", response.body.decode())
+
+    async def test_all_matching_idempotent_retry_does_not_require_live_selection(self):
+        storage = self._fleet_storage(self._fleet_summary("a.json"))
+        selection_token = credential_selection_registry.issue(
+            CredentialFleetFilters(provider_variant="google_ai_studio"),
+            mode="primary",
+        )
+        request = CredFileBatchActionRequest(
+            action="disable",
+            selection_token=selection_token,
+            idempotency_key="selection-retry-1",
+        )
+
+        with (
+            patch("core.panel.credentials.get_storage_adapter", AsyncMock(return_value=storage)),
+            patch(
+                "core.panel.credentials.credential_manager.set_cred_disabled",
+                new=AsyncMock(return_value=True),
+            ) as mutate,
+        ):
+            first = await creds_batch_action(request, token="session", mode="provider")
+            with patch.object(
+                credential_selection_registry,
+                "resolve",
+                side_effect=AssertionError("cached retry must not resolve selection"),
+            ):
+                retry = await creds_batch_action(request, token="session", mode="provider")
+
+        self.assertEqual(first.body, retry.body)
+        self.assertEqual(mutate.await_count, 1)
+
+    async def test_changed_all_matching_selection_rejects_stale_preview(self):
+        storage = self._fleet_storage(
+            self._fleet_summary("a.json"),
+            self._fleet_summary("a.json", "b.json"),
+        )
+        selection_token = credential_selection_registry.issue(
+            CredentialFleetFilters(provider_variant="google_ai_studio"),
+            mode="primary",
+        )
+
+        with (
+            patch("core.panel.credentials.get_storage_adapter", AsyncMock(return_value=storage)),
+            patch(
+                "core.panel.credentials.credential_manager.remove_credential",
+                new=AsyncMock(return_value=True),
+            ) as mutate,
+        ):
+            preview = await creds_batch_action(
+                CredFileBatchActionRequest(
+                    action="delete",
+                    selection_token=selection_token,
+                    preview=True,
+                ),
+                token="session",
+                mode="provider",
+            )
+            preview_body = json.loads(preview.body)
+            execution = await creds_batch_action(
+                CredFileBatchActionRequest(
+                    action="delete",
+                    selection_token=selection_token,
+                    preview_token=preview_body["preview_token"],
+                    idempotency_key="changed-selection-1",
+                ),
+                token="session",
+                mode="provider",
+            )
+
+        body = json.loads(execution.body)
+        self.assertEqual(execution.status_code, 428)
+        self.assertEqual(body["error"]["code"], "credential_batch_preview_required")
+        mutate.assert_not_awaited()
+
+    async def test_unknown_selection_token_is_rejected_without_storage_access(self):
+        response = await creds_batch_action(
+            CredFileBatchActionRequest(
+                action="disable",
+                selection_token="forged-selection-token",
+            ),
+            token="session",
+            mode="provider",
+        )
+
+        body = json.loads(response.body)
+        self.assertEqual(response.status_code, 410)
+        self.assertEqual(body["error"]["code"], "credential_selection_expired")
+
+    async def test_all_matching_selection_retains_the_100_target_cap(self):
+        filenames = tuple(f"credential-{index:03}.json" for index in range(101))
+        storage = self._fleet_storage(self._fleet_summary(*filenames))
+        selection_token = credential_selection_registry.issue(
+            CredentialFleetFilters(provider_variant="google_ai_studio"),
+            mode="primary",
+        )
+
+        with patch(
+            "core.panel.credentials.get_storage_adapter",
+            AsyncMock(return_value=storage),
+        ):
+            response = await creds_batch_action(
+                CredFileBatchActionRequest(
+                    action="disable",
+                    selection_token=selection_token,
+                ),
+                token="session",
+                mode="provider",
+            )
+
+        body = json.loads(response.body)
+        self.assertEqual(response.status_code, 422)
+        self.assertEqual(body["error"]["code"], "credential_selection_limit_exceeded")
+        self.assertEqual(body["error"]["matching_count"], 101)
+
     async def test_preview_is_side_effect_free_and_returns_a_typed_plan(self):
         storage = AsyncMock()
         storage.get_credential.return_value = {

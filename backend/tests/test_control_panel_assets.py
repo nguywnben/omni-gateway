@@ -437,6 +437,21 @@ class ControlPanelAssetTests(unittest.TestCase):
         )[0]
         self.assertNotIn("selectedFiles", persistence_block)
 
+    def test_pool_toolbar_uses_capability_intersection_and_preview_results(self):
+        credential_manager_script = read_scripts("core/credential-manager.js")
+
+        self.assertIn("fetch('./api/providers'", credential_manager_script)
+        self.assertIn("selectedVariantsSupport(operation)", credential_manager_script)
+        self.assertIn("selection_token: this.allMatchingSelection?.token", credential_manager_script)
+        self.assertIn("pool.operation.unsupported", credential_manager_script)
+        preview_index = credential_manager_script.index("const previewResponse = await fetch")
+        confirmation_index = credential_manager_script.index(
+            "await showConfirmModal(confirmMsg, confirmOptions)"
+        )
+        self.assertLess(preview_index, confirmation_index)
+        self.assertIn("this.formatBatchResults(data)", credential_manager_script)
+        self.assertIn("pool.batch.preview_stale", credential_manager_script)
+
     def test_grok_build_oauth_uses_the_shared_quota_dialog(self):
         card_script = read_scripts("ui/credential-cards.js")
         dialog_script = read_scripts("ui/credential-dialogs.js")

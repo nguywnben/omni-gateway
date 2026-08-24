@@ -25,8 +25,8 @@
 - [x] Checkpoint W2-A: contracts, compatibility, safety, and evidence gates pass.
 - [x] W2.6 Add the faceted fleet query and stable all-matching selection contract.
 - [x] W2.7 Add persistent responsive filters and page/all-results selection.
-- [ ] W2.8 Add the context-aware toolbar, preview, and localized result workflow.
-- [ ] Checkpoint W2-B: mixed-provider API/browser/accessibility matrix passes.
+- [x] W2.8 Add the context-aware toolbar, preview, and localized result workflow.
+- [x] Checkpoint W2-B: mixed-provider API/browser/accessibility matrix passes.
 - [ ] W2.9 Define and enforce the shared provider form contract.
 - [ ] W2.10 Correct Google-family provider forms and flows.
 - [ ] W2.11 Correct OpenAI, xAI, Anthropic, and Ollama forms and flows.

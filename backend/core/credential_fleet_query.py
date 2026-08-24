@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import json
 import os
@@ -13,6 +14,7 @@ from dataclasses import asdict, dataclass
 from typing import Any, Iterable
 
 from core.provider_registry import (
+    GOOGLE_ANTIGRAVITY,
     credential_supports_operation,
     get_credential_provider,
     get_credential_provider_variant,
@@ -102,6 +104,40 @@ class CredentialSelectionRegistry:
 credential_selection_registry = CredentialSelectionRegistry()
 
 
+async def load_credential_fleet_items(storage_adapter: Any, *, mode: str) -> list[dict[str, Any]]:
+    """Load and allowlist the fleet once for filtering or batch selection."""
+    backend_info = await storage_adapter.get_backend_info()
+    backend_type = backend_info.get("backend_type", "unknown")
+    result = await storage_adapter._backend.get_credentials_summary(
+        offset=0,
+        limit=None,
+        status_filter="all",
+        mode=mode,
+        error_code_filter=None,
+        cooldown_filter=None,
+        preview_filter=None,
+        tier_filter=None,
+    )
+    credential_read_semaphore = asyncio.Semaphore(20)
+
+    async def load_public_summary(summary: dict[str, Any]) -> dict[str, Any]:
+        filename = os.path.basename(str(summary.get("filename") or ""))
+        async with credential_read_semaphore:
+            credential_data = await storage_adapter.get_credential(filename, mode=mode) or {}
+        return enrich_credential_summary(
+            summary,
+            credential_data,
+            backend_type=backend_type,
+            mode=mode,
+        )
+
+    return list(
+        await asyncio.gather(
+            *(load_public_summary(summary) for summary in result.get("items", []))
+        )
+    )
+
+
 def _derive_health(*, disabled: bool, error_codes: list[Any], has_cooldown: bool) -> str:
     if disabled:
         return "disabled"
@@ -145,6 +181,12 @@ def enrich_credential_summary(
     if credential_kind not in {"oauth", "api_key", "connection"}:
         credential_kind = "oauth"
     source = "environment" if credential_data.get("source") == "environment" else "managed"
+    provider = get_credential_provider(credential_data)
+    tier = (
+        str(summary.get("tier") or "pro").strip().lower()
+        if provider == GOOGLE_ANTIGRAVITY
+        else "not_applicable"
+    )
 
     item: dict[str, Any] = {
         "filename": os.path.basename(str(summary.get("filename") or "")),
@@ -152,7 +194,7 @@ def enrich_credential_summary(
         "credential_label": credential_data.get("credential_label"),
         "credential_type": credential_kind,
         "credential_kind": credential_kind,
-        "provider": get_credential_provider(credential_data),
+        "provider": provider,
         "provider_variant": get_credential_provider_variant(credential_data),
         "model_count": len(get_declared_credential_models(credential_data)),
         "disabled": disabled,
@@ -160,7 +202,7 @@ def enrich_credential_summary(
         "last_success": summary.get("last_success"),
         "backend_type": backend_type,
         "model_cooldowns": model_cooldowns,
-        "tier": str(summary.get("tier") or "pro").strip().lower(),
+        "tier": tier,
         "health": _derive_health(
             disabled=disabled,
             error_codes=error_codes,
@@ -229,6 +271,17 @@ def credential_query_fingerprint(filters: CredentialFleetFilters, *, mode: str) 
     payload = {"schema": 1, "mode": mode, "filters": asdict(filters)}
     encoded = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8")
     return hashlib.sha256(encoded).hexdigest()[:20]
+
+
+def select_credential_filenames(
+    items: Iterable[dict[str, Any]], filters: CredentialFleetFilters
+) -> list[str]:
+    """Resolve normalized filters against fresh fleet data in stable order."""
+    matching = sorted(
+        (item for item in items if _matches(item, filters)),
+        key=_stable_sort_key,
+    )
+    return [str(item["filename"]) for item in matching]
 
 
 def _facet_counts(items: Iterable[dict[str, Any]]) -> dict[str, dict[str, int]]:

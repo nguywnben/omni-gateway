@@ -77,7 +77,7 @@ class CredentialFleetQueryTests(unittest.TestCase):
                 health="healthy",
                 cooldown="no_cooldown",
                 quota_state="unsupported",
-                tier="free",
+                tier="not_applicable",
                 source="environment",
             ),
             offset=0,

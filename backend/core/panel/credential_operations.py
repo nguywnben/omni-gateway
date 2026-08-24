@@ -16,7 +16,7 @@ from core.codex import CodexError, fetch_codex_model_ids, refresh_codex_oauth_cr
 from core.credential_fleet_query import (
     CredentialFleetFilters,
     build_credential_fleet_page,
-    enrich_credential_summary,
+    load_credential_fleet_items,
 )
 from core.credential_manager import credential_manager
 from core.credential_pool import (
@@ -528,8 +528,11 @@ async def get_creds_status_common(
         raise HTTPException(
             status_code=400, detail="Preview filter must be all, preview, or no_preview."
         )
-    if tier_filter and tier_filter not in ["all", "free", "pro", "ultra"]:
-        raise HTTPException(status_code=400, detail="Tier filter must be all, free, pro, or ultra.")
+    if tier_filter and tier_filter not in ["all", "free", "pro", "ultra", "not_applicable"]:
+        raise HTTPException(
+            status_code=400,
+            detail="Tier filter must be all, free, pro, ultra, or not_applicable.",
+        )
     if credential_kind_filter and credential_kind_filter not in [
         "all",
         "oauth",
@@ -633,36 +636,7 @@ async def get_creds_status_common(
     dedupe_result = await deduplicate_credentials_by_account_email(mode=mode)
 
     storage_adapter = await get_storage_adapter()
-    backend_info = await storage_adapter.get_backend_info()
-    backend_type = backend_info.get("backend_type", "unknown")
-
-    result = await storage_adapter._backend.get_credentials_summary(
-        offset=0,
-        limit=None,
-        status_filter="all",
-        mode=mode,
-        error_code_filter=None,
-        cooldown_filter=None,
-        preview_filter=None,
-        tier_filter=None,
-    )
-
-    credential_read_semaphore = asyncio.Semaphore(20)
-
-    async def load_public_summary(summary: dict[str, Any]) -> dict[str, Any]:
-        filename = os.path.basename(summary["filename"])
-        async with credential_read_semaphore:
-            credential_data = await storage_adapter.get_credential(filename, mode=mode) or {}
-        return enrich_credential_summary(
-            summary,
-            credential_data,
-            backend_type=backend_type,
-            mode=mode,
-        )
-
-    all_creds = await asyncio.gather(
-        *(load_public_summary(summary) for summary in result["items"])
-    )
+    all_creds = await load_credential_fleet_items(storage_adapter, mode=mode)
     filters = CredentialFleetFilters(
         provider=normalized_provider_filter,
         provider_variant=normalized_variant_filter,

@@ -48,6 +48,10 @@ function createCredsManager(type) {
 
         facets: {},
 
+        capabilityByVariant: {},
+
+        capabilityCatalogPromise: null,
+
         statsData: { total: 0, normal: 0, disabled: 0 },
 
         getEndpoint: (action) => {
@@ -82,6 +86,46 @@ function createCredsManager(type) {
 
         },
 
+        async loadCapabilityCatalog() {
+
+            if (this.type !== 'primary' || Object.keys(this.capabilityByVariant).length > 0) return;
+
+            if (!this.capabilityCatalogPromise) {
+
+                this.capabilityCatalogPromise = fetch('./api/providers', { headers: getAuthHeaders() })
+
+                    .then(async (response) => {
+
+                        if (!response.ok) throw new Error('capability_catalog_unavailable');
+
+                        const catalog = await response.json();
+
+                        this.capabilityByVariant = Object.fromEntries(
+
+                            (catalog.credential_variants || []).map(variant => [variant.variant_id, variant.operations || []])
+
+                        );
+
+                    })
+
+                    .catch(() => {
+
+                        this.capabilityByVariant = {};
+
+                    })
+
+                    .finally(() => {
+
+                        this.capabilityCatalogPromise = null;
+
+                    });
+
+            }
+
+            await this.capabilityCatalogPromise;
+
+        },
+
         getModeParam: () => modeParam,
 
         getFilterDefinitions() {
@@ -96,7 +140,7 @@ function createCredsManager(type) {
 
                 cooldown: { state: 'currentCooldownFilter', suffix: 'CooldownFilter', values: ['all', 'in_cooldown', 'no_cooldown'] },
 
-                tier: { state: 'currentTierFilter', suffix: 'TierFilter', values: ['all', 'free', 'pro', 'ultra'] },
+                tier: { state: 'currentTierFilter', suffix: 'TierFilter', values: ['all', 'free', 'pro', 'ultra', 'not_applicable'] },
 
                 kind: { state: 'currentCredentialKindFilter', suffix: 'CredentialKindFilter', values: ['all', 'oauth', 'api_key', 'connection'] },
 
@@ -221,6 +265,8 @@ function createCredsManager(type) {
             try {
 
                 this.restoreFilterState();
+
+                await this.loadCapabilityCatalog();
 
                 if (loading && !preserveContent) loading.hidden = false;
 
@@ -445,6 +491,8 @@ function createCredsManager(type) {
 
                 document.getElementById(this.getElementId('PaginationContainer')).style.display = 'none';
 
+                this.updateBatchControls();
+
                 return;
 
             }
@@ -621,6 +669,50 @@ function createCredsManager(type) {
 
         },
 
+        getSelectedVariantIds() {
+
+            if (this.selectionScope === 'all_matching') {
+
+                return Object.keys(this.facets.provider_variant || {});
+
+            }
+
+            return [...new Set(
+
+                Array.from(this.selectedFiles)
+
+                    .map(filename => this.data[filename]?.provider_variant)
+
+                    .filter(Boolean)
+
+            )];
+
+        },
+
+        selectedVariantsSupport(operation) {
+
+            const variants = this.getSelectedVariantIds();
+
+            return variants.length > 0 && variants.every((variantId) => (
+
+                (this.capabilityByVariant[variantId] || []).includes(operation)
+
+            ));
+
+        },
+
+        getBatchTargetPayload() {
+
+            if (this.selectionScope === 'all_matching') {
+
+                return { selection_token: this.allMatchingSelection?.token || '' };
+
+            }
+
+            return { filenames: Array.from(this.selectedFiles) };
+
+        },
+
         updateBatchControls() {
 
             const allMatching = this.selectionScope === 'all_matching';
@@ -657,27 +749,55 @@ function createCredsManager(type) {
 
             if (this.type === 'primary') {
 
-                const selectedCredentials = Array.from(this.selectedFiles)
+                const targetLimitExceeded = allMatching && selectedCount > 100;
 
-                    .map(filename => this.data[filename])
+                const operationButtons = {
 
-                    .filter(Boolean);
+                    Enable: 'toggle',
 
-                const supportsCreditActions = selectedCredentials.length > 0
+                    Disable: 'toggle',
 
-                    && selectedCredentials.every((credInfo) => (
+                    Delete: 'delete',
 
-                        getCredentialProviderMeta(credInfo, this.type).id === 'google_antigravity'
+                    EnableCredit: 'credit_mode',
 
-                    ));
+                    DisableCredit: 'credit_mode'
 
-                ['EnableCredit', 'DisableCredit'].forEach((action) => {
+                };
 
-                    const button = document.getElementById(this.getElementId(`Batch${action}Btn`));
+                Object.entries(operationButtons).forEach(([actionName, operation]) => {
 
-                    if (button) button.disabled = !supportsCreditActions;
+                    const button = document.getElementById(this.getElementId(`Batch${actionName}Btn`));
+
+                    if (!button) return;
+
+                    const supported = this.selectedVariantsSupport(operation);
+
+                    button.disabled = selectedCount === 0 || targetLimitExceeded || !supported;
+
+                    button.title = targetLimitExceeded
+
+                        ? t('pool.operation.limit')
+
+                        : (!supported && selectedCount > 0 ? t('pool.operation.unsupported') : '');
 
                 });
+
+                const verifyButton = document.getElementById(this.getElementId('BatchVerifyBtn'));
+
+                if (verifyButton) {
+
+                    const supported = this.selectedVariantsSupport('verify');
+
+                    verifyButton.disabled = selectedCount === 0 || allMatching || !supported;
+
+                    verifyButton.title = allMatching
+
+                        ? t('pool.operation.verify_page_only')
+
+                        : (!supported && selectedCount > 0 ? t('pool.operation.unsupported') : '');
+
+                }
 
             }
 
@@ -799,11 +919,55 @@ function createCredsManager(type) {
 
         },
 
+        formatBatchResults(data) {
+
+            const counts = data.outcome_counts || {};
+
+            const lines = [
+
+                t('pool.batch.result_summary', {
+
+                    success: data.success_count || 0,
+
+                    total: data.total_count || 0
+
+                })
+
+            ];
+
+            const itemResults = data.results || [];
+
+            itemResults.slice(0, 12).forEach((item) => {
+
+                lines.push(`${item.filename || `#${item.target_index + 1}`}: ${t(`pool.batch.outcome.${item.status}`)}`);
+
+            });
+
+            if (itemResults.length > 12) {
+
+                lines.push(t('pool.batch.more_results', {count: itemResults.length - 12}));
+
+            }
+
+            if ((counts.timed_out || 0) + (counts.failed || 0) + (counts.not_found || 0) > 0) {
+
+                lines.push('', t('pool.batch.recovery'));
+
+            }
+
+            return lines.join('\n');
+
+        },
+
         async batchAction(action) {
 
-            const selectedFiles = Array.from(this.selectedFiles);
+            const targetCount = this.selectionScope === 'all_matching'
 
-            if (selectedFiles.length === 0) {
+                ? Number(this.allMatchingSelection?.matching_count || 0)
+
+                : this.selectedFiles.size;
+
+            if (targetCount === 0) {
 
                 showStatus(t('please_select_the_files_to_operate'), 'error');
 
@@ -841,23 +1005,19 @@ function createCredsManager(type) {
 
             const confirmationMessages = {
 
-                enable: t('confirm_batch_enable', {count: selectedFiles.length}),
+                enable: t('confirm_batch_enable', {count: targetCount}),
 
-                disable: t('confirm_batch_disable', {count: selectedFiles.length}),
+                disable: t('confirm_batch_disable', {count: targetCount}),
 
-                delete: t('confirm_batch_delete', {count: selectedFiles.length}),
+                delete: t('confirm_batch_delete', {count: targetCount}),
 
-                enable_credit: t('confirm_batch_enable_credit', {count: selectedFiles.length}),
+                enable_credit: t('confirm_batch_enable_credit', {count: targetCount}),
 
-                disable_credit: t('confirm_batch_disable_credit', {count: selectedFiles.length})
+                disable_credit: t('confirm_batch_disable_credit', {count: targetCount})
 
             };
 
             const actionLabel = actionNames[action] || action;
-
-            const confirmMsg = confirmationMessages[action]
-
-                || `${actionLabel} ${selectedFiles.length} selected credentials?`;
 
             const confirmOptions = {
 
@@ -866,8 +1026,6 @@ function createCredsManager(type) {
                 confirmLabel: actionLabel
 
             };
-
-            if (!(await showConfirmModal(confirmMsg, confirmOptions))) return;
 
             try {
 
@@ -879,7 +1037,7 @@ function createCredsManager(type) {
 
                     headers: getAuthHeaders(),
 
-                    body: JSON.stringify({ action, filenames: selectedFiles, preview: true })
+                    body: JSON.stringify({ action, ...this.getBatchTargetPayload(), preview: true })
 
                 });
 
@@ -887,13 +1045,35 @@ function createCredsManager(type) {
 
                 if (!previewResponse.ok) {
 
-                    const previewError = previewData.error?.message || previewData.detail || t('unknown_error');
+                    const previewError = previewData.error?.code === 'credential_selection_expired'
+
+                        ? t('pool.batch.refresh_selection')
+
+                        : (previewData.error?.message || previewData.detail || t('unknown_error'));
 
                     showStatus(t('status_batch_failed', {error: previewError}), 'error');
 
                     return;
 
                 }
+
+                const eligibleCount = previewData.outcome_counts?.eligible || 0;
+
+                const skippedCount = (previewData.total_count || 0) - eligibleCount;
+
+                const previewSummary = t('pool.batch.preview_summary', {
+
+                    eligible: eligibleCount,
+
+                    skipped: skippedCount,
+
+                    total: previewData.total_count || targetCount
+
+                });
+
+                const confirmMsg = `${previewSummary}\n\n${confirmationMessages[action] || actionLabel}`;
+
+                if (!(await showConfirmModal(confirmMsg, confirmOptions))) return;
 
                 const idempotencyKey = crypto.randomUUID();
 
@@ -907,7 +1087,7 @@ function createCredsManager(type) {
 
                         action,
 
-                        filenames: selectedFiles,
+                        ...this.getBatchTargetPayload(),
 
                         preview_token: previewData.preview_token,
 
@@ -923,11 +1103,29 @@ function createCredsManager(type) {
 
                     const successCount = data.success_count ?? data.succeeded ?? 0;
 
-                    showStatus(t('status_batch_complete', {success: successCount, total: selectedFiles.length}), 'success');
+                    showStatus(t('status_batch_complete', {success: successCount, total: data.total_count || targetCount}), 'success');
+
+                    showMessageModal(
+
+                        t('pool.batch.results_title'),
+
+                        this.formatBatchResults(data),
+
+                        successCount === (data.total_count || 0) ? 'success' : 'info'
+
+                    );
 
                     if (action === 'delete') {
 
-                        selectedFiles.forEach((filename) => {
+                        const executedFiles = (data.results || [])
+
+                            .filter(item => item.status === 'succeeded')
+
+                            .map(item => item.filename)
+
+                            .filter(Boolean);
+
+                        executedFiles.forEach((filename) => {
 
                             delete AppState.quotaPreviewCache[filename];
 
@@ -935,15 +1133,13 @@ function createCredsManager(type) {
 
                         Object.entries(AppState.credentialCardIndex).forEach(([pathId, context]) => {
 
-                            if (selectedFiles.includes(context.filename)) delete AppState.credentialCardIndex[pathId];
+                            if (executedFiles.includes(context.filename)) delete AppState.credentialCardIndex[pathId];
 
                         });
 
                     }
 
-                    this.selectedFiles.clear();
-
-                    this.updateBatchControls();
+                    this.clearSelection();
 
                     await this.refresh();
 
@@ -951,7 +1147,11 @@ function createCredsManager(type) {
 
                 } else {
 
-                    const operationError = data.error?.message || data.detail || t('unknown_error');
+                    const operationError = data.error?.code === 'credential_batch_preview_required'
+
+                        ? t('pool.batch.preview_stale')
+
+                        : (data.error?.message || data.detail || t('unknown_error'));
 
                     showStatus(t('status_batch_failed', {error: operationError}), 'error');
 

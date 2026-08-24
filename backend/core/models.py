@@ -453,7 +453,8 @@ class CredFileBatchActionRequest(BaseModel):
         "enable_credit",
         "disable_credit",
     ]
-    filenames: List[str] = Field(min_length=1, max_length=100)
+    filenames: List[str] = Field(default_factory=list, max_length=100)
+    selection_token: Optional[str] = Field(default=None, min_length=16, max_length=256)
     preview: bool = False
     preview_token: Optional[str] = Field(default=None, min_length=16, max_length=256)
     idempotency_key: Optional[str] = Field(default=None, min_length=8, max_length=128)

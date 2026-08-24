@@ -144,6 +144,124 @@ for (const [locale, values] of Object.entries(CREDENTIAL_FLEET_VALUES)) {
     });
 }
 
+const CREDENTIAL_OPERATION_KEYS = [
+    'pool.operation.limit', 'pool.operation.unsupported', 'pool.operation.verify_page_only',
+    'pool.batch.result_summary', 'pool.batch.more_results', 'pool.batch.recovery', 'pool.batch.refresh_selection',
+    'pool.batch.preview_summary', 'pool.batch.results_title', 'pool.batch.preview_stale',
+    'pool.batch.outcome.succeeded', 'pool.batch.outcome.unsupported', 'pool.batch.outcome.not_found',
+    'pool.batch.outcome.invalid', 'pool.batch.outcome.duplicate', 'pool.batch.outcome.timed_out', 'pool.batch.outcome.failed'
+];
+
+const CREDENTIAL_OPERATION_VALUES = {
+    en: [
+        'Narrow the selection to 100 credentials or fewer.', 'This operation is not supported by every selected credential type.', 'Verification currently requires an explicit page selection.',
+        '{success} of {total} operations succeeded.', '{count} additional results are not shown.', 'Refresh the fleet and retry failed or timed-out items. Unsupported items require a narrower provider selection.', 'The selection expired. Refresh the fleet and select the matching results again.',
+        'Preview: {eligible} eligible, {skipped} skipped, {total} total.', 'Credential operation results', 'The fleet changed after preview. Review a fresh preview before continuing.',
+        'Succeeded', 'Unsupported for this credential type', 'Credential no longer exists', 'Invalid target', 'Duplicate target', 'Timed out', 'Failed'
+    ],
+    'zh-CN': [
+        '请将选择范围缩小到不超过 100 个凭据。', '并非所有已选凭据类型都支持此操作。', '验证目前需要明确选择当前页。',
+        '{total} 个操作中有 {success} 个成功。', '另有 {count} 个结果未显示。', '请刷新凭据池并重试失败或超时的项目。不支持的项目需要缩小提供商范围。', '选择已过期。请刷新凭据池并重新选择匹配结果。',
+        '预览：{eligible} 个符合条件，{skipped} 个跳过，共 {total} 个。', '凭据操作结果', '预览后凭据池已变化。继续前请查看新预览。',
+        '成功', '此凭据类型不支持', '凭据已不存在', '目标无效', '目标重复', '超时', '失败'
+    ],
+    'zh-TW': [
+        '請將選取範圍縮小到不超過 100 個憑證。', '並非所有已選憑證類型都支援此操作。', '驗證目前需要明確選取目前頁面。',
+        '{total} 個操作中有 {success} 個成功。', '另有 {count} 個結果未顯示。', '請重新整理憑證集區並重試失敗或逾時項目。不支援的項目需縮小供應商範圍。', '選取已過期。請重新整理憑證集區並重新選取符合結果。',
+        '預覽：{eligible} 個符合條件，{skipped} 個略過，共 {total} 個。', '憑證操作結果', '預覽後憑證集區已變更。繼續前請查看新預覽。',
+        '成功', '此憑證類型不支援', '憑證已不存在', '目標無效', '目標重複', '逾時', '失敗'
+    ],
+    de: [
+        'Grenzen Sie die Auswahl auf höchstens 100 Zugangsdaten ein.', 'Nicht jede ausgewählte Zugangsdatenart unterstützt diesen Vorgang.', 'Die Prüfung erfordert derzeit eine explizite Seitenauswahl.',
+        '{success} von {total} Vorgängen waren erfolgreich.', '{count} weitere Ergebnisse werden nicht angezeigt.', 'Aktualisieren Sie den Pool und wiederholen Sie fehlgeschlagene oder abgebrochene Elemente. Nicht unterstützte Elemente benötigen eine engere Anbieterauswahl.', 'Die Auswahl ist abgelaufen. Aktualisieren Sie den Pool und wählen Sie die Treffer erneut aus.',
+        'Vorschau: {eligible} geeignet, {skipped} übersprungen, {total} insgesamt.', 'Ergebnisse der Zugangsdatenvorgänge', 'Der Pool hat sich nach der Vorschau geändert. Prüfen Sie vor dem Fortfahren eine neue Vorschau.',
+        'Erfolgreich', 'Für diese Zugangsdatenart nicht unterstützt', 'Zugangsdaten nicht mehr vorhanden', 'Ungültiges Ziel', 'Doppeltes Ziel', 'Zeitüberschreitung', 'Fehlgeschlagen'
+    ],
+    es: [
+        'Reduce la selección a 100 credenciales o menos.', 'No todos los tipos de credencial seleccionados admiten esta operación.', 'La verificación requiere actualmente una selección explícita de página.',
+        '{success} de {total} operaciones se completaron correctamente.', 'No se muestran {count} resultados adicionales.', 'Actualiza el grupo y reintenta los elementos fallidos o agotados. Los elementos no compatibles requieren una selección de proveedor más específica.', 'La selección caducó. Actualiza el grupo y vuelve a seleccionar los resultados.',
+        'Vista previa: {eligible} aptos, {skipped} omitidos, {total} en total.', 'Resultados de operaciones de credenciales', 'El grupo cambió después de la vista previa. Revisa una vista previa nueva antes de continuar.',
+        'Correcto', 'No compatible con este tipo de credencial', 'La credencial ya no existe', 'Destino no válido', 'Destino duplicado', 'Tiempo agotado', 'Error'
+    ],
+    fr: [
+        'Limitez la sélection à 100 identifiants ou moins.', 'Cette opération n’est pas prise en charge par tous les types d’identifiants sélectionnés.', 'La vérification nécessite actuellement une sélection explicite de page.',
+        '{success} opérations sur {total} ont réussi.', '{count} résultats supplémentaires ne sont pas affichés.', 'Actualisez le pool et réessayez les éléments en échec ou expirés. Les éléments non pris en charge exigent une sélection de fournisseur plus précise.', 'La sélection a expiré. Actualisez le pool et sélectionnez de nouveau les résultats.',
+        'Aperçu : {eligible} admissibles, {skipped} ignorés, {total} au total.', 'Résultats des opérations sur les identifiants', 'Le pool a changé après l’aperçu. Consultez un nouvel aperçu avant de continuer.',
+        'Réussi', 'Non pris en charge pour ce type', 'L’identifiant n’existe plus', 'Cible non valide', 'Cible en double', 'Délai dépassé', 'Échec'
+    ],
+    id: [
+        'Persempit pilihan menjadi maksimal 100 kredensial.', 'Operasi ini tidak didukung oleh semua jenis kredensial yang dipilih.', 'Verifikasi saat ini memerlukan pilihan halaman yang eksplisit.',
+        '{success} dari {total} operasi berhasil.', '{count} hasil tambahan tidak ditampilkan.', 'Segarkan pool dan coba lagi item yang gagal atau kehabisan waktu. Item yang tidak didukung memerlukan pilihan penyedia yang lebih sempit.', 'Pilihan kedaluwarsa. Segarkan pool lalu pilih kembali hasil yang cocok.',
+        'Pratinjau: {eligible} memenuhi syarat, {skipped} dilewati, total {total}.', 'Hasil operasi kredensial', 'Pool berubah setelah pratinjau. Tinjau pratinjau baru sebelum melanjutkan.',
+        'Berhasil', 'Tidak didukung untuk jenis ini', 'Kredensial sudah tidak ada', 'Target tidak valid', 'Target duplikat', 'Waktu habis', 'Gagal'
+    ],
+    it: [
+        'Riduci la selezione a non più di 100 credenziali.', 'Questa operazione non è supportata da tutti i tipi di credenziale selezionati.', 'La verifica richiede attualmente una selezione esplicita della pagina.',
+        '{success} operazioni su {total} riuscite.', 'Altri {count} risultati non sono visualizzati.', 'Aggiorna il pool e riprova gli elementi non riusciti o scaduti. Gli elementi non supportati richiedono una selezione provider più ristretta.', 'La selezione è scaduta. Aggiorna il pool e seleziona nuovamente i risultati.',
+        'Anteprima: {eligible} idonei, {skipped} ignorati, {total} totali.', 'Risultati delle operazioni sulle credenziali', 'Il pool è cambiato dopo l’anteprima. Esamina una nuova anteprima prima di continuare.',
+        'Riuscito', 'Non supportato per questo tipo', 'La credenziale non esiste più', 'Destinazione non valida', 'Destinazione duplicata', 'Tempo scaduto', 'Non riuscito'
+    ],
+    ja: [
+        '選択範囲を 100 件以下に絞り込んでください。', '選択したすべての認証情報の種類がこの操作に対応しているわけではありません。', '現在、検証にはページを明示的に選択する必要があります。',
+        '{total} 件中 {success} 件の操作が成功しました。', '追加の {count} 件は表示されていません。', 'プールを更新し、失敗またはタイムアウトした項目を再試行してください。未対応項目はプロバイダーを絞り込む必要があります。', '選択の有効期限が切れました。プールを更新して再度選択してください。',
+        'プレビュー: 対象 {eligible} 件、スキップ {skipped} 件、合計 {total} 件。', '認証情報操作の結果', 'プレビュー後にプールが変更されました。続行前に新しいプレビューを確認してください。',
+        '成功', 'この種類では未対応', '認証情報は存在しません', '無効な対象', '対象が重複', 'タイムアウト', '失敗'
+    ],
+    ko: [
+        '선택 범위를 자격 증명 100개 이하로 좁히세요.', '선택한 모든 자격 증명 유형에서 이 작업을 지원하지는 않습니다.', '현재 확인 작업에는 명시적인 페이지 선택이 필요합니다.',
+        '총 {total}개 작업 중 {success}개가 성공했습니다.', '추가 결과 {count}개는 표시되지 않습니다.', '풀을 새로 고친 후 실패하거나 시간 초과된 항목을 다시 시도하세요. 지원되지 않는 항목은 공급자 범위를 좁혀야 합니다.', '선택이 만료되었습니다. 풀을 새로 고치고 다시 선택하세요.',
+        '미리보기: 가능 {eligible}개, 건너뜀 {skipped}개, 총 {total}개.', '자격 증명 작업 결과', '미리보기 후 풀이 변경되었습니다. 계속하기 전에 새 미리보기를 확인하세요.',
+        '성공', '이 유형에서는 지원되지 않음', '자격 증명이 더 이상 없음', '잘못된 대상', '중복 대상', '시간 초과', '실패'
+    ],
+    pt: [
+        'Restrinja a seleção a 100 credenciais ou menos.', 'Esta operação não é compatível com todos os tipos de credencial selecionados.', 'A verificação atualmente exige uma seleção explícita de página.',
+        '{success} de {total} operações foram bem-sucedidas.', 'Outros {count} resultados não são exibidos.', 'Atualize o pool e tente novamente itens com falha ou tempo esgotado. Itens incompatíveis exigem uma seleção de provedor mais específica.', 'A seleção expirou. Atualize o pool e selecione novamente os resultados.',
+        'Prévia: {eligible} qualificados, {skipped} ignorados, {total} no total.', 'Resultados das operações de credenciais', 'O pool mudou após a prévia. Revise uma nova prévia antes de continuar.',
+        'Bem-sucedido', 'Incompatível com este tipo', 'A credencial não existe mais', 'Destino inválido', 'Destino duplicado', 'Tempo esgotado', 'Falhou'
+    ],
+    ru: [
+        'Сузьте выбор до 100 учётных данных или меньше.', 'Не все выбранные типы учётных данных поддерживают эту операцию.', 'Для проверки пока требуется явный выбор страницы.',
+        'Успешно выполнено операций: {success} из {total}.', 'Не показано дополнительных результатов: {count}.', 'Обновите пул и повторите элементы с ошибкой или тайм-аутом. Для неподдерживаемых элементов сузьте выбор провайдера.', 'Срок действия выбора истёк. Обновите пул и выберите результаты снова.',
+        'Предпросмотр: доступно {eligible}, пропущено {skipped}, всего {total}.', 'Результаты операций с учётными данными', 'После предпросмотра пул изменился. Перед продолжением проверьте новый предпросмотр.',
+        'Успешно', 'Не поддерживается для этого типа', 'Учётные данные больше не существуют', 'Недопустимая цель', 'Повторяющаяся цель', 'Тайм-аут', 'Ошибка'
+    ],
+    th: [
+        'จำกัดการเลือกให้ไม่เกิน 100 ข้อมูลรับรอง', 'ข้อมูลรับรองที่เลือกบางประเภทไม่รองรับการดำเนินการนี้', 'ขณะนี้การตรวจสอบต้องเลือกเป็นรายหน้าอย่างชัดเจน',
+        'สำเร็จ {success} จาก {total} การดำเนินการ', 'ไม่แสดงผลลัพธ์เพิ่มเติม {count} รายการ', 'รีเฟรชพูลแล้วลองรายการที่ล้มเหลวหรือหมดเวลาอีกครั้ง รายการที่ไม่รองรับต้องจำกัดผู้ให้บริการให้แคบลง', 'การเลือกหมดอายุแล้ว โปรดรีเฟรชพูลและเลือกผลลัพธ์ใหม่',
+        'ตัวอย่าง: พร้อมดำเนินการ {eligible} ข้าม {skipped} รวม {total}', 'ผลการดำเนินการข้อมูลรับรอง', 'พูลเปลี่ยนแปลงหลังดูตัวอย่าง โปรดตรวจสอบตัวอย่างใหม่ก่อนดำเนินการต่อ',
+        'สำเร็จ', 'ประเภทนี้ไม่รองรับ', 'ไม่มีข้อมูลรับรองแล้ว', 'เป้าหมายไม่ถูกต้อง', 'เป้าหมายซ้ำ', 'หมดเวลา', 'ล้มเหลว'
+    ],
+    tr: [
+        'Seçimi en fazla 100 kimlik bilgisiyle sınırlandırın.', 'Seçilen her kimlik bilgisi türü bu işlemi desteklemiyor.', 'Doğrulama şu anda açık bir sayfa seçimi gerektiriyor.',
+        '{total} işlemin {success} tanesi başarılı oldu.', '{count} ek sonuç gösterilmiyor.', 'Havuzu yenileyip başarısız veya zaman aşımına uğrayan öğeleri yeniden deneyin. Desteklenmeyen öğeler için sağlayıcı seçimini daraltın.', 'Seçimin süresi doldu. Havuzu yenileyip sonuçları yeniden seçin.',
+        'Önizleme: {eligible} uygun, {skipped} atlandı, toplam {total}.', 'Kimlik bilgisi işlem sonuçları', 'Havuz önizlemeden sonra değişti. Devam etmeden önce yeni önizlemeyi inceleyin.',
+        'Başarılı', 'Bu tür için desteklenmiyor', 'Kimlik bilgisi artık yok', 'Geçersiz hedef', 'Yinelenen hedef', 'Zaman aşımı', 'Başarısız'
+    ],
+    vi: [
+        'Thu hẹp phạm vi xuống tối đa 100 thông tin xác thực.', 'Không phải mọi loại thông tin xác thực đã chọn đều hỗ trợ thao tác này.', 'Xác minh hiện yêu cầu chọn rõ từng trang.',
+        '{success}/{total} thao tác thành công.', 'Còn {count} kết quả không hiển thị.', 'Làm mới kho rồi thử lại các mục thất bại hoặc hết thời gian. Với mục không hỗ trợ, hãy thu hẹp loại nhà cung cấp.', 'Lựa chọn đã hết hạn. Hãy làm mới kho và chọn lại các kết quả phù hợp.',
+        'Xem trước: {eligible} mục hợp lệ, {skipped} mục bỏ qua, tổng cộng {total}.', 'Kết quả thao tác thông tin xác thực', 'Kho đã thay đổi sau bước xem trước. Hãy xem trước lại trước khi tiếp tục.',
+        'Thành công', 'Không hỗ trợ loại này', 'Thông tin xác thực không còn tồn tại', 'Mục tiêu không hợp lệ', 'Mục tiêu trùng lặp', 'Hết thời gian', 'Thất bại'
+    ]
+};
+
+for (const [locale, values] of Object.entries(CREDENTIAL_OPERATION_VALUES)) {
+    CREDENTIAL_OPERATION_KEYS.forEach((key, index) => {
+        PAGE_LOCALE_TRANSLATIONS[locale][key] = values[index];
+    });
+}
+
+const CREDENTIAL_TIER_KEYS = ['pool.tier.not_applicable'];
+const CREDENTIAL_TIER_VALUES = {
+    en: 'Not applicable', 'zh-CN': '不适用', 'zh-TW': '不適用', de: 'Nicht zutreffend',
+    es: 'No aplicable', fr: 'Non applicable', id: 'Tidak berlaku', it: 'Non applicabile',
+    ja: '対象外', ko: '해당 없음', pt: 'Não aplicável', ru: 'Не применимо', th: 'ไม่เกี่ยวข้อง',
+    tr: 'Uygulanamaz', vi: 'Không áp dụng'
+};
+for (const [locale, value] of Object.entries(CREDENTIAL_TIER_VALUES)) {
+    PAGE_LOCALE_TRANSLATIONS[locale]['pool.tier.not_applicable'] = value;
+}
+
 const UPDATE_GUIDE_KEYS = ['about.update_guide_link'];
 
 const UPDATE_GUIDE_COPY = {

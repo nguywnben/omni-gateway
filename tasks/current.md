@@ -10,11 +10,13 @@
   approval), approximately 36%; Wave 2 execution-slice checkboxes are refinements and are not added
   to that denominator.
 - Active scope: Wave 2 — Credential Operations.
-- Control state: **IN PROGRESS — W2.8**.
-- Expected worktree state at this checkpoint: W2.7 changes staged for an atomic commit.
-- Expected runtime: Omni Gateway PID 1364 on `http://127.0.0.1:4283`; `/health` and `/ready`
+- Control state: **IN PROGRESS — W2.9**.
+- Expected worktree state at this checkpoint: W2.8 / Checkpoint W2-B changes staged for an atomic
+  commit.
+- Expected runtime: Omni Gateway PID 3800 on `http://127.0.0.1:4283`; `/health` and `/ready`
   return HTTP 200.
-- Last verified full suite: 515 tests passed; focused Ruff, compileall, and diff-check passed.
+- Last verified full suite: 522 tests passed; Ruff, compileall, all JavaScript syntax, and
+  diff-check passed.
 
 Wave 2 was approved by the human on 2026-08-24. Do not expand beyond its documented scope.
 
@@ -74,6 +76,19 @@ silently choosing a new design.
   session record without credential names; page selection and opaque all-matching selection are
   distinct, clearable states. All 15 supported locales received curated fleet copy, frontend
   locale/asset tests passed, and changed JavaScript files passed syntax checks.
+- W2.8 evidence: all-matching batch requests resolve normalized filters against fresh fleet data,
+  retain the 100-target cap, and reject expired selections or previews made stale by fleet changes;
+  provider catalog capabilities now drive a fail-closed operation intersection in the toolbar.
+  Preview precedes explicit confirmation, while execution returns localized bounded per-item
+  outcomes and recovery guidance. Non-Antigravity tiers are explicitly not applicable rather than
+  being mislabeled as Pro.
+- W2-B evidence: 522 tests passed with mixed-provider, 101-target, stale-preview, tamper, and
+  secret-exclusion fixtures; Ruff, compileall, every frontend JavaScript file, and diff-check passed.
+  PID 3800 is the only listener on port 4283 and health/ready return 200. Real-browser checks found
+  no horizontal overflow at 360/768/1024/1440, verified 2/3/5-column responsive filters,
+  light/dark/system themes, bounded URL filter restoration, semantic controls/focus styling, and
+  curated Vietnamese, English, and Simplified Chinese fleet copy; observed management requests
+  returned 200.
 
 ## Approved vs. Proposed Scope
 
@@ -113,9 +128,8 @@ checkboxes to be marked complete.
 
 ## Immediate Next Action
 
-Implement W2.8 with test-first evidence: resolve all-matching tokens into freshly evaluated bounded
-batches, compute the contextual operation intersection, and present preview/per-item recovery
-results with explicit destructive confirmation.
+Implement W2.9 with test-first evidence: define and enforce the shared provider form contract before
+correcting each provider family in W2.10–W2.11.
 
 ## Update Rule
 

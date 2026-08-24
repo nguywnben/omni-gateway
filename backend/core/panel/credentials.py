@@ -27,6 +27,11 @@ from core.credential_batch_operations import (
     release_idempotency_reservation,
     store_idempotent_response,
 )
+from core.credential_fleet_query import (
+    credential_selection_registry,
+    load_credential_fleet_items,
+    select_credential_filenames,
+)
 from core.credential_manager import credential_manager
 from core.credential_operation_evidence import record_credential_mutation
 from core.google_ai_studio import (
@@ -447,27 +452,97 @@ async def creds_batch_action(
     mode: str = "code_assist",
 ):
     reservation_active = False
-    fingerprint = ""
+    target_fingerprint = ""
+    idempotency_fingerprint = ""
     planning_complete = False
     evidence_mode = mode
+    filenames = list(request.filenames)
+    storage_adapter = None
     try:
         mode = validate_mode(mode)
         evidence_mode = mode
         action = request.action
-        filenames = request.filenames
-        fingerprint = batch_request_fingerprint(mode, action, filenames)
-        requires_preview = batch_requires_preview(action, len(filenames))
-
+        has_explicit_targets = bool(filenames)
+        has_selection = bool(request.selection_token)
+        if has_explicit_targets == has_selection:
+            return JSONResponse(
+                status_code=422,
+                content={
+                    "error": {
+                        "code": "credential_batch_target_scope_invalid",
+                        "message": (
+                            "Provide either explicit credential filenames or one selection token."
+                        ),
+                    }
+                },
+            )
+        idempotency_targets = (
+            filenames
+            if has_explicit_targets
+            else [f"selection:{request.selection_token or ''}"]
+        )
+        idempotency_fingerprint = batch_request_fingerprint(
+            mode,
+            action,
+            idempotency_targets,
+        )
         try:
-            cached = get_idempotent_response(request.idempotency_key, fingerprint)
+            cached = get_idempotent_response(
+                request.idempotency_key,
+                idempotency_fingerprint,
+            )
         except HTTPException as exc:
             return _batch_idempotency_error(exc)
         if cached and not request.preview:
             status_code, body = cached
             return JSONResponse(status_code=status_code, content=body)
 
+        if has_selection:
+            try:
+                filters = credential_selection_registry.resolve(
+                    request.selection_token or "",
+                    mode=mode,
+                )
+            except ValueError:
+                return JSONResponse(
+                    status_code=410,
+                    content={
+                        "error": {
+                            "code": "credential_selection_expired",
+                            "message": "Refresh the fleet selection before running this batch.",
+                        }
+                    },
+                )
+            storage_adapter = await get_storage_adapter()
+            fleet_items = await load_credential_fleet_items(storage_adapter, mode=mode)
+            filenames = select_credential_filenames(fleet_items, filters)
+            if not filenames:
+                return JSONResponse(
+                    status_code=409,
+                    content={
+                        "error": {
+                            "code": "credential_selection_empty",
+                            "message": "No credentials currently match this selection.",
+                        }
+                    },
+                )
+            if len(filenames) > 100:
+                return JSONResponse(
+                    status_code=422,
+                    content={
+                        "error": {
+                            "code": "credential_selection_limit_exceeded",
+                            "message": "Narrow the fleet selection to 100 credentials or fewer.",
+                            "matching_count": len(filenames),
+                            "maximum_count": 100,
+                        }
+                    },
+                )
+        target_fingerprint = batch_request_fingerprint(mode, action, filenames)
+        requires_preview = batch_requires_preview(action, len(filenames))
+
         if not request.preview and requires_preview:
-            if not preview_matches(request.preview_token, fingerprint):
+            if not preview_matches(request.preview_token, target_fingerprint):
                 return JSONResponse(
                     status_code=428,
                     content={
@@ -493,7 +568,7 @@ async def creds_batch_action(
             try:
                 cached = get_idempotent_response(
                     request.idempotency_key,
-                    fingerprint,
+                    idempotency_fingerprint,
                     reserve=True,
                 )
             except HTTPException as exc:
@@ -507,12 +582,13 @@ async def creds_batch_action(
             f"Planning credential batch action '{action}' for {len(filenames)} targets "
             f"(mode={mode}, preview={request.preview})."
         )
-        storage_adapter = await get_storage_adapter()
+        if storage_adapter is None:
+            storage_adapter = await get_storage_adapter()
         results = await build_batch_plan(storage_adapter, action, filenames, mode=mode)
         planning_complete = True
 
         if request.preview:
-            preview_token = issue_batch_preview(fingerprint)
+            preview_token = issue_batch_preview(target_fingerprint)
             body = _batch_response_body(
                 action,
                 results,
@@ -573,7 +649,12 @@ async def creds_batch_action(
             preview=False,
             requires_preview=requires_preview,
         )
-        store_idempotent_response(request.idempotency_key, fingerprint, 200, body)
+        store_idempotent_response(
+            request.idempotency_key,
+            idempotency_fingerprint,
+            200,
+            body,
+        )
         reservation_active = False
         return JSONResponse(content=body)
 
@@ -581,7 +662,7 @@ async def creds_batch_action(
         raise
     except Exception as e:
         if not request.preview and not planning_complete:
-            for filename in request.filenames:
+            for filename in filenames:
                 record_credential_mutation(
                     action=request.action,
                     operation=BATCH_ACTION_OPERATIONS.get(request.action, "unknown"),
@@ -596,7 +677,10 @@ async def creds_batch_action(
         raise internal_server_error() from e
     finally:
         if reservation_active:
-            release_idempotency_reservation(request.idempotency_key, fingerprint)
+            release_idempotency_reservation(
+                request.idempotency_key,
+                idempotency_fingerprint,
+            )
 
 
 def _batch_idempotency_error(exc: HTTPException) -> JSONResponse:
