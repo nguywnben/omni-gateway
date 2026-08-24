@@ -10,12 +10,11 @@
   approval), approximately 36%; Wave 2 execution-slice checkboxes are refinements and are not added
   to that denominator.
 - Active scope: Wave 2 — Credential Operations.
-- Control state: **IN PROGRESS — W2.9**.
-- Expected worktree state at this checkpoint: W2.8 / Checkpoint W2-B changes staged for an atomic
-  commit.
+- Control state: **IN PROGRESS — W2.10**.
+- Expected worktree state at this checkpoint: W2.9 changes prepared for an atomic commit.
 - Expected runtime: Omni Gateway PID 3800 on `http://127.0.0.1:4283`; `/health` and `/ready`
   return HTTP 200.
-- Last verified full suite: 522 tests passed; Ruff, compileall, all JavaScript syntax, and
+- Last verified full suite: 528 tests passed; Ruff, compileall, changed JavaScript syntax, and
   diff-check passed.
 
 Wave 2 was approved by the human on 2026-08-24. Do not expand beyond its documented scope.
@@ -89,6 +88,11 @@ silently choosing a new design.
   light/dark/system themes, bounded URL filter restoration, semantic controls/focus styling, and
   curated Vietnamese, English, and Simplified Chinese fleet copy; observed management requests
   returned 200.
+- W2.9 evidence: one declarative manifest now covers all 37 editable fields across the nine console
+  provider variants. It defines input type, required state, bounds, autocomplete, secret lifetime,
+  environment locks, help, advanced status, validation, and reset behavior; runtime helpers apply
+  the contract without browser persistence. Static audits enforce coverage, labels, secret safety,
+  and a curated 15-locale catalog. The full suite reached 528 tests.
 
 ## Approved vs. Proposed Scope
 
@@ -128,8 +132,8 @@ checkboxes to be marked complete.
 
 ## Immediate Next Action
 
-Implement W2.9 with test-first evidence: define and enforce the shared provider form contract before
-correcting each provider family in W2.10–W2.11.
+Implement W2.10 with test-first evidence: apply the shared contract to Google Antigravity and Google
+AI Studio settings, credential, OAuth/callback, reset, and environment-lock flows.
 
 ## Update Rule
 
