@@ -72,6 +72,9 @@ MANAGEMENT_MUTATIONS: dict[tuple[str, str], ManagementMutation] = {
     ("POST", "/api/config/access"): _mutation("config.update", "configuration", "settings_changed"),
     ("POST", "/api/config/reset"): _mutation("config.reset", "configuration", "settings_changed"),
     ("POST", "/api/logs/clear"): _mutation("logs.clear", "log_store", "deleted"),
+    ("PUT", "/api/audit/retention"): _mutation(
+        "audit.retention_update", "audit_policy", "retention_changed"
+    ),
     ("POST", "/api/virtual-keys"): _mutation("virtual_key.create", "virtual_key", "created"),
     ("PATCH", "/api/virtual-keys/{key_id}"): _mutation(
         "virtual_key.update", "virtual_key", "updated"
