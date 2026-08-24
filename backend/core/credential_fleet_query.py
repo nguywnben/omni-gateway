@@ -132,9 +132,7 @@ async def load_credential_fleet_items(storage_adapter: Any, *, mode: str) -> lis
         )
 
     return list(
-        await asyncio.gather(
-            *(load_public_summary(summary) for summary in result.get("items", []))
-        )
+        await asyncio.gather(*(load_public_summary(summary) for summary in result.get("items", [])))
     )
 
 
@@ -298,10 +296,7 @@ def _facet_counts(items: Iterable[dict[str, Any]]) -> dict[str, dict[str, int]]:
     for item in items:
         for facet_name, field_name in fields.items():
             counters[facet_name][str(item.get(field_name) or "unknown")] += 1
-    return {
-        name: dict(sorted(counter.items()))
-        for name, counter in counters.items()
-    }
+    return {name: dict(sorted(counter.items())) for name, counter in counters.items()}
 
 
 def build_credential_fleet_page(

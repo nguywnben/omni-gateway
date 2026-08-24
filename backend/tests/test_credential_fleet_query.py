@@ -116,7 +116,9 @@ class CredentialFleetQueryTests(unittest.TestCase):
         self.assertEqual(first_names, sorted(first_names))
         self.assertFalse(set(first_names) & set(second_names))
         self.assertEqual(first["selection"]["matching_count"], 125)
-        self.assertEqual(first["selection"]["query_fingerprint"], second["selection"]["query_fingerprint"])
+        self.assertEqual(
+            first["selection"]["query_fingerprint"], second["selection"]["query_fingerprint"]
+        )
 
     def test_empty_result_has_explicit_selection_without_token(self):
         page = build_credential_fleet_page(

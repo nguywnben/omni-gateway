@@ -151,9 +151,7 @@ async def build_batch_plan(
         try:
             filename = validate_credential_filename(raw_filename)
         except HTTPException:
-            results.append(
-                _plan_item(target_index, None, operation, "invalid", "invalid_filename")
-            )
+            results.append(_plan_item(target_index, None, operation, "invalid", "invalid_filename"))
             continue
 
         if filename in seen:
@@ -173,11 +171,8 @@ async def build_batch_plan(
         inferred_variant = get_credential_provider_variant(credential_data)
         capabilities = get_credential_variant_capabilities(inferred_variant)
         variant_id = capabilities.variant_id if capabilities else "unknown"
-        operation_unsupported = (
-            operation == "credit_mode" and mode != "primary"
-        ) or (
-            mode == "primary"
-            and not credential_supports_operation(credential_data, operation)
+        operation_unsupported = (operation == "credit_mode" and mode != "primary") or (
+            mode == "primary" and not credential_supports_operation(credential_data, operation)
         )
         if operation_unsupported:
             results.append(
@@ -201,8 +196,7 @@ async def build_batch_plan(
 
 def public_batch_plan(results: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return [
-        {key: value for key, value in item.items() if key != "credential_data"}
-        for item in results
+        {key: value for key, value in item.items() if key != "credential_data"} for item in results
     ]
 
 

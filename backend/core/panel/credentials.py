@@ -396,9 +396,7 @@ async def creds_action(
             )
             evidence_emitted = True
             raise
-        log.info(
-            f"Performing credential action '{request.action}' on {filename} (mode={mode})."
-        )
+        log.info(f"Performing credential action '{request.action}' on {filename} (mode={mode}).")
 
         storage_adapter = await get_storage_adapter()
         credential_data = await storage_adapter.get_credential(filename, mode=mode)
@@ -477,9 +475,7 @@ async def creds_batch_action(
                 },
             )
         idempotency_targets = (
-            filenames
-            if has_explicit_targets
-            else [f"selection:{request.selection_token or ''}"]
+            filenames if has_explicit_targets else [f"selection:{request.selection_token or ''}"]
         )
         idempotency_fingerprint = batch_request_fingerprint(
             mode,
@@ -622,9 +618,7 @@ async def creds_batch_action(
                     timeout_seconds=BATCH_ITEM_TIMEOUT_SECONDS,
                 )
                 if response.status_code >= 400:
-                    item["status"] = (
-                        "unsupported" if response.status_code == 422 else "failed"
-                    )
+                    item["status"] = "unsupported" if response.status_code == 422 else "failed"
                     item["code"] = (
                         "credential_operation_unsupported"
                         if response.status_code == 422

@@ -482,9 +482,7 @@ class CredentialBatchOperationTests(unittest.IsolatedAsyncioTestCase):
             AsyncMock(return_value=storage),
         ):
             preview = await creds_batch_action(
-                CredFileBatchActionRequest(
-                    action="delete", filenames=["first.json"], preview=True
-                ),
+                CredFileBatchActionRequest(action="delete", filenames=["first.json"], preview=True),
                 token="session",
                 mode="provider",
             )
@@ -584,9 +582,7 @@ class CredentialBatchOperationTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(body["results"][0]["status"], "unsupported")
 
     def test_batch_route_publishes_the_typed_success_contract(self):
-        route = next(
-            route for route in credentials_router.routes if route.path == "/batch-action"
-        )
+        route = next(route for route in credentials_router.routes if route.path == "/batch-action")
         self.assertIsNotNone(route.response_model)
         self.assertEqual(route.response_model.__name__, "CredentialBatchOperationResponse")
 

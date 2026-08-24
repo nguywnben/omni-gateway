@@ -134,7 +134,10 @@ class ProviderFormContractTests(unittest.TestCase):
                 self.assertIn("resetBehavior: 'clear'", field_entry)
 
     def test_runtime_enforces_contract_without_persisting_form_state(self):
-        self.assertIn("document.addEventListener('DOMContentLoaded', applyProviderFormContract", CONTRACT_SOURCE)
+        self.assertIn(
+            "document.addEventListener('DOMContentLoaded', applyProviderFormContract",
+            CONTRACT_SOURCE,
+        )
         self.assertIn("field.dataset.secretLifetime", CONTRACT_SOURCE)
         self.assertIn("field.setCustomValidity", CONTRACT_SOURCE)
         self.assertIn("document.createElement('p')", CONTRACT_SOURCE)
@@ -153,15 +156,28 @@ class ProviderFormContractTests(unittest.TestCase):
         self.assertEqual(
             locales,
             {
-                "en", "zh-CN", "zh-TW", "de", "es", "fr", "id", "it",
-                "ja", "ko", "pt", "ru", "th", "tr", "vi",
+                "en",
+                "zh-CN",
+                "zh-TW",
+                "de",
+                "es",
+                "fr",
+                "id",
+                "it",
+                "ja",
+                "ko",
+                "pt",
+                "ru",
+                "th",
+                "tr",
+                "vi",
             },
         )
         self.assertIn("values.length !== PROVIDER_FORM_KEYS.length", LOCALE_SOURCE)
 
-        label_block = LOCALE_SOURCE.split(
-            "const PROVIDER_FORM_LABEL_VALUES = {", 1
-        )[1].split("\n};", 1)[0]
+        label_block = LOCALE_SOURCE.split("const PROVIDER_FORM_LABEL_VALUES = {", 1)[1].split(
+            "\n};", 1
+        )[0]
         label_locales = {
             left or right
             for left, right in re.findall(

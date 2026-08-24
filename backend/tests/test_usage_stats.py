@@ -86,8 +86,18 @@ class UsageStatsTests(unittest.TestCase):
                 self.assertEqual(
                     row,
                     (
-                        "request-123", 120, 30, 150, 100, 40, 6,
-                        "balanced", 7, "target_reached", 125, 2,
+                        "request-123",
+                        120,
+                        30,
+                        150,
+                        100,
+                        40,
+                        6,
+                        "balanced",
+                        7,
+                        "target_reached",
+                        125,
+                        2,
                     ),
                 )
             finally:

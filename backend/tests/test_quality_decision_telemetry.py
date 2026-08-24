@@ -115,8 +115,7 @@ class QualityDecisionTelemetryTests(unittest.TestCase):
                     connection.close()
 
                 self.assertTrue(
-                    {"quality_profile", "quality_policy_revision", "compression_reason"}
-                    <= columns
+                    {"quality_profile", "quality_policy_revision", "compression_reason"} <= columns
                 )
                 self.assertEqual(legacy_row, ("legacy.json",))
             finally:

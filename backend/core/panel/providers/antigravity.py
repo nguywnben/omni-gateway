@@ -49,9 +49,7 @@ SECRET_CONFIG_KEYS = {"antigravity_client_secret"}
 def redact_antigravity_config(config_values: dict) -> dict:
     """Return provider settings without reflecting stored secrets to the browser."""
     safe_config = dict(config_values)
-    configured_secrets = sorted(
-        key for key in SECRET_CONFIG_KEYS if bool(safe_config.get(key))
-    )
+    configured_secrets = sorted(key for key in SECRET_CONFIG_KEYS if bool(safe_config.get(key)))
     for key in SECRET_CONFIG_KEYS:
         if key in safe_config:
             safe_config[key] = ""

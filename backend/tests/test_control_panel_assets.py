@@ -442,7 +442,9 @@ class ControlPanelAssetTests(unittest.TestCase):
 
         self.assertIn("fetch('./api/providers'", credential_manager_script)
         self.assertIn("selectedVariantsSupport(operation)", credential_manager_script)
-        self.assertIn("selection_token: this.allMatchingSelection?.token", credential_manager_script)
+        self.assertIn(
+            "selection_token: this.allMatchingSelection?.token", credential_manager_script
+        )
         self.assertIn("pool.operation.unsupported", credential_manager_script)
         preview_index = credential_manager_script.index("const previewResponse = await fetch")
         confirmation_index = credential_manager_script.index(

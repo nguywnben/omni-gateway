@@ -113,9 +113,7 @@ class CredentialOperationEnforcementTests(unittest.IsolatedAsyncioTestCase):
             "core.panel.credentials.get_storage_adapter",
             AsyncMock(return_value=storage),
         ):
-            response = await download_cred_file(
-                "unknown.json", token="session", mode="provider"
-            )
+            response = await download_cred_file("unknown.json", token="session", mode="provider")
 
         body = json.loads(response.body)
         self.assertEqual(response.status_code, 422)

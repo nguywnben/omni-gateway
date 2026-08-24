@@ -92,14 +92,10 @@ class ProviderCapabilityTests(unittest.TestCase):
             )
         )
         self.assertTrue(
-            credential_supports_operation(
-                {"provider": XAI, "credential_type": "oauth"}, "quota"
-            )
+            credential_supports_operation({"provider": XAI, "credential_type": "oauth"}, "quota")
         )
         self.assertTrue(
-            credential_supports_operation(
-                {"provider": OPENAI, "credential_type": "oauth"}, "quota"
-            )
+            credential_supports_operation({"provider": OPENAI, "credential_type": "oauth"}, "quota")
         )
         self.assertFalse(
             credential_supports_operation(

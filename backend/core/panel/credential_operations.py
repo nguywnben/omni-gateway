@@ -580,9 +580,7 @@ async def get_creds_status_common(
                 detail="Error code filter must be all, none, or a three-digit status code.",
             )
 
-    supported_variants = {
-        item["variant_id"] for item in list_credential_variant_capabilities()
-    }
+    supported_variants = {item["variant_id"] for item in list_credential_variant_capabilities()}
     normalized_provider_filter = "all"
     normalized_variant_filter = str(provider_variant_filter or "all").strip().lower()
     if normalized_variant_filter != "all" and normalized_variant_filter not in supported_variants:
@@ -626,7 +624,10 @@ async def get_creds_status_common(
                 ),
             )
         if legacy_variant_filter != "all":
-            if normalized_variant_filter != "all" and normalized_variant_filter != legacy_variant_filter:
+            if (
+                normalized_variant_filter != "all"
+                and normalized_variant_filter != legacy_variant_filter
+            ):
                 raise HTTPException(
                     status_code=400,
                     detail="Provider and provider variant filters conflict.",

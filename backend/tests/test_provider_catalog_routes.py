@@ -26,16 +26,16 @@ class ProviderCatalogRouteTests(unittest.IsolatedAsyncioTestCase):
         body = json.loads(response.body)
 
         self.assertEqual(body["providers"], list_provider_capabilities())
-        self.assertEqual(
-            body["credential_variants"], list_credential_variant_capabilities()
-        )
+        self.assertEqual(body["credential_variants"], list_credential_variant_capabilities())
         self.assertEqual(body["operation_vocabulary"], sorted(CREDENTIAL_OPERATIONS))
 
     async def test_catalog_route_remains_authenticated_and_typed(self):
         route = next(route for route in router.routes if route.path == "/api/providers")
 
         self.assertTrue(
-            any(dependency.call is verify_panel_token for dependency in route.dependant.dependencies)
+            any(
+                dependency.call is verify_panel_token for dependency in route.dependant.dependencies
+            )
         )
         self.assertIsNotNone(route.response_model)
 
