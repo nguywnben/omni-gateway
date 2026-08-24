@@ -18,13 +18,18 @@ if str(BACKEND_DIR) not in sys.path:
 import httpx
 import main
 from core.audit import AuditPage, AuditQuery, AuditRetentionPolicy, create_audit_event
+from core.audit_export import AuditExportLimitError
 from core.panel.audit_routes import (
+    AuditExportParams,
     AuditQueryParams,
     AuditRetentionUpdateRequest,
+    export_audit_events,
     get_audit_events,
     get_audit_retention,
     update_audit_retention,
 )
+from core.utils import verify_panel_token
+from starlette.requests import Request
 
 
 def _event():
@@ -51,6 +56,7 @@ class _AuditService:
         self.retention_policy = AuditRetentionPolicy()
         self.query_calls = []
         self.update_calls = []
+        self.record_calls = []
         self.page = AuditPage(events=(_event(),), next_cursor="opaque-cursor")
 
     async def query(self, query):
@@ -61,6 +67,15 @@ class _AuditService:
         self.update_calls.append(policy)
         self.retention_policy = policy
         return 7
+
+    async def record(self, mutation, **kwargs):
+        self.record_calls.append((mutation, kwargs))
+
+
+def _request(request_id="export-request"):
+    request = Request({"type": "http", "method": "GET", "path": "/api/audit/export"})
+    request.state.request_id = request_id
+    return request
 
 
 class AuditRouteTests(unittest.IsolatedAsyncioTestCase):
@@ -74,13 +89,17 @@ class AuditRouteTests(unittest.IsolatedAsyncioTestCase):
             responses = (
                 await client.get("/api/audit/events?page_size=25"),
                 await client.get("/api/audit/retention"),
+                await client.get("/api/audit/export?format=csv"),
                 await client.put(
                     "/api/audit/retention",
                     json={"retention_days": 90, "max_events": 1_000_000},
                 ),
             )
 
-        self.assertEqual([response.status_code for response in responses], [401, 401, 401])
+        self.assertEqual(
+            [response.status_code for response in responses],
+            [401, 401, 401, 401],
+        )
 
     async def test_query_maps_all_bounded_filters_and_returns_opaque_page(self):
         service = _AuditService()
@@ -127,6 +146,34 @@ class AuditRouteTests(unittest.IsolatedAsyncioTestCase):
         serialized = response.body.decode()
         self.assertNotIn("panel-owner", serialized)
         self.assertNotIn("private-credential.json", serialized)
+
+    async def test_query_http_contract_accepts_repeated_filters_and_integer_page_size(self):
+        service = _AuditService()
+        service.page = AuditPage(events=service.page.events)
+        main.app.dependency_overrides[verify_panel_token] = lambda: "session"
+        try:
+            with patch("core.panel.audit_routes.get_audit_service", return_value=service):
+                transport = httpx.ASGITransport(app=main.app)
+                async with httpx.AsyncClient(
+                    transport=transport,
+                    base_url="http://test",
+                ) as client:
+                    response = await client.get(
+                        "/api/audit/events",
+                        params=[
+                            ("actions", "credential.delete"),
+                            ("outcomes", "failed"),
+                            ("outcomes", "succeeded"),
+                            ("page_size", "25"),
+                        ],
+                    )
+        finally:
+            main.app.dependency_overrides.pop(verify_panel_token, None)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(service.query_calls[0].actions, ("credential.delete",))
+        self.assertEqual(service.query_calls[0].outcomes, ("failed", "succeeded"))
+        self.assertEqual(service.query_calls[0].page_size, 25)
 
     async def test_invalid_filter_or_tampered_cursor_has_stable_secret_free_error(self):
         service = _AuditService()
@@ -187,6 +234,52 @@ class AuditRouteTests(unittest.IsolatedAsyncioTestCase):
         ):
             with self.subTest(invalid=invalid), self.assertRaises(ValidationError):
                 AuditRetentionUpdateRequest.model_validate(invalid)
+
+    async def test_export_streams_fixed_attachment_and_records_successful_operation(self):
+        service = _AuditService()
+        service.page = AuditPage(events=service.page.events)
+        with patch("core.panel.audit_routes.get_audit_service", return_value=service):
+            response = await export_audit_events(
+                request=_request(),
+                params=AuditExportParams(format="jsonl", actions=["credential.delete"]),
+                token="session",
+            )
+
+        chunks = [chunk async for chunk in response.body_iterator]
+        payload = b"".join(chunk.encode() if isinstance(chunk, str) else chunk for chunk in chunks)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.media_type, "application/x-ndjson")
+        self.assertRegex(
+            response.headers["content-disposition"],
+            r'^attachment; filename="omni-audit-\d{8}T\d{6}Z\.jsonl"$',
+        )
+        self.assertEqual(response.headers["x-audit-event-count"], "1")
+        self.assertEqual(json.loads(payload), service.page.events[0].to_record())
+        mutation, evidence = service.record_calls[0]
+        self.assertEqual(mutation.action, "audit.export")
+        self.assertEqual(mutation.target_type, "audit_policy")
+        self.assertEqual(mutation.change_codes, ("exported",))
+        self.assertEqual(evidence["request_id"], "export-request")
+        self.assertEqual(evidence["outcome"], "succeeded")
+
+    async def test_export_limit_error_is_413_and_does_not_claim_success(self):
+        service = _AuditService()
+        with (
+            patch("core.panel.audit_routes.get_audit_service", return_value=service),
+            patch(
+                "core.panel.audit_routes.build_audit_export",
+                new=AsyncMock(side_effect=AuditExportLimitError("too many events")),
+            ),
+        ):
+            response = await export_audit_events(
+                request=_request(),
+                params=AuditExportParams(format="csv"),
+                token="session",
+            )
+
+        self.assertEqual(response.status_code, 413)
+        self.assertEqual(_body(response)["error"]["code"], "audit_export_limit_exceeded")
+        self.assertEqual(service.record_calls, [])
 
 
 if __name__ == "__main__":

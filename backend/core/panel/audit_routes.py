@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from datetime import datetime
-from typing import Annotated
+from datetime import datetime, timezone
+from typing import Annotated, Literal
 
 from core.audit import (
     MAX_RETENTION_DAYS,
@@ -13,17 +13,25 @@ from core.audit import (
     AuditQuery,
     AuditRetentionPolicy,
 )
+from core.audit_export import (
+    MAX_AUDIT_EXPORT_BYTES,
+    MAX_AUDIT_EXPORT_EVENTS,
+    AuditExportLimitError,
+    build_audit_export,
+)
 from core.audit_service import get_audit_service
 from core.i18n import LocalizedJSONResponse as JSONResponse
+from core.management_audit import ManagementMutation
 from core.utils import verify_panel_token
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, Request
+from fastapi.responses import StreamingResponse
 from log import log
 from pydantic import BaseModel, ConfigDict, Field
 
 router = APIRouter(prefix="/api/audit", tags=["audit"])
 
 
-class AuditQueryParams(BaseModel):
+class AuditFilterParams(BaseModel):
     """Bounded exact-match filters shared by list and export routes."""
 
     model_config = ConfigDict(extra="forbid")
@@ -37,10 +45,13 @@ class AuditQueryParams(BaseModel):
     request_id: str | None = Field(default=None, max_length=128)
     occurred_after: datetime | None = None
     occurred_before: datetime | None = None
-    page_size: int = Field(default=50, ge=1, le=200)
-    cursor: str | None = Field(default=None, min_length=1, max_length=1024)
 
-    def to_domain(self) -> AuditQuery:
+    def to_domain(
+        self,
+        *,
+        page_size: int = 50,
+        cursor: str | None = None,
+    ) -> AuditQuery:
         return AuditQuery(
             actor_types=tuple(self.actor_types),
             actor_fingerprints=tuple(self.actor_fingerprints),
@@ -51,9 +62,21 @@ class AuditQueryParams(BaseModel):
             request_id=self.request_id,
             occurred_after=self.occurred_after,
             occurred_before=self.occurred_before,
-            page_size=self.page_size,
-            cursor=self.cursor,
+            page_size=page_size,
+            cursor=cursor,
         )
+
+
+class AuditQueryParams(AuditFilterParams):
+    page_size: int = Field(default=50, ge=1, le=200)
+    cursor: str | None = Field(default=None, min_length=1, max_length=1024)
+
+    def to_domain(self) -> AuditQuery:
+        return super().to_domain(page_size=self.page_size, cursor=self.cursor)
+
+
+class AuditExportParams(AuditFilterParams):
+    format: Literal["jsonl", "csv"] = "jsonl"
 
 
 class AuditRetentionUpdateRequest(BaseModel):
@@ -150,6 +173,63 @@ async def get_audit_retention(token: str = Depends(verify_panel_token)):
                 },
             },
         }
+    )
+
+
+@router.get("/export")
+async def export_audit_events(
+    request: Request,
+    params: Annotated[AuditExportParams, Query()],
+    token: str = Depends(verify_panel_token),
+):
+    del token
+    try:
+        service = get_audit_service()
+        export = await build_audit_export(
+            service,
+            params.to_domain(),
+            export_format=params.format,
+        )
+        await service.record(
+            ManagementMutation(
+                action="audit.export",
+                target_type="audit_policy",
+                change_codes=("exported",),
+                target_identifier=f"{params.format}:bounded",
+            ),
+            request_id=request.state.request_id,
+            actor_type="panel_session",
+            actor_identifier="panel-owner",
+            outcome="succeeded",
+        )
+    except AuditExportLimitError:
+        return _error(
+            413,
+            "audit_export_limit_exceeded",
+            "The filtered audit export exceeds the configured safety limit.",
+        )
+    except ValueError:
+        return _error(
+            400,
+            "audit_export_invalid",
+            "The audit export contains an invalid filter or format.",
+        )
+    except Exception as exc:
+        return _unavailable("export", exc)
+
+    generated_at = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    return StreamingResponse(
+        iter(export.chunks),
+        media_type=export.media_type,
+        headers={
+            "Content-Disposition": (
+                f'attachment; filename="omni-audit-{generated_at}.{export.extension}"'
+            ),
+            "X-Audit-Event-Count": str(export.event_count),
+            "X-Audit-Byte-Count": str(export.byte_count),
+            "X-Audit-Max-Events": str(MAX_AUDIT_EXPORT_EVENTS),
+            "X-Audit-Max-Bytes": str(MAX_AUDIT_EXPORT_BYTES),
+        },
     )
 
 
