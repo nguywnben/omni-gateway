@@ -32,6 +32,22 @@ function createCredsManager(type) {
 
         currentProviderFilter: 'all',
 
+        currentCredentialKindFilter: 'all',
+
+        currentHealthFilter: 'all',
+
+        currentQuotaStateFilter: 'all',
+
+        currentSourceFilter: 'all',
+
+        filtersRestored: false,
+
+        selectionScope: 'page',
+
+        allMatchingSelection: null,
+
+        facets: {},
+
         statsData: { total: 0, normal: 0, disabled: 0 },
 
         getEndpoint: (action) => {
@@ -68,6 +84,120 @@ function createCredsManager(type) {
 
         getModeParam: () => modeParam,
 
+        getFilterDefinitions() {
+
+            return {
+
+                provider: { state: 'currentProviderFilter', suffix: 'ProviderFilter', values: ['all', 'google_antigravity', 'google_ai_studio', 'grok', 'xai_console', 'codex', 'openai_platform', 'claude_code', 'claude_platform', 'ollama'] },
+
+                status: { state: 'currentStatusFilter', suffix: 'StatusFilter', values: ['all', 'enabled', 'disabled'] },
+
+                error: { state: 'currentErrorCodeFilter', suffix: 'ErrorCodeFilter', values: ['all', 'none', '400', '401', '403', '429', '500', '502', '503'] },
+
+                cooldown: { state: 'currentCooldownFilter', suffix: 'CooldownFilter', values: ['all', 'in_cooldown', 'no_cooldown'] },
+
+                tier: { state: 'currentTierFilter', suffix: 'TierFilter', values: ['all', 'free', 'pro', 'ultra'] },
+
+                kind: { state: 'currentCredentialKindFilter', suffix: 'CredentialKindFilter', values: ['all', 'oauth', 'api_key', 'connection'] },
+
+                health: { state: 'currentHealthFilter', suffix: 'HealthFilter', values: ['all', 'healthy', 'degraded', 'unhealthy', 'disabled'] },
+
+                quota: { state: 'currentQuotaStateFilter', suffix: 'QuotaStateFilter', values: ['all', 'available', 'limited', 'exhausted', 'unsupported'] },
+
+                source: { state: 'currentSourceFilter', suffix: 'SourceFilter', values: ['all', 'managed', 'environment'] }
+
+            };
+
+        },
+
+        restoreFilterState() {
+
+            if (this.filtersRestored || this.type !== 'primary') return;
+
+            this.filtersRestored = true;
+
+            let stored = {};
+
+            try {
+
+                const raw = sessionStorage.getItem('omni.pool.filters.v1') || '';
+
+                if (raw.length <= 512) stored = JSON.parse(raw) || {};
+
+            } catch (_error) {
+
+                stored = {};
+
+            }
+
+            const params = new URLSearchParams(window.location.search);
+
+            Object.entries(this.getFilterDefinitions()).forEach(([key, definition]) => {
+
+                const candidate = params.get(`pool_${key}`) || stored[key] || 'all';
+
+                const value = definition.values.includes(candidate) ? candidate : 'all';
+
+                this[definition.state] = value;
+
+                const element = document.getElementById(this.getElementId(definition.suffix));
+
+                if (element) element.value = value;
+
+            });
+
+            const pageSize = Number(params.get('pool_page_size') || stored.pageSize);
+
+            if ([20, 50, 100, 200].includes(pageSize)) this.pageSize = pageSize;
+
+            const pageSizeElement = document.getElementById(this.getElementId('PageSizeSelect'));
+
+            if (pageSizeElement) pageSizeElement.value = String(this.pageSize);
+
+        },
+
+        persistFilterState() {
+
+            if (this.type !== 'primary') return;
+
+            const state = {};
+
+            const url = new URL(window.location.href);
+
+            Object.entries(this.getFilterDefinitions()).forEach(([key, definition]) => {
+
+                const value = definition.values.includes(this[definition.state]) ? this[definition.state] : 'all';
+
+                state[key] = value;
+
+                if (value === 'all') url.searchParams.delete(`pool_${key}`);
+
+                else url.searchParams.set(`pool_${key}`, value);
+
+            });
+
+            state.pageSize = this.pageSize;
+
+            if (this.pageSize === 20) url.searchParams.delete('pool_page_size');
+
+            else url.searchParams.set('pool_page_size', String(this.pageSize));
+
+            try {
+
+                const serialized = JSON.stringify(state);
+
+                if (serialized.length <= 512) sessionStorage.setItem('omni.pool.filters.v1', serialized);
+
+            } catch (_error) {
+
+                // Session persistence is optional in privacy-restricted browsers.
+
+            }
+
+            window.history.replaceState(window.history.state, '', url);
+
+        },
+
         getElementId: (suffix) => {
 
             if (type === 'primary') {
@@ -90,6 +220,8 @@ function createCredsManager(type) {
 
             try {
 
+                this.restoreFilterState();
+
                 if (loading && !preserveContent) loading.hidden = false;
 
                 if (!preserveContent) list.innerHTML = '';
@@ -106,9 +238,47 @@ function createCredsManager(type) {
 
                 const providerFilter = this.currentProviderFilter || 'all';
 
+                const credentialKindFilter = this.currentCredentialKindFilter || 'all';
+
+                const healthFilter = this.currentHealthFilter || 'all';
+
+                const quotaStateFilter = this.currentQuotaStateFilter || 'all';
+
+                const sourceFilter = this.currentSourceFilter || 'all';
+
+                const query = new URLSearchParams({
+
+                    offset: String(offset),
+
+                    limit: String(this.pageSize),
+
+                    status_filter: this.currentStatusFilter,
+
+                    error_code_filter: errorCodeFilter,
+
+                    cooldown_filter: cooldownFilter,
+
+                    preview_filter: previewFilter,
+
+                    tier_filter: tierFilter,
+
+                    provider_filter: providerFilter,
+
+                    credential_kind_filter: credentialKindFilter,
+
+                    health_filter: healthFilter,
+
+                    quota_state_filter: quotaStateFilter,
+
+                    source_filter: sourceFilter
+
+                });
+
+                query.set('mode', this.type === 'primary' ? 'provider' : 'code_assist');
+
                 const response = await fetch(
 
-                    `${this.getEndpoint('status')}?offset=${offset}&limit=${this.pageSize}&status_filter=${this.currentStatusFilter}&error_code_filter=${errorCodeFilter}&cooldown_filter=${cooldownFilter}&preview_filter=${previewFilter}&tier_filter=${tierFilter}&provider_filter=${providerFilter}&${this.getModeParam()}`,
+                    `${this.getEndpoint('status')}?${query.toString()}`,
 
                     { headers: getAuthHeaders() }
 
@@ -154,13 +324,25 @@ function createCredsManager(type) {
 
                             tier: item.tier || 'pro',
 
-                            enable_credit: !!item.enable_credit
+                            enable_credit: !!item.enable_credit,
+
+                            health: item.health || 'healthy',
+
+                            cooldown_state: item.cooldown_state || 'no_cooldown',
+
+                            quota_state: item.quota_state || 'unsupported',
+
+                            source: item.source || 'managed'
 
                         };
 
                     });
 
                     this.totalCount = data.total;
+
+                    this.facets = data.facets || {};
+
+                    this.allMatchingSelection = data.selection || null;
 
                     this.hasLoaded = true;
 
@@ -339,6 +521,8 @@ function createCredsManager(type) {
 
             if (newPage >= 1 && newPage <= this.getTotalPages()) {
 
+                if (this.selectionScope === 'page') this.clearSelection();
+
                 this.currentPage = newPage;
 
                 this.refresh();
@@ -353,61 +537,105 @@ function createCredsManager(type) {
 
             this.currentPage = 1;
 
+            if (this.selectionScope === 'page') this.clearSelection();
+
+            this.persistFilterState();
+
             this.refresh();
 
         },
 
         applyStatusFilter() {
 
-            this.currentStatusFilter = document.getElementById(this.getElementId('StatusFilter')).value;
+            Object.values(this.getFilterDefinitions()).forEach((definition) => {
 
-            const errorCodeFilterEl = document.getElementById(this.getElementId('ErrorCodeFilter'));
+                const element = document.getElementById(this.getElementId(definition.suffix));
 
-            const cooldownFilterEl = document.getElementById(this.getElementId('CooldownFilter'));
+                if (element && definition.values.includes(element.value)) {
 
-            const previewFilterEl = document.getElementById(this.getElementId('PreviewFilter'));
+                    this[definition.state] = element.value;
 
-            const tierFilterEl = document.getElementById(this.getElementId('TierFilter'));
+                }
 
-            const providerFilterEl = document.getElementById(this.getElementId('ProviderFilter'));
+            });
 
-            this.currentErrorCodeFilter = errorCodeFilterEl ? errorCodeFilterEl.value : 'all';
-
-            this.currentCooldownFilter = cooldownFilterEl ? cooldownFilterEl.value : 'all';
-
-            this.currentPreviewFilter = previewFilterEl ? previewFilterEl.value : 'all';
-
-            this.currentProviderFilter = providerFilterEl ? providerFilterEl.value : 'all';
-
-            if (tierFilterEl) {
-
-                const tierIsRelevant = !['google_ai_studio', 'grok', 'xai_console', 'xai', 'codex', 'openai_platform', 'openai', 'claude_code', 'claude_platform', 'anthropic', 'ollama'].includes(this.currentProviderFilter);
-
-                tierFilterEl.disabled = !tierIsRelevant;
-
-                if (!tierIsRelevant) tierFilterEl.value = 'all';
-
-                this.currentTierFilter = tierIsRelevant ? tierFilterEl.value : 'all';
-
-            } else {
-
-                this.currentTierFilter = 'all';
-
-            }
-
-            this.selectedFiles.clear();
+            this.clearSelection();
 
             this.currentPage = 1;
+
+            this.persistFilterState();
 
             this.refresh();
 
         },
 
+        clearSelection() {
+
+            this.selectionScope = 'page';
+
+            this.selectedFiles.clear();
+
+            this.updateBatchControls();
+
+        },
+
+        selectAllMatching() {
+
+            if (!this.allMatchingSelection?.token || this.allMatchingSelection.matching_count < 1) return;
+
+            this.selectionScope = 'all_matching';
+
+            this.selectedFiles.clear();
+
+            this.updateBatchControls();
+
+        },
+
+        toggleFileSelection(filename) {
+
+            if (this.selectionScope === 'all_matching') {
+
+                this.selectionScope = 'page';
+
+                this.selectedFiles = new Set(Object.keys(this.data));
+
+            }
+
+            if (this.selectedFiles.has(filename)) this.selectedFiles.delete(filename);
+
+            else this.selectedFiles.add(filename);
+
+            this.updateBatchControls();
+
+        },
+
+        toggleVisibleSelection(checked) {
+
+            this.selectionScope = 'page';
+
+            this.selectedFiles.clear();
+
+            if (checked) Object.keys(this.data).forEach(filename => this.selectedFiles.add(filename));
+
+            this.updateBatchControls();
+
+        },
+
         updateBatchControls() {
 
-            const selectedCount = this.selectedFiles.size;
+            const allMatching = this.selectionScope === 'all_matching';
 
-            document.getElementById(this.getElementId('SelectedCount')).textContent = t('status_selected_items', {count: selectedCount});
+            const selectedCount = allMatching
+
+                ? Number(this.allMatchingSelection?.matching_count || 0)
+
+                : this.selectedFiles.size;
+
+            document.getElementById(this.getElementId('SelectedCount')).textContent = allMatching
+
+                ? t('pool.selection.selected_all', {count: selectedCount})
+
+                : t('pool.selection.selected_page', {count: selectedCount});
 
             const batchBtnNames = ['Enable', 'Disable', 'Delete', 'Verify', 'Preview'];
 
@@ -455,6 +683,12 @@ function createCredsManager(type) {
 
             const selectAllCheckbox = document.getElementById(this.getElementId('SelectAllCheckbox'));
 
+            const selectAllMatchingButton = document.getElementById(this.getElementId('SelectAllMatchingBtn'));
+
+            const clearSelectionButton = document.getElementById(this.getElementId('ClearSelectionBtn'));
+
+            if (clearSelectionButton) clearSelectionButton.hidden = selectedCount === 0;
+
             if (!selectAllCheckbox) return;
 
             const checkboxes = document.querySelectorAll(`.${this.getElementId('file-checkbox')}`);
@@ -463,7 +697,13 @@ function createCredsManager(type) {
 
                 .filter(cb => this.selectedFiles.has(cb.getAttribute('data-filename'))).length;
 
-            if (currentPageSelectedCount === 0) {
+            if (allMatching) {
+
+                selectAllCheckbox.indeterminate = false;
+
+                selectAllCheckbox.checked = true;
+
+            } else if (currentPageSelectedCount === 0) {
 
                 selectAllCheckbox.indeterminate = false;
 
@@ -483,9 +723,25 @@ function createCredsManager(type) {
 
             checkboxes.forEach(cb => {
 
-                cb.checked = this.selectedFiles.has(cb.getAttribute('data-filename'));
+                cb.checked = allMatching || this.selectedFiles.has(cb.getAttribute('data-filename'));
 
             });
+
+            if (selectAllMatchingButton) {
+
+                const pageIsSelected = checkboxes.length > 0 && currentPageSelectedCount === checkboxes.length;
+
+                selectAllMatchingButton.hidden = allMatching
+
+                    || !pageIsSelected
+
+                    || selectedCount >= this.totalCount
+
+                    || !this.allMatchingSelection?.token;
+
+                selectAllMatchingButton.textContent = t('pool.selection.select_all_matching', {count: this.totalCount});
+
+            }
 
         },
 

@@ -10,8 +10,8 @@
   approval), approximately 36%; Wave 2 execution-slice checkboxes are refinements and are not added
   to that denominator.
 - Active scope: Wave 2 — Credential Operations.
-- Control state: **IN PROGRESS — W2.7**.
-- Expected worktree state at this checkpoint: W2.6 changes staged for an atomic commit.
+- Control state: **IN PROGRESS — W2.8**.
+- Expected worktree state at this checkpoint: W2.7 changes staged for an atomic commit.
 - Expected runtime: Omni Gateway PID 1364 on `http://127.0.0.1:4283`; `/health` and `/ready`
   return HTTP 200.
 - Last verified full suite: 515 tests passed; focused Ruff, compileall, and diff-check passed.
@@ -69,6 +69,11 @@ silently choosing a new design.
   sorting/pagination; responses expose safe facets and a bounded five-minute opaque all-matching
   token that retains only normalized filters. Empty, 125-record, changing-data, invalid, conflict,
   tamper, cross-mode, and secret-exclusion tests passed; the full suite reached 515 tests.
+- W2.7 evidence: pool filters use explicit responsive controls for credential kind, health, quota
+  state, and source; allowlisted filter/page-size state persists in URL and a 512-byte bounded
+  session record without credential names; page selection and opaque all-matching selection are
+  distinct, clearable states. All 15 supported locales received curated fleet copy, frontend
+  locale/asset tests passed, and changed JavaScript files passed syntax checks.
 
 ## Approved vs. Proposed Scope
 
@@ -108,8 +113,9 @@ checkboxes to be marked complete.
 
 ## Immediate Next Action
 
-Implement W2.7 with test-first evidence: persist the responsive filter state and make page-only
-versus all-matching selection explicit without storing credential names in the URL or session.
+Implement W2.8 with test-first evidence: resolve all-matching tokens into freshly evaluated bounded
+batches, compute the contextual operation intersection, and present preview/per-item recovery
+results with explicit destructive confirmation.
 
 ## Update Rule
 

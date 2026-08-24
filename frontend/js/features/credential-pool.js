@@ -10,17 +10,7 @@ function changePageSize() { AppState.creds.changePageSize(); }
 
 function toggleFileSelection(filename) {
 
-    if (AppState.creds.selectedFiles.has(filename)) {
-
-        AppState.creds.selectedFiles.delete(filename);
-
-    } else {
-
-        AppState.creds.selectedFiles.add(filename);
-
-    }
-
-    AppState.creds.updateBatchControls();
+    AppState.creds.toggleFileSelection(filename);
 
 }
 
@@ -28,21 +18,7 @@ function toggleSelectAll() {
 
     const checkbox = document.getElementById('selectAllCheckbox');
 
-    const checkboxes = document.querySelectorAll('.file-checkbox');
-
-    if (checkbox.checked) {
-
-        checkboxes.forEach(cb => AppState.creds.selectedFiles.add(cb.getAttribute('data-filename')));
-
-    } else {
-
-        AppState.creds.selectedFiles.clear();
-
-    }
-
-    checkboxes.forEach(cb => cb.checked = checkbox.checked);
-
-    AppState.creds.updateBatchControls();
+    AppState.creds.toggleVisibleSelection(checkbox.checked);
 
 }
 
@@ -120,17 +96,7 @@ function changePrimaryPageSize() { AppState.primaryCreds.changePageSize(); }
 
 function togglePrimaryFileSelection(filename) {
 
-    if (AppState.primaryCreds.selectedFiles.has(filename)) {
-
-        AppState.primaryCreds.selectedFiles.delete(filename);
-
-    } else {
-
-        AppState.primaryCreds.selectedFiles.add(filename);
-
-    }
-
-    AppState.primaryCreds.updateBatchControls();
+    AppState.primaryCreds.toggleFileSelection(filename);
 
 }
 
@@ -138,23 +104,13 @@ function toggleSelectAllPrimary() {
 
     const checkbox = document.getElementById('selectAllPrimaryCheckbox');
 
-    const checkboxes = document.querySelectorAll('.primaryFile-checkbox');
-
-    if (checkbox.checked) {
-
-        checkboxes.forEach(cb => AppState.primaryCreds.selectedFiles.add(cb.getAttribute('data-filename')));
-
-    } else {
-
-        AppState.primaryCreds.selectedFiles.clear();
-
-    }
-
-    checkboxes.forEach(cb => cb.checked = checkbox.checked);
-
-    AppState.primaryCreds.updateBatchControls();
+    AppState.primaryCreds.toggleVisibleSelection(checkbox.checked);
 
 }
+
+function selectAllMatchingPrimary() { AppState.primaryCreds.selectAllMatching(); }
+
+function clearPrimarySelection() { AppState.primaryCreds.clearSelection(); }
 
 function batchPrimaryAction(action) { AppState.primaryCreds.batchAction(action); }
 

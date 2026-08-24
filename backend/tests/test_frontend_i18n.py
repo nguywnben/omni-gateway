@@ -87,6 +87,7 @@ class FrontendLocaleContractTests(unittest.TestCase):
             "CREDENTIAL_CARD_KEYS",
             "CREDENTIAL_MODAL_KEYS",
             "UPDATE_GUIDE_KEYS",
+            "CREDENTIAL_FLEET_KEYS",
         ):
             generated_keys.update(
                 re.findall(

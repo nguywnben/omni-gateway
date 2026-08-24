@@ -52,6 +52,98 @@ const PAGE_LOCALE_TRANSLATIONS = {
     }
 };
 
+const CREDENTIAL_FLEET_KEYS = [
+    'pool.filter.provider_variant', 'pool.filter.credential_kind', 'pool.filter.health', 'pool.filter.quota_state', 'pool.filter.source',
+    'pool.filter.all_kinds', 'pool.filter.all_health', 'pool.filter.all_quota', 'pool.filter.all_sources', 'pool.kind.connection',
+    'pool.health.healthy', 'pool.health.degraded', 'pool.health.unhealthy', 'pool.quota.available', 'pool.quota.limited',
+    'pool.quota.exhausted', 'pool.quota.unsupported', 'pool.source.managed', 'pool.source.environment', 'pool.selection.page',
+    'pool.selection.clear', 'pool.selection.select_all_matching', 'pool.selection.selected_page', 'pool.selection.selected_all'
+];
+
+const CREDENTIAL_FLEET_VALUES = {
+    en: [
+        'Provider type', 'Credential kind', 'Health', 'Quota state', 'Source', 'All kinds', 'All health states', 'All quota states', 'All sources', 'Connection',
+        'Healthy', 'Degraded', 'Unhealthy', 'Available', 'Limited', 'Exhausted', 'Not supported', 'Managed', 'Environment', 'Select this page',
+        'Clear selection', 'Select all {count} matching', '{count} selected on this page', 'All {count} matching selected'
+    ],
+    'zh-CN': [
+        '提供商类型', '凭据类型', '健康状态', '配额状态', '来源', '所有类型', '所有健康状态', '所有配额状态', '所有来源', '连接',
+        '健康', '性能下降', '不健康', '可用', '受限', '已用尽', '不支持', '受管理', '环境变量', '选择本页',
+        '清除选择', '选择全部 {count} 个匹配项', '本页已选择 {count} 项', '已选择全部 {count} 个匹配项'
+    ],
+    'zh-TW': [
+        '供應商類型', '憑證類型', '健康狀態', '配額狀態', '來源', '所有類型', '所有健康狀態', '所有配額狀態', '所有來源', '連線',
+        '健康', '效能下降', '不健康', '可用', '受限', '已用盡', '不支援', '受管理', '環境變數', '選取本頁',
+        '清除選取', '選取全部 {count} 個符合項目', '本頁已選取 {count} 項', '已選取全部 {count} 個符合項目'
+    ],
+    de: [
+        'Anbietertyp', 'Zugangsdatenart', 'Zustand', 'Kontingentstatus', 'Quelle', 'Alle Arten', 'Alle Zustände', 'Alle Kontingentstatus', 'Alle Quellen', 'Verbindung',
+        'Fehlerfrei', 'Beeinträchtigt', 'Fehlerhaft', 'Verfügbar', 'Begrenzt', 'Erschöpft', 'Nicht unterstützt', 'Verwaltet', 'Umgebung', 'Diese Seite auswählen',
+        'Auswahl löschen', 'Alle {count} Treffer auswählen', '{count} auf dieser Seite ausgewählt', 'Alle {count} Treffer ausgewählt'
+    ],
+    es: [
+        'Tipo de proveedor', 'Tipo de credencial', 'Estado', 'Estado de cuota', 'Origen', 'Todos los tipos', 'Todos los estados', 'Todos los estados de cuota', 'Todos los orígenes', 'Conexión',
+        'Correcto', 'Degradado', 'No saludable', 'Disponible', 'Limitado', 'Agotado', 'No compatible', 'Gestionado', 'Entorno', 'Seleccionar esta página',
+        'Borrar selección', 'Seleccionar las {count} coincidencias', '{count} seleccionados en esta página', 'Las {count} coincidencias están seleccionadas'
+    ],
+    fr: [
+        'Type de fournisseur', 'Type d’identifiant', 'Santé', 'État du quota', 'Source', 'Tous les types', 'Tous les états de santé', 'Tous les états de quota', 'Toutes les sources', 'Connexion',
+        'Sain', 'Dégradé', 'Défaillant', 'Disponible', 'Limité', 'Épuisé', 'Non pris en charge', 'Géré', 'Environnement', 'Sélectionner cette page',
+        'Effacer la sélection', 'Sélectionner les {count} résultats', '{count} sélectionnés sur cette page', 'Les {count} résultats sont sélectionnés'
+    ],
+    id: [
+        'Jenis penyedia', 'Jenis kredensial', 'Kesehatan', 'Status kuota', 'Sumber', 'Semua jenis', 'Semua status kesehatan', 'Semua status kuota', 'Semua sumber', 'Koneksi',
+        'Sehat', 'Menurun', 'Tidak sehat', 'Tersedia', 'Terbatas', 'Habis', 'Tidak didukung', 'Terkelola', 'Lingkungan', 'Pilih halaman ini',
+        'Hapus pilihan', 'Pilih semua {count} yang cocok', '{count} dipilih di halaman ini', 'Semua {count} yang cocok dipilih'
+    ],
+    it: [
+        'Tipo di provider', 'Tipo di credenziale', 'Stato', 'Stato quota', 'Origine', 'Tutti i tipi', 'Tutti gli stati', 'Tutti gli stati quota', 'Tutte le origini', 'Connessione',
+        'Integro', 'Degradato', 'Non integro', 'Disponibile', 'Limitato', 'Esaurito', 'Non supportato', 'Gestito', 'Ambiente', 'Seleziona questa pagina',
+        'Cancella selezione', 'Seleziona tutte le {count} corrispondenze', '{count} selezionati in questa pagina', 'Tutte le {count} corrispondenze selezionate'
+    ],
+    ja: [
+        'プロバイダー種別', '認証情報の種類', '健全性', 'クォータ状態', 'ソース', 'すべての種類', 'すべての健全性', 'すべてのクォータ状態', 'すべてのソース', '接続',
+        '正常', '低下', '異常', '利用可能', '制限あり', '枯渇', '未対応', '管理対象', '環境', 'このページを選択',
+        '選択を解除', '一致する {count} 件をすべて選択', 'このページで {count} 件選択中', '一致する {count} 件をすべて選択中'
+    ],
+    ko: [
+        '공급자 유형', '자격 증명 종류', '상태', '할당량 상태', '소스', '모든 종류', '모든 상태', '모든 할당량 상태', '모든 소스', '연결',
+        '정상', '성능 저하', '비정상', '사용 가능', '제한됨', '소진됨', '지원되지 않음', '관리됨', '환경', '이 페이지 선택',
+        '선택 지우기', '일치하는 {count}개 모두 선택', '이 페이지에서 {count}개 선택됨', '일치하는 {count}개 모두 선택됨'
+    ],
+    pt: [
+        'Tipo de provedor', 'Tipo de credencial', 'Saúde', 'Estado da cota', 'Origem', 'Todos os tipos', 'Todos os estados', 'Todos os estados de cota', 'Todas as origens', 'Conexão',
+        'Saudável', 'Degradado', 'Não saudável', 'Disponível', 'Limitado', 'Esgotado', 'Não compatível', 'Gerenciado', 'Ambiente', 'Selecionar esta página',
+        'Limpar seleção', 'Selecionar as {count} correspondências', '{count} selecionados nesta página', 'As {count} correspondências estão selecionadas'
+    ],
+    ru: [
+        'Тип провайдера', 'Тип учётных данных', 'Состояние', 'Состояние квоты', 'Источник', 'Все типы', 'Все состояния', 'Все состояния квоты', 'Все источники', 'Подключение',
+        'Исправно', 'Сниженная доступность', 'Неисправно', 'Доступно', 'Ограничено', 'Исчерпано', 'Не поддерживается', 'Управляемый', 'Окружение', 'Выбрать эту страницу',
+        'Снять выделение', 'Выбрать все совпадения: {count}', 'Выбрано на этой странице: {count}', 'Выбраны все совпадения: {count}'
+    ],
+    th: [
+        'ประเภทผู้ให้บริการ', 'ชนิดข้อมูลรับรอง', 'สถานะสุขภาพ', 'สถานะโควตา', 'แหล่งที่มา', 'ทุกชนิด', 'ทุกสถานะสุขภาพ', 'ทุกสถานะโควตา', 'ทุกแหล่งที่มา', 'การเชื่อมต่อ',
+        'ปกติ', 'ประสิทธิภาพลดลง', 'ผิดปกติ', 'พร้อมใช้', 'จำกัด', 'หมดแล้ว', 'ไม่รองรับ', 'จัดการแล้ว', 'สภาพแวดล้อม', 'เลือกหน้านี้',
+        'ล้างการเลือก', 'เลือกทั้งหมด {count} รายการที่ตรงกัน', 'เลือก {count} รายการในหน้านี้', 'เลือกทั้งหมด {count} รายการที่ตรงกันแล้ว'
+    ],
+    tr: [
+        'Sağlayıcı türü', 'Kimlik bilgisi türü', 'Sağlık', 'Kota durumu', 'Kaynak', 'Tüm türler', 'Tüm sağlık durumları', 'Tüm kota durumları', 'Tüm kaynaklar', 'Bağlantı',
+        'Sağlıklı', 'Bozulmuş', 'Sağlıksız', 'Kullanılabilir', 'Sınırlı', 'Tükendi', 'Desteklenmiyor', 'Yönetilen', 'Ortam', 'Bu sayfayı seç',
+        'Seçimi temizle', 'Eşleşen {count} öğenin tümünü seç', 'Bu sayfada {count} öğe seçili', 'Eşleşen {count} öğenin tümü seçili'
+    ],
+    vi: [
+        'Loại nhà cung cấp', 'Loại thông tin xác thực', 'Tình trạng', 'Trạng thái hạn mức', 'Nguồn', 'Mọi loại', 'Mọi tình trạng', 'Mọi trạng thái hạn mức', 'Mọi nguồn', 'Kết nối',
+        'Ổn định', 'Suy giảm', 'Không ổn định', 'Khả dụng', 'Bị giới hạn', 'Đã cạn', 'Không hỗ trợ', 'Được quản lý', 'Môi trường', 'Chọn trang này',
+        'Bỏ chọn', 'Chọn toàn bộ {count} kết quả phù hợp', 'Đã chọn {count} mục trên trang này', 'Đã chọn toàn bộ {count} kết quả phù hợp'
+    ]
+};
+
+for (const [locale, values] of Object.entries(CREDENTIAL_FLEET_VALUES)) {
+    CREDENTIAL_FLEET_KEYS.forEach((key, index) => {
+        PAGE_LOCALE_TRANSLATIONS[locale][key] = values[index];
+    });
+}
+
 const UPDATE_GUIDE_KEYS = ['about.update_guide_link'];
 
 const UPDATE_GUIDE_COPY = {

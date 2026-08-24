@@ -414,6 +414,29 @@ class ControlPanelAssetTests(unittest.TestCase):
         self.assertIn("idempotency_key: idempotencyKey", credential_manager_script)
         self.assertIn("crypto.randomUUID()", credential_manager_script)
 
+    def test_pool_filters_and_selection_are_bounded_and_explicit(self):
+        body = serve_control_panel().body.decode("utf-8")
+        credential_manager_script = read_scripts("core/credential-manager.js")
+
+        for control_id in (
+            "primaryCredentialKindFilter",
+            "primaryHealthFilter",
+            "primaryQuotaStateFilter",
+            "primarySourceFilter",
+            "primarySelectAllMatchingBtn",
+            "primaryClearSelectionBtn",
+        ):
+            self.assertIn(f'id="{control_id}"', body)
+        self.assertIn("new URLSearchParams(window.location.search)", credential_manager_script)
+        self.assertIn("raw.length <= 512", credential_manager_script)
+        self.assertIn("serialized.length <= 512", credential_manager_script)
+        self.assertIn("selectionScope: 'page'", credential_manager_script)
+        self.assertIn("this.selectionScope = 'all_matching'", credential_manager_script)
+        persistence_block = credential_manager_script.split("persistFilterState() {", 1)[1].split(
+            "getElementId:", 1
+        )[0]
+        self.assertNotIn("selectedFiles", persistence_block)
+
     def test_grok_build_oauth_uses_the_shared_quota_dialog(self):
         card_script = read_scripts("ui/credential-cards.js")
         dialog_script = read_scripts("ui/credential-dialogs.js")
