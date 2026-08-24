@@ -9,14 +9,15 @@
 - Original program progress: 14/28 approved checklist items complete (including specification
   approval), exactly 50%; Wave 2 execution-slice checkboxes are refinements and are not added
   to that denominator.
-- Active scope: Wave 3 — Access and Operational Evidence; W3.1 audit contract is next.
+- Active scope: Wave 3 — Access and Operational Evidence; W3.2 durable repositories are next.
 - Control state: **IMPLEMENTING — WAVE 3**.
-- Expected worktree state at this checkpoint: documentation changes for Wave 3 planning, followed
-  by the focused W3.1 implementation.
+- Expected worktree state at this checkpoint: clean after the W3.1 contract commit.
 - Expected runtime: one Omni Gateway listener on `http://127.0.0.1:4283`; `/health` and `/ready`
   return HTTP 200.
-- Last verified full suite: 534 tests passed; Ruff, compileall, all JavaScript syntax, and
-  diff-check passed.
+- Last verified full suite: 542 tests passed; Ruff check, compileall, focused W3.1 format, and
+  diff-check passed. The repository-wide format check still reports 16 pre-existing Wave 2 files
+  that differ from the currently installed Ruff formatter; they remain untouched to keep the W3.1
+  commit atomic.
 
 Wave 2 was accepted and pushed by the human on 2026-08-24. Wave 3 / Phases 4–5 was approved for
 implementation on the same date. Do not expand into Phase 6 or release activation.
@@ -113,6 +114,13 @@ silently choosing a new design.
   provider-specific secret bounds, and ArrowRight focus/selection from Antigravity to AI Studio;
   the browser console was empty. English literal leaks discovered in advanced provider forms were
   corrected before closing this checkpoint.
+- W3.1 evidence: the versioned immutable audit contract now validates actor/action/target/outcome
+  vocabularies, HMAC-redacts actor and target identifiers before the repository boundary, bounds
+  change summaries and retention/query inputs, provides exact fingerprint filters, and signs
+  opaque cursors against tampering. The repository protocol exposes append, query, and policy-
+  driven prune only—never individual update/delete. Two RED cycles proved the missing module and
+  direct-construction redaction bypass before implementation; 8 focused tests and all 542 tests
+  passed.
 
 ## Approved vs. Proposed Scope
 
@@ -160,9 +168,9 @@ checkboxes to be marked complete.
 
 ## Immediate Next Action
 
-Implement W3.1 with a failing focused test first: define the versioned append-only audit event,
-redaction boundary, bounded query/cursor semantics, retention policy, and repository interface.
-Do not add runtime mutation hooks or durable backend implementations until the W3.1 contract passes
+Implement W3.2 incrementally against the committed W3.1 contract: add backend contract tests first,
+then SQLite, PostgreSQL, and MongoDB append/query/policy-prune implementations with additive schema
+initialization and restart/order/cursor parity. Do not add runtime mutation hooks until W3.2 passes
 and is committed.
 
 ## Update Rule
