@@ -15,7 +15,7 @@ import re
 import uuid
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from typing import Any, Protocol
+from typing import Any, Mapping, Protocol
 
 AUDIT_SCHEMA_VERSION = 1
 AUDIT_CURSOR_VERSION = 1
@@ -120,6 +120,10 @@ _EVENT_ID = re.compile(r"^[0-9a-f]{32}$")
 _FINGERPRINT = re.compile(r"^[0-9a-f]{20}$")
 _FINGERPRINT_LENGTH = 20
 _MIN_SIGNING_KEY_BYTES = 32
+
+
+class AuditEventAlreadyExistsError(RuntimeError):
+    """Raised when an append would reuse an immutable audit event ID."""
 
 
 def _require_vocabulary(value: str, vocabulary: frozenset[str], field_name: str) -> str:
@@ -242,6 +246,42 @@ class AuditEvent:
             "outcome": self.outcome,
             "change_codes": list(self.change_codes),
         }
+
+
+def audit_event_from_record(record: Mapping[str, Any]) -> AuditEvent:
+    """Revalidate an untrusted storage record before returning it to callers."""
+
+    expected_fields = {
+        "schema_version",
+        "event_id",
+        "occurred_at",
+        "request_id",
+        "actor_type",
+        "actor_fingerprint",
+        "action",
+        "target_type",
+        "target_fingerprint",
+        "outcome",
+        "change_codes",
+    }
+    if not isinstance(record, Mapping) or set(record) != expected_fields:
+        raise ValueError("Invalid stored audit event shape.")
+    change_codes = record["change_codes"]
+    if not isinstance(change_codes, (list, tuple)):
+        raise ValueError("Invalid stored audit change summary.")
+    return AuditEvent(
+        schema_version=record["schema_version"],
+        event_id=record["event_id"],
+        occurred_at=record["occurred_at"],
+        request_id=record["request_id"],
+        actor_type=record["actor_type"],
+        actor_fingerprint=record["actor_fingerprint"],
+        action=record["action"],
+        target_type=record["target_type"],
+        target_fingerprint=record["target_fingerprint"],
+        outcome=record["outcome"],
+        change_codes=tuple(change_codes),
+    )
 
 
 def create_audit_event(
