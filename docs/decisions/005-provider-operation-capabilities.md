@@ -31,6 +31,24 @@ results” remain distinct scopes, and the server re-evaluates the filter at exe
 Provider-specific fields, validation, and defaults remain owned by provider adapters. The shared
 fleet layer owns filtering, selection, preview, authorization, result envelopes, and audit hooks.
 
+The initial conservative inventory is:
+
+| Credential variant | Credential kind | Supported operations |
+| --- | --- | --- |
+| Google Antigravity | OAuth | verify, test, quota, toggle, delete, export, credit mode |
+| Google AI Studio | API key | verify, test, toggle, delete, export |
+| Grok Build | OAuth | verify, test, quota, toggle, delete, export |
+| SpaceXAI Console | API key | verify, test, toggle, delete, export |
+| Codex | OAuth | verify, test, quota, toggle, delete, export |
+| OpenAI Platform | API key | verify, test, toggle, delete, export |
+| Claude Code | OAuth | verify, test, toggle, delete, export |
+| Claude Platform | API key | verify, test, toggle, delete, export |
+| Ollama | Connection | verify, test, toggle, delete, export |
+
+`refresh_identity` and `preview_channel` remain in the vocabulary for legacy compatibility but are
+not declared for the current shared provider pool. They cannot be invoked through the Wave 2 fleet
+service until a variant explicitly earns support through contract and failure-path tests.
+
 ## Compatibility and Rollback
 
 - Existing provider metadata is mapped to a conservative default set derived from current server

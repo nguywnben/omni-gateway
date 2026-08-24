@@ -23,6 +23,20 @@ MAX_MODEL_ID_LENGTH = 256
 MODEL_SUPPORT_UNSUPPORTED = 0
 MODEL_SUPPORT_INFERRED = 1
 MODEL_SUPPORT_DECLARED = 2
+CREDENTIAL_OPERATIONS = frozenset(
+    {
+        "verify",
+        "test",
+        "quota",
+        "refresh_identity",
+        "toggle",
+        "delete",
+        "export",
+        "credit_mode",
+        "preview_channel",
+    }
+)
+_COMMON_CREDENTIAL_OPERATIONS = ("verify", "test", "toggle", "delete", "export")
 
 _PROVIDER_ALIASES = {
     "primary": GOOGLE_ANTIGRAVITY,
@@ -111,6 +125,25 @@ class ProviderCapabilities:
         return value
 
 
+@dataclass(frozen=True)
+class CredentialVariantCapabilities:
+    """Server-authoritative operations for one console credential variant."""
+
+    variant_id: str
+    provider_id: str
+    display_name: str
+    credential_type: str
+    operations: tuple[str, ...]
+
+    def supports_operation(self, operation: Any) -> bool:
+        return isinstance(operation, str) and operation in self.operations
+
+    def to_dict(self) -> Dict[str, Any]:
+        value = asdict(self)
+        value["operations"] = list(self.operations)
+        return value
+
+
 _PROVIDER_CAPABILITIES = {
     GOOGLE_ANTIGRAVITY: ProviderCapabilities(
         provider_id=GOOGLE_ANTIGRAVITY,
@@ -147,6 +180,72 @@ _PROVIDER_CAPABILITIES = {
         display_name=_PROVIDER_NAMES[OPENAI],
         credential_types=("oauth", "api_key"),
         model_prefixes=(),
+    ),
+}
+
+_CREDENTIAL_VARIANT_CAPABILITIES = {
+    GOOGLE_ANTIGRAVITY: CredentialVariantCapabilities(
+        variant_id=GOOGLE_ANTIGRAVITY,
+        provider_id=GOOGLE_ANTIGRAVITY,
+        display_name=_PROVIDER_NAMES[GOOGLE_ANTIGRAVITY],
+        credential_type="oauth",
+        operations=(*_COMMON_CREDENTIAL_OPERATIONS, "quota", "credit_mode"),
+    ),
+    GOOGLE_AI_STUDIO: CredentialVariantCapabilities(
+        variant_id=GOOGLE_AI_STUDIO,
+        provider_id=GOOGLE_AI_STUDIO,
+        display_name=_PROVIDER_NAMES[GOOGLE_AI_STUDIO],
+        credential_type="api_key",
+        operations=_COMMON_CREDENTIAL_OPERATIONS,
+    ),
+    GROK: CredentialVariantCapabilities(
+        variant_id=GROK,
+        provider_id=XAI,
+        display_name=_CREDENTIAL_PROVIDER_NAMES[GROK],
+        credential_type="oauth",
+        operations=(*_COMMON_CREDENTIAL_OPERATIONS, "quota"),
+    ),
+    XAI_CONSOLE: CredentialVariantCapabilities(
+        variant_id=XAI_CONSOLE,
+        provider_id=XAI,
+        display_name=_CREDENTIAL_PROVIDER_NAMES[XAI_CONSOLE],
+        credential_type="api_key",
+        operations=_COMMON_CREDENTIAL_OPERATIONS,
+    ),
+    CODEX: CredentialVariantCapabilities(
+        variant_id=CODEX,
+        provider_id=OPENAI,
+        display_name=_CREDENTIAL_PROVIDER_NAMES[CODEX],
+        credential_type="oauth",
+        operations=(*_COMMON_CREDENTIAL_OPERATIONS, "quota"),
+    ),
+    OPENAI_PLATFORM: CredentialVariantCapabilities(
+        variant_id=OPENAI_PLATFORM,
+        provider_id=OPENAI,
+        display_name=_CREDENTIAL_PROVIDER_NAMES[OPENAI_PLATFORM],
+        credential_type="api_key",
+        operations=_COMMON_CREDENTIAL_OPERATIONS,
+    ),
+    CLAUDE_CODE: CredentialVariantCapabilities(
+        variant_id=CLAUDE_CODE,
+        provider_id=ANTHROPIC,
+        display_name=_CREDENTIAL_PROVIDER_NAMES[CLAUDE_CODE],
+        credential_type="oauth",
+        operations=_COMMON_CREDENTIAL_OPERATIONS,
+    ),
+    CLAUDE_PLATFORM: CredentialVariantCapabilities(
+        variant_id=CLAUDE_PLATFORM,
+        provider_id=ANTHROPIC,
+        display_name=_CREDENTIAL_PROVIDER_NAMES[CLAUDE_PLATFORM],
+        credential_type="api_key",
+        operations=_COMMON_CREDENTIAL_OPERATIONS,
+    ),
+    OLLAMA: CredentialVariantCapabilities(
+        variant_id=OLLAMA,
+        provider_id=OLLAMA,
+        display_name=_PROVIDER_NAMES[OLLAMA],
+        credential_type="connection",
+        operations=_COMMON_CREDENTIAL_OPERATIONS,
     ),
 }
 
@@ -318,6 +417,32 @@ def list_provider_capabilities() -> list[Dict[str, Any]]:
         _PROVIDER_CAPABILITIES[provider_id].to_dict()
         for provider_id in sorted(_PROVIDER_CAPABILITIES)
     ]
+
+
+def get_credential_variant_capabilities(
+    variant_id: Any,
+) -> Optional[CredentialVariantCapabilities]:
+    """Return the operation contract for one exact console variant."""
+    normalized = str(variant_id or "").strip().lower().replace("-", "_").replace(" ", "_")
+    return _CREDENTIAL_VARIANT_CAPABILITIES.get(normalized)
+
+
+def list_credential_variant_capabilities() -> list[Dict[str, Any]]:
+    """Return deterministic credential variant metadata for management clients."""
+    return [
+        _CREDENTIAL_VARIANT_CAPABILITIES[variant_id].to_dict()
+        for variant_id in sorted(_CREDENTIAL_VARIANT_CAPABILITIES)
+    ]
+
+
+def credential_supports_operation(
+    credential_data: Optional[Dict[str, Any]], operation: Any
+) -> bool:
+    """Fail closed unless the inferred credential variant declares the operation."""
+    capabilities = get_credential_variant_capabilities(
+        get_credential_provider_variant(credential_data)
+    )
+    return bool(capabilities and capabilities.supports_operation(operation))
 
 
 def api_key_fingerprint(api_key: str) -> str:

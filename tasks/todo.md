@@ -11,13 +11,13 @@
   change that denominator.
 - [x] Complete Wave 1 / Phases 0–2 at implementation commit `39fb9da`.
 - [x] Record wave governance, recovery order, and the Wave 2 execution slices in repository docs.
-- [ ] Obtain explicit human approval before implementing Wave 2.
-  - State: paused; documentation work is allowed, feature implementation is not.
+- [x] Obtain explicit human approval before implementing Wave 2.
+  - Approved: 2026-08-24; implementation begins at W2.1.
   - Resume: read `tasks/current.md`, then verify `git status`, `git log`, tests, and runtime health.
 
 ## Wave 2 — Credential Operations Execution Queue
 
-- [ ] W2.1 Inventory credential variants and operation capabilities.
+- [x] W2.1 Inventory credential variants and operation capabilities.
 - [ ] W2.2 Add the authenticated additive capability catalog contract.
 - [ ] W2.3 Enforce capabilities for single-credential operations.
 - [ ] W2.4 Add bounded batch preview and typed per-item execution outcomes.

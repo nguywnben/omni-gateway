@@ -9,13 +9,13 @@
 - Original program progress: 10/28 approved checklist items complete (including specification
   approval), approximately 36%; Wave 2 execution-slice checkboxes are refinements and are not added
   to that denominator.
-- Proposed next scope: Wave 2 — Credential Operations.
-- Control state: **PAUSED — WAITING FOR HUMAN APPROVAL**.
-- Expected worktree state at this checkpoint: clean after the planning commit.
+- Active scope: Wave 2 — Credential Operations.
+- Control state: **IN PROGRESS — W2.2**.
+- Expected worktree state at this checkpoint: clean after the latest checkpoint commit.
 - Expected runtime: Omni Gateway on `http://127.0.0.1:4283`, `/health` returns HTTP 200.
-- Last verified full suite: 470 tests passed; Ruff, compileall, and diff-check passed.
+- Last verified full suite: 473 tests passed; Ruff, compileall, and diff-check passed.
 
-Do not begin feature implementation from this state until the human explicitly approves Wave 2.
+Wave 2 was approved by the human on 2026-08-24. Do not expand beyond its documented scope.
 
 ## Authoritative Reading Order
 
@@ -44,6 +44,8 @@ silently choosing a new design.
 - Latest implementation checkpoint: `39fb9da`.
 - Repository quality evidence at that checkpoint: 470 tests passed; Ruff and compileall clean.
 - Service restart evidence: `/health` returned HTTP 200 after the checkpoint restart.
+- W2.1 evidence: all nine console credential variants have an exact, fail-closed operation
+  inventory; 473 full-suite tests passed before its checkpoint commit.
 
 ## Approved vs. Proposed Scope
 
@@ -51,7 +53,7 @@ silently choosing a new design.
 
 - Everything checked in Phases 0–2 of `tasks/todo.md`.
 
-### Proposed for the next approval
+### Approved and active
 
 - Wave 2 slices W2.1–W2.11 in `tasks/plan.md`.
 - Phase 3 completion: provider capability contract, safe single/batch operations, fleet filtering,
@@ -83,8 +85,8 @@ checkboxes to be marked complete.
 
 ## Immediate Next Action
 
-Wait for the human to approve or revise Wave 2. After approval, start only W2.1 with a clean
-worktree and test-first evidence. Do not skip directly to UI changes or broad batch mutations.
+Implement W2.2 with test-first evidence: expose the authenticated additive capability catalog
+contract without changing existing provider fields.
 
 ## Update Rule
 
