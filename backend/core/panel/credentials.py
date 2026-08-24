@@ -28,6 +28,7 @@ from core.credential_batch_operations import (
     store_idempotent_response,
 )
 from core.credential_manager import credential_manager
+from core.credential_operation_evidence import record_credential_mutation
 from core.google_ai_studio import (
     build_api_key_headers,
     build_generation_url,
@@ -50,6 +51,7 @@ from core.provider_registry import (
     OPENAI,
     XAI,
     get_credential_provider,
+    get_credential_provider_variant,
     get_declared_credential_models,
     is_api_key_credential,
 )
@@ -225,7 +227,7 @@ async def get_cred_detail(
         raise internal_server_error() from e
 
 
-async def _execute_credential_action(
+async def _apply_credential_action(
     storage_adapter,
     filename: str,
     credential_data: dict,
@@ -290,15 +292,95 @@ async def _execute_credential_action(
     return JSONResponse(content={"message": f"Credit usage {state} for this credential."})
 
 
+async def _execute_credential_action(
+    storage_adapter,
+    filename: str,
+    credential_data: dict,
+    action: str,
+    *,
+    mode: str,
+    timeout_seconds: float | None = None,
+) -> JSONResponse:
+    started_at = time.perf_counter()
+    operation = BATCH_ACTION_OPERATIONS.get(action, "unknown")
+    variant_id = get_credential_provider_variant(credential_data)
+    outcome = "failed"
+    summary_code = "operation_failed"
+    try:
+        operation_coro = _apply_credential_action(
+            storage_adapter,
+            filename,
+            credential_data,
+            action,
+            mode=mode,
+        )
+        response = (
+            await asyncio.wait_for(operation_coro, timeout=timeout_seconds)
+            if timeout_seconds is not None
+            else await operation_coro
+        )
+        if response.status_code == 422:
+            outcome = "unsupported"
+            summary_code = "credential_operation_unsupported"
+        elif response.status_code >= 400:
+            outcome = "failed"
+            summary_code = "operation_failed"
+        else:
+            outcome = "succeeded"
+            summary_code = "operation_succeeded"
+        return response
+    except TimeoutError:
+        outcome = "timed_out"
+        summary_code = "operation_timed_out"
+        raise
+    except asyncio.CancelledError:
+        outcome = "cancelled"
+        summary_code = "operation_cancelled"
+        raise
+    except HTTPException as exc:
+        outcome = "failed"
+        summary_code = f"http_{exc.status_code}"
+        raise
+    finally:
+        record_credential_mutation(
+            action=action,
+            operation=operation,
+            mode=mode,
+            filename=filename,
+            variant_id=variant_id,
+            outcome=outcome,
+            duration_ms=(time.perf_counter() - started_at) * 1000,
+            summary_code=summary_code,
+        )
+
+
 @router.post("/action")
 async def creds_action(
     request: CredFileActionRequest,
     token: str = Depends(verify_panel_token),
     mode: str = "code_assist",
 ):
+    started_at = time.perf_counter()
+    evidence_emitted = False
+    evidence_mode = mode
     try:
         mode = validate_mode(mode)
-        filename = validate_credential_filename(request.filename)
+        evidence_mode = mode
+        try:
+            filename = validate_credential_filename(request.filename)
+        except HTTPException:
+            record_credential_mutation(
+                action=request.action,
+                operation=BATCH_ACTION_OPERATIONS.get(request.action, "unknown"),
+                mode=mode,
+                filename=request.filename,
+                variant_id="unknown",
+                outcome="invalid",
+                duration_ms=(time.perf_counter() - started_at) * 1000,
+                summary_code="invalid_filename",
+            )
+            evidence_emitted = True
+            raise
         log.info(
             f"Performing credential action '{request.action}' on {filename} (mode={mode})."
         )
@@ -306,7 +388,19 @@ async def creds_action(
         storage_adapter = await get_storage_adapter()
         credential_data = await storage_adapter.get_credential(filename, mode=mode)
         if not credential_data:
+            record_credential_mutation(
+                action=request.action,
+                operation=BATCH_ACTION_OPERATIONS.get(request.action, "unknown"),
+                mode=mode,
+                filename=filename,
+                variant_id="unknown",
+                outcome="not_found",
+                duration_ms=(time.perf_counter() - started_at) * 1000,
+                summary_code="credential_not_found",
+            )
+            evidence_emitted = True
             raise HTTPException(status_code=404, detail="Credential file does not exist.")
+        evidence_emitted = True
         return await _execute_credential_action(
             storage_adapter,
             filename,
@@ -317,7 +411,18 @@ async def creds_action(
     except HTTPException:
         raise
     except Exception as e:
-        log.error(f"Credential file operation failed: {e}")
+        if not evidence_emitted:
+            record_credential_mutation(
+                action=request.action,
+                operation=BATCH_ACTION_OPERATIONS.get(request.action, "unknown"),
+                mode=evidence_mode,
+                filename=request.filename,
+                variant_id="unknown",
+                outcome="failed",
+                duration_ms=(time.perf_counter() - started_at) * 1000,
+                summary_code="operation_failed",
+            )
+        log.error("Credential file operation failed; internal detail was withheld.")
         raise internal_server_error() from e
 
 
@@ -333,8 +438,11 @@ async def creds_batch_action(
 ):
     reservation_active = False
     fingerprint = ""
+    planning_complete = False
+    evidence_mode = mode
     try:
         mode = validate_mode(mode)
+        evidence_mode = mode
         action = request.action
         filenames = request.filenames
         fingerprint = batch_request_fingerprint(mode, action, filenames)
@@ -391,6 +499,7 @@ async def creds_batch_action(
         )
         storage_adapter = await get_storage_adapter()
         results = await build_batch_plan(storage_adapter, action, filenames, mode=mode)
+        planning_complete = True
 
         if request.preview:
             preview_token = issue_batch_preview(fingerprint)
@@ -406,17 +515,25 @@ async def creds_batch_action(
 
         for item in results:
             if item["status"] != "eligible":
+                record_credential_mutation(
+                    action=action,
+                    operation=item["operation"],
+                    mode=mode,
+                    filename=item["filename"] or filenames[item["target_index"]],
+                    variant_id=item["variant_id"],
+                    outcome=item["status"],
+                    duration_ms=0,
+                    summary_code=item["code"],
+                )
                 continue
             try:
-                response = await asyncio.wait_for(
-                    _execute_credential_action(
-                        storage_adapter,
-                        item["filename"],
-                        item["credential_data"],
-                        action,
-                        mode=mode,
-                    ),
-                    timeout=BATCH_ITEM_TIMEOUT_SECONDS,
+                response = await _execute_credential_action(
+                    storage_adapter,
+                    item["filename"],
+                    item["credential_data"],
+                    action,
+                    mode=mode,
+                    timeout_seconds=BATCH_ITEM_TIMEOUT_SECONDS,
                 )
                 if response.status_code >= 400:
                     item["status"] = (
@@ -453,7 +570,19 @@ async def creds_batch_action(
     except HTTPException:
         raise
     except Exception as e:
-        log.error(f"Batch credential file operation failed: {e}")
+        if not request.preview and not planning_complete:
+            for filename in request.filenames:
+                record_credential_mutation(
+                    action=request.action,
+                    operation=BATCH_ACTION_OPERATIONS.get(request.action, "unknown"),
+                    mode=evidence_mode,
+                    filename=filename,
+                    variant_id="unknown",
+                    outcome="failed",
+                    duration_ms=0,
+                    summary_code="operation_failed",
+                )
+        log.error("Batch credential operation failed; internal detail was withheld.")
         raise internal_server_error() from e
     finally:
         if reservation_active:

@@ -13,6 +13,7 @@ import os
 import time
 from typing import Dict, List, Optional
 
+from core.credential_operation_evidence import render_credential_operation_metrics
 from core.response_cache import response_cache
 from core.usage_stats import get_provider_metrics
 from fastapi import APIRouter, Header, Response, status
@@ -103,6 +104,8 @@ def render_prometheus_metrics(provider_rows: List[Dict]) -> str:
         "Unexpired entries currently held by the response cache.",
     )
     lines.append(f"omni_response_cache_entries {int(response_cache.size())}")
+
+    lines.extend(render_credential_operation_metrics().rstrip().splitlines())
 
     return "\n".join(lines) + "\n"
 

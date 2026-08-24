@@ -65,6 +65,25 @@ process-local by design while Omni Gateway remains single-worker. It is not perm
 multiple workers; Phase 6 must move preview and idempotency coordination behind the accepted
 distributed-state boundary first.
 
+### Wave 2 evidence foundation
+
+The initial evidence boundary answers four on-call questions: which credential operation is
+failing or timing out, which bounded provider variant is affected, which request touched the same
+anonymous target, and whether an idempotent retry executed a mutation again. Toggle, deletion, and
+credit-mode attempts emit one schema-versioned JSON event per target with request ID, actor class,
+action, operation, mode, HMAC target fingerprint, provider variant, bounded outcome, duration, and
+summary code. Events never contain filenames, credential content, session values, idempotency
+keys, emails, tokens, prompts, or raw exception text.
+
+The single-worker foundation keeps a 1,000-event process-local diagnostic mirror and emits the
+same allowlisted event to the existing append-only structured log stream. Prometheus exposes
+`omni_credential_operations_total` and
+`omni_credential_operation_duration_seconds` with only bounded operation, outcome, mode, and
+variant labels. Request IDs and fingerprints remain event fields, never metric labels. The mirror
+is not the durable, queryable audit repository required by Phase 4; that phase remains open and
+must persist this schema behind the durable-state boundary in ADR-006 before claiming full audit
+coverage.
+
 ## Compatibility and Rollback
 
 - Existing provider metadata is mapped to a conservative default set derived from current server

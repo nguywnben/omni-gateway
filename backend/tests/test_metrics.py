@@ -17,6 +17,10 @@ if str(TESTS_DIR) not in sys.path:
 
 from core import metrics as metrics_module
 from core import usage_stats
+from core.credential_operation_evidence import (
+    clear_credential_operation_evidence_for_testing,
+    record_credential_mutation,
+)
 from core.metrics import metrics, render_prometheus_metrics
 from support import workspace_temp_directory
 
@@ -48,6 +52,9 @@ SAMPLE_ROWS = [
 
 
 class RenderPrometheusMetricsTests(unittest.TestCase):
+    def setUp(self):
+        clear_credential_operation_evidence_for_testing()
+
     def test_renders_per_provider_counters(self):
         output = render_prometheus_metrics(SAMPLE_ROWS)
         self.assertIn('omni_requests_total{provider="google_ai_studio"} 10', output)
@@ -73,6 +80,28 @@ class RenderPrometheusMetricsTests(unittest.TestCase):
         output = render_prometheus_metrics([])
         self.assertIn("omni_uptime_seconds", output)
         self.assertIn("omni_response_cache_entries", output)
+
+    def test_credential_operation_metrics_are_exposed_with_bounded_labels(self):
+        with patch("core.credential_operation_evidence.log.info"):
+            record_credential_mutation(
+                action="disable",
+                operation="toggle",
+                mode="primary",
+                filename="must-not-appear.json",
+                variant_id="google_ai_studio",
+                outcome="succeeded",
+                duration_ms=25,
+                summary_code="operation_succeeded",
+            )
+
+        output = render_prometheus_metrics([])
+        self.assertIn("# TYPE omni_credential_operations_total counter", output)
+        self.assertIn(
+            'operation="toggle",outcome="succeeded",mode="provider",variant="google_ai_studio"',
+            output,
+        )
+        self.assertIn("# TYPE omni_credential_operation_duration_seconds histogram", output)
+        self.assertNotIn("must-not-appear", output)
 
 
 class MetricsEndpointTests(unittest.TestCase):

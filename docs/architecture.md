@@ -42,6 +42,7 @@ backend/
     xai.py               Grok Build OAuth, SpaceXAI Console model discovery, and transport translation
     xai_billing.py       Grok Build OAuth account quota retrieval and normalization
     provider_registry.py  Provider identity and capability metadata
+    credential_operation_evidence.py Redacted credential mutation events and bounded metrics
     smart_routing.py      Provider and credential selection policy
     storage_adapter.py    Persistence boundary used by the application
   tests/                   Regression and contract tests
@@ -76,6 +77,11 @@ Model eligibility is evaluated before a request is sent. A declared model catalo
 ## State and Scaling
 
 The default single-instance mode stores credentials, configuration, and usage data under `backend/data/creds`, with logs under `backend/data/logs`. Both locations must be persisted in containers.
+
+Credential fleet mutations emit allowlisted structured evidence into the append-only log stream
+and a bounded process-local diagnostic mirror. Prometheus operation counters and latency
+histograms use only fixed capability dimensions. This Wave 2 foundation is not the durable audit
+repository; full retention, query, export, and actor identity remain Phase 4 work.
 
 `WORKERS=1` and one application replica are the supported process model for the 1.x series. MongoDB and PostgreSQL can replace local SQLite storage, but shared storage alone does not coordinate reservations, cooldowns, sessions, or usage aggregation across workers. The service rejects `WORKERS` values other than `1` instead of presenting an unsafe scale-out configuration as supported.
 

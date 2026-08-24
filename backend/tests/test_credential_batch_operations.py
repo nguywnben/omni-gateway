@@ -269,7 +269,7 @@ class CredentialBatchOperationTests(unittest.IsolatedAsyncioTestCase):
                 AsyncMock(return_value=storage),
             ),
             patch("core.panel.credentials.BATCH_ITEM_TIMEOUT_SECONDS", 0.001),
-            patch("core.panel.credentials._execute_credential_action", slow_operation),
+            patch("core.panel.credentials._apply_credential_action", slow_operation),
         ):
             response = await creds_batch_action(
                 CredFileBatchActionRequest(action="disable", filenames=["studio.json"]),
