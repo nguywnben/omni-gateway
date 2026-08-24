@@ -1,9 +1,12 @@
 import asyncio
 import json
 import os
-from typing import Any, Dict, List, Optional, Protocol
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Protocol
 
 from log import log
+
+if TYPE_CHECKING:
+    from core.audit import AuditRepository
 
 
 class StorageBackend(Protocol):
@@ -57,6 +60,8 @@ class StorageBackend(Protocol):
     async def get_all_config(self) -> Dict[str, Any]: ...
 
     async def delete_config(self, key: str) -> bool: ...
+
+    async def create_audit_repository(self, *, cursor_signing_key: bytes) -> "AuditRepository": ...
 
 
 class StorageAdapter:
@@ -198,6 +203,12 @@ class StorageAdapter:
     async def delete_config(self, key: str) -> bool:
         self._ensure_initialized()
         return await self._backend.delete_config(key)
+
+    async def create_audit_repository(self, *, cursor_signing_key: bytes) -> "AuditRepository":
+        """Create the audit repository owned by the selected storage backend."""
+
+        self._ensure_initialized()
+        return await self._backend.create_audit_repository(cursor_signing_key=cursor_signing_key)
 
     async def export_credential_to_json(self, filename: str, output_path: str = None) -> bool:
         self._ensure_initialized()

@@ -2,10 +2,13 @@ import asyncio
 import json
 import os
 import time
-from typing import Any, Dict, List, Optional, Tuple
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple
 
 import asyncpg
 from log import log
+
+if TYPE_CHECKING:
+    from core.audit import AuditRepository
 
 
 class PostgreSQLManager:
@@ -219,6 +222,17 @@ class PostgreSQLManager:
     def _ensure_initialized(self) -> None:
         if not self._initialized or not self._pool:
             raise RuntimeError("PostgreSQL manager not initialized")
+
+    async def create_audit_repository(self, *, cursor_signing_key: bytes) -> "AuditRepository":
+        self._ensure_initialized()
+        from .audit_postgresql import PostgreSQLAuditRepository
+
+        repository = PostgreSQLAuditRepository(
+            self._pool,
+            cursor_signing_key=cursor_signing_key,
+        )
+        await repository.initialize()
+        return repository
 
     def _get_table_name(self, mode: str) -> str:
         if mode == "primary":

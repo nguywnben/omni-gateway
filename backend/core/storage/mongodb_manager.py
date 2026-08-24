@@ -1,11 +1,14 @@
 import json
 import os
 import time
-from typing import Any, Dict, List, Optional
+from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
 from log import log
 from pymongo import AsyncMongoClient
 from pymongo.asynchronous.database import AsyncDatabase
+
+if TYPE_CHECKING:
+    from core.audit import AuditRepository
 
 
 class MongoDBManager:
@@ -466,6 +469,17 @@ class MongoDBManager:
     def _ensure_initialized(self):
         if not self._initialized:
             raise RuntimeError("MongoDB manager not initialized")
+
+    async def create_audit_repository(self, *, cursor_signing_key: bytes) -> "AuditRepository":
+        self._ensure_initialized()
+        from .audit_mongodb import MongoAuditRepository
+
+        repository = MongoAuditRepository(
+            self._db["audit_events"],
+            cursor_signing_key=cursor_signing_key,
+        )
+        await repository.initialize()
+        return repository
 
     def _get_collection_name(self, mode: str) -> str:
         if mode == "primary":

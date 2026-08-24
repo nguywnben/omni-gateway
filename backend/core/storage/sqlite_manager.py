@@ -2,11 +2,14 @@ import asyncio
 import json
 import os
 import time
-from typing import Any, Dict, List, Optional, Tuple
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple
 
 import aiosqlite
 from log import log
 from paths import DEFAULT_CREDENTIALS_DIR
+
+if TYPE_CHECKING:
+    from core.audit import AuditRepository
 
 
 class SQLiteManager:
@@ -317,6 +320,17 @@ class SQLiteManager:
     def _ensure_initialized(self):
         if not self._initialized:
             raise RuntimeError("SQLite manager not initialized")
+
+    async def create_audit_repository(self, *, cursor_signing_key: bytes) -> "AuditRepository":
+        self._ensure_initialized()
+        from .audit_sqlite import SQLiteAuditRepository
+
+        repository = SQLiteAuditRepository(
+            self._db_path,
+            cursor_signing_key=cursor_signing_key,
+        )
+        await repository.initialize()
+        return repository
 
     def _get_table_name(self, mode: str) -> str:
         if mode == "primary":
