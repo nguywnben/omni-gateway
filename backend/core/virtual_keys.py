@@ -35,8 +35,24 @@ BUDGET_CACHE_TTL_SECONDS = 15.0
 DAILY_WINDOW_SECONDS = 86_400
 MONTHLY_WINDOW_SECONDS = 30 * 86_400
 RATE_WINDOW_SECONDS = 60.0
+LAST_USED_PERSIST_INTERVAL_SECONDS = 60.0
+VIRTUAL_KEY_SCHEMA_VERSION = 2
+MAX_MODEL_PATTERNS = 64
+MAX_MODEL_PATTERN_LENGTH = 128
+MAX_FALLBACK_PRICE_USD_PER_MILLION = 100_000.0
+
+INFERENCE_SCOPES = (
+    "inference:openai",
+    "inference:anthropic",
+    "inference:gemini",
+)
+MANAGEMENT_SCOPES = ("management:read", "management:write")
+VIRTUAL_KEY_SCOPES = INFERENCE_SCOPES + MANAGEMENT_SCOPES
+DEFAULT_INFERENCE_SCOPES = INFERENCE_SCOPES
+UNKNOWN_PRICING_POLICIES = ("deny", "warn", "fallback")
 
 _GEMINI_MODEL_PATH_RE = re.compile(r"/models/([^/:?]+)")
+_MODEL_PATTERN_RE = re.compile(r"^(?=.{1,128}$)(?=.*[A-Za-z0-9])[A-Za-z0-9._:/+*?-]+$")
 
 
 def hash_key(token: str) -> str:
@@ -69,6 +85,56 @@ def _int_or_none(value: Any) -> Optional[int]:
     return parsed if parsed > 0 else None
 
 
+def _normalize_scopes(value: Any, *, legacy_default: bool = False) -> Tuple[str, ...]:
+    if value is None and legacy_default:
+        return DEFAULT_INFERENCE_SCOPES
+    if not isinstance(value, (list, tuple)):
+        raise ValueError("Virtual key scopes must be a list.")
+    requested = {str(scope).strip().lower() for scope in value if str(scope).strip()}
+    unknown = requested.difference(VIRTUAL_KEY_SCOPES)
+    if unknown:
+        raise ValueError("Virtual key scopes contain an unknown value.")
+    if not requested:
+        raise ValueError("At least one virtual key scope is required.")
+    if "management:write" in requested and "management:read" not in requested:
+        raise ValueError("The management:write scope requires management:read.")
+    return tuple(scope for scope in VIRTUAL_KEY_SCOPES if scope in requested)
+
+
+def _normalize_model_patterns(value: Any) -> List[str]:
+    if value is None:
+        return []
+    if not isinstance(value, (list, tuple)):
+        raise ValueError("Virtual key model patterns must be a list.")
+    if len(value) > MAX_MODEL_PATTERNS:
+        raise ValueError(f"At most {MAX_MODEL_PATTERNS} model patterns are allowed.")
+    normalized: List[str] = []
+    seen = set()
+    for candidate in value:
+        pattern = str(candidate).strip()
+        if not _MODEL_PATTERN_RE.fullmatch(pattern):
+            raise ValueError("Each model pattern must use only bounded safe glob characters.")
+        folded = pattern.lower()
+        if folded not in seen:
+            normalized.append(pattern)
+            seen.add(folded)
+    return normalized
+
+
+def _normalize_pricing_policy(policy: Any, fallback: Any) -> Tuple[str, Optional[float]]:
+    normalized_policy = str(policy or "deny").strip().lower()
+    if normalized_policy not in UNKNOWN_PRICING_POLICIES:
+        raise ValueError("Unknown pricing policy must be deny, warn, or fallback.")
+    normalized_fallback = _float_or_none(fallback)
+    if normalized_fallback is not None and normalized_fallback > MAX_FALLBACK_PRICE_USD_PER_MILLION:
+        raise ValueError("Unknown-pricing fallback price exceeds the supported maximum.")
+    if normalized_policy == "fallback" and normalized_fallback is None:
+        raise ValueError("A positive fallback price is required for fallback pricing policy.")
+    if normalized_policy != "fallback" and fallback not in {None, ""}:
+        raise ValueError("A fallback price is only valid with fallback pricing policy.")
+    return normalized_policy, normalized_fallback
+
+
 @dataclass
 class VirtualKey:
     """A single virtual API key record (secret stored as SHA-256 hash)."""
@@ -85,9 +151,23 @@ class VirtualKey:
     rpm_limit: Optional[int] = None
     tpm_limit: Optional[int] = None
     allowed_models: List[str] = field(default_factory=list)
+    schema_version: int = VIRTUAL_KEY_SCHEMA_VERSION
+    scopes: Tuple[str, ...] = DEFAULT_INFERENCE_SCOPES
+    unknown_pricing_policy: str = "deny"
+    fallback_price_usd_per_million: Optional[float] = None
+    last_used_at: Optional[float] = None
+
+    @property
+    def status(self) -> str:
+        if not self.enabled:
+            return "disabled"
+        if self.is_expired():
+            return "expired"
+        return "active"
 
     def to_public_dict(self) -> Dict[str, Any]:
         return {
+            "schema_version": self.schema_version,
             "id": self.id,
             "name": self.name,
             "key_preview": self.key_preview,
@@ -99,10 +179,16 @@ class VirtualKey:
             "rpm_limit": self.rpm_limit,
             "tpm_limit": self.tpm_limit,
             "allowed_models": list(self.allowed_models),
+            "scopes": list(self.scopes),
+            "unknown_pricing_policy": self.unknown_pricing_policy,
+            "fallback_price_usd_per_million": self.fallback_price_usd_per_million,
+            "last_used_at": self.last_used_at,
+            "status": self.status,
         }
 
     def to_storage_dict(self) -> Dict[str, Any]:
         payload = self.to_public_dict()
+        payload.pop("status", None)
         payload["key_hash"] = self.key_hash
         return payload
 
@@ -114,23 +200,38 @@ class VirtualKey:
         key_hash = str(raw.get("key_hash") or "").strip()
         if not key_id or not key_hash:
             return None
-        allowed_models = raw.get("allowed_models") or []
-        if not isinstance(allowed_models, list):
-            allowed_models = []
-        return cls(
-            id=key_id,
-            name=str(raw.get("name") or key_id),
-            key_hash=key_hash,
-            key_preview=str(raw.get("key_preview") or ""),
-            enabled=bool(raw.get("enabled", True)),
-            created_at=float(raw.get("created_at") or 0.0),
-            expires_at=_float_or_none(raw.get("expires_at")),
-            budget_daily_usd=_float_or_none(raw.get("budget_daily_usd")),
-            budget_monthly_usd=_float_or_none(raw.get("budget_monthly_usd")),
-            rpm_limit=_int_or_none(raw.get("rpm_limit")),
-            tpm_limit=_int_or_none(raw.get("tpm_limit")),
-            allowed_models=[str(model) for model in allowed_models if str(model).strip()],
-        )
+        raw_version = raw.get("schema_version")
+        is_legacy = raw_version is None
+        if not is_legacy and raw_version != VIRTUAL_KEY_SCHEMA_VERSION:
+            return None
+        try:
+            scopes = _normalize_scopes(raw.get("scopes"), legacy_default=is_legacy)
+            allowed_models = _normalize_model_patterns(raw.get("allowed_models") or [])
+            pricing_policy, fallback_price = _normalize_pricing_policy(
+                raw.get("unknown_pricing_policy"),
+                raw.get("fallback_price_usd_per_million"),
+            )
+            return cls(
+                id=key_id,
+                name=str(raw.get("name") or key_id),
+                key_hash=key_hash,
+                key_preview=str(raw.get("key_preview") or ""),
+                enabled=bool(raw.get("enabled", True)),
+                created_at=float(raw.get("created_at") or 0.0),
+                expires_at=_float_or_none(raw.get("expires_at")),
+                budget_daily_usd=_float_or_none(raw.get("budget_daily_usd")),
+                budget_monthly_usd=_float_or_none(raw.get("budget_monthly_usd")),
+                rpm_limit=_int_or_none(raw.get("rpm_limit")),
+                tpm_limit=_int_or_none(raw.get("tpm_limit")),
+                allowed_models=allowed_models,
+                schema_version=VIRTUAL_KEY_SCHEMA_VERSION,
+                scopes=scopes,
+                unknown_pricing_policy=pricing_policy,
+                fallback_price_usd_per_million=fallback_price,
+                last_used_at=_float_or_none(raw.get("last_used_at")),
+            )
+        except (TypeError, ValueError):
+            return None
 
     def is_expired(self, now: Optional[float] = None) -> bool:
         if self.expires_at is None:
@@ -209,13 +310,23 @@ class VirtualKeyManager:
             storage_adapter = await get_storage_adapter()
             raw_keys = await storage_adapter.get_config(VIRTUAL_KEYS_CONFIG_KEY, [])
             keys: Dict[str, VirtualKey] = {}
+            needs_migration = False
+            invalid_record_found = False
             if isinstance(raw_keys, list):
                 for raw in raw_keys:
                     record = VirtualKey.from_storage_dict(raw)
                     if record is not None:
                         keys[record.key_hash] = record
+                        needs_migration = needs_migration or "schema_version" not in raw
+                    else:
+                        invalid_record_found = True
             self._keys_by_hash = keys
             self._loaded = True
+            if needs_migration and not invalid_record_found:
+                await storage_adapter.set_config(
+                    VIRTUAL_KEYS_CONFIG_KEY,
+                    [record.to_storage_dict() for record in keys.values()],
+                )
             if keys:
                 log.info(f"[virtual-keys] loaded {len(keys)} virtual API keys")
 
@@ -245,6 +356,9 @@ class VirtualKeyManager:
         tpm_limit: Optional[int] = None,
         expires_at: Optional[float] = None,
         allowed_models: Optional[List[str]] = None,
+        scopes: Optional[List[str]] = None,
+        unknown_pricing_policy: str = "deny",
+        fallback_price_usd_per_million: Optional[float] = None,
     ) -> Tuple[Dict[str, Any], str]:
         """Create a key and return ``(public_record, plaintext_secret)``."""
         from config import API_KEY_PREFIX
@@ -253,6 +367,14 @@ class VirtualKeyManager:
         clean_name = str(name or "").strip()
         if not clean_name:
             raise ValueError("Virtual key name is required.")
+        normalized_scopes = _normalize_scopes(
+            list(DEFAULT_INFERENCE_SCOPES) if scopes is None else scopes
+        )
+        normalized_models = _normalize_model_patterns(allowed_models or [])
+        pricing_policy, fallback_price = _normalize_pricing_policy(
+            unknown_pricing_policy,
+            fallback_price_usd_per_million,
+        )
 
         plaintext = f"{API_KEY_PREFIX}vk-{secrets.token_hex(20)}"
         record = VirtualKey(
@@ -267,9 +389,10 @@ class VirtualKeyManager:
             budget_monthly_usd=_float_or_none(budget_monthly_usd),
             rpm_limit=_int_or_none(rpm_limit),
             tpm_limit=_int_or_none(tpm_limit),
-            allowed_models=[
-                str(model).strip() for model in (allowed_models or []) if str(model).strip()
-            ],
+            allowed_models=normalized_models,
+            scopes=normalized_scopes,
+            unknown_pricing_policy=pricing_policy,
+            fallback_price_usd_per_million=fallback_price,
         )
         async with self._lock:
             self._keys_by_hash[record.key_hash] = record
@@ -283,6 +406,24 @@ class VirtualKeyManager:
             record = self._find_by_id_locked(key_id)
             if record is None:
                 return None
+            normalized_scopes = (
+                _normalize_scopes(patch.get("scopes")) if "scopes" in patch else None
+            )
+            normalized_models = (
+                _normalize_model_patterns(patch.get("allowed_models"))
+                if "allowed_models" in patch
+                else None
+            )
+            pricing_policy = record.unknown_pricing_policy
+            fallback_price = record.fallback_price_usd_per_million
+            if "unknown_pricing_policy" in patch or "fallback_price_usd_per_million" in patch:
+                pricing_policy, fallback_price = _normalize_pricing_policy(
+                    patch.get("unknown_pricing_policy", record.unknown_pricing_policy),
+                    patch.get(
+                        "fallback_price_usd_per_million",
+                        record.fallback_price_usd_per_million,
+                    ),
+                )
             if "name" in patch:
                 new_name = str(patch.get("name") or "").strip()
                 if new_name:
@@ -300,11 +441,11 @@ class VirtualKeyManager:
             if "expires_at" in patch:
                 record.expires_at = _float_or_none(patch.get("expires_at"))
             if "allowed_models" in patch:
-                models = patch.get("allowed_models") or []
-                if isinstance(models, list):
-                    record.allowed_models = [
-                        str(model).strip() for model in models if str(model).strip()
-                    ]
+                record.allowed_models = normalized_models or []
+            if normalized_scopes is not None:
+                record.scopes = normalized_scopes
+            record.unknown_pricing_policy = pricing_policy
+            record.fallback_price_usd_per_million = fallback_price
             await self._persist()
             return record.to_public_dict()
 
@@ -346,8 +487,9 @@ class VirtualKeyManager:
                 matched = record
         return matched
 
-    async def enforce(self, record: VirtualKey, *, requested_model: str = "") -> None:
-        """Raise :class:`HTTPException` when the key may not serve this call."""
+    @staticmethod
+    def _enforce_active(record: VirtualKey) -> None:
+        """Reject disabled or expired keys before evaluating any permission."""
         now = time.time()
         if not record.enabled:
             raise HTTPException(
@@ -361,6 +503,23 @@ class VirtualKeyManager:
                 detail="This API key has expired.",
                 headers={"WWW-Authenticate": "Bearer"},
             )
+
+    async def enforce(
+        self,
+        record: VirtualKey,
+        *,
+        protocol: str = "openai",
+        requested_model: str = "",
+    ) -> None:
+        """Raise :class:`HTTPException` when the key may not serve this call."""
+        now = time.time()
+        self._enforce_active(record)
+        required_scope = f"inference:{str(protocol or '').strip().lower()}"
+        if required_scope not in INFERENCE_SCOPES or required_scope not in record.scopes:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="This API key is not allowed to use the requested inference protocol.",
+            )
         if not record.allows_model(requested_model):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
@@ -372,6 +531,28 @@ class VirtualKeyManager:
 
         # Count this request in the RPM window only after all checks pass.
         self._request_windows.setdefault(record.id, _SlidingWindow()).add(1)
+
+    def authorize_management(self, record: VirtualKey, *, write: bool) -> None:
+        """Authorize a management read or write without consuming inference limits."""
+        self._enforce_active(record)
+        required_scope = "management:write" if write else "management:read"
+        if required_scope not in record.scopes:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="This API key does not have the required management scope.",
+            )
+
+    async def note_last_used(self, record: VirtualKey, *, now: Optional[float] = None) -> None:
+        """Persist bounded last-used metadata without writing on every request."""
+        current = now if now is not None else time.time()
+        async with self._lock:
+            if (
+                record.last_used_at is not None
+                and current - record.last_used_at < LAST_USED_PERSIST_INTERVAL_SECONDS
+            ):
+                return
+            record.last_used_at = current
+            await self._persist()
 
     def _enforce_rate_limits(self, record: VirtualKey) -> None:
         if record.rpm_limit is not None:
