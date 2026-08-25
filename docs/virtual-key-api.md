@@ -2,7 +2,8 @@
 
 Virtual keys provide independently revocable, hashed-at-rest credentials for inference clients and
 explicitly authorized management automation. The plaintext credential is returned only when a key
-is created. List, update, usage, and delete responses never expose it.
+is created or rotated. List, update, revoke, usage, and delete responses never expose it, and the
+plaintext is never persisted.
 
 ## Authentication and scope model
 
@@ -40,8 +41,9 @@ schema version fails closed and prevents a partial rewrite that could discard da
 Public records contain:
 
 - `schema_version`, stable `id`, `name`, and masked `key_preview`;
-- `enabled`, derived `status` (`active`, `disabled`, or `expired`), `created_at`, `expires_at`, and
-  `last_used_at`;
+- `enabled`, derived `status` (`active`, `disabled`, `expired`, or terminal `revoked`),
+  `created_at`, `expires_at`, `last_used_at`, and `revoked_at`;
+- monotonic `revision` for optimistic lifecycle concurrency;
 - daily/monthly USD budgets and RPM/TPM limits;
 - bounded `allowed_models` patterns and ordered `scopes`;
 - `unknown_pricing_policy` and optional `fallback_price_usd_per_million`.
@@ -96,8 +98,15 @@ labels in `omni_virtual_key_quota_events_total`; key IDs and request contents ar
 | `PATCH /api/virtual-keys/{key_id}` | `management:write` | Update supplied fields |
 | `DELETE /api/virtual-keys/{key_id}` | `management:write` | Delete the record |
 | `GET /api/virtual-keys/{key_id}/usage` | `management:read` | Read key-attributed usage |
+| `POST /api/virtual-keys/{key_id}/rotate` | `management:write` | Atomically replace and reveal plaintext once |
+| `POST /api/virtual-keys/{key_id}/revoke` | `management:write` | Permanently revoke while retaining stable identity |
 
 Create accepts all public policy fields except server-owned identity, status, timestamps, preview,
-and usage metadata. Update is partial. Domain validation failures return HTTP 400; a missing key
-returns HTTP 404. Lifecycle-safe rotation, one-time reveal dismissal semantics, optimistic
-concurrency, and audited revoke/rotate workflows are intentionally delivered in W3.8.
+revision, and usage metadata. Update is partial and remains backward-compatible when
+`expected_revision` is omitted. Rotate and revoke require the current positive
+`expected_revision`; update may supply it. A stale mutation returns HTTP 409 without changing the
+record. Domain validation failures return HTTP 400 and a missing key returns HTTP 404. Rotation
+preserves the stable key ID, invalidates the previous secret atomically, and returns the new secret
+only in that successful response. Revocation is terminal: a revoked key cannot be re-enabled or
+rotated. Create, update, rotate, revoke, and legacy delete operations use the bounded management
+audit vocabulary without recording secret material.

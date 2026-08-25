@@ -4,17 +4,18 @@
 
 - Updated: 2026-08-25 (Asia/Saigon).
 - Branch: `codex/enterprise-overhaul`.
-- Implementation baseline: `5b38c71 feat: enforce atomic virtual-key quotas`.
-- Completed scope: Waves 1–2 / Phases 0–3, Wave 3 checkpoint W3-A, and W3.6–W3.7.
+- Implementation baseline: `c8f62da feat: secure virtual-key lifecycle`.
+- Completed scope: Waves 1–2 / Phases 0–3, Wave 3 checkpoint W3-A, and W3.6–W3.8.
 - Original program progress: 15/28 approved checklist items complete (including specification
   approval), approximately 53.6%; wave execution-slice checkboxes are refinements and are not
   added to that denominator.
-- Active scope: Wave 3 — Access and Operational Evidence; W3.8 safe key lifecycle is next.
-- Control state: **READY — W3.8**.
-- Expected worktree state at this checkpoint: clean after the W3.7 closure commit.
+- Active scope: Wave 3 — Access and Operational Evidence; W3.9 Access lifecycle is next.
+- Control state: **READY — W3.9**.
+- Expected worktree state at this checkpoint: clean after the W3.8 lifecycle commit.
 - Expected runtime: one Omni Gateway listener on `http://127.0.0.1:4283`; `/health` and `/ready`
   return HTTP 200.
-- Last verified full suite: 646 tests passed; Ruff lint/format, compileall, pip dependency
+- Last verified full suite: 653 tests passed; focused Ruff lint/format passed; full repository
+  gates remain scheduled for checkpoint W3-B. The prior checkpoint's compileall, pip dependency
   consistency, pip-audit, all 38 JavaScript syntax checks, and diff-check passed. The 14 remaining
   Wave 2 formatter differences were normalized mechanically in commit `1abbb15`; the repository-
   wide formatter gate is now clean. Runtime `/audit`, `/health`, and `/ready` return HTTP 200.
@@ -197,6 +198,11 @@ silently choosing a new design.
   reconciliation, overspend, fallback pricing, and ledger-outage tests pass; all 646 repository
   tests, Ruff lint/format, compileall, dependency consistency, vulnerability audit, 38 JavaScript
   syntax checks, and diff-check are clean. Redis coordination and multiple workers remain inactive.
+- W3.8 evidence: the safe lifecycle slice adds monotonic revisions, stale-write conflicts,
+  stable-ID atomic rotation, terminal revocation, one-time create/rotate reveal, and bounded audit
+  classifications. Plaintext never enters persisted or non-reveal records; rotation races produce
+  one winner; revoke and stale-write replays are rejected. All 653 backend tests and focused Ruff
+  checks pass, while existing PATCH clients remain compatible without an expected revision.
 
 ## Approved vs. Proposed Scope
 
@@ -244,10 +250,9 @@ checkboxes to be marked complete.
 
 ## Immediate Next Action
 
-Begin W3.8 with RED lifecycle race and replay tests, then add audited revoke, rotate, one-time
-reveal, last-used/usage summaries, and optimistic concurrency without weakening hashed-at-rest
-storage or the existing route contract. Do not begin W3.9 Access-page lifecycle work until W3.8 is
-independently committed.
+Commit W3.8 independently, then begin W3.9 with frontend contract tests for list/create/edit,
+rotate/revoke, usage/status, explicit pricing policy, and one-time reveal DOM lifetime. Complete the
+desktop/mobile/theme/locale/keyboard/accessibility browser matrix before closing checkpoint W3-B.
 
 ## Update Rule
 
