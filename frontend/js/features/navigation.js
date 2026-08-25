@@ -58,6 +58,12 @@ function initStaticUiBindings() {
         'copy-api-key': () => copyInputValue('apiKey'),
         'toggle-api-key': () => toggleApiKeyVisibility(),
         'regenerate-api-key': () => regenerateApiKey(),
+        'virtual-key-create': () => openVirtualKeyForm(),
+        'virtual-key-refresh': () => loadVirtualKeys({ announce: true }),
+        'virtual-key-edit': (element) => editVirtualKey(element.dataset.keyId),
+        'virtual-key-usage': (element) => showVirtualKeyUsage(element.dataset.keyId),
+        'virtual-key-rotate': (element) => rotateVirtualKey(element.dataset.keyId),
+        'virtual-key-revoke': (element) => revokeVirtualKey(element.dataset.keyId),
         'copy-url': (element) => cpUrl(element),
         'refresh-pool': () => refreshPrimaryCredsList(),
         'select-pool-archive': () => selectPoolImportArchive(),
@@ -165,6 +171,9 @@ function initStaticUiBindings() {
         'primary-files': (_element, event) => handlePrimaryFileSelect(event),
         'routing-strategy': () => syncRoutingPolicyControls(),
         'quality-profile': (element) => selectQualityProfile(element.value),
+        'virtual-key-status': (element) => updateVirtualKeyStatus(element.value),
+        'virtual-key-pricing': (element) => syncVirtualKeyPricingControl(element.form),
+        'virtual-key-scope': (element) => syncVirtualKeyScopeControl(element),
         'log-level': () => filterLogs()
     };
 
@@ -192,6 +201,9 @@ function initStaticUiBindings() {
         }
         if (event.target.matches('[data-ui-input="provider-catalog-search"]')) {
             filterProviderCatalog(event.target.value);
+        }
+        if (event.target.matches('[data-ui-input="virtual-key-search"]')) {
+            updateVirtualKeySearch(event.target.value);
         }
     });
 

@@ -194,7 +194,7 @@ class ControlPanelAssetTests(unittest.TestCase):
         self.assertIn('data-i18n="access.title"', access_fragment)
         self.assertIn("'/access': 'access'", navigation_script)
         self.assertIn("access: '/access'", navigation_script)
-        self.assertIn("access: () => updateEndpointUrls()", navigation_script)
+        self.assertIn("access: () => loadAccessPage()", navigation_script)
         self.assertIn('@router.get("/access"', root_source)
         self.assertIn("t('access.api_key_copy_label')", integration_script)
         self.assertIn("t('access.hide_api_key')", integration_script)

@@ -66,4 +66,41 @@
                             </div>
                         </section>
                     </div>
+
+                    <section class="card virtual-key-section" aria-labelledby="virtualKeyHeading">
+                        <div class="virtual-key-header">
+                            <div>
+                                <div class="page-kicker" data-i18n="access.virtual_keys_label">Governed access</div>
+                                <h2 class="card-title" id="virtualKeyHeading" data-i18n="access.virtual_keys">Virtual API keys</h2>
+                                <p class="card-copy card-title-copy" data-i18n="access.virtual_keys_description">Issue least-privilege client keys with independent scopes, model access, rate limits, budgets, and expiry.</p>
+                            </div>
+                            <div class="page-actions">
+                                <button type="button" class="btn btn-secondary" data-ui-action="virtual-key-refresh" data-i18n="access.refresh_keys">Refresh</button>
+                                <button type="button" class="btn" data-ui-action="virtual-key-create" data-i18n="access.create_key">Create key</button>
+                            </div>
+                        </div>
+
+                        <div class="virtual-key-filters" role="search" data-i18n-aria-label="access.filter_keys" aria-label="Filter virtual keys">
+                            <label class="virtual-key-filter-field" for="virtualKeySearch">
+                                <span data-i18n="access.search_keys">Search keys</span>
+                                <input type="search" id="virtualKeySearch" autocomplete="off" data-ui-input="virtual-key-search" data-i18n-placeholder="access.search_keys_placeholder" placeholder="Name or key ID">
+                            </label>
+                            <label class="virtual-key-filter-field" for="virtualKeyStatusFilter">
+                                <span data-i18n="access.status">Status</span>
+                                <select id="virtualKeyStatusFilter" data-ui-change="virtual-key-status">
+                                    <option value="" data-i18n="access.all_statuses">All statuses</option>
+                                    <option value="active" data-i18n="access.status_active">Active</option>
+                                    <option value="disabled" data-i18n="access.status_disabled">Disabled</option>
+                                    <option value="expired" data-i18n="access.status_expired">Expired</option>
+                                    <option value="revoked" data-i18n="access.status_revoked">Revoked</option>
+                                </select>
+                            </label>
+                        </div>
+
+                        <div id="virtualKeyList" class="virtual-key-list" aria-live="polite" aria-busy="true"></div>
+                        <div id="virtualKeyEmptyState" class="virtual-key-empty hidden" role="status">
+                            <strong data-i18n="access.no_keys">No virtual keys found</strong>
+                            <span data-i18n="access.no_keys_description">Create a least-privilege key or adjust the filters.</span>
+                        </div>
+                    </section>
                 </div>

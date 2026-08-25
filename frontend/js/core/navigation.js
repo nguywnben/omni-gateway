@@ -210,7 +210,7 @@ function getTabDataLoader(tabName) {
 
         quality: () => loadQualityPolicy(),
 
-        access: () => updateEndpointUrls(),
+        access: () => loadAccessPage(),
 
         pool: () => AppState.primaryCreds.refresh(),
 
