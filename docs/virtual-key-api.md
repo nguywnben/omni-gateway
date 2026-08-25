@@ -110,3 +110,17 @@ preserves the stable key ID, invalidates the previous secret atomically, and ret
 only in that successful response. Revocation is terminal: a revoked key cannot be re-enabled or
 rotated. Create, update, rotate, revoke, and legacy delete operations use the bounded management
 audit vocabulary without recording secret material.
+
+## Access console contract
+
+The Access page preserves the existing root integration key and SDK examples while adding a
+separate virtual-key governance workspace. Operators can search and filter public records, create
+or edit policy, inspect usage, rotate, and terminally revoke. The form exposes scope, model, rate,
+budget, expiry, and unknown-pricing controls; selecting management write also selects management
+read, and fallback price is editable only when fallback pricing is selected.
+
+Create and rotate display plaintext in a modal exactly once. Closing or copying clears the secret
+from JavaScript state and the DOM, and the feature does not write it to browser persistence. A
+concurrent mutation returns the revision conflict without silently overwriting newer policy; the
+console reloads the current record before another attempt. All statuses and lifecycle actions are
+localized across the 15 supported console locales.

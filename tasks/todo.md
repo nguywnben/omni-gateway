@@ -6,8 +6,8 @@
 
 ## Current Execution Gate
 
-- Program progress: 15/28 original checklist items complete (including specification approval),
-  approximately 53.6%. Wave execution-slice checkboxes below refine existing phase items and do
+- Program progress: 17/28 original checklist items complete (including specification approval),
+  approximately 60.7%. Wave execution-slice checkboxes below refine existing phase items and do
   not change that denominator.
 - [x] Complete Wave 1 / Phases 0–2 at implementation commit `39fb9da`.
 - [x] Record wave governance, recovery order, and the Wave 2 execution slices in repository docs.
@@ -60,8 +60,15 @@ Phase 4 audit item or the Phase 5 request-trace item.
   - Complete at `c8f62da`; stable-ID rotation and terminal revocation are atomic,
     secrets remain hashed at rest and are revealed only on create/rotate, stale revisions return
     conflicts, lifecycle routes are audited, and all 653 backend tests pass.
-- [ ] W3.9 Complete the Access page virtual-key lifecycle.
-- [ ] Checkpoint W3-B: scope, concurrency, compatibility, audit, and Access gates pass.
+- [x] W3.9 Complete the Access page virtual-key lifecycle.
+  - Complete at `49db870` and `8379d9c`; the localized Access console covers list, search,
+    status/scope filtering, create/edit, usage, rotate, revoke, pricing policy, revision conflicts,
+    and one-time secret reveal without retaining plaintext in the page DOM.
+- [x] Checkpoint W3-B: scope, concurrency, compatibility, audit, and Access gates pass.
+  - Closed after 659 tests, repository-wide Ruff lint/format, compile/dependency/vulnerability/JS
+    gates, and an authenticated browser matrix at 360/768/1024/1440, light/dark/system, keyboard
+    focus containment, clean console, and all 15 supported locales. Formatter debt was normalized
+    independently at `bf5cc99`.
 - [ ] W3.10 Persist bounded redacted request decision traces.
 - [ ] W3.11 Build trace search/detail and keep raw logs separate.
 - [ ] W3.12 Add SLOs, health views, safe exporters, alert rules, and runbooks.
@@ -142,11 +149,11 @@ distributed activation, multiple workers/replicas, and release activation remain
   - Acceptance: every management mutation is correlated, attributable, filterable, and bounded.
   - Verify: mutation matrix, redaction, retention, and export tests.
   - Files: audit domain/storage/routes, integration hooks, tests.
-- [ ] Add scoped, reservation-aware virtual keys.
+- [x] Add scoped, reservation-aware virtual keys.
   - Acceptance: scopes, limits, budgets, unknown pricing, expiry, revoke/rotate are enforced.
   - Verify: concurrent auth/rate/budget and compatibility tests.
   - Files: virtual-key domain/routes, request auth, state store, tests.
-- [ ] Build Access page.
+- [x] Build Access page.
   - Acceptance: root integration and virtual-key lifecycle work; plaintext appears exactly once.
   - Verify: DOM/console/network/accessibility and secret-lifetime browser tests.
   - Files: page fragment, feature JS, CSS, locales/tests.

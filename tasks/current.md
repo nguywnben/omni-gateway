@@ -4,21 +4,19 @@
 
 - Updated: 2026-08-25 (Asia/Saigon).
 - Branch: `codex/enterprise-overhaul`.
-- Implementation baseline: `c8f62da feat: secure virtual-key lifecycle`.
-- Completed scope: Waves 1–2 / Phases 0–3, Wave 3 checkpoint W3-A, and W3.6–W3.8.
-- Original program progress: 15/28 approved checklist items complete (including specification
-  approval), approximately 53.6%; wave execution-slice checkboxes are refinements and are not
+- Implementation baseline: `bf5cc99 style: restore repository formatter gate`.
+- Completed scope: Waves 1–2 / Phases 0–3, Wave 3 checkpoints W3-A/W3-B, and W3.6–W3.9.
+- Original program progress: 17/28 approved checklist items complete (including specification
+  approval), approximately 60.7%; wave execution-slice checkboxes are refinements and are not
   added to that denominator.
-- Active scope: Wave 3 — Access and Operational Evidence; W3.9 Access lifecycle is next.
-- Control state: **READY — W3.9**.
-- Expected worktree state at this checkpoint: clean after the W3.8 lifecycle commit.
+- Active scope: Wave 3 — Access and Operational Evidence; W3.10 request decision traces are next.
+- Control state: **READY — W3.10**.
+- Expected worktree state at this checkpoint: clean after the W3-B documentation commit.
 - Expected runtime: one Omni Gateway listener on `http://127.0.0.1:4283`; `/health` and `/ready`
   return HTTP 200.
-- Last verified full suite: 653 tests passed; focused Ruff lint/format passed; full repository
-  gates remain scheduled for checkpoint W3-B. The prior checkpoint's compileall, pip dependency
-  consistency, pip-audit, all 38 JavaScript syntax checks, and diff-check passed. The 14 remaining
-  Wave 2 formatter differences were normalized mechanically in commit `1abbb15`; the repository-
-  wide formatter gate is now clean. Runtime `/audit`, `/health`, and `/ready` return HTTP 200.
+- Last verified full suite: 659 tests passed. Repository-wide Ruff lint/format, compileall, pip
+  dependency consistency, pip-audit, all 39 JavaScript syntax checks, and diff-check pass. The
+  formatter drift exposed by W3-B was normalized mechanically in `bf5cc99`.
 
 Wave 2 was accepted and pushed by the human on 2026-08-24. Wave 3 / Phases 4–5 was approved for
 implementation on the same date. Do not expand into Phase 6 or release activation.
@@ -203,6 +201,17 @@ silently choosing a new design.
   classifications. Plaintext never enters persisted or non-reveal records; rotation races produce
   one winner; revoke and stale-write replays are rejected. All 653 backend tests and focused Ruff
   checks pass, while existing PATCH clients remain compatible without an expected revision.
+- W3.9/W3-B evidence: `49db870` completes the 75-key Access vocabulary for every supported locale
+  and `8379d9c` adds the responsive lifecycle console without disturbing root integration or SDK
+  guidance. The console supports list/search/filter, create/edit, usage, atomic rotate, terminal
+  revoke, explicit unknown-pricing policy, revision conflict recovery, and one-time secret reveal;
+  write scope implies read scope and fallback price is enabled only for fallback policy. Static
+  contracts prove plaintext cleanup on close/copy and prohibit persistence APIs. The authenticated
+  browser matrix passed at 360/768/1024/1440 with no horizontal overflow, light/dark/system themes,
+  all 15 locales with no raw `access.*` keys, keyboard focus containment and Escape close, clean
+  console, accessible controls, and correct responsive filters. The isolated browser runtime and
+  its temporary data were stopped and removed after verification. All 659 tests and W3-B gates
+  pass; `bf5cc99` independently restores the repository-wide formatter gate.
 
 ## Approved vs. Proposed Scope
 
@@ -250,9 +259,9 @@ checkboxes to be marked complete.
 
 ## Immediate Next Action
 
-Commit W3.8 independently, then begin W3.9 with frontend contract tests for list/create/edit,
-rotate/revoke, usage/status, explicit pricing policy, and one-time reveal DOM lifetime. Complete the
-desktop/mobile/theme/locale/keyboard/accessibility browser matrix before closing checkpoint W3-B.
+Begin W3.10 with red contract tests for a versioned allowlisted request-decision trace, independent
+bounded retention, redaction, and one-request-ID correlation across supported protocol and failure
+paths. Keep raw diagnostic logs and request content outside the trace repository.
 
 ## Update Rule
 
