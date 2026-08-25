@@ -99,6 +99,14 @@ record boundary. Request-scoped key attribution prevents management automation f
 as the browser owner. The [virtual-key API contract](virtual-key-api.md) defines the supported
 scope matrix, migration behavior, and the reservation-enforcement boundary.
 
+Constrained inference authenticates once and creates one atomic in-process reservation spanning
+all credential retries and model fallbacks. RPM, estimated TPM, and worst-case eligible-model cost
+are admitted together; success replaces the estimate with actual ledger-backed usage, while errors,
+disconnects, and cancellations release it. Cached spend is reconciled against unreconciled commits
+without double counting, and a budget-ledger outage fails closed. The same state-store semantics
+cover primary and Vertex surfaces; Redis implementations deliberately reject quota coordination
+until the separate HA activation phase is approved.
+
 `WORKERS=1` and one application replica are the supported process model for the 1.x series. MongoDB and PostgreSQL can replace local SQLite storage, but shared storage alone does not coordinate reservations, cooldowns, sessions, or usage aggregation across workers. The service rejects `WORKERS` values other than `1` instead of presenting an unsafe scale-out configuration as supported.
 
 The Render Blueprint deliberately uses a paid persistent disk. Free Render services have ephemeral filesystems and are not suitable for durable credential storage.

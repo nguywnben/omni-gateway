@@ -55,6 +55,14 @@ MongoDB, or Redis does not change the supported worker count.
 - Redis is an optional operational dependency until HA is explicitly activated.
 - Reservation semantics add complexity but prevent knowingly exceeding concurrent limits.
 
+## Implementation Status
+
+W3.7 implements the reserve/commit/release portion of this decision for the supported single-worker
+runtime. The in-process state store atomically coordinates RPM, estimated TPM, rolling hard budgets,
+expiry, and durable-ledger reconciliation. Request success commits actual usage; errors and
+cancellation release capacity. Redis methods remain deliberately fail-closed, so this milestone does
+not activate HA or change the one-worker/one-replica support boundary.
+
 ## Rejected Alternatives
 
 - Enabling multiple workers with process-local state was rejected as unsafe.

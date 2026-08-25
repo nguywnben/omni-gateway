@@ -2,20 +2,19 @@
 
 ## Resume Here
 
-- Updated: 2026-08-24 (Asia/Saigon).
+- Updated: 2026-08-25 (Asia/Saigon).
 - Branch: `codex/enterprise-overhaul`.
-- Implementation baseline: `f8513cf feat: enforce scoped virtual-key access`.
-- Completed scope: Waves 1–2 / Phases 0–3, Wave 3 checkpoint W3-A, and W3.6.
+- Implementation baseline: `5b38c71 feat: enforce atomic virtual-key quotas`.
+- Completed scope: Waves 1–2 / Phases 0–3, Wave 3 checkpoint W3-A, and W3.6–W3.7.
 - Original program progress: 15/28 approved checklist items complete (including specification
   approval), approximately 53.6%; wave execution-slice checkboxes are refinements and are not
   added to that denominator.
-- Active scope: Wave 3 — Access and Operational Evidence; W3.7 reservation-aware enforcement is
-  next.
-- Control state: **READY — W3.7**.
-- Expected worktree state at this checkpoint: clean after the W3.6 closure commit.
+- Active scope: Wave 3 — Access and Operational Evidence; W3.8 safe key lifecycle is next.
+- Control state: **READY — W3.8**.
+- Expected worktree state at this checkpoint: clean after the W3.7 closure commit.
 - Expected runtime: one Omni Gateway listener on `http://127.0.0.1:4283`; `/health` and `/ready`
   return HTTP 200.
-- Last verified full suite: 623 tests passed; Ruff lint/format, compileall, pip dependency
+- Last verified full suite: 646 tests passed; Ruff lint/format, compileall, pip dependency
   consistency, pip-audit, all 38 JavaScript syntax checks, and diff-check passed. The 14 remaining
   Wave 2 formatter differences were normalized mechanically in commit `1abbb15`; the repository-
   wide formatter gate is now clean. Runtime `/audit`, `/health`, and `/ready` return HTTP 200.
@@ -186,8 +185,18 @@ silently choosing a new design.
   are separated into read/write methods and management audit evidence is attributed to the stable
   key ID before fingerprinting. The maintained contract is `docs/virtual-key-api.md`. All 623 tests,
   Ruff lint/format, compileall, pip consistency, vulnerability audit, 38 JavaScript syntax checks,
-  and diff-check pass. W3.7 reservation enforcement, W3.8 lifecycle concurrency, and W3.9 UI remain
-  intentionally open.
+  and diff-check pass. W3.8 lifecycle concurrency and W3.9 UI remain intentionally open.
+- W3.7 evidence: commits `bb3bd74` and `5b38c71` add an atomic state-store semantic boundary for
+  RPM, TPM, daily/monthly budget, estimate-to-actual commit, idempotent release, reservation expiry,
+  and durable-ledger reconciliation. Authentication reserves worst-case candidate-model capacity
+  before provider work; primary and Vertex success paths commit actual tokens and policy cost;
+  provider failure, stream cancellation, and response errors release capacity. Missing pricing
+  follows deny/warn/fallback only when a hard budget needs a price, and unavailable spend storage
+  fails closed with HTTP 503 rather than appearing as zero. Low-cardinality Prometheus evidence
+  covers quota decisions without key IDs. Concurrency, cancellation, retry/idempotency, expiry,
+  reconciliation, overspend, fallback pricing, and ledger-outage tests pass; all 646 repository
+  tests, Ruff lint/format, compileall, dependency consistency, vulnerability audit, 38 JavaScript
+  syntax checks, and diff-check are clean. Redis coordination and multiple workers remain inactive.
 
 ## Approved vs. Proposed Scope
 
@@ -235,11 +244,10 @@ checkboxes to be marked complete.
 
 ## Immediate Next Action
 
-Begin W3.7 with RED concurrency tests around the state-store boundary, then implement atomic
-reserve/commit/release for RPM, TPM, and estimated/actual cost in the supported single-worker
-runtime. Cancellation and provider failure must release reservations, reconciliation must be
-bounded, and the W3.6 deny/warn/fallback policy must determine unknown-price behavior. Do not begin
-W3.8 rotate/revoke concurrency semantics until W3.7 is independently committed.
+Begin W3.8 with RED lifecycle race and replay tests, then add audited revoke, rotate, one-time
+reveal, last-used/usage summaries, and optimistic concurrency without weakening hashed-at-rest
+storage or the existing route contract. Do not begin W3.9 Access-page lifecycle work until W3.8 is
+independently committed.
 
 ## Update Rule
 

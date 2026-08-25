@@ -56,14 +56,36 @@ Every key declares one of these policies:
 
 | Policy | Contract |
 | --- | --- |
-| `deny` | Fail closed when an enforceable price is unavailable; default for new and migrated keys |
-| `warn` | Permit with explicit unknown-pricing telemetry |
-| `fallback` | Use the positive configured fallback price per one million tokens |
+| `deny` | With a hard budget, fail closed when any eligible model has no enforceable price; default for new and migrated keys |
+| `warn` | Permit an unpriced hard-budget request with explicit bounded telemetry |
+| `fallback` | Reserve unknown models at the positive configured price per one million estimated tokens |
 
 Fallback prices are valid only with `fallback`, must be positive, and cannot exceed 100,000 USD per
-one million tokens. W3.6 persists and validates this policy. Atomic price reservation and runtime
-deny/warn/fallback enforcement belong to W3.7; operators must not interpret W3.6 metadata alone as
-a concurrency-safe spending guarantee.
+one million tokens. A key without a daily or monthly hard budget does not invent a monetary cost
+for unknown models. The durable ledger stores the fallback cost used by a budgeted request so a
+restart cannot erase that spend.
+
+## Reservation and settlement semantics
+
+The supported single-worker runtime reserves constrained capacity atomically after authentication
+and before provider selection. One reservation covers every credential retry and model fallback in
+the request; retries never consume another RPM slot. For a virtual model, budget estimation uses the
+highest calculated cost across its eligible concrete candidates. TPM reserves estimated prompt
+tokens plus the requested maximum output; when no output maximum is supplied, the bounded default
+is 4,096 tokens. Local count-token operations reserve RPM only.
+
+Successful provider calls replace the estimate with normalized actual tokens and the policy cost
+written to the durable usage ledger. Successful non-generation endpoints retain their estimate;
+provider errors, response errors, disconnects, and cancelled streams release active capacity.
+Commit and release are idempotent. Active reservations expire after 15 minutes, while completed RPM
+and TPM usage remains in the rolling 60-second window. Actual usage above the estimate is committed
+and emits overspend telemetry so later requests observe the exceeded limit.
+
+Daily and monthly budget snapshots are reconciled with unreconciled in-process commits without
+double counting. A spend-ledger outage fails hard-budget authentication with HTTP 503. Atomic
+enforcement currently uses the in-process state-store implementation and therefore does not relax
+the documented `WORKERS=1` and single-replica restriction. Prometheus exposes only bounded event
+labels in `omni_virtual_key_quota_events_total`; key IDs and request contents are never labels.
 
 ## Management routes
 

@@ -52,7 +52,10 @@ Phase 4 audit item or the Phase 5 request-trace item.
   - Complete at `1bb6596` and `f8513cf`; versioned migration, inference/management scope matrix,
     pricing-policy metadata, last-used/status, bounded model patterns, auth integration, and audit
     attribution pass the W3.6 contract and compatibility gates.
-- [ ] W3.7 Add atomic reserve/commit/release rate and budget enforcement.
+- [x] W3.7 Add atomic reserve/commit/release rate and budget enforcement.
+  - Complete at `bb3bd74` and `5b38c71`; state-store atomicity, estimate-to-actual settlement,
+    cancellation/failure release, retry idempotency, bounded reconciliation, fail-closed ledger
+    outages, unknown-pricing policy, Vertex parity, and low-cardinality metrics pass 646 tests.
 - [ ] W3.8 Add audited revoke, rotate, one-time reveal, last-used, and conflict semantics.
 - [ ] W3.9 Complete the Access page virtual-key lifecycle.
 - [ ] Checkpoint W3-B: scope, concurrency, compatibility, audit, and Access gates pass.

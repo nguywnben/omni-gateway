@@ -294,6 +294,8 @@ last-used metadata, model-pattern validation, and versioned migration of existin
 Extend the state-store semantic boundary with atomic reserve/commit/release operations for RPM,
 TPM, and estimated/actual cost in the supported single-worker implementation.
 
+Status: complete at `bb3bd74` and `5b38c71`.
+
 - Acceptance: concurrent requests cannot knowingly exceed a hard limit; cancellations and provider
   failures release reservations; unknown pricing follows deny/warn/fallback policy.
 - Verification: concurrency, cancellation, retry, expiry, reconciliation, and overspend tests.
