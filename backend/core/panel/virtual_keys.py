@@ -10,6 +10,7 @@ from core.virtual_keys import (
     DEFAULT_INFERENCE_SCOPES,
     MAX_FALLBACK_PRICE_USD_PER_MILLION,
     MAX_MODEL_PATTERNS,
+    VirtualKeyConflictError,
     normalize_model_patterns,
     normalize_unknown_pricing_policy,
     normalize_virtual_key_scopes,
@@ -66,6 +67,7 @@ class CreateVirtualKeyRequest(BaseModel):
 
 
 class UpdateVirtualKeyRequest(BaseModel):
+    expected_revision: Optional[int] = Field(default=None, ge=1)
     name: Optional[str] = Field(default=None, max_length=128)
     enabled: Optional[bool] = None
     budget_daily_usd: Optional[float] = Field(default=None, ge=0)
@@ -108,6 +110,14 @@ class UpdateVirtualKeyRequest(BaseModel):
         self.unknown_pricing_policy = policy
         self.fallback_price_usd_per_million = fallback
         return self
+
+
+class RotateVirtualKeyRequest(BaseModel):
+    expected_revision: int = Field(ge=1)
+
+
+class RevokeVirtualKeyRequest(BaseModel):
+    expected_revision: int = Field(ge=1)
 
 
 @router.get("")
@@ -160,17 +170,81 @@ async def update_virtual_key(
 ):
     try:
         patch: Dict[str, Any] = payload.model_dump(exclude_unset=True)
-        record = await virtual_key_manager.update_key(key_id, patch)
+        expected_revision = patch.pop("expected_revision", None)
+        record = await virtual_key_manager.update_key(
+            key_id,
+            patch,
+            expected_revision=expected_revision,
+        )
         if record is None:
             return JSONResponse(
                 status_code=404,
                 content={"success": False, "detail": "Virtual key not found."},
             )
         return {"success": True, "data": record}
+    except VirtualKeyConflictError as exc:
+        return JSONResponse(status_code=409, content={"success": False, "detail": str(exc)})
     except ValueError as exc:
         return JSONResponse(status_code=400, content={"success": False, "detail": str(exc)})
     except Exception as exc:
         log.error(f"Failed to update virtual key {key_id}: {exc}")
+        return JSONResponse(
+            status_code=500,
+            content={"success": False, "detail": INTERNAL_SERVER_ERROR_DETAIL},
+        )
+
+
+@router.post("/{key_id}/rotate")
+async def rotate_virtual_key(
+    key_id: str,
+    payload: RotateVirtualKeyRequest,
+    token: str = Depends(verify_panel_token),
+):
+    try:
+        result = await virtual_key_manager.rotate_key(
+            key_id,
+            expected_revision=payload.expected_revision,
+        )
+        if result is None:
+            return JSONResponse(
+                status_code=404,
+                content={"success": False, "detail": "Virtual key not found."},
+            )
+        record, plaintext = result
+        return {"success": True, "data": record, "key": plaintext}
+    except VirtualKeyConflictError as exc:
+        return JSONResponse(status_code=409, content={"success": False, "detail": str(exc)})
+    except ValueError as exc:
+        return JSONResponse(status_code=400, content={"success": False, "detail": str(exc)})
+    except Exception as exc:
+        log.error(f"Failed to rotate virtual key {key_id}: {exc}")
+        return JSONResponse(
+            status_code=500,
+            content={"success": False, "detail": INTERNAL_SERVER_ERROR_DETAIL},
+        )
+
+
+@router.post("/{key_id}/revoke")
+async def revoke_virtual_key(
+    key_id: str,
+    payload: RevokeVirtualKeyRequest,
+    token: str = Depends(verify_panel_token),
+):
+    try:
+        record = await virtual_key_manager.revoke_key(
+            key_id,
+            expected_revision=payload.expected_revision,
+        )
+        if record is None:
+            return JSONResponse(
+                status_code=404,
+                content={"success": False, "detail": "Virtual key not found."},
+            )
+        return {"success": True, "data": record}
+    except VirtualKeyConflictError as exc:
+        return JSONResponse(status_code=409, content={"success": False, "detail": str(exc)})
+    except Exception as exc:
+        log.error(f"Failed to revoke virtual key {key_id}: {exc}")
         return JSONResponse(
             status_code=500,
             content={"success": False, "detail": INTERNAL_SERVER_ERROR_DETAIL},

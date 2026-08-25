@@ -66,6 +66,10 @@ _QUOTA_METRIC_LOCK = threading.Lock()
 _QUOTA_METRICS: Dict[str, int] = {}
 
 
+class VirtualKeyConflictError(ValueError):
+    """Raised when a lifecycle mutation uses a stale record revision."""
+
+
 def _increment_quota_metric(event: str) -> None:
     with _QUOTA_METRIC_LOCK:
         _QUOTA_METRICS[event] = _QUOTA_METRICS.get(event, 0) + 1
@@ -185,9 +189,13 @@ class VirtualKey:
     unknown_pricing_policy: str = "deny"
     fallback_price_usd_per_million: Optional[float] = None
     last_used_at: Optional[float] = None
+    revision: int = 1
+    revoked_at: Optional[float] = None
 
     @property
     def status(self) -> str:
+        if self.revoked_at is not None:
+            return "revoked"
         if not self.enabled:
             return "disabled"
         if self.is_expired():
@@ -212,6 +220,8 @@ class VirtualKey:
             "unknown_pricing_policy": self.unknown_pricing_policy,
             "fallback_price_usd_per_million": self.fallback_price_usd_per_million,
             "last_used_at": self.last_used_at,
+            "revision": self.revision,
+            "revoked_at": self.revoked_at,
             "status": self.status,
         }
 
@@ -258,6 +268,8 @@ class VirtualKey:
                 unknown_pricing_policy=pricing_policy,
                 fallback_price_usd_per_million=fallback_price,
                 last_used_at=_float_or_none(raw.get("last_used_at")),
+                revision=max(1, int(raw.get("revision") or 1)),
+                revoked_at=_float_or_none(raw.get("revoked_at")),
             )
         except (TypeError, ValueError):
             return None
@@ -396,12 +408,19 @@ class VirtualKeyManager:
         log.info(f"[virtual-keys] created key id={record.id} name={record.name!r}")
         return record.to_public_dict(), plaintext
 
-    async def update_key(self, key_id: str, patch: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    async def update_key(
+        self,
+        key_id: str,
+        patch: Dict[str, Any],
+        *,
+        expected_revision: Optional[int] = None,
+    ) -> Optional[Dict[str, Any]]:
         await self._ensure_loaded()
         async with self._lock:
             record = self._find_by_id_locked(key_id)
             if record is None:
                 return None
+            self._assert_expected_revision(record, expected_revision)
             normalized_scopes = (
                 normalize_virtual_key_scopes(patch.get("scopes")) if "scopes" in patch else None
             )
@@ -431,6 +450,8 @@ class VirtualKeyManager:
                 if new_name:
                     record.name = new_name[:128]
             if "enabled" in patch:
+                if record.revoked_at is not None and bool(patch.get("enabled")):
+                    raise ValueError("A revoked virtual key cannot be enabled.")
                 record.enabled = bool(patch.get("enabled"))
             if "budget_daily_usd" in patch:
                 record.budget_daily_usd = _float_or_none(patch.get("budget_daily_usd"))
@@ -448,7 +469,58 @@ class VirtualKeyManager:
                 record.scopes = normalized_scopes
             record.unknown_pricing_policy = pricing_policy
             record.fallback_price_usd_per_million = fallback_price
+            record.revision += 1
             await self._persist()
+            return record.to_public_dict()
+
+    async def rotate_key(
+        self,
+        key_id: str,
+        *,
+        expected_revision: int,
+    ) -> Optional[Tuple[Dict[str, Any], str]]:
+        """Replace a key secret atomically and reveal the new plaintext once."""
+        from config import API_KEY_PREFIX
+
+        await self._ensure_loaded()
+        plaintext = f"{API_KEY_PREFIX}vk-{secrets.token_hex(20)}"
+        async with self._lock:
+            record = self._find_by_id_locked(key_id)
+            if record is None:
+                return None
+            self._assert_expected_revision(record, expected_revision)
+            if record.revoked_at is not None:
+                raise ValueError("A revoked virtual key cannot be rotated.")
+            old_hash = record.key_hash
+            record.key_hash = hash_key(plaintext)
+            record.key_preview = _key_preview(plaintext)
+            record.revision += 1
+            self._keys_by_hash.pop(old_hash, None)
+            self._keys_by_hash[record.key_hash] = record
+            await self._persist()
+            log.info(f"[virtual-keys] rotated key id={record.id}")
+            return record.to_public_dict(), plaintext
+
+    async def revoke_key(
+        self,
+        key_id: str,
+        *,
+        expected_revision: int,
+    ) -> Optional[Dict[str, Any]]:
+        """Permanently disable a key while retaining its audit-safe identity."""
+        await self._ensure_loaded()
+        async with self._lock:
+            record = self._find_by_id_locked(key_id)
+            if record is None:
+                return None
+            self._assert_expected_revision(record, expected_revision)
+            if record.revoked_at is not None:
+                return record.to_public_dict()
+            record.enabled = False
+            record.revoked_at = time.time()
+            record.revision += 1
+            await self._persist()
+            log.info(f"[virtual-keys] revoked key id={record.id}")
             return record.to_public_dict()
 
     async def delete_key(self, key_id: str) -> bool:
@@ -473,6 +545,16 @@ class VirtualKeyManager:
                 return record
         return None
 
+    @staticmethod
+    def _assert_expected_revision(
+        record: VirtualKey,
+        expected_revision: Optional[int],
+    ) -> None:
+        if expected_revision is not None and record.revision != expected_revision:
+            raise VirtualKeyConflictError(
+                "The virtual key changed. Refresh its current state and try again."
+            )
+
     # ------------------------------------------------------------------
     # Verification and enforcement
     # ------------------------------------------------------------------
@@ -491,6 +573,12 @@ class VirtualKeyManager:
     def _enforce_active(record: VirtualKey) -> None:
         """Reject disabled or expired keys before evaluating any permission."""
         now = time.time()
+        if record.revoked_at is not None:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="This API key has been revoked.",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
         if not record.enabled:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,

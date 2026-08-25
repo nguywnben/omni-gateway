@@ -82,6 +82,12 @@ MANAGEMENT_MUTATIONS: dict[tuple[str, str], ManagementMutation] = {
     ("DELETE", "/api/virtual-keys/{key_id}"): _mutation(
         "virtual_key.revoke", "virtual_key", "revoked"
     ),
+    ("POST", "/api/virtual-keys/{key_id}/rotate"): _mutation(
+        "virtual_key.rotate", "virtual_key", "rotated"
+    ),
+    ("POST", "/api/virtual-keys/{key_id}/revoke"): _mutation(
+        "virtual_key.revoke", "virtual_key", "revoked"
+    ),
     ("POST", "/api/providers/antigravity/config"): _mutation(
         "provider.update", "provider", "settings_changed"
     ),
