@@ -323,14 +323,11 @@ OpenAI의 Base URL로 `/v1`을 설정합니다. SDK가 자동으로 끝에 `/cha
 ```python
 from openai import OpenAI
 
-client = OpenAI(
-    base_url="http://127.0.0.1:4283/v1",
-    api_key="sk-ogw-..."
-)
+client = OpenAI(base_url="http://127.0.0.1:4283/v1", api_key="sk-ogw-...")
 
 response = client.chat.completions.create(
     model="omway",
-    messages=[{"role": "user", "content": "이 코드 저장소를 한 단락으로 설명해 주세요."}]
+    messages=[{"role": "user", "content": "이 코드 저장소를 한 단락으로 설명해 주세요."}],
 )
 ```
 
@@ -340,7 +337,7 @@ response = client.chat.completions.create(
 response = client.responses.create(
     model="omway",
     instructions="간결하게 답변해 주세요.",
-    input="이 코드 저장소를 한 단락으로 설명해 주세요."
+    input="이 코드 저장소를 한 단락으로 설명해 주세요.",
 )
 
 print(response.output_text)
@@ -355,15 +352,12 @@ Anthropic의 Base URL로 게이트웨이 오리진을 직접 지정합니다. SD
 ```python
 from anthropic import Anthropic
 
-client = Anthropic(
-    base_url="http://127.0.0.1:4283",
-    api_key="sk-ogw-..."
-)
+client = Anthropic(base_url="http://127.0.0.1:4283", api_key="sk-ogw-...")
 
 response = client.messages.create(
     model="omway",
     max_tokens=1024,
-    messages=[{"role": "user", "content": "간결한 커밋 메시지를 작성해 주세요."}]
+    messages=[{"role": "user", "content": "간결한 커밋 메시지를 작성해 주세요."}],
 )
 ```
 
@@ -375,19 +369,12 @@ Google GenAI의 Base URL로 게이트웨이 오리진을 직접 지정합니다.
 from google import genai
 from google.genai import types
 
-client = genai.Client(
-    http_options={
-        "base_url": "http://127.0.0.1:4283"
-    },
-    api_key="sk-ogw-..."
-)
+client = genai.Client(http_options={"base_url": "http://127.0.0.1:4283"}, api_key="sk-ogw-...")
 
 response = client.models.generate_content(
     model="omway",
     contents="간단한 Python 함수를 작성해 주세요.",
-    config=types.GenerateContentConfig(
-        system_instruction="당신은 유능한 코딩 어시스턴트입니다."
-    )
+    config=types.GenerateContentConfig(system_instruction="당신은 유능한 코딩 어시스턴트입니다."),
 )
 ```
 

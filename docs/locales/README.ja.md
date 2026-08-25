@@ -328,14 +328,11 @@ OpenAI のベース URL に `/v1` を指定します。SDK は自動的に `/cha
 ```python
 from openai import OpenAI
 
-client = OpenAI(
-    base_url="http://127.0.0.1:4283/v1",
-    api_key="sk-ogw-..."
-)
+client = OpenAI(base_url="http://127.0.0.1:4283/v1", api_key="sk-ogw-...")
 
 response = client.chat.completions.create(
     model="omway",
-    messages=[{"role": "user", "content": "このリポジトリについて1段落で説明してください。"}]
+    messages=[{"role": "user", "content": "このリポジトリについて1段落で説明してください。"}],
 )
 ```
 
@@ -345,7 +342,7 @@ response = client.chat.completions.create(
 response = client.responses.create(
     model="omway",
     instructions="簡潔に回答してください。",
-    input="このリポジトリについて1段落で説明してください。"
+    input="このリポジトリについて1段落で説明してください。",
 )
 
 print(response.output_text)
@@ -360,15 +357,12 @@ Anthropic のベース URL にはゲートウェイのオリジンを直接指�
 ```python
 from anthropic import Anthropic
 
-client = Anthropic(
-    base_url="http://127.0.0.1:4283",
-    api_key="sk-ogw-..."
-)
+client = Anthropic(base_url="http://127.0.0.1:4283", api_key="sk-ogw-...")
 
 response = client.messages.create(
     model="omway",
     max_tokens=1024,
-    messages=[{"role": "user", "content": "簡潔なコミットメッセージを作成してください。"}]
+    messages=[{"role": "user", "content": "簡潔なコミットメッセージを作成してください。"}],
 )
 ```
 
@@ -380,19 +374,12 @@ Google GenAI のベース URL にはゲートウェイのオリジンを直接�
 from google import genai
 from google.genai import types
 
-client = genai.Client(
-    http_options={
-        "base_url": "http://127.0.0.1:4283"
-    },
-    api_key="sk-ogw-..."
-)
+client = genai.Client(http_options={"base_url": "http://127.0.0.1:4283"}, api_key="sk-ogw-...")
 
 response = client.models.generate_content(
     model="omway",
     contents="短い Python 関数を書いてください。",
-    config=types.GenerateContentConfig(
-        system_instruction="あなたは有能なアシスタントです。"
-    )
+    config=types.GenerateContentConfig(system_instruction="あなたは有能なアシスタントです。"),
 )
 ```
 

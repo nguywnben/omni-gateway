@@ -323,10 +323,7 @@ Utilisez `/v1` comme base_url pour OpenAI. Le SDK ajoute automatiquement `/chat/
 ```python
 from openai import OpenAI
 
-client = OpenAI(
-    base_url="http://127.0.0.1:4283/v1",
-    api_key="sk-ogw-..."
-)
+client = OpenAI(base_url="http://127.0.0.1:4283/v1", api_key="sk-ogw-...")
 
 response = client.chat.completions.create(
     model="omway",
@@ -355,10 +352,7 @@ Utilisez l'origine de la passerelle comme base_url pour Anthropic. Le SDK ajoute
 ```python
 from anthropic import Anthropic
 
-client = Anthropic(
-    base_url="http://127.0.0.1:4283",
-    api_key="sk-ogw-..."
-)
+client = Anthropic(base_url="http://127.0.0.1:4283", api_key="sk-ogw-...")
 
 response = client.messages.create(
     model="omway",
@@ -379,7 +373,7 @@ client = genai.Client(
     http_options={
         "base_url": "http://127.0.0.1:4283",
     },
-    api_key="sk-ogw-..."
+    api_key="sk-ogw-...",
 )
 
 response = client.models.generate_content(

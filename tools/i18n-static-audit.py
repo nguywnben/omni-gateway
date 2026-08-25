@@ -7,7 +7,6 @@ import sys
 from html.parser import HTMLParser
 from pathlib import Path
 
-
 ROOT = Path(__file__).resolve().parents[1]
 FRAGMENTS = ROOT / "frontend" / "fragments"
 TRANSLATED_ATTRIBUTES = {
@@ -33,7 +32,11 @@ TECHNICAL_TEXT = re.compile(
 
 def _is_user_copy(value: str) -> bool:
     normalized = " ".join(value.split())
-    return bool(normalized and re.search(r"[A-Za-z]", normalized) and not TECHNICAL_TEXT.fullmatch(normalized))
+    return bool(
+        normalized
+        and re.search(r"[A-Za-z]", normalized)
+        and not TECHNICAL_TEXT.fullmatch(normalized)
+    )
 
 
 class FragmentAuditParser(HTMLParser):
@@ -79,7 +82,9 @@ class FragmentAuditParser(HTMLParser):
         if self.stack:
             attributes = self.stack[-1]
             classes = set(attributes.get("class", "").split())
-            if ("provider-workspace" in classes or "data-i18n-auto" in attributes) and self.auto_translated_depth:
+            if (
+                "provider-workspace" in classes or "data-i18n-auto" in attributes
+            ) and self.auto_translated_depth:
                 self.auto_translated_depth -= 1
             if "data-i18n-runtime" in attributes and self.runtime_depth:
                 self.runtime_depth -= 1

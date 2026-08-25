@@ -327,14 +327,10 @@ Omni Gateway 嚴格按照官方 Python SDK 的標準 URL 行為進行設計。�
 ```python
 from openai import OpenAI
 
-client = OpenAI(
-    base_url="http://127.0.0.1:4283/v1",
-    api_key="sk-ogw-..."
-)
+client = OpenAI(base_url="http://127.0.0.1:4283/v1", api_key="sk-ogw-...")
 
 response = client.chat.completions.create(
-    model="omway",
-    messages=[{"role": "user", "content": "用一段話解釋這個程式庫。"}]
+    model="omway", messages=[{"role": "user", "content": "用一段話解釋這個程式庫。"}]
 )
 ```
 
@@ -342,9 +338,7 @@ response = client.chat.completions.create(
 
 ```python
 response = client.responses.create(
-    model="omway",
-    instructions="請簡明扼要。",
-    input="用一段話解釋這個程式庫。"
+    model="omway", instructions="請簡明扼要。", input="用一段話解釋這個程式庫。"
 )
 
 print(response.output_text)
@@ -359,15 +353,12 @@ Responses 相容層支援文字輸入、圖片輸入、非串流 Function Tool �
 ```python
 from anthropic import Anthropic
 
-client = Anthropic(
-    base_url="http://127.0.0.1:4283",
-    api_key="sk-ogw-..."
-)
+client = Anthropic(base_url="http://127.0.0.1:4283", api_key="sk-ogw-...")
 
 response = client.messages.create(
     model="omway",
     max_tokens=1024,
-    messages=[{"role": "user", "content": "撰寫一條 Git 提交訊息。"}]
+    messages=[{"role": "user", "content": "撰寫一條 Git 提交訊息。"}],
 )
 ```
 
@@ -379,19 +370,12 @@ response = client.messages.create(
 from google import genai
 from google.genai import types
 
-client = genai.Client(
-    http_options={
-        "base_url": "http://127.0.0.1:4283"
-    },
-    api_key="sk-ogw-..."
-)
+client = genai.Client(http_options={"base_url": "http://127.0.0.1:4283"}, api_key="sk-ogw-...")
 
 response = client.models.generate_content(
     model="omway",
     contents="寫一個簡短的 Python 函式。",
-    config=types.GenerateContentConfig(
-        system_instruction="你是一個得力的程式設計助手。"
-    )
+    config=types.GenerateContentConfig(system_instruction="你是一個得力的程式設計助手。"),
 )
 ```
 
