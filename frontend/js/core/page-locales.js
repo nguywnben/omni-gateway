@@ -1986,3 +1986,280 @@ const ACCESS_DYNAMIC_MESSAGES = {
 for (const [locale, messages] of Object.entries(ACCESS_DYNAMIC_MESSAGES)) {
     Object.assign(PAGE_LOCALE_TRANSLATIONS[locale], messages);
 }
+
+const ACCESS_VIRTUAL_KEY_MESSAGES = {
+    en: {
+        'access.virtual_keys_label': 'Governed access', 'access.virtual_keys': 'Virtual API keys',
+        'access.virtual_keys_description': 'Issue least-privilege client keys with independent scopes, model access, rate limits, budgets, and expiry.',
+        'access.refresh_keys': 'Refresh', 'access.create_key': 'Create key', 'access.filter_keys': 'Filter virtual keys',
+        'access.search_keys': 'Search keys', 'access.search_keys_placeholder': 'Name or key ID', 'access.status': 'Status',
+        'access.all_statuses': 'All statuses', 'access.status_active': 'Active', 'access.status_disabled': 'Disabled',
+        'access.status_expired': 'Expired', 'access.status_revoked': 'Revoked', 'access.status_unknown': 'Unknown',
+        'access.no_keys': 'No virtual keys found', 'access.no_keys_description': 'Create a least-privilege key or adjust the filters.',
+        'access.request_failed': 'The virtual-key request failed.', 'access.keys_refreshed': 'Virtual keys refreshed.',
+        'access.keys_load_failed': 'Could not load virtual keys: {error}', 'access.never': 'Never', 'access.unknown': 'Unknown',
+        'access.daily_budget_value': '${value} daily', 'access.monthly_budget_value': '${value} monthly', 'access.no_limits': 'No rate or budget limits',
+        'access.last_used': 'Last used', 'access.expires': 'Expires', 'access.limits': 'Limits', 'access.pricing_policy': 'Unknown-price policy',
+        'access.pricing_deny': 'Deny', 'access.pricing_warn': 'Allow with warning', 'access.pricing_fallback': 'Use fallback price',
+        'access.scopes': 'Scopes', 'access.models': 'Models', 'access.all_models': 'All models', 'access.view_usage': 'View usage',
+        'access.edit_key': 'Edit', 'access.rotate_key': 'Rotate', 'access.revoke_key': 'Revoke', 'access.edit_key_title': 'Edit virtual key',
+        'access.create_key_title': 'Create virtual key', 'access.key_name': 'Key name', 'access.key_enabled': 'Enabled',
+        'access.expires_at': 'Expiry', 'access.rpm_limit': 'Requests per minute', 'access.tpm_limit': 'Tokens per minute',
+        'access.daily_budget': 'Daily budget (USD)', 'access.monthly_budget': 'Monthly budget (USD)',
+        'access.allowed_models': 'Allowed model patterns', 'access.allowed_models_hint': 'One bounded glob pattern per line. Leave empty to allow every model.',
+        'access.management_read': 'Management read', 'access.management_write': 'Management write',
+        'access.fallback_price': 'Fallback USD per 1M tokens', 'access.save_key': 'Save key', 'access.scope_required': 'Select at least one scope.',
+        'access.key_saved': 'Virtual key saved.', 'access.key_conflict': 'This key changed elsewhere. The current state has been refreshed.',
+        'access.key_created_title': 'Virtual key created', 'access.key_rotated_title': 'Virtual key rotated',
+        'access.secret_once': 'Copy this secret now. It cannot be recovered after this dialog closes.',
+        'access.new_key_secret': 'New virtual-key secret', 'access.copy_secret': 'Copy secret', 'access.secret_saved': 'I saved the key',
+        'access.rotate_confirm': 'Rotate “{name}”? The current secret will stop working immediately.', 'access.rotate_key_title': 'Rotate virtual key',
+        'access.revoke_confirm': 'Revoke “{name}”? This is permanent and the key cannot be restored.', 'access.revoke_key_title': 'Revoke virtual key',
+        'access.key_revoked': 'Virtual key revoked.', 'access.usage_title': 'Usage for {name}', 'access.last_24_hours': 'Last 24 hours',
+        'access.last_30_days': 'Last 30 days', 'access.calls': 'Calls', 'access.tokens': 'Tokens', 'access.spend': 'Spend',
+        'access.usage_load_failed': 'Could not load key usage: {error}'
+    },
+    vi: {
+        'access.virtual_keys_label': 'Truy cập có quản trị', 'access.virtual_keys': 'Khóa API ảo',
+        'access.virtual_keys_description': 'Cấp khóa theo nguyên tắc đặc quyền tối thiểu với phạm vi, quyền truy cập mô hình, giới hạn tốc độ, ngân sách và thời hạn độc lập.',
+        'access.refresh_keys': 'Làm mới', 'access.create_key': 'Tạo khóa', 'access.filter_keys': 'Lọc khóa API ảo',
+        'access.search_keys': 'Tìm kiếm khóa', 'access.search_keys_placeholder': 'Tên hoặc mã khóa', 'access.status': 'Trạng thái',
+        'access.all_statuses': 'Mọi trạng thái', 'access.status_active': 'Đang hoạt động', 'access.status_disabled': 'Đã tắt',
+        'access.status_expired': 'Đã hết hạn', 'access.status_revoked': 'Đã thu hồi', 'access.status_unknown': 'Không xác định',
+        'access.no_keys': 'Không tìm thấy khóa API ảo', 'access.no_keys_description': 'Hãy tạo khóa theo đặc quyền tối thiểu hoặc điều chỉnh bộ lọc.',
+        'access.request_failed': 'Yêu cầu quản lý khóa API ảo không thành công.', 'access.keys_refreshed': 'Đã làm mới danh sách khóa API ảo.',
+        'access.keys_load_failed': 'Không thể tải khóa API ảo: {error}', 'access.never': 'Chưa bao giờ', 'access.unknown': 'Không xác định',
+        'access.daily_budget_value': '${value} mỗi ngày', 'access.monthly_budget_value': '${value} mỗi tháng', 'access.no_limits': 'Không giới hạn tốc độ hoặc ngân sách',
+        'access.last_used': 'Lần dùng gần nhất', 'access.expires': 'Hết hạn', 'access.limits': 'Hạn mức', 'access.pricing_policy': 'Chính sách khi chưa có giá',
+        'access.pricing_deny': 'Từ chối', 'access.pricing_warn': 'Cho phép và cảnh báo', 'access.pricing_fallback': 'Dùng giá dự phòng',
+        'access.scopes': 'Phạm vi quyền', 'access.models': 'Mô hình', 'access.all_models': 'Mọi mô hình', 'access.view_usage': 'Xem mức sử dụng',
+        'access.edit_key': 'Chỉnh sửa', 'access.rotate_key': 'Xoay vòng', 'access.revoke_key': 'Thu hồi', 'access.edit_key_title': 'Chỉnh sửa khóa API ảo',
+        'access.create_key_title': 'Tạo khóa API ảo', 'access.key_name': 'Tên khóa', 'access.key_enabled': 'Đang bật',
+        'access.expires_at': 'Thời điểm hết hạn', 'access.rpm_limit': 'Số yêu cầu mỗi phút', 'access.tpm_limit': 'Số token mỗi phút',
+        'access.daily_budget': 'Ngân sách ngày (USD)', 'access.monthly_budget': 'Ngân sách tháng (USD)',
+        'access.allowed_models': 'Mẫu mô hình được phép', 'access.allowed_models_hint': 'Mỗi dòng là một mẫu glob có giới hạn. Để trống nếu cho phép mọi mô hình.',
+        'access.management_read': 'Đọc dữ liệu quản trị', 'access.management_write': 'Thay đổi dữ liệu quản trị',
+        'access.fallback_price': 'Giá dự phòng USD/1 triệu token', 'access.save_key': 'Lưu khóa', 'access.scope_required': 'Hãy chọn ít nhất một phạm vi quyền.',
+        'access.key_saved': 'Đã lưu khóa API ảo.', 'access.key_conflict': 'Khóa đã được thay đổi ở nơi khác. Trạng thái mới nhất đã được tải lại.',
+        'access.key_created_title': 'Đã tạo khóa API ảo', 'access.key_rotated_title': 'Đã xoay vòng khóa API ảo',
+        'access.secret_once': 'Hãy sao chép khóa bí mật ngay bây giờ. Bạn không thể khôi phục khóa sau khi đóng hộp thoại này.',
+        'access.new_key_secret': 'Khóa bí mật API ảo mới', 'access.copy_secret': 'Sao chép khóa bí mật', 'access.secret_saved': 'Tôi đã lưu khóa',
+        'access.rotate_confirm': 'Xoay vòng “{name}”? Khóa bí mật hiện tại sẽ ngừng hoạt động ngay lập tức.', 'access.rotate_key_title': 'Xoay vòng khóa API ảo',
+        'access.revoke_confirm': 'Thu hồi “{name}”? Thao tác này là vĩnh viễn và không thể khôi phục khóa.', 'access.revoke_key_title': 'Thu hồi khóa API ảo',
+        'access.key_revoked': 'Đã thu hồi khóa API ảo.', 'access.usage_title': 'Mức sử dụng của {name}', 'access.last_24_hours': '24 giờ qua',
+        'access.last_30_days': '30 ngày qua', 'access.calls': 'Lượt gọi', 'access.tokens': 'Token', 'access.spend': 'Chi phí',
+        'access.usage_load_failed': 'Không thể tải mức sử dụng của khóa: {error}'
+    }
+};
+
+const ACCESS_VIRTUAL_KEY_LOCALE_VALUES = {
+    'zh-CN': [
+        "受管访问", "虚拟 API 密钥", "为客户端签发最小权限密钥，并分别设置权限范围、模型访问、速率限制、预算和有效期。",
+        "刷新", "创建密钥", "筛选虚拟密钥", "搜索密钥", "名称或密钥 ID", "状态", "所有状态",
+        "有效", "已停用", "已过期", "已撤销", "未知", "未找到虚拟密钥", "创建最小权限密钥或调整筛选条件。",
+        "虚拟密钥请求失败。", "已刷新虚拟密钥。", "无法加载虚拟密钥：{error}", "从未", "未知",
+        "每天 ${value}", "每月 ${value}", "无速率或预算限制", "上次使用", "到期时间", "限制", "未知价格策略",
+        "拒绝", "允许并警告", "使用备用价格", "权限范围", "模型", "所有模型", "查看用量", "编辑", "轮换", "撤销",
+        "编辑虚拟密钥", "创建虚拟密钥", "密钥名称", "已启用", "有效期", "每分钟请求数", "每分钟令牌数",
+        "每日预算 (USD)", "每月预算 (USD)", "允许的模型模式", "每行一个受限 glob 模式。留空表示允许所有模型。",
+        "管理读取", "管理写入", "每百万令牌备用价格 (USD)", "保存密钥", "请至少选择一个权限范围。",
+        "已保存虚拟密钥。", "此密钥已在其他位置更改。已刷新为当前状态。", "虚拟密钥已创建", "虚拟密钥已轮换",
+        "请立即复制此密钥。关闭此对话框后将无法恢复。", "新的虚拟密钥", "复制密钥", "我已保存密钥",
+        "要轮换“{name}”吗？当前密钥将立即失效。", "轮换虚拟密钥", "要撤销“{name}”吗？此操作永久生效，无法恢复该密钥。", "撤销虚拟密钥",
+        "虚拟密钥已撤销。", "{name} 的用量", "过去 24 小时", "过去 30 天", "调用次数", "令牌", "费用", "无法加载密钥用量：{error}"
+    ],
+    'zh-TW': [
+        "受管存取", "虛擬 API 金鑰", "為用戶端簽發最小權限金鑰，並分別設定權限範圍、模型存取、速率限制、預算與有效期限。",
+        "重新整理", "建立金鑰", "篩選虛擬金鑰", "搜尋金鑰", "名稱或金鑰 ID", "狀態", "所有狀態",
+        "有效", "已停用", "已過期", "已撤銷", "未知", "找不到虛擬金鑰", "請建立最小權限金鑰或調整篩選條件。",
+        "虛擬金鑰要求失敗。", "已重新整理虛擬金鑰。", "無法載入虛擬金鑰：{error}", "從未", "未知",
+        "每日 ${value}", "每月 ${value}", "無速率或預算限制", "上次使用", "到期時間", "限制", "未知價格政策",
+        "拒絕", "允許並警告", "使用備用價格", "權限範圍", "模型", "所有模型", "檢視用量", "編輯", "輪替", "撤銷",
+        "編輯虛擬金鑰", "建立虛擬金鑰", "金鑰名稱", "已啟用", "有效期限", "每分鐘要求數", "每分鐘權杖數",
+        "每日預算 (USD)", "每月預算 (USD)", "允許的模型模式", "每行一個受限 glob 模式。留空表示允許所有模型。",
+        "管理讀取", "管理寫入", "每百萬權杖備用價格 (USD)", "儲存金鑰", "請至少選取一個權限範圍。",
+        "已儲存虛擬金鑰。", "此金鑰已在其他位置變更。已重新整理為目前狀態。", "虛擬金鑰已建立", "虛擬金鑰已輪替",
+        "請立即複製此金鑰。關閉此對話框後將無法復原。", "新的虛擬金鑰", "複製金鑰", "我已儲存金鑰",
+        "要輪替「{name}」嗎？目前金鑰將立即失效。", "輪替虛擬金鑰", "要撤銷「{name}」嗎？此操作永久生效，無法復原此金鑰。", "撤銷虛擬金鑰",
+        "虛擬金鑰已撤銷。", "{name} 的用量", "過去 24 小時", "過去 30 天", "呼叫次數", "權杖", "費用", "無法載入金鑰用量：{error}"
+    ],
+    de: [
+        "Verwalteter Zugriff", "Virtuelle API-Schlüssel", "Stellen Sie Client-Schlüssel nach dem Prinzip der geringsten Rechte mit eigenen Bereichen, Modellzugriffen, Ratenlimits, Budgets und Ablaufzeiten aus.",
+        "Aktualisieren", "Schlüssel erstellen", "Virtuelle Schlüssel filtern", "Schlüssel suchen", "Name oder Schlüssel-ID", "Status", "Alle Status",
+        "Aktiv", "Deaktiviert", "Abgelaufen", "Widerrufen", "Unbekannt", "Keine virtuellen Schlüssel gefunden", "Erstellen Sie einen Schlüssel mit minimalen Rechten oder passen Sie die Filter an.",
+        "Die Anfrage für virtuelle Schlüssel ist fehlgeschlagen.", "Virtuelle Schlüssel wurden aktualisiert.", "Virtuelle Schlüssel konnten nicht geladen werden: {error}", "Nie", "Unbekannt",
+        "${value} täglich", "${value} monatlich", "Keine Raten- oder Budgetlimits", "Zuletzt verwendet", "Läuft ab", "Limits", "Richtlinie für unbekannte Preise",
+        "Ablehnen", "Mit Warnung zulassen", "Ersatzpreis verwenden", "Berechtigungsbereiche", "Modelle", "Alle Modelle", "Nutzung anzeigen", "Bearbeiten", "Rotieren", "Widerrufen",
+        "Virtuellen Schlüssel bearbeiten", "Virtuellen Schlüssel erstellen", "Schlüsselname", "Aktiviert", "Ablauf", "Anfragen pro Minute", "Token pro Minute",
+        "Tagesbudget (USD)", "Monatsbudget (USD)", "Zulässige Modellmuster", "Ein begrenztes Glob-Muster pro Zeile. Leer lassen, um alle Modelle zuzulassen.",
+        "Verwaltung lesen", "Verwaltung schreiben", "Ersatzpreis in USD pro 1 Mio. Token", "Schlüssel speichern", "Wählen Sie mindestens einen Berechtigungsbereich aus.",
+        "Virtueller Schlüssel gespeichert.", "Dieser Schlüssel wurde an anderer Stelle geändert. Der aktuelle Stand wurde geladen.", "Virtueller Schlüssel erstellt", "Virtueller Schlüssel rotiert",
+        "Kopieren Sie dieses Geheimnis jetzt. Nach dem Schließen dieses Dialogs kann es nicht wiederhergestellt werden.", "Neues virtuelles Schlüsselgeheimnis", "Geheimnis kopieren", "Ich habe den Schlüssel gespeichert",
+        "„{name}“ rotieren? Das aktuelle Geheimnis funktioniert danach sofort nicht mehr.", "Virtuellen Schlüssel rotieren", "„{name}“ widerrufen? Dies ist dauerhaft und der Schlüssel kann nicht wiederhergestellt werden.", "Virtuellen Schlüssel widerrufen",
+        "Virtueller Schlüssel widerrufen.", "Nutzung für {name}", "Letzte 24 Stunden", "Letzte 30 Tage", "Aufrufe", "Token", "Ausgaben", "Schlüsselnutzung konnte nicht geladen werden: {error}"
+    ],
+    es: [
+        "Acceso gobernado", "Claves de API virtuales", "Emite claves de cliente con privilegios mínimos y ámbitos, acceso a modelos, límites de frecuencia, presupuestos y caducidad independientes.",
+        "Actualizar", "Crear clave", "Filtrar claves virtuales", "Buscar claves", "Nombre o ID de clave", "Estado", "Todos los estados",
+        "Activa", "Desactivada", "Caducada", "Revocada", "Desconocido", "No se encontraron claves virtuales", "Crea una clave con privilegios mínimos o ajusta los filtros.",
+        "La solicitud de clave virtual falló.", "Claves virtuales actualizadas.", "No se pudieron cargar las claves virtuales: {error}", "Nunca", "Desconocido",
+        "${value} al día", "${value} al mes", "Sin límites de frecuencia ni presupuesto", "Último uso", "Caduca", "Límites", "Política para precios desconocidos",
+        "Denegar", "Permitir con advertencia", "Usar precio alternativo", "Ámbitos", "Modelos", "Todos los modelos", "Ver uso", "Editar", "Rotar", "Revocar",
+        "Editar clave virtual", "Crear clave virtual", "Nombre de la clave", "Habilitada", "Caducidad", "Solicitudes por minuto", "Tokens por minuto",
+        "Presupuesto diario (USD)", "Presupuesto mensual (USD)", "Patrones de modelos permitidos", "Un patrón glob acotado por línea. Déjalo vacío para permitir todos los modelos.",
+        "Lectura de administración", "Escritura de administración", "USD alternativos por 1 M de tokens", "Guardar clave", "Selecciona al menos un ámbito.",
+        "Clave virtual guardada.", "Esta clave cambió en otro lugar. Se ha actualizado el estado actual.", "Clave virtual creada", "Clave virtual rotada",
+        "Copia este secreto ahora. No se puede recuperar después de cerrar este diálogo.", "Nuevo secreto de clave virtual", "Copiar secreto", "He guardado la clave",
+        "¿Rotar “{name}”? El secreto actual dejará de funcionar inmediatamente.", "Rotar clave virtual", "¿Revocar “{name}”? Es permanente y la clave no se puede restaurar.", "Revocar clave virtual",
+        "Clave virtual revocada.", "Uso de {name}", "Últimas 24 horas", "Últimos 30 días", "Llamadas", "Tokens", "Gasto", "No se pudo cargar el uso de la clave: {error}"
+    ],
+    fr: [
+        "Accès gouverné", "Clés API virtuelles", "Émettez des clés client à privilèges minimaux avec des portées, accès aux modèles, limites de débit, budgets et expirations indépendants.",
+        "Actualiser", "Créer une clé", "Filtrer les clés virtuelles", "Rechercher des clés", "Nom ou ID de clé", "État", "Tous les états",
+        "Active", "Désactivée", "Expirée", "Révoquée", "Inconnu", "Aucune clé virtuelle trouvée", "Créez une clé à privilèges minimaux ou ajustez les filtres.",
+        "La demande de clé virtuelle a échoué.", "Clés virtuelles actualisées.", "Impossible de charger les clés virtuelles : {error}", "Jamais", "Inconnu",
+        "${value} par jour", "${value} par mois", "Aucune limite de débit ou de budget", "Dernière utilisation", "Expiration", "Limites", "Politique de prix inconnu",
+        "Refuser", "Autoriser avec avertissement", "Utiliser le prix de repli", "Portées", "Modèles", "Tous les modèles", "Voir l’utilisation", "Modifier", "Faire tourner", "Révoquer",
+        "Modifier la clé virtuelle", "Créer une clé virtuelle", "Nom de la clé", "Activée", "Expiration", "Requêtes par minute", "Jetons par minute",
+        "Budget quotidien (USD)", "Budget mensuel (USD)", "Motifs de modèles autorisés", "Un motif glob borné par ligne. Laissez vide pour autoriser tous les modèles.",
+        "Lecture de gestion", "Écriture de gestion", "Prix de repli en USD par million de jetons", "Enregistrer la clé", "Sélectionnez au moins une portée.",
+        "Clé virtuelle enregistrée.", "Cette clé a été modifiée ailleurs. L’état actuel a été actualisé.", "Clé virtuelle créée", "Clé virtuelle renouvelée",
+        "Copiez ce secret maintenant. Il ne pourra plus être récupéré après la fermeture de cette boîte de dialogue.", "Nouveau secret de clé virtuelle", "Copier le secret", "J’ai enregistré la clé",
+        "Renouveler « {name} » ? Le secret actuel cessera immédiatement de fonctionner.", "Renouveler la clé virtuelle", "Révoquer « {name} » ? Cette action est définitive et la clé ne pourra pas être restaurée.", "Révoquer la clé virtuelle",
+        "Clé virtuelle révoquée.", "Utilisation de {name}", "Dernières 24 heures", "30 derniers jours", "Appels", "Jetons", "Dépenses", "Impossible de charger l’utilisation de la clé : {error}"
+    ],
+    id: [
+        "Akses terkelola", "Kunci API virtual", "Terbitkan kunci klien dengan hak akses minimum serta cakupan, akses model, batas laju, anggaran, dan masa berlaku yang terpisah.",
+        "Segarkan", "Buat kunci", "Filter kunci virtual", "Cari kunci", "Nama atau ID kunci", "Status", "Semua status",
+        "Aktif", "Dinonaktifkan", "Kedaluwarsa", "Dicabut", "Tidak diketahui", "Kunci virtual tidak ditemukan", "Buat kunci dengan hak akses minimum atau sesuaikan filter.",
+        "Permintaan kunci virtual gagal.", "Kunci virtual disegarkan.", "Tidak dapat memuat kunci virtual: {error}", "Belum pernah", "Tidak diketahui",
+        "${value} per hari", "${value} per bulan", "Tanpa batas laju atau anggaran", "Terakhir digunakan", "Kedaluwarsa", "Batas", "Kebijakan harga tidak diketahui",
+        "Tolak", "Izinkan dengan peringatan", "Gunakan harga cadangan", "Cakupan", "Model", "Semua model", "Lihat penggunaan", "Edit", "Rotasi", "Cabut",
+        "Edit kunci virtual", "Buat kunci virtual", "Nama kunci", "Diaktifkan", "Masa berlaku", "Permintaan per menit", "Token per menit",
+        "Anggaran harian (USD)", "Anggaran bulanan (USD)", "Pola model yang diizinkan", "Satu pola glob terbatas per baris. Kosongkan untuk mengizinkan semua model.",
+        "Baca pengelolaan", "Tulis pengelolaan", "Harga cadangan USD per 1 juta token", "Simpan kunci", "Pilih setidaknya satu cakupan.",
+        "Kunci virtual disimpan.", "Kunci ini diubah di tempat lain. Status terkini telah disegarkan.", "Kunci virtual dibuat", "Kunci virtual dirotasi",
+        "Salin rahasia ini sekarang. Rahasia tidak dapat dipulihkan setelah dialog ini ditutup.", "Rahasia kunci virtual baru", "Salin rahasia", "Saya sudah menyimpan kunci",
+        "Rotasi “{name}”? Rahasia saat ini akan langsung berhenti berfungsi.", "Rotasi kunci virtual", "Cabut “{name}”? Tindakan ini permanen dan kunci tidak dapat dipulihkan.", "Cabut kunci virtual",
+        "Kunci virtual dicabut.", "Penggunaan {name}", "24 jam terakhir", "30 hari terakhir", "Panggilan", "Token", "Biaya", "Tidak dapat memuat penggunaan kunci: {error}"
+    ],
+    it: [
+        "Accesso governato", "Chiavi API virtuali", "Emetti chiavi client con privilegi minimi e ambiti, accesso ai modelli, limiti di frequenza, budget e scadenze indipendenti.",
+        "Aggiorna", "Crea chiave", "Filtra le chiavi virtuali", "Cerca chiavi", "Nome o ID chiave", "Stato", "Tutti gli stati",
+        "Attiva", "Disattivata", "Scaduta", "Revocata", "Sconosciuto", "Nessuna chiave virtuale trovata", "Crea una chiave con privilegi minimi o modifica i filtri.",
+        "La richiesta della chiave virtuale non è riuscita.", "Chiavi virtuali aggiornate.", "Impossibile caricare le chiavi virtuali: {error}", "Mai", "Sconosciuto",
+        "${value} al giorno", "${value} al mese", "Nessun limite di frequenza o budget", "Ultimo utilizzo", "Scadenza", "Limiti", "Criterio per prezzo sconosciuto",
+        "Nega", "Consenti con avviso", "Usa prezzo di riserva", "Ambiti", "Modelli", "Tutti i modelli", "Visualizza utilizzo", "Modifica", "Ruota", "Revoca",
+        "Modifica chiave virtuale", "Crea chiave virtuale", "Nome chiave", "Abilitata", "Scadenza", "Richieste al minuto", "Token al minuto",
+        "Budget giornaliero (USD)", "Budget mensile (USD)", "Pattern di modelli consentiti", "Un pattern glob limitato per riga. Lascia vuoto per consentire tutti i modelli.",
+        "Lettura gestione", "Scrittura gestione", "Prezzo di riserva USD per 1 milione di token", "Salva chiave", "Seleziona almeno un ambito.",
+        "Chiave virtuale salvata.", "Questa chiave è stata modificata altrove. Lo stato corrente è stato aggiornato.", "Chiave virtuale creata", "Chiave virtuale ruotata",
+        "Copia ora questo segreto. Non potrà essere recuperato dopo la chiusura della finestra.", "Nuovo segreto della chiave virtuale", "Copia segreto", "Ho salvato la chiave",
+        "Ruotare “{name}”? Il segreto corrente smetterà subito di funzionare.", "Ruota chiave virtuale", "Revocare “{name}”? L’operazione è permanente e la chiave non può essere ripristinata.", "Revoca chiave virtuale",
+        "Chiave virtuale revocata.", "Utilizzo di {name}", "Ultime 24 ore", "Ultimi 30 giorni", "Chiamate", "Token", "Spesa", "Impossibile caricare l’utilizzo della chiave: {error}"
+    ],
+    ja: [
+        "統制されたアクセス", "仮想 API キー", "スコープ、モデルアクセス、レート制限、予算、有効期限を個別に設定した最小権限のクライアントキーを発行します。",
+        "更新", "キーを作成", "仮想キーを絞り込む", "キーを検索", "名前またはキー ID", "状態", "すべての状態",
+        "有効", "無効", "期限切れ", "失効済み", "不明", "仮想キーが見つかりません", "最小権限のキーを作成するか、フィルターを調整してください。",
+        "仮想キーのリクエストに失敗しました。", "仮想キーを更新しました。", "仮想キーを読み込めませんでした: {error}", "なし", "不明",
+        "1 日 ${value}", "1 か月 ${value}", "レートまたは予算の制限なし", "最終使用", "有効期限", "制限", "価格不明時のポリシー",
+        "拒否", "警告付きで許可", "代替価格を使用", "スコープ", "モデル", "すべてのモデル", "使用量を表示", "編集", "ローテーション", "失効",
+        "仮想キーを編集", "仮想キーを作成", "キー名", "有効", "有効期限", "1 分あたりのリクエスト数", "1 分あたりのトークン数",
+        "日次予算 (USD)", "月次予算 (USD)", "許可するモデルパターン", "1 行に 1 つの制限付き glob パターンを入力します。空欄の場合はすべてのモデルを許可します。",
+        "管理の読み取り", "管理の書き込み", "100 万トークンあたりの代替価格 (USD)", "キーを保存", "少なくとも 1 つのスコープを選択してください。",
+        "仮想キーを保存しました。", "このキーは別の場所で変更されました。現在の状態に更新しました。", "仮想キーを作成しました", "仮想キーをローテーションしました",
+        "このシークレットを今すぐコピーしてください。このダイアログを閉じると復元できません。", "新しい仮想キーのシークレット", "シークレットをコピー", "キーを保存しました",
+        "「{name}」をローテーションしますか？現在のシークレットは直ちに使用できなくなります。", "仮想キーをローテーション", "「{name}」を失効しますか？この操作は永続的で、キーは復元できません。", "仮想キーを失効",
+        "仮想キーを失効しました。", "{name} の使用量", "過去 24 時間", "過去 30 日間", "呼び出し", "トークン", "費用", "キーの使用量を読み込めませんでした: {error}"
+    ],
+    ko: [
+        "관리형 접근", "가상 API 키", "범위, 모델 접근, 속도 제한, 예산, 만료를 각각 설정한 최소 권한 클라이언트 키를 발급합니다.",
+        "새로고침", "키 만들기", "가상 키 필터", "키 검색", "이름 또는 키 ID", "상태", "모든 상태",
+        "활성", "비활성", "만료됨", "폐기됨", "알 수 없음", "가상 키를 찾을 수 없음", "최소 권한 키를 만들거나 필터를 조정하세요.",
+        "가상 키 요청에 실패했습니다.", "가상 키를 새로고침했습니다.", "가상 키를 불러올 수 없습니다: {error}", "사용 기록 없음", "알 수 없음",
+        "일 ${value}", "월 ${value}", "속도 또는 예산 제한 없음", "마지막 사용", "만료", "제한", "가격 미확인 정책",
+        "거부", "경고 후 허용", "대체 가격 사용", "범위", "모델", "모든 모델", "사용량 보기", "편집", "교체", "폐기",
+        "가상 키 편집", "가상 키 만들기", "키 이름", "활성화됨", "만료", "분당 요청 수", "분당 토큰 수",
+        "일일 예산 (USD)", "월간 예산 (USD)", "허용 모델 패턴", "줄마다 제한된 glob 패턴을 하나씩 입력하세요. 비워 두면 모든 모델을 허용합니다.",
+        "관리 읽기", "관리 쓰기", "100만 토큰당 대체 가격 (USD)", "키 저장", "범위를 하나 이상 선택하세요.",
+        "가상 키를 저장했습니다.", "이 키가 다른 곳에서 변경되었습니다. 최신 상태로 새로고침했습니다.", "가상 키를 만들었습니다", "가상 키를 교체했습니다",
+        "이 비밀 키를 지금 복사하세요. 이 대화 상자를 닫으면 복구할 수 없습니다.", "새 가상 키 비밀", "비밀 키 복사", "키를 저장했습니다",
+        "“{name}” 키를 교체할까요? 현재 비밀 키는 즉시 작동을 멈춥니다.", "가상 키 교체", "“{name}” 키를 폐기할까요? 영구적인 작업이며 키를 복원할 수 없습니다.", "가상 키 폐기",
+        "가상 키를 폐기했습니다.", "{name} 사용량", "최근 24시간", "최근 30일", "호출", "토큰", "비용", "키 사용량을 불러올 수 없습니다: {error}"
+    ],
+    pt: [
+        "Acesso governado", "Chaves de API virtuais", "Emita chaves de cliente com privilégio mínimo e escopos, acesso a modelos, limites de taxa, orçamentos e validade independentes.",
+        "Atualizar", "Criar chave", "Filtrar chaves virtuais", "Pesquisar chaves", "Nome ou ID da chave", "Estado", "Todos os estados",
+        "Ativa", "Desativada", "Expirada", "Revogada", "Desconhecido", "Nenhuma chave virtual encontrada", "Crie uma chave com privilégio mínimo ou ajuste os filtros.",
+        "A solicitação da chave virtual falhou.", "Chaves virtuais atualizadas.", "Não foi possível carregar as chaves virtuais: {error}", "Nunca", "Desconhecido",
+        "${value} por dia", "${value} por mês", "Sem limites de taxa ou orçamento", "Último uso", "Expira", "Limites", "Política de preço desconhecido",
+        "Negar", "Permitir com aviso", "Usar preço alternativo", "Escopos", "Modelos", "Todos os modelos", "Ver uso", "Editar", "Rotacionar", "Revogar",
+        "Editar chave virtual", "Criar chave virtual", "Nome da chave", "Ativada", "Validade", "Solicitações por minuto", "Tokens por minuto",
+        "Orçamento diário (USD)", "Orçamento mensal (USD)", "Padrões de modelo permitidos", "Um padrão glob limitado por linha. Deixe em branco para permitir todos os modelos.",
+        "Leitura de gerenciamento", "Escrita de gerenciamento", "Preço alternativo em USD por 1 milhão de tokens", "Salvar chave", "Selecione pelo menos um escopo.",
+        "Chave virtual salva.", "Esta chave foi alterada em outro lugar. O estado atual foi atualizado.", "Chave virtual criada", "Chave virtual rotacionada",
+        "Copie este segredo agora. Ele não poderá ser recuperado após fechar esta caixa de diálogo.", "Novo segredo da chave virtual", "Copiar segredo", "Salvei a chave",
+        "Rotacionar “{name}”? O segredo atual deixará de funcionar imediatamente.", "Rotacionar chave virtual", "Revogar “{name}”? Isto é permanente e a chave não pode ser restaurada.", "Revogar chave virtual",
+        "Chave virtual revogada.", "Uso de {name}", "Últimas 24 horas", "Últimos 30 dias", "Chamadas", "Tokens", "Gasto", "Não foi possível carregar o uso da chave: {error}"
+    ],
+    ru: [
+        "Управляемый доступ", "Виртуальные ключи API", "Выпускайте клиентские ключи с минимальными привилегиями и отдельными областями доступа, моделями, лимитами, бюджетами и сроками действия.",
+        "Обновить", "Создать ключ", "Фильтр виртуальных ключей", "Поиск ключей", "Имя или ID ключа", "Состояние", "Все состояния",
+        "Активен", "Отключён", "Истёк", "Отозван", "Неизвестно", "Виртуальные ключи не найдены", "Создайте ключ с минимальными привилегиями или измените фильтры.",
+        "Запрос виртуального ключа завершился ошибкой.", "Виртуальные ключи обновлены.", "Не удалось загрузить виртуальные ключи: {error}", "Никогда", "Неизвестно",
+        "${value} в день", "${value} в месяц", "Без ограничений скорости или бюджета", "Последнее использование", "Срок действия", "Лимиты", "Политика неизвестной цены",
+        "Запретить", "Разрешить с предупреждением", "Использовать резервную цену", "Области доступа", "Модели", "Все модели", "Показать использование", "Изменить", "Ротировать", "Отозвать",
+        "Изменить виртуальный ключ", "Создать виртуальный ключ", "Имя ключа", "Включён", "Срок действия", "Запросов в минуту", "Токенов в минуту",
+        "Дневной бюджет (USD)", "Месячный бюджет (USD)", "Разрешённые шаблоны моделей", "Один ограниченный glob-шаблон в строке. Оставьте пустым, чтобы разрешить все модели.",
+        "Чтение управления", "Изменение управления", "Резервная цена USD за 1 млн токенов", "Сохранить ключ", "Выберите хотя бы одну область доступа.",
+        "Виртуальный ключ сохранён.", "Этот ключ изменён в другом месте. Текущее состояние обновлено.", "Виртуальный ключ создан", "Виртуальный ключ ротирован",
+        "Скопируйте этот секрет сейчас. После закрытия окна восстановить его будет невозможно.", "Новый секрет виртуального ключа", "Копировать секрет", "Ключ сохранён",
+        "Ротировать «{name}»? Текущий секрет немедленно перестанет работать.", "Ротировать виртуальный ключ", "Отозвать «{name}»? Это действие необратимо, ключ нельзя восстановить.", "Отозвать виртуальный ключ",
+        "Виртуальный ключ отозван.", "Использование {name}", "Последние 24 часа", "Последние 30 дней", "Вызовы", "Токены", "Расходы", "Не удалось загрузить использование ключа: {error}"
+    ],
+    th: [
+        "การเข้าถึงที่มีการกำกับ", "คีย์ API เสมือน", "ออกคีย์ไคลเอนต์ตามหลักสิทธิ์ขั้นต่ำ พร้อมขอบเขต การเข้าถึงโมเดล ขีดจำกัดอัตรา งบประมาณ และวันหมดอายุที่แยกจากกัน",
+        "รีเฟรช", "สร้างคีย์", "กรองคีย์เสมือน", "ค้นหาคีย์", "ชื่อหรือ ID คีย์", "สถานะ", "ทุกสถานะ",
+        "ใช้งานอยู่", "ปิดใช้งาน", "หมดอายุ", "เพิกถอนแล้ว", "ไม่ทราบ", "ไม่พบคีย์เสมือน", "สร้างคีย์แบบสิทธิ์ขั้นต่ำหรือปรับตัวกรอง",
+        "คำขอคีย์เสมือนล้มเหลว", "รีเฟรชคีย์เสมือนแล้ว", "โหลดคีย์เสมือนไม่ได้: {error}", "ไม่เคย", "ไม่ทราบ",
+        "${value} ต่อวัน", "${value} ต่อเดือน", "ไม่มีขีดจำกัดอัตราหรืองบประมาณ", "ใช้ล่าสุด", "หมดอายุ", "ขีดจำกัด", "นโยบายเมื่อไม่ทราบราคา",
+        "ปฏิเสธ", "อนุญาตพร้อมคำเตือน", "ใช้ราคาสำรอง", "ขอบเขต", "โมเดล", "ทุกโมเดล", "ดูการใช้งาน", "แก้ไข", "หมุนเวียน", "เพิกถอน",
+        "แก้ไขคีย์เสมือน", "สร้างคีย์เสมือน", "ชื่อคีย์", "เปิดใช้งาน", "วันหมดอายุ", "คำขอต่อนาที", "โทเคนต่อนาที",
+        "งบประมาณรายวัน (USD)", "งบประมาณรายเดือน (USD)", "รูปแบบโมเดลที่อนุญาต", "ใส่รูปแบบ glob แบบจำกัดหนึ่งรายการต่อบรรทัด เว้นว่างเพื่ออนุญาตทุกโมเดล",
+        "อ่านข้อมูลการจัดการ", "แก้ไขข้อมูลการจัดการ", "ราคาสำรอง USD ต่อ 1 ล้านโทเคน", "บันทึกคีย์", "เลือกอย่างน้อยหนึ่งขอบเขต",
+        "บันทึกคีย์เสมือนแล้ว", "คีย์นี้ถูกเปลี่ยนจากที่อื่น รีเฟรชเป็นสถานะปัจจุบันแล้ว", "สร้างคีย์เสมือนแล้ว", "หมุนเวียนคีย์เสมือนแล้ว",
+        "คัดลอกข้อมูลลับนี้ตอนนี้ หลังปิดกล่องโต้ตอบจะไม่สามารถกู้คืนได้", "ข้อมูลลับคีย์เสมือนใหม่", "คัดลอกข้อมูลลับ", "ฉันบันทึกคีย์แล้ว",
+        "หมุนเวียน “{name}” หรือไม่ ข้อมูลลับปัจจุบันจะหยุดทำงานทันที", "หมุนเวียนคีย์เสมือน", "เพิกถอน “{name}” หรือไม่ การดำเนินการนี้ถาวรและกู้คืนคีย์ไม่ได้", "เพิกถอนคีย์เสมือน",
+        "เพิกถอนคีย์เสมือนแล้ว", "การใช้งานของ {name}", "24 ชั่วโมงที่ผ่านมา", "30 วันที่ผ่านมา", "ครั้งที่เรียก", "โทเคน", "ค่าใช้จ่าย", "โหลดการใช้งานคีย์ไม่ได้: {error}"
+    ],
+    tr: [
+        "Yönetilen erişim", "Sanal API anahtarları", "Bağımsız kapsamlar, model erişimi, hız sınırları, bütçeler ve sona erme süreleriyle en az ayrıcalıklı istemci anahtarları oluşturun.",
+        "Yenile", "Anahtar oluştur", "Sanal anahtarları filtrele", "Anahtar ara", "Ad veya anahtar kimliği", "Durum", "Tüm durumlar",
+        "Etkin", "Devre dışı", "Süresi dolmuş", "İptal edilmiş", "Bilinmiyor", "Sanal anahtar bulunamadı", "En az ayrıcalıklı bir anahtar oluşturun veya filtreleri ayarlayın.",
+        "Sanal anahtar isteği başarısız oldu.", "Sanal anahtarlar yenilendi.", "Sanal anahtarlar yüklenemedi: {error}", "Hiçbir zaman", "Bilinmiyor",
+        "Günlük ${value}", "Aylık ${value}", "Hız veya bütçe sınırı yok", "Son kullanım", "Sona erme", "Sınırlar", "Bilinmeyen fiyat politikası",
+        "Reddet", "Uyarıyla izin ver", "Yedek fiyatı kullan", "Kapsamlar", "Modeller", "Tüm modeller", "Kullanımı görüntüle", "Düzenle", "Döndür", "İptal et",
+        "Sanal anahtarı düzenle", "Sanal anahtar oluştur", "Anahtar adı", "Etkin", "Sona erme", "Dakikadaki istek", "Dakikadaki token",
+        "Günlük bütçe (USD)", "Aylık bütçe (USD)", "İzin verilen model desenleri", "Her satıra bir sınırlı glob deseni girin. Tüm modellere izin vermek için boş bırakın.",
+        "Yönetim okuma", "Yönetim yazma", "1 milyon token başına yedek USD fiyatı", "Anahtarı kaydet", "En az bir kapsam seçin.",
+        "Sanal anahtar kaydedildi.", "Bu anahtar başka bir yerde değiştirildi. Güncel durum yenilendi.", "Sanal anahtar oluşturuldu", "Sanal anahtar döndürüldü",
+        "Bu sırrı şimdi kopyalayın. İletişim kutusu kapandıktan sonra kurtarılamaz.", "Yeni sanal anahtar sırrı", "Sırrı kopyala", "Anahtarı kaydettim",
+        "“{name}” döndürülsün mü? Geçerli sır hemen çalışmayı durdurur.", "Sanal anahtarı döndür", "“{name}” iptal edilsin mi? Bu kalıcıdır ve anahtar geri yüklenemez.", "Sanal anahtarı iptal et",
+        "Sanal anahtar iptal edildi.", "{name} kullanımı", "Son 24 saat", "Son 30 gün", "Çağrılar", "Tokenlar", "Harcama", "Anahtar kullanımı yüklenemedi: {error}"
+    ]
+};
+
+const ACCESS_VIRTUAL_KEY_KEYS = Object.keys(ACCESS_VIRTUAL_KEY_MESSAGES.en);
+for (const [locale, values] of Object.entries(ACCESS_VIRTUAL_KEY_LOCALE_VALUES)) {
+    if (values.length !== ACCESS_VIRTUAL_KEY_KEYS.length) {
+        throw new Error(`Virtual-key locale ${locale} is incomplete.`);
+    }
+    ACCESS_VIRTUAL_KEY_MESSAGES[locale] = Object.fromEntries(
+        ACCESS_VIRTUAL_KEY_KEYS.map((key, index) => [key, values[index]])
+    );
+}
+
+for (const [locale, messages] of Object.entries(ACCESS_VIRTUAL_KEY_MESSAGES)) {
+    Object.assign(PAGE_LOCALE_TRANSLATIONS[locale], messages);
+}

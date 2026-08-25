@@ -111,6 +111,62 @@ class FrontendLocaleContractTests(unittest.TestCase):
             with self.subTest(locale=locale):
                 self.assertEqual(catalogs[locale], catalogs["en"])
 
+    def test_virtual_key_catalog_is_complete_for_every_locale(self):
+        block = PAGE_LOCALE_SOURCE.split("const ACCESS_VIRTUAL_KEY_MESSAGES = {", 1)[1].split(
+            "\n};", 1
+        )[0]
+        locale_matches = list(
+            re.finditer(
+                r"^    (?:'([^']+)'|([a-z]{2})): \{",
+                block,
+                re.MULTILINE,
+            )
+        )
+        catalogs = {}
+        for index, match in enumerate(locale_matches):
+            locale = match.group(1) or match.group(2)
+            end = (
+                locale_matches[index + 1].start() if index + 1 < len(locale_matches) else len(block)
+            )
+            catalogs[locale] = set(
+                re.findall(r"'(access\.[a-z0-9_]+)'\s*:", block[match.start() : end])
+            )
+
+        values_block = PAGE_LOCALE_SOURCE.split("const ACCESS_VIRTUAL_KEY_LOCALE_VALUES = {", 1)[
+            1
+        ].split("\n};", 1)[0]
+        for match in re.finditer(
+            r"^    (?:'([^']+)'|([a-z]{2})): (\[.*?\])(?:,)?$",
+            values_block,
+            re.MULTILINE | re.DOTALL,
+        ):
+            locale = match.group(1) or match.group(2)
+            values = json.loads(match.group(3))
+            self.assertEqual(len(values), len(catalogs["en"]), locale)
+            catalogs[locale] = set(catalogs["en"])
+
+        expected_locales = {
+            "en",
+            "zh-CN",
+            "zh-TW",
+            "de",
+            "es",
+            "fr",
+            "id",
+            "it",
+            "ja",
+            "ko",
+            "pt",
+            "ru",
+            "th",
+            "tr",
+            "vi",
+        }
+        self.assertEqual(set(catalogs), expected_locales)
+        for locale in expected_locales:
+            with self.subTest(locale=locale):
+                self.assertEqual(catalogs[locale], catalogs["en"])
+
     def test_language_control_only_appears_in_settings(self):
         locations = []
         for path in _frontend_sources():
