@@ -6,12 +6,10 @@ Design distilled from LiteLLM's proxy auth (`user_api_key_auth.py` /
 - Keys are stored in the storage backend under the ``virtual_keys`` config
   entry. Only the SHA-256 hash of the secret is persisted; the plaintext is
   shown exactly once at creation time.
-- RPM/TPM enforcement uses in-memory sliding windows. This is correct because
-  the gateway enforces ``WORKERS=1`` (see ``main.py``); if multi-worker mode
-  ever lands, these windows must move to ``core.state_store``.
-- Budget enforcement uses rolling windows (24h / 30d) backed by the usage
-  ledger (``usage_stats.get_spend_since``) with a short-lived cache so budget
-  checks do not add a SQLite query to every request.
+- RPM, TPM, and budget capacity are reserved atomically before provider work.
+  Estimates are committed as actual usage or released at request completion.
+- Durable rolling spend comes from ``usage_stats`` and is reconciled with
+  in-process reservations so concurrent requests cannot knowingly oversubscribe.
 """
 
 from __future__ import annotations
@@ -21,11 +19,20 @@ import fnmatch
 import hashlib
 import re
 import secrets
+import threading
 import time
-from collections import deque
 from dataclasses import dataclass, field
-from typing import Any, Deque, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Sequence, Tuple
 
+from core.pricing import ZERO_COST_PROVIDERS, calculate_cost_usd, find_model_pricing
+from core.state_store import (
+    BaseStateStore,
+    InMemoryStateStore,
+    QuotaCommitRequest,
+    QuotaCommitResult,
+    QuotaReservationRequest,
+)
+from core.token_estimator import estimate_input_tokens
 from fastapi import HTTPException, status
 from log import log
 
@@ -34,8 +41,10 @@ KEY_ID_PREFIX = "vk_"
 BUDGET_CACHE_TTL_SECONDS = 15.0
 DAILY_WINDOW_SECONDS = 86_400
 MONTHLY_WINDOW_SECONDS = 30 * 86_400
-RATE_WINDOW_SECONDS = 60.0
 LAST_USED_PERSIST_INTERVAL_SECONDS = 60.0
+RESERVATION_TTL_SECONDS = 15 * 60.0
+DEFAULT_RESERVED_OUTPUT_TOKENS = 4096
+MAX_RESERVED_TOKENS = 2_000_000
 VIRTUAL_KEY_SCHEMA_VERSION = 2
 MAX_MODEL_PATTERNS = 64
 MAX_MODEL_PATTERN_LENGTH = 128
@@ -53,6 +62,26 @@ UNKNOWN_PRICING_POLICIES = ("deny", "warn", "fallback")
 
 _GEMINI_MODEL_PATH_RE = re.compile(r"/models/([^/:?]+)")
 _MODEL_PATTERN_RE = re.compile(r"^(?=.{1,128}$)(?=.*[A-Za-z0-9])[A-Za-z0-9._:/+*?-]+$")
+_QUOTA_METRIC_LOCK = threading.Lock()
+_QUOTA_METRICS: Dict[str, int] = {}
+
+
+def _increment_quota_metric(event: str) -> None:
+    with _QUOTA_METRIC_LOCK:
+        _QUOTA_METRICS[event] = _QUOTA_METRICS.get(event, 0) + 1
+
+
+def render_virtual_key_quota_metrics() -> str:
+    """Render low-cardinality reservation and pricing-policy counters."""
+    with _QUOTA_METRIC_LOCK:
+        snapshot = dict(_QUOTA_METRICS)
+    lines = [
+        "# HELP omni_virtual_key_quota_events_total Virtual-key quota lifecycle events.",
+        "# TYPE omni_virtual_key_quota_events_total counter",
+    ]
+    for event in sorted(snapshot):
+        lines.append(f'omni_virtual_key_quota_events_total{{event="{event}"}} {snapshot[event]}')
+    return "\n".join(lines) + "\n"
 
 
 def hash_key(token: str) -> str:
@@ -252,48 +281,15 @@ class VirtualKey:
         )
 
 
-class _SlidingWindow:
-    """Sliding-window counter for RPM/TPM (single-process only)."""
-
-    def __init__(self) -> None:
-        self._events: Deque[Tuple[float, int]] = deque()
-        self._total: int = 0
-
-    def _prune(self, now: float) -> None:
-        cutoff = now - RATE_WINDOW_SECONDS
-        while self._events and self._events[0][0] <= cutoff:
-            _, amount = self._events.popleft()
-            self._total -= amount
-
-    def add(self, amount: int = 1, now: Optional[float] = None) -> None:
-        current = now if now is not None else time.monotonic()
-        self._prune(current)
-        self._events.append((current, max(0, int(amount))))
-        self._total += max(0, int(amount))
-
-    def current_total(self, now: Optional[float] = None) -> int:
-        self._prune(now if now is not None else time.monotonic())
-        return max(0, self._total)
-
-    def seconds_until_slot_frees(self, now: Optional[float] = None) -> int:
-        current = now if now is not None else time.monotonic()
-        self._prune(current)
-        if not self._events:
-            return 1
-        oldest_ts = self._events[0][0]
-        return max(1, int(RATE_WINDOW_SECONDS - (current - oldest_ts)) + 1)
-
-
 class VirtualKeyManager:
     """Loads, verifies, and enforces virtual API keys."""
 
-    def __init__(self) -> None:
+    def __init__(self, *, state_store: Optional[BaseStateStore] = None) -> None:
         self._keys_by_hash: Dict[str, VirtualKey] = {}
         self._loaded = False
         self._lock = asyncio.Lock()
-        self._request_windows: Dict[str, _SlidingWindow] = {}
-        self._token_windows: Dict[str, _SlidingWindow] = {}
         self._budget_cache: Dict[str, Tuple[float, float, float]] = {}
+        self._state_store = state_store or InMemoryStateStore()
 
     # ------------------------------------------------------------------
     # Persistence
@@ -462,8 +458,6 @@ class VirtualKeyManager:
             if record is None:
                 return False
             self._keys_by_hash.pop(record.key_hash, None)
-            self._request_windows.pop(record.id, None)
-            self._token_windows.pop(record.id, None)
             self._budget_cache = {
                 cache_key: value
                 for cache_key, value in self._budget_cache.items()
@@ -516,9 +510,13 @@ class VirtualKeyManager:
         *,
         protocol: str = "openai",
         requested_model: str = "",
-    ) -> None:
-        """Raise :class:`HTTPException` when the key may not serve this call."""
-        now = time.time()
+        request_body: Any = None,
+        candidate_models: Optional[Sequence[str]] = None,
+        reservation_id: str = "",
+        now: Optional[float] = None,
+    ) -> Optional[str]:
+        """Authorize and atomically reserve constrained inference capacity."""
+        current = time.time() if now is None else float(now)
         self._enforce_active(record)
         required_scope = f"inference:{str(protocol or '').strip().lower()}"
         if required_scope not in INFERENCE_SCOPES or required_scope not in record.scopes:
@@ -532,11 +530,75 @@ class VirtualKeyManager:
                 detail=f"This API key is not allowed to access model '{requested_model}'.",
             )
 
-        self._enforce_rate_limits(record)
-        await self._enforce_budgets(record, now)
+        constrained = any(
+            limit is not None
+            for limit in (
+                record.rpm_limit,
+                record.tpm_limit,
+                record.budget_daily_usd,
+                record.budget_monthly_usd,
+            )
+        )
+        if not constrained:
+            return None
 
-        # Count this request in the RPM window only after all checks pass.
-        self._request_windows.setdefault(record.id, _SlidingWindow()).add(1)
+        estimated_input, estimated_output = self._estimate_tokens(request_body)
+        estimated_tokens = min(
+            MAX_RESERVED_TOKENS,
+            max(0, estimated_input) + max(0, estimated_output),
+        )
+        models = self._reservation_models(requested_model, candidate_models)
+        estimated_cost = self._estimate_cost(
+            record,
+            models=models,
+            input_tokens=estimated_input,
+            output_tokens=estimated_output,
+        )
+        daily_spend, daily_snapshot_at = await self._get_spend_snapshot(
+            record.id,
+            "daily",
+            DAILY_WINDOW_SECONDS,
+            current,
+            enabled=record.budget_daily_usd is not None,
+        )
+        monthly_spend, monthly_snapshot_at = await self._get_spend_snapshot(
+            record.id,
+            "monthly",
+            MONTHLY_WINDOW_SECONDS,
+            current,
+            enabled=record.budget_monthly_usd is not None,
+        )
+        internal_id = str(reservation_id or f"qrs_{secrets.token_hex(16)}")[:128]
+        try:
+            decision = await self._state_store.reserve_quota(
+                QuotaReservationRequest(
+                    reservation_id=internal_id,
+                    key_id=record.id,
+                    now=current,
+                    ttl_seconds=RESERVATION_TTL_SECONDS,
+                    estimated_tokens=estimated_tokens,
+                    estimated_cost_usd=estimated_cost,
+                    rpm_limit=record.rpm_limit,
+                    tpm_limit=record.tpm_limit,
+                    daily_budget_usd=record.budget_daily_usd,
+                    monthly_budget_usd=record.budget_monthly_usd,
+                    daily_spend_usd=daily_spend,
+                    monthly_spend_usd=monthly_spend,
+                    daily_snapshot_started_at=daily_snapshot_at,
+                    monthly_snapshot_started_at=monthly_snapshot_at,
+                )
+            )
+        except Exception as exc:
+            log.error(f"[virtual-keys] quota state unavailable for key id={record.id}: {exc}")
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="API key quota enforcement is temporarily unavailable.",
+            ) from exc
+        if not decision.accepted:
+            _increment_quota_metric(f"rejected_{decision.reason or 'unknown'}")
+            self._raise_reservation_rejection(record, decision.reason, decision.retry_after_seconds)
+        _increment_quota_metric("accepted")
+        return decision.reservation_id
 
     def authorize_management(self, record: VirtualKey, *, write: bool) -> None:
         """Authorize a management read or write without consuming inference limits."""
@@ -560,70 +622,230 @@ class VirtualKeyManager:
             record.last_used_at = current
             await self._persist()
 
-    def _enforce_rate_limits(self, record: VirtualKey) -> None:
-        if record.rpm_limit is not None:
-            window = self._request_windows.setdefault(record.id, _SlidingWindow())
-            if window.current_total() >= record.rpm_limit:
-                retry_after = window.seconds_until_slot_frees()
-                raise HTTPException(
-                    status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-                    detail=(
-                        f"Rate limit exceeded: {record.rpm_limit} requests per minute "
-                        "for this API key."
-                    ),
-                    headers={"Retry-After": str(retry_after)},
-                )
-        if record.tpm_limit is not None:
-            token_window = self._token_windows.setdefault(record.id, _SlidingWindow())
-            if token_window.current_total() >= record.tpm_limit:
-                retry_after = token_window.seconds_until_slot_frees()
-                raise HTTPException(
-                    status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-                    detail=(
-                        f"Token rate limit exceeded: {record.tpm_limit} tokens per minute "
-                        "for this API key."
-                    ),
-                    headers={"Retry-After": str(retry_after)},
-                )
+    @staticmethod
+    def _estimate_tokens(request_body: Any) -> Tuple[int, int]:
+        if not isinstance(request_body, dict) or not request_body:
+            return 0, 0
+        input_tokens = min(MAX_RESERVED_TOKENS, estimate_input_tokens(request_body))
+        raw_output = None
+        for field_name in ("max_output_tokens", "max_completion_tokens", "max_tokens"):
+            if request_body.get(field_name) is not None:
+                raw_output = request_body.get(field_name)
+                break
+        generation_config = request_body.get("generationConfig")
+        if raw_output is None and isinstance(generation_config, dict):
+            raw_output = generation_config.get("maxOutputTokens")
+        try:
+            output_tokens = (
+                int(raw_output) if raw_output is not None else DEFAULT_RESERVED_OUTPUT_TOKENS
+            )
+        except (TypeError, ValueError):
+            output_tokens = DEFAULT_RESERVED_OUTPUT_TOKENS
+        return input_tokens, min(MAX_RESERVED_TOKENS, max(0, output_tokens))
 
-    async def _enforce_budgets(self, record: VirtualKey, now: float) -> None:
-        checks = (
-            ("daily", record.budget_daily_usd, DAILY_WINDOW_SECONDS),
-            ("monthly", record.budget_monthly_usd, MONTHLY_WINDOW_SECONDS),
-        )
-        for window_name, limit_usd, window_seconds in checks:
-            if limit_usd is None:
-                continue
-            spend = await self._get_cached_spend(record.id, window_name, window_seconds, now)
-            if spend >= limit_usd:
-                raise HTTPException(
-                    status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-                    detail=(
-                        f"Budget exceeded: this API key has spent ${spend:.4f} of its "
-                        f"${limit_usd:.2f} {window_name} budget."
-                    ),
-                )
+    @staticmethod
+    def _reservation_models(
+        requested_model: str,
+        candidate_models: Optional[Sequence[str]],
+    ) -> Tuple[str, ...]:
+        raw_models = candidate_models if candidate_models is not None else (requested_model,)
+        normalized: List[str] = []
+        for value in raw_models:
+            model = str(value or "").strip()
+            if model and model not in normalized:
+                normalized.append(model)
+        return tuple(normalized)
 
-    async def _get_cached_spend(
-        self, key_id: str, window_name: str, window_seconds: int, now: float
+    @staticmethod
+    def _has_hard_budget(record: VirtualKey) -> bool:
+        return record.budget_daily_usd is not None or record.budget_monthly_usd is not None
+
+    def _estimate_cost(
+        self,
+        record: VirtualKey,
+        *,
+        models: Sequence[str],
+        input_tokens: int,
+        output_tokens: int,
     ) -> float:
+        estimates: List[float] = []
+        unknown_models: List[str] = []
+        for model in models:
+            if find_model_pricing(model) is None:
+                unknown_models.append(model)
+                if record.unknown_pricing_policy == "fallback":
+                    fallback = float(record.fallback_price_usd_per_million or 0.0)
+                    estimates.append((input_tokens + output_tokens) * fallback / 1_000_000.0)
+                continue
+            estimates.append(
+                calculate_cost_usd(
+                    model,
+                    input_tokens=input_tokens,
+                    output_tokens=output_tokens,
+                )
+            )
+
+        if unknown_models and self._has_hard_budget(record):
+            if record.unknown_pricing_policy == "deny":
+                _increment_quota_metric("pricing_denied")
+                raise HTTPException(
+                    status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                    detail=(
+                        "Budget enforcement denied this request because pricing is unavailable "
+                        "for one or more candidate models."
+                    ),
+                )
+            if record.unknown_pricing_policy == "warn":
+                _increment_quota_metric("pricing_warned")
+                log.warning(
+                    "[virtual-keys] allowing unpriced budget reservation under warn policy "
+                    f"for key id={record.id}"
+                )
+            if record.unknown_pricing_policy == "fallback":
+                _increment_quota_metric("pricing_fallback")
+        return max(estimates, default=0.0)
+
+    @staticmethod
+    def _raise_reservation_rejection(
+        record: VirtualKey,
+        reason: str,
+        retry_after_seconds: int,
+    ) -> None:
+        headers = (
+            {"Retry-After": str(max(1, int(retry_after_seconds)))}
+            if reason in {"rpm", "tpm"}
+            else None
+        )
+        if reason == "rpm":
+            detail = (
+                f"Rate limit exceeded: {record.rpm_limit} requests per minute for this API key."
+            )
+        elif reason == "tpm":
+            detail = (
+                f"Token rate limit exceeded: {record.tpm_limit} tokens per minute for this API key."
+            )
+        elif reason == "daily_budget":
+            detail = (
+                "Budget exceeded: the estimated request would cross this API key's daily budget."
+            )
+        else:
+            detail = (
+                "Budget exceeded: the estimated request would cross this API key's monthly budget."
+            )
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail=detail,
+            headers=headers,
+        )
+
+    async def _get_spend_snapshot(
+        self,
+        key_id: str,
+        window_name: str,
+        window_seconds: int,
+        now: float,
+        *,
+        enabled: bool,
+    ) -> Tuple[float, float]:
+        if not enabled:
+            return 0.0, now
         cache_key = f"{key_id}:{window_name}"
         cached = self._budget_cache.get(cache_key)
         if cached is not None and (now - cached[0]) < BUDGET_CACHE_TTL_SECONDS:
-            return cached[1]
+            return cached[1], cached[0]
 
         from core.usage_stats import get_spend_since
 
         spend_snapshot = await asyncio.to_thread(get_spend_since, now - window_seconds, key_id)
+        if spend_snapshot.get("available", True) is False:
+            _increment_quota_metric("ledger_unavailable")
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="API key budget enforcement is temporarily unavailable.",
+            )
         spend = float(spend_snapshot.get("cost_usd") or 0.0)
         self._budget_cache[cache_key] = (now, spend, float(window_seconds))
-        return spend
+        return spend, now
 
-    def note_tokens(self, key_id: str, total_tokens: int) -> None:
-        """Feed the TPM window after a completed call (fire-and-forget)."""
-        if not key_id or total_tokens <= 0:
-            return
-        self._token_windows.setdefault(key_id, _SlidingWindow()).add(int(total_tokens))
+    async def commit_reservation(
+        self,
+        reservation_id: str,
+        *,
+        actual_tokens: Optional[int],
+        actual_cost_usd: Optional[float],
+        durable_cost_recorded: bool,
+        now: Optional[float] = None,
+    ) -> QuotaCommitResult:
+        if not reservation_id:
+            return QuotaCommitResult(False)
+        result = await self._state_store.commit_quota(
+            QuotaCommitRequest(
+                reservation_id=str(reservation_id),
+                now=time.time() if now is None else float(now),
+                actual_tokens=None if actual_tokens is None else max(0, int(actual_tokens)),
+                actual_cost_usd=(
+                    None if actual_cost_usd is None else max(0.0, float(actual_cost_usd))
+                ),
+                durable_cost_recorded=bool(durable_cost_recorded),
+            )
+        )
+        if result.committed:
+            _increment_quota_metric("committed")
+        elif result.idempotent:
+            _increment_quota_metric("commit_idempotent")
+        if result.overspent:
+            _increment_quota_metric("actual_overspend")
+        return result
+
+    async def release_reservation(
+        self,
+        reservation_id: Optional[str],
+        *,
+        now: Optional[float] = None,
+    ) -> bool:
+        if not reservation_id:
+            return False
+        released = await self._state_store.release_quota(
+            str(reservation_id),
+            now=time.time() if now is None else float(now),
+        )
+        if released:
+            _increment_quota_metric("released")
+        return released
+
+    async def calculate_actual_cost(
+        self,
+        key_id: str,
+        *,
+        model: str,
+        provider: str,
+        token_usage: Optional[Dict[str, Any]],
+    ) -> float:
+        if str(provider or "").strip().lower() in ZERO_COST_PROVIDERS:
+            return 0.0
+        await self._ensure_loaded()
+        async with self._lock:
+            record = self._find_by_id_locked(key_id)
+        from core.usage_stats import normalize_token_usage
+
+        tokens = normalize_token_usage(token_usage)
+        if find_model_pricing(model) is not None:
+            return calculate_cost_usd(
+                model,
+                input_tokens=tokens["input_tokens"],
+                output_tokens=tokens["output_tokens"],
+                cached_tokens=tokens["cached_tokens"],
+                reasoning_tokens=tokens["reasoning_tokens"],
+                provider=provider,
+            )
+        if record is not None and record.unknown_pricing_policy == "fallback":
+            return round(
+                tokens["total_tokens"]
+                * float(record.fallback_price_usd_per_million or 0.0)
+                / 1_000_000.0,
+                10,
+            )
+        return 0.0
 
     async def get_key_usage(self, key_id: str) -> Dict[str, Any]:
         """Spend snapshot used by the panel key list."""
@@ -636,8 +858,7 @@ class VirtualKeyManager:
 
     def reset_runtime_state(self) -> None:
         """Testing/maintenance hook: clear windows and caches, keep keys."""
-        self._request_windows.clear()
-        self._token_windows.clear()
+        self._state_store = InMemoryStateStore()
         self._budget_cache.clear()
 
     def invalidate(self) -> None:

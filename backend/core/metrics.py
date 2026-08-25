@@ -16,6 +16,7 @@ from typing import Dict, List, Optional
 from core.credential_operation_evidence import render_credential_operation_metrics
 from core.response_cache import response_cache
 from core.usage_stats import get_provider_metrics
+from core.virtual_keys import render_virtual_key_quota_metrics
 from fastapi import APIRouter, Header, Response, status
 
 router = APIRouter(tags=["Metrics"])
@@ -106,6 +107,7 @@ def render_prometheus_metrics(provider_rows: List[Dict]) -> str:
     lines.append(f"omni_response_cache_entries {int(response_cache.size())}")
 
     lines.extend(render_credential_operation_metrics().rstrip().splitlines())
+    lines.extend(render_virtual_key_quota_metrics().rstrip().splitlines())
 
     return "\n".join(lines) + "\n"
 

@@ -118,7 +118,13 @@ class InferenceScopeAuthenticationTests(unittest.IsolatedAsyncioTestCase):
             )
 
         self.assertEqual(token, "sk-ogw-vk-example")
-        enforce.assert_awaited_once_with(record, protocol="openai", requested_model="")
+        enforce.assert_awaited_once_with(
+            record,
+            protocol="openai",
+            requested_model="",
+            request_body=None,
+            candidate_models=None,
+        )
         note_last_used.assert_awaited_once_with(record)
 
 

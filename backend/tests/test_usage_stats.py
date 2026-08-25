@@ -103,6 +103,30 @@ class UsageStatsTests(unittest.TestCase):
             finally:
                 usage_stats.db_path = original_db_path
 
+    def test_record_call_accepts_validated_cost_override_and_reports_persistence(self):
+        original_db_path = usage_stats.db_path
+        with workspace_temp_directory() as temp_dir:
+            try:
+                usage_stats.db_path = str(Path(temp_dir) / "usage.db")
+
+                recorded = usage_stats.record_call(
+                    "credential.json",
+                    model="unpriced-enterprise-model",
+                    provider="primary",
+                    token_usage={"totalTokenCount": 100},
+                    cost_override_usd=0.125,
+                )
+
+                connection = sqlite3.connect(usage_stats.db_path)
+                try:
+                    cost = connection.execute("SELECT cost_usd FROM usage_logs").fetchone()[0]
+                finally:
+                    connection.close()
+                self.assertTrue(recorded)
+                self.assertEqual(cost, 0.125)
+            finally:
+                usage_stats.db_path = original_db_path
+
 
 class UsageAggregationTests(unittest.IsolatedAsyncioTestCase):
     async def test_deleted_credential_usage_is_retained_anonymously(self):

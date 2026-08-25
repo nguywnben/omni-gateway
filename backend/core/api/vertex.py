@@ -609,6 +609,7 @@ async def stream_request(
     max_retries = 3
     recaptcha_token: Optional[str] = None
     is_first_auth = True
+    usage_metadata: Dict[str, Any] = {}
 
     for attempt in range(max_retries + 1):
         log.debug(f"[VERTEX STREAM] attempt {attempt + 1}/{max_retries + 1}, model={model}")
@@ -745,11 +746,22 @@ async def stream_request(
                                 if chunk is not None:
                                     content_yielded = True
                                     is_first_auth = False
+                                    if isinstance(chunk.get("usageMetadata"), dict):
+                                        usage_metadata = chunk["usageMetadata"]
                                     sse = f"data: {json.dumps(chunk, ensure_ascii=False)}\n\n"
                                     yield sse.encode("utf-8") if native else sse
 
                                     fr = _get_finish_reason(chunk)
                                     if fr and fr != _FINISH_REASON_UNSPECIFIED:
+                                        from core.api.utils import (
+                                            record_unassigned_api_call_success,
+                                        )
+
+                                        await record_unassigned_api_call_success(
+                                            mode="vertex",
+                                            model_name=model,
+                                            token_usage=usage_metadata,
+                                        )
                                         return
 
                             if auth_retry or need_retry or quota_retry:
@@ -764,6 +776,13 @@ async def stream_request(
                 need_retry = True
 
         if content_yielded:
+            from core.api.utils import record_unassigned_api_call_success
+
+            await record_unassigned_api_call_success(
+                mode="vertex",
+                model_name=model,
+                token_usage=usage_metadata,
+            )
             return
 
         if auth_retry:
@@ -941,6 +960,13 @@ async def non_stream_request(
                 media_type="application/json",
             )
 
+        from core.api.utils import record_unassigned_api_call_success
+
+        await record_unassigned_api_call_success(
+            mode="vertex",
+            model_name=model,
+            token_usage=result.get("usageMetadata") if isinstance(result, dict) else None,
+        )
         return Response(
             content=json.dumps(result, ensure_ascii=False).encode("utf-8"),
             status_code=200,

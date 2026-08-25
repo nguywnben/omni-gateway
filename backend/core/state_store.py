@@ -51,8 +51,8 @@ class QuotaReservationDecision:
 class QuotaCommitRequest:
     reservation_id: str
     now: float
-    actual_tokens: int
-    actual_cost_usd: float
+    actual_tokens: Optional[int]
+    actual_cost_usd: Optional[float]
     durable_cost_recorded: bool
 
 
@@ -201,9 +201,7 @@ class InMemoryStateStore(BaseStateStore):
                 self._quota_reservations.pop(reservation_id, None)
 
         for reservation_id, committed in list(self._quota_committed.items()):
-            if committed.key_id != key_id:
-                continue
-            if committed.durable_cost_recorded:
+            if committed.key_id == key_id and committed.durable_cost_recorded:
                 if daily_snapshot_started_at >= committed.committed_at:
                     committed.daily_reconciled = True
                 if monthly_snapshot_started_at >= committed.committed_at:
@@ -344,12 +342,22 @@ class InMemoryStateStore(BaseStateStore):
                 return QuotaCommitResult(False)
 
             source = active.request
+            committed_tokens = (
+                source.estimated_tokens
+                if request.actual_tokens is None
+                else max(0, int(request.actual_tokens))
+            )
+            committed_cost = (
+                source.estimated_cost_usd
+                if request.actual_cost_usd is None
+                else max(0.0, float(request.actual_cost_usd))
+            )
             committed = _CommittedQuotaReservation(
                 reservation_id=request.reservation_id,
                 key_id=source.key_id,
                 committed_at=request.now,
-                actual_tokens=max(0, int(request.actual_tokens)),
-                actual_cost_usd=max(0.0, float(request.actual_cost_usd)),
+                actual_tokens=committed_tokens,
+                actual_cost_usd=committed_cost,
                 durable_cost_recorded=bool(request.durable_cost_recorded),
                 daily_reconciled=source.daily_budget_usd is None,
                 monthly_reconciled=source.monthly_budget_usd is None,

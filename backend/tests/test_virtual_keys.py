@@ -181,11 +181,20 @@ class VirtualKeyEnforcementTests(unittest.TestCase):
         self.assertEqual(ctx.exception.status_code, 429)
         self.assertIn("Retry-After", ctx.exception.headers)
 
-    def test_tpm_limit_enforced_after_note_tokens(self):
+    def test_tpm_limit_enforced_from_active_reservations(self):
         record = self._make_key(tpm_limit=1000)
-        self.manager.note_tokens(record.id, 1500)
+
+        async def scenario():
+            body = {
+                "model": "gpt-4o-mini",
+                "messages": [{"role": "user", "content": "hello"}],
+                "max_tokens": 600,
+            }
+            await self.manager.enforce(record, request_body=body)
+            await self.manager.enforce(record, request_body=body)
+
         with self.assertRaises(HTTPException) as ctx:
-            _run(self.manager.enforce(record))
+            _run(scenario())
         self.assertEqual(ctx.exception.status_code, 429)
 
     def test_budget_exceeded_rejected_429(self):

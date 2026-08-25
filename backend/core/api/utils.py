@@ -12,7 +12,12 @@ from config import (
 )
 from core.credential_manager import CredentialManager
 from core.quality_decision import normalize_quality_decision
-from core.request_context import get_api_key_id, get_request_elapsed_ms, get_request_id
+from core.request_context import (
+    get_api_key_id,
+    get_request_elapsed_ms,
+    get_request_id,
+    get_virtual_key_reservation_id,
+)
 from core.usage_stats import normalize_token_usage, record_call
 from core.virtual_keys import virtual_key_manager
 from fastapi import Response
@@ -156,6 +161,71 @@ async def get_retry_config() -> Dict[str, Any]:
     }
 
 
+async def _record_success_usage(
+    *,
+    filename: str,
+    model_name: str,
+    provider: str,
+    status_code: int,
+    token_usage: Optional[Dict[str, Any]],
+    request_metrics: Optional[Dict[str, Any]],
+) -> Dict[str, Any]:
+    """Persist one success and atomically replace its quota estimate with actual usage."""
+    api_key_id = get_api_key_id()
+    reservation_id = get_virtual_key_reservation_id()
+    tokens = normalize_token_usage(token_usage)
+    metrics = dict(request_metrics or {})
+    metrics.setdefault("latency_ms", get_request_elapsed_ms())
+    actual_cost_usd = 0.0
+    cost_override_usd = None
+    durable_cost_recorded = False
+    actual_cost_calculated = not bool(api_key_id)
+    try:
+        if api_key_id:
+            actual_cost_usd = await virtual_key_manager.calculate_actual_cost(
+                api_key_id,
+                model=model_name,
+                provider=provider,
+                token_usage=token_usage,
+            )
+            cost_override_usd = actual_cost_usd
+            actual_cost_calculated = True
+        durable_cost_recorded = bool(
+            await asyncio.to_thread(
+                record_call,
+                filename,
+                model=model_name,
+                provider=provider,
+                status_code=status_code,
+                success=True,
+                token_usage=token_usage,
+                request_metrics=metrics,
+                request_id=get_request_id(),
+                api_key_id=api_key_id,
+                cost_override_usd=cost_override_usd,
+            )
+        )
+    except Exception as exc:
+        log.error(f"Failed to record successful usage for {filename}: {exc}")
+
+    if reservation_id and actual_cost_calculated:
+        try:
+            result = await virtual_key_manager.commit_reservation(
+                reservation_id,
+                actual_tokens=tokens["total_tokens"],
+                actual_cost_usd=actual_cost_usd,
+                durable_cost_recorded=durable_cost_recorded,
+            )
+            if result.overspent:
+                log.warning(
+                    "[virtual-keys] actual usage exceeded reserved capacity "
+                    f"for key id={api_key_id}"
+                )
+        except Exception as exc:
+            log.error(f"Failed to commit quota reservation for {api_key_id}: {exc}")
+    return metrics
+
+
 async def record_api_call_success(
     credential_manager: CredentialManager,
     credential_name: str,
@@ -167,31 +237,14 @@ async def record_api_call_success(
     provider: Optional[str] = None,
 ) -> None:
     if credential_manager and credential_name:
-        api_key_id = get_api_key_id()
-        try:
-            request_metrics = dict(request_metrics or {})
-            request_metrics.setdefault("latency_ms", get_request_elapsed_ms())
-            await asyncio.to_thread(
-                record_call,
-                credential_name,
-                model=model_name or "",
-                provider=provider or mode,
-                status_code=status_code,
-                success=True,
-                token_usage=token_usage,
-                request_metrics=request_metrics,
-                request_id=get_request_id(),
-                api_key_id=api_key_id,
-            )
-        except Exception as e:
-            log.error(f"Failed to record usage for {credential_name}: {e}")
-
-        if api_key_id:
-            try:
-                tokens = normalize_token_usage(token_usage)
-                virtual_key_manager.note_tokens(api_key_id, tokens["total_tokens"])
-            except Exception as e:
-                log.debug(f"Failed to feed TPM window for {api_key_id}: {e}")
+        request_metrics = await _record_success_usage(
+            filename=credential_name,
+            model_name=model_name or "",
+            provider=provider or mode,
+            status_code=status_code,
+            token_usage=token_usage,
+            request_metrics=request_metrics,
+        )
 
         _schedule_trace_export(
             model_name=model_name or "",
@@ -299,6 +352,24 @@ async def record_unassigned_api_call_error(
         )
     except Exception as e:
         log.error(f"Failed to record unassigned usage failure: {e}")
+
+
+async def record_unassigned_api_call_success(
+    *,
+    mode: str,
+    model_name: str,
+    token_usage: Optional[Dict[str, Any]],
+    status_code: int = 200,
+) -> None:
+    """Persist unattributed success usage and settle any virtual-key reservation."""
+    await _record_success_usage(
+        filename=UNASSIGNED_USAGE_FILENAME,
+        model_name=model_name,
+        provider=mode,
+        status_code=status_code,
+        token_usage=token_usage,
+        request_metrics=None,
+    )
 
 
 async def parse_and_log_cooldown(error_text: str, mode: str = "code_assist") -> Optional[float]:

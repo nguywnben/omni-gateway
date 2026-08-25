@@ -1,4 +1,5 @@
 import json
+import math
 import os
 import sqlite3
 import threading
@@ -354,22 +355,28 @@ def record_call(
     request_metrics: Optional[Dict[str, Any]] = None,
     request_id: str = "",
     api_key_id: str = "",
-):
+    cost_override_usd: Optional[float] = None,
+) -> bool:
     filename = os.path.basename(filename)
     if not filename:
-        return
+        return False
 
     tokens = normalize_token_usage(token_usage)
     request_metrics = request_metrics or {}
     quality_decision = normalize_quality_decision(request_metrics)
-    cost_usd = calculate_cost_usd(
-        model,
-        input_tokens=tokens["input_tokens"],
-        output_tokens=tokens["output_tokens"],
-        cached_tokens=tokens["cached_tokens"],
-        reasoning_tokens=tokens["reasoning_tokens"],
-        provider=provider,
-    )
+    if cost_override_usd is None:
+        cost_usd = calculate_cost_usd(
+            model,
+            input_tokens=tokens["input_tokens"],
+            output_tokens=tokens["output_tokens"],
+            cached_tokens=tokens["cached_tokens"],
+            reasoning_tokens=tokens["reasoning_tokens"],
+            provider=provider,
+        )
+    else:
+        cost_usd = float(cost_override_usd)
+        if not math.isfinite(cost_usd) or cost_usd < 0:
+            raise ValueError("Cost override must be a finite non-negative amount.")
     init_db()
     with db_lock:
         conn = sqlite3.connect(db_path)
@@ -428,8 +435,10 @@ def record_call(
                 ),
             )
             conn.commit()
+            return True
         except Exception as e:
             log.error(f"Failed to record call in database for {filename}: {e}")
+            return False
         finally:
             conn.close()
 
@@ -809,9 +818,10 @@ def get_spend_since(since: float, api_key_id: Optional[str] = None) -> Dict[str,
                 "cost_usd": round(float(row[0] or 0.0), 6),
                 "total_tokens": _int_value(row[1]),
                 "calls": _int_value(row[2]),
+                "available": True,
             }
         except Exception as exc:
             log.error(f"Failed to compute spend since {since}: {exc}")
-            return {"cost_usd": 0.0, "total_tokens": 0, "calls": 0}
+            return {"cost_usd": 0.0, "total_tokens": 0, "calls": 0, "available": False}
         finally:
             conn.close()

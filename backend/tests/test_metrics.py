@@ -80,6 +80,7 @@ class RenderPrometheusMetricsTests(unittest.TestCase):
         output = render_prometheus_metrics([])
         self.assertIn("omni_uptime_seconds", output)
         self.assertIn("omni_response_cache_entries", output)
+        self.assertIn("omni_virtual_key_quota_events_total", output)
 
     def test_credential_operation_metrics_are_exposed_with_bounded_labels(self):
         with patch("core.credential_operation_evidence.log.info"):

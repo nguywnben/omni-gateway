@@ -48,6 +48,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from log import configure_logging, log
 from paths import FRONTEND_DIR
+from starlette.background import BackgroundTask
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.middleware.gzip import GZipMiddleware
 
@@ -262,7 +263,22 @@ async def add_security_headers(request, call_next):
     localize_console = request.url.path.startswith("/api/") or request.url.path == "/callback"
     locale = resolve_locale(request.headers.get("accept-language"))
     with request_scope(request_id), locale_context(locale, enabled=localize_console):
-        response = await call_next(request)
+        try:
+            response = await call_next(request)
+        except BaseException:
+            reservation_id = getattr(request.state, "virtual_key_reservation_id", "")
+            if reservation_id:
+                request.state.virtual_key_reservation_id = ""
+                from core.virtual_keys import virtual_key_manager
+
+                try:
+                    await virtual_key_manager.release_reservation(reservation_id)
+                except Exception as exc:
+                    log.error(
+                        "Failed to release virtual-key reservation after request error "
+                        f"(request_id={request_id}, error_type={type(exc).__name__})."
+                    )
+            raise
         try:
             if management_mutation is not None:
                 await record_classified_management_response(
@@ -275,6 +291,62 @@ async def add_security_headers(request, call_next):
                 "Durable management audit append failed "
                 f"(request_id={request_id}, error_type={type(exc).__name__})."
             )
+
+    reservation_id = getattr(request.state, "virtual_key_reservation_id", "")
+    if reservation_id:
+        released = False
+
+        async def release_reservation() -> None:
+            nonlocal released
+            if released:
+                return
+            released = True
+            request.state.virtual_key_reservation_id = ""
+            from core.virtual_keys import virtual_key_manager
+
+            try:
+                if response.status_code < 400:
+                    await virtual_key_manager.commit_reservation(
+                        reservation_id,
+                        actual_tokens=None,
+                        actual_cost_usd=None,
+                        durable_cost_recorded=False,
+                    )
+            except Exception as exc:
+                log.error(
+                    "Failed to finalize virtual-key reservation "
+                    f"(request_id={request_id}, error_type={type(exc).__name__})."
+                )
+            try:
+                await virtual_key_manager.release_reservation(reservation_id)
+            except Exception as exc:
+                log.error(
+                    "Failed to release virtual-key reservation "
+                    f"(request_id={request_id}, error_type={type(exc).__name__})."
+                )
+
+        body_iterator = getattr(response, "body_iterator", None)
+        if body_iterator is not None:
+
+            async def releasing_body_iterator():
+                try:
+                    async for chunk in body_iterator:
+                        yield chunk
+                finally:
+                    await release_reservation()
+
+            response.body_iterator = releasing_body_iterator()
+        else:
+            existing_background = response.background
+
+            async def finalize_response() -> None:
+                try:
+                    if existing_background is not None:
+                        await existing_background()
+                finally:
+                    await release_reservation()
+
+            response.background = BackgroundTask(finalize_response)
     response.headers["X-Request-ID"] = request_id
     if localize_console:
         response.headers["Content-Language"] = locale

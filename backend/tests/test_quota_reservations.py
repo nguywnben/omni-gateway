@@ -194,6 +194,30 @@ class AtomicQuotaReservationTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(result.committed)
         self.assertTrue(result.overspent)
 
+    async def test_reconciliation_prunes_expired_commits_from_inactive_keys(self):
+        await self.store.reserve_quota(
+            _reservation("inactive-key-commit", key_id="vk_inactive", rpm_limit=1)
+        )
+        await self.store.commit_quota(
+            QuotaCommitRequest(
+                reservation_id="inactive-key-commit",
+                now=1_001.0,
+                actual_tokens=1,
+                actual_cost_usd=0.0,
+                durable_cost_recorded=True,
+            )
+        )
+
+        await self.store.reserve_quota(
+            _reservation(
+                "other-key-request",
+                key_id="vk_other",
+                now=1_062.0,
+            )
+        )
+
+        self.assertNotIn("inactive-key-commit", self.store._quota_committed)
+
 
 if __name__ == "__main__":
     unittest.main()

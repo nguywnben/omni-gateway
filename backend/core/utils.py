@@ -207,7 +207,7 @@ async def authenticate_flexible(
         return token
 
     # Fall back to virtual API keys (per-key budgets, rate limits, scopes).
-    from core.request_context import set_api_key_id
+    from core.request_context import set_api_key_id, set_virtual_key_reservation_id
     from core.router.protocol_errors import protocol_for_path
     from core.virtual_keys import extract_requested_model, virtual_key_manager
 
@@ -221,6 +221,7 @@ async def authenticate_flexible(
         )
 
     requested_model = ""
+    body = None
     if request.method == "POST":
         try:
             body = await request.json()
@@ -230,13 +231,40 @@ async def authenticate_flexible(
     else:
         requested_model = extract_requested_model(request.url.path, None)
 
-    await virtual_key_manager.enforce(
+    candidate_models = None
+    if requested_model:
+        try:
+            from core.model_pool import ModelPoolError, resolve_model_request
+
+            quota_model = get_base_model_from_feature_model(requested_model)
+            model_resolution = await resolve_model_request(quota_model)
+            candidate_models = model_resolution.candidates
+        except ModelPoolError as exc:
+            log.debug(f"Could not pre-resolve model candidates for quota estimation: {exc}")
+            candidate_models = (requested_model,)
+
+    normalized_path = request.url.path.lower()
+    billable_body = (
+        None
+        if normalized_path.endswith(":counttokens") or normalized_path.endswith("/count_tokens")
+        else body
+    )
+    reservation_id = await virtual_key_manager.enforce(
         record,
         protocol=protocol_for_path(request.url.path) or "",
         requested_model=requested_model,
+        request_body=billable_body,
+        candidate_models=candidate_models,
     )
-    await virtual_key_manager.note_last_used(record)
+    try:
+        await virtual_key_manager.note_last_used(record)
+    except Exception:
+        await virtual_key_manager.release_reservation(reservation_id)
+        raise
     set_api_key_id(record.id)
+    set_virtual_key_reservation_id(reservation_id or "")
+    if reservation_id:
+        request.state.virtual_key_reservation_id = reservation_id
     log.debug(f"Authentication successful using {auth_method} (virtual key id={record.id})")
     return token
 
