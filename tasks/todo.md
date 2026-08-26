@@ -73,7 +73,10 @@ Phase 4 audit item or the Phase 5 request-trace item.
   - Complete at `fdbe2ea`; the schema is strict and content-free, all supported inference protocols
     share the public request ID, streaming completion is deferred correctly, retention is separate,
     and additive SQLite/PostgreSQL/MongoDB repositories pass redaction/restart/cardinality tests.
-- [ ] W3.11 Build trace search/detail and keep raw logs separate.
+- [x] W3.11 Build trace search/detail and keep raw logs separate.
+  - Complete at `b52b1a3`; authenticated query/detail/retention/export APIs, audited policy/export
+    operations, strict client revalidation, request-ID pivots, 15-locale UI, and a distinct
+    diagnostic raw-log section pass 691 tests and the real-browser matrix.
 - [ ] W3.12 Add SLOs, health views, safe exporters, alert rules, and runbooks.
 - [ ] Checkpoint W3-C: Phase 4–5 acceptance and all repository quality gates pass.
 - [ ] Report Wave 3 evidence and obtain human acceptance before Wave 4.

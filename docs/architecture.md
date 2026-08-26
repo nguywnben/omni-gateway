@@ -151,12 +151,13 @@ frontend/
     forms-and-data.css
     components.css
     audit.css              Audit filters, event stream, detail dialog, and retention layout
+    observability.css      Request trace search/detail and separated raw-log diagnostics
     dialogs.css
     responsive.css         Breakpoint overrides loaded last
   js/
     core/                  Localization, navigation, state, and managers
     ui/                    Notifications, dialogs, API-key UI, and credential views
-    features/              Authentication, audit, pool, models, providers, settings, and logs
+    features/              Authentication, audit, traces, pool, models, providers, settings, logs
 
 backend/core/panel/
   credentials.py          Credential HTTP routes
@@ -165,6 +166,7 @@ backend/core/panel/
   auth_support.py         Login throttling and response shaping
   environment_credentials.py Environment credential import routes
   setup_security.py       Remote first-run bootstrap policy
+  trace_routes.py         Authenticated trace query, detail, retention, and bounded export
   providers/
     catalog.py            Provider capability discovery
     antigravity.py        Google Antigravity settings

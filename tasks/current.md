@@ -4,20 +4,21 @@
 
 - Updated: 2026-08-26 (Asia/Saigon).
 - Branch: `codex/enterprise-overhaul`.
-- Implementation baseline: `fdbe2ea feat: persist bounded request decision traces`.
-- Completed scope: Waves 1–2 / Phases 0–3, Wave 3 checkpoints W3-A/W3-B, and W3.6–W3.10.
+- Implementation baseline: `b52b1a3 feat: add request trace observability console`.
+- Completed scope: Waves 1–2 / Phases 0–3, Wave 3 checkpoints W3-A/W3-B, and W3.6–W3.11.
 - Original program progress: 18/28 approved checklist items complete (including specification
   approval), approximately 64.3%; wave execution-slice checkboxes are refinements and are not
   added to that denominator.
-- Active scope: Wave 3 — Access and Operational Evidence; W3.11 trace search and raw-log separation
-  are next.
-- Control state: **READY — W3.11**.
-- Expected worktree state at this checkpoint: clean after the W3.10 documentation commit.
+- Active scope: Wave 3 — Access and Operational Evidence; W3.12 SLOs, health views, exporters,
+  alerts, and runbooks are next.
+- Control state: **READY — W3.12**.
+- Expected worktree state at this checkpoint: clean after the W3.11 documentation commit.
 - Expected runtime: one Omni Gateway listener on `http://127.0.0.1:4283`; `/health` and `/ready`
   return HTTP 200.
-- Last verified full suite: 679 tests passed. Repository-wide Ruff lint/format, compileall, pip
-  dependency consistency, pip-audit, all 39 JavaScript syntax checks, and diff-check pass. The
-  formatter drift exposed by W3-B was normalized mechanically in `bf5cc99`.
+- Last verified full suite: 691 tests passed. Repository-wide Ruff lint/format, compileall, all
+  JavaScript syntax checks, and diff-check pass. Dependency consistency and pip-audit last passed
+  at W3-B; they run again at W3-C. The formatter drift exposed by W3-B was normalized mechanically
+  in `bf5cc99`.
 
 Wave 2 was accepted and pushed by the human on 2026-08-24. Wave 3 / Phases 4–5 was approved for
 implementation on the same date. Do not expand into Phase 6 or release activation.
@@ -223,6 +224,16 @@ silently choosing a new design.
   and MongoDB repositories survive restart and use a separate 7-day/100,000-trace default policy
   with bounded signed pagination. All 679 tests, full Ruff lint/format, compileall, and diff-check
   pass. The maintained contract is `docs/request-traces.md`.
+- W3.11 evidence: `b52b1a3` adds authenticated trace query/detail/retention/export APIs with exact
+  filters, signed pagination, formula-safe CSV, a 10,000-trace/16-MiB hard export bound, and audit
+  evidence for retention changes and successful exports. `/logs` now opens a localized Request
+  traces console with request-ID pivots and ordered decision detail; raw WebSocket logs remain in a
+  visually and semantically separate diagnostic-only region. The client persists only protocol,
+  outcome, and page size and strictly revalidates the closed schema before text-only rendering.
+  All 691 tests pass. The authenticated browser gate verified a real denied request trace and its
+  two-step timeline, filters/pivot/export, WebSocket separation, Escape/focus return, no overflow
+  at 360/768/1024/1440, light/dark/system, all 15 locale labels, and a clean console. Temporary
+  runtime data were removed and the browser viewport was reset after verification.
 
 ## Approved vs. Proposed Scope
 
@@ -270,9 +281,9 @@ checkboxes to be marked complete.
 
 ## Immediate Next Action
 
-Begin W3.11 with authenticated bounded trace query/detail/retention/export APIs, then evolve Logs
-into a localized Observability page where request traces and redacted raw runtime logs are visually,
-semantically, and operationally separate.
+Begin W3.12 with a low-cardinality SLO/health snapshot derived from bounded request traces and
+existing enforcement signals, then add opt-in safe Prometheus/OpenTelemetry controls, alert rules,
+and symptom-based runbooks before the W3-C repository and runtime gates.
 
 ## Update Rule
 

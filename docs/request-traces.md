@@ -30,6 +30,38 @@ SQLite, PostgreSQL, and MongoDB use additive `request_traces` storage with reque
 route, and stable-order indexes. Records are revalidated on every read. Signed opaque cursors and
 strict query types form the repository boundary used by the management API in W3.11.
 
+## Management API
+
+All trace-management routes require the authenticated panel session and return sanitized errors:
+
+- `GET /api/traces` lists newest-first traces with signed cursor pagination. Filters are exact and
+  allowlisted: protocol, outcome, provider, model, public request ID, and UTC start bounds.
+- `GET /api/traces/{trace_id}` returns one strictly revalidated trace or `404`.
+- `GET /api/traces/retention` returns the active independent policy and supported bounds.
+- `PUT /api/traces/retention` validates and applies both limits, immediately prunes records outside
+  either limit, and emits correlated management-audit evidence.
+- `GET /api/traces/export?format=jsonl|csv` exports the applied filter snapshot. Export fails rather
+  than silently truncating above 10,000 traces or 16 MiB; CSV cells are formula-safe, filenames are
+  allowlisted by the client, and successful exports emit an audit event.
+
+Query and export responses contain only the versioned trace contract. Raw logs, prompts, responses,
+credential names, arbitrary metadata, and exception strings cannot be requested through these
+routes.
+
+## Operations console
+
+The stable `/logs` deep link now opens **Request traces** under Observability. Operators can search,
+page, inspect the ordered decision timeline, pivot on the public request ID, export the active
+filter, and manage trace retention. Only protocol, outcome, and page size preferences may persist
+in browser storage; provider/model dimensions, correlation IDs, and time bounds remain
+session-only. Untrusted API records are checked against the closed schema before text-only DOM
+rendering.
+
+The bounded raw-log WebSocket viewer remains on the same page in a visually and semantically
+separate **Diagnostic only** section. It retains its own server-side redaction, authentication,
+same-origin, download, clear, and retention controls. Raw logs are a low-level fallback; request
+traces are the primary source for routing and failure investigation.
+
 Trace retention is independent from audit and raw-log retention. Its separate persisted default is
 7 days or 100,000 traces, whichever limit is reached first; supported policy bounds are 1–90 days
 and 1,000–1,000,000 traces. Age pruning runs before oldest-first count pruning after each append and
