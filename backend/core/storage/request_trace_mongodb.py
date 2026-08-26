@@ -70,6 +70,7 @@ class MongoRequestTraceRepository:
         self._ensure_initialized()
         filters: dict[str, Any] = {}
         for field, values in (
+            ("trace_id", query.trace_ids),
             ("protocol", query.protocols),
             ("outcome", query.outcomes),
             ("selected_provider", query.providers),

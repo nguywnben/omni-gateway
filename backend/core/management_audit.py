@@ -75,6 +75,9 @@ MANAGEMENT_MUTATIONS: dict[tuple[str, str], ManagementMutation] = {
     ("PUT", "/api/audit/retention"): _mutation(
         "audit.retention_update", "audit_policy", "retention_changed"
     ),
+    ("PUT", "/api/traces/retention"): _mutation(
+        "trace.retention_update", "trace_policy", "retention_changed"
+    ),
     ("POST", "/api/virtual-keys"): _mutation("virtual_key.create", "virtual_key", "created"),
     ("PATCH", "/api/virtual-keys/{key_id}"): _mutation(
         "virtual_key.update", "virtual_key", "updated"
@@ -229,6 +232,7 @@ def _semantic_target_identifier(
         "quality_policy": "global",
         "model_pool": "omway",
         "model_blacklist": "global",
+        "trace_policy": "request-traces",
     }
     if mutation.target_type in fixed_targets:
         return fixed_targets[mutation.target_type]

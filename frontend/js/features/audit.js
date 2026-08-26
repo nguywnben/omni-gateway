@@ -33,13 +33,14 @@ const AUDIT_ACTIONS = new Set([
     'credential.email_refresh', 'virtual_key.create', 'virtual_key.update',
     'virtual_key.rotate', 'virtual_key.revoke', 'quality_policy.update',
     'backup.create', 'backup.restore', 'backup.export', 'audit.retention_update',
-    'audit.export', 'model_blacklist.clear', 'model_pool.update', 'logs.clear'
+    'audit.export', 'trace.retention_update', 'trace.export', 'model_blacklist.clear',
+    'model_pool.update', 'logs.clear'
 ]);
 const AUDIT_ACTOR_TYPES = new Set(['panel_session', 'root_key', 'virtual_key', 'system']);
 const AUDIT_TARGET_TYPES = new Set([
     'session', 'configuration', 'provider', 'credential', 'virtual_key',
     'quality_policy', 'backup', 'audit_policy', 'root_key', 'model_blacklist',
-    'model_pool', 'log_store'
+    'model_pool', 'log_store', 'trace_policy'
 ]);
 const AUDIT_OUTCOMES = new Set([
     'succeeded', 'denied', 'failed', 'not_found', 'conflict', 'invalid',

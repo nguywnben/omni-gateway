@@ -17,6 +17,10 @@ MAX_TRACE_DECISIONS = 64
 MAX_TRACE_DURATION_MS = 86_400_000
 MAX_TRACE_TOKENS = 2_000_000_000
 MAX_TRACE_COST_USD = 1_000_000.0
+MIN_TRACE_RETENTION_DAYS = 1
+MAX_TRACE_RETENTION_DAYS = 90
+MIN_TRACE_RETENTION_COUNT = 1_000
+MAX_TRACE_RETENTION_COUNT = 1_000_000
 
 REQUEST_TRACE_PROTOCOLS = frozenset(
     {
@@ -389,6 +393,7 @@ def request_trace_from_record(record: Mapping[str, Any]) -> RequestTrace:
 
 @dataclass(frozen=True, slots=True)
 class RequestTraceQuery:
+    trace_ids: tuple[str, ...] = ()
     protocols: tuple[str, ...] = ()
     outcomes: tuple[str, ...] = ()
     providers: tuple[str, ...] = ()
@@ -400,6 +405,12 @@ class RequestTraceQuery:
     cursor: str | None = None
 
     def __post_init__(self) -> None:
+        if not isinstance(self.trace_ids, tuple) or len(self.trace_ids) > 32:
+            raise ValueError("Invalid request trace ID filter.")
+        normalized_trace_ids = tuple(dict.fromkeys(str(value or "") for value in self.trace_ids))
+        if any(not _TRACE_ID.fullmatch(value) for value in normalized_trace_ids):
+            raise ValueError("Invalid request trace ID filter.")
+        object.__setattr__(self, "trace_ids", normalized_trace_ids)
         object.__setattr__(
             self, "protocols", _normalize_filters(self.protocols, REQUEST_TRACE_PROTOCOLS)
         )
@@ -450,8 +461,18 @@ class RequestTraceRetentionPolicy:
     max_traces: int = 100_000
 
     def __post_init__(self) -> None:
-        _bounded_int(self.retention_days, "retention days", 1, 90)
-        _bounded_int(self.max_traces, "retention trace count", 1_000, 1_000_000)
+        _bounded_int(
+            self.retention_days,
+            "retention days",
+            MIN_TRACE_RETENTION_DAYS,
+            MAX_TRACE_RETENTION_DAYS,
+        )
+        _bounded_int(
+            self.max_traces,
+            "retention trace count",
+            MIN_TRACE_RETENTION_COUNT,
+            MAX_TRACE_RETENTION_COUNT,
+        )
 
 
 @dataclass(frozen=True, slots=True)

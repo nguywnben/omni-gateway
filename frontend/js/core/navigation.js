@@ -234,11 +234,11 @@ function getTabDataLoader(tabName) {
 
         audit: () => loadAuditConsole(),
 
-        logs: () => {
+        logs: async () => {
+
+            await loadTraceConsole();
 
             connectWebSocket();
-
-            return Promise.resolve();
 
         }
 

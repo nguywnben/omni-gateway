@@ -12,6 +12,7 @@ FRONTEND = ROOT / "frontend"
 LOCALE_SOURCE = (FRONTEND / "js" / "core" / "locales.js").read_text(encoding="utf-8")
 PAGE_LOCALE_SOURCE = (FRONTEND / "js" / "core" / "page-locales.js").read_text(encoding="utf-8")
 AUDIT_LOCALE_SOURCE = (FRONTEND / "js" / "core" / "audit-locales.js").read_text(encoding="utf-8")
+TRACE_LOCALE_SOURCE = (FRONTEND / "js" / "core" / "trace-locales.js").read_text(encoding="utf-8")
 I18N_SOURCE = (FRONTEND / "js" / "core" / "i18n.js").read_text(encoding="utf-8")
 
 
@@ -27,6 +28,62 @@ def _frontend_sources() -> list[Path]:
 
 
 class FrontendLocaleContractTests(unittest.TestCase):
+    def test_trace_catalog_is_complete_for_every_locale(self):
+        keys = re.findall(
+            r"'(trace\.[a-z0-9_]+)'", _extract_array(TRACE_LOCALE_SOURCE, "TRACE_KEYS")
+        )
+        values_block = TRACE_LOCALE_SOURCE.split("const TRACE_LOCALE_VALUES = {", 1)[1].split(
+            "\n};", 1
+        )[0]
+        catalogs = {
+            match.group(1) or match.group(2): json.loads(match.group(3))
+            for match in re.finditer(
+                r"^    (?:'([^']+)'|([a-z]{2})): (\[.*\]),?$",
+                values_block,
+                re.MULTILINE,
+            )
+        }
+        expected = {
+            "en",
+            "zh-CN",
+            "zh-TW",
+            "de",
+            "es",
+            "fr",
+            "id",
+            "it",
+            "ja",
+            "ko",
+            "pt",
+            "ru",
+            "th",
+            "tr",
+            "vi",
+        }
+        self.assertEqual(set(catalogs), expected)
+        for locale in expected:
+            with self.subTest(locale=locale):
+                self.assertEqual(len(catalogs[locale]), len(keys))
+                self.assertTrue(all(isinstance(value, str) and value for value in catalogs[locale]))
+        context_keys = re.findall(
+            r"'(trace\.[a-z0-9_]+)'",
+            _extract_array(TRACE_LOCALE_SOURCE, "TRACE_CONTEXT_KEYS"),
+        )
+        context_block = TRACE_LOCALE_SOURCE.split("const TRACE_CONTEXT_VALUES = {", 1)[1].split(
+            "\n};", 1
+        )[0]
+        context_catalogs = {
+            match.group(1) or match.group(2): json.loads(match.group(3))
+            for match in re.finditer(
+                r"^    (?:'([^']+)'|([a-z]{2})): (\[.*\]),?$",
+                context_block,
+                re.MULTILINE,
+            )
+        }
+        self.assertEqual(set(context_catalogs), expected)
+        for locale in expected:
+            self.assertEqual(len(context_catalogs[locale]), len(context_keys), locale)
+
     def test_audit_catalog_is_complete_for_every_locale(self):
         keys = re.findall(
             r"^    '(audit\.[a-z0-9_]+)',?$",
@@ -187,7 +244,13 @@ class FrontendLocaleContractTests(unittest.TestCase):
             for pattern in patterns:
                 references.update(pattern.findall(source))
 
-        combined_catalog = LOCALE_SOURCE + PAGE_LOCALE_SOURCE + AUDIT_LOCALE_SOURCE + I18N_SOURCE
+        combined_catalog = (
+            LOCALE_SOURCE
+            + PAGE_LOCALE_SOURCE
+            + AUDIT_LOCALE_SOURCE
+            + TRACE_LOCALE_SOURCE
+            + I18N_SOURCE
+        )
         generated_keys: set[str] = set()
         for variable in (
             "SETTINGS_PAGE_KEYS",
@@ -209,8 +272,16 @@ class FrontendLocaleContractTests(unittest.TestCase):
             "CREDENTIAL_OPERATION_KEYS",
             "CREDENTIAL_TIER_KEYS",
             "AUDIT_KEYS",
+            "TRACE_KEYS",
+            "TRACE_CONTEXT_KEYS",
         ):
-            source = AUDIT_LOCALE_SOURCE if variable == "AUDIT_KEYS" else PAGE_LOCALE_SOURCE
+            source = (
+                AUDIT_LOCALE_SOURCE
+                if variable == "AUDIT_KEYS"
+                else TRACE_LOCALE_SOURCE
+                if variable in {"TRACE_KEYS", "TRACE_CONTEXT_KEYS"}
+                else PAGE_LOCALE_SOURCE
+            )
             generated_keys.update(
                 re.findall(r"['\"]([a-z][a-z0-9_.-]+)['\"]", _extract_array(source, variable))
             )
@@ -265,7 +336,14 @@ class FrontendLocaleContractTests(unittest.TestCase):
         runtime_source = "\n".join(
             path.read_text(encoding="utf-8")
             for path in sorted((FRONTEND / "js").rglob("*.js"))
-            if path.name not in {"i18n.js", "locales.js", "page-locales.js", "audit-locales.js"}
+            if path.name
+            not in {
+                "i18n.js",
+                "locales.js",
+                "page-locales.js",
+                "audit-locales.js",
+                "trace-locales.js",
+            }
         )
         forbidden_literals = {
             "Close navigation",

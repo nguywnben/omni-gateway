@@ -102,6 +102,7 @@ class PostgreSQLRequestTraceRepository:
         clauses: list[str] = []
         parameters: list[Any] = []
         for column, values in (
+            ("trace_id", query.trace_ids),
             ("protocol", query.protocols),
             ("outcome", query.outcomes),
             ("selected_provider", query.providers),

@@ -11,6 +11,7 @@ from . import (
     providers,
     quality_policy,
     root,
+    trace_routes,
     usage_routes,
     version,
     virtual_keys,
@@ -34,6 +35,7 @@ def create_router() -> APIRouter:
     router.include_router(model_pools.router)
     router.include_router(quality_policy.router)
     router.include_router(audit_routes.router)
+    router.include_router(trace_routes.router)
 
     return router
 
