@@ -54,6 +54,7 @@ class ManagementPermission(StrEnum):
     OIDC_MANAGE = "oidc.manage"
     BACKUP_EXPORT = "backup.export"
     BACKUP_RESTORE = "backup.restore"
+    ROOT_KEY_READ = "root_key.read"
     ROOT_KEY_ROTATE = "root_key.rotate"
     OWNERS_MANAGE = "owners.manage"
     RECOVERY_MANAGE = "recovery.manage"
@@ -119,6 +120,7 @@ _OWNER_PERMISSIONS = (
     | _SECURITY_ADMIN_PERMISSIONS
     | {
         ManagementPermission.CONFIGURATION_MANAGE,
+        ManagementPermission.ROOT_KEY_READ,
         ManagementPermission.ROOT_KEY_ROTATE,
         ManagementPermission.BACKUP_RESTORE,
         ManagementPermission.OWNERS_MANAGE,
@@ -136,7 +138,15 @@ _ROLE_PERMISSIONS = {
 
 # These sets preserve only the routes that existed before Wave 4. They are
 # intentionally explicit so a future permission cannot leak into a broad key.
-_LEGACY_READ_PERMISSIONS = _VIEWER_PERMISSIONS - {ManagementPermission.IDENTITY_READ}
+_LEGACY_READ_PERMISSIONS = (
+    _VIEWER_PERMISSIONS
+    | {
+        ManagementPermission.CREDENTIALS_EXPORT,
+        ManagementPermission.AUDIT_EXPORT,
+        ManagementPermission.TRACES_EXPORT,
+        ManagementPermission.ROOT_KEY_READ,
+    }
+) - {ManagementPermission.IDENTITY_READ}
 _LEGACY_WRITE_PERMISSIONS = _LEGACY_READ_PERMISSIONS | {
     ManagementPermission.CONFIGURATION_MANAGE,
     ManagementPermission.CREDENTIALS_OPERATE,

@@ -7,6 +7,7 @@ import os
 import sys
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
 from fastapi import HTTPException
@@ -38,6 +39,8 @@ def build_request(
     method: str = "GET",
     origin: str = "",
     sec_fetch_site: str = "",
+    route_path: str = "/api/config/get",
+    internal_route_path: str = "",
 ) -> Request:
     headers = []
     if cookie:
@@ -55,7 +58,11 @@ def build_request(
             "type": "http",
             "method": method,
             "scheme": scheme,
-            "path": "/api/config/get",
+            "path": route_path,
+            "route": SimpleNamespace(
+                path=internal_route_path or route_path,
+                path_format=route_path,
+            ),
             "headers": headers,
             "client": (client_host, 50000),
             "server": ("localhost", 4283),
@@ -183,23 +190,23 @@ class PanelSessionCookieTests(unittest.IsolatedAsyncioTestCase):
             key_preview="sk-ogw-vk-...ader",
             scopes=("management:read",),
         )
+        request = build_request()
         with (
             patch(
                 "core.virtual_keys.virtual_key_manager.verify",
                 new=AsyncMock(return_value=record),
             ) as verify,
-            patch("core.virtual_keys.virtual_key_manager.authorize_management") as authorize,
             patch(
                 "core.virtual_keys.virtual_key_manager.note_last_used",
                 new=AsyncMock(),
             ) as note_last_used,
         ):
-            token = await verify_panel_token(build_request(), credentials=credentials)
+            token = await verify_panel_token(request, credentials=credentials)
 
         self.assertEqual(token, credentials.credentials)
         verify.assert_awaited_once_with(credentials.credentials)
-        authorize.assert_called_once_with(record, write=False)
         note_last_used.assert_awaited_once_with(record)
+        self.assertEqual(request.state.management_principal.principal_id, "vk_reader")
 
     async def test_virtual_key_bearer_uses_write_scope_for_unsafe_method(self):
         credentials = HTTPAuthorizationCredentials(
@@ -218,15 +225,84 @@ class PanelSessionCookieTests(unittest.IsolatedAsyncioTestCase):
                 "core.virtual_keys.virtual_key_manager.verify",
                 new=AsyncMock(return_value=record),
             ),
-            patch("core.virtual_keys.virtual_key_manager.authorize_management") as authorize,
             patch(
                 "core.virtual_keys.virtual_key_manager.note_last_used",
                 new=AsyncMock(),
             ),
         ):
-            await verify_panel_token(build_request(method="POST"), credentials=credentials)
+            await verify_panel_token(
+                build_request(method="POST", route_path="/api/config/save"),
+                credentials=credentials,
+            )
 
-        authorize.assert_called_once_with(record, write=True)
+    async def test_virtual_key_denial_happens_before_last_used_is_recorded(self):
+        credentials = HTTPAuthorizationCredentials(
+            scheme="Bearer",
+            credentials="sk-ogw-vk-management-reader",
+        )
+        record = VirtualKey(
+            id="vk_reader",
+            name="reader",
+            key_hash="hash",
+            key_preview="sk-ogw-vk-...ader",
+            scopes=("management:read",),
+        )
+        with (
+            patch(
+                "core.virtual_keys.virtual_key_manager.verify",
+                new=AsyncMock(return_value=record),
+            ),
+            patch(
+                "core.virtual_keys.virtual_key_manager.note_last_used",
+                new=AsyncMock(),
+            ) as note_last_used,
+            self.assertRaises(HTTPException) as context,
+        ):
+            await verify_panel_token(
+                build_request(method="POST", route_path="/api/config/save"),
+                credentials=credentials,
+            )
+
+        self.assertEqual(context.exception.status_code, 403)
+        self.assertEqual(context.exception.detail, "Management permission denied.")
+        note_last_used.assert_not_awaited()
+
+    async def test_unclassified_protected_route_fails_closed_before_handler(self):
+        request = build_request(
+            cookie=f"{PANEL_SESSION_COOKIE}=cookie-session",
+            route_path="/api/unclassified",
+        )
+
+        with (
+            patch(
+                "core.utils.verify_panel_token_value",
+                new=AsyncMock(return_value="cookie-session"),
+            ),
+            self.assertRaises(HTTPException) as context,
+        ):
+            await verify_panel_token(request, credentials=None)
+
+        self.assertEqual(context.exception.status_code, 500)
+        self.assertEqual(
+            context.exception.detail,
+            "Management authorization policy is incomplete.",
+        )
+
+    async def test_fastapi_path_converter_uses_the_openapi_route_template(self):
+        request = build_request(
+            cookie=f"{PANEL_SESSION_COOKIE}=cookie-session",
+            method="DELETE",
+            route_path="/api/model-blacklist/{provider_id}/models/{model_id}",
+            internal_route_path="/api/model-blacklist/{provider_id}/models/{model_id:path}",
+        )
+
+        with patch(
+            "core.utils.verify_panel_token_value",
+            new=AsyncMock(return_value="cookie-session"),
+        ):
+            token = await verify_panel_token(request, credentials=None)
+
+        self.assertEqual(token, "cookie-session")
 
     async def test_same_origin_cookie_request_is_accepted(self):
         request = build_request(
@@ -234,6 +310,7 @@ class PanelSessionCookieTests(unittest.IsolatedAsyncioTestCase):
             method="POST",
             origin="http://localhost:4283",
             sec_fetch_site="same-origin",
+            route_path="/api/config/save",
         )
 
         with patch(
@@ -277,6 +354,7 @@ class PanelSessionCookieTests(unittest.IsolatedAsyncioTestCase):
             method="POST",
             origin="https://automation.example",
             sec_fetch_site="cross-site",
+            route_path="/api/config/save",
         )
 
         with patch(

@@ -4,6 +4,13 @@ import os
 from urllib.parse import urlsplit
 
 from core.i18n import LocalizedJSONResponse as JSONResponse
+from core.identity import (
+    AuthorizationDenied,
+    ManagementPrincipal,
+    ManagementRouteTransport,
+    UnclassifiedManagementRoute,
+    require_management_route,
+)
 from core.utils import PANEL_SESSION_COOKIE, verify_panel_token, verify_panel_token_value
 from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.responses import StreamingResponse
@@ -146,6 +153,24 @@ async def websocket_logs(websocket: WebSocket):
         await websocket.close(code=1011, reason="Authentication error")
         log.error(f"Error during WebSocket authentication: {e}")
         return
+
+    principal = ManagementPrincipal.local_owner()
+    try:
+        require_management_route(
+            principal,
+            transport=ManagementRouteTransport.WEBSOCKET,
+            method="WEBSOCKET",
+            path="/api/logs/stream",
+        )
+    except AuthorizationDenied:
+        await websocket.close(code=4403, reason="Management permission denied")
+        log.warning("WebSocket connection denied: management permission denied.")
+        return
+    except UnclassifiedManagementRoute:
+        await websocket.close(code=4403, reason="Management permission denied")
+        log.error("Protected management WebSocket is not classified.")
+        return
+    websocket.state.management_principal = principal
 
     if not await manager.connect(websocket):
         return

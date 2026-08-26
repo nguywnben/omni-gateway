@@ -7,6 +7,14 @@ from urllib.parse import urlsplit
 
 import jwt
 from config import get_panel_password, trust_proxy_headers_enabled
+from core.identity import (
+    AuthorizationDenied,
+    InvalidPrincipal,
+    ManagementPrincipal,
+    ManagementRouteTransport,
+    UnclassifiedManagementRoute,
+    require_management_route,
+)
 from fastapi import Depends, Header, HTTPException, Query, Request, Response, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from log import log
@@ -421,7 +429,10 @@ async def verify_panel_token(
     token = request.cookies.get(PANEL_SESSION_COOKIE)
     if token:
         _verify_cookie_request_origin(request)
-        return await verify_panel_token_value(token)
+        token = await verify_panel_token_value(token)
+        principal = ManagementPrincipal.local_owner()
+        _authorize_panel_request(request, principal)
+        return token
 
     if not credentials:
         raise HTTPException(status_code=401, detail="Authentication required.")
@@ -430,7 +441,10 @@ async def verify_panel_token(
     from config import API_KEY_PREFIX
 
     if not token.startswith(f"{API_KEY_PREFIX}vk-"):
-        return await verify_panel_token_value(token)
+        token = await verify_panel_token_value(token)
+        principal = ManagementPrincipal.local_owner()
+        _authorize_panel_request(request, principal)
+        return token
 
     from core.request_context import set_api_key_id
     from core.virtual_keys import virtual_key_manager
@@ -438,10 +452,33 @@ async def verify_panel_token(
     record = await virtual_key_manager.verify(token)
     if record is None:
         raise HTTPException(status_code=401, detail="Invalid API key.")
-    virtual_key_manager.authorize_management(
-        record,
-        write=request.method.upper() not in PANEL_SAFE_METHODS,
-    )
+    try:
+        principal = ManagementPrincipal.virtual_key(record.id, scopes=record.scopes)
+    except InvalidPrincipal as exc:
+        raise HTTPException(status_code=403, detail="Management permission denied.") from exc
+    _authorize_panel_request(request, principal)
     await virtual_key_manager.note_last_used(record)
     set_api_key_id(record.id)
     return token
+
+
+def _authorize_panel_request(request: Request, principal: ManagementPrincipal) -> None:
+    """Enforce the policy for the trusted route template selected by FastAPI."""
+    route = request.scope.get("route")
+    route_path = getattr(route, "path_format", None) or getattr(route, "path", None)
+    try:
+        require_management_route(
+            principal,
+            transport=ManagementRouteTransport.HTTP,
+            method=request.method,
+            path=route_path,
+        )
+    except AuthorizationDenied as exc:
+        raise HTTPException(status_code=403, detail="Management permission denied.") from exc
+    except UnclassifiedManagementRoute as exc:
+        log.error("Protected management request reached an unclassified route.")
+        raise HTTPException(
+            status_code=500,
+            detail="Management authorization policy is incomplete.",
+        ) from exc
+    request.state.management_principal = principal

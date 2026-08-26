@@ -18,6 +18,13 @@ from core.identity.authorization import (
     permissions_for_role,
     require_permission,
 )
+from core.identity.manifest import (
+    ManagementRoutePolicy,
+    ManagementRouteTransport,
+    UnclassifiedManagementRoute,
+    management_route_manifest,
+    require_management_route,
+)
 
 __all__ = [
     "LEGACY_MANAGEMENT_READ_SCOPE",
@@ -36,4 +43,9 @@ __all__ = [
     "permission_scope",
     "permissions_for_role",
     "require_permission",
+    "ManagementRoutePolicy",
+    "ManagementRouteTransport",
+    "UnclassifiedManagementRoute",
+    "management_route_manifest",
+    "require_management_route",
 ]

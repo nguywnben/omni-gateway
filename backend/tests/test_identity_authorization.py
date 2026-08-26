@@ -63,6 +63,7 @@ OWNER = (
     | SECURITY_ADMIN
     | {
         ManagementPermission.CONFIGURATION_MANAGE,
+        ManagementPermission.ROOT_KEY_READ,
         ManagementPermission.ROOT_KEY_ROTATE,
         ManagementPermission.BACKUP_RESTORE,
         ManagementPermission.OWNERS_MANAGE,
