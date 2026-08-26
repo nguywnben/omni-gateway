@@ -1,0 +1,39 @@
+"""Enterprise management identity domain."""
+
+from core.identity.authorization import (
+    LEGACY_MANAGEMENT_READ_SCOPE,
+    LEGACY_MANAGEMENT_WRITE_SCOPE,
+    MANAGEMENT_PERMISSION_SCOPE_PREFIX,
+    AuthorizationDecision,
+    AuthorizationDenied,
+    AuthorizationReason,
+    InvalidPrincipal,
+    ManagementPermission,
+    ManagementPrincipal,
+    ManagementRole,
+    OidcRoleSource,
+    PrincipalType,
+    evaluate_permission,
+    permission_scope,
+    permissions_for_role,
+    require_permission,
+)
+
+__all__ = [
+    "LEGACY_MANAGEMENT_READ_SCOPE",
+    "LEGACY_MANAGEMENT_WRITE_SCOPE",
+    "MANAGEMENT_PERMISSION_SCOPE_PREFIX",
+    "AuthorizationDecision",
+    "AuthorizationDenied",
+    "AuthorizationReason",
+    "InvalidPrincipal",
+    "ManagementPermission",
+    "ManagementPrincipal",
+    "ManagementRole",
+    "OidcRoleSource",
+    "PrincipalType",
+    "evaluate_permission",
+    "permission_scope",
+    "permissions_for_role",
+    "require_permission",
+]
