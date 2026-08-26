@@ -85,10 +85,45 @@ Phase 4 audit item or the Phase 5 request-trace item.
   - Closed after 709 tests, repository-wide Ruff lint/format, compile, dependency, vulnerability,
     JavaScript, YAML, shell-syntax, and diff gates. The authenticated browser matrix passed at
     360/768/1024/1440, light/dark/system, all 15 locales, with no overflow or console errors.
-- [ ] Report Wave 3 evidence and obtain human acceptance before Wave 4.
+- [x] Report Wave 3 evidence and obtain human acceptance before Wave 4.
+  - Accepted: 2026-08-26 when the human instructed the agent to start the project and execute the
+    next plan after receiving the W3-C completion report.
 
-These queue items refine Phases 4–5 and do not add to the 28-item program denominator. Phase 6,
-distributed activation, multiple workers/replicas, and release activation remain unapproved.
+These queue items refine Phases 4–5 and do not add to the 28-item program denominator.
+
+## Wave 4 — Identity and Scale Execution Queue
+
+- [x] W4.1 Draft the Phase 6 specification and proposed RBAC/OIDC and HA ADRs.
+  - `docs/specs/enterprise-identity-and-ha.md`, ADR-007, and ADR-008 define principals, roles,
+    sessions, recovery, OIDC validation, durable/coordinated state, migration, failure posture,
+    measurable targets, alternatives, and rollback without activating the behavior.
+- [ ] Approval gate W4-0: human accepts ADR-007, ADR-008, permission bundles, recovery posture,
+  `PyJWT[crypto]`, HA targets, and the Wave 4 execution queue before W4.2.
+- [ ] W4.2 Define the principal, role, and permission contract.
+- [ ] W4.3 Enforce a complete management HTTP/WebSocket permission manifest.
+- [ ] W4.4 Add the versioned identity/role repository and SQLite migration.
+- [ ] W4.5 Add PostgreSQL and MongoDB identity repository parity.
+- [ ] W4.6 Add opaque revocable sessions and local-owner recovery.
+- [ ] Checkpoint W4-A: authorization, durability, compatibility, session, and recovery gates pass.
+- [ ] W4.7 Add safe OIDC policy, discovery, JWKS, and secret configuration.
+- [ ] W4.8 Add strict asymmetric ID Token verification.
+- [ ] W4.9 Add Authorization Code + PKCE/state/nonce transaction and callback.
+- [ ] W4.10 Add explicit role binding and deny-by-default JIT identity resolution.
+- [ ] W4.11 Add bounded identity/session APIs and complete actor-aware audit.
+- [ ] W4.12 Build the localized Identity console.
+- [ ] Checkpoint W4-B: OIDC, API, audit, recovery, i18n, accessibility, and browser gates pass.
+- [ ] W4.13 Add the resumable durable-ledger migration contract.
+- [ ] W4.14 Complete durable usage ledger and backend parity.
+- [ ] W4.15 Implement Redis semantic primitive parity.
+- [ ] W4.16 Coordinate identity/session/security runtime state.
+- [ ] W4.17 Coordinate routing/governance/cache runtime state.
+- [ ] W4.18 Add the HA deployment gate, readiness, alerts, runbooks, and rollback.
+- [ ] W4.19 Pass failure/load gates and record the exact activation topology.
+- [ ] Checkpoint W4-C: Phase 6 acceptance and all repository/rollback gates pass.
+- [ ] Report Wave 4 evidence and obtain human acceptance before Wave 5.
+
+These queue items refine Phase 6 and do not add to the 28-item program denominator. RBAC/OIDC code,
+distributed activation, multiple workers/replicas, and release activation remain gated.
 
 ## Phase 0 — Decisions
 
@@ -184,7 +219,7 @@ distributed activation, multiple workers/replicas, and release activation remain
 
 ## Phase 6 — Identity and HA
 
-- [ ] Approve RBAC/OIDC ADR before implementation.
+- [ ] Approve RBAC/OIDC and HA activation ADRs before implementation.
 - [ ] Implement viewer/operator/security-admin/owner and OIDC with recovery.
 - [ ] Move usage, traces, and audit to the selected durable backend.
 - [ ] Move runtime coordination to Redis-capable state interfaces.

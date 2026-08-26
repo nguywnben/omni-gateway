@@ -5,13 +5,13 @@
 - Updated: 2026-08-26 (Asia/Saigon).
 - Branch: `codex/enterprise-overhaul`.
 - Implementation baseline: `4b775b9 feat: add operational health and safe telemetry`.
-- Completed scope: Waves 1–2 / Phases 0–3 and all Wave 3 implementation/checkpoints W3.1–W3.12.
+- Completed scope: Waves 1–3 / Phases 0–5 and all Wave 3 implementation/checkpoints W3.1–W3.12.
 - Original program progress: 20/28 approved checklist items complete (including specification
   approval), approximately 71.4%; wave execution-slice checkboxes are refinements and are not
   added to that denominator.
-- Active scope: Wave 3 completion report and human acceptance only; Wave 4 remains unapproved.
-- Control state: **AWAITING HUMAN ACCEPTANCE — W3-C**.
-- Expected worktree state at this checkpoint: clean after the W3-C documentation commit.
+- Active scope: Wave 4 planning and ADR review only; Phase 6 behavior remains unapproved.
+- Control state: **AWAITING HUMAN ACCEPTANCE — ADR-007/ADR-008**.
+- Expected worktree state at this checkpoint: clean after the W4.1 planning commit.
 - Expected runtime: one Omni Gateway listener on `http://127.0.0.1:4283`; `/health` and `/ready`
   return HTTP 200.
 - Last verified full suite: 709 tests passed. Repository-wide Ruff lint/format, compileall, all
@@ -20,7 +20,9 @@
   all 15 supported locales.
 
 Wave 2 was accepted and pushed by the human on 2026-08-24. Wave 3 / Phases 4–5 was approved for
-implementation on the same date. Do not expand into Phase 6 or release activation.
+implementation on the same date and accepted on 2026-08-26 when the human instructed execution of
+the next plan. Do not implement Phase 6 behavior until ADR-007/ADR-008 are accepted; do not enter
+release activation.
 
 The W3.5 browser blocker cleared on retry. The authenticated loopback console completed its full
 W3-A browser matrix without requiring a code change; the browser was returned to its default
@@ -32,10 +34,13 @@ viewport with Vietnamese locale, system theme, cleared filters, and no open dial
 2. `docs/decisions/004-versioned-ai-quality-policy-plane.md` — AI Quality policy.
 3. `docs/decisions/005-provider-operation-capabilities.md` — Wave 2 operation contract.
 4. `docs/decisions/006-durable-and-coordinated-enterprise-state.md` — state and HA boundary.
-5. `tasks/plan.md` — delivery waves, dependencies, detailed execution slices.
-6. `tasks/todo.md` — authoritative checkboxes.
-7. This file — latest handoff state, evidence, and immediate next action.
-8. `git status`, `git log`, and the actual test/runtime output — final verification of all claims.
+5. `docs/specs/enterprise-identity-and-ha.md` — proposed Phase 6 contract.
+6. `docs/decisions/007-explicit-rbac-and-oidc-identity.md` — proposed identity decision.
+7. `docs/decisions/008-gated-high-availability-activation.md` — proposed HA decision.
+8. `tasks/plan.md` — delivery waves, dependencies, detailed execution slices.
+9. `tasks/todo.md` — authoritative checkboxes.
+10. This file — latest handoff state, evidence, and immediate next action.
+11. `git status`, `git log`, and the actual test/runtime output — final verification of all claims.
 
 If documents conflict, accepted ADRs and the approved spec constrain the plan; current repository
 state and test evidence constrain this handoff. Stop and surface an unresolved conflict instead of
@@ -243,6 +248,16 @@ silently choosing a new design.
   browser verified a denied request without falsely degrading the service-error SLO, responsive
   layouts, light/dark/system themes, all 15 locale catalogs, accessible text-only rendering, and a
   clean console. Temporary runtime/cache data were removed after verification.
+- Wave 3 acceptance: the human accepted W3-C on 2026-08-26 by instructing the agent to start the
+  project and execute the next plan after receiving the completion evidence. Runtime was started
+  again from checkpoint `76315e7` before Wave 4 planning.
+- W4.1 planning evidence: `docs/specs/enterprise-identity-and-ha.md` plus proposed ADR-007 and
+  ADR-008 record the current password/JWT and process-local constraints, explicit principals and
+  permission bundles, OIDC Authorization Code + PKCE/state/nonce validation, opaque revocable
+  sessions, local recovery, `PyJWT[crypto]` dependency proposal, durable/coordinated state split,
+  fail-closed Redis reconciliation, staged activation, measurable HA targets, and rollback. The
+  detailed W4.2–W4.19 queue does not claim any Phase 6 runtime behavior is active. Local-link and
+  diff checks pass, and the unchanged runtime remains covered by all 709 regression tests.
 
 ## Approved vs. Proposed Scope
 
@@ -258,13 +273,20 @@ silently choosing a new design.
 - Minimal credential-scoped audit and operation telemetry foundations required to make new batch
   mutations diagnosable and safe.
 
-### Approved and technically complete; awaiting human acceptance
+### Approved and complete
 
 - Wave 3 slices W3.1–W3.12 in `tasks/plan.md`.
 - Phase 4: complete audit coverage, durable audit storage, virtual-key governance, reservation-
   aware enforcement, and the Access lifecycle.
 - Phase 5: bounded request traces, Observability separation, health/SLO views, safe exporters,
   alert rules, and runbooks.
+
+### Proposed for human acceptance
+
+- `docs/specs/enterprise-identity-and-ha.md`.
+- ADR-007 explicit management principals, RBAC, OIDC, sessions, and recovery.
+- ADR-008 coordinated-state HA activation, failure posture, targets, and rollback.
+- Wave 4 slices W4.2–W4.19. W4.1 is documentation only and activates no identity/HA behavior.
 
 ### Explicitly not approved yet
 
@@ -290,9 +312,9 @@ checkboxes to be marked complete.
 
 ## Immediate Next Action
 
-Commit this W3-C evidence, restart the single supported runtime from the committed checkpoint,
-verify health/readiness and the default-disabled metrics boundary, push the branch, and report the
-evidence for human acceptance. Do not enter Wave 4 until that acceptance is explicit.
+Review and accept or revise the Phase 6 spec, ADR-007, ADR-008, and Wave 4 queue. Only after explicit
+acceptance, begin W4.2 with the closed principal/role/permission contract and denial-first tests.
+Keep `WORKERS=1`, one replica, local-owner defaults, and all release boundaries unchanged.
 
 ## Update Rule
 

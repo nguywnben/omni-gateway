@@ -4,7 +4,7 @@
 
 Deliver the enterprise overhaul as reversible vertical slices. The first release establishes the
 UX and policy foundation, the second governs credentials and access, the third adds operational
-evidence, and the final program phases earn multi-tenant and multi-replica claims.
+evidence, and the final program phases earn multi-user identity and multi-replica claims.
 
 ## Execution Governance
 
@@ -32,8 +32,8 @@ number.
 | --- | --- | --- | --- |
 | 1 — Policy and console foundation | Phases 0–2 | Decisions, theme/i18n/navigation, governed AI Quality | Complete |
 | 2 — Credential operations | Phase 3 plus credential-scoped audit/telemetry foundations | Capability-correct provider and credential fleet | Complete |
-| 3 — Access and operational evidence | Phases 4–5 | Access governance, complete audit, traces, SLOs | Awaiting human acceptance |
-| 4 — Identity and scale | Phase 6 | RBAC/OIDC, durable state, coordinated HA | Not started |
+| 3 — Access and operational evidence | Phases 4–5 | Access governance, complete audit, traces, SLOs | Complete |
+| 4 — Identity and scale | Phase 6 | RBAC/OIDC, durable state, coordinated HA | ADR review |
 | 5 — Production release | Phase 7 | Security/performance hardening and staged launch | Not started |
 
 Wave boundaries organize delivery; phase checkboxes continue to describe product completion.
@@ -43,13 +43,14 @@ or Phase 5 request tracing.
 
 ## Current Approval Gate
 
-- Wave 2 completion checkpoint: commit `578fbb4` (`fix: complete provider form localization`).
-- Completed product scope: Phases 0–3.
-- Implemented approved scope: Wave 3 / Phases 4–5 only.
-- State: **AWAITING HUMAN ACCEPTANCE — W3-C**; implementation and technical acceptance gates are
-  complete, but Wave 3 does not close until the human accepts the completion report.
-- Out of scope until later approval: RBAC/OIDC, distributed-state activation, multiple
-  workers/replicas, destructive migration, and production release activation.
+- Wave 3 completion checkpoint: `76315e7` (`docs: close wave 3 operational evidence`).
+- Completed product scope: Phases 0–5; Wave 3 was accepted by the human on 2026-08-26 through the
+  instruction to start the project and execute the next plan.
+- Active approved scope: Wave 4 planning and ADR review only.
+- State: **AWAITING HUMAN ACCEPTANCE — ADR-007/ADR-008**. No Phase 6 behavior changes begin until
+  the identity and HA decisions are accepted.
+- Out of scope until the applicable approval: RBAC/OIDC implementation, distributed-state
+  activation, multiple workers/replicas, destructive migration, and production release activation.
 
 ## Architecture Decisions
 
@@ -363,9 +364,241 @@ Prometheus/OpenTelemetry export controls, symptom-based alert rules, and linked 
 - Dependencies: W3.11.
 - Likely files: metrics/telemetry, health APIs/UI, deployment rules, runbooks, tests.
 
-Checkpoint W3-C closes Wave 3 only when Phase 4–5 acceptance passes end-to-end, all repository
-quality gates pass, the committed service restarts cleanly, and the human accepts the completion
-report. Phase 6 remains unapproved and multi-worker/multi-replica mode remains disabled.
+Checkpoint W3-C closed on 2026-08-26 after Phase 4–5 acceptance passed end-to-end, all repository
+quality gates passed, the committed service restarted cleanly, and the human instructed execution
+of the next plan. Phase 6 behavior remains gated by ADR-007/ADR-008 and multi-worker/multi-replica
+mode remains disabled.
+
+## Wave 4 Execution Slices
+
+Wave 4 implements [the Phase 6 specification](../docs/specs/enterprise-identity-and-ha.md) only
+after its proposed decisions are accepted. Identity and authorization land before OIDC; OIDC and
+revocable sessions land before identity UI; durable parity and Redis semantics land before any
+scale-out configuration changes.
+
+### W4.1 — Phase 6 specification and decision gate
+
+Record the current trust boundaries, explicit role/session/OIDC contract, coordinated-state
+activation criteria, rollback, and measurable HA targets in ADR-007 and ADR-008.
+
+- Acceptance: the documents cover principals, permission bundles, claim mapping, recovery,
+  dependency change, durable/coordinated state, failure posture, migration, alternatives, and
+  rollback without claiming that the behavior is active.
+- Verification: ADR convention/link audit, source review against OIDC Core and OAuth Security BCP,
+  diff/secret review, and human acceptance before W4.2.
+- Dependencies: accepted W3-C.
+- Likely files: Phase 6 spec, ADR-007, ADR-008, architecture, task state.
+
+### W4.2 — Principal and permission contract
+
+Define closed principal/role/permission vocabularies and a pure authorization decision service.
+
+- Acceptance: the four roles resolve explicit immutable permissions; unknown values fail closed;
+  local owner and existing virtual-key semantics have typed compatibility adapters; broad legacy
+  management keys are inventory-visible and new granular scopes do not silently narrow them.
+- Verification: role matrix, spoofing, malformed principal, and compatibility unit tests.
+- Dependencies: accepted W4.1.
+- Likely files: identity domain, permission registry, focused tests, API contract docs.
+
+### W4.3 — Complete management authorization coverage
+
+Classify every protected HTTP/WebSocket route in one declarative permission manifest and enforce it
+through a common dependency before handlers run.
+
+- Acceptance: there is no unclassified protected route; UI state cannot bypass denial; existing
+  management keys keep existing-route read/write compatibility and gain no identity/HA permission.
+- Verification: generated OpenAPI/WebSocket allow-deny matrix and regression tests.
+- Dependencies: W4.2.
+- Likely files: permission manifest, auth dependency, route integration, coverage tests.
+
+### W4.4 — Versioned identity repository and SQLite migration
+
+Add strict identities, role bindings, OIDC policy revisions, and migration records with optimistic
+concurrency and a backward-compatible local-owner bootstrap.
+
+- Acceptance: stable `(issuer, subject)` identity, no email identity, owner invariants, bounded
+  records, and non-destructive rollback are enforced.
+- Verification: schema migration/restart, conflict, corruption, owner-lockout, and redaction tests.
+- Dependencies: W4.2.
+- Likely files: identity repository contract/domain, SQLite manager/migration, tests.
+
+### W4.5 — PostgreSQL and MongoDB identity parity
+
+Implement the W4.4 repository contract for both shared durable backends.
+
+- Acceptance: ordering, revisions, uniqueness, owner invariants, and migration checkpoints match
+  SQLite without backend-specific API behavior.
+- Verification: contract fixtures plus opt-in live backend integration tests.
+- Dependencies: W4.4.
+- Likely files: PostgreSQL repository, MongoDB repository, adapter wiring, parity tests.
+
+### W4.6 — Opaque standalone sessions and local-owner recovery
+
+Add the semantic session store with an in-process implementation, opaque HMAC-indexed sessions,
+idle/absolute expiry, rotation/revocation, authorization epoch, and audited break-glass flow.
+
+- Acceptance: fixation/replay/revoked sessions fail; privilege/password changes revoke affected
+  sessions; cookie/CSRF protections and current local login remain compatible.
+- Verification: concurrency, expiry, origin, recovery, secret-lifetime, and migration-window tests.
+- Dependencies: W4.3–W4.4.
+- Likely files: session domain/store, panel auth integration, audit vocabulary, tests.
+
+Checkpoint W4-A follows W4.2–W4.6: complete authorization coverage, backend identity durability,
+local-owner compatibility, revocable sessions, and lockout-recovery gates pass before OIDC login.
+
+### W4.7 — OIDC policy, metadata, and endpoint safety
+
+Add versioned disabled-by-default issuer/client/claim policy, exact discovery validation, bounded
+JWKS caching, endpoint-host controls, and environment-locked secret handling.
+
+- Acceptance: invalid HTTPS/issuer/redirect/endpoint/algorithm/claim configuration fails closed and
+  no secret is returned or logged.
+- Verification: metadata/JWKS poisoning, SSRF-oriented, redirect, size, timeout, rotation, and
+  configuration revision tests.
+- Dependencies: W4-A and accepted `PyJWT[crypto]` dependency.
+- Likely files: OIDC policy/client, config bridge, schemas, tests.
+
+### W4.8 — ID Token verifier
+
+Implement strict asymmetric signature, issuer, audience/authorized-party, expiry/skew, nonce, and
+optional UserInfo subject validation behind a content-free error boundary.
+
+- Acceptance: only the configured issuer/audience/algorithms and exact transaction succeed;
+  unknown key ID refreshes once; provider text never reaches responses/audit.
+- Verification: valid and adversarial JWT/JWKS fixtures across supported algorithms.
+- Dependencies: W4.7.
+- Likely files: token verifier, bounded JWKS cache, focused tests, protocol docs.
+
+### W4.9 — OIDC authorization transaction and callback
+
+Implement Authorization Code with PKCE S256, one-time state/nonce, exact callback handling, code
+exchange, replay prevention, and internal session issuance.
+
+- Acceptance: state/nonce/code are single-use and transaction-bound; no provider token persists;
+  open redirects, query credentials, and mixed issuers are impossible.
+- Verification: login/replay/CSRF/mix-up/cancellation/outage protocol matrix.
+- Dependencies: W4.6–W4.8.
+- Likely files: OIDC transaction service, identity routes, state store, tests.
+
+### W4.10 — Role binding and just-in-time identity resolution
+
+Resolve direct subject bindings before bounded provider-specific claim mappings and deny unmapped
+users without assigning owner from claims.
+
+- Acceptance: missing/malformed/oversized claims deny; mapping revisions revoke stale sessions;
+  disabled identities cannot authenticate.
+- Verification: provider claim-shape, precedence, downgrade, stale-session, and owner abuse tests.
+- Dependencies: W4.5 and W4.9.
+- Likely files: role-binding service, identity repository integration, tests.
+
+### W4.11 — Identity/session management API and audit
+
+Add typed bounded APIs for current session, OIDC policy, identities, role bindings, sessions, and
+recovery verification with complete mutation evidence.
+
+- Acceptance: pagination/revisions/permissions/errors are consistent; every mutation and denial is
+  attributed to a redacted typed actor; exports or token-returning endpoints are absent.
+- Verification: API contract, permission, audit matrix, redaction, and concurrent conflict tests.
+- Dependencies: W4.10.
+- Likely files: identity routes/schemas, audit matrix/vocabulary, API tests/docs.
+
+### W4.12 — Localized Identity console
+
+Add a dedicated Identity destination for current principal, OIDC readiness, identities/roles,
+session revocation, and recovery health without overloading the API-key Access page.
+
+- Acceptance: controls follow server permissions, risky changes use explicit confirmation, all 15
+  locales are curated, and no session/OIDC secret enters DOM or browser storage.
+- Verification: 360/768/1024/1440, themes, locales, keyboard/focus, stale revision, clean
+  console/network, and permission matrix browser tests.
+- Dependencies: W4.11.
+- Likely files: Identity fragment/feature/CSS/locales and frontend tests.
+
+Checkpoint W4-B follows W4.7–W4.12: protocol, abuse, API, audit, migration, recovery, i18n,
+accessibility, and authenticated browser gates pass before distributed-state work.
+
+### W4.13 — Durable-ledger inventory and migration contract
+
+Inventory every usage/audit/trace/config/credential/identity record and define resumable copy,
+checksum, authority-switch, and rollback checkpoints without indefinite dual-write.
+
+- Acceptance: each record has one authoritative backend at every step; incomplete verification
+  leaves standalone authoritative and can resume idempotently.
+- Verification: interruption, duplicate, corruption, checksum, restart, and rollback tests.
+- Dependencies: W4-B.
+- Likely files: migration contract/runner, storage adapter, tests, operator guide.
+
+### W4.14 — Durable usage and backend parity
+
+Move remaining usage/cost ledger records behind selected-backend repositories and complete live
+SQLite/PostgreSQL/MongoDB parity.
+
+- Acceptance: estimate/commit/release/reconcile and reporting survive restart/migration with no
+  double count or silent zero during outage.
+- Verification: concurrency, restart, migration, ledger-outage, and live backend tests.
+- Dependencies: W4.13.
+- Likely files: usage repository implementations, adapter, focused parity tests.
+
+### W4.15 — Redis semantic primitive parity
+
+Implement versioned atomic compare-and-set, reserve/commit/release, expiry, replay, invalidation,
+and fencing-epoch semantics against Redis without exposing Redis commands to callers.
+
+- Acceptance: in-process and Redis implementations pass the same contract; unknown state, stale
+  epoch, partial execution, and duplicate delivery fail safely.
+- Verification: live Redis atomicity, expiry, restart, cancellation, and fault-injection tests.
+- Dependencies: W4.14.
+- Likely files: state-store interface/Redis implementation, contract tests, configuration.
+
+### W4.16 — Coordinate identity and security state
+
+Move management sessions, login throttles, OIDC replay/nonce state, and authorization invalidation
+to the W4.15 boundary.
+
+- Acceptance: logout/revocation/role changes are visible across processes and an unavailable store
+  cannot create a session or authorize stale privilege.
+- Verification: cross-process login/revoke/replay, partition, expiry, and recovery tests.
+- Dependencies: W4.15.
+- Likely files: session/OIDC/throttle adapters, integration tests.
+
+### W4.17 — Coordinate routing, governance, and cache state
+
+Move credential reservations/cooldowns, rate/budget reservations, response-cache metadata, and
+invalidation to the Redis boundary.
+
+- Acceptance: no process-local supported state can change admission, hard budget, routing, or cache
+  correctness in coordinated mode.
+- Verification: multi-process overspend, duplicate selection, stale cache, failover, and
+  reconciliation tests.
+- Dependencies: W4.15–W4.16.
+- Likely files: routing/quota/cache state adapters and fault-injection tests.
+
+### W4.18 — HA deployment gate, probes, alerts, and rollback
+
+Add explicit standalone/coordinated configuration, prerequisite validation, migration/reconciliation
+readiness, topology ceiling, low-cardinality alerts, and executable operator runbooks.
+
+- Acceptance: templates remain one replica by default; unsafe combinations fail startup/readiness;
+  secrets are redacted; drain/reconcile/rollback is executable.
+- Verification: configuration matrix, container/Helm render, probe/alert, backup, and rollback smoke.
+- Dependencies: W4.13–W4.17.
+- Likely files: deployment templates, readiness/metrics, migration/rollback scripts, runbooks/tests.
+
+### W4.19 — Failure/load evidence and activation record
+
+Run the accepted two-replica and target worker topology through dependency loss, restart,
+split-brain/stale epoch, migration, reconciliation, and measured load tests.
+
+- Acceptance: ADR-008 correctness/recovery/performance targets pass and a separate activation ADR
+  records exact versions/topology/evidence before superseding ADR-002's limit.
+- Verification: reproducible reports, dashboards, full repository/security/container/browser gates,
+  committed restart, and human acceptance.
+- Dependencies: W4.18.
+- Likely files: load/failure harness, CI jobs, activation ADR, evidence docs.
+
+Checkpoint W4-C closes Wave 4 only after W4.13–W4.19, all Phase 6 criteria and repository gates,
+the committed coordinated canary/rollback evidence, and human acceptance. Production release
+activation remains Wave 5.
 
 ## Phase 0: Baseline and Decision Records
 
@@ -508,10 +741,11 @@ pricing, alert-ready status, and low-cardinality metrics.
 
 ## Phase 6: Enterprise Identity and High Availability
 
-### Task 6.1 — RBAC and OIDC ADR
+### Task 6.1 — RBAC, OIDC, and HA activation ADRs
 
 Specify actor, role, session, OIDC, emergency owner access, migration, and lockout recovery before
-implementation.
+implementation. Separately specify coordinated-state prerequisites, failure posture, measurable HA
+targets, staged activation, and rollback before distributed implementation or scale-out.
 
 ### Task 6.2 — Roles and identity
 
@@ -571,5 +805,8 @@ new policy plane, verify telemetry, and retain a tested rollback image/data path
 
 ## Open Questions
 
-None blocks phases 1-4. OIDC provider compatibility, SCIM scope, and the exact multi-replica SLO
-are decided in dedicated ADRs before phase 6.
+Human acceptance of the Phase 6 spec, ADR-007, ADR-008, permission bundles, recovery posture,
+`PyJWT[crypto]`, and proposed HA targets blocks W4.2. The proposals keep SCIM and tenant isolation
+out of Wave 4, use exact OIDC issuer/subject identity, and require 99.9% end-to-end availability,
+60-second supported failover recovery, zero correctness violations, and bounded performance impact.
+Any human revision updates the documents before behavior code begins.

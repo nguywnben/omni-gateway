@@ -128,6 +128,14 @@ until the separate HA activation phase is approved.
 
 `WORKERS=1` and one application replica are the supported process model for the 1.x series. MongoDB and PostgreSQL can replace local SQLite storage, but shared storage alone does not coordinate reservations, cooldowns, sessions, or usage aggregation across workers. The service rejects `WORKERS` values other than `1` instead of presenting an unsafe scale-out configuration as supported.
 
+Wave 4 identity and HA behavior is not active. The proposed
+[Phase 6 specification](specs/enterprise-identity-and-ha.md),
+[ADR-007](decisions/007-explicit-rbac-and-oidc-identity.md), and
+[ADR-008](decisions/008-gated-high-availability-activation.md) define the review gate for explicit
+management principals, server-side permissions, OIDC, revocable sessions, coordinated state, and
+measured scale-out. Until those decisions are accepted and implemented, the local owner remains
+authoritative and ADR-002/ADR-006 keep the single-worker/single-replica boundary in force.
+
 The Render Blueprint deliberately uses a paid persistent disk. Free Render services have ephemeral filesystems and are not suitable for durable credential storage.
 
 ## Security Boundaries
@@ -215,3 +223,5 @@ Current decisions:
 - [ADR-004: Versioned AI Quality Policy Plane](decisions/004-versioned-ai-quality-policy-plane.md)
 - [ADR-005: Provider-Declared Credential Operation Capabilities](decisions/005-provider-operation-capabilities.md)
 - [ADR-006: Separate Durable Data from Coordinated Runtime State](decisions/006-durable-and-coordinated-enterprise-state.md)
+- [ADR-007 (Proposed): Use Explicit Management Principals, RBAC, and OIDC](decisions/007-explicit-rbac-and-oidc-identity.md)
+- [ADR-008 (Proposed): Gate High Availability on Coordinated State and Failure Evidence](decisions/008-gated-high-availability-activation.md)
