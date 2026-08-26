@@ -111,7 +111,12 @@ These queue items refine Phases 4–5 and do not add to the 28-item program deno
     FastAPI route templates before handlers, and fails closed on missing policy. Generated role and
     legacy-key matrices preserve existing read/write behavior without granting identity/recovery/HA
     rights. Root-key read and rotate are separate owner permissions. Ruff and all 741 tests pass.
-- [ ] W4.4 Add the versioned identity/role repository and SQLite migration.
+- [x] W4.4 Add the versioned identity/role repository and SQLite migration.
+  - Complete at `563fb9d` and `5a81b83`; strict versioned identities, bindings, OIDC policy
+    revisions, and migration records use exact case-sensitive issuer/subject identity, independent
+    optimistic revisions, authorization epochs, bounded closed records, generic errors, and an
+    immutable enabled local-owner bootstrap. The additive SQLite transaction preserves existing
+    data and fails closed on corruption. Twenty-one focused and 762 total tests pass.
 - [ ] W4.5 Add PostgreSQL and MongoDB identity repository parity.
 - [ ] W4.6 Add opaque revocable sessions and local-owner recovery.
 - [ ] Checkpoint W4-A: authorization, durability, compatibility, session, and recovery gates pass.

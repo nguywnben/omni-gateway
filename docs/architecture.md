@@ -138,8 +138,12 @@ immutable manifest and enforces the resolved typed principal against FastAPI's t
 template before handler execution. Missing policy fails closed. Human roles use exact bundles;
 legacy management keys retain existing-route compatibility without receiving future identity,
 recovery, owner-assignment, or HA rights. The local owner remains the only browser principal until
-later identity/session slices, and ADR-002/ADR-006 keep the single-worker/single-replica boundary
-in force.
+later identity/session slices. W4.4 adds the strict
+[management identity repository](identity-repository.md) contract and an additive SQLite
+implementation: exact case-sensitive `(issuer, subject)` identities, independent optimistic
+revisions, authorization epochs, immutable local-owner bootstrap, and fail-closed stored-row
+validation. It is not wired as a login source until backend parity and session/OIDC slices land.
+ADR-002/ADR-006 keep the single-worker/single-replica boundary in force.
 
 The Render Blueprint deliberately uses a paid persistent disk. Free Render services have ephemeral filesystems and are not suitable for durable credential storage.
 

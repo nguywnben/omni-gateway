@@ -3,8 +3,9 @@
 ## Status
 
 Accepted on 2026-08-26. Delivery remains incremental: W4.2 establishes the pure principal and
-permission contract and W4.3 enforces it on existing management routes; repositories, sessions,
-and OIDC activate only in their later Wave 4 slices.
+permission contract, W4.3 enforces it on existing management routes, and W4.4 adds the versioned
+repository plus additive SQLite migration. Shared-backend selection, sessions, and OIDC activate
+only in their later Wave 4 slices.
 
 ## Context
 
@@ -129,6 +130,9 @@ to an OIDC user.
 - Keeping local recovery reduces lockout risk but requires strong operational protection.
 - The PyJWT cryptographic backend is a new audited runtime dependency.
 - Provider-specific claim mapping improves compatibility but must be configured deliberately.
+- Identity, role-binding, and OIDC-policy resources now have strict versioned records and
+  independent optimistic revisions. SQLite preserves existing tables and keeps the local owner
+  enabled and immutable while later recovery/session work remains gated.
 
 ## Rejected Alternatives
 

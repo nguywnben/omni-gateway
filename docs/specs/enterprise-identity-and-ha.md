@@ -2,9 +2,10 @@
 
 ## Status
 
-Accepted for Wave 4 on 2026-08-26. W4.2 implements only the pure principal/role/permission domain;
-HTTP/WebSocket enforcement, OIDC, distributed coordination, worker-count, and replica-count
-changes remain gated by their later slices and acceptance evidence.
+Accepted for Wave 4 on 2026-08-26. W4.2–W4.4 now provide the pure principal/permission domain,
+complete existing-route authorization coverage, and a versioned identity repository with additive
+SQLite persistence. OIDC/session activation, shared-backend parity, distributed coordination,
+worker-count, and replica-count changes remain gated by their later slices and acceptance evidence.
 
 ## Objective
 
@@ -151,6 +152,13 @@ the default standalone backend and is rejected for HA activation.
   reservations/cooldowns, rate/budget reservations, cache metadata/invalidation, and fencing epoch.
 - Local derived: immutable snapshots and caches that can be discarded and rebuilt without changing
   an authorization, limit, routing, or billing decision.
+
+The W4.4 durable identity contract uses exact case-sensitive issuer/subject identity, separate
+optimistic revisions for identity and binding resources, authorization epochs, and a fixed additive
+migration checkpoint. SQLite bootstraps an immutable enabled local owner and validates all stored
+rows before committing initialization. It provides no destructive rollback or delete path. The
+maintained implementation contract is `docs/identity-repository.md`; PostgreSQL/MongoDB parity and
+adapter selection remain W4.5 work.
 
 Callers depend on typed compare-and-set, reserve/commit/release, expiry, idempotency, and
 invalidation semantics—not Redis commands. New admissions and security mutations fail closed when

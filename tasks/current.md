@@ -2,20 +2,20 @@
 
 ## Resume Here
 
-- Updated: 2026-08-26 (Asia/Saigon).
+- Updated: 2026-08-27 (Asia/Saigon).
 - Branch: `codex/enterprise-overhaul`.
-- Implementation baseline: `627514d feat: enforce management route permissions`.
-- Completed scope: Waves 1–3 / Phases 0–5 plus Wave 4 slices W4.1–W4.3.
+- Implementation baseline: `5a81b83 feat: add SQLite identity repository`.
+- Completed scope: Waves 1–3 / Phases 0–5 plus Wave 4 slices W4.1–W4.4.
 - Original program progress: 21/28 approved checklist items complete (including specification and
   Phase 6 ADR approval), exactly 75.0%; wave execution-slice checkboxes are refinements and are not
   added to that denominator.
-- Active scope: Wave 4 W4.4, versioned identity/role repository and SQLite migration.
-- Control state: **IN PROGRESS — W4.4 NEXT**.
-- Expected worktree state at this checkpoint: clean after the W4.3 documentation commit.
+- Active scope: Wave 4 W4.5, PostgreSQL/MongoDB identity parity and adapter wiring.
+- Control state: **IN PROGRESS — W4.5 NEXT**.
+- Expected worktree state at this checkpoint: clean after the W4.4 documentation commit.
 - Expected runtime: one Omni Gateway listener on `http://127.0.0.1:4283`; `/health` and `/ready`
   return HTTP 200.
-- Last verified full suite: 741 tests passed. Repository-wide Ruff lint/format, compileall, and
-  diff-check pass for W4.3. The earlier W3-C JavaScript, YAML, shell-syntax, dependency,
+- Last verified full suite: 762 tests passed. Repository-wide Ruff lint/format, compileall, and
+  diff-check pass for W4.4. The earlier W3-C JavaScript, YAML, shell-syntax, dependency,
   vulnerability, and authenticated 360/768/1024/1440 browser matrix remain the latest evidence for
   unchanged areas.
 
@@ -274,6 +274,17 @@ silently choosing a new design.
   `{model_id:path}` normalization. Review split root-key disclosure into owner-only
   `root_key.read` versus `root_key.rotate`; legacy read keys retain their prior GET access and gain
   no identity, owner-assignment, recovery, or HA rights. Ruff, diff-check, and all 741 tests pass.
+- W4.4 durable-identity evidence: `563fb9d` adds closed immutable identity, role-binding,
+  OIDC-policy revision, and migration records plus a storage-agnostic repository protocol. Email
+  and profile data have no contract field; OIDC identity is exact case-sensitive `(issuer,
+  subject)`, generated resource IDs are opaque, record sizes/types/versions/timestamps are bounded,
+  and normal representations and errors do not expose issuer/subject. `5a81b83` adds an atomic,
+  additive SQLite implementation in the existing `credentials.db`; it enables foreign keys per
+  connection, preserves legacy tables, bootstraps one enabled immutable local owner, revalidates
+  every stored pair, and exposes no delete path. Identity, binding, and OIDC-policy resources use
+  conditional revisions; authorization changes advance epochs; two concurrent writers produce one
+  winner. Restart, corruption, owner-lockout, rollback, bounds, redaction, and independent-resource
+  revision regressions are covered by 21 focused tests. All 762 tests and repository gates pass.
 
 ## Approved vs. Proposed Scope
 
@@ -300,12 +311,12 @@ silently choosing a new design.
 ### Approved and in progress
 
 - The Phase 6 specification, ADR-007, ADR-008, and Wave 4 execution queue.
-- W4.1–W4.3 are complete; W4.4 is the active next slice.
+- W4.1–W4.4 are complete; W4.5 is the active next slice.
 
 ### Approved for staged implementation, not active yet
 
-- Identity repositories, sessions/OIDC, Redis coordination, durable HA migration, and multiple
-  workers/replicas remain gated by W4.4–W4.19 and their checkpoints.
+- Shared-backend identity parity, sessions/OIDC, Redis coordination, durable HA migration, and
+  multiple workers/replicas remain gated by W4.5–W4.19 and their checkpoints.
 - Phase 7 release activation, production deployment, or destructive migration.
 
 Foundations borrowed from Phase 4 or Phase 5 remain partial and must not cause those phase
@@ -327,11 +338,11 @@ checkboxes to be marked complete.
 
 ## Immediate Next Action
 
-Begin W4.4 with a strict versioned identity/role repository contract, then implement its additive
-SQLite migration and backward-compatible local-owner bootstrap. Prove optimistic conflicts,
-corruption failure, stable issuer/subject identity, owner-lockout prevention, restart persistence,
-and redaction. Keep `WORKERS=1`, one replica, local-owner defaults, and all release boundaries
-unchanged.
+Begin W4.5 by extracting reusable backend contract fixtures, then implement PostgreSQL and MongoDB
+identity repositories with the same ordering, uniqueness, independent revision, owner, migration,
+corruption, and redaction behavior as SQLite. Wire repository selection through the existing
+storage adapter only after parity passes. Keep `WORKERS=1`, one replica, local-owner defaults, and
+all release boundaries unchanged.
 
 ## Update Rule
 
