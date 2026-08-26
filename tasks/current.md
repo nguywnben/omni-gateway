@@ -4,21 +4,20 @@
 
 - Updated: 2026-08-26 (Asia/Saigon).
 - Branch: `codex/enterprise-overhaul`.
-- Implementation baseline: `b52b1a3 feat: add request trace observability console`.
-- Completed scope: Waves 1–2 / Phases 0–3, Wave 3 checkpoints W3-A/W3-B, and W3.6–W3.11.
-- Original program progress: 18/28 approved checklist items complete (including specification
-  approval), approximately 64.3%; wave execution-slice checkboxes are refinements and are not
+- Implementation baseline: `4b775b9 feat: add operational health and safe telemetry`.
+- Completed scope: Waves 1–2 / Phases 0–3 and all Wave 3 implementation/checkpoints W3.1–W3.12.
+- Original program progress: 20/28 approved checklist items complete (including specification
+  approval), approximately 71.4%; wave execution-slice checkboxes are refinements and are not
   added to that denominator.
-- Active scope: Wave 3 — Access and Operational Evidence; W3.12 SLOs, health views, exporters,
-  alerts, and runbooks are next.
-- Control state: **READY — W3.12**.
-- Expected worktree state at this checkpoint: clean after the W3.11 documentation commit.
+- Active scope: Wave 3 completion report and human acceptance only; Wave 4 remains unapproved.
+- Control state: **AWAITING HUMAN ACCEPTANCE — W3-C**.
+- Expected worktree state at this checkpoint: clean after the W3-C documentation commit.
 - Expected runtime: one Omni Gateway listener on `http://127.0.0.1:4283`; `/health` and `/ready`
   return HTTP 200.
-- Last verified full suite: 691 tests passed. Repository-wide Ruff lint/format, compileall, all
-  JavaScript syntax checks, and diff-check pass. Dependency consistency and pip-audit last passed
-  at W3-B; they run again at W3-C. The formatter drift exposed by W3-B was normalized mechanically
-  in `bf5cc99`.
+- Last verified full suite: 709 tests passed. Repository-wide Ruff lint/format, compileall, all
+  JavaScript syntax, YAML, shell-syntax, dependency consistency, vulnerability, and diff gates
+  pass. The authenticated W3-C browser matrix also passes at 360/768/1024/1440, all themes, and
+  all 15 supported locales.
 
 Wave 2 was accepted and pushed by the human on 2026-08-24. Wave 3 / Phases 4–5 was approved for
 implementation on the same date. Do not expand into Phase 6 or release activation.
@@ -234,6 +233,16 @@ silently choosing a new design.
   two-step timeline, filters/pivot/export, WebSocket separation, Escape/focus return, no overflow
   at 360/768/1024/1440, light/dark/system, all 15 locale labels, and a clean console. Temporary
   runtime data were removed and the browser viewport was reset after verification.
+- W3.12/W3-C evidence: `4b775b9` adds a bounded cached RED snapshot, p50/p95/p99 latency,
+  service-error and rejection separation, provider/model route health, and quota/budget/rate-limit
+  exhaustion evidence to the authenticated dashboard. Prometheus and OTLP/HTTP JSON export are
+  disabled by default, reject unsafe explicit configuration, use fixed low-cardinality dimensions,
+  and never export request content or secrets. Deployment rules cover service errors, P95 latency,
+  exhaustion, storage readiness, and unknown pricing with linked symptom-based runbooks. All 709
+  tests and repository gates pass; dependency audit reports no known vulnerabilities. The real
+  browser verified a denied request without falsely degrading the service-error SLO, responsive
+  layouts, light/dark/system themes, all 15 locale catalogs, accessible text-only rendering, and a
+  clean console. Temporary runtime/cache data were removed after verification.
 
 ## Approved vs. Proposed Scope
 
@@ -249,7 +258,7 @@ silently choosing a new design.
 - Minimal credential-scoped audit and operation telemetry foundations required to make new batch
   mutations diagnosable and safe.
 
-### Approved and active
+### Approved and technically complete; awaiting human acceptance
 
 - Wave 3 slices W3.1–W3.12 in `tasks/plan.md`.
 - Phase 4: complete audit coverage, durable audit storage, virtual-key governance, reservation-
@@ -281,9 +290,9 @@ checkboxes to be marked complete.
 
 ## Immediate Next Action
 
-Begin W3.12 with a low-cardinality SLO/health snapshot derived from bounded request traces and
-existing enforcement signals, then add opt-in safe Prometheus/OpenTelemetry controls, alert rules,
-and symptom-based runbooks before the W3-C repository and runtime gates.
+Commit this W3-C evidence, restart the single supported runtime from the committed checkpoint,
+verify health/readiness and the default-disabled metrics boundary, push the branch, and report the
+evidence for human acceptance. Do not enter Wave 4 until that acceptance is explicit.
 
 ## Update Rule
 

@@ -6,8 +6,8 @@
 
 ## Current Execution Gate
 
-- Program progress: 18/28 original checklist items complete (including specification approval),
-  approximately 64.3%. Wave execution-slice checkboxes below refine existing phase items and do
+- Program progress: 20/28 original checklist items complete (including specification approval),
+  approximately 71.4%. Wave execution-slice checkboxes below refine existing phase items and do
   not change that denominator.
 - [x] Complete Wave 1 / Phases 0–2 at implementation commit `39fb9da`.
 - [x] Record wave governance, recovery order, and the Wave 2 execution slices in repository docs.
@@ -77,8 +77,14 @@ Phase 4 audit item or the Phase 5 request-trace item.
   - Complete at `b52b1a3`; authenticated query/detail/retention/export APIs, audited policy/export
     operations, strict client revalidation, request-ID pivots, 15-locale UI, and a distinct
     diagnostic raw-log section pass 691 tests and the real-browser matrix.
-- [ ] W3.12 Add SLOs, health views, safe exporters, alert rules, and runbooks.
-- [ ] Checkpoint W3-C: Phase 4–5 acceptance and all repository quality gates pass.
+- [x] W3.12 Add SLOs, health views, safe exporters, alert rules, and runbooks.
+  - Complete at `4b775b9`; the authenticated Operational Health view exposes bounded RED,
+    percentile, route-health, and exhaustion evidence. Prometheus and OTLP/HTTP JSON export are
+    opt-in, secret-safe, and low-cardinality; deployment alerts link to symptom-based runbooks.
+- [x] Checkpoint W3-C: Phase 4–5 acceptance and all repository quality gates pass.
+  - Closed after 709 tests, repository-wide Ruff lint/format, compile, dependency, vulnerability,
+    JavaScript, YAML, shell-syntax, and diff gates. The authenticated browser matrix passed at
+    360/768/1024/1440, light/dark/system, all 15 locales, with no overflow or console errors.
 - [ ] Report Wave 3 evidence and obtain human acceptance before Wave 4.
 
 These queue items refine Phases 4–5 and do not add to the 28-item program denominator. Phase 6,
@@ -169,10 +175,10 @@ distributed activation, multiple workers/replicas, and release activation remain
 - [x] Persist bounded request decision traces.
   - Acceptance: routing/retry/compression/guardrail/cache/token/cost/latency/outcome are correlated.
   - Verify: redaction, retention, and failure-path tests.
-- [ ] Build trace search/detail and separate raw logs.
+- [x] Build trace search/detail and separate raw logs.
   - Acceptance: request-ID diagnosis works without prompt or secret content.
   - Verify: API/browser/filter/export tests.
-- [ ] Add SLO health, alerts, and low-cardinality metrics.
+- [x] Add SLO health, alerts, and low-cardinality metrics.
   - Acceptance: p50/p95/p99, errors, exhaustion, storage, and unknown pricing are visible.
   - Verify: metric snapshot/cardinality and alert-state tests.
 

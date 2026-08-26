@@ -32,7 +32,7 @@ number.
 | --- | --- | --- | --- |
 | 1 — Policy and console foundation | Phases 0–2 | Decisions, theme/i18n/navigation, governed AI Quality | Complete |
 | 2 — Credential operations | Phase 3 plus credential-scoped audit/telemetry foundations | Capability-correct provider and credential fleet | Complete |
-| 3 — Access and operational evidence | Phases 4–5 | Access governance, complete audit, traces, SLOs | In progress |
+| 3 — Access and operational evidence | Phases 4–5 | Access governance, complete audit, traces, SLOs | Awaiting human acceptance |
 | 4 — Identity and scale | Phase 6 | RBAC/OIDC, durable state, coordinated HA | Not started |
 | 5 — Production release | Phase 7 | Security/performance hardening and staged launch | Not started |
 
@@ -45,8 +45,9 @@ or Phase 5 request tracing.
 
 - Wave 2 completion checkpoint: commit `578fbb4` (`fix: complete provider form localization`).
 - Completed product scope: Phases 0–3.
-- Active approved scope: Wave 3 / Phases 4–5 only.
-- State: **IMPLEMENTING — WAVE 3**; approved by the human on 2026-08-24 after Wave 2 was pushed.
+- Implemented approved scope: Wave 3 / Phases 4–5 only.
+- State: **AWAITING HUMAN ACCEPTANCE — W3-C**; implementation and technical acceptance gates are
+  complete, but Wave 3 does not close until the human accepts the completion report.
 - Out of scope until later approval: RBAC/OIDC, distributed-state activation, multiple
   workers/replicas, destructive migration, and production release activation.
 
