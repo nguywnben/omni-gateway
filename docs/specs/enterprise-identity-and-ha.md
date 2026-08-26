@@ -67,7 +67,7 @@ allowlisted permission for every management route and WebSocket handshake.
 | `viewer` | `dashboard.read`, `configuration.read`, `credentials.read`, `providers.read`, `quality.read`, `access.read`, `audit.read`, `traces.read`, `logs.read`, `identity.read` |
 | `operator` | All viewer permissions plus `credentials.operate`, `routing.manage`, `quality.manage`, `logs.manage` |
 | `security_admin` | All viewer permissions plus `credentials.operate`, `credentials.manage`, `credentials.export`, `providers.manage`, `access.manage`, `audit.manage`, `audit.export`, `traces.manage`, `traces.export`, `identity.manage`, `sessions.manage`, `oidc.manage`, `backup.export` |
-| `owner` | Union of operator and security-admin permissions plus `configuration.manage`, `root_key.rotate`, `backup.restore`, `owners.manage`, `recovery.manage`, `ha.activate` |
+| `owner` | Union of operator and security-admin permissions plus `configuration.manage`, `root_key.read`, `root_key.rotate`, `backup.restore`, `owners.manage`, `recovery.manage`, `ha.activate` |
 
 The bundles are explicit and are not inferred from role name ordering. An owner-only permission
 cannot be delegated through an OIDC claim. At least one working owner/recovery path must remain.
@@ -76,6 +76,10 @@ new identity, owner, recovery, or HA permissions implicitly. Because broad `mana
 more powerful than the new human roles, Wave 4 inventories it as a legacy automation scope, exposes
 a migration warning, and adds granular permission scopes for newly created keys before any later
 removal proposal; existing keys are not silently narrowed.
+
+Root-key disclosure and rotation are deliberately separate owner permissions. Existing broad
+`management:read` keys retain access to the pre-Wave-4 root-key GET route for compatibility, but a
+viewer or other human role cannot inherit that secret through `access.read`.
 
 ## OIDC Contract
 

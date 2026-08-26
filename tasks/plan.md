@@ -46,10 +46,10 @@ or Phase 5 request tracing.
 - Wave 3 completion checkpoint: `76315e7` (`docs: close wave 3 operational evidence`).
 - Completed product scope: Phases 0–5; Wave 3 was accepted by the human on 2026-08-26 through the
   instruction to start the project and execute the next plan.
-- Active approved scope: Wave 4 under accepted ADR-007/ADR-008; W4.1–W4.2 are complete and W4.3 is
+- Active approved scope: Wave 4 under accepted ADR-007/ADR-008; W4.1–W4.3 are complete and W4.4 is
   the next implementation slice.
-- State: **IN PROGRESS — W4.3 NEXT**. The pure authorization domain exists, but management routes
-  still use the legacy local-owner/read-write checks until W4.3 lands.
+- State: **IN PROGRESS — W4.4 NEXT**. Management HTTP/WebSocket authorization is complete; durable
+  identity and role records do not exist until W4.4 lands.
 - Still gated by later slices and evidence: OIDC activation, distributed-state activation, multiple
   workers/replicas, destructive migration, and production release activation.
 
@@ -412,6 +412,9 @@ through a common dependency before handlers run.
 - Verification: generated OpenAPI/WebSocket allow-deny matrix and regression tests.
 - Dependencies: W4.2.
 - Likely files: permission manifest, auth dependency, route integration, coverage tests.
+- Completed: `627514d`; all 93 protected HTTP operations and the one management WebSocket are
+  classified and enforced before handlers. Generated human-role and legacy-key allow/deny matrices,
+  path-converter normalization, fail-closed unknown-route behavior, and all 741 tests pass.
 
 ### W4.4 — Versioned identity repository and SQLite migration
 
@@ -807,7 +810,7 @@ new policy plane, verify telemetry, and retain a tested rollback image/data path
 
 ## Open Questions
 
-No decision gate blocks W4.3. The accepted constraints keep SCIM and tenant isolation out of Wave
+No decision gate blocks W4.4. The accepted constraints keep SCIM and tenant isolation out of Wave
 4, use exact OIDC issuer/subject identity, approve an audited `PyJWT[crypto]` addition in W4.7, and
 require 99.9% end-to-end availability, 60-second supported failover recovery, zero correctness
 violations, and bounded performance impact before coordinated activation. Enabling OIDC by default,

@@ -3,8 +3,8 @@
 ## Status
 
 Accepted on 2026-08-26. Delivery remains incremental: W4.2 establishes the pure principal and
-permission contract; route enforcement, repositories, sessions, and OIDC activate only in their
-later Wave 4 slices.
+permission contract and W4.3 enforces it on existing management routes; repositories, sessions,
+and OIDC activate only in their later Wave 4 slices.
 
 ## Context
 
@@ -39,7 +39,8 @@ map to explicit immutable permission sets:
   `traces.manage`, `traces.export`, `identity.manage`, `sessions.manage`, `oidc.manage`, and
   `backup.export`.
 - `owner`: the union of operator and security-admin permissions plus `configuration.manage`,
-  `root_key.rotate`, `backup.restore`, `owners.manage`, `recovery.manage`, and `ha.activate`.
+  `root_key.read`, `root_key.rotate`, `backup.restore`, `owners.manage`, `recovery.manage`, and
+  `ha.activate`.
 
 Permission sets are not inferred from lexical role order. New owner-only and identity permissions
 are not granted to existing management virtual keys. The UI consumes the server-returned principal
@@ -50,6 +51,11 @@ means they can still perform some actions assigned only to the human owner role.
 explicit migration debt: inventory and warn on broad keys, offer granular permission scopes for new
 and rotated keys, and require a later deprecation decision before narrowing an existing key. Broad
 keys never receive new identity, owner-assignment, recovery, or HA-activation permissions.
+
+Route inventory discovered that the existing root-key GET route cannot share `access.read` without
+disclosing the integration secret to viewers. `root_key.read` is therefore a distinct owner
+permission. Legacy `management:read` keeps it solely to preserve the route behavior that existed
+before Wave 4; root-key rotation remains a separate permission.
 
 Use OIDC Authorization Code flow as a confidential relying party with PKCE `S256`, transaction-
 bound one-time `state` and `nonce`, exact HTTPS issuer and redirect validation, and bounded discovery,

@@ -4,19 +4,20 @@
 
 - Updated: 2026-08-26 (Asia/Saigon).
 - Branch: `codex/enterprise-overhaul`.
-- Implementation baseline: `c745e18 feat: add management authorization contract`.
-- Completed scope: Waves 1–3 / Phases 0–5 plus Wave 4 slices W4.1–W4.2.
+- Implementation baseline: `627514d feat: enforce management route permissions`.
+- Completed scope: Waves 1–3 / Phases 0–5 plus Wave 4 slices W4.1–W4.3.
 - Original program progress: 21/28 approved checklist items complete (including specification and
   Phase 6 ADR approval), exactly 75.0%; wave execution-slice checkboxes are refinements and are not
   added to that denominator.
-- Active scope: Wave 4 W4.3, complete management HTTP/WebSocket authorization coverage.
-- Control state: **IN PROGRESS — W4.3 NEXT**.
-- Expected worktree state at this checkpoint: clean after the W4.2 documentation commit.
+- Active scope: Wave 4 W4.4, versioned identity/role repository and SQLite migration.
+- Control state: **IN PROGRESS — W4.4 NEXT**.
+- Expected worktree state at this checkpoint: clean after the W4.3 documentation commit.
 - Expected runtime: one Omni Gateway listener on `http://127.0.0.1:4283`; `/health` and `/ready`
   return HTTP 200.
-- Last verified full suite: 724 tests passed. Repository-wide Ruff lint/format and compileall pass
-  for W4.2. The earlier W3-C JavaScript, YAML, shell-syntax, dependency, vulnerability, diff, and
-  authenticated 360/768/1024/1440 browser matrix remain the latest evidence for unchanged areas.
+- Last verified full suite: 741 tests passed. Repository-wide Ruff lint/format, compileall, and
+  diff-check pass for W4.3. The earlier W3-C JavaScript, YAML, shell-syntax, dependency,
+  vulnerability, and authenticated 360/768/1024/1440 browser matrix remain the latest evidence for
+  unchanged areas.
 
 Wave 2 was accepted and pushed by the human on 2026-08-24. Wave 3 / Phases 4–5 was accepted on
 2026-08-26. ADR-007/ADR-008 and the Wave 4 queue were accepted later that day when the human again
@@ -263,6 +264,16 @@ silently choosing a new design.
   legacy read/write allowlists; inventory markers; and additive granular permission scopes. No
   route uses the new domain yet. Fifteen focused tests and all 724 backend tests pass, with
   repository-wide Ruff lint/format and compileall clean.
+- W4.3 route-authorization evidence: `627514d` adds one immutable manifest for all 93 protected
+  OpenAPI operations and `/api/logs/stream`; exact typed permissions are enforced through the
+  existing common FastAPI dependency before handlers and immediately after the WebSocket cookie
+  handshake. The dependency uses FastAPI's trusted `path_format`, stores the resolved principal in
+  request state, returns generic denials, records virtual-key last use only after authorization,
+  and fails closed if a protected route lacks policy. Generated matrices cover all human roles,
+  every legacy safe/write route, duplicates, malformed route inputs, WebSocket denial, and
+  `{model_id:path}` normalization. Review split root-key disclosure into owner-only
+  `root_key.read` versus `root_key.rotate`; legacy read keys retain their prior GET access and gain
+  no identity, owner-assignment, recovery, or HA rights. Ruff, diff-check, and all 741 tests pass.
 
 ## Approved vs. Proposed Scope
 
@@ -289,12 +300,12 @@ silently choosing a new design.
 ### Approved and in progress
 
 - The Phase 6 specification, ADR-007, ADR-008, and Wave 4 execution queue.
-- W4.1–W4.2 are complete; W4.3 is the active next slice.
+- W4.1–W4.3 are complete; W4.4 is the active next slice.
 
 ### Approved for staged implementation, not active yet
 
-- Route-level RBAC enforcement, identity repositories, sessions/OIDC, Redis coordination, durable
-  HA migration, and multiple workers/replicas remain gated by W4.3–W4.19 and their checkpoints.
+- Identity repositories, sessions/OIDC, Redis coordination, durable HA migration, and multiple
+  workers/replicas remain gated by W4.4–W4.19 and their checkpoints.
 - Phase 7 release activation, production deployment, or destructive migration.
 
 Foundations borrowed from Phase 4 or Phase 5 remain partial and must not cause those phase
@@ -316,9 +327,11 @@ checkboxes to be marked complete.
 
 ## Immediate Next Action
 
-Begin W4.3 by inventorying every protected management HTTP route and WebSocket, assigning one
-allowlisted permission in a declarative manifest, and enforcing it through the common dependency.
-Keep `WORKERS=1`, one replica, local-owner defaults, and all release boundaries unchanged.
+Begin W4.4 with a strict versioned identity/role repository contract, then implement its additive
+SQLite migration and backward-compatible local-owner bootstrap. Prove optimistic conflicts,
+corruption failure, stable issuer/subject identity, owner-lockout prevention, restart persistence,
+and redaction. Keep `WORKERS=1`, one replica, local-owner defaults, and all release boundaries
+unchanged.
 
 ## Update Rule
 

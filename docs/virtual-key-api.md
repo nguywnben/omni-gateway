@@ -21,11 +21,19 @@ Supported scopes are closed and versioned by the server:
 | `inference:gemini` | Gemini-compatible inference routes |
 | `management:read` | Safe management methods: `GET`, `HEAD`, and `OPTIONS` |
 | `management:write` | Management mutation methods; requires `management:read` |
+| `management:permission:<permission>` | One additive allowlisted management permission |
 
 New keys default to the three inference scopes and no management access. This is least privilege
 for the existing inference-key purpose while preserving the create API's prior behavior. Callers
 must explicitly request management scopes. An unknown, empty, malformed, or internally inconsistent
 scope set is rejected; authorization never treats an unknown scope as a wildcard.
+
+Management authorization is route-based rather than inferred from the raw URL or client UI state.
+The broad read/write scopes retain their pre-Wave-4 behavior only for the existing route manifest;
+they do not automatically receive later identity, owner-assignment, recovery, or HA permissions.
+Granular scopes use values from the closed server permission catalog. Root-key disclosure uses
+`management:permission:root_key.read`, separately from `root_key.rotate`; broad legacy read keys
+retain the former only for compatibility with the existing root-key GET route.
 
 Successful inference and management authentication updates `last_used_at` at most once per minute.
 Management mutations performed by a virtual key are attributed to its stable key ID before the

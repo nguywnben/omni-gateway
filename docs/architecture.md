@@ -33,6 +33,7 @@ backend/
     api/                  Provider request orchestration and retry lifecycle
     converter/            Pure request/response format translation
     storage/              Concrete persistence backends
+    identity/             Management principals, RBAC decisions, and route permission manifest
     panel/                Authenticated management API and setup policy
     antigravity.py        Google Antigravity headers and per-credential model discovery
     anthropic.py          Claude Code OAuth, Claude Platform keys, and Messages translation
@@ -132,9 +133,13 @@ The accepted [Phase 6 specification](specs/enterprise-identity-and-ha.md),
 [ADR-007](decisions/007-explicit-rbac-and-oidc-identity.md), and
 [ADR-008](decisions/008-gated-high-availability-activation.md) govern explicit management
 principals, server-side permissions, OIDC, revocable sessions, coordinated state, and measured
-scale-out. W4.2 provides a pure fail-closed principal/role/permission domain, but it is not yet
-wired to management routes. The local owner therefore remains authoritative, and ADR-002/ADR-006
-keep the single-worker/single-replica boundary in force.
+scale-out. W4.3 classifies every protected management OpenAPI operation and WebSocket in one
+immutable manifest and enforces the resolved typed principal against FastAPI's trusted route
+template before handler execution. Missing policy fails closed. Human roles use exact bundles;
+legacy management keys retain existing-route compatibility without receiving future identity,
+recovery, owner-assignment, or HA rights. The local owner remains the only browser principal until
+later identity/session slices, and ADR-002/ADR-006 keep the single-worker/single-replica boundary
+in force.
 
 The Render Blueprint deliberately uses a paid persistent disk. Free Render services have ephemeral filesystems and are not suitable for durable credential storage.
 

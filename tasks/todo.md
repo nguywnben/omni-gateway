@@ -105,7 +105,12 @@ These queue items refine Phases 4–5 and do not add to the 28-item program deno
   - Complete at `c745e18`; four exact immutable role bundles, strict typed principals, denial-first
     decisions, local-owner/OIDC adapters, bounded virtual-key compatibility, legacy-scope inventory
     markers, and additive granular scopes pass 15 focused and 724 total tests.
-- [ ] W4.3 Enforce a complete management HTTP/WebSocket permission manifest.
+- [x] W4.3 Enforce a complete management HTTP/WebSocket permission manifest.
+  - Complete at `627514d`; one exact manifest covers all 93 protected OpenAPI operations and the
+    runtime-log WebSocket. The common dependency resolves typed principals, authorizes trusted
+    FastAPI route templates before handlers, and fails closed on missing policy. Generated role and
+    legacy-key matrices preserve existing read/write behavior without granting identity/recovery/HA
+    rights. Root-key read and rotate are separate owner permissions. Ruff and all 741 tests pass.
 - [ ] W4.4 Add the versioned identity/role repository and SQLite migration.
 - [ ] W4.5 Add PostgreSQL and MongoDB identity repository parity.
 - [ ] W4.6 Add opaque revocable sessions and local-owner recovery.
