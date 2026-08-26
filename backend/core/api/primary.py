@@ -101,6 +101,7 @@ from core.provider_registry import (
     get_credential_provider_variant,
     get_provider_routing_id,
 )
+from core.request_trace_service import trace_decision
 from core.storage_adapter import get_storage_adapter
 from core.token_compression import (
     CompressionResult,
@@ -524,6 +525,34 @@ async def prepare_provider_request(
             auth_headers.pop("x-goog-api-key", None)
             access_token = credential_data.get("access_token") or credential_data.get("token")
             auth_headers["Authorization"] = f"Bearer {access_token}"
+
+    compression_reason = (
+        "token_budget"
+        if compression_result.applied
+        else "feature_disabled"
+        if compression_result.reason == "disabled"
+        else "history_within_limit"
+        if compression_result.reason == "below_threshold"
+        else "content_limit"
+    )
+    trace_decision(
+        category="compression",
+        action="applied" if compression_result.applied else "skipped",
+        result="succeeded" if compression_result.applied else "skipped",
+        reason=compression_reason,
+        provider=provider_id,
+        model=model_name,
+        original_tokens=compression_result.original_estimated_tokens,
+        final_tokens=compression_result.final_estimated_tokens,
+    )
+    trace_decision(
+        category="upstream",
+        action="attempted",
+        result="succeeded",
+        reason="healthy_candidate",
+        provider=provider_id,
+        model=model_name,
+    )
 
     return ProviderRequestContext(
         provider_id=provider_id,

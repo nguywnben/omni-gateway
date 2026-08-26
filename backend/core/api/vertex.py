@@ -8,6 +8,7 @@ import string
 from typing import Any, Dict, Optional, Tuple
 
 from core.converter.thought_signature import decode_tool_id_and_signature
+from core.request_trace_service import trace_decision
 from fastapi import Response
 from log import log
 
@@ -595,7 +596,25 @@ async def stream_request(
     body: Dict[str, Any],
     native: bool = False,
 ):
+    model = str(body.get("model") or "")
+    trace_decision(
+        category="upstream",
+        action="attempted",
+        result="succeeded",
+        reason="healthy_candidate",
+        provider="vertex",
+        model=model,
+    )
     if not WREQ_AVAILABLE:
+        trace_decision(
+            category="upstream",
+            action="failed",
+            result="failed",
+            reason="provider_error",
+            provider="vertex",
+            model=model,
+            status_code=503,
+        )
         yield Response(
             content='{"error":{"code":503,"message":"wreq not installed, vertex channel unavailable","status":"UNAVAILABLE"}}',
             status_code=503,
@@ -603,7 +622,6 @@ async def stream_request(
         )
         return
 
-    model = body.get("model", "")
     gemini_payload = body.get("request", {})
 
     max_retries = 3
@@ -817,14 +835,31 @@ async def stream_request(
 async def non_stream_request(
     body: Dict[str, Any],
 ) -> Response:
+    model = str(body.get("model") or "")
+    trace_decision(
+        category="upstream",
+        action="attempted",
+        result="succeeded",
+        reason="healthy_candidate",
+        provider="vertex",
+        model=model,
+    )
     if not WREQ_AVAILABLE:
+        trace_decision(
+            category="upstream",
+            action="failed",
+            result="failed",
+            reason="provider_error",
+            provider="vertex",
+            model=model,
+            status_code=503,
+        )
         return Response(
             content='{"error":{"code":503,"message":"wreq not installed, vertex channel unavailable","status":"UNAVAILABLE"}}',
             status_code=503,
             media_type="application/json",
         )
 
-    model = body.get("model", "")
     gemini_payload = body.get("request", {})
 
     max_retries = 3

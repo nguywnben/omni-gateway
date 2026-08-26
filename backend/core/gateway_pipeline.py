@@ -18,6 +18,7 @@ import json
 from typing import Any, Dict, List, Optional, Tuple
 
 from core.guardrails import GuardrailsEngine
+from core.request_trace_service import trace_decision
 from core.response_cache import generate_cache_key, response_cache
 from fastapi import Response
 from log import log
@@ -67,6 +68,12 @@ async def apply_pre_call_guardrails(
             f"[guardrails] policy resolution failed ({type(exc).__name__}); "
             "blocking the request because enforcement state is unknown."
         )
+        trace_decision(
+            category="guardrail",
+            action="blocked",
+            result="failed",
+            reason="policy_unavailable",
+        )
         return (
             Response(
                 content=json.dumps(
@@ -84,6 +91,12 @@ async def apply_pre_call_guardrails(
         )
 
     if not settings["enabled"]:
+        trace_decision(
+            category="guardrail",
+            action="skipped",
+            result="skipped",
+            reason="feature_disabled",
+        )
         return None, body
 
     engine = GuardrailsEngine(
@@ -98,6 +111,17 @@ async def apply_pre_call_guardrails(
         result = engine.inspect_and_sanitize(part["text"])
         if not result.is_safe:
             log.warning(f"[guardrails] request blocked: {', '.join(result.violations)}")
+            reason = (
+                "injection_detected"
+                if any("injection" in str(item).lower() for item in result.violations)
+                else "blocked_keyword"
+            )
+            trace_decision(
+                category="guardrail",
+                action="blocked",
+                result="denied",
+                reason=reason,
+            )
             return (
                 Response(
                     content=json.dumps(
@@ -119,6 +143,13 @@ async def apply_pre_call_guardrails(
                 sanitized_body = copy.deepcopy(body)
             _iter_text_parts(sanitized_body)[index]["text"] = result.sanitized_text
             log.info(f"[guardrails] masked PII in request text ({', '.join(result.violations)})")
+
+    trace_decision(
+        category="guardrail",
+        action="masked" if sanitized_body is not None else "evaluated",
+        result="succeeded" if sanitized_body is not None else "allowed",
+        reason="pii_masked" if sanitized_body is not None else "policy_passed",
+    )
 
     return None, sanitized_body if sanitized_body is not None else body
 
@@ -149,9 +180,29 @@ async def lookup_response_cache(
         settings = await get_response_cache_config()
     except Exception as exc:
         log.error(f"[response-cache] failed to load config, failing open: {exc}")
+        trace_decision(
+            category="cache",
+            action="skipped",
+            result="failed",
+            reason="policy_unavailable",
+        )
         return None, None
 
-    if not settings["enabled"] or not _is_cacheable_request(body):
+    if not settings["enabled"]:
+        trace_decision(
+            category="cache",
+            action="skipped",
+            result="skipped",
+            reason="feature_disabled",
+        )
+        return None, None
+    if not _is_cacheable_request(body):
+        trace_decision(
+            category="cache",
+            action="skipped",
+            result="skipped",
+            reason="not_eligible",
+        )
         return None, None
 
     response_cache.default_ttl_seconds = settings["ttl_seconds"]
@@ -160,10 +211,23 @@ async def lookup_response_cache(
     cache_key = generate_cache_key(str(body.get("model") or ""), body, stream=False)
     entry = response_cache.get(cache_key)
     if entry is None:
+        trace_decision(
+            category="cache",
+            action="miss",
+            result="miss",
+            reason="cache_miss",
+        )
         return cache_key, None
 
     content, media_type = entry
     log.info(f"[response-cache] HIT for model={body.get('model')}")
+    trace_decision(
+        category="cache",
+        action="hit",
+        result="hit",
+        reason="cache_hit",
+        model=str(body.get("model") or ""),
+    )
     return cache_key, Response(
         content=content,
         status_code=200,
@@ -180,3 +244,9 @@ def store_response_cache(cache_key: Optional[str], response: Response) -> None:
     if not body_bytes or len(body_bytes) > MAX_CACHEABLE_RESPONSE_BYTES:
         return
     response_cache.set(cache_key, (bytes(body_bytes), response.media_type))
+    trace_decision(
+        category="cache",
+        action="stored",
+        result="succeeded",
+        reason="cache_stored",
+    )

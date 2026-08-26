@@ -7,6 +7,7 @@ from log import log
 
 if TYPE_CHECKING:
     from core.audit import AuditRepository
+    from core.request_trace import RequestTraceRepository
 
 
 class StorageBackend(Protocol):
@@ -62,6 +63,10 @@ class StorageBackend(Protocol):
     async def delete_config(self, key: str) -> bool: ...
 
     async def create_audit_repository(self, *, cursor_signing_key: bytes) -> "AuditRepository": ...
+
+    async def create_request_trace_repository(
+        self, *, cursor_signing_key: bytes
+    ) -> "RequestTraceRepository": ...
 
 
 class StorageAdapter:
@@ -209,6 +214,16 @@ class StorageAdapter:
 
         self._ensure_initialized()
         return await self._backend.create_audit_repository(cursor_signing_key=cursor_signing_key)
+
+    async def create_request_trace_repository(
+        self, *, cursor_signing_key: bytes
+    ) -> "RequestTraceRepository":
+        """Create the request trace repository owned by the selected storage backend."""
+
+        self._ensure_initialized()
+        return await self._backend.create_request_trace_repository(
+            cursor_signing_key=cursor_signing_key
+        )
 
     async def export_credential_to_json(self, filename: str, output_path: str = None) -> bool:
         self._ensure_initialized()

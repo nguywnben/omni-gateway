@@ -16,6 +16,7 @@ from core.provider_registry import (
     normalize_provider_id,
 )
 from core.request_context import get_request_elapsed_ms, get_request_id
+from core.request_trace_service import trace_decision
 from core.routing_decision import RouteCandidate, RouteDecision
 from log import log
 
@@ -448,6 +449,15 @@ class SmartCredentialRouter:
                     request_id=get_request_id(),
                 )
                 self._recent_decisions.append(decision)
+                trace_decision(
+                    category="routing",
+                    action="selected",
+                    result="succeeded",
+                    reason="healthy_candidate",
+                    provider=selected_provider,
+                    model=str(model_name or ""),
+                    candidate_count=len(decision.candidates),
+                )
                 in_flight_display = score[3] + 1 if len(score) > 5 else "?"
                 calls_display = score[5] if len(score) > 5 else "?"
                 log.debug(
@@ -471,6 +481,14 @@ class SmartCredentialRouter:
                 request_id=get_request_id(),
             )
             self._recent_decisions.append(decision)
+            trace_decision(
+                category="routing",
+                action="unavailable",
+                result="failed",
+                reason="no_candidate",
+                model=str(model_name or ""),
+                candidate_count=len(decision.candidates),
+            )
             return None, decision
 
     async def acquire(

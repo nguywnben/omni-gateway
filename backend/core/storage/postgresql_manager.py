@@ -234,6 +234,17 @@ class PostgreSQLManager:
         await repository.initialize()
         return repository
 
+    async def create_request_trace_repository(self, *, cursor_signing_key: bytes):
+        self._ensure_initialized()
+        from .request_trace_postgresql import PostgreSQLRequestTraceRepository
+
+        repository = PostgreSQLRequestTraceRepository(
+            self._pool,
+            cursor_signing_key=cursor_signing_key,
+        )
+        await repository.initialize()
+        return repository
+
     def _get_table_name(self, mode: str) -> str:
         if mode == "primary":
             return "primary_credentials"

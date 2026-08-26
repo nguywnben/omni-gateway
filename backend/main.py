@@ -3,7 +3,7 @@ import os
 import re
 import sys
 import uuid
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, nullcontext
 from pathlib import Path
 
 BACKEND_DIR = Path(__file__).resolve().parent
@@ -29,6 +29,14 @@ from core.panel import router as panel_router
 from core.panel.setup_security import get_setup_bootstrap_token
 from core.request_context import request_scope
 from core.request_limits import RequestBodyLimitMiddleware, get_max_request_body_bytes
+from core.request_trace import classify_request_protocol
+from core.request_trace_service import (
+    bind_request_trace_collector,
+    close_request_trace_service,
+    get_request_trace_service,
+    initialize_request_trace_service,
+    request_trace_scope,
+)
 from core.router.primary.anthropic import router as primary_anthropic_router
 from core.router.primary.gemini import router as primary_gemini_router
 from core.router.primary.model_list import router as primary_model_list_router
@@ -119,6 +127,16 @@ async def lifespan(app: FastAPI):
         raise RuntimeError("Audit service initialization failed.") from e
 
     try:
+        await initialize_request_trace_service()
+        log.info("Durable request trace service initialized.")
+    except Exception as e:
+        log.critical(f"Request trace service initialization failed: {type(e).__name__}")
+        await close_audit_service()
+        await credential_manager.close()
+        await close_storage_adapter()
+        raise RuntimeError("Request trace service initialization failed.") from e
+
+    try:
         await keep_alive_service.start()
     except Exception as e:
         log.error(f"Failed to start the keep-alive service: {e}")
@@ -144,6 +162,12 @@ async def lifespan(app: FastAPI):
             log.info("Audit service closed.")
         except Exception as e:
             log.error(f"Error while closing the audit service: {e}")
+
+        try:
+            await close_request_trace_service()
+            log.info("Request trace service closed.")
+        except Exception as e:
+            log.error(f"Error while closing the request trace service: {e}")
 
         try:
             await credential_manager.close()
@@ -262,7 +286,16 @@ async def add_security_headers(request, call_next):
     )
     localize_console = request.url.path.startswith("/api/") or request.url.path == "/callback"
     locale = resolve_locale(request.headers.get("accept-language"))
-    with request_scope(request_id), locale_context(locale, enabled=localize_console):
+    protocol = classify_request_protocol(
+        request.method,
+        request.scope.get("path", request.url.path),
+    )
+    trace_context = request_trace_scope(request_id, protocol) if protocol else nullcontext(None)
+    with (
+        request_scope(request_id),
+        locale_context(locale, enabled=localize_console),
+        trace_context as trace_collector,
+    ):
         try:
             response = await call_next(request)
         except BaseException:
@@ -278,6 +311,16 @@ async def add_security_headers(request, call_next):
                         "Failed to release virtual-key reservation after request error "
                         f"(request_id={request_id}, error_type={type(exc).__name__})."
                     )
+            if trace_collector is not None:
+                try:
+                    await get_request_trace_service().record(
+                        trace_collector.complete(status_code=500)
+                    )
+                except Exception as exc:
+                    log.error(
+                        "Failed to persist request trace after request error "
+                        f"(request_id={request_id}, error_type={type(exc).__name__})."
+                    )
             raise
         try:
             if management_mutation is not None:
@@ -289,6 +332,26 @@ async def add_security_headers(request, call_next):
         except Exception as exc:
             log.critical(
                 "Durable management audit append failed "
+                f"(request_id={request_id}, error_type={type(exc).__name__})."
+            )
+
+    trace_recorded = False
+
+    async def persist_request_trace(*, cancelled: bool = False) -> None:
+        nonlocal trace_recorded
+        if trace_recorded or trace_collector is None:
+            return
+        trace_recorded = True
+        try:
+            await get_request_trace_service().record(
+                trace_collector.complete(
+                    status_code=response.status_code,
+                    cancelled=cancelled,
+                )
+            )
+        except Exception as exc:
+            log.error(
+                "Failed to persist bounded request trace "
                 f"(request_id={request_id}, error_type={type(exc).__name__})."
             )
 
@@ -347,6 +410,25 @@ async def add_security_headers(request, call_next):
                     await release_reservation()
 
             response.background = BackgroundTask(finalize_response)
+
+    trace_body_iterator = getattr(response, "body_iterator", None)
+    if trace_collector is not None and trace_body_iterator is not None:
+
+        async def tracing_body_iterator():
+            cancelled = False
+            try:
+                with bind_request_trace_collector(trace_collector):
+                    async for chunk in trace_body_iterator:
+                        yield chunk
+            except BaseException:
+                cancelled = True
+                raise
+            finally:
+                await persist_request_trace(cancelled=cancelled)
+
+        response.body_iterator = tracing_body_iterator()
+    elif trace_collector is not None:
+        await persist_request_trace()
     response.headers["X-Request-ID"] = request_id
     if localize_console:
         response.headers["Content-Language"] = locale

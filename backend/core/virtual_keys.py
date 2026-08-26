@@ -25,6 +25,7 @@ from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 from core.pricing import ZERO_COST_PROVIDERS, calculate_cost_usd, find_model_pricing
+from core.request_trace_service import trace_decision
 from core.state_store import (
     BaseStateStore,
     InMemoryStateStore,
@@ -628,6 +629,13 @@ class VirtualKeyManager:
             )
         )
         if not constrained:
+            trace_decision(
+                category="quota",
+                action="skipped",
+                result="skipped",
+                reason="not_eligible",
+                model=requested_model,
+            )
             return None
 
         estimated_input, estimated_output = self._estimate_tokens(request_body)
@@ -678,14 +686,41 @@ class VirtualKeyManager:
             )
         except Exception as exc:
             log.error(f"[virtual-keys] quota state unavailable for key id={record.id}: {exc}")
+            trace_decision(
+                category="quota",
+                action="denied",
+                result="failed",
+                reason="policy_unavailable",
+                model=requested_model,
+            )
             raise HTTPException(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
                 detail="API key quota enforcement is temporarily unavailable.",
             ) from exc
         if not decision.accepted:
             _increment_quota_metric(f"rejected_{decision.reason or 'unknown'}")
+            trace_decision(
+                category="quota",
+                action="denied",
+                result="denied",
+                reason=(
+                    "quota_exceeded" if decision.reason in {"rpm", "tpm"} else "budget_exceeded"
+                ),
+                model=requested_model,
+                original_tokens=estimated_tokens,
+                cost_usd=estimated_cost,
+            )
             self._raise_reservation_rejection(record, decision.reason, decision.retry_after_seconds)
         _increment_quota_metric("accepted")
+        trace_decision(
+            category="quota",
+            action="reserved",
+            result="succeeded",
+            reason="quota_reserved",
+            model=requested_model,
+            original_tokens=estimated_tokens,
+            cost_usd=estimated_cost,
+        )
         return decision.reservation_id
 
     def authorize_management(self, record: VirtualKey, *, write: bool) -> None:
@@ -883,6 +918,14 @@ class VirtualKeyManager:
             _increment_quota_metric("commit_idempotent")
         if result.overspent:
             _increment_quota_metric("actual_overspend")
+        trace_decision(
+            category="quota",
+            action="committed",
+            result="succeeded" if result.committed or result.idempotent else "skipped",
+            reason="usage_recorded",
+            final_tokens=max(0, int(actual_tokens or 0)),
+            cost_usd=max(0.0, float(actual_cost_usd or 0.0)),
+        )
         return result
 
     async def release_reservation(
@@ -899,6 +942,12 @@ class VirtualKeyManager:
         )
         if released:
             _increment_quota_metric("released")
+            trace_decision(
+                category="quota",
+                action="released",
+                result="succeeded",
+                reason="completed",
+            )
         return released
 
     async def calculate_actual_cost(

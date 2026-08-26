@@ -18,6 +18,7 @@ from core.request_context import (
     get_request_id,
     get_virtual_key_reservation_id,
 )
+from core.request_trace_service import trace_decision
 from core.usage_stats import normalize_token_usage, record_call
 from core.virtual_keys import virtual_key_manager
 from fastapi import Response
@@ -139,6 +140,14 @@ async def handle_error_with_retry(
                 f"(status {status_code}, attempt {attempt + 1}/{max_retries})"
             )
             await asyncio.sleep(retry_interval)
+            trace_decision(
+                category="retry",
+                action="scheduled",
+                result="succeeded",
+                reason="credential_switched",
+                attempt=attempt + 1,
+                status_code=status_code,
+            )
             return True
         return False
 
@@ -148,6 +157,14 @@ async def handle_error_with_retry(
             f"(attempt {attempt + 1}/{max_retries})"
         )
         await asyncio.sleep(retry_interval)
+        trace_decision(
+            category="retry",
+            action="scheduled",
+            result="succeeded",
+            reason="retryable_status",
+            attempt=attempt + 1,
+            status_code=status_code,
+        )
         return True
 
     return False
@@ -223,6 +240,20 @@ async def _record_success_usage(
                 )
         except Exception as exc:
             log.error(f"Failed to commit quota reservation for {api_key_id}: {exc}")
+    trace_decision(
+        category="usage",
+        action="recorded",
+        result="succeeded" if durable_cost_recorded else "failed",
+        reason="usage_recorded",
+        provider=provider,
+        model=model_name,
+        latency_ms=min(86_400_000, max(0, int(metrics.get("latency_ms") or 0))),
+        input_tokens=tokens["input_tokens"],
+        output_tokens=tokens["output_tokens"],
+        cached_tokens=tokens["cached_tokens"],
+        reasoning_tokens=tokens["reasoning_tokens"],
+        cost_usd=actual_cost_usd,
+    )
     return metrics
 
 
@@ -244,6 +275,20 @@ async def record_api_call_success(
             status_code=status_code,
             token_usage=token_usage,
             request_metrics=request_metrics,
+        )
+
+        trace_decision(
+            category="upstream",
+            action="succeeded",
+            result="succeeded",
+            reason="completed",
+            provider=provider or mode,
+            model=model_name or "",
+            status_code=status_code,
+            latency_ms=min(
+                86_400_000,
+                max(0, int(request_metrics.get("latency_ms") or 0)),
+            ),
         )
 
         _schedule_trace_export(
@@ -294,6 +339,15 @@ async def record_api_call_error(
             model_name=model_name,
             error_message=error_message,
         )
+        trace_decision(
+            category="upstream",
+            action="failed",
+            result="failed",
+            reason="rate_limited" if status_code == 429 else "provider_error",
+            provider=provider or mode,
+            model=model_name or "",
+            status_code=status_code,
+        )
 
 
 async def record_model_route_miss(
@@ -329,6 +383,15 @@ async def record_model_route_miss(
     except Exception as exc:
         log.error(f"Failed to record model route miss for {credential_name}: {exc}")
     finally:
+        trace_decision(
+            category="cooldown",
+            action="applied",
+            result="succeeded",
+            reason="model_cooldown",
+            provider=provider,
+            model=model_name,
+            status_code=404,
+        )
         await credential_manager.release_credential(credential_name, mode="primary")
 
 
@@ -352,6 +415,14 @@ async def record_unassigned_api_call_error(
         )
     except Exception as e:
         log.error(f"Failed to record unassigned usage failure: {e}")
+    trace_decision(
+        category="routing",
+        action="unavailable",
+        result="failed",
+        reason="no_candidate",
+        model=model_name or "",
+        status_code=status_code,
+    )
 
 
 async def record_unassigned_api_call_success(
@@ -370,6 +441,15 @@ async def record_unassigned_api_call_success(
         token_usage=token_usage,
         request_metrics=None,
     )
+    trace_decision(
+        category="upstream",
+        action="succeeded",
+        result="succeeded",
+        reason="completed",
+        provider=mode,
+        model=model_name,
+        status_code=status_code,
+    )
 
 
 async def parse_and_log_cooldown(error_text: str, mode: str = "code_assist") -> Optional[float]:
@@ -380,6 +460,12 @@ async def parse_and_log_cooldown(error_text: str, mode: str = "code_assist") -> 
             log.info(
                 f"[{mode.upper()}] Quota cooldown detected: "
                 f"{datetime.fromtimestamp(cooldown_until, timezone.utc).isoformat()}"
+            )
+            trace_decision(
+                category="cooldown",
+                action="applied",
+                result="succeeded",
+                reason="quota_cooldown",
             )
             return cooldown_until
     except Exception as parse_err:
