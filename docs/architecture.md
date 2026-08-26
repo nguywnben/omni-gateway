@@ -91,6 +91,14 @@ values. The [audit API contract](audit-api.md) defines the public surface and sa
 Credential operation counters and latency histograms continue to use only fixed capability
 dimensions.
 
+Supported inference requests also emit a separate versioned decision trace after the response or
+stream lifecycle ends. Its allowlisted steps explain routing/fallback, retry/cooldown, compression,
+guardrails, cache, quota, upstream, usage, and outcome without prompt/response bodies, secrets,
+credential filenames, arbitrary metadata, or exception text. SQLite, PostgreSQL, and MongoDB own
+additive trace repositories with signed pagination and a dedicated 7-day/100,000-record default
+retention policy; audit and raw-log policies do not prune traces. The maintained privacy, storage,
+and lifecycle boundary is documented in [Request Decision Trace Contract](request-traces.md).
+
 Virtual keys use a versioned, fail-closed record contract with hashed-at-rest secrets. Protocol-
 specific inference scopes are separate from management read/write scopes; existing unversioned
 keys migrate with their prior inference access and no management permission. Bounded model globs,

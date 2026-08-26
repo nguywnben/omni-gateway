@@ -6,8 +6,8 @@
 
 ## Current Execution Gate
 
-- Program progress: 17/28 original checklist items complete (including specification approval),
-  approximately 60.7%. Wave execution-slice checkboxes below refine existing phase items and do
+- Program progress: 18/28 original checklist items complete (including specification approval),
+  approximately 64.3%. Wave execution-slice checkboxes below refine existing phase items and do
   not change that denominator.
 - [x] Complete Wave 1 / Phases 0–2 at implementation commit `39fb9da`.
 - [x] Record wave governance, recovery order, and the Wave 2 execution slices in repository docs.
@@ -69,7 +69,10 @@ Phase 4 audit item or the Phase 5 request-trace item.
     gates, and an authenticated browser matrix at 360/768/1024/1440, light/dark/system, keyboard
     focus containment, clean console, and all 15 supported locales. Formatter debt was normalized
     independently at `bf5cc99`.
-- [ ] W3.10 Persist bounded redacted request decision traces.
+- [x] W3.10 Persist bounded redacted request decision traces.
+  - Complete at `fdbe2ea`; the schema is strict and content-free, all supported inference protocols
+    share the public request ID, streaming completion is deferred correctly, retention is separate,
+    and additive SQLite/PostgreSQL/MongoDB repositories pass redaction/restart/cardinality tests.
 - [ ] W3.11 Build trace search/detail and keep raw logs separate.
 - [ ] W3.12 Add SLOs, health views, safe exporters, alert rules, and runbooks.
 - [ ] Checkpoint W3-C: Phase 4–5 acceptance and all repository quality gates pass.
@@ -160,7 +163,7 @@ distributed activation, multiple workers/replicas, and release activation remain
 
 ## Phase 5 — Observability
 
-- [ ] Persist bounded request decision traces.
+- [x] Persist bounded request decision traces.
   - Acceptance: routing/retry/compression/guardrail/cache/token/cost/latency/outcome are correlated.
   - Verify: redaction, retention, and failure-path tests.
 - [ ] Build trace search/detail and separate raw logs.

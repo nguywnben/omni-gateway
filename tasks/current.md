@@ -2,19 +2,20 @@
 
 ## Resume Here
 
-- Updated: 2026-08-25 (Asia/Saigon).
+- Updated: 2026-08-26 (Asia/Saigon).
 - Branch: `codex/enterprise-overhaul`.
-- Implementation baseline: `bf5cc99 style: restore repository formatter gate`.
-- Completed scope: Waves 1–2 / Phases 0–3, Wave 3 checkpoints W3-A/W3-B, and W3.6–W3.9.
-- Original program progress: 17/28 approved checklist items complete (including specification
-  approval), approximately 60.7%; wave execution-slice checkboxes are refinements and are not
+- Implementation baseline: `fdbe2ea feat: persist bounded request decision traces`.
+- Completed scope: Waves 1–2 / Phases 0–3, Wave 3 checkpoints W3-A/W3-B, and W3.6–W3.10.
+- Original program progress: 18/28 approved checklist items complete (including specification
+  approval), approximately 64.3%; wave execution-slice checkboxes are refinements and are not
   added to that denominator.
-- Active scope: Wave 3 — Access and Operational Evidence; W3.10 request decision traces are next.
-- Control state: **READY — W3.10**.
-- Expected worktree state at this checkpoint: clean after the W3-B documentation commit.
+- Active scope: Wave 3 — Access and Operational Evidence; W3.11 trace search and raw-log separation
+  are next.
+- Control state: **READY — W3.11**.
+- Expected worktree state at this checkpoint: clean after the W3.10 documentation commit.
 - Expected runtime: one Omni Gateway listener on `http://127.0.0.1:4283`; `/health` and `/ready`
   return HTTP 200.
-- Last verified full suite: 659 tests passed. Repository-wide Ruff lint/format, compileall, pip
+- Last verified full suite: 679 tests passed. Repository-wide Ruff lint/format, compileall, pip
   dependency consistency, pip-audit, all 39 JavaScript syntax checks, and diff-check pass. The
   formatter drift exposed by W3-B was normalized mechanically in `bf5cc99`.
 
@@ -212,6 +213,16 @@ silently choosing a new design.
   console, accessible controls, and correct responsive filters. The isolated browser runtime and
   its temporary data were stopped and removed after verification. All 659 tests and W3-B gates
   pass; `bf5cc99` independently restores the repository-wide formatter gate.
+- W3.10 evidence: `fdbe2ea` adds a strict schema-version-1 trace with closed protocol, outcome,
+  category/action/result/reason vocabularies and at most 64 decisions. Middleware correlates the
+  same bounded public request ID across OpenAI, Responses, Anthropic, Gemini, and Vertex success,
+  failure, streaming, and cancellation lifecycles. Allowlisted hooks cover routing/fallback,
+  retry/cooldown, compression, guardrails, cache, quota, upstream, tokens, cost, latency, and final
+  outcome. Request/response content, secrets, credential filenames, exception text, and arbitrary
+  metadata have no schema field and corrupted records fail closed. Additive SQLite, PostgreSQL,
+  and MongoDB repositories survive restart and use a separate 7-day/100,000-trace default policy
+  with bounded signed pagination. All 679 tests, full Ruff lint/format, compileall, and diff-check
+  pass. The maintained contract is `docs/request-traces.md`.
 
 ## Approved vs. Proposed Scope
 
@@ -259,9 +270,9 @@ checkboxes to be marked complete.
 
 ## Immediate Next Action
 
-Begin W3.10 with red contract tests for a versioned allowlisted request-decision trace, independent
-bounded retention, redaction, and one-request-ID correlation across supported protocol and failure
-paths. Keep raw diagnostic logs and request content outside the trace repository.
+Begin W3.11 with authenticated bounded trace query/detail/retention/export APIs, then evolve Logs
+into a localized Observability page where request traces and redacted raw runtime logs are visually,
+semantically, and operationally separate.
 
 ## Update Rule
 
