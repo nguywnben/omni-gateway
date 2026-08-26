@@ -4,25 +4,23 @@
 
 - Updated: 2026-08-26 (Asia/Saigon).
 - Branch: `codex/enterprise-overhaul`.
-- Implementation baseline: `4b775b9 feat: add operational health and safe telemetry`.
-- Completed scope: Waves 1–3 / Phases 0–5 and all Wave 3 implementation/checkpoints W3.1–W3.12.
-- Original program progress: 20/28 approved checklist items complete (including specification
-  approval), approximately 71.4%; wave execution-slice checkboxes are refinements and are not
+- Implementation baseline: `c745e18 feat: add management authorization contract`.
+- Completed scope: Waves 1–3 / Phases 0–5 plus Wave 4 slices W4.1–W4.2.
+- Original program progress: 21/28 approved checklist items complete (including specification and
+  Phase 6 ADR approval), exactly 75.0%; wave execution-slice checkboxes are refinements and are not
   added to that denominator.
-- Active scope: Wave 4 planning and ADR review only; Phase 6 behavior remains unapproved.
-- Control state: **AWAITING HUMAN ACCEPTANCE — ADR-007/ADR-008**.
-- Expected worktree state at this checkpoint: clean after the W4.1 planning commit.
+- Active scope: Wave 4 W4.3, complete management HTTP/WebSocket authorization coverage.
+- Control state: **IN PROGRESS — W4.3 NEXT**.
+- Expected worktree state at this checkpoint: clean after the W4.2 documentation commit.
 - Expected runtime: one Omni Gateway listener on `http://127.0.0.1:4283`; `/health` and `/ready`
   return HTTP 200.
-- Last verified full suite: 709 tests passed. Repository-wide Ruff lint/format, compileall, all
-  JavaScript syntax, YAML, shell-syntax, dependency consistency, vulnerability, and diff gates
-  pass. The authenticated W3-C browser matrix also passes at 360/768/1024/1440, all themes, and
-  all 15 supported locales.
+- Last verified full suite: 724 tests passed. Repository-wide Ruff lint/format and compileall pass
+  for W4.2. The earlier W3-C JavaScript, YAML, shell-syntax, dependency, vulnerability, diff, and
+  authenticated 360/768/1024/1440 browser matrix remain the latest evidence for unchanged areas.
 
-Wave 2 was accepted and pushed by the human on 2026-08-24. Wave 3 / Phases 4–5 was approved for
-implementation on the same date and accepted on 2026-08-26 when the human instructed execution of
-the next plan. Do not implement Phase 6 behavior until ADR-007/ADR-008 are accepted; do not enter
-release activation.
+Wave 2 was accepted and pushed by the human on 2026-08-24. Wave 3 / Phases 4–5 was accepted on
+2026-08-26. ADR-007/ADR-008 and the Wave 4 queue were accepted later that day when the human again
+instructed execution of the next plan. Do not skip Wave 4 slice gates or enter release activation.
 
 The W3.5 browser blocker cleared on retry. The authenticated loopback console completed its full
 W3-A browser matrix without requiring a code change; the browser was returned to its default
@@ -34,9 +32,9 @@ viewport with Vietnamese locale, system theme, cleared filters, and no open dial
 2. `docs/decisions/004-versioned-ai-quality-policy-plane.md` — AI Quality policy.
 3. `docs/decisions/005-provider-operation-capabilities.md` — Wave 2 operation contract.
 4. `docs/decisions/006-durable-and-coordinated-enterprise-state.md` — state and HA boundary.
-5. `docs/specs/enterprise-identity-and-ha.md` — proposed Phase 6 contract.
-6. `docs/decisions/007-explicit-rbac-and-oidc-identity.md` — proposed identity decision.
-7. `docs/decisions/008-gated-high-availability-activation.md` — proposed HA decision.
+5. `docs/specs/enterprise-identity-and-ha.md` — accepted Phase 6 contract.
+6. `docs/decisions/007-explicit-rbac-and-oidc-identity.md` — accepted identity decision.
+7. `docs/decisions/008-gated-high-availability-activation.md` — accepted HA decision.
 8. `tasks/plan.md` — delivery waves, dependencies, detailed execution slices.
 9. `tasks/todo.md` — authoritative checkboxes.
 10. This file — latest handoff state, evidence, and immediate next action.
@@ -251,13 +249,20 @@ silently choosing a new design.
 - Wave 3 acceptance: the human accepted W3-C on 2026-08-26 by instructing the agent to start the
   project and execute the next plan after receiving the completion evidence. Runtime was started
   again from checkpoint `76315e7` before Wave 4 planning.
-- W4.1 planning evidence: `docs/specs/enterprise-identity-and-ha.md` plus proposed ADR-007 and
+- W4.1 planning evidence: `docs/specs/enterprise-identity-and-ha.md` plus ADR-007 and
   ADR-008 record the current password/JWT and process-local constraints, explicit principals and
   permission bundles, OIDC Authorization Code + PKCE/state/nonce validation, opaque revocable
-  sessions, local recovery, `PyJWT[crypto]` dependency proposal, durable/coordinated state split,
+  sessions, local recovery, the approved W4.7 `PyJWT[crypto]` dependency change,
+  durable/coordinated state split,
   fail-closed Redis reconciliation, staged activation, measurable HA targets, and rollback. The
   detailed W4.2–W4.19 queue does not claim any Phase 6 runtime behavior is active. Local-link and
   diff checks pass, and the unchanged runtime remains covered by all 709 regression tests.
+- W4.2 authorization evidence: `c745e18` adds the closed `local_owner`, `oidc_user`, `virtual_key`,
+  and `system` principal types; four exact immutable role bundles; typed allow/deny decisions;
+  direct-binding versus claim-mapping owner protection; bounded malformed-input handling; explicit
+  legacy read/write allowlists; inventory markers; and additive granular permission scopes. No
+  route uses the new domain yet. Fifteen focused tests and all 724 backend tests pass, with
+  repository-wide Ruff lint/format and compileall clean.
 
 ## Approved vs. Proposed Scope
 
@@ -281,39 +286,38 @@ silently choosing a new design.
 - Phase 5: bounded request traces, Observability separation, health/SLO views, safe exporters,
   alert rules, and runbooks.
 
-### Proposed for human acceptance
+### Approved and in progress
 
-- `docs/specs/enterprise-identity-and-ha.md`.
-- ADR-007 explicit management principals, RBAC, OIDC, sessions, and recovery.
-- ADR-008 coordinated-state HA activation, failure posture, targets, and rollback.
-- Wave 4 slices W4.2–W4.19. W4.1 is documentation only and activates no identity/HA behavior.
+- The Phase 6 specification, ADR-007, ADR-008, and Wave 4 execution queue.
+- W4.1–W4.2 are complete; W4.3 is the active next slice.
 
-### Explicitly not approved yet
+### Approved for staged implementation, not active yet
 
-- Phase 6 RBAC/OIDC, Redis coordination, durable HA migration, or multiple workers/replicas.
+- Route-level RBAC enforcement, identity repositories, sessions/OIDC, Redis coordination, durable
+  HA migration, and multiple workers/replicas remain gated by W4.3–W4.19 and their checkpoints.
 - Phase 7 release activation, production deployment, or destructive migration.
 
 Foundations borrowed from Phase 4 or Phase 5 remain partial and must not cause those phase
 checkboxes to be marked complete.
 
-## Wave 3 Checkpoint Protocol
+## Wave 4 Checkpoint Protocol
 
-1. W3-A: append-only audit contract, durable repositories, full mutation coverage, query/export,
-   and audit console.
-2. W3-B: scoped virtual keys, atomic rate/budget reservations, safe lifecycle, and Access page.
-3. W3-C: bounded request traces, trace/raw-log separation, health/SLOs, exporters, alerts, and
-   runbooks.
+1. W4-A: authorization coverage, durable identity parity, revocable sessions, local-owner
+   compatibility, and recovery gates.
+2. W4-B: OIDC flow, identity APIs/UI, audit, i18n, accessibility, and browser gates.
+3. W4-C: durable ledgers, Redis semantics, coordinated failure/load evidence, activation, and
+   rollback gates.
 4. At each checkpoint: focused tests, full regression tests, Ruff/compile/JS/i18n gates, diff and
    secret review, atomic commit, clean worktree, and runtime smoke when applicable.
 5. Browser-facing checkpoints require 360/768/1024/1440 widths, light/dark/system themes,
    representative locales, keyboard/accessibility verification, and clean console/network.
-6. At the Wave 3 boundary: restart from the committed checkpoint, verify health, report evidence,
-   and pause for human acceptance before Wave 4.
+6. At the Wave 4 boundary: restart from the committed checkpoint, verify health, report evidence,
+   and pause for human acceptance before Wave 5.
 
 ## Immediate Next Action
 
-Review and accept or revise the Phase 6 spec, ADR-007, ADR-008, and Wave 4 queue. Only after explicit
-acceptance, begin W4.2 with the closed principal/role/permission contract and denial-first tests.
+Begin W4.3 by inventorying every protected management HTTP route and WebSocket, assigning one
+allowlisted permission in a declarative manifest, and enforcing it through the common dependency.
 Keep `WORKERS=1`, one replica, local-owner defaults, and all release boundaries unchanged.
 
 ## Update Rule

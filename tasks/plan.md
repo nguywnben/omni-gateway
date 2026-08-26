@@ -33,7 +33,7 @@ number.
 | 1 — Policy and console foundation | Phases 0–2 | Decisions, theme/i18n/navigation, governed AI Quality | Complete |
 | 2 — Credential operations | Phase 3 plus credential-scoped audit/telemetry foundations | Capability-correct provider and credential fleet | Complete |
 | 3 — Access and operational evidence | Phases 4–5 | Access governance, complete audit, traces, SLOs | Complete |
-| 4 — Identity and scale | Phase 6 | RBAC/OIDC, durable state, coordinated HA | ADR review |
+| 4 — Identity and scale | Phase 6 | RBAC/OIDC, durable state, coordinated HA | In progress |
 | 5 — Production release | Phase 7 | Security/performance hardening and staged launch | Not started |
 
 Wave boundaries organize delivery; phase checkboxes continue to describe product completion.
@@ -46,11 +46,12 @@ or Phase 5 request tracing.
 - Wave 3 completion checkpoint: `76315e7` (`docs: close wave 3 operational evidence`).
 - Completed product scope: Phases 0–5; Wave 3 was accepted by the human on 2026-08-26 through the
   instruction to start the project and execute the next plan.
-- Active approved scope: Wave 4 planning and ADR review only.
-- State: **AWAITING HUMAN ACCEPTANCE — ADR-007/ADR-008**. No Phase 6 behavior changes begin until
-  the identity and HA decisions are accepted.
-- Out of scope until the applicable approval: RBAC/OIDC implementation, distributed-state
-  activation, multiple workers/replicas, destructive migration, and production release activation.
+- Active approved scope: Wave 4 under accepted ADR-007/ADR-008; W4.1–W4.2 are complete and W4.3 is
+  the next implementation slice.
+- State: **IN PROGRESS — W4.3 NEXT**. The pure authorization domain exists, but management routes
+  still use the legacy local-owner/read-write checks until W4.3 lands.
+- Still gated by later slices and evidence: OIDC activation, distributed-state activation, multiple
+  workers/replicas, destructive migration, and production release activation.
 
 ## Architecture Decisions
 
@@ -366,13 +367,13 @@ Prometheus/OpenTelemetry export controls, symptom-based alert rules, and linked 
 
 Checkpoint W3-C closed on 2026-08-26 after Phase 4–5 acceptance passed end-to-end, all repository
 quality gates passed, the committed service restarted cleanly, and the human instructed execution
-of the next plan. Phase 6 behavior remains gated by ADR-007/ADR-008 and multi-worker/multi-replica
-mode remains disabled.
+of the next plan. ADR-007/ADR-008 were accepted on 2026-08-26; later Wave 4 slices still gate OIDC
+and distributed behavior, and multi-worker/multi-replica mode remains disabled.
 
 ## Wave 4 Execution Slices
 
-Wave 4 implements [the Phase 6 specification](../docs/specs/enterprise-identity-and-ha.md) only
-after its proposed decisions are accepted. Identity and authorization land before OIDC; OIDC and
+Wave 4 implements the accepted [Phase 6 specification](../docs/specs/enterprise-identity-and-ha.md).
+Identity and authorization land before OIDC; OIDC and
 revocable sessions land before identity UI; durable parity and Redis semantics land before any
 scale-out configuration changes.
 
@@ -399,6 +400,7 @@ Define closed principal/role/permission vocabularies and a pure authorization de
 - Verification: role matrix, spoofing, malformed principal, and compatibility unit tests.
 - Dependencies: accepted W4.1.
 - Likely files: identity domain, permission registry, focused tests, API contract docs.
+- Completed: `c745e18`; 15 focused contract tests and all 724 backend tests pass.
 
 ### W4.3 — Complete management authorization coverage
 
@@ -805,8 +807,9 @@ new policy plane, verify telemetry, and retain a tested rollback image/data path
 
 ## Open Questions
 
-Human acceptance of the Phase 6 spec, ADR-007, ADR-008, permission bundles, recovery posture,
-`PyJWT[crypto]`, and proposed HA targets blocks W4.2. The proposals keep SCIM and tenant isolation
-out of Wave 4, use exact OIDC issuer/subject identity, and require 99.9% end-to-end availability,
-60-second supported failover recovery, zero correctness violations, and bounded performance impact.
-Any human revision updates the documents before behavior code begins.
+No decision gate blocks W4.3. The accepted constraints keep SCIM and tenant isolation out of Wave
+4, use exact OIDC issuer/subject identity, approve an audited `PyJWT[crypto]` addition in W4.7, and
+require 99.9% end-to-end availability, 60-second supported failover recovery, zero correctness
+violations, and bounded performance impact before coordinated activation. Enabling OIDC by default,
+disabling local recovery, changing role bundles, live migration, and scale-out still require their
+explicit later gates.

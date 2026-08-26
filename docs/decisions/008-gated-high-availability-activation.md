@@ -2,7 +2,8 @@
 
 ## Status
 
-Proposed. Human acceptance is required before distributed-state implementation or scale-out.
+Accepted on 2026-08-26. This decision authorizes the staged implementation plan, not scale-out;
+ADR-002 remains active until the separate evidence-backed activation record described below.
 
 ## Context
 

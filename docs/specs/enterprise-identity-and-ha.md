@@ -2,8 +2,9 @@
 
 ## Status
 
-Proposed for Wave 4. No RBAC/OIDC, distributed-coordination, worker-count, or replica-count change
-may ship until ADR-007 and ADR-008 are accepted by the human owner.
+Accepted for Wave 4 on 2026-08-26. W4.2 implements only the pure principal/role/permission domain;
+HTTP/WebSocket enforcement, OIDC, distributed coordination, worker-count, and replica-count
+changes remain gated by their later slices and acceptance evidence.
 
 ## Objective
 
@@ -103,8 +104,8 @@ removal proposal; existing keys are not silently narrowed.
   the code is not retained in the application URL or rendered into the page.
 
 Supporting normal enterprise RS256/PS256/ES256 verification requires the optional cryptographic
-backend for PyJWT. Wave 4 therefore proposes changing the runtime requirement from `PyJWT` to
-`PyJWT[crypto]`; this dependency change is part of ADR approval and must be audited before use.
+backend for PyJWT. Wave 4 approves changing the runtime requirement from `PyJWT` to
+`PyJWT[crypto]` in W4.7; the dependency must be pinned and audited before use.
 
 ## Session and Recovery Contract
 
@@ -247,7 +248,6 @@ docs/runbooks/                  Identity, dependency, failover, and rollback pro
 
 ### Ask first
 
-- Accept ADR-007/ADR-008 and the `PyJWT[crypto]` dependency.
 - Enable OIDC as a default login path, disable local owner access, change role bundles, run a live
   data migration, or enable coordinated/multi-replica mode.
 

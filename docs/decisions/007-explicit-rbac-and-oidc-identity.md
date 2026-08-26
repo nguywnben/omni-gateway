@@ -2,7 +2,9 @@
 
 ## Status
 
-Proposed. Human acceptance is required before implementation.
+Accepted on 2026-08-26. Delivery remains incremental: W4.2 establishes the pure principal and
+permission contract; route enforcement, repositories, sessions, and OIDC activate only in their
+later Wave 4 slices.
 
 ## Context
 

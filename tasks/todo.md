@@ -6,9 +6,9 @@
 
 ## Current Execution Gate
 
-- Program progress: 20/28 original checklist items complete (including specification approval),
-  approximately 71.4%. Wave execution-slice checkboxes below refine existing phase items and do
-  not change that denominator.
+- Program progress: 21/28 original checklist items complete (including specification and Phase 6
+  ADR approval), exactly 75.0%. Wave execution-slice checkboxes below refine existing phase items
+  and do not change that denominator.
 - [x] Complete Wave 1 / Phases 0–2 at implementation commit `39fb9da`.
 - [x] Record wave governance, recovery order, and the Wave 2 execution slices in repository docs.
 - [x] Obtain explicit human approval before implementing Wave 2.
@@ -97,9 +97,14 @@ These queue items refine Phases 4–5 and do not add to the 28-item program deno
   - `docs/specs/enterprise-identity-and-ha.md`, ADR-007, and ADR-008 define principals, roles,
     sessions, recovery, OIDC validation, durable/coordinated state, migration, failure posture,
     measurable targets, alternatives, and rollback without activating the behavior.
-- [ ] Approval gate W4-0: human accepts ADR-007, ADR-008, permission bundles, recovery posture,
+- [x] Approval gate W4-0: human accepts ADR-007, ADR-008, permission bundles, recovery posture,
   `PyJWT[crypto]`, HA targets, and the Wave 4 execution queue before W4.2.
-- [ ] W4.2 Define the principal, role, and permission contract.
+  - Accepted: 2026-08-26 when the human instructed execution of the next plan after receiving the
+    W4.1 review gate and progress report.
+- [x] W4.2 Define the principal, role, and permission contract.
+  - Complete at `c745e18`; four exact immutable role bundles, strict typed principals, denial-first
+    decisions, local-owner/OIDC adapters, bounded virtual-key compatibility, legacy-scope inventory
+    markers, and additive granular scopes pass 15 focused and 724 total tests.
 - [ ] W4.3 Enforce a complete management HTTP/WebSocket permission manifest.
 - [ ] W4.4 Add the versioned identity/role repository and SQLite migration.
 - [ ] W4.5 Add PostgreSQL and MongoDB identity repository parity.
@@ -219,7 +224,7 @@ distributed activation, multiple workers/replicas, and release activation remain
 
 ## Phase 6 — Identity and HA
 
-- [ ] Approve RBAC/OIDC and HA activation ADRs before implementation.
+- [x] Approve RBAC/OIDC and HA activation ADRs before implementation.
 - [ ] Implement viewer/operator/security-admin/owner and OIDC with recovery.
 - [ ] Move usage, traces, and audit to the selected durable backend.
 - [ ] Move runtime coordination to Redis-capable state interfaces.
