@@ -310,7 +310,11 @@ Omni Gateway reads configuration from environment variables first, then stored c
 | `CLAUDE_USER_AGENT` | `claude-cli/omni-gateway` | Optional User-Agent override for Claude Code and Claude Platform requests. |
 | `ANTIGRAVITY_USER_AGENT` | `antigravity/cli/1.0.1 windows/amd64` | Optional Google Antigravity protocol User-Agent override. |
 | `ANTIGRAVITY_PAYLOAD_USER_AGENT` | `antigravity` | Optional payload-level Google Antigravity userAgent override. |
-| `METRICS_TOKEN` | empty | Optional bearer token required to scrape `GET /metrics`. |
+| `PROMETHEUS_EXPORT_ENABLED` | `false` | Explicitly enables authenticated `GET /metrics` export. |
+| `METRICS_TOKEN` | empty | Bearer token of at least 32 UTF-8 bytes required when Prometheus export is enabled. |
+| `OTEL_EXPORT_ENABLED` | `false` | Explicitly enables content-free aggregate OTLP/HTTP metrics export. |
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | empty | HTTPS OpenTelemetry collector endpoint; credentials in URLs are rejected. |
+| `OTEL_EXPORT_INTERVAL_SECONDS` | `60` | Aggregate export interval, bounded to 15–300 seconds. |
 | `LANGFUSE_PUBLIC_KEY` | empty | Enables Langfuse trace export together with the secret key. |
 | `LANGFUSE_SECRET_KEY` | empty | Langfuse secret key for trace export. |
 | `LANGFUSE_HOST` | `https://cloud.langfuse.com` | Langfuse ingestion endpoint. |
@@ -545,7 +549,9 @@ The production baseline is Python 3.12, and CI currently verifies Python 3.12 an
 - Configure the reverse proxy to preserve `Host` and pass `X-Forwarded-Proto`; set `PANEL_COOKIE_SECURE=true` when HTTPS termination is guaranteed.
 - Set `TRUST_PROXY_HEADERS=true` only when the service is reachable exclusively through a trusted proxy that replaces `X-Forwarded-For` and `X-Forwarded-Proto`.
 - Use `GET /health` for process liveness and `GET /ready` for storage-aware readiness checks.
-- Use `GET /metrics` for Prometheus scraping; set `METRICS_TOKEN` to require bearer authentication outside trusted networks.
+- External telemetry is opt-in. Enable `PROMETHEUS_EXPORT_ENABLED` with a strong `METRICS_TOKEN`,
+  or configure the aggregate-only OpenTelemetry exporter as documented in
+  [Operational observability](docs/observability.md). Prompt and response content is never exported.
 - The Docker image starts as root only long enough to repair mounted data-directory ownership, then runs the service as the unprivileged `gateway` user.
 - Set `CORS_ORIGINS` to explicit trusted origins when browser clients need cross-origin access.
 - Keep `/opt/omni-gateway` or your chosen `DATA_DIR` backed up before upgrading or moving servers.

@@ -63,17 +63,24 @@ env:
   GUARDRAILS_INJECTION_DETECTION_ENABLED: "true"
   GUARDRAILS_BLOCKED_KEYWORDS: ""
   LANGFUSE_HOST: https://cloud.langfuse.com
+  PROMETHEUS_EXPORT_ENABLED: "false"
+  OTEL_EXPORT_ENABLED: "false"
+  OTEL_EXPORTER_OTLP_ENDPOINT: ""
+  OTEL_EXPORTER_OTLP_PROTOCOL: http/json
+  OTEL_EXPORT_INTERVAL_SECONDS: "60"
   TRUST_PROXY_HEADERS: "false"
 
 # Secret values. When existingSecret is set, it is used as-is and the
 # inline values below are ignored. Keys: API_KEY, PANEL_PASSWORD,
-# SETUP_TOKEN, METRICS_TOKEN, LANGFUSE_PUBLIC_KEY, LANGFUSE_SECRET_KEY.
+# SETUP_TOKEN, METRICS_TOKEN, OTEL_EXPORTER_OTLP_HEADERS,
+# LANGFUSE_PUBLIC_KEY, LANGFUSE_SECRET_KEY.
 secrets:
   existingSecret: ""
   apiKey: ""
   panelPassword: ""
   setupToken: ""
   metricsToken: ""
+  otelExporterHeaders: ""
   langfusePublicKey: ""
   langfuseSecretKey: ""
 
@@ -82,6 +89,11 @@ serviceMonitor:
   enabled: false
   interval: 30s
   scrapeTimeout: 10s
+  labels: {}
+
+# PrometheusRule integration using the symptom-based rules maintained by this chart.
+alerting:
+  enabled: false
   labels: {}
 
 podAnnotations: {}

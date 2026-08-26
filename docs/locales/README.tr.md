@@ -301,7 +301,7 @@ Omni Gateway, yapılandırmayı önce ortam değişkenlerinden, ardından kayded
 | `CLAUDE_USER_AGENT` | `claude-cli/omni-gateway` | Claude Code ve Claude Platform istekleri için isteğe bağlı User-Agent geçersiz kılması. |
 | `ANTIGRAVITY_USER_AGENT` | `antigravity/cli/1.0.1 windows/amd64` | Google Antigravity protokolü User-Agent geçersiz kılması. |
 | `ANTIGRAVITY_PAYLOAD_USER_AGENT` | `antigravity` | Google Antigravity yük düzeyi userAgent geçersiz kılması. |
-| `METRICS_TOKEN` | empty | Optional bearer token required to scrape `GET /metrics`. |
+| `METRICS_TOKEN` | empty | At least 32 bytes; required with opt-in `PROMETHEUS_EXPORT_ENABLED=true`. |
 | `LANGFUSE_PUBLIC_KEY` | empty | Enables Langfuse trace export together with the secret key. |
 | `LANGFUSE_SECRET_KEY` | empty | Langfuse secret key for trace export. |
 | `LANGFUSE_HOST` | `https://cloud.langfuse.com` | Langfuse ingestion endpoint. |

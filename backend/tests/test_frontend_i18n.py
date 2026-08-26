@@ -13,6 +13,9 @@ LOCALE_SOURCE = (FRONTEND / "js" / "core" / "locales.js").read_text(encoding="ut
 PAGE_LOCALE_SOURCE = (FRONTEND / "js" / "core" / "page-locales.js").read_text(encoding="utf-8")
 AUDIT_LOCALE_SOURCE = (FRONTEND / "js" / "core" / "audit-locales.js").read_text(encoding="utf-8")
 TRACE_LOCALE_SOURCE = (FRONTEND / "js" / "core" / "trace-locales.js").read_text(encoding="utf-8")
+OPERATIONAL_LOCALE_SOURCE = (FRONTEND / "js" / "core" / "operational-locales.js").read_text(
+    encoding="utf-8"
+)
 I18N_SOURCE = (FRONTEND / "js" / "core" / "i18n.js").read_text(encoding="utf-8")
 
 
@@ -83,6 +86,24 @@ class FrontendLocaleContractTests(unittest.TestCase):
         self.assertEqual(set(context_catalogs), expected)
         for locale in expected:
             self.assertEqual(len(context_catalogs[locale]), len(context_keys), locale)
+
+    def test_operational_health_catalog_is_complete_for_every_locale(self):
+        keys = re.findall(
+            r"'(slo\.[a-z0-9_]+)'",
+            _extract_array(OPERATIONAL_LOCALE_SOURCE, "OPERATIONAL_HEALTH_KEYS"),
+        )
+        values_block = OPERATIONAL_LOCALE_SOURCE.split("const OPERATIONAL_HEALTH_VALUES = {", 1)[
+            1
+        ].split("\n};", 1)[0]
+        catalogs = {
+            match.group(1) or match.group(2): json.loads(match.group(3))
+            for match in re.finditer(
+                r"^    (?:'([^']+)'|([a-z]{2})): (\[.*\]),?$", values_block, re.MULTILINE
+            )
+        }
+        self.assertEqual(len(catalogs), 15)
+        for locale, values in catalogs.items():
+            self.assertEqual(len(values), len(keys), locale)
 
     def test_audit_catalog_is_complete_for_every_locale(self):
         keys = re.findall(
@@ -249,6 +270,7 @@ class FrontendLocaleContractTests(unittest.TestCase):
             + PAGE_LOCALE_SOURCE
             + AUDIT_LOCALE_SOURCE
             + TRACE_LOCALE_SOURCE
+            + OPERATIONAL_LOCALE_SOURCE
             + I18N_SOURCE
         )
         generated_keys: set[str] = set()
@@ -274,12 +296,15 @@ class FrontendLocaleContractTests(unittest.TestCase):
             "AUDIT_KEYS",
             "TRACE_KEYS",
             "TRACE_CONTEXT_KEYS",
+            "OPERATIONAL_HEALTH_KEYS",
         ):
             source = (
                 AUDIT_LOCALE_SOURCE
                 if variable == "AUDIT_KEYS"
                 else TRACE_LOCALE_SOURCE
                 if variable in {"TRACE_KEYS", "TRACE_CONTEXT_KEYS"}
+                else OPERATIONAL_LOCALE_SOURCE
+                if variable == "OPERATIONAL_HEALTH_KEYS"
                 else PAGE_LOCALE_SOURCE
             )
             generated_keys.update(

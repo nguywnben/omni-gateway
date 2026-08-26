@@ -301,7 +301,7 @@ Omni Gateway lit la configuration en priorité depuis les variables d'environnem
 | `CLAUDE_USER_AGENT` | `claude-cli/omni-gateway` | Remplacement optionnel de User-Agent pour les requêtes Claude Code et Claude Platform. |
 | `ANTIGRAVITY_USER_AGENT` | `antigravity/cli/1.0.1 windows/amd64` | Remplacement optionnel de User-Agent au niveau protocolaire de Google Antigravity. |
 | `ANTIGRAVITY_PAYLOAD_USER_AGENT` | `antigravity` | Remplacement optionnel du champ userAgent au niveau de la charge utile de Google Antigravity. |
-| `METRICS_TOKEN` | empty | Optional bearer token required to scrape `GET /metrics`. |
+| `METRICS_TOKEN` | empty | At least 32 bytes; required with opt-in `PROMETHEUS_EXPORT_ENABLED=true`. |
 | `LANGFUSE_PUBLIC_KEY` | empty | Enables Langfuse trace export together with the secret key. |
 | `LANGFUSE_SECRET_KEY` | empty | Langfuse secret key for trace export. |
 | `LANGFUSE_HOST` | `https://cloud.langfuse.com` | Langfuse ingestion endpoint. |

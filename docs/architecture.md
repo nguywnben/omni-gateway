@@ -99,6 +99,17 @@ additive trace repositories with signed pagination and a dedicated 7-day/100,000
 retention policy; audit and raw-log policies do not prune traces. The maintained privacy, storage,
 and lifecycle boundary is documented in [Request Decision Trace Contract](request-traces.md).
 
+The operational-health plane derives a cached, bounded 15-minute RED snapshot from those traces.
+It exposes at most 5,000 sampled requests and 50 provider/model routes to the authenticated
+console, while Prometheus receives only fixed quantile/status/exhaustion vocabularies and a finite
+provider label set. Caller and policy rejections remain visible but do not degrade the service
+error SLO. External Prometheus and OTLP/HTTP JSON export are both explicit opt-ins; unsafe tokens,
+non-HTTPS OTLP endpoints, embedded credentials, arbitrary exporter headers, and unsupported OTLP
+transports fail closed. The design follows the official
+[OTLP/HTTP contract](https://opentelemetry.io/docs/specs/otlp/) and
+[symptom-based Prometheus alerting guidance](https://prometheus.io/docs/practices/alerting/).
+Alert rules link directly to the maintained [operational runbooks](observability.md).
+
 Virtual keys use a versioned, fail-closed record contract with hashed-at-rest secrets. Protocol-
 specific inference scopes are separate from management read/write scopes; existing unversioned
 keys migrate with their prior inference access and no management permission. Bounded model globs,
@@ -167,6 +178,7 @@ backend/core/panel/
   environment_credentials.py Environment credential import routes
   setup_security.py       Remote first-run bootstrap policy
   trace_routes.py         Authenticated trace query, detail, retention, and bounded export
+  observability_routes.py Authenticated RED, route-health, exhaustion, and exporter status
   providers/
     catalog.py            Provider capability discovery
     antigravity.py        Google Antigravity settings

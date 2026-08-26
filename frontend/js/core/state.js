@@ -171,6 +171,8 @@ const AppState = {
 
     usageStatsLoaded: false,
 
+    operationalHealth: null,
+
     usagePeriod: '1d',
 
     usagePage: 1,

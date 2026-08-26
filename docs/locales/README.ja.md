@@ -306,7 +306,7 @@ Omni Gateway は、環境変数 > 保存された設定 > デフォルト値の�
 | `CLAUDE_USER_AGENT` | `claude-cli/omni-gateway` | Claude Code および Claude Platform リクエスト用のオプションの User-Agent 上書き。 |
 | `ANTIGRAVITY_USER_AGENT` | `antigravity/cli/1.0.1 windows/amd64` | Google Antigravity プロトコルレベルリクエスト用のオプションの User-Agent 上書き。 |
 | `ANTIGRAVITY_PAYLOAD_USER_AGENT` | `antigravity` | Google Antigravity ペイロード層 userAgent フィールドのオプションの上書き。 |
-| `METRICS_TOKEN` | empty | Optional bearer token required to scrape `GET /metrics`. |
+| `METRICS_TOKEN` | empty | At least 32 bytes; required with opt-in `PROMETHEUS_EXPORT_ENABLED=true`. |
 | `LANGFUSE_PUBLIC_KEY` | empty | Enables Langfuse trace export together with the secret key. |
 | `LANGFUSE_SECRET_KEY` | empty | Langfuse secret key for trace export. |
 | `LANGFUSE_HOST` | `https://cloud.langfuse.com` | Langfuse ingestion endpoint. |

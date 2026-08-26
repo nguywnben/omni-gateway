@@ -8,6 +8,7 @@ from . import (
     environment_credentials,
     logs,
     model_pools,
+    observability_routes,
     providers,
     quality_policy,
     root,
@@ -36,6 +37,7 @@ def create_router() -> APIRouter:
     router.include_router(quality_policy.router)
     router.include_router(audit_routes.router)
     router.include_router(trace_routes.router)
+    router.include_router(observability_routes.router)
 
     return router
 

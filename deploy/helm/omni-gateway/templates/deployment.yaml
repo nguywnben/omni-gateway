@@ -43,11 +43,15 @@ spec:
               protocol: TCP
           env:
             {{- range $key, $value := .Values.env }}
+            {{- if ne $key "PROMETHEUS_EXPORT_ENABLED" }}
             - name: {{ $key }}
               value: {{ $value | quote }}
             {{- end }}
+            {{- end }}
+            - name: PROMETHEUS_EXPORT_ENABLED
+              value: {{ ternary "true" (default "false" (get .Values.env "PROMETHEUS_EXPORT_ENABLED")) .Values.serviceMonitor.enabled | quote }}
             {{- $secretName := include "omni-gateway.secretName" . }}
-            {{- range $envName := list "API_KEY" "PANEL_PASSWORD" "SETUP_TOKEN" "METRICS_TOKEN" "LANGFUSE_PUBLIC_KEY" "LANGFUSE_SECRET_KEY" }}
+            {{- range $envName := list "API_KEY" "PANEL_PASSWORD" "SETUP_TOKEN" "METRICS_TOKEN" "OTEL_EXPORTER_OTLP_HEADERS" "LANGFUSE_PUBLIC_KEY" "LANGFUSE_SECRET_KEY" }}
             - name: {{ $envName }}
               valueFrom:
                 secretKeyRef:

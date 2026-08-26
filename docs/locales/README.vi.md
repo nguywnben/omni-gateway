@@ -299,7 +299,11 @@ Omni Gateway đọc cấu hình ưu tiên từ các biến môi trường trư�
 | `CLAUDE_USER_AGENT` | `claude-cli/omni-gateway` | Ghi đè tùy chọn cho User-Agent đối với các request Claude Code và Claude Platform. |
 | `ANTIGRAVITY_USER_AGENT` | `antigravity/cli/1.0.1 windows/amd64` | Ghi đè tùy chọn cho User-Agent giao thức Google Antigravity. |
 | `ANTIGRAVITY_PAYLOAD_USER_AGENT` | `antigravity` | Ghi đè tùy chọn cho trường userAgent ở cấp payload của Google Antigravity. |
-| `METRICS_TOKEN` | trống | Bearer token tùy chọn bắt buộc để thu thập (scrape) `GET /metrics`. |
+| `PROMETHEUS_EXPORT_ENABLED` | `false` | Bật rõ ràng endpoint Prometheus `GET /metrics` có xác thực. |
+| `METRICS_TOKEN` | trống | Bearer token tối thiểu 32 byte, bắt buộc khi bật xuất Prometheus. |
+| `OTEL_EXPORT_ENABLED` | `false` | Bật xuất số liệu tổng hợp, không chứa nội dung qua OTLP/HTTP. |
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | trống | Endpoint HTTPS của OpenTelemetry collector; không cho phép nhúng thông tin xác thực trong URL. |
+| `OTEL_EXPORT_INTERVAL_SECONDS` | `60` | Chu kỳ xuất số liệu tổng hợp, giới hạn từ 15–300 giây. |
 | `LANGFUSE_PUBLIC_KEY` | trống | Bật xuất trace Langfuse cùng với secret key. |
 | `LANGFUSE_SECRET_KEY` | trống | Secret key của Langfuse dùng cho xuất trace. |
 | `LANGFUSE_HOST` | `https://cloud.langfuse.com` | Endpoint tiếp nhận dữ liệu của Langfuse. |
@@ -535,7 +539,9 @@ Nền tảng tiêu chuẩn cho môi trường sản xuất là Python 3.12, và 
 - Cấu hình reverse proxy để bảo toàn `Host` và truyền `X-Forwarded-Proto`; đặt `PANEL_COOKIE_SECURE=true` khi đã đảm bảo đầu cuối HTTPS.
 - Chỉ đặt `TRUST_PROXY_HEADERS=true` khi dịch vụ chỉ có thể truy cập duy nhất qua một proxy đáng tin cậy có ghi đè `X-Forwarded-For` và `X-Forwarded-Proto`.
 - Sử dụng `GET /health` cho kiểm tra tiến trình còn sống (liveness) và `GET /ready` cho kiểm tra sẵn sàng kèm lưu trữ (readiness).
-- Sử dụng `GET /metrics` cho việc thu thập số liệu Prometheus; đặt `METRICS_TOKEN` để bắt buộc xác thực bearer khi ở bên ngoài các mạng đáng tin cậy.
+- Telemetry bên ngoài mặc định bị tắt. Chỉ bật `PROMETHEUS_EXPORT_ENABLED` cùng
+  `METRICS_TOKEN` đủ mạnh hoặc cấu hình bộ xuất OpenTelemetry chỉ chứa số liệu tổng hợp theo
+  [tài liệu quan sát vận hành](../observability.md). Nội dung prompt và phản hồi không bao giờ được xuất.
 - Docker image chỉ chạy với quyền root trong khoảng thời gian đủ ngắn để sửa chữa quyền sở hữu thư mục dữ liệu được gắn kết, sau đó chạy dịch vụ dưới người dùng không có đặc quyền `gateway`.
 - Đặt `CORS_ORIGINS` thành các origin đáng tin cậy rõ ràng khi các client trên trình duyệt cần quyền truy cập cross-origin.
 - Luôn sao lưu `/opt/omni-gateway` hoặc thư mục `DATA_DIR` đã chọn trước khi nâng cấp hoặc chuyển máy chủ.

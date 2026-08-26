@@ -94,6 +94,8 @@ function setUsagePeriod(period) {
 
 async function refreshUsageStats(options = {}) {
 
+    void refreshOperationalHealth();
+
     const loading = document.getElementById('usageLoading');
 
     const list = document.getElementById('usageList');
@@ -249,6 +251,80 @@ async function refreshUsageStats(options = {}) {
 
     }
 
+}
+
+function setOperationalHealthStatus(status) {
+    const pill = document.getElementById('sloOverallStatus');
+    if (!pill) return;
+    const normalized = ['healthy', 'warning', 'critical', 'no_data'].includes(status) ? status : 'critical';
+    pill.className = `health-pill ${normalized === 'healthy' ? 'healthy' : normalized === 'critical' ? 'error' : 'warning'}`;
+    const label = pill.querySelector('span:last-child');
+    if (label) label.textContent = t(`slo.status_${normalized}`);
+}
+
+async function refreshOperationalHealth() {
+    const card = document.getElementById('operationalHealthCard');
+    if (!card) return;
+    card.setAttribute('aria-busy', 'true');
+    try {
+        const response = await fetch('./api/observability/health?window_seconds=900', {headers: getAuthHeaders()});
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        const snapshot = await response.json();
+        AppState.operationalHealth = snapshot;
+        const red = snapshot.red || {};
+        document.getElementById('sloRequestRate').textContent = formatUsageNumber(red.requests_per_minute, {decimals: 1});
+        document.getElementById('sloErrorRate').textContent = `${(Number(red.error_rate || 0) * 100).toFixed(1)}%`;
+        document.getElementById('sloErrorCount').textContent = t('slo.errors_of_requests', {errors: formatUsageNumber(red.errors), requests: formatUsageNumber(red.requests)});
+        document.getElementById('sloP95').textContent = `${formatUsageNumber(red.p95_duration_ms)} ms`;
+        const exhaustion = Object.values(snapshot.exhaustion || {}).reduce((total, value) => total + Number(value || 0), 0);
+        document.getElementById('sloExhaustion').textContent = formatUsageNumber(exhaustion);
+        setOperationalHealthStatus(snapshot.status);
+        renderOperationalRoutes(snapshot.routes || []);
+        const telemetry = snapshot.telemetry || {};
+        document.getElementById('sloPrometheusStatus').textContent = t(telemetry.prometheus?.enabled ? 'slo.enabled' : 'slo.disabled_default');
+        document.getElementById('sloOtelStatus').textContent = t(telemetry.opentelemetry?.enabled ? 'slo.enabled' : 'slo.disabled_default');
+        const notice = document.getElementById('sloSampleNotice');
+        notice.hidden = !snapshot.sample_truncated;
+        notice.textContent = snapshot.sample_truncated ? t('slo.sample_truncated', {count: formatUsageNumber(snapshot.sample_size)}) : '';
+    } catch (error) {
+        setOperationalHealthStatus('critical');
+        const rows = document.getElementById('sloRouteRows');
+        if (rows) {
+            rows.replaceChildren();
+            const row = rows.insertRow();
+            const cell = row.insertCell();
+            cell.colSpan = 4;
+            cell.textContent = t('slo.load_failed');
+        }
+    } finally {
+        card.setAttribute('aria-busy', 'false');
+    }
+}
+
+function renderOperationalRoutes(routes) {
+    const target = document.getElementById('sloRouteRows');
+    if (!target) return;
+    target.replaceChildren();
+    if (!routes.length) {
+        const row = target.insertRow();
+        const cell = row.insertCell();
+        cell.colSpan = 4;
+        cell.textContent = t('slo.no_data');
+        return;
+    }
+    routes.slice(0, 10).forEach((route) => {
+        const row = target.insertRow();
+        [
+            route.route,
+            formatUsageNumber(route.requests),
+            `${(Number(route.error_rate || 0) * 100).toFixed(1)}%`,
+            `${formatUsageNumber(route.p95_duration_ms)} ms`,
+        ].forEach((value) => {
+            const cell = row.insertCell();
+            cell.textContent = String(value);
+        });
+        row.dataset.status = route.status;
+    });
 }
 
 function getUsageCallCount(stats = {}) {

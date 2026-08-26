@@ -301,7 +301,7 @@ Omni Gateway 读取配置的优先级为：环境变量 > 已保存配置 > 默�
 | `CLAUDE_USER_AGENT` | `claude-cli/omni-gateway` | Claude Code 与 Claude Platform 请求的可选 User-Agent 覆盖值。 |
 | `ANTIGRAVITY_USER_AGENT` | `antigravity/cli/1.0.1 windows/amd64` | Google Antigravity 协议级请求的可选 User-Agent 覆盖值。 |
 | `ANTIGRAVITY_PAYLOAD_USER_AGENT` | `antigravity` | Google Antigravity 载荷层 userAgent 的可选覆盖值。 |
-| `METRICS_TOKEN` | empty | Optional bearer token required to scrape `GET /metrics`. |
+| `METRICS_TOKEN` | empty | At least 32 bytes; required with opt-in `PROMETHEUS_EXPORT_ENABLED=true`. |
 | `LANGFUSE_PUBLIC_KEY` | empty | Enables Langfuse trace export together with the secret key. |
 | `LANGFUSE_SECRET_KEY` | empty | Langfuse secret key for trace export. |
 | `LANGFUSE_HOST` | `https://cloud.langfuse.com` | Langfuse ingestion endpoint. |

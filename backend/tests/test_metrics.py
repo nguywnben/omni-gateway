@@ -71,16 +71,37 @@ class RenderPrometheusMetricsTests(unittest.TestCase):
         self.assertIn("# TYPE omni_requests_total counter", output)
         self.assertIn("# TYPE omni_uptime_seconds gauge", output)
 
-    def test_label_values_are_escaped(self):
+    def test_unknown_provider_labels_are_collapsed(self):
         rows = [dict(SAMPLE_ROWS[0], provider='weird"provider\\name')]
         output = render_prometheus_metrics(rows)
-        self.assertIn('provider="weird\\"provider\\\\name"', output)
+        self.assertIn('provider="other"', output)
+        self.assertNotIn("weird", output)
 
     def test_empty_rows_still_render_process_metrics(self):
         output = render_prometheus_metrics([])
         self.assertIn("omni_uptime_seconds", output)
         self.assertIn("omni_response_cache_entries", output)
         self.assertIn("omni_virtual_key_quota_events_total", output)
+        self.assertIn("omni_storage_ready 1", output)
+
+    def test_red_metrics_have_only_fixed_labels(self):
+        snapshot = {
+            "status": "warning",
+            "red": {
+                "requests": 10,
+                "error_rate": 0.1,
+                "p50_duration_ms": 1,
+                "p95_duration_ms": 2,
+                "p99_duration_ms": 3,
+            },
+            "exhaustion": {"quota": 2, "budget": 1},
+            "routes": [{"model": "must-not-be-a-label", "route": "secret-route"}],
+        }
+        output = render_prometheus_metrics([], snapshot)
+        self.assertIn('omni_red_duration_milliseconds{quantile="0.95"} 2', output)
+        self.assertIn('omni_exhaustion_events{category="quota"} 2', output)
+        self.assertNotIn("must-not-be-a-label", output)
+        self.assertNotIn("secret-route", output)
 
     def test_credential_operation_metrics_are_exposed_with_bounded_labels(self):
         with patch("core.credential_operation_evidence.log.info"):
@@ -106,15 +127,25 @@ class RenderPrometheusMetricsTests(unittest.TestCase):
 
 
 class MetricsEndpointTests(unittest.TestCase):
-    def test_endpoint_returns_text_format(self):
-        with patch.object(metrics_module, "get_provider_metrics", return_value=SAMPLE_ROWS):
+    def test_endpoint_is_not_externally_enabled_by_default(self):
+        with patch.dict("os.environ", {}, clear=True):
             response = _run(metrics(authorization=None))
+        self.assertEqual(response.status_code, 404)
+
+    def test_enabled_endpoint_returns_text_format(self):
+        env = {"PROMETHEUS_EXPORT_ENABLED": "true", "METRICS_TOKEN": "x" * 32}
+        with (
+            patch.dict("os.environ", env, clear=True),
+            patch.object(metrics_module, "get_provider_metrics", return_value=SAMPLE_ROWS),
+        ):
+            response = _run(metrics(authorization=f"Bearer {'x' * 32}"))
         self.assertEqual(response.status_code, 200)
         self.assertIn("text/plain", response.media_type)
         self.assertIn(b"omni_requests_total", response.body)
 
     def test_token_protection_rejects_missing_bearer(self):
-        with patch.dict("os.environ", {"METRICS_TOKEN": "secret-token"}):
+        env = {"PROMETHEUS_EXPORT_ENABLED": "true", "METRICS_TOKEN": "s" * 32}
+        with patch.dict("os.environ", env, clear=True):
             response = _run(metrics(authorization=None))
             self.assertEqual(response.status_code, 401)
 
@@ -122,10 +153,17 @@ class MetricsEndpointTests(unittest.TestCase):
             self.assertEqual(response_bad.status_code, 401)
 
     def test_token_protection_accepts_valid_bearer(self):
-        with patch.dict("os.environ", {"METRICS_TOKEN": "secret-token"}):
+        env = {"PROMETHEUS_EXPORT_ENABLED": "true", "METRICS_TOKEN": "s" * 32}
+        with patch.dict("os.environ", env, clear=True):
             with patch.object(metrics_module, "get_provider_metrics", return_value=[]):
-                response = _run(metrics(authorization="Bearer secret-token"))
+                response = _run(metrics(authorization=f"Bearer {'s' * 32}"))
         self.assertEqual(response.status_code, 200)
+
+    def test_invalid_enabled_configuration_fails_closed(self):
+        env = {"PROMETHEUS_EXPORT_ENABLED": "true", "METRICS_TOKEN": "short"}
+        with patch.dict("os.environ", env, clear=True):
+            response = _run(metrics(authorization="Bearer short"))
+        self.assertEqual(response.status_code, 503)
 
 
 class ProviderMetricsLedgerTests(unittest.TestCase):

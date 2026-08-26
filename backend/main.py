@@ -25,6 +25,7 @@ from core.management_audit import (
     record_classified_management_response,
 )
 from core.metrics import router as metrics_router
+from core.otel_exporter import run_otel_export_loop
 from core.panel import router as panel_router
 from core.panel.setup_security import get_setup_bootstrap_token
 from core.request_context import request_scope
@@ -49,7 +50,8 @@ from core.router.vertex.gemini import router as vertex_gemini_router
 from core.router.vertex.model_list import router as vertex_model_list_router
 from core.router.vertex.openai import router as vertex_openai_router
 from core.storage_adapter import close_storage_adapter
-from core.task_manager import shutdown_all_tasks
+from core.task_manager import create_managed_task, shutdown_all_tasks
+from core.telemetry_policy import get_telemetry_policy
 from fastapi import FastAPI, Request, Response
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
@@ -135,6 +137,21 @@ async def lifespan(app: FastAPI):
         await credential_manager.close()
         await close_storage_adapter()
         raise RuntimeError("Request trace service initialization failed.") from e
+
+    try:
+        telemetry_policy = get_telemetry_policy()
+        if telemetry_policy.otel_enabled:
+            create_managed_task(
+                run_otel_export_loop(telemetry_policy), name="otel-aggregate-export"
+            )
+            log.info("Content-free OpenTelemetry aggregate export enabled.")
+    except Exception as e:
+        log.critical(f"External telemetry configuration failed: {type(e).__name__}")
+        await close_request_trace_service()
+        await close_audit_service()
+        await credential_manager.close()
+        await close_storage_adapter()
+        raise RuntimeError("External telemetry configuration failed.") from e
 
     try:
         await keep_alive_service.start()

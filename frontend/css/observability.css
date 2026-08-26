@@ -51,3 +51,19 @@
 .trace-card button:focus-visible, .trace-detail-dialog button:focus-visible, .trace-filter-grid :focus-visible, .trace-retention :focus-visible { outline: 3px solid var(--focus-ring); outline-offset: 2px; }
 @media (max-width: 960px) { .trace-layout { grid-template-columns: 1fr; } .trace-retention { position: static; } }
 @media (max-width: 760px) { .trace-filter-grid, .trace-detail-grid { grid-template-columns: 1fr; } .trace-filter-wide, .trace-filter-hint { grid-column: auto; } .trace-card { grid-template-columns: 1fr; } .trace-card > .btn { width: 100%; } .raw-log-header { flex-direction: column; } .trace-detail-actions { align-items: stretch; flex-direction: column-reverse; } .trace-detail-actions .btn { width: 100%; } }
+
+.operational-health-card { margin: 20px 0; }
+.operational-health-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 18px; }
+.slo-red-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin: 18px 0; }
+.slo-metric { display: grid; gap: 4px; min-width: 0; padding: 14px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--bg-subtle); }
+.slo-metric span, .slo-metric small { color: var(--text-muted); font-size: 12px; }
+.slo-metric strong { overflow-wrap: anywhere; font-size: clamp(20px, 3vw, 30px); }
+.slo-detail-grid { display: grid; grid-template-columns: minmax(0, 2fr) minmax(230px, 1fr); gap: 18px; }
+.slo-detail-grid h3 { margin: 0 0 10px; font-size: 14px; }
+.slo-export-status { padding: 14px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--bg-subtle); }
+.slo-export-status p { color: var(--text-muted); font-size: 12px; }
+.slo-export-status dl { display: grid; gap: 8px; margin: 14px 0; }
+.slo-export-status dl div { display: flex; justify-content: space-between; gap: 12px; }
+.slo-export-status dd { margin: 0; font-weight: 600; }
+@media (max-width: 960px) { .slo-red-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } .slo-detail-grid { grid-template-columns: 1fr; } }
+@media (max-width: 520px) { .operational-health-header { flex-direction: column; } .slo-red-grid { grid-template-columns: 1fr; } }

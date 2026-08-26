@@ -53,6 +53,7 @@ CONSOLE_SCRIPT_ASSETS = (
     "js/core/page-locales.js",
     "js/core/audit-locales.js",
     "js/core/trace-locales.js",
+    "js/core/operational-locales.js",
     "js/core/i18n.js",
     "js/core/navigation.js",
     "js/core/credential-manager.js",

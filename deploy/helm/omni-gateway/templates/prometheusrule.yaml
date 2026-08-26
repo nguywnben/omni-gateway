@@ -1,0 +1,16 @@
+{{- if .Values.alerting.enabled }}
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: {{ include "omni-gateway.fullname" . }}
+  labels:
+    {{- include "omni-gateway.labels" . | nindent 4 }}
+    {{- with .Values.alerting.labels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+spec:
+  groups:
+    - name: omni-gateway-symptoms
+      rules:
+        {{- (index (.Files.Get "observability/prometheus-alerts.yml" | fromYaml) "groups" 0 "rules") | toYaml | nindent 8 }}
+{{- end }}

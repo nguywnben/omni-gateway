@@ -301,7 +301,7 @@ Omni Gateway는 환경 변수 > 저장된 설정 > 기본값 순서의 우선순
 | `CLAUDE_USER_AGENT` | `claude-cli/omni-gateway` | Claude Code 및 Claude Platform 요청을 위한 선택적 User-Agent 재정의. |
 | `ANTIGRAVITY_USER_AGENT` | `antigravity/cli/1.0.1 windows/amd64` | Google Antigravity 프로토콜 레벨 요청을 위한 선택적 User-Agent 재정의. |
 | `ANTIGRAVITY_PAYLOAD_USER_AGENT` | `antigravity` | Google Antigravity 페이로드 레벨 userAgent 필드에 대한 선택적 재정의. |
-| `METRICS_TOKEN` | empty | Optional bearer token required to scrape `GET /metrics`. |
+| `METRICS_TOKEN` | empty | At least 32 bytes; required with opt-in `PROMETHEUS_EXPORT_ENABLED=true`. |
 | `LANGFUSE_PUBLIC_KEY` | empty | Enables Langfuse trace export together with the secret key. |
 | `LANGFUSE_SECRET_KEY` | empty | Langfuse secret key for trace export. |
 | `LANGFUSE_HOST` | `https://cloud.langfuse.com` | Langfuse ingestion endpoint. |
