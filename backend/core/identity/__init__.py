@@ -44,6 +44,21 @@ from core.identity.repository import (
     RoleBindingRecord,
     RoleBindingSource,
 )
+from core.identity.sessions import (
+    SESSION_SCHEMA_VERSION,
+    SESSION_TOKEN_BYTES,
+    SESSION_TOKEN_PREFIX,
+    InProcessSessionStore,
+    IssuedSession,
+    SessionAuthenticationMethod,
+    SessionError,
+    SessionExpired,
+    SessionNotFound,
+    SessionPolicy,
+    SessionRecord,
+    SessionStale,
+    SessionStore,
+)
 
 __all__ = [
     "LEGACY_MANAGEMENT_READ_SCOPE",
@@ -84,4 +99,17 @@ __all__ = [
     "OidcPolicyRevisionRecord",
     "RoleBindingRecord",
     "RoleBindingSource",
+    "SESSION_SCHEMA_VERSION",
+    "SESSION_TOKEN_BYTES",
+    "SESSION_TOKEN_PREFIX",
+    "InProcessSessionStore",
+    "IssuedSession",
+    "SessionAuthenticationMethod",
+    "SessionError",
+    "SessionExpired",
+    "SessionNotFound",
+    "SessionPolicy",
+    "SessionRecord",
+    "SessionStale",
+    "SessionStore",
 ]
