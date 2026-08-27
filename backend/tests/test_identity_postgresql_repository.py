@@ -191,6 +191,10 @@ class PostgreSQLIdentityRepositoryTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("VALUES ($1, $2", sql)
         self.assertNotIn("User-123", sql)
         self.assertIn("User-123", args)
+        self.assertEqual(
+            [value.tzinfo for value in args if isinstance(value, datetime)],
+            [timezone.utc, timezone.utc, timezone.utc, timezone.utc],
+        )
         self.assertEqual(self.connection.transaction_entries, 2)
 
         self.connection.execute_error = asyncpg.UniqueViolationError("duplicate")

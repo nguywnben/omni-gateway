@@ -169,7 +169,7 @@ class PostgreSQLIdentityRepository:
         await connection.execute(
             f"INSERT INTO management_role_bindings ({', '.join(_BINDING_COLUMNS)}) "
             f"VALUES ({self._placeholders(len(_BINDING_COLUMNS))}) ON CONFLICT DO NOTHING",
-            *(binding[column] for column in _BINDING_COLUMNS),
+            *self._database_values(binding, _BINDING_COLUMNS),
         )
         await connection.execute(
             """
@@ -180,7 +180,7 @@ class PostgreSQLIdentityRepository:
             policy["schema_version"],
             policy["revision"],
             policy["authorization_epoch"],
-            policy["updated_at"],
+            self._timestamp_value(policy["updated_at"]),
         )
         await connection.execute(
             """
@@ -189,7 +189,7 @@ class PostgreSQLIdentityRepository:
             """,
             migration["migration_id"],
             migration["schema_version"],
-            migration["applied_at"],
+            self._timestamp_value(migration["applied_at"]),
         )
 
     async def _validate_store(self, connection: asyncpg.Connection) -> None:
@@ -436,7 +436,7 @@ class PostgreSQLIdentityRepository:
         await connection.execute(
             f"INSERT INTO management_role_bindings ({', '.join(_BINDING_COLUMNS)}) "
             f"VALUES ({PostgreSQLIdentityRepository._placeholders(len(_BINDING_COLUMNS))})",
-            *(record[column] for column in _BINDING_COLUMNS),
+            *PostgreSQLIdentityRepository._database_values(record, _BINDING_COLUMNS),
         )
 
     @staticmethod
@@ -445,7 +445,28 @@ class PostgreSQLIdentityRepository:
 
     @staticmethod
     def _identity_values(record: dict[str, object]) -> tuple[object, ...]:
-        return tuple(record[column] for column in _IDENTITY_COLUMNS)
+        return PostgreSQLIdentityRepository._database_values(record, _IDENTITY_COLUMNS)
+
+    @staticmethod
+    def _database_values(record: dict[str, object], columns: tuple[str, ...]) -> tuple[object, ...]:
+        return tuple(
+            PostgreSQLIdentityRepository._timestamp_value(record[column])
+            if column in {"created_at", "updated_at", "applied_at"}
+            else record[column]
+            for column in columns
+        )
+
+    @staticmethod
+    def _timestamp_value(value: object) -> datetime:
+        if type(value) is not str:
+            raise ValueError("Timestamp is invalid.")
+        try:
+            parsed = datetime.fromisoformat(value)
+        except ValueError as exc:
+            raise ValueError("Timestamp is invalid.") from exc
+        if parsed.tzinfo is None or parsed.utcoffset() is None:
+            raise ValueError("Timestamp is invalid.")
+        return parsed.astimezone(timezone.utc)
 
     @staticmethod
     def _joined_columns() -> str:
