@@ -122,13 +122,13 @@ class InProcessSessionStoreTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_idle_and_absolute_expiry_are_terminal(self):
         idle = await self._issue()
-        absolute = await self._issue(now=2_000.0)
 
         with self.assertRaises(SessionExpired):
             await self.store.resolve(idle.token, current_authorization_epoch=7, now=1_300.0)
         with self.assertRaises(SessionNotFound):
             await self.store.resolve(idle.token, current_authorization_epoch=7, now=1_299.0)
 
+        absolute = await self._issue(now=2_000.0)
         await self.store.resolve(
             absolute.token,
             current_authorization_epoch=7,
@@ -273,6 +273,42 @@ class InProcessSessionStoreTests(unittest.IsolatedAsyncioTestCase):
         issued = await self._issue()
         self.assertTrue(re.fullmatch(r"ogs_[A-Za-z0-9_-]{43}", issued.token))
 
+    async def test_capacity_is_bounded_and_evicts_the_least_recently_used_session(self):
+        store = InProcessSessionStore(
+            hmac_key=b"c" * 32,
+            policy=SessionPolicy(
+                idle_ttl_seconds=300,
+                absolute_ttl_seconds=900,
+                max_active_sessions=2,
+            ),
+        )
+        first = await store.issue(
+            principal=self.owner,
+            authentication_method=SessionAuthenticationMethod.LOCAL_PASSWORD,
+            authorization_epoch=7,
+            now=1_000.0,
+        )
+        second = await store.issue(
+            principal=self.owner,
+            authentication_method=SessionAuthenticationMethod.LOCAL_PASSWORD,
+            authorization_epoch=7,
+            now=1_001.0,
+        )
+        await store.resolve(first.token, current_authorization_epoch=7, now=1_010.0)
+
+        third = await store.issue(
+            principal=self.owner,
+            authentication_method=SessionAuthenticationMethod.LOCAL_PASSWORD,
+            authorization_epoch=7,
+            now=1_011.0,
+        )
+
+        self.assertEqual(len(store._sessions), 2)
+        await store.resolve(first.token, current_authorization_epoch=7, now=1_012.0)
+        await store.resolve(third.token, current_authorization_epoch=7, now=1_012.0)
+        with self.assertRaises(SessionNotFound):
+            await store.resolve(second.token, current_authorization_epoch=7, now=1_012.0)
+
 
 class SessionPolicyTests(unittest.TestCase):
     def test_policy_is_bounded_and_absolute_ttl_must_exceed_idle_ttl(self):
@@ -289,6 +325,14 @@ class SessionPolicyTests(unittest.TestCase):
         ):
             with self.subTest(values=values), self.assertRaises(ValueError):
                 SessionPolicy(idle_ttl_seconds=values[0], absolute_ttl_seconds=values[1])
+
+        for capacity in (0, 100_001, True):
+            with self.subTest(capacity=capacity), self.assertRaises(ValueError):
+                SessionPolicy(
+                    idle_ttl_seconds=300,
+                    absolute_ttl_seconds=900,
+                    max_active_sessions=capacity,
+                )
 
 
 class SessionServiceTests(unittest.IsolatedAsyncioTestCase):

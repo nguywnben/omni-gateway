@@ -25,6 +25,8 @@ SESSION_TOKEN_PREFIX = "ogs_"
 SESSION_TOKEN_BYTES = 32
 MIN_SESSION_TTL_SECONDS = 300
 MAX_SESSION_TTL_SECONDS = 2_592_000
+MIN_ACTIVE_SESSIONS = 1
+MAX_ACTIVE_SESSIONS = 100_000
 
 _SESSION_TOKEN_PATTERN = re.compile(r"^ogs_[A-Za-z0-9_-]{43}$")
 _SESSION_DIGEST_PATTERN = re.compile(r"^[0-9a-f]{64}$")
@@ -94,6 +96,7 @@ def _strict_timestamp(value: object, label: str) -> float:
 class SessionPolicy:
     idle_ttl_seconds: int
     absolute_ttl_seconds: int
+    max_active_sessions: int = 10_000
 
     def __post_init__(self) -> None:
         if type(self.idle_ttl_seconds) is not int or not (
@@ -106,6 +109,10 @@ class SessionPolicy:
             raise ValueError("Session absolute lifetime is invalid.")
         if self.absolute_ttl_seconds <= self.idle_ttl_seconds:
             raise ValueError("Session absolute lifetime must exceed its idle lifetime.")
+        if type(self.max_active_sessions) is not int or not (
+            MIN_ACTIVE_SESSIONS <= self.max_active_sessions <= MAX_ACTIVE_SESSIONS
+        ):
+            raise ValueError("Session capacity is invalid.")
 
 
 @dataclass(frozen=True, slots=True)
@@ -258,6 +265,23 @@ class InProcessSessionStore:
         authorization_epoch: int,
         now: float,
     ) -> IssuedSession:
+        expired = [
+            digest
+            for digest, record in self._sessions.items()
+            if now >= record.idle_expires_at or now >= record.absolute_expires_at
+        ]
+        for digest in expired:
+            self._sessions.pop(digest, None)
+        while len(self._sessions) >= self._policy.max_active_sessions:
+            least_recent_digest = min(
+                self._sessions,
+                key=lambda digest: (
+                    self._sessions[digest].last_seen_at,
+                    self._sessions[digest].issued_at,
+                    digest,
+                ),
+            )
+            self._sessions.pop(least_recent_digest, None)
         for _attempt in range(4):
             token = SESSION_TOKEN_PREFIX + secrets.token_urlsafe(SESSION_TOKEN_BYTES)
             digest = self._digest(token)
@@ -448,9 +472,16 @@ def get_session_policy() -> SessionPolicy:
         MIN_SESSION_TTL_SECONDS,
         absolute_ttl - 1,
     )
+    max_active_sessions = _env_lifetime(
+        "PANEL_SESSION_MAX_ACTIVE",
+        10_000,
+        MIN_ACTIVE_SESSIONS,
+        MAX_ACTIVE_SESSIONS,
+    )
     return SessionPolicy(
         idle_ttl_seconds=idle_ttl,
         absolute_ttl_seconds=absolute_ttl,
+        max_active_sessions=max_active_sessions,
     )
 
 
