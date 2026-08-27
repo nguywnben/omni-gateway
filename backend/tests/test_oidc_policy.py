@@ -136,6 +136,12 @@ class OidcPolicyTests(unittest.TestCase):
             )
 
     def test_issuer_and_redirect_require_exact_safe_https_urls(self):
+        root_issuer = load_oidc_configuration(
+            _revision(),
+            environ=_enabled_environment() | {"OIDC_ISSUER": "https://identity.example.com"},
+        ).policy
+        self.assertEqual(root_issuer.issuer, "https://identity.example.com")
+
         invalid_issuers = (
             "http://identity.example.com",
             "https://user@identity.example.com",

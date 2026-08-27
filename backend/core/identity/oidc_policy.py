@@ -121,7 +121,7 @@ class OidcPolicy:
             raise OidcConfigurationError("Enabled OIDC policy is incomplete.")
         issuer = _split_https_url(self.issuer, "OIDC_ISSUER")
         redirect = _split_https_url(self.redirect_uri, "OIDC_REDIRECT_URI")
-        if issuer.query or not issuer.path.startswith("/"):
+        if issuer.query:
             raise OidcConfigurationError("OIDC issuer is invalid.")
         if redirect.query or redirect.path in {"", "/"} or not redirect.path.startswith("/"):
             raise OidcConfigurationError("OIDC redirect URI is invalid.")
@@ -265,7 +265,7 @@ def _split_https_url(value: str, name: str) -> SplitResult:
 def _issuer_url(environment: Mapping[str, str]) -> tuple[str, str]:
     value = _required_text(environment, "OIDC_ISSUER", maximum=_MAX_URL_LENGTH)
     parsed = _split_https_url(value, "OIDC_ISSUER")
-    if parsed.query or not parsed.path.startswith("/"):
+    if parsed.query:
         raise OidcConfigurationError("OIDC_ISSUER must be an exact HTTPS issuer URL.")
     return value, _origin(parsed)
 

@@ -25,6 +25,12 @@ from core.identity.manifest import (
     management_route_manifest,
     require_management_route,
 )
+from core.identity.oidc_discovery import (
+    OidcDiscoveryDocument,
+    OidcDiscoveryError,
+    discover_oidc,
+)
+from core.identity.oidc_http import OidcHttpClient, OidcHttpError
 from core.identity.oidc_policy import (
     OIDC_POLICY_SCHEMA_VERSION,
     OidcClaimPolicy,
@@ -96,6 +102,11 @@ __all__ = [
     "UnclassifiedManagementRoute",
     "management_route_manifest",
     "require_management_route",
+    "OidcDiscoveryDocument",
+    "OidcDiscoveryError",
+    "discover_oidc",
+    "OidcHttpClient",
+    "OidcHttpError",
     "OIDC_POLICY_SCHEMA_VERSION",
     "OidcClaimPolicy",
     "OidcConfiguration",
