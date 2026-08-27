@@ -4,18 +4,19 @@
 
 - Updated: 2026-08-27 (Asia/Saigon).
 - Branch: `codex/enterprise-overhaul`.
-- Implementation baseline: `5a81b83 feat: add SQLite identity repository`.
-- Completed scope: Waves 1–3 / Phases 0–5 plus Wave 4 slices W4.1–W4.4.
+- Implementation baseline: `b3352b5 fix: encode PostgreSQL identity timestamps`.
+- Completed scope: Waves 1–3 / Phases 0–5 plus Wave 4 slices W4.1–W4.5.
 - Original program progress: 21/28 approved checklist items complete (including specification and
   Phase 6 ADR approval), exactly 75.0%; wave execution-slice checkboxes are refinements and are not
   added to that denominator.
-- Active scope: Wave 4 W4.5, PostgreSQL/MongoDB identity parity and adapter wiring.
-- Control state: **IN PROGRESS — W4.5 NEXT**.
-- Expected worktree state at this checkpoint: clean after the W4.4 documentation commit.
+- Active scope: Wave 4 W4.6, opaque revocable sessions and local-owner recovery.
+- Control state: **IN PROGRESS — W4.6 NEXT**.
+- Expected worktree state at this checkpoint: clean after the W4.5 documentation commit.
 - Expected runtime: one Omni Gateway listener on `http://127.0.0.1:4283`; `/health` and `/ready`
   return HTTP 200.
-- Last verified full suite: 762 tests passed. Repository-wide Ruff lint/format, compileall, and
-  diff-check pass for W4.4. The earlier W3-C JavaScript, YAML, shell-syntax, dependency,
+- Last verified full suite: 801 tests passed with 14 opt-in live backend tests skipped because no
+  test URI was configured. Repository-wide Ruff lint/format, compileall, pip consistency, and
+  diff-check pass for W4.5. The earlier W3-C JavaScript, YAML, shell-syntax, dependency,
   vulnerability, and authenticated 360/768/1024/1440 browser matrix remain the latest evidence for
   unchanged areas.
 
@@ -285,6 +286,16 @@ silently choosing a new design.
   conditional revisions; authorization changes advance epochs; two concurrent writers produce one
   winner. Restart, corruption, owner-lockout, rollback, bounds, redaction, and independent-resource
   revision regressions are covered by 21 focused tests. All 762 tests and repository gates pass.
+- W4.5 shared-backend evidence: `65335bc` extracts one backend-neutral parity fixture; `3d47e9d`
+  and `6ec265b` implement PostgreSQL and MongoDB repositories; `12ff59e` wires all three managers
+  through the storage adapter and adds isolated opt-in live suites. PostgreSQL uses additive
+  normalized tables, transactions for multi-table mutations, parameterized revision CAS, exact
+  collation, and UTC datetime encoding at the asyncpg boundary. MongoDB embeds each identity and
+  binding for atomic authorization changes, applies simple-collation partial uniqueness only to
+  OIDC documents, and keeps policy/migration checkpoints separate. Review commits `c610cd7` and
+  `b3352b5` close security-admin schema parity and timestamp portability regressions. Forty-six
+  focused tests execute locally, fourteen live tests skip without explicit URIs, and all 801 tests
+  plus Ruff lint/format, compileall, pip consistency, and diff-check pass.
 
 ## Approved vs. Proposed Scope
 
@@ -311,12 +322,12 @@ silently choosing a new design.
 ### Approved and in progress
 
 - The Phase 6 specification, ADR-007, ADR-008, and Wave 4 execution queue.
-- W4.1–W4.4 are complete; W4.5 is the active next slice.
+- W4.1–W4.5 are complete; W4.6 is the active next slice.
 
 ### Approved for staged implementation, not active yet
 
-- Shared-backend identity parity, sessions/OIDC, Redis coordination, durable HA migration, and
-  multiple workers/replicas remain gated by W4.5–W4.19 and their checkpoints.
+- Sessions/OIDC, Redis coordination, durable HA migration, and multiple workers/replicas remain
+  gated by W4.6–W4.19 and their checkpoints.
 - Phase 7 release activation, production deployment, or destructive migration.
 
 Foundations borrowed from Phase 4 or Phase 5 remain partial and must not cause those phase
@@ -338,11 +349,10 @@ checkboxes to be marked complete.
 
 ## Immediate Next Action
 
-Begin W4.5 by extracting reusable backend contract fixtures, then implement PostgreSQL and MongoDB
-identity repositories with the same ordering, uniqueness, independent revision, owner, migration,
-corruption, and redaction behavior as SQLite. Wire repository selection through the existing
-storage adapter only after parity passes. Keep `WORKERS=1`, one replica, local-owner defaults, and
-all release boundaries unchanged.
+Begin W4.6 with the semantic session-store contract and in-process implementation, then add opaque
+HMAC-indexed sessions, idle/absolute expiry, rotation/revocation, authorization-epoch invalidation,
+and the audited local-owner recovery path. Preserve the current login compatibility window, cookie
+and CSRF protections, `WORKERS=1`, one replica, and every release boundary.
 
 ## Update Rule
 

@@ -46,10 +46,10 @@ or Phase 5 request tracing.
 - Wave 3 completion checkpoint: `76315e7` (`docs: close wave 3 operational evidence`).
 - Completed product scope: Phases 0–5; Wave 3 was accepted by the human on 2026-08-26 through the
   instruction to start the project and execute the next plan.
-- Active approved scope: Wave 4 under accepted ADR-007/ADR-008; W4.1–W4.4 are complete and W4.5 is
+- Active approved scope: Wave 4 under accepted ADR-007/ADR-008; W4.1–W4.5 are complete and W4.6 is
   the next implementation slice.
-- State: **IN PROGRESS — W4.5 NEXT**. Management authorization and the SQLite identity repository
-  are complete; PostgreSQL/MongoDB parity and adapter selection remain W4.5 work.
+- State: **IN PROGRESS — W4.6 NEXT**. Management authorization and durable identity parity across
+  SQLite/PostgreSQL/MongoDB are complete; opaque sessions and recovery remain W4.6 work.
 - Still gated by later slices and evidence: OIDC activation, distributed-state activation, multiple
   workers/replicas, destructive migration, and production release activation.
 
@@ -443,6 +443,12 @@ Implement the W4.4 repository contract for both shared durable backends.
 - Verification: contract fixtures plus opt-in live backend integration tests.
 - Dependencies: W4.4.
 - Likely files: PostgreSQL repository, MongoDB repository, adapter wiring, parity tests.
+- Completed: reusable contract fixture `65335bc`; PostgreSQL `3d47e9d`; MongoDB `6ec265b`; adapter
+  and opt-in live parity harness `12ff59e`; review corrections `c610cd7` and `b3352b5`. Exact
+  identity/order/uniqueness, independent revisions, authorization epochs, owner invariants,
+  migration checkpoints, corruption handling, and generic errors match SQLite. Forty-six focused
+  cases run locally, fourteen live backend cases skip without explicit test URIs, all 801 tests
+  pass, and repository-wide lint/format/compile/dependency gates are clean.
 
 ### W4.6 — Opaque standalone sessions and local-owner recovery
 
@@ -817,7 +823,7 @@ new policy plane, verify telemetry, and retain a tested rollback image/data path
 
 ## Open Questions
 
-No decision gate blocks W4.5. The accepted constraints keep SCIM and tenant isolation out of Wave
+No decision gate blocks W4.6. The accepted constraints keep SCIM and tenant isolation out of Wave
 4, use exact OIDC issuer/subject identity, approve an audited `PyJWT[crypto]` addition in W4.7, and
 require 99.9% end-to-end availability, 60-second supported failover recovery, zero correctness
 violations, and bounded performance impact before coordinated activation. Enabling OIDC by default,

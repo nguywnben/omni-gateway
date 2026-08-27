@@ -142,7 +142,11 @@ later identity/session slices. W4.4 adds the strict
 [management identity repository](identity-repository.md) contract and an additive SQLite
 implementation: exact case-sensitive `(issuer, subject)` identities, independent optimistic
 revisions, authorization epochs, immutable local-owner bootstrap, and fail-closed stored-row
-validation. It is not wired as a login source until backend parity and session/OIDC slices land.
+validation. W4.5 implements the same contract for PostgreSQL and MongoDB and exposes the selected
+implementation through the existing storage adapter. PostgreSQL uses transactions and conditional
+revision updates across normalized tables; MongoDB keeps each identity/binding pair in one atomic
+document and uses an OIDC-only simple-collation unique index. The repository is not wired as a login
+source until session/OIDC slices land.
 ADR-002/ADR-006 keep the single-worker/single-replica boundary in force.
 
 The Render Blueprint deliberately uses a paid persistent disk. Free Render services have ephemeral filesystems and are not suitable for durable credential storage.

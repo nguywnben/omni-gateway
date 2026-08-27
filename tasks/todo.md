@@ -117,7 +117,13 @@ These queue items refine Phases 4–5 and do not add to the 28-item program deno
     optimistic revisions, authorization epochs, bounded closed records, generic errors, and an
     immutable enabled local-owner bootstrap. The additive SQLite transaction preserves existing
     data and fails closed on corruption. Twenty-one focused and 762 total tests pass.
-- [ ] W4.5 Add PostgreSQL and MongoDB identity repository parity.
+- [x] W4.5 Add PostgreSQL and MongoDB identity repository parity.
+  - Complete at `65335bc`, `3d47e9d`, `6ec265b`, and `12ff59e`, with review fixes `c610cd7` and
+    `b3352b5`; one reusable behavioral fixture governs SQLite and opt-in live shared backends.
+    PostgreSQL uses additive transactional tables, parameterized CAS, exact collation, and correct
+    asyncpg timestamp encoding. MongoDB uses atomic identity/binding documents, OIDC-only partial
+    uniqueness, simple collation, and revision CAS. Adapter selection passes for all three backends;
+    46 focused tests run, 14 live tests skip without configured test URIs, and all 801 tests pass.
 - [ ] W4.6 Add opaque revocable sessions and local-owner recovery.
 - [ ] Checkpoint W4-A: authorization, durability, compatibility, session, and recovery gates pass.
 - [ ] W4.7 Add safe OIDC policy, discovery, JWKS, and secret configuration.

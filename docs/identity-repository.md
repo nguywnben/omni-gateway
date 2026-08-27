@@ -2,10 +2,10 @@
 
 ## Status and Scope
 
-Wave 4 slice W4.4 provides the versioned storage-agnostic identity contract and its standalone
-SQLite implementation. It does not activate OIDC login, add identity APIs, replace browser
-sessions, or change the supported single-worker/single-replica topology. PostgreSQL and MongoDB
-parity and storage-adapter selection belong to W4.5.
+Wave 4 slices W4.4–W4.5 provide the versioned storage-agnostic identity contract, implementations
+for SQLite, PostgreSQL, and MongoDB, and repository selection through the existing storage adapter.
+They do not activate OIDC login, add identity APIs, replace browser sessions, or change the
+supported single-worker/single-replica topology.
 
 ## Durable Records
 
@@ -31,17 +31,27 @@ fail closed as store corruption.
 ## Concurrency and Owner Safety
 
 Identity state, role bindings, and OIDC policy are separate optimistic-concurrency resources.
-Callers must provide the current revision for the resource being changed. SQLite writers use an
-immediate write transaction and a conditional revision update, so concurrent writes with the same
-revision produce exactly one winner. Authorization-affecting identity or role changes also advance
-the identity authorization epoch; OIDC policy changes advance the policy authorization epoch.
+Callers must provide the current revision for the resource being changed. SQLite uses an immediate
+write transaction, PostgreSQL uses parameterized conditional updates and transactions for
+multi-table mutations, and MongoDB stores each identity/binding pair in one document so the pair
+can change atomically. Concurrent writes with the same revision produce exactly one winner.
+Authorization-affecting identity or role changes also advance the identity authorization epoch;
+OIDC policy changes advance the policy authorization epoch.
 
 The backward-compatible `local-owner` identity and `binding-local-owner` owner binding are created
 idempotently. The bootstrap identity remains enabled and its binding is immutable. Claim mapping
-cannot assign `owner`. W4.4 intentionally exposes no delete operation, so rollback leaves identity
-and migration evidence intact.
+cannot assign `owner`. The contract intentionally exposes no delete operation, so rollback leaves
+identity and migration evidence intact.
 
-## SQLite Migration
+## Backend Storage and Migration
+
+All three implementations create only missing schema objects and bootstrap records. Initialization
+does not remove legacy credential/configuration data and validates the complete identity store
+before the repository becomes available. The storage adapter exposes one
+`create_identity_repository()` boundary and delegates to the already-selected backend; creating a
+repository does not change backend selection or activate authentication.
+
+### SQLite
 
 `SQLiteIdentityRepository.initialize()` opens the selected `credentials.db`, enables WAL and
 foreign-key enforcement, begins one immediate transaction, and creates only additive tables and
@@ -52,23 +62,45 @@ indexes:
 - `oidc_policy_revision`;
 - `identity_migrations`.
 
-It then inserts missing bootstrap records without overwriting existing rows, validates every
+It inserts missing bootstrap records without overwriting existing rows, validates every
 identity/binding pair plus the singleton checkpoints, and commits only if the complete store is
 consistent. Failure rolls the transaction back and leaves pre-existing credential/configuration
 tables untouched. Foreign keys are enabled on every repository connection, and dynamic values are
 always passed as SQL parameters.
 
+### PostgreSQL
+
+PostgreSQL uses four additive tables matching the logical record families plus indexes for exact
+OIDC lookup and stable `(created_at, identity_id)` ordering. Issuer and subject columns use the
+deterministic `C` collation. Bootstrap and identity/binding mutations use transactions; revision
+updates include the expected revision in the `WHERE` predicate. Dynamic values use asyncpg
+parameters, domain timestamp strings are converted to UTC `datetime` values at the driver boundary,
+and uniqueness errors become the same generic repository error as SQLite.
+
+### MongoDB
+
+MongoDB uses a dedicated `management_identity_state` collection. Each managed identity embeds its
+binding in the same closed document so authorization mutations do not require a replica-set
+transaction. Policy and migration checkpoints are separate reserved documents. A simple-collation
+compound unique index applies only to OIDC identity documents, avoiding null-key collisions with
+the local owner and metadata documents; a separate index provides stable list ordering. No TTL or
+individual delete path exists.
+
 ## Verification Contract
 
-The W4.4 tests cover exact issuer/subject matching, duplicate rejection without attribute leakage,
-closed record shapes, page bounds, additive/idempotent initialization, restart persistence,
-sequential and concurrent revision conflicts, independent identity/binding revisions, atomic role
-updates, policy revisions, local-owner lockout prevention, claim-to-owner rejection, rollback, and
-corrupted-row failure during reads and restart.
+The shared contract tests cover exact issuer/subject matching, duplicate rejection without
+attribute leakage, closed record shapes, page bounds, additive/idempotent initialization, restart
+persistence, sequential and concurrent revision conflicts, independent identity/binding revisions,
+atomic role updates, policy revisions, local-owner lockout prevention, claim-to-owner rejection,
+rollback, and corrupted-row failure during reads and restart.
 
-The repository is not yet a runtime authentication source. W4.5 must implement the same observable
-contract for PostgreSQL and MongoDB and connect repository selection through the existing storage
-adapter before sessions or OIDC consume it.
+PostgreSQL and MongoDB add driver-boundary/index/CAS tests. Fourteen opt-in live parity cases run
+when `OMNI_TEST_POSTGRESQL_URI` and/or `OMNI_TEST_MONGODB_URI` are configured; otherwise they are
+reported as skipped rather than silently using a fake service. W4.5 closed with 46 focused tests
+executed, 14 live cases skipped on the local machine, and all 801 backend tests passing.
+
+The repository is not yet a runtime authentication source. W4.6 must add opaque revocable sessions
+and local-owner recovery before later OIDC slices consume durable identities.
 
 ## Implementation References
 
@@ -76,3 +108,11 @@ adapter before sessions or OIDC consume it.
 - SQLite foreign-key activation and indexing: <https://www.sqlite.org/foreignkeys.html>
 - SQLite table constraints: <https://www.sqlite.org/lang_createtable.html>
 - aiosqlite connection and transaction API: <https://aiosqlite.omnilib.dev/en/stable/api.html>
+- asyncpg connection pool and transaction API:
+  <https://magicstack.github.io/asyncpg/current/usage.html>
+- PostgreSQL transaction isolation and conditional updates:
+  <https://www.postgresql.org/docs/current/transaction-iso.html>
+- PyMongo asynchronous API:
+  <https://www.mongodb.com/docs/languages/python/pymongo-driver/current/reference/migration/>
+- MongoDB unique and partial indexes:
+  <https://www.mongodb.com/docs/manual/tutorial/unique-indexes-schema-validation/>

@@ -4,8 +4,8 @@
 
 Accepted on 2026-08-26. Delivery remains incremental: W4.2 establishes the pure principal and
 permission contract, W4.3 enforces it on existing management routes, and W4.4 adds the versioned
-repository plus additive SQLite migration. Shared-backend selection, sessions, and OIDC activate
-only in their later Wave 4 slices.
+repository plus additive SQLite migration. W4.5 completes PostgreSQL/MongoDB repository parity and
+storage-adapter selection. Sessions and OIDC activate only in their later Wave 4 slices.
 
 ## Context
 

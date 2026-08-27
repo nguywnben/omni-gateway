@@ -153,12 +153,13 @@ the default standalone backend and is rejected for HA activation.
 - Local derived: immutable snapshots and caches that can be discarded and rebuilt without changing
   an authorization, limit, routing, or billing decision.
 
-The W4.4 durable identity contract uses exact case-sensitive issuer/subject identity, separate
+The W4.4–W4.5 durable identity contract uses exact case-sensitive issuer/subject identity, separate
 optimistic revisions for identity and binding resources, authorization epochs, and a fixed additive
-migration checkpoint. SQLite bootstraps an immutable enabled local owner and validates all stored
-rows before committing initialization. It provides no destructive rollback or delete path. The
-maintained implementation contract is `docs/identity-repository.md`; PostgreSQL/MongoDB parity and
-adapter selection remain W4.5 work.
+migration checkpoint. SQLite, PostgreSQL, and MongoDB bootstrap an immutable enabled local owner and
+validate all stored records before completing initialization. PostgreSQL uses transactional
+multi-table mutations; MongoDB embeds each identity/binding pair for single-document atomicity.
+All backends provide no destructive rollback or delete path and are selected through the existing
+storage adapter. The maintained implementation contract is `docs/identity-repository.md`.
 
 Callers depend on typed compare-and-set, reserve/commit/release, expiry, idempotency, and
 invalidation semantics—not Redis commands. New admissions and security mutations fail closed when
