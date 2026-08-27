@@ -31,6 +31,7 @@ from core.identity.oidc_discovery import (
     discover_oidc,
 )
 from core.identity.oidc_http import OidcHttpClient, OidcHttpError
+from core.identity.oidc_jwks import OidcJwk, OidcJwksCache, OidcJwksError
 from core.identity.oidc_policy import (
     OIDC_POLICY_SCHEMA_VERSION,
     OidcClaimPolicy,
@@ -107,6 +108,9 @@ __all__ = [
     "discover_oidc",
     "OidcHttpClient",
     "OidcHttpError",
+    "OidcJwk",
+    "OidcJwksCache",
+    "OidcJwksError",
     "OIDC_POLICY_SCHEMA_VERSION",
     "OidcClaimPolicy",
     "OidcConfiguration",
