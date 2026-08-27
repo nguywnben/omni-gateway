@@ -4,19 +4,19 @@
 
 - Updated: 2026-08-27 (Asia/Saigon).
 - Branch: `codex/enterprise-overhaul`.
-- Implementation baseline: `b3352b5 fix: encode PostgreSQL identity timestamps`.
-- Completed scope: Waves 1–3 / Phases 0–5 plus Wave 4 slices W4.1–W4.5.
+- Implementation baseline: `6010e71 fix: bound standalone session capacity`.
+- Completed scope: Waves 1–3 / Phases 0–5 plus Wave 4 slices W4.1–W4.6 and checkpoint W4-A.
 - Original program progress: 21/28 approved checklist items complete (including specification and
   Phase 6 ADR approval), exactly 75.0%; wave execution-slice checkboxes are refinements and are not
   added to that denominator.
-- Active scope: Wave 4 W4.6, opaque revocable sessions and local-owner recovery.
-- Control state: **IN PROGRESS — W4.6 NEXT**.
-- Expected worktree state at this checkpoint: clean after the W4.5 documentation commit.
+- Active scope: Wave 4 W4.7, safe OIDC policy, discovery, JWKS, and secret configuration.
+- Control state: **READY — W4.7 NEXT**.
+- Expected worktree state at this checkpoint: clean after the W4-A documentation commit.
 - Expected runtime: one Omni Gateway listener on `http://127.0.0.1:4283`; `/health` and `/ready`
   return HTTP 200.
-- Last verified full suite: 801 tests passed with 14 opt-in live backend tests skipped because no
+- Last verified full suite: 829 tests passed with 14 opt-in live backend tests skipped because no
   test URI was configured. Repository-wide Ruff lint/format, compileall, pip consistency, and
-  diff-check pass for W4.5. The earlier W3-C JavaScript, YAML, shell-syntax, dependency,
+  diff-check pass for W4-A. The earlier W3-C JavaScript, YAML, shell-syntax, dependency,
   vulnerability, and authenticated 360/768/1024/1440 browser matrix remain the latest evidence for
   unchanged areas.
 
@@ -296,6 +296,20 @@ silently choosing a new design.
   `b3352b5` close security-admin schema parity and timestamp portability regressions. Forty-six
   focused tests execute locally, fourteen live tests skip without explicit URIs, and all 801 tests
   plus Ruff lint/format, compileall, pip consistency, and diff-check pass.
+- W4.6/W4-A evidence: `849da03` adds the semantic session-store contract and 256-bit opaque,
+  HMAC-indexed in-process implementation; `a29dec1` binds issuance and resolution to the durable
+  immutable local owner and its authorization epoch; `4dd7bbb` activates the store across setup,
+  login, logout, password rotation, and independently throttled recovery. Review fix `6010e71`
+  bounds the process-local store with expired-record pruning and LRU revocation. Idle/absolute expiry,
+  atomic rotation/revocation, concurrent password proof, corrupted master-key failure, generic
+  auth errors, origin/cookie protections, and bounded legacy-JWT migration are covered. Provider
+  OAuth transactions receive only an ephemeral HMAC request reference and their external state
+  contains no bearer/session value. Low-cardinality metrics and `auth.recovery` audit evidence add
+  no identifiers or secrets. Expired records are pruned and the bounded store revokes the least
+  recently used session at capacity. All 829 tests pass with 14 opt-in live-backend skips;
+  repository gates and committed-runtime health/readiness smoke are clean.
+  `docs/management-sessions.md` records the process-restart reauthentication posture and keeps
+  shared coordination gated to W4.16.
 
 ## Approved vs. Proposed Scope
 
@@ -322,12 +336,12 @@ silently choosing a new design.
 ### Approved and in progress
 
 - The Phase 6 specification, ADR-007, ADR-008, and Wave 4 execution queue.
-- W4.1–W4.5 are complete; W4.6 is the active next slice.
+- W4.1–W4.6 and checkpoint W4-A are complete; W4.7 is the active next slice.
 
 ### Approved for staged implementation, not active yet
 
-- Sessions/OIDC, Redis coordination, durable HA migration, and multiple workers/replicas remain
-  gated by W4.6–W4.19 and their checkpoints.
+- OIDC, Redis coordination, durable HA migration, and multiple workers/replicas remain gated by
+  W4.7–W4.19 and their checkpoints.
 - Phase 7 release activation, production deployment, or destructive migration.
 
 Foundations borrowed from Phase 4 or Phase 5 remain partial and must not cause those phase
@@ -349,10 +363,11 @@ checkboxes to be marked complete.
 
 ## Immediate Next Action
 
-Begin W4.6 with the semantic session-store contract and in-process implementation, then add opaque
-HMAC-indexed sessions, idle/absolute expiry, rotation/revocation, authorization-epoch invalidation,
-and the audited local-owner recovery path. Preserve the current login compatibility window, cookie
-and CSRF protections, `WORKERS=1`, one replica, and every release boundary.
+Begin W4.7 with the versioned disabled-by-default OIDC policy and environment/file-secret contract,
+then implement exact issuer/discovery validation, endpoint-host and network controls, and bounded
+JWKS caching. Add the accepted, pinned `PyJWT[crypto]` dependency only with dependency and
+vulnerability evidence. Preserve `WORKERS=1`, one replica, local-owner recovery, and every release
+boundary; do not activate OIDC login before W4.8–W4.10 gates pass.
 
 ## Update Rule
 

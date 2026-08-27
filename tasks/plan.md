@@ -46,10 +46,11 @@ or Phase 5 request tracing.
 - Wave 3 completion checkpoint: `76315e7` (`docs: close wave 3 operational evidence`).
 - Completed product scope: Phases 0–5; Wave 3 was accepted by the human on 2026-08-26 through the
   instruction to start the project and execute the next plan.
-- Active approved scope: Wave 4 under accepted ADR-007/ADR-008; W4.1–W4.5 are complete and W4.6 is
-  the next implementation slice.
-- State: **IN PROGRESS — W4.6 NEXT**. Management authorization and durable identity parity across
-  SQLite/PostgreSQL/MongoDB are complete; opaque sessions and recovery remain W4.6 work.
+- Active approved scope: Wave 4 under accepted ADR-007/ADR-008; W4.1–W4.6 and checkpoint W4-A are
+  complete and W4.7 is the next implementation slice.
+- State: **READY — W4.7 NEXT**. Management authorization, durable identity parity, opaque
+  standalone sessions, and local-owner recovery are complete; safe OIDC policy/discovery/JWKS
+  configuration is the next gated slice.
 - Still gated by later slices and evidence: OIDC activation, distributed-state activation, multiple
   workers/replicas, destructive migration, and production release activation.
 
@@ -460,9 +461,19 @@ idle/absolute expiry, rotation/revocation, authorization epoch, and audited brea
 - Verification: concurrency, expiry, origin, recovery, secret-lifetime, and migration-window tests.
 - Dependencies: W4.3–W4.4.
 - Likely files: session domain/store, panel auth integration, audit vocabulary, tests.
+- Completed: store contract `849da03`, durable-epoch binding `a29dec1`, panel/recovery activation
+  `4dd7bbb`, and bounded-capacity review fix `6010e71`. New authentication issues 256-bit opaque
+  tokens while retaining only an HMAC index and bounded metadata; idle/absolute expiry, atomic
+  rotation/revocation, password and epoch invalidation, origin/cookie protections, isolated
+  provider OAuth state, bounded legacy-JWT
+  migration, recovery throttling/loopback restriction, audit evidence, generic failures, and
+  fixed-cardinality metrics and bounded LRU capacity are covered. All 829 tests pass with 14 opt-in
+  live-backend skips. The maintained operator contract is `docs/management-sessions.md`.
 
 Checkpoint W4-A follows W4.2–W4.6: complete authorization coverage, backend identity durability,
 local-owner compatibility, revocable sessions, and lockout-recovery gates pass before OIDC login.
+Closed on 2026-08-27 after repository-wide quality gates and committed-runtime health/readiness
+smoke passed; the single-worker/single-replica boundary remains enforced.
 
 ### W4.7 — OIDC policy, metadata, and endpoint safety
 

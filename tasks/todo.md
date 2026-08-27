@@ -124,8 +124,21 @@ These queue items refine Phases 4–5 and do not add to the 28-item program deno
     asyncpg timestamp encoding. MongoDB uses atomic identity/binding documents, OIDC-only partial
     uniqueness, simple collation, and revision CAS. Adapter selection passes for all three backends;
     46 focused tests run, 14 live tests skip without configured test URIs, and all 801 tests pass.
-- [ ] W4.6 Add opaque revocable sessions and local-owner recovery.
-- [ ] Checkpoint W4-A: authorization, durability, compatibility, session, and recovery gates pass.
+- [x] W4.6 Add opaque revocable sessions and local-owner recovery.
+  - Complete at `849da03`, `a29dec1`, `4dd7bbb`, and review fix `6010e71`; the semantic
+    in-process store issues 256-bit opaque values, retains only HMAC-indexed bounded records,
+    enforces idle/absolute expiry and authorization epochs, and supports atomic
+    rotation/revocation. New setup/login/recovery uses the store; logout and password rotation
+    revoke server-side state; legacy local-owner JWTs have a bounded migration window; provider
+    OAuth state never contains a bearer session. Recovery is independently throttled, audited,
+    optionally direct-loopback-only, and returns generic errors. Store capacity is bounded with
+    expiry pruning and least-recently-used revocation. All 829 tests pass with 14 opt-in
+    live-backend skips.
+- [x] Checkpoint W4-A: authorization, durability, compatibility, session, and recovery gates pass.
+  - Closed on 2026-08-27 after 829 tests, repository-wide lint/format/compile/dependency/diff gates,
+    session/recovery security review, and committed-runtime health/readiness smoke passed. The
+    maintained operator contract is `docs/management-sessions.md`; one worker/replica remains the
+    only activated topology.
 - [ ] W4.7 Add safe OIDC policy, discovery, JWKS, and secret configuration.
 - [ ] W4.8 Add strict asymmetric ID Token verification.
 - [ ] W4.9 Add Authorization Code + PKCE/state/nonce transaction and callback.

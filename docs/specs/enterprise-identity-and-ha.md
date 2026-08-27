@@ -2,10 +2,11 @@
 
 ## Status
 
-Accepted for Wave 4 on 2026-08-26. W4.2–W4.4 now provide the pure principal/permission domain,
-complete existing-route authorization coverage, and a versioned identity repository with additive
-SQLite persistence. OIDC/session activation, shared-backend parity, distributed coordination,
-worker-count, and replica-count changes remain gated by their later slices and acceptance evidence.
+Accepted for Wave 4 on 2026-08-26. W4.2–W4.6 now provide the principal/permission domain, complete
+existing-route authorization coverage, versioned identity repositories with SQLite, PostgreSQL,
+and MongoDB parity, and opaque standalone sessions with local-owner recovery. OIDC activation,
+shared session coordination, worker-count, and replica-count changes remain gated by their later
+slices and acceptance evidence.
 
 ## Objective
 
@@ -20,15 +21,17 @@ SCIM provisioning, SAML, social login, and production release activation remain 
 
 ## Current Baseline
 
-- Browser management authentication uses an HTTP-only `panel_session` JWT signed with a secret
-  derived from the local owner password. It expires but cannot be revoked individually.
+- Browser management authentication issues an HTTP-only opaque `panel_session` backed by a
+  revocable in-process store and the durable local-owner authorization epoch. Existing signed JWTs
+  are accepted only for the shorter of their original expiry or a bounded migration window.
 - Every valid browser session is effectively an owner. Management virtual keys distinguish only
   `management:read` and `management:write`.
 - Audit evidence attributes browser mutations to a generic redacted `panel-owner` actor.
 - SQLite, PostgreSQL, and MongoDB implement durable audit and trace repositories; usage/state
   parity is not yet complete.
 - Rate/budget reservations are atomic only in the supported single process. Other reservations,
-  cooldowns, login throttles, sessions, and cache invalidation still include process-local state.
+  cooldowns, login/recovery throttles, opaque sessions, and cache invalidation still include
+  process-local state.
 - `WORKERS=1` and one application replica remain enforced.
 
 ## Trust Boundaries and Assets
@@ -127,6 +130,13 @@ backend for PyJWT. Wave 4 approves changing the runtime requirement from `PyJWT`
 - The local owner remains the break-glass path by default. It is separately rate-limited, fully
   audited, and can be restricted to loopback/trusted administrative ingress. It cannot be disabled
   unless another tested recovery mechanism and an active owner binding exist.
+
+W4.6 implements this contract for the standalone topology. New setup, login, and recovery flows
+issue 256-bit opaque values; the store retains only an HMAC index and bounded metadata. Logout,
+password rotation, expiry, and authorization-epoch change revoke or invalidate sessions. Provider
+OAuth state receives only an ephemeral HMAC reference, never the bearer session. Active sessions
+are deliberately lost on process restart until W4.16 supplies shared coordination. The maintained
+operator contract is [Management Sessions and Local-Owner Recovery](../management-sessions.md).
 
 ## Management API Principles
 

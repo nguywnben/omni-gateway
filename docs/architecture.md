@@ -138,7 +138,7 @@ immutable manifest and enforces the resolved typed principal against FastAPI's t
 template before handler execution. Missing policy fails closed. Human roles use exact bundles;
 legacy management keys retain existing-route compatibility without receiving future identity,
 recovery, owner-assignment, or HA rights. The local owner remains the only browser principal until
-later identity/session slices. W4.4 adds the strict
+OIDC activation. W4.4 adds the strict
 [management identity repository](identity-repository.md) contract and an additive SQLite
 implementation: exact case-sensitive `(issuer, subject)` identities, independent optimistic
 revisions, authorization epochs, immutable local-owner bootstrap, and fail-closed stored-row
@@ -146,8 +146,13 @@ validation. W4.5 implements the same contract for PostgreSQL and MongoDB and exp
 implementation through the existing storage adapter. PostgreSQL uses transactions and conditional
 revision updates across normalized tables; MongoDB keeps each identity/binding pair in one atomic
 document and uses an OIDC-only simple-collation unique index. The repository is not wired as a login
-source until session/OIDC slices land.
-ADR-002/ADR-006 keep the single-worker/single-replica boundary in force.
+source. W4.6 adds the standalone
+[management session and recovery contract](management-sessions.md): new browser authentication
+uses 256-bit opaque cookies backed by HMAC-indexed, authorization-epoch-aware, revocable in-process
+records; logout and password rotation revoke server-side state; and a separately throttled,
+audited local-owner recovery route remains available. Existing JWTs receive only a bounded
+migration window. Process restart invalidates active opaque sessions until W4.16 supplies shared
+coordination, so ADR-002/ADR-006 continue to enforce one worker and one replica.
 
 The Render Blueprint deliberately uses a paid persistent disk. Free Render services have ephemeral filesystems and are not suitable for durable credential storage.
 

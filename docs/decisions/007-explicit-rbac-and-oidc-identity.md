@@ -5,7 +5,8 @@
 Accepted on 2026-08-26. Delivery remains incremental: W4.2 establishes the pure principal and
 permission contract, W4.3 enforces it on existing management routes, and W4.4 adds the versioned
 repository plus additive SQLite migration. W4.5 completes PostgreSQL/MongoDB repository parity and
-storage-adapter selection. Sessions and OIDC activate only in their later Wave 4 slices.
+storage-adapter selection. W4.6 activates opaque revocable sessions and local-owner recovery for
+the standalone topology. OIDC and shared session coordination remain gated by later Wave 4 slices.
 
 ## Context
 
@@ -133,6 +134,10 @@ to an OIDC user.
 - Identity, role-binding, and OIDC-policy resources now have strict versioned records and
   independent optimistic revisions. SQLite preserves existing tables and keeps the local owner
   enabled and immutable while later recovery/session work remains gated.
+- The standalone session implementation retains only HMAC-indexed records in process memory, binds
+  them to the durable local-owner authorization epoch, and fails closed when the identity or
+  session master key is unavailable. Restart reauthentication is an explicit interim consequence
+  until W4.16 introduces coordinated session storage.
 
 ## Rejected Alternatives
 
