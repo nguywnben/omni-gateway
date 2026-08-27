@@ -25,6 +25,14 @@ from core.identity.manifest import (
     management_route_manifest,
     require_management_route,
 )
+from core.identity.oidc_policy import (
+    OIDC_POLICY_SCHEMA_VERSION,
+    OidcClaimPolicy,
+    OidcConfiguration,
+    OidcConfigurationError,
+    OidcPolicy,
+    load_oidc_configuration,
+)
 from core.identity.repository import (
     IDENTITY_MIGRATION_ID,
     IDENTITY_SCHEMA_VERSION,
@@ -88,6 +96,12 @@ __all__ = [
     "UnclassifiedManagementRoute",
     "management_route_manifest",
     "require_management_route",
+    "OIDC_POLICY_SCHEMA_VERSION",
+    "OidcClaimPolicy",
+    "OidcConfiguration",
+    "OidcConfigurationError",
+    "OidcPolicy",
+    "load_oidc_configuration",
     "IDENTITY_MIGRATION_ID",
     "IDENTITY_SCHEMA_VERSION",
     "LOCAL_OWNER_BINDING_ID",
