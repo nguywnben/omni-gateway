@@ -25,18 +25,28 @@ from core.identity.repository import (
     RoleBindingSource,
 )
 from core.storage.identity_sqlite import SQLiteIdentityRepository
+from tests.identity_repository_contract import IdentityRepositoryParityMixin
 from tests.support import workspace_temp_directory
 
 NOW = datetime(2026, 8, 27, 1, 0, tzinfo=timezone.utc)
 
 
-class SQLiteIdentityRepositoryTests(unittest.IsolatedAsyncioTestCase):
+class SQLiteIdentityRepositoryTests(
+    IdentityRepositoryParityMixin,
+    unittest.IsolatedAsyncioTestCase,
+):
     async def asyncSetUp(self):
         self.temp_dir = workspace_temp_directory()
         temp_path = self.temp_dir.__enter__()
         self.addCleanup(self.temp_dir.__exit__, None, None, None)
         self.db_path = Path(temp_path) / "credentials.db"
         self.repository = SQLiteIdentityRepository(self.db_path, clock=lambda: NOW)
+        await self.repository.initialize()
+
+    async def restart_repository(self):
+        restarted = SQLiteIdentityRepository(self.db_path, clock=lambda: NOW)
+        await restarted.initialize()
+        return restarted
 
     async def test_initialize_is_additive_idempotent_and_bootstraps_local_owner(self):
         async with aiosqlite.connect(self.db_path) as db:
@@ -44,7 +54,6 @@ class SQLiteIdentityRepositoryTests(unittest.IsolatedAsyncioTestCase):
             await db.execute("INSERT INTO existing_config(value) VALUES (?)", ("preserved",))
             await db.commit()
 
-        await self.repository.initialize()
         await self.repository.initialize()
 
         owner = await self.repository.get_identity(LOCAL_OWNER_ID)
@@ -61,7 +70,6 @@ class SQLiteIdentityRepositoryTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(row[0], "preserved")
 
     async def test_exact_oidc_identity_is_case_sensitive_and_duplicate_safe(self):
-        await self.repository.initialize()
         first = await self.repository.create_oidc_identity(
             issuer="https://idp.example/Tenant",
             subject="User-123",
@@ -87,7 +95,6 @@ class SQLiteIdentityRepositoryTests(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn("User-123", str(raised.exception))
 
     async def test_restart_preserves_managed_identities_and_never_removes_legacy_data(self):
-        await self.repository.initialize()
         created = await self.repository.create_oidc_identity(
             issuer="https://idp.example", subject="subject-1", role=ManagementRole.OPERATOR
         )
@@ -100,7 +107,6 @@ class SQLiteIdentityRepositoryTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(len(await restarted.list_identities(limit=200)), 2)
 
     async def test_optimistic_enable_update_rejects_stale_revision(self):
-        await self.repository.initialize()
         created = await self.repository.create_oidc_identity(
             issuer="https://idp.example", subject="subject-2", role=ManagementRole.VIEWER
         )
@@ -121,7 +127,6 @@ class SQLiteIdentityRepositoryTests(unittest.IsolatedAsyncioTestCase):
             )
 
     async def test_concurrent_writers_allow_exactly_one_revision_winner(self):
-        await self.repository.initialize()
         created = await self.repository.create_oidc_identity(
             issuer="https://idp.example", subject="subject-race", role=ManagementRole.VIEWER
         )
@@ -147,7 +152,6 @@ class SQLiteIdentityRepositoryTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(winners[0].identity.revision, 2)
 
     async def test_role_update_is_atomic_and_claim_mapping_cannot_create_owner(self):
-        await self.repository.initialize()
         created = await self.repository.create_oidc_identity(
             issuer="https://idp.example", subject="subject-3", role=ManagementRole.VIEWER
         )
@@ -171,7 +175,6 @@ class SQLiteIdentityRepositoryTests(unittest.IsolatedAsyncioTestCase):
             )
 
     async def test_identity_and_binding_revisions_are_independent_resources(self):
-        await self.repository.initialize()
         created = await self.repository.create_oidc_identity(
             issuer="https://idp.example",
             subject="subject-independent-revisions",
@@ -196,7 +199,6 @@ class SQLiteIdentityRepositoryTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(updated.binding.revision, 2)
 
     async def test_local_owner_cannot_be_disabled_or_demoted_and_state_is_unchanged(self):
-        await self.repository.initialize()
 
         with self.assertRaises(IdentityOwnerInvariant):
             await self.repository.set_identity_enabled(
@@ -216,7 +218,6 @@ class SQLiteIdentityRepositoryTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(owner.identity.revision, 1)
 
     async def test_policy_revision_uses_optimistic_concurrency(self):
-        await self.repository.initialize()
         updated = await self.repository.advance_oidc_policy_revision(expected_revision=1)
 
         self.assertEqual((updated.revision, updated.authorization_epoch), (2, 2))
@@ -224,14 +225,12 @@ class SQLiteIdentityRepositoryTests(unittest.IsolatedAsyncioTestCase):
             await self.repository.advance_oidc_policy_revision(expected_revision=1)
 
     async def test_list_limit_is_bounded_and_strictly_typed(self):
-        await self.repository.initialize()
 
         for limit in (0, 201, True, "10"):
             with self.subTest(limit=limit), self.assertRaises(ValueError):
                 await self.repository.list_identities(limit=limit)
 
     async def test_corruption_fails_closed_on_read_and_restart(self):
-        await self.repository.initialize()
         async with aiosqlite.connect(self.db_path) as db:
             await db.execute(
                 "UPDATE management_role_bindings SET source = ? WHERE identity_id = ?",
