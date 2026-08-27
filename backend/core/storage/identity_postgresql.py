@@ -114,7 +114,8 @@ class PostgreSQLIdentityRepository:
                 schema_version INTEGER NOT NULL CHECK (schema_version = {IDENTITY_SCHEMA_VERSION}),
                 binding_id TEXT NOT NULL PRIMARY KEY,
                 identity_id TEXT NOT NULL UNIQUE,
-                role TEXT NOT NULL CHECK (role IN ('owner', 'operator', 'viewer')),
+                role TEXT NOT NULL
+                    CHECK (role IN ('owner', 'security_admin', 'operator', 'viewer')),
                 source TEXT NOT NULL
                     CHECK (source IN ('local_bootstrap', 'direct_binding', 'claim_mapping')),
                 revision INTEGER NOT NULL CHECK (revision >= 1),

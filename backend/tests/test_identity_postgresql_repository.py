@@ -173,6 +173,7 @@ class PostgreSQLIdentityRepositoryTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("CREATE TABLE IF NOT EXISTS management_role_bindings", schema)
         self.assertIn("ON CONFLICT DO NOTHING", schema)
         self.assertIn("UNIQUE (issuer, subject)", schema)
+        self.assertIn("'security_admin'", schema)
         self.assertNotIn("DROP ", schema.upper())
         self.assertNotIn("TRUNCATE ", schema.upper())
         self.assertEqual(self.connection.transaction_entries, 1)
