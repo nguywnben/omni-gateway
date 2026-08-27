@@ -4,21 +4,56 @@ import dataclasses
 import re
 import sys
 import unittest
+from datetime import datetime, timezone
 from pathlib import Path
 
 BACKEND_DIR = Path(__file__).resolve().parents[1]
 if str(BACKEND_DIR) not in sys.path:
     sys.path.insert(0, str(BACKEND_DIR))
 
-from core.identity import ManagementPrincipal
+from core.identity import (
+    IdentityRecord,
+    ManagedIdentity,
+    ManagementPrincipal,
+    RoleBindingRecord,
+)
 from core.identity.sessions import (
     InProcessSessionStore,
     SessionAuthenticationMethod,
     SessionExpired,
     SessionNotFound,
     SessionPolicy,
+    SessionService,
     SessionStale,
 )
+
+
+class FakeIdentityRepository:
+    def __init__(self, owner: ManagedIdentity):
+        self.owner = owner
+
+    async def get_identity(self, identity_id: str):
+        if self.owner is None:
+            return None
+        if identity_id != self.owner.identity.identity_id:
+            return None
+        return self.owner
+
+
+class FakeSessionStorage:
+    def __init__(self, owner: ManagedIdentity):
+        self.config = {}
+        self.repository = FakeIdentityRepository(owner)
+
+    async def get_config(self, key, default=None):
+        return self.config.get(key, default)
+
+    async def set_config(self, key, value):
+        self.config[key] = value
+        return True
+
+    async def create_identity_repository(self):
+        return self.repository
 
 
 class InProcessSessionStoreTests(unittest.IsolatedAsyncioTestCase):
@@ -253,6 +288,81 @@ class SessionPolicyTests(unittest.TestCase):
         ):
             with self.subTest(values=values), self.assertRaises(ValueError):
                 SessionPolicy(idle_ttl_seconds=values[0], absolute_ttl_seconds=values[1])
+
+
+class SessionServiceTests(unittest.IsolatedAsyncioTestCase):
+    def setUp(self):
+        now = datetime(2026, 8, 27, tzinfo=timezone.utc)
+        self.owner = ManagedIdentity(
+            identity=IdentityRecord.local_owner(now=now),
+            binding=RoleBindingRecord.local_owner(now=now),
+        )
+        self.storage = FakeSessionStorage(self.owner)
+
+    async def test_service_persists_only_a_master_key_and_uses_durable_owner_epoch(self):
+        service = await SessionService.create(
+            self.storage,
+            policy=SessionPolicy(idle_ttl_seconds=300, absolute_ttl_seconds=900),
+        )
+
+        issued = await service.issue_local_owner(now=1_000.0)
+        resolved = await service.resolve(issued.token, now=1_001.0)
+
+        self.assertEqual(resolved.principal, ManagementPrincipal.local_owner())
+        self.assertEqual(resolved.authorization_epoch, 1)
+        self.assertEqual(len(self.storage.config), 1)
+        serialized_config = repr(self.storage.config)
+        self.assertNotIn(issued.token, serialized_config)
+        self.assertNotIn(issued.token, repr(service))
+
+    async def test_password_rotation_revokes_every_owner_session_before_reissue(self):
+        service = await SessionService.create(
+            self.storage,
+            policy=SessionPolicy(idle_ttl_seconds=300, absolute_ttl_seconds=900),
+        )
+        sessions = [await service.issue_local_owner(now=1_000.0 + i) for i in range(3)]
+
+        self.assertEqual(await service.revoke_local_owner_sessions(), 3)
+        replacement = await service.issue_local_owner(now=1_100.0)
+
+        for issued in sessions:
+            with self.assertRaises(SessionNotFound):
+                await service.resolve(issued.token, now=1_101.0)
+        self.assertEqual(
+            (await service.resolve(replacement.token, now=1_101.0)).principal,
+            ManagementPrincipal.local_owner(),
+        )
+
+    async def test_identity_epoch_change_invalidates_session_without_explicit_revoke(self):
+        service = await SessionService.create(
+            self.storage,
+            policy=SessionPolicy(idle_ttl_seconds=300, absolute_ttl_seconds=900),
+        )
+        issued = await service.issue_local_owner(now=1_000.0)
+        changed = dataclasses.replace(self.owner.identity, authorization_epoch=2, revision=2)
+        self.storage.repository.owner = dataclasses.replace(self.owner, identity=changed)
+
+        with self.assertRaises(SessionStale):
+            await service.resolve(issued.token, now=1_001.0)
+
+    async def test_missing_or_disabled_durable_identity_fails_closed(self):
+        service = await SessionService.create(
+            self.storage,
+            policy=SessionPolicy(idle_ttl_seconds=300, absolute_ttl_seconds=900),
+        )
+        self.storage.repository.owner = None
+
+        with self.assertRaises(RuntimeError):
+            await service.issue_local_owner(now=1_000.0)
+
+    async def test_corrupt_persisted_master_key_fails_initialization(self):
+        self.storage.config["_internal_session_master_key_v1"] = "not-a-valid-key"
+
+        with self.assertRaises(RuntimeError):
+            await SessionService.create(
+                self.storage,
+                policy=SessionPolicy(idle_ttl_seconds=300, absolute_ttl_seconds=900),
+            )
 
 
 if __name__ == "__main__":

@@ -3,16 +3,20 @@
 from __future__ import annotations
 
 import asyncio
+import base64
+import binascii
 import hashlib
 import hmac
 import math
+import os
 import re
 import secrets
 from dataclasses import dataclass, replace
 from enum import StrEnum
-from typing import Protocol
+from typing import Any, Protocol
 
 from core.identity.authorization import ManagementPrincipal
+from core.identity.repository import LOCAL_OWNER_ID, ManagedIdentity
 
 SESSION_SCHEMA_VERSION = 1
 SESSION_TOKEN_PREFIX = "ogs_"
@@ -23,6 +27,8 @@ MAX_SESSION_TTL_SECONDS = 2_592_000
 _SESSION_TOKEN_PATTERN = re.compile(r"^ogs_[A-Za-z0-9_-]{43}$")
 _SESSION_DIGEST_PATTERN = re.compile(r"^[0-9a-f]{64}$")
 _SESSION_HMAC_DOMAIN = b"omni-gateway:management-session:v1\0"
+_SESSION_MASTER_KEY_CONFIG = "_internal_session_master_key_v1"
+_SESSION_MASTER_KEY_BYTES = 32
 
 
 class SessionError(RuntimeError):
@@ -372,3 +378,145 @@ class InProcessSessionStore:
             for digest in digests:
                 self._sessions.pop(digest, None)
             return len(digests)
+
+
+def _encode_master_key(value: bytes) -> str:
+    return base64.urlsafe_b64encode(value).decode("ascii")
+
+
+def _decode_master_key(value: Any) -> bytes:
+    if not isinstance(value, str) or len(value) > 128:
+        raise RuntimeError("Stored session master key is invalid.")
+    try:
+        decoded = base64.b64decode(value, altchars=b"-_", validate=True)
+    except (ValueError, binascii.Error) as exc:
+        raise RuntimeError("Stored session master key is invalid.") from exc
+    if len(decoded) != _SESSION_MASTER_KEY_BYTES or _encode_master_key(decoded) != value:
+        raise RuntimeError("Stored session master key is invalid.")
+    return decoded
+
+
+def _env_lifetime(name: str, default: int, minimum: int, maximum: int) -> int:
+    try:
+        value = int(os.getenv(name, str(default)))
+    except ValueError:
+        value = default
+    return max(minimum, min(value, maximum))
+
+
+def get_session_policy() -> SessionPolicy:
+    """Build the bounded standalone policy while retaining the legacy TTL setting."""
+
+    absolute_ttl = _env_lifetime(
+        "PANEL_SESSION_TTL_SECONDS",
+        86_400,
+        MIN_SESSION_TTL_SECONDS + 1,
+        MAX_SESSION_TTL_SECONDS,
+    )
+    idle_ttl = _env_lifetime(
+        "PANEL_SESSION_IDLE_TTL_SECONDS",
+        1_800,
+        MIN_SESSION_TTL_SECONDS,
+        absolute_ttl - 1,
+    )
+    return SessionPolicy(
+        idle_ttl_seconds=idle_ttl,
+        absolute_ttl_seconds=absolute_ttl,
+    )
+
+
+class SessionService:
+    """Bind opaque runtime sessions to durable identity authorization epochs."""
+
+    def __init__(self, store: SessionStore, *, identity_repository: Any) -> None:
+        self._store = store
+        self._identity_repository = identity_repository
+
+    def __repr__(self) -> str:
+        return f"SessionService(store={self._store!r})"
+
+    @classmethod
+    async def create(
+        cls,
+        storage: Any,
+        *,
+        policy: SessionPolicy | None = None,
+    ) -> SessionService:
+        selected_policy = policy or get_session_policy()
+        encoded_master = await storage.get_config(_SESSION_MASTER_KEY_CONFIG, None)
+        if encoded_master is None:
+            generated = _encode_master_key(secrets.token_bytes(_SESSION_MASTER_KEY_BYTES))
+            if not await storage.set_config(_SESSION_MASTER_KEY_CONFIG, generated):
+                raise RuntimeError("Unable to persist the session master key.")
+            encoded_master = await storage.get_config(_SESSION_MASTER_KEY_CONFIG, None)
+        master_key = _decode_master_key(encoded_master)
+        session_key = hmac.digest(
+            master_key,
+            _SESSION_HMAC_DOMAIN + b"index-key",
+            hashlib.sha256,
+        )
+        identity_repository = await storage.create_identity_repository()
+        return cls(
+            InProcessSessionStore(hmac_key=session_key, policy=selected_policy),
+            identity_repository=identity_repository,
+        )
+
+    async def _local_owner(self) -> ManagedIdentity:
+        owner = await self._identity_repository.get_identity(LOCAL_OWNER_ID)
+        if type(owner) is not ManagedIdentity or not owner.identity.enabled:
+            raise RuntimeError("The local-owner recovery identity is unavailable.")
+        return owner
+
+    async def issue_local_owner(self, *, now: float) -> IssuedSession:
+        owner = await self._local_owner()
+        return await self._store.issue(
+            principal=ManagementPrincipal.local_owner(owner.identity.identity_id),
+            authentication_method=SessionAuthenticationMethod.LOCAL_PASSWORD,
+            authorization_epoch=owner.identity.authorization_epoch,
+            now=now,
+        )
+
+    async def resolve(self, token: str, *, now: float) -> SessionRecord:
+        owner = await self._local_owner()
+        return await self._store.resolve(
+            token,
+            current_authorization_epoch=owner.identity.authorization_epoch,
+            now=now,
+        )
+
+    async def revoke(self, token: str) -> bool:
+        return await self._store.revoke(token)
+
+    async def revoke_local_owner_sessions(self) -> int:
+        owner = await self._local_owner()
+        return await self._store.revoke_principal(
+            ManagementPrincipal.local_owner(owner.identity.identity_id)
+        )
+
+
+_session_service: SessionService | None = None
+_session_service_lock = asyncio.Lock()
+
+
+async def initialize_session_service(storage: Any | None = None) -> SessionService:
+    global _session_service
+    async with _session_service_lock:
+        if _session_service is None:
+            if storage is None:
+                from core.storage_adapter import get_storage_adapter
+
+                storage = await get_storage_adapter()
+            _session_service = await SessionService.create(storage)
+        return _session_service
+
+
+def get_session_service() -> SessionService:
+    if _session_service is None:
+        raise RuntimeError("Session service is not initialized.")
+    return _session_service
+
+
+async def close_session_service() -> None:
+    global _session_service
+    async with _session_service_lock:
+        _session_service = None

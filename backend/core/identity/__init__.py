@@ -56,8 +56,13 @@ from core.identity.sessions import (
     SessionNotFound,
     SessionPolicy,
     SessionRecord,
+    SessionService,
     SessionStale,
     SessionStore,
+    close_session_service,
+    get_session_policy,
+    get_session_service,
+    initialize_session_service,
 )
 
 __all__ = [
@@ -110,6 +115,11 @@ __all__ = [
     "SessionNotFound",
     "SessionPolicy",
     "SessionRecord",
+    "SessionService",
     "SessionStale",
     "SessionStore",
+    "close_session_service",
+    "get_session_policy",
+    "get_session_service",
+    "initialize_session_service",
 ]
