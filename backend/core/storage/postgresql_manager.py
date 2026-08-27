@@ -9,6 +9,7 @@ from log import log
 
 if TYPE_CHECKING:
     from core.audit import AuditRepository
+    from core.identity.repository import IdentityRepository
 
 
 class PostgreSQLManager:
@@ -231,6 +232,14 @@ class PostgreSQLManager:
             self._pool,
             cursor_signing_key=cursor_signing_key,
         )
+        await repository.initialize()
+        return repository
+
+    async def create_identity_repository(self) -> "IdentityRepository":
+        self._ensure_initialized()
+        from .identity_postgresql import PostgreSQLIdentityRepository
+
+        repository = PostgreSQLIdentityRepository(self._pool)
         await repository.initialize()
         return repository
 

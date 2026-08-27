@@ -9,6 +9,7 @@ from pymongo.asynchronous.database import AsyncDatabase
 
 if TYPE_CHECKING:
     from core.audit import AuditRepository
+    from core.identity.repository import IdentityRepository
 
 
 class MongoDBManager:
@@ -478,6 +479,14 @@ class MongoDBManager:
             self._db["audit_events"],
             cursor_signing_key=cursor_signing_key,
         )
+        await repository.initialize()
+        return repository
+
+    async def create_identity_repository(self) -> "IdentityRepository":
+        self._ensure_initialized()
+        from .identity_mongodb import MongoDBIdentityRepository
+
+        repository = MongoDBIdentityRepository(self._db["management_identity_state"])
         await repository.initialize()
         return repository
 
