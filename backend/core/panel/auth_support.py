@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import ipaddress
 import os
 import time
 from collections import OrderedDict
@@ -23,6 +24,10 @@ LOGIN_WINDOW_SECONDS = _env_int("PANEL_LOGIN_WINDOW_SECONDS", 300, 30, 3600)
 LOGIN_MAX_ATTEMPTS = _env_int("PANEL_LOGIN_MAX_ATTEMPTS", 10, 3, 100)
 LOGIN_MAX_TRACKED_CLIENTS = _env_int("PANEL_LOGIN_MAX_TRACKED_CLIENTS", 10_000, 100, 100_000)
 _login_failures: OrderedDict[str, List[float]] = OrderedDict()
+RECOVERY_WINDOW_SECONDS = _env_int("PANEL_RECOVERY_WINDOW_SECONDS", 900, 60, 7200)
+RECOVERY_MAX_ATTEMPTS = _env_int("PANEL_RECOVERY_MAX_ATTEMPTS", 5, 3, 20)
+RECOVERY_MAX_TRACKED_CLIENTS = _env_int("PANEL_RECOVERY_MAX_TRACKED_CLIENTS", 10_000, 100, 100_000)
+_recovery_failures: OrderedDict[str, List[float]] = OrderedDict()
 
 
 def _client_identity(request: Request) -> str:
@@ -77,6 +82,67 @@ def _record_login_failure(client_id: str) -> None:
 
 def _clear_login_failures(client_id: str) -> None:
     _login_failures.pop(client_id, None)
+
+
+def _recent_recovery_failures(client_id: str, now: float | None = None) -> List[float]:
+    current_time = time.time() if now is None else now
+    cutoff = current_time - RECOVERY_WINDOW_SECONDS
+    for candidate, failures in list(_recovery_failures.items()):
+        if not failures or failures[-1] < cutoff:
+            _recovery_failures.pop(candidate, None)
+    failures = [ts for ts in _recovery_failures.get(client_id, []) if ts >= cutoff]
+    if failures:
+        _recovery_failures[client_id] = failures
+        _recovery_failures.move_to_end(client_id)
+    else:
+        _recovery_failures.pop(client_id, None)
+    return failures
+
+
+def _assert_recovery_allowed(client_id: str) -> None:
+    if len(_recent_recovery_failures(client_id)) >= RECOVERY_MAX_ATTEMPTS:
+        raise HTTPException(
+            status_code=429,
+            detail="Too many failed recovery attempts. Please wait before trying again.",
+        )
+
+
+def _record_recovery_failure(client_id: str) -> None:
+    now = time.time()
+    failures = _recent_recovery_failures(client_id, now)
+    if (
+        client_id not in _recovery_failures
+        and len(_recovery_failures) >= RECOVERY_MAX_TRACKED_CLIENTS
+    ):
+        _recovery_failures.popitem(last=False)
+    failures.append(now)
+    _recovery_failures[client_id] = failures
+    _recovery_failures.move_to_end(client_id)
+
+
+def _clear_recovery_failures(client_id: str) -> None:
+    _recovery_failures.pop(client_id, None)
+
+
+def _assert_recovery_ingress(request: Request) -> None:
+    if os.getenv("PANEL_RECOVERY_LOCAL_ONLY", "").strip().lower() not in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }:
+        return
+    hostname = (request.url.hostname or "").strip().lower()
+    peer = request.client.host if request.client else ""
+    try:
+        peer_is_loopback = ipaddress.ip_address(peer).is_loopback
+    except ValueError:
+        peer_is_loopback = False
+    if hostname not in {"localhost", "127.0.0.1", "::1"} or not peer_is_loopback:
+        raise HTTPException(
+            status_code=403,
+            detail="Local-owner recovery is restricted to direct loopback access.",
+        )
 
 
 def _credential_result_message(result: Dict[str, Any]) -> str:

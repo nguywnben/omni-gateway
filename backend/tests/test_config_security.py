@@ -2,12 +2,13 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 import os
 import sys
 import unittest
 from pathlib import Path
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 from fastapi import HTTPException
 from starlette.requests import Request
@@ -153,6 +154,13 @@ class AccessCredentialUpdateTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_updates_passwords_without_returning_them(self):
         storage = FakeStorageAdapter()
+        session_service = MagicMock()
+
+        async def revoke_before_write():
+            self.assertNotIn("panel_password", storage.values)
+            return 2
+
+        session_service.revoke_local_owner_sessions = AsyncMock(side_effect=revoke_before_write)
         request = AccessCredentialsUpdateRequest(
             current_password="current-password",
             panel_password="new-panel-password",
@@ -177,6 +185,10 @@ class AccessCredentialUpdateTests(unittest.IsolatedAsyncioTestCase):
                 "core.panel.config_routes.create_panel_session_token",
                 new=AsyncMock(return_value="replacement-session"),
             ),
+            patch(
+                "core.panel.config_routes.get_session_service",
+                return_value=session_service,
+            ),
         ):
             response = await update_access_credentials(
                 request,
@@ -193,6 +205,7 @@ class AccessCredentialUpdateTests(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn("new-panel-password", response.body.decode())
         self.assertIn("panel_session=replacement-session", response.headers["set-cookie"])
         self.assertIn("HttpOnly", response.headers["set-cookie"])
+        session_service.revoke_local_owner_sessions.assert_awaited_once_with()
 
     async def test_rejects_confirmation_mismatch(self):
         request = AccessCredentialsUpdateRequest(
@@ -216,3 +229,85 @@ class AccessCredentialUpdateTests(unittest.IsolatedAsyncioTestCase):
                 )
 
         self.assertEqual(context.exception.status_code, 400)
+
+    async def test_concurrent_password_changes_cannot_reuse_one_current_password_proof(self):
+        storage = FakeStorageAdapter()
+        changed = False
+
+        async def verify_current(_candidate):
+            await asyncio.sleep(0.02)
+            return not changed
+
+        original_set_config = storage.set_config
+
+        async def set_config(key, value):
+            nonlocal changed
+            await asyncio.sleep(0.02)
+            result = await original_set_config(key, value)
+            changed = True
+            return result
+
+        storage.set_config = set_config
+        session_service = MagicMock()
+        session_service.revoke_local_owner_sessions = AsyncMock(return_value=1)
+        requests = (
+            AccessCredentialsUpdateRequest(
+                current_password="current-password",
+                panel_password="new-panel-password-a",
+                panel_password_confirm="new-panel-password-a",
+            ),
+            AccessCredentialsUpdateRequest(
+                current_password="current-password",
+                panel_password="new-panel-password-b",
+                panel_password_confirm="new-panel-password-b",
+            ),
+        )
+
+        with (
+            patch.dict(os.environ, {"PANEL_PASSWORD": ""}),
+            patch(
+                "core.panel.config_routes.verify_password",
+                new=AsyncMock(side_effect=verify_current),
+            ),
+            patch(
+                "core.panel.config_routes.get_storage_adapter",
+                new=AsyncMock(return_value=storage),
+            ),
+            patch(
+                "core.panel.config_routes.config.reload_config",
+                new=AsyncMock(),
+            ),
+            patch(
+                "core.panel.config_routes.create_panel_session_token",
+                new=AsyncMock(return_value="replacement-session"),
+            ),
+            patch(
+                "core.panel.config_routes.hash_password",
+                side_effect=lambda value: f"hashed:{value}",
+            ),
+            patch(
+                "core.panel.config_routes.get_session_service",
+                return_value=session_service,
+            ),
+        ):
+            results = await asyncio.gather(
+                *(
+                    update_access_credentials(
+                        payload,
+                        build_http_request(),
+                        token="session",
+                    )
+                    for payload in requests
+                ),
+                return_exceptions=True,
+            )
+
+        successes = [result for result in results if not isinstance(result, Exception)]
+        denied = [
+            result
+            for result in results
+            if isinstance(result, HTTPException) and result.status_code == 401
+        ]
+        self.assertEqual(len(successes), 1)
+        self.assertEqual(len(denied), 1)
+        session_service.revoke_local_owner_sessions.assert_awaited_once_with()

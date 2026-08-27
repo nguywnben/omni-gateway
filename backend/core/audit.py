@@ -38,6 +38,7 @@ AUDIT_ACTIONS = frozenset(
     {
         "auth.login",
         "auth.logout",
+        "auth.recovery",
         "auth.setup",
         "config.update",
         "config.reset",

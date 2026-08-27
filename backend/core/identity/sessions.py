@@ -11,6 +11,8 @@ import math
 import os
 import re
 import secrets
+import threading
+from collections import Counter
 from dataclasses import dataclass, replace
 from enum import StrEnum
 from typing import Any, Protocol
@@ -29,6 +31,10 @@ _SESSION_DIGEST_PATTERN = re.compile(r"^[0-9a-f]{64}$")
 _SESSION_HMAC_DOMAIN = b"omni-gateway:management-session:v1\0"
 _SESSION_MASTER_KEY_CONFIG = "_internal_session_master_key_v1"
 _SESSION_MASTER_KEY_BYTES = 32
+_SESSION_METRIC_ACTIONS = frozenset({"issue", "resolve", "revoke", "revoke_principal"})
+_SESSION_METRIC_OUTCOMES = frozenset({"succeeded", "not_found", "expired", "stale", "failed"})
+_session_metric_lock = threading.Lock()
+_session_metrics: Counter[tuple[str, str]] = Counter()
 
 
 class SessionError(RuntimeError):
@@ -50,6 +56,29 @@ class SessionStale(SessionError):
 class SessionAuthenticationMethod(StrEnum):
     LOCAL_PASSWORD = "local_password"
     OIDC = "oidc"
+
+
+def _record_session_metric(action: str, outcome: str) -> None:
+    if action not in _SESSION_METRIC_ACTIONS or outcome not in _SESSION_METRIC_OUTCOMES:
+        raise ValueError("Session metric dimensions are invalid.")
+    with _session_metric_lock:
+        _session_metrics[(action, outcome)] += 1
+
+
+def render_management_session_metrics() -> str:
+    """Render only closed low-cardinality management-session outcomes."""
+    with _session_metric_lock:
+        snapshot = dict(_session_metrics)
+    lines = [
+        "# HELP omni_management_session_operations_total Management session lifecycle outcomes.",
+        "# TYPE omni_management_session_operations_total counter",
+    ]
+    for (action, outcome), count in sorted(snapshot.items()):
+        lines.append(
+            "omni_management_session_operations_total"
+            f'{{action="{action}",outcome="{outcome}"}} {count}'
+        )
+    return "\n".join(lines) + "\n"
 
 
 def _strict_timestamp(value: object, label: str) -> float:
@@ -468,30 +497,63 @@ class SessionService:
         return owner
 
     async def issue_local_owner(self, *, now: float) -> IssuedSession:
-        owner = await self._local_owner()
-        return await self._store.issue(
-            principal=ManagementPrincipal.local_owner(owner.identity.identity_id),
-            authentication_method=SessionAuthenticationMethod.LOCAL_PASSWORD,
-            authorization_epoch=owner.identity.authorization_epoch,
-            now=now,
-        )
+        try:
+            owner = await self._local_owner()
+            issued = await self._store.issue(
+                principal=ManagementPrincipal.local_owner(owner.identity.identity_id),
+                authentication_method=SessionAuthenticationMethod.LOCAL_PASSWORD,
+                authorization_epoch=owner.identity.authorization_epoch,
+                now=now,
+            )
+        except Exception:
+            _record_session_metric("issue", "failed")
+            raise
+        _record_session_metric("issue", "succeeded")
+        return issued
 
     async def resolve(self, token: str, *, now: float) -> SessionRecord:
-        owner = await self._local_owner()
-        return await self._store.resolve(
-            token,
-            current_authorization_epoch=owner.identity.authorization_epoch,
-            now=now,
-        )
+        try:
+            owner = await self._local_owner()
+            resolved = await self._store.resolve(
+                token,
+                current_authorization_epoch=owner.identity.authorization_epoch,
+                now=now,
+            )
+        except SessionExpired:
+            _record_session_metric("resolve", "expired")
+            raise
+        except SessionStale:
+            _record_session_metric("resolve", "stale")
+            raise
+        except SessionNotFound:
+            _record_session_metric("resolve", "not_found")
+            raise
+        except Exception:
+            _record_session_metric("resolve", "failed")
+            raise
+        _record_session_metric("resolve", "succeeded")
+        return resolved
 
     async def revoke(self, token: str) -> bool:
-        return await self._store.revoke(token)
+        try:
+            revoked = await self._store.revoke(token)
+        except Exception:
+            _record_session_metric("revoke", "failed")
+            raise
+        _record_session_metric("revoke", "succeeded" if revoked else "not_found")
+        return revoked
 
     async def revoke_local_owner_sessions(self) -> int:
-        owner = await self._local_owner()
-        return await self._store.revoke_principal(
-            ManagementPrincipal.local_owner(owner.identity.identity_id)
-        )
+        try:
+            owner = await self._local_owner()
+            revoked = await self._store.revoke_principal(
+                ManagementPrincipal.local_owner(owner.identity.identity_id)
+            )
+        except Exception:
+            _record_session_metric("revoke_principal", "failed")
+            raise
+        _record_session_metric("revoke_principal", "succeeded")
+        return revoked
 
 
 _session_service: SessionService | None = None

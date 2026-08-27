@@ -41,6 +41,7 @@ def _mutation(
 
 MANAGEMENT_MUTATIONS: dict[tuple[str, str], ManagementMutation] = {
     ("POST", "/api/auth/login"): _mutation("auth.login", "session", "created"),
+    ("POST", "/api/auth/recovery"): _mutation("auth.recovery", "session", "created"),
     ("POST", "/api/auth/setup"): _mutation("auth.setup", "session", "created"),
     ("POST", "/api/auth/logout"): _mutation("auth.logout", "session", "deleted"),
     ("POST", "/api/auth/callback"): _mutation("credential.create", "credential", "created"),
@@ -275,7 +276,7 @@ def classify_management_mutation(
 def _outcome_for_status(status_code: int) -> str:
     if 200 <= status_code < 400:
         return "succeeded"
-    if status_code in {401, 403}:
+    if status_code in {401, 403, 429}:
         return "denied"
     if status_code == 404:
         return "not_found"
@@ -321,7 +322,7 @@ async def record_classified_management_response(
     from core.request_context import get_api_key_id
 
     outcome = _outcome_for_status(status_code)
-    unauthenticated_action = mutation.action in {"auth.login", "auth.setup"}
+    unauthenticated_action = mutation.action in {"auth.login", "auth.recovery", "auth.setup"}
     denied = outcome == "denied"
     virtual_key_id = get_api_key_id()
     if unauthenticated_action or denied:

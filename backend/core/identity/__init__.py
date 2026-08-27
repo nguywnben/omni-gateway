@@ -63,6 +63,7 @@ from core.identity.sessions import (
     get_session_policy,
     get_session_service,
     initialize_session_service,
+    render_management_session_metrics,
 )
 
 __all__ = [
@@ -122,4 +123,5 @@ __all__ = [
     "get_session_policy",
     "get_session_service",
     "initialize_session_service",
+    "render_management_session_metrics",
 ]

@@ -1,6 +1,6 @@
 from typing import Any, Dict, List, Literal, Optional, Union
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, SecretStr
 
 
 def model_to_dict(model: BaseModel) -> Dict[str, Any]:
@@ -372,6 +372,10 @@ class CredentialStatus(BaseModel):
 # Web Routes Models
 class LoginRequest(BaseModel):
     password: str
+
+
+class RecoveryRequest(BaseModel):
+    password: SecretStr
 
 
 class SetupRequest(BaseModel):

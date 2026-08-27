@@ -8,6 +8,7 @@ import time
 from typing import Dict, List, Optional
 
 from core.credential_operation_evidence import render_credential_operation_metrics
+from core.identity import render_management_session_metrics
 from core.operational_health import get_operational_health_snapshot
 from core.provider_registry import (
     ANTHROPIC,
@@ -145,6 +146,7 @@ def render_prometheus_metrics(
     lines.append(f"omni_response_cache_entries {int(response_cache.size())}")
 
     lines.extend(render_credential_operation_metrics().rstrip().splitlines())
+    lines.extend(render_management_session_metrics().rstrip().splitlines())
     lines.extend(render_virtual_key_quota_metrics().rstrip().splitlines())
     emit("omni_storage_ready", "gauge", "Whether the configured durable storage is reachable.")
     lines.append(f"omni_storage_ready {int(storage_ready)}")

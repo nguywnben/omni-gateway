@@ -1,4 +1,5 @@
 import hashlib
+import hmac
 import os
 import secrets
 import time
@@ -8,11 +9,16 @@ from urllib.parse import urlsplit
 import jwt
 from config import get_panel_password, trust_proxy_headers_enabled
 from core.identity import (
+    SESSION_TOKEN_PREFIX,
     AuthorizationDenied,
     InvalidPrincipal,
     ManagementPrincipal,
     ManagementRouteTransport,
+    SessionError,
+    SessionExpired,
     UnclassifiedManagementRoute,
+    get_session_policy,
+    get_session_service,
     require_management_route,
 )
 from fastapi import Depends, Header, HTTPException, Query, Request, Response, status
@@ -287,15 +293,21 @@ PANEL_SESSION_AUDIENCE = "panel"
 PANEL_SESSION_ALGORITHM = "HS256"
 PANEL_SESSION_COOKIE = "panel_session"
 PANEL_SAFE_METHODS = {"GET", "HEAD", "OPTIONS"}
+_PANEL_AUTH_REFERENCE_KEY = secrets.token_bytes(32)
+_PANEL_AUTH_REFERENCE_DOMAIN = b"omni-gateway:panel-auth-reference:v1\0"
 
 
 def _get_panel_session_ttl_seconds() -> int:
-    raw_ttl = os.getenv("PANEL_SESSION_TTL_SECONDS", "86400")
+    return get_session_policy().absolute_ttl_seconds
+
+
+def _get_legacy_session_migration_seconds() -> int:
+    raw_ttl = os.getenv("PANEL_LEGACY_SESSION_MIGRATION_SECONDS", "3600")
     try:
         ttl = int(raw_ttl)
     except ValueError:
-        ttl = 86400
-    return max(300, min(ttl, 2592000))
+        ttl = 3600
+    return max(300, min(ttl, 86400))
 
 
 def _panel_cookie_is_secure(request: Request) -> bool:
@@ -347,37 +359,53 @@ async def _get_panel_session_secret() -> bytes:
 
 
 async def create_panel_session_token() -> str:
-    """Create a signed control-panel session token."""
+    """Issue a revocable opaque control-panel session token."""
+    issued = await get_session_service().issue_local_owner(now=time.time())
+    return issued.token
+
+
+async def _verify_legacy_panel_session(token: str) -> str:
     secret = await _get_panel_session_secret()
-
-    now = int(time.time())
-    payload = {
-        "sub": "panel",
-        "aud": PANEL_SESSION_AUDIENCE,
-        "iat": now,
-        "exp": now + _get_panel_session_ttl_seconds(),
-    }
-    return jwt.encode(payload, secret, algorithm=PANEL_SESSION_ALGORITHM)
-
-
-async def verify_panel_token_value(token: str) -> str:
-    """Validate a signed control-panel session token."""
-
-    secret = await _get_panel_session_secret()
-
     try:
-        jwt.decode(
+        payload = jwt.decode(
             token,
             secret,
             algorithms=[PANEL_SESSION_ALGORITHM],
             audience=PANEL_SESSION_AUDIENCE,
+            options={"require": ["sub", "aud", "iat", "exp"]},
         )
+        issued_at = payload.get("iat")
+        if (
+            payload.get("sub") != "panel"
+            or type(issued_at) is not int
+            or time.time() >= issued_at + _get_legacy_session_migration_seconds()
+        ):
+            raise jwt.ExpiredSignatureError
     except jwt.ExpiredSignatureError:
         raise HTTPException(status_code=401, detail="Session expired. Please sign in again.")
     except jwt.InvalidTokenError:
         raise HTTPException(status_code=401, detail="Invalid session token.")
-
     return token
+
+
+async def verify_panel_token_value(token: str) -> str:
+    """Validate an opaque session or a bounded local-owner migration JWT."""
+    if not isinstance(token, str):
+        raise HTTPException(status_code=401, detail="Invalid session token.")
+    if token.startswith(SESSION_TOKEN_PREFIX):
+        try:
+            await get_session_service().resolve(token, now=time.time())
+        except SessionExpired:
+            raise HTTPException(status_code=401, detail="Session expired. Please sign in again.")
+        except SessionError:
+            raise HTTPException(status_code=401, detail="Invalid session token.")
+        except RuntimeError as exc:
+            raise HTTPException(status_code=503, detail="Session service is unavailable.") from exc
+        return token
+    try:
+        return await _verify_legacy_panel_session(token)
+    except HTTPException:
+        raise
 
 
 def _normalize_http_origin(value: str) -> str:
@@ -421,6 +449,14 @@ def _verify_cookie_request_origin(request: Request) -> None:
         raise HTTPException(status_code=403, detail="Cross-site console request rejected.")
 
 
+def _set_management_auth_reference(request: Request, token: str) -> None:
+    request.state.management_auth_reference = hmac.digest(
+        _PANEL_AUTH_REFERENCE_KEY,
+        _PANEL_AUTH_REFERENCE_DOMAIN + token.encode("utf-8", errors="strict"),
+        hashlib.sha256,
+    ).hex()
+
+
 async def verify_panel_token(
     request: Request,
     credentials: Optional[HTTPAuthorizationCredentials] = Depends(security),
@@ -432,6 +468,7 @@ async def verify_panel_token(
         token = await verify_panel_token_value(token)
         principal = ManagementPrincipal.local_owner()
         _authorize_panel_request(request, principal)
+        _set_management_auth_reference(request, token)
         return token
 
     if not credentials:
@@ -444,6 +481,7 @@ async def verify_panel_token(
         token = await verify_panel_token_value(token)
         principal = ManagementPrincipal.local_owner()
         _authorize_panel_request(request, principal)
+        _set_management_auth_reference(request, token)
         return token
 
     from core.request_context import set_api_key_id
@@ -457,6 +495,7 @@ async def verify_panel_token(
     except InvalidPrincipal as exc:
         raise HTTPException(status_code=403, detail="Management permission denied.") from exc
     _authorize_panel_request(request, principal)
+    _set_management_auth_reference(request, token)
     await virtual_key_manager.note_last_used(record)
     set_api_key_id(record.id)
     return token

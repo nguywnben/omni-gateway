@@ -25,7 +25,7 @@ const AUDIT_FINGERPRINT_PATTERN = /^[0-9a-f]{20}$/;
 const AUDIT_EVENT_ID_PATTERN = /^[0-9a-f]{32}$/;
 const AUDIT_CURSOR_MAX_LENGTH = 4096;
 const AUDIT_ACTIONS = new Set([
-    'auth.login', 'auth.logout', 'auth.setup', 'config.update', 'config.reset',
+    'auth.login', 'auth.logout', 'auth.recovery', 'auth.setup', 'config.update', 'config.reset',
     'root_key.rotate', 'provider.create', 'provider.update', 'provider.delete',
     'credential.create', 'credential.update', 'credential.delete', 'credential.verify',
     'credential.test', 'credential.quota', 'credential.toggle', 'credential.export',

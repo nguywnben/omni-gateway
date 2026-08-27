@@ -25,6 +25,7 @@ from core.identity.sessions import (
     SessionPolicy,
     SessionService,
     SessionStale,
+    render_management_session_metrics,
 )
 
 
@@ -363,6 +364,24 @@ class SessionServiceTests(unittest.IsolatedAsyncioTestCase):
                 self.storage,
                 policy=SessionPolicy(idle_ttl_seconds=300, absolute_ttl_seconds=900),
             )
+
+    async def test_operational_metrics_are_fixed_cardinality_and_secret_free(self):
+        service = await SessionService.create(
+            self.storage,
+            policy=SessionPolicy(idle_ttl_seconds=300, absolute_ttl_seconds=900),
+        )
+        issued = await service.issue_local_owner(now=1_000.0)
+        await service.resolve(issued.token, now=1_001.0)
+        await service.revoke(issued.token)
+        with self.assertRaises(SessionNotFound):
+            await service.resolve(issued.token, now=1_002.0)
+
+        rendered = render_management_session_metrics()
+        self.assertIn('action="issue",outcome="succeeded"', rendered)
+        self.assertIn('action="resolve",outcome="not_found"', rendered)
+        self.assertIn('action="revoke",outcome="succeeded"', rendered)
+        self.assertNotIn(issued.token, rendered)
+        self.assertNotIn("local-owner", rendered)
 
 
 if __name__ == "__main__":

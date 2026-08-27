@@ -19,6 +19,7 @@ from core.credential_manager import credential_manager
 from core.health import router as health_router
 from core.httpx_client import http_client
 from core.i18n import LocalizedJSONResponse, locale_context, resolve_locale
+from core.identity import close_session_service, initialize_session_service
 from core.keep_alive import keep_alive_service
 from core.management_audit import (
     classify_management_mutation,
@@ -129,10 +130,21 @@ async def lifespan(app: FastAPI):
         raise RuntimeError("Audit service initialization failed.") from e
 
     try:
+        await initialize_session_service()
+        log.info("Revocable management session service initialized.")
+    except Exception as e:
+        log.critical(f"Session service initialization failed: {type(e).__name__}")
+        await close_audit_service()
+        await credential_manager.close()
+        await close_storage_adapter()
+        raise RuntimeError("Session service initialization failed.") from e
+
+    try:
         await initialize_request_trace_service()
         log.info("Durable request trace service initialized.")
     except Exception as e:
         log.critical(f"Request trace service initialization failed: {type(e).__name__}")
+        await close_session_service()
         await close_audit_service()
         await credential_manager.close()
         await close_storage_adapter()
@@ -148,6 +160,7 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         log.critical(f"External telemetry configuration failed: {type(e).__name__}")
         await close_request_trace_service()
+        await close_session_service()
         await close_audit_service()
         await credential_manager.close()
         await close_storage_adapter()
@@ -175,16 +188,22 @@ async def lifespan(app: FastAPI):
             log.error(f"Error while shutting down asynchronous tasks: {e}")
 
         try:
-            await close_audit_service()
-            log.info("Audit service closed.")
-        except Exception as e:
-            log.error(f"Error while closing the audit service: {e}")
-
-        try:
             await close_request_trace_service()
             log.info("Request trace service closed.")
         except Exception as e:
             log.error(f"Error while closing the request trace service: {e}")
+
+        try:
+            await close_session_service()
+            log.info("Management session service closed.")
+        except Exception as e:
+            log.error(f"Error while closing the session service: {e}")
+
+        try:
+            await close_audit_service()
+            log.info("Audit service closed.")
+        except Exception as e:
+            log.error(f"Error while closing the audit service: {e}")
 
         try:
             await credential_manager.close()

@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import os
 import sys
+import time
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
@@ -19,12 +20,16 @@ BACKEND_DIR = Path(__file__).resolve().parents[1]
 if str(BACKEND_DIR) not in sys.path:
     sys.path.insert(0, str(BACKEND_DIR))
 
-from core.panel.auth import _client_identity, setup_status
+import jwt
+from core.identity import SessionExpired, SessionNotFound
+from core.panel.auth import _client_identity, logout, setup_status
 from core.utils import (
     PANEL_SESSION_COOKIE,
     clear_panel_session_cookie,
+    create_panel_session_token,
     set_panel_session_cookie,
     verify_panel_token,
+    verify_panel_token_value,
 )
 from core.virtual_keys import VirtualKey
 
@@ -163,6 +168,8 @@ class PanelSessionCookieTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(token, "cookie-session")
         verifier.assert_awaited_once_with("cookie-session")
+        self.assertRegex(request.state.management_auth_reference, r"^[0-9a-f]{64}$")
+        self.assertNotEqual(request.state.management_auth_reference, "cookie-session")
 
     async def test_bearer_token_remains_supported_for_non_browser_clients(self):
         credentials = HTTPAuthorizationCredentials(
@@ -379,6 +386,111 @@ class PanelSessionCookieTests(unittest.IsolatedAsyncioTestCase):
         cookie = response.headers["set-cookie"]
         self.assertIn(f"{PANEL_SESSION_COOKIE}=", cookie)
         self.assertIn("Max-Age=0", cookie)
+
+
+class PanelSessionLifecycleTests(unittest.IsolatedAsyncioTestCase):
+    async def test_new_login_tokens_are_issued_by_the_opaque_session_service(self):
+        service = SimpleNamespace(
+            issue_local_owner=AsyncMock(return_value=SimpleNamespace(token="ogs_" + "A" * 43))
+        )
+
+        with (
+            patch("core.utils.get_session_service", return_value=service),
+            patch("core.utils.time.time", return_value=1_000.0),
+        ):
+            token = await create_panel_session_token()
+
+        self.assertEqual(token, "ogs_" + "A" * 43)
+        service.issue_local_owner.assert_awaited_once_with(now=1_000.0)
+
+    async def test_opaque_session_resolution_maps_expiry_and_replay_to_generic_http_errors(self):
+        service = SimpleNamespace(resolve=AsyncMock(return_value=SimpleNamespace()))
+        token = "ogs_" + "A" * 43
+        with (
+            patch("core.utils.get_session_service", return_value=service),
+            patch("core.utils.time.time", return_value=1_001.0),
+        ):
+            self.assertEqual(await verify_panel_token_value(token), token)
+        service.resolve.assert_awaited_once_with(token, now=1_001.0)
+
+        for error, detail in (
+            (SessionExpired("expired"), "Session expired. Please sign in again."),
+            (SessionNotFound("missing"), "Invalid session token."),
+        ):
+            service.resolve.reset_mock(side_effect=True)
+            service.resolve.side_effect = error
+            with (
+                patch("core.utils.get_session_service", return_value=service),
+                self.assertRaises(HTTPException) as context,
+            ):
+                await verify_panel_token_value(token)
+            self.assertEqual(context.exception.status_code, 401)
+            self.assertEqual(context.exception.detail, detail)
+
+    async def test_legacy_jwt_is_accepted_only_inside_its_bounded_migration_window(self):
+        now = int(time.time())
+        secret = b"l" * 32
+
+        def legacy_token(issued_at: int) -> str:
+            return jwt.encode(
+                {
+                    "sub": "panel",
+                    "aud": "panel",
+                    "iat": issued_at,
+                    "exp": now + 600,
+                },
+                secret,
+                algorithm="HS256",
+            )
+
+        with (
+            patch("core.utils._get_panel_session_secret", new=AsyncMock(return_value=secret)),
+            patch.dict(os.environ, {"PANEL_LEGACY_SESSION_MIGRATION_SECONDS": "300"}),
+            patch("core.utils.time.time", return_value=float(now)),
+        ):
+            recent = legacy_token(now - 299)
+            self.assertEqual(await verify_panel_token_value(recent), recent)
+            with self.assertRaises(HTTPException) as context:
+                await verify_panel_token_value(legacy_token(now - 300))
+
+        self.assertEqual(context.exception.status_code, 401)
+        self.assertEqual(context.exception.detail, "Session expired. Please sign in again.")
+
+    async def test_logout_revokes_the_presented_opaque_session_before_clearing_cookie(self):
+        token = "ogs_" + "A" * 43
+        service = SimpleNamespace(revoke=AsyncMock(return_value=True))
+        request = build_request(
+            cookie=f"{PANEL_SESSION_COOKIE}={token}",
+            method="POST",
+            origin="http://localhost:4283",
+            sec_fetch_site="same-origin",
+            route_path="/api/auth/logout",
+        )
+
+        with patch("core.panel.auth.get_session_service", return_value=service):
+            response = await logout(request)
+
+        service.revoke.assert_awaited_once_with(token)
+        self.assertIn("Max-Age=0", response.headers["set-cookie"])
+
+    async def test_cross_origin_logout_is_rejected_before_session_revocation(self):
+        token = "ogs_" + "A" * 43
+        service = SimpleNamespace(revoke=AsyncMock())
+        request = build_request(
+            cookie=f"{PANEL_SESSION_COOKIE}={token}",
+            method="POST",
+            origin="https://attacker.example",
+            route_path="/api/auth/logout",
+        )
+
+        with (
+            patch("core.panel.auth.get_session_service", return_value=service),
+            self.assertRaises(HTTPException) as context,
+        ):
+            await logout(request)
+
+        self.assertEqual(context.exception.status_code, 403)
+        service.revoke.assert_not_awaited()
 
 
 class ClientIdentityTests(unittest.TestCase):

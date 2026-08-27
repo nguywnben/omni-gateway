@@ -1,6 +1,9 @@
+import asyncio
+
 import config
 from core.auth import verify_password
 from core.i18n import LocalizedJSONResponse as JSONResponse
+from core.identity import get_session_service
 from core.keep_alive import keep_alive_service
 from core.models import AccessCredentialsUpdateRequest, ConfigSaveRequest
 from core.passwords import hash_password
@@ -16,6 +19,7 @@ from log import configure_logging, log
 from .utils import get_env_locked_keys, internal_server_error
 
 router = APIRouter(prefix="/api/config", tags=["config"])
+_access_credentials_update_lock = asyncio.Lock()
 
 ACCESS_SECRET_KEYS = {"api_password", "panel_password", "password"}
 RESTART_REQUIRED_CONFIG_KEYS = {"host", "port", "credentials_dir"}
@@ -482,68 +486,73 @@ async def update_access_credentials(
     token: str = Depends(verify_panel_token),
 ):
     """Update the panel password without exposing its current value."""
-    if not await verify_password(payload.current_password):
-        raise HTTPException(status_code=401, detail="The current console password is incorrect.")
-
-    requested_updates = {
-        "panel_password": (
-            payload.panel_password,
-            payload.panel_password_confirm,
-            "Panel password",
-        ),
-    }
-    updates = {}
-    for key, (value, confirmation, label) in requested_updates.items():
-        if value is None or value == "":
-            continue
-        if value != confirmation:
-            raise HTTPException(status_code=400, detail=f"{label} confirmation does not match.")
-        if len(value) < 8 or len(value) > 256:
+    async with _access_credentials_update_lock:
+        if not await verify_password(payload.current_password):
             raise HTTPException(
-                status_code=400,
-                detail=f"{label} must contain between 8 and 256 characters.",
+                status_code=401, detail="The current console password is incorrect."
             )
-        updates[key] = value
 
-    if not updates:
-        raise HTTPException(status_code=400, detail="Enter at least one new password.")
-
-    env_locked_keys = get_env_locked_keys()
-    locked_updates = sorted(set(updates) & env_locked_keys)
-    if locked_updates:
-        raise HTTPException(
-            status_code=409,
-            detail=(
-                "The requested password is managed by the runtime environment and "
-                "cannot be changed from the console."
+        requested_updates = {
+            "panel_password": (
+                payload.panel_password,
+                payload.panel_password_confirm,
+                "Panel password",
             ),
-        )
-
-    try:
-        storage_adapter = await get_storage_adapter()
-        for key, value in updates.items():
-            await storage_adapter.set_config(key, hash_password(value))
-        await config.reload_config()
-
-        response_data = {
-            "message": "Console password updated.",
-            "updated": sorted(updates),
         }
-        response = JSONResponse(content=response_data)
-        if "panel_password" in updates:
-            set_panel_session_cookie(
-                response,
-                await create_panel_session_token(),
-                request,
+        updates = {}
+        for key, (value, confirmation, label) in requested_updates.items():
+            if value is None or value == "":
+                continue
+            if value != confirmation:
+                raise HTTPException(status_code=400, detail=f"{label} confirmation does not match.")
+            if len(value) < 8 or len(value) > 256:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"{label} must contain between 8 and 256 characters.",
+                )
+            updates[key] = value
+
+        if not updates:
+            raise HTTPException(status_code=400, detail="Enter at least one new password.")
+
+        env_locked_keys = get_env_locked_keys()
+        locked_updates = sorted(set(updates) & env_locked_keys)
+        if locked_updates:
+            raise HTTPException(
+                status_code=409,
+                detail=(
+                    "The requested password is managed by the runtime environment and "
+                    "cannot be changed from the console."
+                ),
             )
 
-        log.info("Control-panel password updated.")
-        return response
-    except HTTPException:
-        raise
-    except Exception as exc:
-        log.error(f"Failed to update the control-panel password: {exc}")
-        raise HTTPException(status_code=500, detail="Failed to update the console password.")
+        try:
+            if "panel_password" in updates:
+                await get_session_service().revoke_local_owner_sessions()
+            storage_adapter = await get_storage_adapter()
+            for key, value in updates.items():
+                await storage_adapter.set_config(key, hash_password(value))
+            await config.reload_config()
+
+            response_data = {
+                "message": "Console password updated.",
+                "updated": sorted(updates),
+            }
+            response = JSONResponse(content=response_data)
+            if "panel_password" in updates:
+                set_panel_session_cookie(
+                    response,
+                    await create_panel_session_token(),
+                    request,
+                )
+
+            log.info("Control-panel password updated.")
+            return response
+        except HTTPException:
+            raise
+        except Exception as exc:
+            log.error(f"Failed to update the control-panel password: {exc}")
+            raise HTTPException(status_code=500, detail="Failed to update the console password.")
 
 
 @router.post("/reset")

@@ -10,17 +10,20 @@ from core.auth import (
     verify_password,
 )
 from core.i18n import LocalizedJSONResponse as JSONResponse
+from core.identity import SESSION_TOKEN_PREFIX, get_session_service
 from core.models import (
     AuthCallbackRequest,
     AuthCallbackUrlRequest,
     AuthStartRequest,
     LoginRequest,
+    RecoveryRequest,
     SetupRequest,
 )
 from core.passwords import hash_password
 from core.storage_adapter import get_storage_adapter
 from core.utils import (
     PANEL_SESSION_COOKIE,
+    _verify_cookie_request_origin,
     clear_panel_session_cookie,
     create_panel_session_token,
     set_panel_session_cookie,
@@ -32,15 +35,26 @@ from log import log
 
 from .auth_support import (
     _assert_login_allowed,
+    _assert_recovery_allowed,
+    _assert_recovery_ingress,
     _auth_success_content,
     _clear_login_failures,
+    _clear_recovery_failures,
     _client_identity,
     _record_login_failure,
+    _record_recovery_failure,
 )
 from .setup_security import get_setup_access_policy, verify_setup_access
 from .utils import internal_server_error, validate_mode
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
+
+
+def _management_auth_reference(request: Request) -> str:
+    reference = getattr(request.state, "management_auth_reference", "")
+    if not reference:
+        raise HTTPException(status_code=401, detail="Authentication required.")
+    return reference
 
 
 @router.post("/login")
@@ -72,6 +86,39 @@ async def login(payload: LoginRequest, request: Request):
             status_code=500,
             detail="Unable to sign in because of an internal service error.",
         ) from e
+
+
+@router.post("/recovery")
+async def recover_local_owner(payload: RecoveryRequest, request: Request):
+    """Authenticate the independently throttled local-owner break-glass path."""
+    try:
+        if not await config.has_password_configured():
+            raise HTTPException(
+                status_code=428, detail="Initial setup is required before recovery."
+            )
+        _assert_recovery_ingress(request)
+        client_id = _client_identity(request)
+        _assert_recovery_allowed(client_id)
+        password = payload.password.get_secret_value()
+        if await verify_password(password):
+            _clear_recovery_failures(client_id)
+            response = JSONResponse(content={"message": "Recovery sign-in completed."})
+            set_panel_session_cookie(
+                response,
+                await create_panel_session_token(),
+                request,
+            )
+            return response
+        _record_recovery_failure(client_id)
+        raise HTTPException(status_code=401, detail="Recovery authentication failed.")
+    except HTTPException:
+        raise
+    except Exception as exc:
+        log.error(f"Local-owner recovery failed: {type(exc).__name__}")
+        raise HTTPException(
+            status_code=500,
+            detail="Unable to complete local-owner recovery.",
+        ) from exc
 
 
 @router.get("/setup/status")
@@ -149,22 +196,31 @@ async def complete_setup(payload: SetupRequest, request: Request):
 
 
 @router.post("/logout")
-async def logout():
-    """Expire the browser control-panel session."""
+async def logout(request: Request):
+    """Revoke and expire the browser control-panel session."""
+    token = request.cookies.get(PANEL_SESSION_COOKIE)
+    if token:
+        _verify_cookie_request_origin(request)
+        if token.startswith(SESSION_TOKEN_PREFIX):
+            await get_session_service().revoke(token)
     response = JSONResponse(content={"message": "Signed out."})
     clear_panel_session_cookie(response)
     return response
 
 
 @router.post("/start")
-async def start_auth(request: AuthStartRequest, token: str = Depends(verify_panel_token)):
+async def start_auth(
+    payload: AuthStartRequest,
+    request: Request,
+    token: str = Depends(verify_panel_token),
+):
     try:
-        project_id = request.project_id
+        project_id = payload.project_id
         if not project_id:
             log.info("No Project ID was provided; auto-detection will be used.")
 
-        user_session = token if token else None
-        mode = validate_mode(request.mode)
+        user_session = _management_auth_reference(request)
+        mode = validate_mode(payload.mode)
         result = await create_auth_url(
             project_id,
             user_session,
@@ -194,14 +250,18 @@ async def start_auth(request: AuthStartRequest, token: str = Depends(verify_pane
 
 
 @router.post("/callback")
-async def auth_callback(request: AuthCallbackRequest, token: str = Depends(verify_panel_token)):
+async def auth_callback(
+    payload: AuthCallbackRequest,
+    request: Request,
+    token: str = Depends(verify_panel_token),
+):
     try:
-        project_id = request.project_id
+        project_id = payload.project_id
 
-        user_session = token if token else None
+        user_session = _management_auth_reference(request)
 
         result = await asyncio_complete_auth_flow(
-            project_id, user_session, mode=validate_mode(request.mode)
+            project_id, user_session, mode=validate_mode(payload.mode)
         )
 
         if result["success"]:
@@ -286,12 +346,15 @@ async def check_auth_status(project_id: str, token: str = Depends(verify_panel_t
 
 @router.get("/status")
 async def check_auth_flow_status(
+    request: Request,
     state: str = Query(..., min_length=1),
     token: str = Depends(verify_panel_token),
 ):
     """Return OAuth callback status for the active browser session without waiting."""
     try:
-        return JSONResponse(content=get_auth_status_by_state(state, token))
+        return JSONResponse(
+            content=get_auth_status_by_state(state, _management_auth_reference(request))
+        )
     except Exception as e:
         log.error(f"Failed to check authentication flow status: {e}")
         raise internal_server_error() from e

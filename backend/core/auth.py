@@ -276,10 +276,9 @@ async def create_auth_url(
             scopes=scopes,
             redirect_uri=callback_url,
         )
-        if user_session:
-            state = f"{user_session}_{str(uuid.uuid4())}"
-        else:
-            state = str(uuid.uuid4())
+        # The externally visible OAuth state is independent from the internal,
+        # non-capability session reference retained for flow ownership checks.
+        state = str(uuid.uuid4())
         auth_url = flow.get_auth_url(state=state)
         if len(auth_flows) >= MAX_AUTH_FLOWS:
             oldest_state = min(auth_flows.keys(), key=lambda k: auth_flows[k].get("created_at", 0))
