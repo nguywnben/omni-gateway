@@ -43,6 +43,7 @@ def _metadata(**overrides):
         "subject_types_supported": ["public"],
         "id_token_signing_alg_values_supported": ["RS256", "PS256"],
         "token_endpoint_auth_methods_supported": ["client_secret_basic"],
+        "code_challenge_methods_supported": ["S256"],
         "scopes_supported": ["openid", "profile", "email"],
         "claims_supported": ["sub", "preferred_username", "name", "email", "groups"],
     } | overrides
@@ -82,6 +83,7 @@ class OidcDiscoveryTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(document.jwks_uri, _metadata()["jwks_uri"])
         self.assertEqual(document.id_token_signing_algorithms, ("RS256",))
         self.assertEqual(document.token_endpoint_auth_methods, ("client_secret_basic",))
+        self.assertEqual(document.code_challenge_methods, ("S256",))
         self.assertNotIn("extension_field", dataclasses.asdict(document))
 
     async def test_issuer_with_trailing_slash_preserves_exact_identity(self):
@@ -125,6 +127,9 @@ class OidcDiscoveryTests(unittest.IsolatedAsyncioTestCase):
             _metadata(subject_types_supported=["sectoral"]),
             _metadata(id_token_signing_alg_values_supported=["HS256", "none"]),
             _metadata(token_endpoint_auth_methods_supported=["none"]),
+            _metadata(code_challenge_methods_supported=["plain"]),
+            _metadata(code_challenge_methods_supported=[]),
+            _metadata(code_challenge_methods_supported="S256"),
             _metadata(scopes_supported=["profile", "email"]),
             _metadata(claims_supported=["sub", "email"]),
         )
@@ -134,6 +139,11 @@ class OidcDiscoveryTests(unittest.IsolatedAsyncioTestCase):
                 client = FakeDiscoveryClient(policy, metadata)
                 with self.assertRaises(OidcDiscoveryError):
                     await discover_oidc(policy, client)
+
+        missing_pkce = _metadata()
+        missing_pkce.pop("code_challenge_methods_supported")
+        with self.assertRaises(OidcDiscoveryError):
+            await discover_oidc(policy, FakeDiscoveryClient(policy, missing_pkce))
 
     async def test_missing_wrong_type_duplicate_and_oversized_metadata_fail_closed(self):
         invalid_documents = (

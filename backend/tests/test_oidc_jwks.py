@@ -76,6 +76,7 @@ def _discovery():
         subject_types=("public",),
         id_token_signing_algorithms=("RS256", "ES256"),
         token_endpoint_auth_methods=("client_secret_basic",),
+        code_challenge_methods=("S256",),
         scopes_supported=("openid",),
         claims_supported=(),
     )

@@ -42,6 +42,7 @@ class OidcDiscoveryDocument:
     subject_types: tuple[str, ...]
     id_token_signing_algorithms: tuple[str, ...]
     token_endpoint_auth_methods: tuple[str, ...]
+    code_challenge_methods: tuple[str, ...]
     scopes_supported: tuple[str, ...]
     claims_supported: tuple[str, ...]
 
@@ -169,6 +170,12 @@ async def discover_oidc(
         )
         if not auth_methods:
             raise OidcDiscoveryError
+        code_challenge_methods = _string_list(
+            document,
+            "code_challenge_methods_supported",
+        )
+        if "S256" not in code_challenge_methods:
+            raise OidcDiscoveryError
         scopes = _string_list(document, "scopes_supported", required=False)
         if scopes and "openid" not in scopes:
             raise OidcDiscoveryError
@@ -192,6 +199,7 @@ async def discover_oidc(
             subject_types=subject_types,
             id_token_signing_algorithms=algorithms,
             token_endpoint_auth_methods=auth_methods,
+            code_challenge_methods=("S256",),
             scopes_supported=scopes,
             claims_supported=claims,
         )
