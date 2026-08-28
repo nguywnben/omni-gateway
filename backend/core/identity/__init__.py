@@ -49,6 +49,12 @@ from core.identity.oidc_policy import (
     OidcPolicy,
     load_oidc_configuration,
 )
+from core.identity.oidc_transaction import (
+    OidcAuthorizationRequest,
+    OidcAuthorizationTransactionError,
+    OidcAuthorizationTransactionService,
+    OidcTransactionProof,
+)
 from core.identity.repository import (
     IDENTITY_MIGRATION_ID,
     IDENTITY_SCHEMA_VERSION,
@@ -130,6 +136,10 @@ __all__ = [
     "OidcConfigurationError",
     "OidcPolicy",
     "load_oidc_configuration",
+    "OidcAuthorizationRequest",
+    "OidcAuthorizationTransactionError",
+    "OidcAuthorizationTransactionService",
+    "OidcTransactionProof",
     "IDENTITY_MIGRATION_ID",
     "IDENTITY_SCHEMA_VERSION",
     "LOCAL_OWNER_BINDING_ID",

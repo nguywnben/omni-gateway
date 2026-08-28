@@ -276,9 +276,10 @@ def _split_https_url(value: str, name: str) -> SplitResult:
     if len(value) > _MAX_URL_LENGTH or not value.startswith("https://") or "\\" in value:
         raise OidcConfigurationError(f"{name} must be an exact HTTPS URL.")
     try:
+        value.encode("ascii")
         parsed = urlsplit(value)
         port = parsed.port
-    except ValueError as exc:
+    except (UnicodeError, ValueError) as exc:
         raise OidcConfigurationError(f"{name} must be an exact HTTPS URL.") from exc
     if (
         parsed.scheme != "https"

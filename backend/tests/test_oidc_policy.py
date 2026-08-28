@@ -154,6 +154,7 @@ class OidcPolicyTests(unittest.TestCase):
             "https://identity.example.com/tenant?query=yes",
             "https://identity.example.com/tenant#fragment",
             " https://identity.example.com/tenant",
+            "https://identity.example.com/ténant",
         )
         for issuer in invalid_issuers:
             with self.subTest(issuer=issuer):
@@ -167,6 +168,7 @@ class OidcPolicyTests(unittest.TestCase):
             "https://gateway.example.com",
             "https://gateway.example.com/auth/oidc/callback?next=/admin",
             "https://gateway.example.com/auth/oidc/callback#fragment",
+            "https://gateway.example.com/auth/oidc/cállback",
         )
         for redirect in invalid_redirects:
             with self.subTest(redirect=redirect):
