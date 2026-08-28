@@ -30,7 +30,11 @@ from core.identity.oidc_discovery import (
     OidcDiscoveryError,
     discover_oidc,
 )
-from core.identity.oidc_http import OidcHttpClient, OidcHttpError
+from core.identity.oidc_http import (
+    OidcHttpClient,
+    OidcHttpError,
+    validate_oidc_endpoint_url,
+)
 from core.identity.oidc_jwks import OidcJwk, OidcJwksCache, OidcJwksError
 from core.identity.oidc_policy import (
     OIDC_POLICY_SCHEMA_VERSION,
@@ -108,6 +112,7 @@ __all__ = [
     "discover_oidc",
     "OidcHttpClient",
     "OidcHttpError",
+    "validate_oidc_endpoint_url",
     "OidcJwk",
     "OidcJwksCache",
     "OidcJwksError",

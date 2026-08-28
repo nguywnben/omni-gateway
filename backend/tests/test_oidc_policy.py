@@ -66,6 +66,10 @@ class OidcPolicyTests(unittest.TestCase):
         self.assertNotIn(secret, str(configuration))
         self.assertNotIn(secret, repr(dataclasses.asdict(configuration.policy)))
         self.assertEqual(configuration.reveal_client_secret(), secret)
+        with self.assertRaises(AttributeError):
+            configuration.policy = load_oidc_configuration(_revision(), environ={}).policy
+        with self.assertRaises(AttributeError):
+            configuration._client_secret = None
 
     def test_exactly_one_environment_locked_secret_source_is_required(self):
         environment = _enabled_environment()

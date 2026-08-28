@@ -116,6 +116,13 @@ def _endpoint_url(url: str, policy: OidcPolicy) -> SplitResult:
     return parsed
 
 
+def validate_oidc_endpoint_url(policy: OidcPolicy, url: str) -> None:
+    """Validate one endpoint against the immutable policy without performing DNS or I/O."""
+    if type(policy) is not OidcPolicy or not policy.enabled:
+        raise OidcHttpError
+    _endpoint_url(url, policy)
+
+
 def _approved_addresses(
     addresses: Sequence[str],
     *,
@@ -315,7 +322,19 @@ def _strict_json(body: bytes) -> object:
         def reject_constant(value: str) -> None:
             raise ValueError(value)
 
-        return json.loads(text, parse_constant=reject_constant)
+        def reject_duplicate_keys(pairs: list[tuple[str, object]]) -> dict[str, object]:
+            value: dict[str, object] = {}
+            for key, item in pairs:
+                if key in value:
+                    raise ValueError("duplicate JSON key")
+                value[key] = item
+            return value
+
+        return json.loads(
+            text,
+            parse_constant=reject_constant,
+            object_pairs_hook=reject_duplicate_keys,
+        )
     except (UnicodeError, ValueError, json.JSONDecodeError) as exc:
         raise OidcHttpError from exc
 
@@ -344,7 +363,7 @@ class OidcHttpClient:
             raise OidcHttpError
 
     def validate_endpoint_url(self, url: str) -> None:
-        _endpoint_url(url, self._policy)
+        validate_oidc_endpoint_url(self._policy, url)
 
     async def _connect(
         self,

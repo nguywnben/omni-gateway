@@ -164,6 +164,36 @@ class OidcJwksCacheTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(all(result is not None and result.kid == "new" for result in results))
         self.assertEqual(len(client.calls), 2)
 
+    async def test_concurrent_failed_refresh_is_coalesced_without_retry_storm(self):
+        started = asyncio.Event()
+        release = asyncio.Event()
+        now = [100.0]
+
+        class FailingClient:
+            def __init__(self):
+                self.calls = 0
+
+            async def get_json(self, url):
+                self.calls += 1
+                started.set()
+                await release.wait()
+                raise RuntimeError("provider detail must not escape")
+
+        client = FailingClient()
+        cache = OidcJwksCache(_policy(), _discovery(), client, clock=lambda: now[0])
+        tasks = [asyncio.create_task(cache.get_keys()) for _ in range(20)]
+        await started.wait()
+        release.set()
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+
+        self.assertTrue(all(type(result) is OidcJwksError for result in results))
+        self.assertEqual(client.calls, 1)
+
+        now[0] = 105.0
+        with self.assertRaises(OidcJwksError):
+            await cache.get_keys()
+        self.assertEqual(client.calls, 2)
+
     async def test_unknown_kid_refreshes_once_then_returns_none(self):
         client = QueueClient(
             {"keys": [_rsa_key("old")]},
@@ -192,6 +222,7 @@ class OidcJwksCacheTests(unittest.IsolatedAsyncioTestCase):
             await cache.get_keys()
         self.assertEqual(cache.generation, 1)
 
+        now[0] = 135.0
         self.assertEqual((await cache.get_keys())[0].kid, "recovered")
         self.assertEqual(cache.generation, 2)
 
@@ -233,6 +264,11 @@ class OidcJwksCacheTests(unittest.IsolatedAsyncioTestCase):
         mismatch = dataclasses_replace(_discovery(), issuer="https://identity.example.com/other")
         with self.assertRaises(OidcJwksError):
             OidcJwksCache(_policy(), mismatch, client)
+        poisoned_uri = dataclasses_replace(
+            _discovery(), jwks_uri="https://attacker.example.net/jwks"
+        )
+        with self.assertRaises(OidcJwksError):
+            OidcJwksCache(_policy(), poisoned_uri, client)
         self.assertEqual(client.calls, [])
 
 

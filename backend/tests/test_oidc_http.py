@@ -277,6 +277,7 @@ class OidcHttpClientTests(unittest.IsolatedAsyncioTestCase):
             b"HTTP/1.1 200 OK\r\nContent-Type: application/json\r\n"
             b"Content-Length: 2\r\nTransfer-Encoding: chunked\r\n\r\n{}",
             _response(b'{"value":NaN}'),
+            _response(b'{"issuer":"trusted","issuer":"poisoned"}'),
             _response(b"\xff"),
         )
         for response in responses:

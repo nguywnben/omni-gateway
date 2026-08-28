@@ -5,6 +5,7 @@ from __future__ import annotations
 import ipaddress
 import os
 import re
+import stat
 from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
@@ -183,11 +184,17 @@ class OidcPolicy:
 class OidcConfiguration:
     """Runtime configuration whose secret cannot be serialized with the public policy."""
 
-    __slots__ = ("_client_secret", "policy")
+    __slots__ = ("_client_secret", "_sealed", "policy")
 
     def __init__(self, policy: OidcPolicy, client_secret: SecretStr | None) -> None:
-        self.policy = policy
-        self._client_secret = client_secret
+        object.__setattr__(self, "policy", policy)
+        object.__setattr__(self, "_client_secret", client_secret)
+        object.__setattr__(self, "_sealed", True)
+
+    def __setattr__(self, name: str, value: object) -> None:
+        if getattr(self, "_sealed", False):
+            raise AttributeError("OIDC configuration snapshots are immutable.")
+        object.__setattr__(self, name, value)
 
     @property
     def secret_configured(self) -> bool:
@@ -420,6 +427,48 @@ def _validate_secret(value: str) -> SecretStr:
     return SecretStr(value)
 
 
+def _read_secret_file(secret_path: Path) -> str:
+    """Read one regular file while rejecting symlink replacement and size races."""
+    descriptor: int | None = None
+    try:
+        before = os.lstat(secret_path)
+        if stat.S_ISLNK(before.st_mode):
+            raise OidcConfigurationError("OIDC client secret file cannot be a symbolic link.")
+        if not stat.S_ISREG(before.st_mode) or before.st_size > _MAX_CLIENT_SECRET_FILE_BYTES:
+            raise OidcConfigurationError("OIDC client secret file is invalid.")
+        flags = os.O_RDONLY | getattr(os, "O_BINARY", 0) | getattr(os, "O_NOFOLLOW", 0)
+        descriptor = os.open(secret_path, flags)
+        after = os.fstat(descriptor)
+        if (
+            not stat.S_ISREG(after.st_mode)
+            or (before.st_dev, before.st_ino) != (after.st_dev, after.st_ino)
+            or after.st_size > _MAX_CLIENT_SECRET_FILE_BYTES
+        ):
+            raise OidcConfigurationError("OIDC client secret file is invalid.")
+        chunks: list[bytes] = []
+        remaining = _MAX_CLIENT_SECRET_FILE_BYTES + 1
+        while remaining:
+            chunk = os.read(descriptor, remaining)
+            if not chunk:
+                break
+            chunks.append(chunk)
+            remaining -= len(chunk)
+        raw_secret = b"".join(chunks)
+        if len(raw_secret) > _MAX_CLIENT_SECRET_FILE_BYTES:
+            raise OidcConfigurationError("OIDC client secret file is invalid.")
+        return raw_secret.decode("utf-8").rstrip("\r\n")
+    except OidcConfigurationError:
+        raise
+    except (OSError, UnicodeError) as exc:
+        raise OidcConfigurationError("OIDC client secret file is invalid.") from exc
+    finally:
+        if descriptor is not None:
+            try:
+                os.close(descriptor)
+            except OSError as exc:
+                raise OidcConfigurationError("OIDC client secret file is invalid.") from exc
+
+
 def _client_secret(environment: Mapping[str, str]) -> SecretStr:
     environment_secret = environment.get("OIDC_CLIENT_SECRET")
     secret_file_value = environment.get("OIDC_CLIENT_SECRET_FILE")
@@ -436,20 +485,7 @@ def _client_secret(environment: Mapping[str, str]) -> SecretStr:
     secret_path = Path(secret_file_value)
     if not secret_path.is_absolute():
         raise OidcConfigurationError("OIDC client secret file path must be absolute.")
-    try:
-        if secret_path.is_symlink():
-            raise OidcConfigurationError("OIDC client secret file cannot be a symbolic link.")
-        if not secret_path.is_file() or secret_path.stat().st_size > _MAX_CLIENT_SECRET_FILE_BYTES:
-            raise OidcConfigurationError("OIDC client secret file is invalid.")
-        raw_secret = secret_path.read_bytes()
-        if len(raw_secret) > _MAX_CLIENT_SECRET_FILE_BYTES:
-            raise OidcConfigurationError("OIDC client secret file is invalid.")
-        secret = raw_secret.decode("utf-8").rstrip("\r\n")
-    except OidcConfigurationError:
-        raise
-    except (OSError, UnicodeError) as exc:
-        raise OidcConfigurationError("OIDC client secret file is invalid.") from exc
-    return _validate_secret(secret)
+    return _validate_secret(_read_secret_file(secret_path))
 
 
 def _disabled_policy(revision: OidcPolicyRevisionRecord) -> OidcPolicy:

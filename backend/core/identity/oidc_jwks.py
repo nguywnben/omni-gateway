@@ -11,6 +11,7 @@ from dataclasses import dataclass
 from typing import Protocol
 
 from core.identity.oidc_discovery import OidcDiscoveryDocument
+from core.identity.oidc_http import OidcHttpError, validate_oidc_endpoint_url
 from core.identity.oidc_policy import OidcPolicy
 from cryptography.hazmat.primitives.asymmetric import ec, rsa
 
@@ -249,6 +250,10 @@ class OidcJwksCache:
             )
         ):
             raise OidcJwksError
+        try:
+            validate_oidc_endpoint_url(policy, discovery.jwks_uri)
+        except OidcHttpError as exc:
+            raise OidcJwksError from exc
         self._policy = policy
         self._discovery = discovery
         self._client = client
@@ -256,7 +261,10 @@ class OidcJwksCache:
         self._keys: tuple[OidcJwk, ...] = ()
         self._by_kid: dict[str, OidcJwk] = {}
         self._expires_at = 0.0
+        self._retry_after = 0.0
+        self._retry_delay_seconds = min(5, max(1, policy.connect_timeout_seconds))
         self._generation = 0
+        self._refresh_attempt = 0
         self._lock = asyncio.Lock()
 
     @property
@@ -297,21 +305,38 @@ class OidcJwksCache:
         if type(force_refresh) is not bool:
             raise OidcJwksError
         observed_generation = self._generation
+        observed_attempt = self._refresh_attempt
         now = self._now()
+        if now < self._retry_after:
+            raise OidcJwksError
         if not force_refresh and self._fresh(now):
             return self._keys
         async with self._lock:
             now = self._now()
+            if now < self._retry_after:
+                raise OidcJwksError
+            if self._refresh_attempt != observed_attempt:
+                if self._fresh(now):
+                    return self._keys
+                raise OidcJwksError
             if force_refresh and self._generation != observed_generation and self._fresh(now):
                 return self._keys
             if not force_refresh and self._fresh(now):
                 return self._keys
-            keys = await self._fetch()
+            self._refresh_attempt += 1
+            try:
+                keys = await self._fetch()
+            except asyncio.CancelledError:
+                raise
+            except OidcJwksError:
+                self._retry_after = self._now() + self._retry_delay_seconds
+                raise
             refreshed_at = self._now()
             by_kid = {key.kid: key for key in keys}
             self._keys = keys
             self._by_kid = by_kid
             self._expires_at = refreshed_at + self._policy.jwks_ttl_seconds
+            self._retry_after = 0.0
             self._generation += 1
             return self._keys
 
