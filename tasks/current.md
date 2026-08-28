@@ -4,19 +4,24 @@
 
 - Updated: 2026-08-28 (Asia/Saigon).
 - Branch: `codex/enterprise-overhaul`.
-- Implementation baseline: `0b70c3a feat(identity): exchange OIDC authorization codes`.
-- Completed scope: Waves 1–3 / Phases 0–5 plus Wave 4 slices W4.1–W4.9 and checkpoint W4-A.
+- Implementation baseline: `a02d0af fix(identity): harden OIDC failure boundaries`.
+- Completed scope: Waves 1–3 / Phases 0–5 plus Wave 4 slices W4.1–W4.10 and checkpoint W4-A.
 - Original program progress: 21/28 approved checklist items complete (including specification and
   Phase 6 ADR approval), exactly 75.0%; wave execution-slice checkboxes are refinements and are not
   added to that denominator.
-- Active scope: Wave 4 W4.10, deny-by-default role binding and JIT identity resolution.
-- Control state: **READY — W4.10 NEXT**.
-- Expected worktree state at this checkpoint: clean after the W4.9 documentation commit.
+- Active scope: Wave 4 W4.11, bounded identity/session management APIs and actor-aware audit.
+- Control state: **READY — W4.11 NEXT**.
+- Expected worktree state at this checkpoint: clean after the W4.10 documentation commit.
 - Expected runtime: one Omni Gateway listener on `http://127.0.0.1:4283`; `/health` and `/ready`
   return HTTP 200.
-- Last verified full suite: 904 tests passed on Python 3.12 and Python 3.14 with 14 opt-in live
-  backend tests skipped because no test URI was configured. Repository-wide Ruff lint/format,
-  compileall, pip consistency, lockfile installation, diff, and vulnerability audit pass for W4.9.
+- Last verified full suite: 929 tests passed on Python 3.14 with 14 opt-in live backend tests
+  skipped because no test URI was configured. The preceding 926-test checkpoint passed in full on
+  Python 3.12 and Python 3.14; after adversarial hardening, all 40 affected identity/OIDC/session
+  tests and compileall pass on Python 3.12. The full Python 3.12 rerun could not use its temporary
+  dependency bundle because the host ACL made that bundle unreadable and the Codex environment's
+  dependency-download quota was exhausted; this limitation is recorded rather than reported as a
+  pass. Repository-wide Ruff lint/format, compileall, pip consistency, hash-locked dry-run
+  installation, diff, and vulnerability audit otherwise pass for W4.10.
   The earlier W4.7 route contract and W3-C
   JavaScript, YAML, shell-syntax, and authenticated 360/768/1024/1440 browser matrix remain the
   latest evidence for unchanged areas; the local Bash registration is currently unavailable, so
@@ -349,6 +354,21 @@ silently choosing a new design.
   diff, and vulnerability gates pass. The temporary validation environments were removed. No
   browser-facing route or OIDC session is active: W4.10 must deny or map the exact issuer/subject
   before issuing a revocable session.
+- W4.10 role/session/browser evidence: `f56781a` adds an immutable bounded JSON group mapping and
+  direct-binding-first exact issuer/subject resolver; `b5d7e66` binds OIDC sessions to independent
+  identity and policy authorization epochs and authorizes the real OIDC principal; `0c4ed63`
+  composes discovery, transaction, verification, identity, and session services lazily behind the
+  disabled-by-default browser routes. Claim-derived owner is structurally impossible; unmapped,
+  malformed, oversized, ambiguous, stale, or disabled identities deny. Login-time role downgrade,
+  callback/path/cookie isolation, clean 303 redirects, provider outage, start abuse, local recovery,
+  and revision invalidation are covered. `a02d0af` reconciles the fresh-context adversarial review:
+  verified sessions cannot fall back to local-owner authority, failed discovery is shared behind a
+  bounded waiter gate and negative-cache backoff, and a rejected claim re-evaluation advances the
+  identity authorization epoch so older privileged sessions become stale. All 929 tests pass on
+  Python 3.14; the 40 affected tests and compileall pass on Python 3.12, following the prior full
+  926-test dual-interpreter checkpoint. Repository-wide Ruff lint/format, compileall, pip
+  consistency, hash-locked install dry run, diff, and vulnerability audit pass. OIDC remains false
+  by default; W4.11–W4.12 and checkpoint W4-B still gate enterprise management/audit/UI activation.
 
 ## Approved vs. Proposed Scope
 
@@ -375,12 +395,12 @@ silently choosing a new design.
 ### Approved and in progress
 
 - The Phase 6 specification, ADR-007, ADR-008, and Wave 4 execution queue.
-- W4.1–W4.9 and checkpoint W4-A are complete; W4.10 is the active next slice.
+- W4.1–W4.10 and checkpoint W4-A are complete; W4.11 is the active next slice.
 
 ### Approved for staged implementation, not active yet
 
-- OIDC login activation, Redis coordination, durable HA migration, and multiple workers/replicas
-  remain gated by W4.10–W4.19 and their checkpoints.
+- Enterprise OIDC activation, Redis coordination, durable HA migration, and multiple workers/
+  replicas remain gated by W4.11–W4.19 and their checkpoints.
 - Phase 7 release activation, production deployment, or destructive migration.
 
 Foundations borrowed from Phase 4 or Phase 5 remain partial and must not cause those phase
@@ -402,12 +422,11 @@ checkboxes to be marked complete.
 
 ## Immediate Next Action
 
-Begin W4.10 with an exact issuer/subject identity resolver. Resolve direct bindings before bounded
-provider-specific claim mappings, deny missing/malformed/oversized/unmapped/disabled identities,
-never derive owner from provider claims, and bind mapping/policy/authorization revisions into the
-issued revocable session. Only after this service passes precedence, downgrade, stale-session, and
-owner-abuse tests may the OIDC browser route perform a clean same-origin redirect and issue a
-session. Preserve `WORKERS=1`, one replica, and local-owner recovery.
+Begin W4.11 with typed bounded resource APIs for the current session, OIDC policy/readiness,
+identities, role bindings, session revocation, and recovery verification. Apply exact permission
+manifest entries, optimistic revisions, bounded pagination, generic errors, and complete redacted
+actor-aware audit for every mutation and denial. Do not expose bearer tokens, provider claims, or
+secret-returning/export endpoints. Preserve `WORKERS=1`, one replica, and local-owner recovery.
 
 ## Update Rule
 

@@ -1,10 +1,10 @@
 # OIDC Foundation and Security Boundary
 
-Wave 4 slices W4.7–W4.9 establish the configuration, discovery transport, metadata validation, JWKS
-cache, strict ID Token verifier, and one-time Authorization Code protocol core used by the future
-enterprise OIDC login flow. They do **not** activate a browser-facing OIDC route or issue an OIDC
-session. Identity resolution and session issuance remain gated by W4.10; the management surface
-remains gated by W4.11–W4.12.
+Wave 4 slices W4.7–W4.10 establish the configuration, discovery transport, metadata validation,
+JWKS cache, strict ID Token verifier, one-time Authorization Code protocol core, deny-by-default
+identity resolution, and revision-bound OIDC sessions. W4.10 exposes the browser flow only when
+`OIDC_ENABLED=true` and the complete trust configuration is valid. Identity/session management
+APIs and the localized console remain gated by W4.11–W4.12 and checkpoint W4-B.
 
 The local-owner login and recovery path remain available and independent of the identity provider.
 `WORKERS=1` and one application replica remain the only supported topology.
@@ -12,24 +12,25 @@ The local-owner login and recovery path remain available and independent of the 
 ## Configuration Contract
 
 OIDC is disabled when `OIDC_ENABLED` is absent or false. A disabled snapshot carries no active
-issuer, client, endpoint, algorithm, or secret configuration. When the later activation slices wire
-this contract into login, an enabled snapshot will fail closed unless every required value is valid.
+issuer, client, endpoint, algorithm, mapping, or secret configuration. An enabled snapshot fails
+closed unless every required value is valid.
 
 | Variable | Default | Contract |
 | --- | --- | --- |
-| `OIDC_ENABLED` | `false` | Boolean activation request; W4.7–W4.9 do not expose a login path. |
+| `OIDC_ENABLED` | `false` | Boolean browser-login gate; disabled mode performs no provider discovery. |
 | `OIDC_ISSUER` | required when enabled | Exact HTTPS issuer URL; no credentials, query, fragment, wildcard, or trailing-dot host. |
 | `OIDC_CLIENT_ID` | required when enabled | Non-empty client identifier, at most 256 characters. |
 | `OIDC_CLIENT_SECRET` | none | Client secret supplied directly; configure exactly one secret source. |
 | `OIDC_CLIENT_SECRET_FILE` | none | Absolute regular-file path; symlinks, replacement races, invalid UTF-8, and files over 4 KiB are rejected. |
-| `OIDC_REDIRECT_URI` | required when enabled | Exact HTTPS callback URL with a non-root path and no query or fragment. |
+| `OIDC_REDIRECT_URI` | required when enabled | Exact HTTPS URL whose path is `/api/identity/oidc/callback`, with no query or fragment. |
 | `OIDC_SCOPES` | `openid profile email` | Space-separated, unique scopes; `openid` is mandatory; maximum 16. |
 | `OIDC_ID_TOKEN_SIGNING_ALGORITHMS` | `RS256` | Comma-separated subset of `RS256`, `PS256`, and `ES256`; symmetric and `none` algorithms are impossible. |
 | `OIDC_SUBJECT_CLAIM` | `sub` | Fixed to `sub`; it cannot be remapped. |
 | `OIDC_USERNAME_CLAIM` | `preferred_username` | Bounded claim name for future profile display. |
 | `OIDC_DISPLAY_NAME_CLAIM` | `name` | Bounded claim name for future profile display. |
 | `OIDC_EMAIL_CLAIM` | `email` | Bounded profile claim only; email is never an identity key. |
-| `OIDC_GROUPS_CLAIM` | `groups` | Bounded claim name for future explicit role mapping. |
+| `OIDC_GROUPS_CLAIM` | `groups` | Bounded claim name used only by explicit role mapping. |
+| `OIDC_ROLE_MAPPINGS` | `{}` | JSON object with at most 64 exact group-to-role entries. Values are `viewer`, `operator`, or `security_admin`; `owner` and default roles are forbidden. |
 | `OIDC_ALLOWED_ENDPOINT_ORIGINS` | issuer origin only | Comma-separated additional exact HTTPS origins, maximum 16 including the issuer origin. |
 | `OIDC_ALLOWED_PRIVATE_HOSTS` | none | Comma-separated exact internal hostnames/IPs, maximum 32; no wildcards or CIDRs. |
 | `OIDC_CONNECT_TIMEOUT_SECONDS` | `5` | Integer from 1 through 30. |
@@ -38,12 +39,14 @@ this contract into login, an enabled snapshot will fail closed unless every requ
 | `OIDC_JWKS_TTL_SECONDS` | `300` | Successful JWKS snapshot lifetime from 30 through 3,600 seconds. |
 | `OIDC_CLOCK_SKEW_SECONDS` | `60` | Symmetric clock tolerance from 0 through 300 seconds for `exp`, `nbf`, and future `iat`. |
 | `OIDC_MAX_ID_TOKEN_AGE_SECONDS` | `300` | Maximum accepted age from 60 through 3,600 seconds, before the configured skew. |
+| `OIDC_START_WINDOW_SECONDS` | `300` | Per-client browser-start accounting window, 30–3,600 seconds. |
+| `OIDC_START_MAX_ATTEMPTS` | `20` | Starts allowed per client/window, 3–100. |
+| `OIDC_START_MAX_TRACKED_CLIENTS` | `10000` | Process-local throttle memory bound, 100–100,000 clients. |
 
 Secrets are excluded from the public immutable policy and its string representation. Configuration
 uses the durable OIDC policy revision and authorization epoch already provided by the identity
-repository. W4.11 will own mutation, optimistic concurrency, readiness preview, and revision
-advancement. Until then, these variables define and test the future runtime contract; changing them
-does not activate OIDC.
+repository. W4.11 will own mutation APIs, optimistic concurrency, readiness preview, and revision
+advancement. Environment changes require a controlled restart.
 
 ## Discovery and Network Safety
 
@@ -130,18 +133,42 @@ the URL. The response requires a Bearer access token and ID Token with strict ty
 access and refresh tokens are discarded, and only the verified allowlisted ID Token projection
 leaves the protocol core. Provider-controlled errors remain behind one content-free boundary.
 
-The browser route is deliberately not registered in W4.9. A verified external subject is not yet an
-authorized Omni Gateway principal: W4.10 must resolve the exact issuer/subject through explicit role
-bindings, deny unmapped or disabled identities, and only then issue a revocable internal session.
-Issuing a session earlier would conflict with ADR-007's deny-by-default contract.
+## Identity Resolution, Browser Routes, and Sessions
+
+W4.10 resolves only the exact, case-sensitive `(issuer, subject)` pair. A durable direct binding
+wins over provider claims. Otherwise the bounded configured group claim must match one or more
+allowlist entries that all resolve to the same non-owner role. Missing, malformed, oversized,
+unmapped, or conflicting claims deny login. Claim-derived bindings are re-evaluated on every login,
+so a mapping downgrade updates the durable binding before session issuance. Email, username, and
+display name never participate in identity lookup or authorization.
+
+`GET /api/identity/oidc/start` allocates a browser-bound transaction and returns a 303 to the
+validated provider authorization endpoint. Its separate `oidc_login` cookie is HttpOnly,
+SameSite=Lax, callback-path scoped, short lived, and Secure on authoritative HTTPS. Start attempts
+and pending transactions have independent process-local capacity bounds. Lazy discovery also has a
+bounded admission queue; one provider failure is shared through a short negative-cache backoff so
+an IdP outage cannot create serialized retry storms or consume unbounded request waiters.
+
+`GET /api/identity/oidc/callback` consumes bounded raw query bytes, the exact browser binding, the
+authorization code, and the transaction exactly once. Success issues an opaque `panel_session` and
+returns a 303 to `/`; failure returns a generic 303 to `/login`. Both paths remove the binding
+cookie, set no-store/no-referrer headers, and remove every provider-controlled parameter from the
+browser URL. Provider access/refresh/ID tokens never enter cookies, storage, logs, or redirects.
+
+An OIDC session stores separate identity and OIDC-policy authorization epochs and the resolved
+typed principal. Every request reloads the exact durable identity and policy snapshot; identity
+disablement, role/source change, or policy revision makes the session stale and revokes it. The
+authorization layer requires the session verifier's typed principal and never synthesizes
+local-owner authority. If a claim-derived identity can no longer resolve to exactly one allowed
+role, the denied login advances its authorization epoch, making every older session stale.
 
 ## Activation and Rollback
 
-W4.7–W4.9 have no browser-facing activation to roll back. Keep `OIDC_ENABLED=false` or unset until
-the later slices provide deny-by-default identity resolution and session issuance,
-management/audit APIs, and the localized Identity console. Removing the OIDC
-variables or setting `OIDC_ENABLED=false` preserves local-owner behavior.
+Keep `OIDC_ENABLED=false` or unset until the IdP registration, exact callback, group mapping, and
+local recovery path have been reviewed. Rollback sets `OIDC_ENABLED=false` and restarts the single
+process; local-owner login/recovery remains available and durable identity records are retained.
+Active in-process sessions are cleared by the restart.
 
-OIDC activation must not proceed until the W4-B protocol, abuse, recovery, API, audit, i18n,
-accessibility, and browser gates pass. IdP outage may eventually block only new OIDC login; it must
-never disable an existing local-owner recovery path.
+Enterprise activation is not complete until W4-B protocol, abuse, recovery, API, audit, i18n,
+accessibility, and browser gates pass. Provider discovery is lazy: an IdP outage blocks only new
+OIDC login and never application startup or the local-owner recovery path.

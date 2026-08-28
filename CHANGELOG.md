@@ -9,6 +9,15 @@ All notable user-facing changes are documented in this file. Omni Gateway follow
 - Added a localized Audit surface under Observability with safe category filters, cursor
   pagination, redacted event details, request-ID pivots, confirmed retention controls, and
   bounded JSONL/CSV export.
+- Added disabled-by-default enterprise OIDC browser login with Authorization Code + PKCE,
+  exact issuer/subject identities, explicit non-owner group-to-role mappings, and revocable
+  sessions bound to identity and policy authorization revisions.
+
+### Fixed
+
+- Hardened OIDC outage handling with bounded shared discovery backoff, removed implicit owner
+  fallback from verified-session authorization, and invalidated older sessions after a failed
+  claim-role re-evaluation.
 
 ## [1.4.0] - 2026-08-21
 

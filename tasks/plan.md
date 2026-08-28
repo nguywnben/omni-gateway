@@ -46,13 +46,12 @@ or Phase 5 request tracing.
 - Wave 3 completion checkpoint: `76315e7` (`docs: close wave 3 operational evidence`).
 - Completed product scope: Phases 0–5; Wave 3 was accepted by the human on 2026-08-26 through the
   instruction to start the project and execute the next plan.
-- Active approved scope: Wave 4 under accepted ADR-007/ADR-008; W4.1–W4.9 and checkpoint W4-A are
-  complete and W4.10 is the next implementation slice.
-- State: **READY — W4.10 NEXT**. Management authorization, durable identity parity, opaque
-  standalone sessions, local-owner recovery, and the safe OIDC policy/discovery/JWKS foundation
-  plus strict ID Token verification and one-time Authorization Code protocol core are complete;
-  deny-by-default identity resolution is the next gated slice.
-- Still gated by later slices and evidence: OIDC activation, distributed-state activation, multiple
+- Active approved scope: Wave 4 under accepted ADR-007/ADR-008; W4.1–W4.10 and checkpoint W4-A are
+  complete and W4.11 is the next implementation slice.
+- State: **READY — W4.11 NEXT**. Deny-by-default role resolution, exact OIDC browser login, and
+  identity/policy-revision-bound sessions are complete; bounded identity/session management APIs
+  and actor-aware audit are the next gated slice.
+- Still gated by later slices and evidence: W4-B enterprise OIDC activation, distributed-state activation, multiple
   workers/replicas, destructive migration, and production release activation.
 
 ## Architecture Decisions
@@ -548,6 +547,15 @@ users without assigning owner from claims.
 - Verification: provider claim-shape, precedence, downgrade, stale-session, and owner abuse tests.
 - Dependencies: W4.5 and W4.9.
 - Likely files: role-binding service, identity repository integration, tests.
+- Completed: `f56781a`, `b5d7e66`, `0c4ed63`, and `a02d0af` add strict bounded group-to-role policy,
+  exact direct-binding-first JIT resolution, non-owner claim mappings, login-time downgrade,
+  independent identity/policy session invalidation, real-principal authorization, lazy IdP
+  discovery, browser-bound start/callback routes, clean 303 redirects, and bounded start abuse
+  controls. The closure review also removes implicit local-owner fallback, bounds discovery
+  waiters with shared failure backoff, and invalidates existing sessions when a claim-mapped
+  identity can no longer resolve. OIDC remains disabled by default and one worker/replica remains
+  mandatory. All 929 tests pass on Python 3.14; the 40 affected tests pass on Python 3.12 after the
+  preceding 926-test dual-interpreter checkpoint.
 
 ### W4.11 — Identity/session management API and audit
 
@@ -863,7 +871,7 @@ new policy plane, verify telemetry, and retain a tested rollback image/data path
 
 ## Open Questions
 
-No decision gate blocks W4.10. The accepted constraints keep SCIM and tenant isolation out of Wave
+No decision gate blocks W4.11. The accepted constraints keep SCIM and tenant isolation out of Wave
 4, use exact OIDC issuer/subject identity, approve an audited `PyJWT[crypto]` addition in W4.7, and
 require 99.9% end-to-end availability, 60-second supported failover recovery, zero correctness
 violations, and bounded performance impact before coordinated activation. Enabling OIDC by default,

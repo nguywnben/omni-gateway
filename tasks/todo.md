@@ -169,7 +169,16 @@ These queue items refine Phases 4–5 and do not add to the 28-item program deno
     all 904 tests pass on Python 3.12 and Python 3.14 with 14 opt-in live-backend skips; Ruff,
     format, compile, dependency, locked-install, diff, and vulnerability gates pass. The route and
     session remain gated by W4.10 so an unmapped external subject can never receive a session.
-- [ ] W4.10 Add explicit role binding and deny-by-default JIT identity resolution.
+- [x] W4.10 Add explicit role binding and deny-by-default JIT identity resolution.
+  - Completed on 2026-08-28 in `f56781a`, `b5d7e66`, `0c4ed63`, and `a02d0af`. Exact case-sensitive
+    issuer/subject direct bindings win; bounded group mappings can assign only viewer/operator/
+    security-admin and conflicting/unmapped claims deny. Claim roles are re-evaluated on login,
+    OIDC sessions bind independent identity/policy authorization epochs, and management requests
+    authorize the real OIDC principal. The disabled-by-default lazy browser flow uses a short-lived
+    callback-scoped HttpOnly binding cookie, clean same-origin 303 completion, bounded start abuse,
+    and never makes local-owner recovery depend on IdP availability. Adversarial closure removed
+    implicit owner fallback, added bounded shared discovery-failure backoff, and made failed claim
+    re-evaluation stale every older session for that identity.
 - [ ] W4.11 Add bounded identity/session APIs and complete actor-aware audit.
 - [ ] W4.12 Build the localized Identity console.
 - [ ] Checkpoint W4-B: OIDC, API, audit, recovery, i18n, accessibility, and browser gates pass.

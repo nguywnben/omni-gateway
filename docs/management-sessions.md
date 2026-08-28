@@ -2,8 +2,9 @@
 
 ## Scope and Status
 
-Wave 4 slice W4.6 replaces newly issued browser JWTs with revocable opaque sessions and adds an
-independently throttled local-owner recovery path. This contract applies to the supported
+Wave 4 slices W4.6 and W4.10 replace newly issued browser JWTs with revocable opaque sessions, add
+an independently throttled local-owner recovery path, and issue deny-by-default OIDC sessions.
+This contract applies to the supported
 single-worker, single-replica standalone topology. Shared session coordination remains gated by
 W4.16 and HA activation remains gated by W4.18–W4.19.
 
@@ -18,8 +19,9 @@ the browser UI.
 - Only an HMAC-SHA-256 index and bounded metadata are retained by the session store. Plaintext
   bearer tokens are never stored in configuration, identity records, audit records, logs, metrics,
   OAuth state, or provider authorization URLs.
-- The metadata binds a session to the typed local-owner principal, authentication method, issue and
-  last-seen times, idle and absolute expiry, and the durable identity authorization epoch.
+- The metadata binds a session to its real typed principal, authentication method, issue and
+  last-seen times, idle and absolute expiry, and the durable identity authorization epoch. OIDC
+  sessions additionally bind the independent OIDC-policy authorization epoch.
 - Resolution is atomic. Expired, revoked, unknown, or stale-epoch sessions fail closed. A successful
   resolution advances last-seen time without extending the absolute lifetime.
 - Logout revokes the server-side record before clearing the cookie. Owner-password rotation revokes
@@ -27,6 +29,11 @@ the browser UI.
   replacement session.
 - Provider OAuth flows receive only an ephemeral HMAC reference to the authenticated request. The
   session token itself never enters the OAuth transaction or externally visible `state` value.
+- OIDC session resolution reloads the exact issuer/subject identity and current policy. Disabled
+  identities, role/source changes, and policy revisions revoke stale sessions before permission
+  evaluation. A failed claim-role re-evaluation advances the identity epoch, and request
+  authorization requires the verifier's typed principal; OIDC principals are never promoted to
+  local owner or replaced with an implicit owner fallback.
 
 The browser cookie remains named `panel_session` and uses `HttpOnly`, `SameSite=Lax`, and `Path=/`.
 It is `Secure` when the request is authoritatively HTTPS or when a trusted proxy reports HTTPS.
@@ -98,7 +105,8 @@ Expected operational behavior:
 4. If session initialization is unavailable, authentication fails closed instead of falling back to
    a self-contained token.
 5. Rolling back to a pre-W4.6 build cannot read opaque cookies, so users sign in again. The additive
-   identity data and internal session master key may remain; no destructive rollback is required.
+   identity data and internal session/transaction master keys may remain; no destructive rollback
+   is required.
 
 ## Verification Boundary
 
@@ -107,5 +115,7 @@ concurrent rotation,
 logout revocation, idle/absolute expiry, authorization-epoch invalidation, password-change
 revocation, bounded legacy migration, cookie/origin behavior, OAuth-state isolation, recovery
 throttling and loopback restriction, corrupted master-key startup, generic errors, audit coverage,
-and fixed-cardinality metrics. W4-A requires those tests plus repository-wide quality gates and a
-restart smoke test before W4.7 begins.
+fixed-cardinality metrics, exact OIDC principals, typed-principal fail-closed behavior, independent
+identity/policy revision invalidation after accepted or rejected claim re-evaluation, and
+role-downgrade denial. W4-A closed the local session foundation; W4-B remains responsible for the
+complete OIDC/API/UI activation evidence.

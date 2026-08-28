@@ -137,8 +137,7 @@ scale-out. W4.3 classifies every protected management OpenAPI operation and WebS
 immutable manifest and enforces the resolved typed principal against FastAPI's trusted route
 template before handler execution. Missing policy fails closed. Human roles use exact bundles;
 legacy management keys retain existing-route compatibility without receiving future identity,
-recovery, owner-assignment, or HA rights. The local owner remains the only browser principal until
-OIDC activation. W4.4 adds the strict
+recovery, owner-assignment, or HA rights. W4.4 adds the strict
 [management identity repository](identity-repository.md) contract and an additive SQLite
 implementation: exact case-sensitive `(issuer, subject)` identities, independent optimistic
 revisions, authorization epochs, immutable local-owner bootstrap, and fail-closed stored-row
@@ -161,9 +160,15 @@ custom HTTPS discovery transport ignores proxies and redirects, validates every 
 connecting to a pinned approved address, retains the original hostname for TLS verification, and
 rejects ambiguous or oversized HTTP/JSON. Discovery metadata and public JWKS keys are reduced to a
 strict internal contract; bounded single-flight refresh handles rotation without replacing a valid
-snapshot with poisoned data. This foundation is not a login source: ID Token verification,
-authorization transactions, role resolution, management APIs, and console activation remain gated
-by W4.8–W4.12, while local-owner recovery remains independent of the IdP.
+snapshot with poisoned data. W4.8–W4.9 add asymmetric ID Token verification and the one-time
+Authorization Code + PKCE/state/nonce core. W4.10 activates the disabled-by-default browser route
+with exact-subject/direct-binding precedence, bounded non-owner group mapping, and OIDC sessions
+bound independently to identity and policy authorization epochs. Discovery stays lazy so IdP
+failure cannot block startup or local recovery; bounded admission and shared failure backoff avoid
+serialized discovery storms. Session authorization accepts only a typed verified principal, and a
+failed claim-role re-evaluation advances the identity epoch so older sessions become stale.
+Identity management APIs, audit completion, and console activation remain gated by W4.11–W4.12
+and checkpoint W4-B.
 
 The Render Blueprint deliberately uses a paid persistent disk. Free Render services have ephemeral filesystems and are not suitable for durable credential storage.
 
