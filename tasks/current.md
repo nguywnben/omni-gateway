@@ -4,19 +4,19 @@
 
 - Updated: 2026-08-28 (Asia/Saigon).
 - Branch: `codex/enterprise-overhaul`.
-- Implementation baseline: `dbd2914 fix(identity): seal OIDC verifier trust boundary`.
-- Completed scope: Waves 1–3 / Phases 0–5 plus Wave 4 slices W4.1–W4.8 and checkpoint W4-A.
+- Implementation baseline: `0b70c3a feat(identity): exchange OIDC authorization codes`.
+- Completed scope: Waves 1–3 / Phases 0–5 plus Wave 4 slices W4.1–W4.9 and checkpoint W4-A.
 - Original program progress: 21/28 approved checklist items complete (including specification and
   Phase 6 ADR approval), exactly 75.0%; wave execution-slice checkboxes are refinements and are not
   added to that denominator.
-- Active scope: Wave 4 W4.9, OIDC authorization transaction and callback.
-- Control state: **READY — W4.9 NEXT**.
-- Expected worktree state at this checkpoint: clean after the W4.8 documentation commit.
+- Active scope: Wave 4 W4.10, deny-by-default role binding and JIT identity resolution.
+- Control state: **READY — W4.10 NEXT**.
+- Expected worktree state at this checkpoint: clean after the W4.9 documentation commit.
 - Expected runtime: one Omni Gateway listener on `http://127.0.0.1:4283`; `/health` and `/ready`
   return HTTP 200.
-- Last verified full suite: 880 tests passed on Python 3.12 and Python 3.14 with 14 opt-in live
+- Last verified full suite: 904 tests passed on Python 3.12 and Python 3.14 with 14 opt-in live
   backend tests skipped because no test URI was configured. Repository-wide Ruff lint/format,
-  compileall, pip consistency, lockfile installation, diff, and vulnerability audit pass for W4.8.
+  compileall, pip consistency, lockfile installation, diff, and vulnerability audit pass for W4.9.
   The earlier W4.7 route contract and W3-C
   JavaScript, YAML, shell-syntax, and authenticated 360/768/1024/1440 browser matrix remain the
   latest evidence for unchanged areas; the local Bash registration is currently unavailable, so
@@ -338,6 +338,17 @@ silently choosing a new design.
   880 tests pass on Python 3.12 and Python 3.14 with 14 opt-in live-backend skips. Ruff lint/format,
   compile, pip consistency, locked installation, diff, and vulnerability gates pass. No login,
   callback, token exchange, or OIDC session route is active.
+- W4.9 Authorization-Code evidence: `e28cbab` requires discovery to advertise PKCE S256;
+  `41795bc` adds the bounded atomic one-time transaction service; `4d849c0` adds pinned bounded form
+  POST with exact Basic/Post client authentication; `0b70c3a` adds strict raw callback parsing,
+  single-use code exchange, and verified-only output. Replay, CSRF/browser mismatch, mix-up,
+  malformed/duplicate/query-token input, provider error, outage, cancellation, stale trust snapshot,
+  and token-response bounds are covered. The external adversarial review was reconciled before
+  closure. Seventy-four focused OIDC tests and all 904 tests pass on Python 3.12 and Python 3.14
+  with 14 opt-in live-backend skips; Ruff, format, compile, pip consistency, clean locked install,
+  diff, and vulnerability gates pass. The temporary validation environments were removed. No
+  browser-facing route or OIDC session is active: W4.10 must deny or map the exact issuer/subject
+  before issuing a revocable session.
 
 ## Approved vs. Proposed Scope
 
@@ -364,12 +375,12 @@ silently choosing a new design.
 ### Approved and in progress
 
 - The Phase 6 specification, ADR-007, ADR-008, and Wave 4 execution queue.
-- W4.1–W4.8 and checkpoint W4-A are complete; W4.9 is the active next slice.
+- W4.1–W4.9 and checkpoint W4-A are complete; W4.10 is the active next slice.
 
 ### Approved for staged implementation, not active yet
 
 - OIDC login activation, Redis coordination, durable HA migration, and multiple workers/replicas
-  remain gated by W4.9–W4.19 and their checkpoints.
+  remain gated by W4.10–W4.19 and their checkpoints.
 - Phase 7 release activation, production deployment, or destructive migration.
 
 Foundations borrowed from Phase 4 or Phase 5 remain partial and must not cause those phase
@@ -391,11 +402,12 @@ checkboxes to be marked complete.
 
 ## Immediate Next Action
 
-Begin W4.9 with a bounded one-time OIDC authorization transaction service and exact callback
-contract. Use Authorization Code with PKCE S256, state and nonce bound to one transaction, one-time
-code exchange, replay and mix-up denial, and immediate redirect to a clean same-origin path. Do not
-persist provider tokens or activate OIDC sessions until the complete callback path passes its abuse,
-outage, audit, and recovery gates; preserve `WORKERS=1`, one replica, and local-owner recovery.
+Begin W4.10 with an exact issuer/subject identity resolver. Resolve direct bindings before bounded
+provider-specific claim mappings, deny missing/malformed/oversized/unmapped/disabled identities,
+never derive owner from provider claims, and bind mapping/policy/authorization revisions into the
+issued revocable session. Only after this service passes precedence, downgrade, stale-session, and
+owner-abuse tests may the OIDC browser route perform a clean same-origin redirect and issue a
+session. Preserve `WORKERS=1`, one replica, and local-owner recovery.
 
 ## Update Rule
 

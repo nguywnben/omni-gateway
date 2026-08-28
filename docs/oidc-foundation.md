@@ -1,10 +1,10 @@
 # OIDC Foundation and Security Boundary
 
-Wave 4 slices W4.7–W4.8 establish the configuration, discovery transport, metadata validation, JWKS
-cache, and strict ID Token verifier used by the future enterprise OIDC login flow. They do **not**
-activate OIDC login, create authorization transactions, exchange authorization codes, or issue OIDC
-sessions. Those behaviors remain gated by W4.9–W4.10 and the management surface remains gated by
-W4.11–W4.12.
+Wave 4 slices W4.7–W4.9 establish the configuration, discovery transport, metadata validation, JWKS
+cache, strict ID Token verifier, and one-time Authorization Code protocol core used by the future
+enterprise OIDC login flow. They do **not** activate a browser-facing OIDC route or issue an OIDC
+session. Identity resolution and session issuance remain gated by W4.10; the management surface
+remains gated by W4.11–W4.12.
 
 The local-owner login and recovery path remain available and independent of the identity provider.
 `WORKERS=1` and one application replica remain the only supported topology.
@@ -17,7 +17,7 @@ this contract into login, an enabled snapshot will fail closed unless every requ
 
 | Variable | Default | Contract |
 | --- | --- | --- |
-| `OIDC_ENABLED` | `false` | Boolean activation request; W4.7 does not yet expose a login path. |
+| `OIDC_ENABLED` | `false` | Boolean activation request; W4.7–W4.9 do not expose a login path. |
 | `OIDC_ISSUER` | required when enabled | Exact HTTPS issuer URL; no credentials, query, fragment, wildcard, or trailing-dot host. |
 | `OIDC_CLIENT_ID` | required when enabled | Non-empty client identifier, at most 256 characters. |
 | `OIDC_CLIENT_SECRET` | none | Client secret supplied directly; configure exactly one secret source. |
@@ -48,10 +48,11 @@ does not activate OIDC.
 ## Discovery and Network Safety
 
 The client derives `/.well-known/openid-configuration` from the configured issuer and requires the
-returned `issuer` to match exactly. Metadata must advertise Authorization Code flow, a supported
-subject type, an allowed asymmetric ID Token algorithm, compatible client authentication, and all
-configured scopes and claims. Authorization, token, JWKS, and optional UserInfo endpoints are
-revalidated against the endpoint policy.
+returned `issuer` to match exactly. Metadata must advertise Authorization Code flow, PKCE `S256`, a
+supported subject type, an allowed asymmetric ID Token algorithm, compatible client authentication,
+and all configured scopes and claims. Authorization, token, JWKS, and optional UserInfo endpoints
+are revalidated against the endpoint policy. Issuer, redirect, and discovered endpoint URLs are
+ASCII-only to prevent visually confusable trust-boundary values.
 
 Outbound OIDC requests:
 
@@ -105,10 +106,39 @@ raw tokens, key material, and provider exception text have no output field. Ever
 the same content-free error and suppresses the internal exception chain; asynchronous cancellation
 continues to propagate.
 
+## Authorization Transaction and Code Exchange
+
+W4.9 creates an in-process, capacity-bounded authorization transaction service. Each transaction
+uses independent high-entropy `state`, browser binding, PKCE verifier, and nonce values. The store
+retains only HMAC-indexed state/browser values and derives the verifier and nonce from keyed input;
+it never stores plaintext provider tokens. Each record binds the exact issuer, client, redirect,
+authorization endpoint, token endpoint, authentication method, and durable policy revision. A
+monotonic TTL, atomic consume operation, bounded capacity, and explicit cancellation prevent replay
+and unbounded memory growth.
+
+Authorization requests always use `response_type=code`, PKCE `S256`, and transaction-bound state and
+nonce. Callback parsing starts from bounded raw ASCII query bytes, rejects malformed percent
+encoding, duplicates, unknown fields, query-carried tokens, mixed issuers, and code/error ambiguity,
+then consumes the matching transaction exactly once. Invalid query structure is rejected before
+consumption so unrelated malformed traffic cannot burn a valid state; a matching provider error,
+mix-up attempt, exchange outage, verification failure, or cancellation consumes it so it cannot be
+replayed.
+
+The token client posts a bounded form directly to the pinned discovered token endpoint, using only
+the single discovered `client_secret_basic` or `client_secret_post` method. Credentials never enter
+the URL. The response requires a Bearer access token and ID Token with strict type/size bounds;
+access and refresh tokens are discarded, and only the verified allowlisted ID Token projection
+leaves the protocol core. Provider-controlled errors remain behind one content-free boundary.
+
+The browser route is deliberately not registered in W4.9. A verified external subject is not yet an
+authorized Omni Gateway principal: W4.10 must resolve the exact issuer/subject through explicit role
+bindings, deny unmapped or disabled identities, and only then issue a revocable internal session.
+Issuing a session earlier would conflict with ADR-007's deny-by-default contract.
+
 ## Activation and Rollback
 
-W4.7–W4.8 have no browser-facing activation to roll back. Keep `OIDC_ENABLED=false` or unset until
-the later slices provide PKCE/state/nonce transactions, deny-by-default identity resolution,
+W4.7–W4.9 have no browser-facing activation to roll back. Keep `OIDC_ENABLED=false` or unset until
+the later slices provide deny-by-default identity resolution and session issuance,
 management/audit APIs, and the localized Identity console. Removing the OIDC
 variables or setting `OIDC_ENABLED=false` preserves local-owner behavior.
 

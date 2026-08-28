@@ -158,7 +158,17 @@ These queue items refine Phases 4–5 and do not add to the 28-item program deno
     token tests and all 880 tests pass on Python 3.12 and Python 3.14 with 14 opt-in live-backend
     skips. Ruff, format, compile, dependency consistency, diff, locked install, and vulnerability
     gates pass. No OIDC login, callback, token exchange, or OIDC session route is active.
-- [ ] W4.9 Add Authorization Code + PKCE/state/nonce transaction and callback.
+- [x] W4.9 Add Authorization Code + PKCE/state/nonce transaction and callback.
+  - Completed on 2026-08-28 in `e28cbab`, `41795bc`, `4d849c0`, and `0b70c3a`.
+    Discovery now requires PKCE S256; a capacity-bounded atomic transaction service binds one-time
+    state, browser proof, nonce, verifier, issuer, endpoints, auth method, and policy revision.
+    Bounded raw callback parsing rejects duplicates, malformed encoding, query credentials, mix-up,
+    and replay; the pinned token exchange supports only the discovered Basic/Post method, discards
+    access/refresh tokens, and releases only a strictly verified ID Token projection. The external
+    adversarial review findings were reconciled before closure. Seventy-four focused OIDC tests and
+    all 904 tests pass on Python 3.12 and Python 3.14 with 14 opt-in live-backend skips; Ruff,
+    format, compile, dependency, locked-install, diff, and vulnerability gates pass. The route and
+    session remain gated by W4.10 so an unmapped external subject can never receive a session.
 - [ ] W4.10 Add explicit role binding and deny-by-default JIT identity resolution.
 - [ ] W4.11 Add bounded identity/session APIs and complete actor-aware audit.
 - [ ] W4.12 Build the localized Identity console.
