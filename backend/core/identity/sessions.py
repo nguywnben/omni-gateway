@@ -17,10 +17,15 @@ from dataclasses import dataclass, replace
 from enum import StrEnum
 from typing import Any, Protocol
 
-from core.identity.authorization import ManagementPrincipal
-from core.identity.repository import LOCAL_OWNER_ID, ManagedIdentity
+from core.identity.authorization import (
+    ManagementPrincipal,
+    OidcRoleSource,
+    PrincipalType,
+)
+from core.identity.oidc_identity import ResolvedOidcIdentity
+from core.identity.repository import LOCAL_OWNER_ID, ManagedIdentity, RoleBindingSource
 
-SESSION_SCHEMA_VERSION = 1
+SESSION_SCHEMA_VERSION = 2
 SESSION_TOKEN_PREFIX = "ogs_"
 SESSION_TOKEN_BYTES = 32
 MIN_SESSION_TTL_SECONDS = 300
@@ -126,6 +131,7 @@ class SessionRecord:
     absolute_expires_at: float
     authentication_method: SessionAuthenticationMethod
     authorization_epoch: int
+    oidc_policy_authorization_epoch: int | None = None
 
     def __post_init__(self) -> None:
         if type(self.schema_version) is not int or self.schema_version != SESSION_SCHEMA_VERSION:
@@ -138,6 +144,18 @@ class SessionRecord:
             raise ValueError("Session authentication method is invalid.")
         if type(self.authorization_epoch) is not int or self.authorization_epoch < 1:
             raise ValueError("Session authorization epoch is invalid.")
+        if self.authentication_method is SessionAuthenticationMethod.LOCAL_PASSWORD:
+            if (
+                self.principal.principal_type is not PrincipalType.LOCAL_OWNER
+                or self.oidc_policy_authorization_epoch is not None
+            ):
+                raise ValueError("Local session authorization snapshot is invalid.")
+        elif (
+            self.principal.principal_type is not PrincipalType.OIDC_USER
+            or type(self.oidc_policy_authorization_epoch) is not int
+            or self.oidc_policy_authorization_epoch < 1
+        ):
+            raise ValueError("OIDC session authorization snapshot is invalid.")
         issued_at = _strict_timestamp(self.issued_at, "Session issue timestamp")
         last_seen_at = _strict_timestamp(self.last_seen_at, "Session last-seen timestamp")
         idle_expires_at = _strict_timestamp(self.idle_expires_at, "Session idle expiry")
@@ -159,7 +177,9 @@ class SessionRecord:
             f"idle_expires_at={self.idle_expires_at!r}, "
             f"absolute_expires_at={self.absolute_expires_at!r}, "
             f"authentication_method={self.authentication_method!r}, "
-            f"authorization_epoch={self.authorization_epoch!r})"
+            f"authorization_epoch={self.authorization_epoch!r}, "
+            "oidc_policy_authorization_epoch="
+            f"{self.oidc_policy_authorization_epoch!r})"
         )
 
 
@@ -179,6 +199,7 @@ class SessionStore(Protocol):
         principal: ManagementPrincipal,
         authentication_method: SessionAuthenticationMethod,
         authorization_epoch: int,
+        oidc_policy_authorization_epoch: int | None = None,
         now: float,
     ) -> IssuedSession: ...
 
@@ -187,8 +208,11 @@ class SessionStore(Protocol):
         token: str,
         *,
         current_authorization_epoch: int,
+        current_oidc_policy_authorization_epoch: int | None = None,
         now: float,
     ) -> SessionRecord: ...
+
+    async def inspect(self, token: str, *, now: float) -> SessionRecord: ...
 
     async def rotate(
         self,
@@ -197,6 +221,7 @@ class SessionStore(Protocol):
         principal: ManagementPrincipal,
         authentication_method: SessionAuthenticationMethod,
         authorization_epoch: int,
+        oidc_policy_authorization_epoch: int | None = None,
         now: float,
     ) -> IssuedSession: ...
 
@@ -242,18 +267,32 @@ class InProcessSessionStore:
         principal: object,
         authentication_method: object,
         authorization_epoch: object,
+        oidc_policy_authorization_epoch: object,
         now: object,
-    ) -> tuple[ManagementPrincipal, SessionAuthenticationMethod, int, float]:
+    ) -> tuple[ManagementPrincipal, SessionAuthenticationMethod, int, int | None, float]:
         if type(principal) is not ManagementPrincipal:
             raise ValueError("A validated session principal is required.")
         if type(authentication_method) is not SessionAuthenticationMethod:
             raise ValueError("A validated session authentication method is required.")
         if type(authorization_epoch) is not int or authorization_epoch < 1:
             raise ValueError("Session authorization epoch is invalid.")
+        if authentication_method is SessionAuthenticationMethod.LOCAL_PASSWORD:
+            if (
+                principal.principal_type is not PrincipalType.LOCAL_OWNER
+                or oidc_policy_authorization_epoch is not None
+            ):
+                raise ValueError("Local session authorization snapshot is invalid.")
+        elif (
+            principal.principal_type is not PrincipalType.OIDC_USER
+            or type(oidc_policy_authorization_epoch) is not int
+            or oidc_policy_authorization_epoch < 1
+        ):
+            raise ValueError("OIDC session authorization snapshot is invalid.")
         return (
             principal,
             authentication_method,
             authorization_epoch,
+            oidc_policy_authorization_epoch,
             _strict_timestamp(now, "Session timestamp"),
         )
 
@@ -263,6 +302,7 @@ class InProcessSessionStore:
         principal: ManagementPrincipal,
         authentication_method: SessionAuthenticationMethod,
         authorization_epoch: int,
+        oidc_policy_authorization_epoch: int | None,
         now: float,
     ) -> IssuedSession:
         expired = [
@@ -303,6 +343,7 @@ class InProcessSessionStore:
             absolute_expires_at=absolute_expires_at,
             authentication_method=authentication_method,
             authorization_epoch=authorization_epoch,
+            oidc_policy_authorization_epoch=oidc_policy_authorization_epoch,
         )
         self._sessions[digest] = record
         return IssuedSession(token=token, session=record)
@@ -312,6 +353,7 @@ class InProcessSessionStore:
         token: str,
         *,
         current_authorization_epoch: int | None,
+        current_oidc_policy_authorization_epoch: int | None,
         now: float,
         touch: bool,
     ) -> SessionRecord:
@@ -325,6 +367,13 @@ class InProcessSessionStore:
         if (
             current_authorization_epoch is not None
             and current_authorization_epoch != record.authorization_epoch
+        ):
+            self._sessions.pop(digest, None)
+            raise SessionStale("Session authorization is stale.")
+        if (
+            current_authorization_epoch is not None
+            and record.authentication_method is SessionAuthenticationMethod.OIDC
+            and current_oidc_policy_authorization_epoch != record.oidc_policy_authorization_epoch
         ):
             self._sessions.pop(digest, None)
             raise SessionStale("Session authorization is stale.")
@@ -347,12 +396,20 @@ class InProcessSessionStore:
         principal: ManagementPrincipal,
         authentication_method: SessionAuthenticationMethod,
         authorization_epoch: int,
+        oidc_policy_authorization_epoch: int | None = None,
         now: float,
     ) -> IssuedSession:
-        principal, authentication_method, authorization_epoch, now = self._validated_issue_inputs(
+        (
             principal,
             authentication_method,
             authorization_epoch,
+            oidc_policy_authorization_epoch,
+            now,
+        ) = self._validated_issue_inputs(
+            principal,
+            authentication_method,
+            authorization_epoch,
+            oidc_policy_authorization_epoch,
             now,
         )
         async with self._lock:
@@ -360,6 +417,7 @@ class InProcessSessionStore:
                 principal=principal,
                 authentication_method=authentication_method,
                 authorization_epoch=authorization_epoch,
+                oidc_policy_authorization_epoch=oidc_policy_authorization_epoch,
                 now=now,
             )
 
@@ -368,18 +426,37 @@ class InProcessSessionStore:
         token: str,
         *,
         current_authorization_epoch: int,
+        current_oidc_policy_authorization_epoch: int | None = None,
         now: float,
     ) -> SessionRecord:
         token = self._validated_token(token)
         if type(current_authorization_epoch) is not int or current_authorization_epoch < 1:
             raise ValueError("Session authorization epoch is invalid.")
+        if current_oidc_policy_authorization_epoch is not None and (
+            type(current_oidc_policy_authorization_epoch) is not int
+            or current_oidc_policy_authorization_epoch < 1
+        ):
+            raise ValueError("OIDC policy authorization epoch is invalid.")
         now = _strict_timestamp(now, "Session timestamp")
         async with self._lock:
             return self._resolve_locked(
                 token,
                 current_authorization_epoch=current_authorization_epoch,
+                current_oidc_policy_authorization_epoch=current_oidc_policy_authorization_epoch,
                 now=now,
                 touch=True,
+            )
+
+    async def inspect(self, token: str, *, now: float) -> SessionRecord:
+        token = self._validated_token(token)
+        now = _strict_timestamp(now, "Session timestamp")
+        async with self._lock:
+            return self._resolve_locked(
+                token,
+                current_authorization_epoch=None,
+                current_oidc_policy_authorization_epoch=None,
+                now=now,
+                touch=False,
             )
 
     async def rotate(
@@ -389,19 +466,28 @@ class InProcessSessionStore:
         principal: ManagementPrincipal,
         authentication_method: SessionAuthenticationMethod,
         authorization_epoch: int,
+        oidc_policy_authorization_epoch: int | None = None,
         now: float,
     ) -> IssuedSession:
         token = self._validated_token(token)
-        principal, authentication_method, authorization_epoch, now = self._validated_issue_inputs(
+        (
             principal,
             authentication_method,
             authorization_epoch,
+            oidc_policy_authorization_epoch,
+            now,
+        ) = self._validated_issue_inputs(
+            principal,
+            authentication_method,
+            authorization_epoch,
+            oidc_policy_authorization_epoch,
             now,
         )
         async with self._lock:
             existing = self._resolve_locked(
                 token,
                 current_authorization_epoch=None,
+                current_oidc_policy_authorization_epoch=None,
                 now=now,
                 touch=False,
             )
@@ -410,6 +496,7 @@ class InProcessSessionStore:
                 principal=principal,
                 authentication_method=authentication_method,
                 authorization_epoch=authorization_epoch,
+                oidc_policy_authorization_epoch=oidc_policy_authorization_epoch,
                 now=now,
             )
 
@@ -542,12 +629,105 @@ class SessionService:
         _record_session_metric("issue", "succeeded")
         return issued
 
+    @staticmethod
+    def _expected_role_source(source: RoleBindingSource) -> OidcRoleSource:
+        if source is RoleBindingSource.DIRECT_BINDING:
+            return OidcRoleSource.DIRECT_BINDING
+        if source is RoleBindingSource.CLAIM_MAPPING:
+            return OidcRoleSource.CLAIM_MAPPING
+        raise SessionStale("Session authorization is stale.")
+
+    async def _oidc_authorization_snapshot(
+        self,
+        principal: ManagementPrincipal,
+    ) -> tuple[ManagedIdentity, int, int]:
+        if (
+            type(principal) is not ManagementPrincipal
+            or principal.principal_type is not PrincipalType.OIDC_USER
+            or principal.issuer is None
+            or principal.subject is None
+        ):
+            raise SessionStale("Session authorization is stale.")
+        managed = await self._identity_repository.get_identity_by_oidc(
+            issuer=principal.issuer,
+            subject=principal.subject,
+        )
+        policy = await self._identity_repository.get_oidc_policy_revision()
+        if (
+            type(managed) is not ManagedIdentity
+            or not managed.identity.enabled
+            or managed.identity.issuer != principal.issuer
+            or managed.identity.subject != principal.subject
+            or managed.binding.role is not principal.role
+            or self._expected_role_source(managed.binding.source) is not principal.role_source
+        ):
+            raise SessionStale("Session authorization is stale.")
+        return managed, policy.revision, policy.authorization_epoch
+
+    async def issue_oidc(
+        self,
+        resolved_identity: ResolvedOidcIdentity,
+        *,
+        now: float,
+    ) -> IssuedSession:
+        try:
+            if type(resolved_identity) is not ResolvedOidcIdentity:
+                raise ValueError("A resolved OIDC identity is required.")
+            managed, policy_revision, policy_epoch = await self._oidc_authorization_snapshot(
+                resolved_identity.principal
+            )
+            if (
+                managed.identity.identity_id != resolved_identity.identity_id
+                or managed.identity.authorization_epoch
+                != resolved_identity.identity_authorization_epoch
+                or managed.binding.revision != resolved_identity.binding_revision
+                or policy_revision != resolved_identity.policy_revision
+                or policy_epoch != resolved_identity.policy_authorization_epoch
+            ):
+                raise SessionStale("Session authorization is stale.")
+            issued = await self._store.issue(
+                principal=resolved_identity.principal,
+                authentication_method=SessionAuthenticationMethod.OIDC,
+                authorization_epoch=resolved_identity.identity_authorization_epoch,
+                oidc_policy_authorization_epoch=resolved_identity.policy_authorization_epoch,
+                now=now,
+            )
+        except Exception:
+            _record_session_metric("issue", "failed")
+            raise
+        _record_session_metric("issue", "succeeded")
+        return issued
+
     async def resolve(self, token: str, *, now: float) -> SessionRecord:
         try:
-            owner = await self._local_owner()
+            inspected = await self._store.inspect(token, now=now)
+            if inspected.authentication_method is SessionAuthenticationMethod.LOCAL_PASSWORD:
+                owner = await self._local_owner()
+                if inspected.principal != ManagementPrincipal.local_owner(
+                    owner.identity.identity_id
+                ):
+                    await self._store.revoke(token)
+                    raise SessionStale("Session authorization is stale.")
+                identity_epoch = owner.identity.authorization_epoch
+                policy_epoch = None
+            elif inspected.authentication_method is SessionAuthenticationMethod.OIDC:
+                try:
+                    (
+                        managed,
+                        _policy_revision,
+                        policy_epoch,
+                    ) = await self._oidc_authorization_snapshot(inspected.principal)
+                except SessionStale:
+                    await self._store.revoke(token)
+                    raise
+                identity_epoch = managed.identity.authorization_epoch
+            else:  # pragma: no cover - SessionRecord construction guards this
+                await self._store.revoke(token)
+                raise SessionStale("Session authorization is stale.")
             resolved = await self._store.resolve(
                 token,
-                current_authorization_epoch=owner.identity.authorization_epoch,
+                current_authorization_epoch=identity_epoch,
+                current_oidc_policy_authorization_epoch=policy_epoch,
                 now=now,
             )
         except SessionExpired:

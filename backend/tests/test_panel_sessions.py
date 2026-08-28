@@ -22,7 +22,13 @@ if str(BACKEND_DIR) not in sys.path:
     sys.path.insert(0, str(BACKEND_DIR))
 
 import jwt
-from core.identity import SessionExpired, SessionNotFound
+from core.identity import (
+    ManagementPrincipal,
+    ManagementRole,
+    OidcRoleSource,
+    SessionExpired,
+    SessionNotFound,
+)
 from core.panel.auth import _client_identity, logout, setup_status
 from core.utils import (
     PANEL_SESSION_COOKIE,
@@ -432,7 +438,11 @@ class PanelSessionLifecycleTests(unittest.IsolatedAsyncioTestCase):
         service.issue_local_owner.assert_awaited_once_with(now=1_000.0)
 
     async def test_opaque_session_resolution_maps_expiry_and_replay_to_generic_http_errors(self):
-        service = SimpleNamespace(resolve=AsyncMock(return_value=SimpleNamespace()))
+        service = SimpleNamespace(
+            resolve=AsyncMock(
+                return_value=SimpleNamespace(principal=ManagementPrincipal.local_owner())
+            )
+        )
         token = "ogs_" + "A" * 43
         with (
             patch("core.utils.get_session_service", return_value=service),
@@ -454,6 +464,37 @@ class PanelSessionLifecycleTests(unittest.IsolatedAsyncioTestCase):
                 await verify_panel_token_value(token)
             self.assertEqual(context.exception.status_code, 401)
             self.assertEqual(context.exception.detail, detail)
+
+    async def test_opaque_oidc_session_authorizes_its_real_role_instead_of_local_owner(self):
+        principal = ManagementPrincipal.oidc_user(
+            issuer="https://identity.example.com/tenant",
+            subject="subject-viewer",
+            role=ManagementRole.VIEWER,
+            role_source=OidcRoleSource.CLAIM_MAPPING,
+        )
+        service = SimpleNamespace(
+            resolve=AsyncMock(return_value=SimpleNamespace(principal=principal))
+        )
+        token = "ogs_" + "A" * 43
+
+        with patch("core.utils.get_session_service", return_value=service):
+            read_request = build_request(
+                cookie=f"{PANEL_SESSION_COOKIE}={token}",
+                route_path="/api/config/get",
+            )
+            self.assertEqual(await verify_panel_token(read_request, credentials=None), token)
+            self.assertEqual(read_request.state.management_principal, principal)
+
+            write_request = build_request(
+                cookie=f"{PANEL_SESSION_COOKIE}={token}",
+                method="POST",
+                origin="http://localhost:4283",
+                route_path="/api/config/save",
+            )
+            with self.assertRaises(HTTPException) as context:
+                await verify_panel_token(write_request, credentials=None)
+
+        self.assertEqual(context.exception.status_code, 403)
 
     async def test_legacy_jwt_is_accepted_only_inside_its_bounded_migration_window(self):
         now = int(time.time())

@@ -297,6 +297,19 @@ _PANEL_AUTH_REFERENCE_KEY = secrets.token_bytes(32)
 _PANEL_AUTH_REFERENCE_DOMAIN = b"omni-gateway:panel-auth-reference:v1\0"
 
 
+class _VerifiedPanelToken(str):
+    """A string-compatible token carrying the principal resolved by the session service."""
+
+    principal: ManagementPrincipal
+
+    def __new__(cls, value: str, principal: ManagementPrincipal):
+        if type(value) is not str or type(principal) is not ManagementPrincipal:
+            raise ValueError("Verified panel token is invalid.")
+        instance = str.__new__(cls, value)
+        instance.principal = principal
+        return instance
+
+
 def _get_panel_session_ttl_seconds() -> int:
     return get_session_policy().absolute_ttl_seconds
 
@@ -394,16 +407,19 @@ async def verify_panel_token_value(token: str) -> str:
         raise HTTPException(status_code=401, detail="Invalid session token.")
     if token.startswith(SESSION_TOKEN_PREFIX):
         try:
-            await get_session_service().resolve(token, now=time.time())
+            resolved = await get_session_service().resolve(token, now=time.time())
+            if type(resolved.principal) is not ManagementPrincipal:
+                raise RuntimeError("Session principal is unavailable.")
         except SessionExpired:
             raise HTTPException(status_code=401, detail="Session expired. Please sign in again.")
         except SessionError:
             raise HTTPException(status_code=401, detail="Invalid session token.")
         except RuntimeError as exc:
             raise HTTPException(status_code=503, detail="Session service is unavailable.") from exc
-        return token
+        return _VerifiedPanelToken(token, resolved.principal)
     try:
-        return await _verify_legacy_panel_session(token)
+        verified = await _verify_legacy_panel_session(token)
+        return _VerifiedPanelToken(verified, ManagementPrincipal.local_owner())
     except HTTPException:
         raise
 
@@ -466,7 +482,7 @@ async def verify_panel_token(
     if token:
         _verify_cookie_request_origin(request)
         token = await verify_panel_token_value(token)
-        principal = ManagementPrincipal.local_owner()
+        principal = getattr(token, "principal", ManagementPrincipal.local_owner())
         _authorize_panel_request(request, principal)
         _set_management_auth_reference(request, token)
         return token
@@ -479,7 +495,7 @@ async def verify_panel_token(
 
     if not token.startswith(f"{API_KEY_PREFIX}vk-"):
         token = await verify_panel_token_value(token)
-        principal = ManagementPrincipal.local_owner()
+        principal = getattr(token, "principal", ManagementPrincipal.local_owner())
         _authorize_panel_request(request, principal)
         _set_management_auth_reference(request, token)
         return token

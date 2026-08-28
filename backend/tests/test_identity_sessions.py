@@ -15,7 +15,11 @@ from core.identity import (
     IdentityRecord,
     ManagedIdentity,
     ManagementPrincipal,
+    ManagementRole,
+    OidcRoleSource,
+    ResolvedOidcIdentity,
     RoleBindingRecord,
+    RoleBindingSource,
 )
 from core.identity.sessions import (
     InProcessSessionStore,
@@ -27,6 +31,8 @@ from core.identity.sessions import (
     SessionStale,
     render_management_session_metrics,
 )
+from core.storage.identity_sqlite import SQLiteIdentityRepository
+from tests.support import workspace_temp_directory
 
 
 class FakeIdentityRepository:
@@ -175,6 +181,70 @@ class InProcessSessionStoreTests(unittest.IsolatedAsyncioTestCase):
                 stale.token,
                 current_authorization_epoch=7,
                 now=1_001.0,
+            )
+
+    async def test_oidc_session_requires_both_identity_and_policy_authorization_epochs(self):
+        principal = ManagementPrincipal.oidc_user(
+            issuer="https://identity.example.com/tenant",
+            subject="subject-1",
+            role=ManagementRole.OPERATOR,
+            role_source=OidcRoleSource.DIRECT_BINDING,
+        )
+        issued = await self.store.issue(
+            principal=principal,
+            authentication_method=SessionAuthenticationMethod.OIDC,
+            authorization_epoch=7,
+            oidc_policy_authorization_epoch=11,
+            now=1_000.0,
+        )
+
+        inspected = await self.store.inspect(issued.token, now=1_001.0)
+        self.assertEqual(inspected.oidc_policy_authorization_epoch, 11)
+        resolved = await self.store.resolve(
+            issued.token,
+            current_authorization_epoch=7,
+            current_oidc_policy_authorization_epoch=11,
+            now=1_001.0,
+        )
+        self.assertEqual(resolved.principal, principal)
+
+        for identity_epoch, policy_epoch in ((8, 11), (7, 12), (7, None)):
+            replay = await self.store.issue(
+                principal=principal,
+                authentication_method=SessionAuthenticationMethod.OIDC,
+                authorization_epoch=7,
+                oidc_policy_authorization_epoch=11,
+                now=1_010.0,
+            )
+            with self.subTest(identity_epoch=identity_epoch, policy_epoch=policy_epoch):
+                with self.assertRaises(SessionStale):
+                    await self.store.resolve(
+                        replay.token,
+                        current_authorization_epoch=identity_epoch,
+                        current_oidc_policy_authorization_epoch=policy_epoch,
+                        now=1_011.0,
+                    )
+
+    async def test_session_method_and_policy_epoch_shape_cannot_be_forged(self):
+        oidc = ManagementPrincipal.oidc_user(
+            issuer="https://identity.example.com/tenant",
+            subject="subject-1",
+            role=ManagementRole.VIEWER,
+        )
+        with self.assertRaises(ValueError):
+            await self.store.issue(
+                principal=oidc,
+                authentication_method=SessionAuthenticationMethod.OIDC,
+                authorization_epoch=1,
+                now=1_000.0,
+            )
+        with self.assertRaises(ValueError):
+            await self.store.issue(
+                principal=self.owner,
+                authentication_method=SessionAuthenticationMethod.LOCAL_PASSWORD,
+                authorization_epoch=1,
+                oidc_policy_authorization_epoch=1,
+                now=1_000.0,
             )
 
     async def test_rotation_is_atomic_and_invalidates_the_old_secret(self):
@@ -426,6 +496,87 @@ class SessionServiceTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn('action="revoke",outcome="succeeded"', rendered)
         self.assertNotIn(issued.token, rendered)
         self.assertNotIn("local-owner", rendered)
+
+
+class OidcSessionServiceTests(unittest.IsolatedAsyncioTestCase):
+    async def asyncSetUp(self):
+        self.temp_dir = workspace_temp_directory()
+        temp_path = self.temp_dir.__enter__()
+        self.addCleanup(self.temp_dir.__exit__, None, None, None)
+        self.temp_path = Path(temp_path)
+        self.repository = SQLiteIdentityRepository(self.temp_path / "identity.db")
+        await self.repository.initialize()
+        self.store = InProcessSessionStore(
+            hmac_key=b"o" * 32,
+            policy=SessionPolicy(idle_ttl_seconds=300, absolute_ttl_seconds=900),
+        )
+        self.service = SessionService(self.store, identity_repository=self.repository)
+
+    async def _resolved(
+        self,
+        *,
+        subject="subject-1",
+        source=RoleBindingSource.DIRECT_BINDING,
+    ):
+        managed = await self.repository.create_oidc_identity(
+            issuer="https://identity.example.com/tenant",
+            subject=subject,
+            role=ManagementRole.OPERATOR,
+            source=source,
+        )
+        policy = await self.repository.get_oidc_policy_revision()
+        return ResolvedOidcIdentity(
+            principal=ManagementPrincipal.oidc_user(
+                issuer=managed.identity.issuer,
+                subject=managed.identity.subject,
+                role=managed.binding.role,
+                role_source=(
+                    OidcRoleSource.DIRECT_BINDING
+                    if source is RoleBindingSource.DIRECT_BINDING
+                    else OidcRoleSource.CLAIM_MAPPING
+                ),
+            ),
+            identity_id=managed.identity.identity_id,
+            identity_authorization_epoch=managed.identity.authorization_epoch,
+            binding_revision=managed.binding.revision,
+            policy_revision=policy.revision,
+            policy_authorization_epoch=policy.authorization_epoch,
+        )
+
+    async def test_service_issues_and_resolves_an_exact_oidc_principal(self):
+        resolved = await self._resolved()
+
+        issued = await self.service.issue_oidc(resolved, now=1_000.0)
+        session = await self.service.resolve(issued.token, now=1_001.0)
+
+        self.assertEqual(session.principal, resolved.principal)
+        self.assertIs(session.authentication_method, SessionAuthenticationMethod.OIDC)
+        self.assertEqual(session.oidc_policy_authorization_epoch, 1)
+
+    async def test_identity_disable_role_change_and_policy_revision_revoke_oidc_sessions(self):
+        for mutation in ("disable", "role", "policy"):
+            with self.subTest(mutation=mutation):
+                resolved = await self._resolved(subject=f"subject-{mutation}")
+                issued = await self.service.issue_oidc(resolved, now=1_000.0)
+                managed = await self.repository.get_identity(resolved.identity_id)
+                if mutation == "disable":
+                    await self.repository.set_identity_enabled(
+                        identity_id=resolved.identity_id,
+                        enabled=False,
+                        expected_revision=managed.identity.revision,
+                    )
+                elif mutation == "role":
+                    await self.repository.set_role(
+                        identity_id=resolved.identity_id,
+                        role=ManagementRole.VIEWER,
+                        source=RoleBindingSource.DIRECT_BINDING,
+                        expected_revision=managed.binding.revision,
+                    )
+                else:
+                    await self.repository.advance_oidc_policy_revision(expected_revision=1)
+
+                with self.assertRaises(SessionStale):
+                    await self.service.resolve(issued.token, now=1_001.0)
 
 
 if __name__ == "__main__":
