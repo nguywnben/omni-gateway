@@ -276,6 +276,14 @@ class OidcJwksCache:
     def generation(self) -> int:
         return self._generation
 
+    def matches_configuration(
+        self,
+        policy: OidcPolicy,
+        discovery: OidcDiscoveryDocument,
+    ) -> bool:
+        """Return whether this cache is bound to the exact immutable trust configuration."""
+        return self._policy == policy and self._discovery == discovery
+
     def _now(self) -> float:
         try:
             value = float(self._clock())

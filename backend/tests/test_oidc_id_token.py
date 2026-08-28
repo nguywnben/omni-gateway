@@ -1,7 +1,9 @@
+import asyncio
 import base64
 import json
 import sys
 import unittest
+from dataclasses import replace
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -181,6 +183,20 @@ class OidcIdTokenVerifierTests(unittest.IsolatedAsyncioTestCase):
             await verifier.verify(token, expected_nonce=_NONCE, **kwargs)
         self.assertEqual(str(caught.exception), "OIDC ID Token failed.")
         self.assertNotIn("provider", repr(caught.exception).lower())
+        self.assertIsNone(caught.exception.__cause__)
+        self.assertTrue(caught.exception.__suppress_context__)
+
+    async def test_verifier_rejects_a_cache_bound_to_another_trust_configuration(self):
+        policy = _policy()
+        discovery = _discovery()
+        other_discovery = replace(
+            discovery,
+            jwks_uri="https://identity.example.com/other-jwks",
+        )
+        other_cache = OidcJwksCache(policy, other_discovery, QueueClient())
+
+        with self.assertRaises(OidcIdTokenError):
+            OidcIdTokenVerifier(policy, discovery, other_cache, clock=lambda: _NOW)
 
     async def test_supported_asymmetric_algorithms_return_only_bounded_identity_claims(self):
         cases = (
@@ -373,6 +389,38 @@ class OidcIdTokenVerifierTests(unittest.IsolatedAsyncioTestCase):
             with self.subTest(claims=claims):
                 verifier, _ = self._verifier(_jwks(key))
                 await self._assert_rejected(verifier, _token(claims=claims))
+
+    async def test_provider_failure_is_content_free_and_cancellation_propagates(self):
+        class FailingClient:
+            async def get_json(self, url: str):
+                raise RuntimeError("provider token and endpoint detail must not escape")
+
+        class CancelledClient:
+            async def get_json(self, url: str):
+                raise asyncio.CancelledError
+
+        policy = _policy()
+        failing_cache = OidcJwksCache(policy, _discovery(), FailingClient())
+        failing_verifier = OidcIdTokenVerifier(
+            policy,
+            _discovery(),
+            failing_cache,
+            clock=lambda: _NOW,
+        )
+        with self.assertRaises(OidcIdTokenError) as caught:
+            await failing_verifier.verify(_token(), expected_nonce=_NONCE)
+        self.assertEqual(str(caught.exception), "OIDC ID Token failed.")
+        self.assertIsNone(caught.exception.__cause__)
+
+        cancelled_cache = OidcJwksCache(policy, _discovery(), CancelledClient())
+        cancelled_verifier = OidcIdTokenVerifier(
+            policy,
+            _discovery(),
+            cancelled_cache,
+            clock=lambda: _NOW,
+        )
+        with self.assertRaises(asyncio.CancelledError):
+            await cancelled_verifier.verify(_token(), expected_nonce=_NONCE)
 
 
 if __name__ == "__main__":

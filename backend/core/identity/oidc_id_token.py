@@ -256,7 +256,7 @@ class OidcIdTokenVerifier:
                 for algorithm in discovery.id_token_signing_algorithms
             )
             or type(jwks_cache) is not OidcJwksCache
-            or jwks_cache.policy_revision != policy.revision
+            or not jwks_cache.matches_configuration(policy, discovery)
             or not callable(clock)
         ):
             raise OidcIdTokenError
@@ -392,8 +392,8 @@ class OidcIdTokenVerifier:
         except asyncio.CancelledError:
             raise
         except OidcIdTokenError:
-            raise
-        except (OidcJwksError, jwt.PyJWTError, ValueError, TypeError, KeyError) as exc:
-            raise OidcIdTokenError from exc
-        except Exception as exc:
-            raise OidcIdTokenError from exc
+            raise OidcIdTokenError from None
+        except (OidcJwksError, jwt.PyJWTError, ValueError, TypeError, KeyError):
+            raise OidcIdTokenError from None
+        except Exception:
+            raise OidcIdTokenError from None
