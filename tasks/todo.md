@@ -139,7 +139,13 @@ These queue items refine Phases 4–5 and do not add to the 28-item program deno
     session/recovery security review, and committed-runtime health/readiness smoke passed. The
     maintained operator contract is `docs/management-sessions.md`; one worker/replica remains the
     only activated topology.
-- [ ] W4.7 Add safe OIDC policy, discovery, JWKS, and secret configuration.
+- [x] W4.7 Add safe OIDC policy, discovery, JWKS, and secret configuration.
+  - Completed on 2026-08-28 in `407ecac`, `c32e369`, `247ada8`, `55c81d6`, and `d0874f7`.
+    The immutable versioned policy is disabled by default, secrets remain environment/file-only,
+    discovery uses pinned verified HTTPS with SSRF and response bounds, metadata/JWKS fail closed,
+    and JWKS rotation is bounded and single-flight. Thirty-eight focused tests and all 867 tests
+    pass on Python 3.12; dependency consistency, Ruff, format, compile, route contract, and
+    vulnerability gates pass. Login activation remains gated by W4.8–W4.12.
 - [ ] W4.8 Add strict asymmetric ID Token verification.
 - [ ] W4.9 Add Authorization Code + PKCE/state/nonce transaction and callback.
 - [ ] W4.10 Add explicit role binding and deny-by-default JIT identity resolution.

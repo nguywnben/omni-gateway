@@ -46,11 +46,11 @@ or Phase 5 request tracing.
 - Wave 3 completion checkpoint: `76315e7` (`docs: close wave 3 operational evidence`).
 - Completed product scope: Phases 0–5; Wave 3 was accepted by the human on 2026-08-26 through the
   instruction to start the project and execute the next plan.
-- Active approved scope: Wave 4 under accepted ADR-007/ADR-008; W4.1–W4.6 and checkpoint W4-A are
-  complete and W4.7 is the next implementation slice.
-- State: **READY — W4.7 NEXT**. Management authorization, durable identity parity, opaque
-  standalone sessions, and local-owner recovery are complete; safe OIDC policy/discovery/JWKS
-  configuration is the next gated slice.
+- Active approved scope: Wave 4 under accepted ADR-007/ADR-008; W4.1–W4.7 and checkpoint W4-A are
+  complete and W4.8 is the next implementation slice.
+- State: **READY — W4.8 NEXT**. Management authorization, durable identity parity, opaque
+  standalone sessions, local-owner recovery, and the safe OIDC policy/discovery/JWKS foundation
+  are complete; strict ID Token verification is the next gated slice.
 - Still gated by later slices and evidence: OIDC activation, distributed-state activation, multiple
   workers/replicas, destructive migration, and production release activation.
 
@@ -486,6 +486,13 @@ JWKS caching, endpoint-host controls, and environment-locked secret handling.
   configuration revision tests.
 - Dependencies: W4-A and accepted `PyJWT[crypto]` dependency.
 - Likely files: OIDC policy/client, config bridge, schemas, tests.
+- Completed: `407ecac`, `c32e369`, `247ada8`, `55c81d6`, and `d0874f7` add the immutable
+  disabled-by-default policy, environment/file-secret isolation, exact origin and pinned-address
+  HTTPS transport, strict discovery metadata, bounded public-key validation, and atomic
+  single-flight JWKS rotation. Review closed duplicate-JSON, secret-file replacement, forged-JWKS-
+  URI, and refresh-storm gaps. Thirty-eight focused tests and all 867 tests pass on Python 3.12;
+  Ruff lint/format, compile, route contract, dependency consistency, and vulnerability audit pass.
+  The operator boundary is maintained in `docs/oidc-foundation.md`; no login route is active.
 
 ### W4.8 — ID Token verifier
 
@@ -834,7 +841,7 @@ new policy plane, verify telemetry, and retain a tested rollback image/data path
 
 ## Open Questions
 
-No decision gate blocks W4.6. The accepted constraints keep SCIM and tenant isolation out of Wave
+No decision gate blocks W4.8. The accepted constraints keep SCIM and tenant isolation out of Wave
 4, use exact OIDC issuer/subject identity, approve an audited `PyJWT[crypto]` addition in W4.7, and
 require 99.9% end-to-end availability, 60-second supported failover recovery, zero correctness
 violations, and bounded performance impact before coordinated activation. Enabling OIDC by default,

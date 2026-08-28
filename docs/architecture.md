@@ -154,6 +154,17 @@ audited local-owner recovery route remains available. Existing JWTs receive only
 migration window. Process restart invalidates active opaque sessions until W4.16 supplies shared
 coordination, so ADR-002/ADR-006 continue to enforce one worker and one replica.
 
+W4.7 adds the disabled-by-default [OIDC foundation](oidc-foundation.md). Its immutable policy keeps
+the client secret outside public configuration, restricts algorithms to `RS256`, `PS256`, and
+`ES256`, and applies exact issuer, redirect, origin, claim, timeout, and response-size bounds. The
+custom HTTPS discovery transport ignores proxies and redirects, validates every DNS answer before
+connecting to a pinned approved address, retains the original hostname for TLS verification, and
+rejects ambiguous or oversized HTTP/JSON. Discovery metadata and public JWKS keys are reduced to a
+strict internal contract; bounded single-flight refresh handles rotation without replacing a valid
+snapshot with poisoned data. This foundation is not a login source: ID Token verification,
+authorization transactions, role resolution, management APIs, and console activation remain gated
+by W4.8–W4.12, while local-owner recovery remains independent of the IdP.
+
 The Render Blueprint deliberately uses a paid persistent disk. Free Render services have ephemeral filesystems and are not suitable for durable credential storage.
 
 ## Security Boundaries

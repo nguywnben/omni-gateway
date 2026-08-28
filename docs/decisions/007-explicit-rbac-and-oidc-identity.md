@@ -6,7 +6,10 @@ Accepted on 2026-08-26. Delivery remains incremental: W4.2 establishes the pure 
 permission contract, W4.3 enforces it on existing management routes, and W4.4 adds the versioned
 repository plus additive SQLite migration. W4.5 completes PostgreSQL/MongoDB repository parity and
 storage-adapter selection. W4.6 activates opaque revocable sessions and local-owner recovery for
-the standalone topology. OIDC and shared session coordination remain gated by later Wave 4 slices.
+the standalone topology. W4.7 completes the disabled-by-default OIDC policy, safe discovery
+transport, strict metadata/JWKS validation, and bounded rotation cache. It does not activate login;
+ID Token verification, authorization transactions, identity resolution, and management/UI gates
+remain in W4.8–W4.12. Shared session coordination remains gated by W4.16.
 
 ## Context
 

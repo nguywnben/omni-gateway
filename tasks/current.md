@@ -2,23 +2,24 @@
 
 ## Resume Here
 
-- Updated: 2026-08-27 (Asia/Saigon).
+- Updated: 2026-08-28 (Asia/Saigon).
 - Branch: `codex/enterprise-overhaul`.
-- Implementation baseline: `6010e71 fix: bound standalone session capacity`.
-- Completed scope: Waves 1–3 / Phases 0–5 plus Wave 4 slices W4.1–W4.6 and checkpoint W4-A.
+- Implementation baseline: `d0874f7 refactor(identity): simplify OIDC control flow`.
+- Completed scope: Waves 1–3 / Phases 0–5 plus Wave 4 slices W4.1–W4.7 and checkpoint W4-A.
 - Original program progress: 21/28 approved checklist items complete (including specification and
   Phase 6 ADR approval), exactly 75.0%; wave execution-slice checkboxes are refinements and are not
   added to that denominator.
-- Active scope: Wave 4 W4.7, safe OIDC policy, discovery, JWKS, and secret configuration.
-- Control state: **READY — W4.7 NEXT**.
-- Expected worktree state at this checkpoint: clean after the W4-A documentation commit.
+- Active scope: Wave 4 W4.8, strict asymmetric ID Token verification.
+- Control state: **READY — W4.8 NEXT**.
+- Expected worktree state at this checkpoint: clean after the W4.7 documentation commit.
 - Expected runtime: one Omni Gateway listener on `http://127.0.0.1:4283`; `/health` and `/ready`
   return HTTP 200.
-- Last verified full suite: 829 tests passed with 14 opt-in live backend tests skipped because no
-  test URI was configured. Repository-wide Ruff lint/format, compileall, pip consistency, and
-  diff-check pass for W4-A. The earlier W3-C JavaScript, YAML, shell-syntax, dependency,
-  vulnerability, and authenticated 360/768/1024/1440 browser matrix remain the latest evidence for
-  unchanged areas.
+- Last verified full suite: 867 tests passed on Python 3.12 with 14 opt-in live backend tests skipped
+  because no test URI was configured. Repository-wide Ruff lint/format, compileall, route contract,
+  pip consistency, lockfile installation, and vulnerability audit pass for W4.7. The earlier W3-C
+  JavaScript, YAML, shell-syntax, and authenticated 360/768/1024/1440 browser matrix remain the
+  latest evidence for unchanged areas; the local Bash registration is currently unavailable, so
+  shell syntax was not rerun in W4.7.
 
 Wave 2 was accepted and pushed by the human on 2026-08-24. Wave 3 / Phases 4–5 was accepted on
 2026-08-26. ADR-007/ADR-008 and the Wave 4 queue were accepted later that day when the human again
@@ -310,6 +311,17 @@ silently choosing a new design.
   repository gates and committed-runtime health/readiness smoke are clean.
   `docs/management-sessions.md` records the process-restart reauthentication posture and keeps
   shared coordination gated to W4.16.
+- W4.7 OIDC-foundation evidence: `407ecac`, `c32e369`, and `247ada8` add a versioned immutable
+  disabled-by-default policy, environment/file-only secret handling, pinned-address verified HTTPS
+  discovery transport, exact reduced metadata validation, and bounded atomic JWKS rotation.
+  `55c81d6` closes duplicate-JSON, secret-file replacement-race, forged-JWKS-URI, and concurrent
+  failed-refresh gaps; `d0874f7` simplifies the reviewed control flow without changing behavior.
+  Thirty-eight focused tests cover invalid configuration, SSRF/mixed DNS, redirects, timeouts,
+  oversized or poisoned metadata/JWKS, key bounds/rotation, and refresh coalescing. All 867 tests
+  pass on Python 3.12 with 14 opt-in live-backend skips; Ruff lint/format, compile, route-contract,
+  dependency consistency, and vulnerability gates are clean. `docs/oidc-foundation.md` records the
+  operator and activation boundary. No login, callback, token verification, or OIDC session path is
+  active; local-owner recovery and the single-worker/single-replica boundary are unchanged.
 
 ## Approved vs. Proposed Scope
 
@@ -336,12 +348,12 @@ silently choosing a new design.
 ### Approved and in progress
 
 - The Phase 6 specification, ADR-007, ADR-008, and Wave 4 execution queue.
-- W4.1–W4.6 and checkpoint W4-A are complete; W4.7 is the active next slice.
+- W4.1–W4.7 and checkpoint W4-A are complete; W4.8 is the active next slice.
 
 ### Approved for staged implementation, not active yet
 
-- OIDC, Redis coordination, durable HA migration, and multiple workers/replicas remain gated by
-  W4.7–W4.19 and their checkpoints.
+- OIDC login activation, Redis coordination, durable HA migration, and multiple workers/replicas
+  remain gated by W4.8–W4.19 and their checkpoints.
 - Phase 7 release activation, production deployment, or destructive migration.
 
 Foundations borrowed from Phase 4 or Phase 5 remain partial and must not cause those phase
@@ -363,11 +375,12 @@ checkboxes to be marked complete.
 
 ## Immediate Next Action
 
-Begin W4.7 with the versioned disabled-by-default OIDC policy and environment/file-secret contract,
-then implement exact issuer/discovery validation, endpoint-host and network controls, and bounded
-JWKS caching. Add the accepted, pinned `PyJWT[crypto]` dependency only with dependency and
-vulnerability evidence. Preserve `WORKERS=1`, one replica, local-owner recovery, and every release
-boundary; do not activate OIDC login before W4.8–W4.10 gates pass.
+Begin W4.8 with a content-free ID Token verifier over the W4.7 policy/discovery/JWKS boundary.
+Require allowlisted asymmetric signature verification, exact issuer and audience, authorized-party
+rules, expiry/not-before/issued-at skew bounds, transaction-bound nonce, bounded claims, and at most
+one unknown-key refresh. Add valid and adversarial fixtures for `RS256`, `PS256`, and `ES256` while
+preserving `WORKERS=1`, one replica, local-owner recovery, and the no-login-activation gate until
+W4.9–W4.10 pass.
 
 ## Update Rule
 
