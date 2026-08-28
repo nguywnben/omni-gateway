@@ -179,6 +179,19 @@ class OidcIdTokenVerifierTests(unittest.IsolatedAsyncioTestCase):
         cache = OidcJwksCache(policy, _discovery(), client)
         return OidcIdTokenVerifier(policy, _discovery(), cache, clock=lambda: _NOW), client
 
+    def test_verifier_exposes_exact_trust_snapshot_matching(self):
+        verifier, _client = self._verifier()
+        policy = _policy()
+        discovery = _discovery()
+
+        self.assertTrue(verifier.matches_configuration(policy, discovery))
+        self.assertFalse(
+            verifier.matches_configuration(
+                replace(policy, revision=policy.revision + 1),
+                discovery,
+            )
+        )
+
     async def _assert_rejected(self, verifier, token, **kwargs):
         with self.assertRaises(OidcIdTokenError) as caught:
             await verifier.verify(token, expected_nonce=_NONCE, **kwargs)

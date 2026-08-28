@@ -274,6 +274,14 @@ class OidcIdTokenVerifier:
             raise OidcIdTokenError
         return value
 
+    def matches_configuration(
+        self,
+        policy: OidcPolicy,
+        discovery: OidcDiscoveryDocument,
+    ) -> bool:
+        """Return whether this verifier is bound to the exact current trust snapshot."""
+        return self._policy == policy and self._discovery == discovery
+
     def _validate_claims(
         self,
         claims: dict[str, object],

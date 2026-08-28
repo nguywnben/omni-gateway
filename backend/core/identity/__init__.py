@@ -25,6 +25,10 @@ from core.identity.manifest import (
     management_route_manifest,
     require_management_route,
 )
+from core.identity.oidc_code_flow import (
+    OidcAuthorizationCodeError,
+    OidcAuthorizationCodeFlow,
+)
 from core.identity.oidc_discovery import (
     OidcDiscoveryDocument,
     OidcDiscoveryError,
@@ -118,6 +122,8 @@ __all__ = [
     "UnclassifiedManagementRoute",
     "management_route_manifest",
     "require_management_route",
+    "OidcAuthorizationCodeError",
+    "OidcAuthorizationCodeFlow",
     "OidcDiscoveryDocument",
     "OidcDiscoveryError",
     "discover_oidc",
