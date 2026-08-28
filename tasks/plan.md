@@ -46,11 +46,12 @@ or Phase 5 request tracing.
 - Wave 3 completion checkpoint: `76315e7` (`docs: close wave 3 operational evidence`).
 - Completed product scope: Phases 0–5; Wave 3 was accepted by the human on 2026-08-26 through the
   instruction to start the project and execute the next plan.
-- Active approved scope: Wave 4 under accepted ADR-007/ADR-008; W4.1–W4.7 and checkpoint W4-A are
-  complete and W4.8 is the next implementation slice.
-- State: **READY — W4.8 NEXT**. Management authorization, durable identity parity, opaque
+- Active approved scope: Wave 4 under accepted ADR-007/ADR-008; W4.1–W4.8 and checkpoint W4-A are
+  complete and W4.9 is the next implementation slice.
+- State: **READY — W4.9 NEXT**. Management authorization, durable identity parity, opaque
   standalone sessions, local-owner recovery, and the safe OIDC policy/discovery/JWKS foundation
-  are complete; strict ID Token verification is the next gated slice.
+  plus strict ID Token verification are complete; the authorization transaction and callback are
+  the next gated slice.
 - Still gated by later slices and evidence: OIDC activation, distributed-state activation, multiple
   workers/replicas, destructive migration, and production release activation.
 
@@ -506,6 +507,16 @@ optional UserInfo subject validation behind a content-free error boundary.
 - Verification: valid and adversarial JWT/JWKS fixtures across supported algorithms.
 - Dependencies: W4.7.
 - Likely files: token verifier, bounded JWKS cache, focused tests, protocol docs.
+- Completed: `5b40d51` adds bounded clock-skew and token-age policy; `e7d5911` prevents configurable
+  profile claims from colliding with protocol claims; `9dcfa51` adds the strict verifier and closes
+  cold-cache rotation plus sequential unknown-key refresh-storm behavior; `dbd2914` binds each
+  verifier to its exact policy/discovery/cache configuration and suppresses all provider-controlled
+  exception chains while preserving cancellation. RS256, PS256, ES256, issuer, audience, `azp`,
+  nonce, `exp`, `nbf`, `iat`, subject, UserInfo, JOSE-header, duplicate-JSON, size, signature,
+  rotation, outage, and claim-bound fixtures pass. Thirty-four focused tests and all 880 tests pass
+  on Python 3.12 and Python 3.14 with 14 opt-in live-backend skips; Ruff lint/format, compile,
+  dependency consistency, locked installation, diff, and vulnerability audit pass. No login route
+  is active.
 
 ### W4.9 — OIDC authorization transaction and callback
 
@@ -843,7 +854,7 @@ new policy plane, verify telemetry, and retain a tested rollback image/data path
 
 ## Open Questions
 
-No decision gate blocks W4.8. The accepted constraints keep SCIM and tenant isolation out of Wave
+No decision gate blocks W4.9. The accepted constraints keep SCIM and tenant isolation out of Wave
 4, use exact OIDC issuer/subject identity, approve an audited `PyJWT[crypto]` addition in W4.7, and
 require 99.9% end-to-end availability, 60-second supported failover recovery, zero correctness
 violations, and bounded performance impact before coordinated activation. Enabling OIDC by default,

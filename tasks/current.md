@@ -4,20 +4,20 @@
 
 - Updated: 2026-08-28 (Asia/Saigon).
 - Branch: `codex/enterprise-overhaul`.
-- Implementation baseline: `3ce001b fix(auth): authorize nested FastAPI routes`.
-- Completed scope: Waves 1–3 / Phases 0–5 plus Wave 4 slices W4.1–W4.7 and checkpoint W4-A.
+- Implementation baseline: `dbd2914 fix(identity): seal OIDC verifier trust boundary`.
+- Completed scope: Waves 1–3 / Phases 0–5 plus Wave 4 slices W4.1–W4.8 and checkpoint W4-A.
 - Original program progress: 21/28 approved checklist items complete (including specification and
   Phase 6 ADR approval), exactly 75.0%; wave execution-slice checkboxes are refinements and are not
   added to that denominator.
-- Active scope: Wave 4 W4.8, strict asymmetric ID Token verification.
-- Control state: **READY — W4.8 NEXT**.
-- Expected worktree state at this checkpoint: clean after the W4.7 documentation commit.
+- Active scope: Wave 4 W4.9, OIDC authorization transaction and callback.
+- Control state: **READY — W4.9 NEXT**.
+- Expected worktree state at this checkpoint: clean after the W4.8 documentation commit.
 - Expected runtime: one Omni Gateway listener on `http://127.0.0.1:4283`; `/health` and `/ready`
   return HTTP 200.
-- Last verified full suite: 868 tests passed on Python 3.12 and Python 3.14 with 14 opt-in live
+- Last verified full suite: 880 tests passed on Python 3.12 and Python 3.14 with 14 opt-in live
   backend tests skipped because no test URI was configured. Repository-wide Ruff lint/format,
-  compileall, route contract,
-  pip consistency, lockfile installation, and vulnerability audit pass for W4.7. The earlier W3-C
+  compileall, pip consistency, lockfile installation, diff, and vulnerability audit pass for W4.8.
+  The earlier W4.7 route contract and W3-C
   JavaScript, YAML, shell-syntax, and authenticated 360/768/1024/1440 browser matrix remain the
   latest evidence for unchanged areas; the local Bash registration is currently unavailable, so
   shell syntax was not rerun in W4.7.
@@ -328,6 +328,16 @@ silently choosing a new design.
   active; local-owner recovery and the single-worker/single-replica boundary are unchanged. The
   post-fix fresh-setup runtime smoke passed end-to-end in isolated storage, and the committed primary
   runtime reports HTTP 200 for both `/health` and `/ready` on port 4283.
+- W4.8 ID-Token-verifier evidence: `5b40d51` adds bounded clock-skew/token-age policy; `e7d5911`
+  prevents configurable identity claims from colliding with OIDC protocol claims; `9dcfa51` adds
+  strict RS256/PS256/ES256 verification with exact issuer, audience, `azp`, nonce, time, subject,
+  optional UserInfo, allowlisted-output, malformed-input, rotation, and outage behavior. `dbd2914`
+  closes review findings around cache trust-configuration binding, provider-controlled exception
+  chains, and cancellation coverage. Unknown keys receive one bounded rotation attempt without
+  refresh storms; failed rotations preserve fresh known keys. Thirty-four focused tests and all
+  880 tests pass on Python 3.12 and Python 3.14 with 14 opt-in live-backend skips. Ruff lint/format,
+  compile, pip consistency, locked installation, diff, and vulnerability gates pass. No login,
+  callback, token exchange, or OIDC session route is active.
 
 ## Approved vs. Proposed Scope
 
@@ -354,12 +364,12 @@ silently choosing a new design.
 ### Approved and in progress
 
 - The Phase 6 specification, ADR-007, ADR-008, and Wave 4 execution queue.
-- W4.1–W4.7 and checkpoint W4-A are complete; W4.8 is the active next slice.
+- W4.1–W4.8 and checkpoint W4-A are complete; W4.9 is the active next slice.
 
 ### Approved for staged implementation, not active yet
 
 - OIDC login activation, Redis coordination, durable HA migration, and multiple workers/replicas
-  remain gated by W4.8–W4.19 and their checkpoints.
+  remain gated by W4.9–W4.19 and their checkpoints.
 - Phase 7 release activation, production deployment, or destructive migration.
 
 Foundations borrowed from Phase 4 or Phase 5 remain partial and must not cause those phase
@@ -381,12 +391,11 @@ checkboxes to be marked complete.
 
 ## Immediate Next Action
 
-Begin W4.8 with a content-free ID Token verifier over the W4.7 policy/discovery/JWKS boundary.
-Require allowlisted asymmetric signature verification, exact issuer and audience, authorized-party
-rules, expiry/not-before/issued-at skew bounds, transaction-bound nonce, bounded claims, and at most
-one unknown-key refresh. Add valid and adversarial fixtures for `RS256`, `PS256`, and `ES256` while
-preserving `WORKERS=1`, one replica, local-owner recovery, and the no-login-activation gate until
-W4.9–W4.10 pass.
+Begin W4.9 with a bounded one-time OIDC authorization transaction service and exact callback
+contract. Use Authorization Code with PKCE S256, state and nonce bound to one transaction, one-time
+code exchange, replay and mix-up denial, and immediate redirect to a clean same-origin path. Do not
+persist provider tokens or activate OIDC sessions until the complete callback path passes its abuse,
+outage, audit, and recovery gates; preserve `WORKERS=1`, one replica, and local-owner recovery.
 
 ## Update Rule
 

@@ -147,7 +147,17 @@ These queue items refine Phases 4–5 and do not add to the 28-item program deno
     and JWKS rotation is bounded and single-flight. Thirty-eight focused tests and all 868 tests
     pass on Python 3.12 and Python 3.14; dependency consistency, Ruff, format, compile, route
     contract, and vulnerability gates pass. Login activation remains gated by W4.8–W4.12.
-- [ ] W4.8 Add strict asymmetric ID Token verification.
+- [x] W4.8 Add strict asymmetric ID Token verification.
+  - Completed on 2026-08-28 in `5b40d51`, `e7d5911`, `9dcfa51`, and `dbd2914`.
+    The verifier accepts only configured/discovered RS256, PS256, or ES256 keys, binds the JWKS
+    cache to the exact immutable trust configuration, requires exact issuer/audience/authorized-
+    party/nonce and bounded `exp`/`nbf`/`iat` semantics, validates optional UserInfo subject
+    equality, returns only bounded allowlisted identity claims, and suppresses provider-controlled
+    exception chains. Unknown key IDs receive one bounded rotation attempt without refresh storms;
+    known cached keys remain usable after a failed rotation. Thirty-four focused OIDC policy/JWKS/
+    token tests and all 880 tests pass on Python 3.12 and Python 3.14 with 14 opt-in live-backend
+    skips. Ruff, format, compile, dependency consistency, diff, locked install, and vulnerability
+    gates pass. No OIDC login, callback, token exchange, or OIDC session route is active.
 - [ ] W4.9 Add Authorization Code + PKCE/state/nonce transaction and callback.
 - [ ] W4.10 Add explicit role binding and deny-by-default JIT identity resolution.
 - [ ] W4.11 Add bounded identity/session APIs and complete actor-aware audit.

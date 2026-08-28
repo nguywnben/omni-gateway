@@ -1,9 +1,9 @@
 # OIDC Foundation and Security Boundary
 
-Wave 4 slice W4.7 establishes the configuration, discovery transport, metadata validation, and
-JWKS cache used by the future enterprise OIDC login flow. It does **not** activate OIDC login,
-create authorization transactions, exchange authorization codes, verify ID Tokens, or issue OIDC
-sessions. Those behaviors remain gated by W4.8–W4.10 and the management surface remains gated by
+Wave 4 slices W4.7–W4.8 establish the configuration, discovery transport, metadata validation, JWKS
+cache, and strict ID Token verifier used by the future enterprise OIDC login flow. They do **not**
+activate OIDC login, create authorization transactions, exchange authorization codes, or issue OIDC
+sessions. Those behaviors remain gated by W4.9–W4.10 and the management surface remains gated by
 W4.11–W4.12.
 
 The local-owner login and recovery path remain available and independent of the identity provider.
@@ -36,6 +36,8 @@ this contract into login, an enabled snapshot will fail closed unless every requ
 | `OIDC_READ_TIMEOUT_SECONDS` | `10` | Integer from 1 through 60. |
 | `OIDC_MAX_RESPONSE_BYTES` | `262144` | Discovery/JWKS response cap from 4 KiB through 1 MiB. |
 | `OIDC_JWKS_TTL_SECONDS` | `300` | Successful JWKS snapshot lifetime from 30 through 3,600 seconds. |
+| `OIDC_CLOCK_SKEW_SECONDS` | `60` | Symmetric clock tolerance from 0 through 300 seconds for `exp`, `nbf`, and future `iat`. |
+| `OIDC_MAX_ID_TOKEN_AGE_SECONDS` | `300` | Maximum accepted age from 60 through 3,600 seconds, before the configured skew. |
 
 Secrets are excluded from the public immutable policy and its string representation. Configuration
 uses the durable OIDC policy revision and authorization epoch already provided by the identity
@@ -79,11 +81,35 @@ expired refreshes, and unknown-key refreshes are single-flight. An unknown key I
 refresh per lookup. Invalid refresh data never replaces the last valid snapshot, and a bounded
 failure cooldown prevents concurrent provider failures from creating a refresh storm.
 
+## ID Token Verification
+
+The W4.8 verifier accepts only compact signed JWTs using the configured and discovered intersection
+of `RS256`, `PS256`, and `ES256`. It rejects symmetric or unsigned algorithms, embedded or remote
+header-selected keys, critical/unknown JOSE extensions, duplicate JSON fields, invalid UTF-8 or
+base64url, and oversized headers, payloads, signatures, claims, audiences, or profile data before
+using them.
+
+Signature verification uses only a key from the exact policy/discovery-bound JWKS cache. An unknown
+key ID may trigger one bounded rotation attempt; repeated unknown IDs share a short cooldown, while
+a failed rotation never replaces the last valid snapshot or blocks a still-fresh known key.
+
+After signature verification, the verifier requires exact `iss`, a bounded ASCII `sub`, an `aud`
+containing the configured client ID, `azp` for multiple audiences, and exact client ID whenever
+`azp` is present. It also requires transaction-bound `nonce`, integer `exp` and `iat`, optional
+integer `nbf`, bounded clock skew, bounded token age, and a consistent issue/not-before/expiry
+timeline. Optional UserInfo is usable only after its bounded `sub` exactly matches the ID Token.
+
+Only issuer, subject, audiences, authorized party, verified timestamps/nonce, configured bounded
+profile fields, policy revision, and JWKS generation leave the verifier. Unknown provider claims,
+raw tokens, key material, and provider exception text have no output field. Every rejection uses
+the same content-free error and suppresses the internal exception chain; asynchronous cancellation
+continues to propagate.
+
 ## Activation and Rollback
 
-W4.7 has no browser-facing activation to roll back. Keep `OIDC_ENABLED=false` or unset until the
-later slices provide strict ID Token verification, PKCE/state/nonce transactions, deny-by-default
-identity resolution, management/audit APIs, and the localized Identity console. Removing the OIDC
+W4.7–W4.8 have no browser-facing activation to roll back. Keep `OIDC_ENABLED=false` or unset until
+the later slices provide PKCE/state/nonce transactions, deny-by-default identity resolution,
+management/audit APIs, and the localized Identity console. Removing the OIDC
 variables or setting `OIDC_ENABLED=false` preserves local-owner behavior.
 
 OIDC activation must not proceed until the W4-B protocol, abuse, recovery, API, audit, i18n,
