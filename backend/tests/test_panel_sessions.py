@@ -32,6 +32,7 @@ from core.identity import (
 from core.panel.auth import _client_identity, logout, setup_status
 from core.utils import (
     PANEL_SESSION_COOKIE,
+    _VerifiedPanelToken,
     clear_panel_session_cookie,
     create_panel_session_token,
     set_panel_session_cookie,
@@ -39,6 +40,10 @@ from core.utils import (
     verify_panel_token_value,
 )
 from core.virtual_keys import VirtualKey
+
+
+def verified_panel_token(value: str) -> _VerifiedPanelToken:
+    return _VerifiedPanelToken(value, ManagementPrincipal.local_owner())
 
 
 def build_request(
@@ -169,7 +174,7 @@ class PanelSessionCookieTests(unittest.IsolatedAsyncioTestCase):
 
         with patch(
             "core.utils.verify_panel_token_value",
-            new=AsyncMock(return_value="cookie-session"),
+            new=AsyncMock(return_value=verified_panel_token("cookie-session")),
         ) as verifier:
             token = await verify_panel_token(request, credentials=None)
 
@@ -186,11 +191,26 @@ class PanelSessionCookieTests(unittest.IsolatedAsyncioTestCase):
 
         with patch(
             "core.utils.verify_panel_token_value",
-            new=AsyncMock(return_value="legacy-session"),
+            new=AsyncMock(return_value=verified_panel_token("legacy-session")),
         ):
             token = await verify_panel_token(build_request(), credentials=credentials)
 
         self.assertEqual(token, "legacy-session")
+
+    async def test_untyped_verified_token_never_falls_back_to_local_owner(self):
+        request = build_request(cookie=f"{PANEL_SESSION_COOKIE}=cookie-session")
+
+        with (
+            patch(
+                "core.utils.verify_panel_token_value",
+                new=AsyncMock(return_value="cookie-session"),
+            ),
+            self.assertRaises(HTTPException) as context,
+        ):
+            await verify_panel_token(request, credentials=None)
+
+        self.assertEqual(context.exception.status_code, 503)
+        self.assertFalse(hasattr(request.state, "management_principal"))
 
     async def test_virtual_key_bearer_authorizes_management_read_scope(self):
         credentials = HTTPAuthorizationCredentials(
@@ -290,7 +310,7 @@ class PanelSessionCookieTests(unittest.IsolatedAsyncioTestCase):
         with (
             patch(
                 "core.utils.verify_panel_token_value",
-                new=AsyncMock(return_value="cookie-session"),
+                new=AsyncMock(return_value=verified_panel_token("cookie-session")),
             ),
             self.assertRaises(HTTPException) as context,
         ):
@@ -312,7 +332,7 @@ class PanelSessionCookieTests(unittest.IsolatedAsyncioTestCase):
 
         with patch(
             "core.utils.verify_panel_token_value",
-            new=AsyncMock(return_value="cookie-session"),
+            new=AsyncMock(return_value=verified_panel_token("cookie-session")),
         ):
             token = await verify_panel_token(request, credentials=None)
 
@@ -333,7 +353,7 @@ class PanelSessionCookieTests(unittest.IsolatedAsyncioTestCase):
 
         with patch(
             "core.utils.verify_panel_token_value",
-            new=AsyncMock(return_value="cookie-session"),
+            new=AsyncMock(return_value=verified_panel_token("cookie-session")),
         ):
             async with httpx.AsyncClient(
                 transport=transport,
@@ -356,7 +376,7 @@ class PanelSessionCookieTests(unittest.IsolatedAsyncioTestCase):
 
         with patch(
             "core.utils.verify_panel_token_value",
-            new=AsyncMock(return_value="cookie-session"),
+            new=AsyncMock(return_value=verified_panel_token("cookie-session")),
         ):
             token = await verify_panel_token(request, credentials=None)
 
@@ -400,7 +420,7 @@ class PanelSessionCookieTests(unittest.IsolatedAsyncioTestCase):
 
         with patch(
             "core.utils.verify_panel_token_value",
-            new=AsyncMock(return_value="automation-session"),
+            new=AsyncMock(return_value=verified_panel_token("automation-session")),
         ):
             token = await verify_panel_token(request, credentials=credentials)
 

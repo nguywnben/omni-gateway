@@ -7,7 +7,9 @@ import base64
 import binascii
 import hashlib
 import hmac
+import math
 import secrets
+import time
 from typing import Any
 
 from core.identity.oidc_code_flow import OidcAuthorizationCodeFlow
@@ -75,10 +77,15 @@ class OidcLoginService:
     """Compose discovery, transaction, verification, identity, and session boundaries lazily."""
 
     __slots__ = (
+        "_component_admission_lock",
+        "_component_waiters",
         "_components_lock",
         "_configuration",
+        "_discovery_failure_backoff_seconds",
+        "_discovery_retry_after",
         "_flow",
         "_hmac_key",
+        "_max_component_waiters",
         "_repository",
         "_resolver",
         "_session_service",
@@ -92,6 +99,8 @@ class OidcLoginService:
         session_service: SessionService,
         *,
         hmac_key: bytes | None,
+        max_component_waiters: int = 32,
+        discovery_failure_backoff_seconds: float = 5.0,
     ) -> None:
         if type(configuration) is not OidcConfiguration:
             raise OidcLoginError
@@ -99,6 +108,14 @@ class OidcLoginService:
             if type(hmac_key) is not bytes or len(hmac_key) < 32:
                 raise OidcLoginError
         elif hmac_key is not None:
+            raise OidcLoginError
+        if (
+            type(max_component_waiters) is not int
+            or not 1 <= max_component_waiters <= 1024
+            or type(discovery_failure_backoff_seconds) not in {int, float}
+            or not math.isfinite(discovery_failure_backoff_seconds)
+            or not 0.1 <= discovery_failure_backoff_seconds <= 300.0
+        ):
             raise OidcLoginError
         self._configuration = configuration
         self._repository = repository
@@ -108,6 +125,11 @@ class OidcLoginService:
         self._transactions: OidcAuthorizationTransactionService | None = None
         self._resolver: OidcIdentityResolver | None = None
         self._components_lock = asyncio.Lock()
+        self._component_admission_lock = asyncio.Lock()
+        self._component_waiters = 0
+        self._max_component_waiters = max_component_waiters
+        self._discovery_failure_backoff_seconds = float(discovery_failure_backoff_seconds)
+        self._discovery_retry_after = 0.0
 
     @classmethod
     async def create(
@@ -169,36 +191,57 @@ class OidcLoginService:
         await self._current_policy()
         if self._flow is not None and self._transactions is not None and self._resolver is not None:
             return self._flow, self._transactions, self._resolver
-        async with self._components_lock:
-            if (
-                self._flow is not None
-                and self._transactions is not None
-                and self._resolver is not None
-            ):
-                return self._flow, self._transactions, self._resolver
-            policy = self._configuration.policy
-            client = OidcHttpClient(policy)
-            discovery = await discover_oidc(policy, client)
-            await self._current_policy()
-            transactions = OidcAuthorizationTransactionService(
-                policy,
-                discovery,
-                hmac_key=self._hmac_key or b"",
-            )
-            jwks = OidcJwksCache(policy, discovery, client)
-            verifier = OidcIdTokenVerifier(policy, discovery, jwks)
-            flow = OidcAuthorizationCodeFlow(
-                self._configuration,
-                discovery,
-                transactions,
-                client,
-                verifier,
-            )
-            resolver = OidcIdentityResolver(policy, self._repository)
-            self._transactions = transactions
-            self._resolver = resolver
-            self._flow = flow
-            return flow, transactions, resolver
+        if time.monotonic() < self._discovery_retry_after:
+            raise OidcLoginError
+        async with self._component_admission_lock:
+            if self._component_waiters >= self._max_component_waiters:
+                raise OidcLoginError
+            self._component_waiters += 1
+        try:
+            async with self._components_lock:
+                if (
+                    self._flow is not None
+                    and self._transactions is not None
+                    and self._resolver is not None
+                ):
+                    return self._flow, self._transactions, self._resolver
+                if time.monotonic() < self._discovery_retry_after:
+                    raise OidcLoginError
+                policy = self._configuration.policy
+                client = OidcHttpClient(policy)
+                try:
+                    discovery = await discover_oidc(policy, client)
+                except asyncio.CancelledError:
+                    raise
+                except Exception:
+                    self._discovery_retry_after = (
+                        time.monotonic() + self._discovery_failure_backoff_seconds
+                    )
+                    raise OidcLoginError from None
+                await self._current_policy()
+                transactions = OidcAuthorizationTransactionService(
+                    policy,
+                    discovery,
+                    hmac_key=self._hmac_key or b"",
+                )
+                jwks = OidcJwksCache(policy, discovery, client)
+                verifier = OidcIdTokenVerifier(policy, discovery, jwks)
+                flow = OidcAuthorizationCodeFlow(
+                    self._configuration,
+                    discovery,
+                    transactions,
+                    client,
+                    verifier,
+                )
+                resolver = OidcIdentityResolver(policy, self._repository)
+                self._transactions = transactions
+                self._resolver = resolver
+                self._flow = flow
+                self._discovery_retry_after = 0.0
+                return flow, transactions, resolver
+        finally:
+            async with self._component_admission_lock:
+                self._component_waiters -= 1
 
     async def begin(self) -> OidcAuthorizationRequest:
         try:

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import sys
 import unittest
 from pathlib import Path
@@ -129,6 +130,43 @@ class OidcLoginServiceTests(unittest.IsolatedAsyncioTestCase):
             await service.begin()
 
         discovery.assert_not_awaited()
+
+    async def test_discovery_failure_is_shared_and_waiters_are_bounded(self):
+        discovery_started = asyncio.Event()
+        release_discovery = asyncio.Event()
+
+        async def failed_discovery(_policy, _client):
+            discovery_started.set()
+            await release_discovery.wait()
+            raise RuntimeError("provider unavailable")
+
+        service = OidcLoginService(
+            self.enabled_configuration,
+            self.repository,
+            SimpleNamespace(),
+            hmac_key=b"h" * 32,
+            max_component_waiters=2,
+            discovery_failure_backoff_seconds=30.0,
+        )
+
+        with (
+            patch("core.identity.oidc_login.OidcHttpClient", return_value=MagicMock()),
+            patch(
+                "core.identity.oidc_login.discover_oidc",
+                new=AsyncMock(side_effect=failed_discovery),
+            ) as discovery,
+        ):
+            requests = [asyncio.create_task(service.begin()) for _ in range(6)]
+            await discovery_started.wait()
+            await asyncio.sleep(0)
+            release_discovery.set()
+            results = await asyncio.gather(*requests, return_exceptions=True)
+
+            with self.assertRaises(OidcLoginError):
+                await service.begin()
+
+        self.assertTrue(all(type(result) is OidcLoginError for result in results))
+        discovery.assert_awaited_once()
 
 
 if __name__ == "__main__":

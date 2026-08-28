@@ -12,11 +12,15 @@ if str(BACKEND_DIR) not in sys.path:
     sys.path.insert(0, str(BACKEND_DIR))
 
 from core.identity import (  # noqa: E402
+    InProcessSessionStore,
     ManagementRole,
     OidcIdentityResolutionError,
     OidcIdentityResolver,
     OidcRoleSource,
     RoleBindingSource,
+    SessionPolicy,
+    SessionService,
+    SessionStale,
     VerifiedOidcIdToken,
     load_oidc_configuration,
 )
@@ -155,6 +159,39 @@ class OidcIdentityResolverTests(unittest.IsolatedAsyncioTestCase):
             resolved.identity_authorization_epoch, created.identity.authorization_epoch
         )
         self.assertIs(stored.binding.role, ManagementRole.VIEWER)
+
+    async def test_failed_claim_re_evaluation_advances_authorization_epoch(self):
+        created = await self.repository.create_oidc_identity(
+            issuer=ISSUER,
+            subject="subject-1",
+            role=ManagementRole.OPERATOR,
+            source=RoleBindingSource.CLAIM_MAPPING,
+        )
+        resolver = OidcIdentityResolver(
+            _configuration(mappings='{"operators":"operator"}').policy,
+            self.repository,
+        )
+        initial = await resolver.resolve(_token(groups=("operators",)))
+        session_service = SessionService(
+            InProcessSessionStore(
+                hmac_key=b"s" * 32,
+                policy=SessionPolicy(idle_ttl_seconds=300, absolute_ttl_seconds=900),
+            ),
+            identity_repository=self.repository,
+        )
+        issued = await session_service.issue_oidc(initial, now=1_000.0)
+
+        with self.assertRaises(OidcIdentityResolutionError):
+            await resolver.resolve(_token(groups=("unmapped",)))
+
+        stored = await self.repository.get_identity(created.identity.identity_id)
+        self.assertGreater(
+            stored.identity.authorization_epoch,
+            created.identity.authorization_epoch,
+        )
+        self.assertIs(stored.binding.role, ManagementRole.OPERATOR)
+        with self.assertRaises(SessionStale):
+            await session_service.resolve(issued.token, now=1_001.0)
 
     async def test_disabled_identity_and_stale_policy_revision_cannot_authenticate(self):
         created = await self.repository.create_oidc_identity(

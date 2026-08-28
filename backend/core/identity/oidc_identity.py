@@ -120,6 +120,19 @@ class OidcIdentityResolver:
             raise OidcIdentityResolutionError
         return revision
 
+    async def _invalidate_claim_sessions(self, managed: ManagedIdentity) -> None:
+        """Advance the identity epoch after a denied claim-mapped re-evaluation."""
+        try:
+            await self._repository.set_role(
+                identity_id=managed.identity.identity_id,
+                role=managed.binding.role,
+                source=RoleBindingSource.CLAIM_MAPPING,
+                expected_revision=managed.binding.revision,
+            )
+        except IdentityRevisionConflict:
+            # A concurrent authorization mutation already advanced the epoch.
+            return
+
     def _resolved(
         self,
         managed: ManagedIdentity,
@@ -185,7 +198,11 @@ class OidcIdentityResolver:
             if not managed.identity.enabled:
                 raise OidcIdentityResolutionError
             if managed.binding.source is RoleBindingSource.CLAIM_MAPPING:
-                role = _claim_mapped_role(self._policy, token.groups)
+                try:
+                    role = _claim_mapped_role(self._policy, token.groups)
+                except OidcIdentityResolutionError:
+                    await self._invalidate_claim_sessions(managed)
+                    raise
                 if managed.binding.role is not role:
                     try:
                         managed = await self._repository.set_role(

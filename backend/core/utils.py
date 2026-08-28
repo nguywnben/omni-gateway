@@ -310,6 +310,13 @@ class _VerifiedPanelToken(str):
         return instance
 
 
+def _verified_panel_principal(token: object) -> ManagementPrincipal:
+    """Require the session verifier's typed result; never synthesize authority."""
+    if type(token) is not _VerifiedPanelToken or type(token.principal) is not ManagementPrincipal:
+        raise HTTPException(status_code=503, detail="Session service is unavailable.")
+    return token.principal
+
+
 def _get_panel_session_ttl_seconds() -> int:
     return get_session_policy().absolute_ttl_seconds
 
@@ -482,7 +489,7 @@ async def verify_panel_token(
     if token:
         _verify_cookie_request_origin(request)
         token = await verify_panel_token_value(token)
-        principal = getattr(token, "principal", ManagementPrincipal.local_owner())
+        principal = _verified_panel_principal(token)
         _authorize_panel_request(request, principal)
         _set_management_auth_reference(request, token)
         return token
@@ -495,7 +502,7 @@ async def verify_panel_token(
 
     if not token.startswith(f"{API_KEY_PREFIX}vk-"):
         token = await verify_panel_token_value(token)
-        principal = getattr(token, "principal", ManagementPrincipal.local_owner())
+        principal = _verified_panel_principal(token)
         _authorize_panel_request(request, principal)
         _set_management_auth_reference(request, token)
         return token
