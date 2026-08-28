@@ -325,7 +325,9 @@ silently choosing a new design.
   route-contract, dependency consistency, and vulnerability gates are clean.
   `docs/oidc-foundation.md` records the
   operator and activation boundary. No login, callback, token verification, or OIDC session path is
-  active; local-owner recovery and the single-worker/single-replica boundary are unchanged.
+  active; local-owner recovery and the single-worker/single-replica boundary are unchanged. The
+  post-fix fresh-setup runtime smoke passed end-to-end in isolated storage, and the committed primary
+  runtime reports HTTP 200 for both `/health` and `/ready` on port 4283.
 
 ## Approved vs. Proposed Scope
 
