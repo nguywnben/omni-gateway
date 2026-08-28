@@ -19,7 +19,11 @@ from core.credential_manager import credential_manager
 from core.health import router as health_router
 from core.httpx_client import http_client
 from core.i18n import LocalizedJSONResponse, locale_context, resolve_locale
-from core.identity import close_session_service, initialize_session_service
+from core.identity import (
+    close_oidc_login_service,
+    close_session_service,
+    initialize_session_service,
+)
 from core.keep_alive import keep_alive_service
 from core.management_audit import (
     classify_management_mutation,
@@ -192,6 +196,12 @@ async def lifespan(app: FastAPI):
             log.info("Request trace service closed.")
         except Exception as e:
             log.error(f"Error while closing the request trace service: {e}")
+
+        try:
+            await close_oidc_login_service()
+            log.info("OIDC login service closed.")
+        except Exception as e:
+            log.error(f"Error while closing the OIDC login service: {e}")
 
         try:
             await close_session_service()

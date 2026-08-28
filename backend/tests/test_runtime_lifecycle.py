@@ -58,6 +58,7 @@ class ApplicationLifecycleTests(unittest.IsolatedAsyncioTestCase):
             patch("main.initialize_audit_service", new=AsyncMock()),
             patch("main.initialize_session_service", new=AsyncMock()),
             patch("main.close_session_service", new=AsyncMock()) as close_session,
+            patch("main.close_oidc_login_service", new=AsyncMock()) as close_oidc,
             patch("main.initialize_request_trace_service", new=AsyncMock()),
             patch("main.close_request_trace_service", new=AsyncMock()),
             patch("main.close_audit_service", new=AsyncMock()) as close_audit,
@@ -74,6 +75,7 @@ class ApplicationLifecycleTests(unittest.IsolatedAsyncioTestCase):
         shutdown_tasks.assert_awaited_once_with(timeout=10.0)
         close_audit.assert_awaited_once_with()
         close_session.assert_awaited_once_with()
+        close_oidc.assert_awaited_once_with()
         close_manager.assert_awaited_once_with()
         close_storage.assert_awaited_once_with()
 

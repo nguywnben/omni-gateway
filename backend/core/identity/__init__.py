@@ -50,7 +50,15 @@ from core.identity.oidc_identity import (
     ResolvedOidcIdentity,
 )
 from core.identity.oidc_jwks import OidcJwk, OidcJwksCache, OidcJwksError
+from core.identity.oidc_login import (
+    OidcLoginDisabled,
+    OidcLoginError,
+    OidcLoginService,
+    close_oidc_login_service,
+    get_or_initialize_oidc_login_service,
+)
 from core.identity.oidc_policy import (
+    OIDC_CALLBACK_PATH,
     OIDC_POLICY_SCHEMA_VERSION,
     OidcClaimPolicy,
     OidcConfiguration,
@@ -144,7 +152,13 @@ __all__ = [
     "OidcJwk",
     "OidcJwksCache",
     "OidcJwksError",
+    "OidcLoginDisabled",
+    "OidcLoginError",
+    "OidcLoginService",
+    "close_oidc_login_service",
+    "get_or_initialize_oidc_login_service",
     "OIDC_POLICY_SCHEMA_VERSION",
+    "OIDC_CALLBACK_PATH",
     "OidcClaimPolicy",
     "OidcConfiguration",
     "OidcConfigurationError",

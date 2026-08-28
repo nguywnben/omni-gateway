@@ -28,6 +28,12 @@ RECOVERY_WINDOW_SECONDS = _env_int("PANEL_RECOVERY_WINDOW_SECONDS", 900, 60, 720
 RECOVERY_MAX_ATTEMPTS = _env_int("PANEL_RECOVERY_MAX_ATTEMPTS", 5, 3, 20)
 RECOVERY_MAX_TRACKED_CLIENTS = _env_int("PANEL_RECOVERY_MAX_TRACKED_CLIENTS", 10_000, 100, 100_000)
 _recovery_failures: OrderedDict[str, List[float]] = OrderedDict()
+OIDC_START_WINDOW_SECONDS = _env_int("OIDC_START_WINDOW_SECONDS", 300, 30, 3600)
+OIDC_START_MAX_ATTEMPTS = _env_int("OIDC_START_MAX_ATTEMPTS", 20, 3, 100)
+OIDC_START_MAX_TRACKED_CLIENTS = _env_int(
+    "OIDC_START_MAX_TRACKED_CLIENTS", 10_000, 100, 100_000
+)
+_oidc_starts: OrderedDict[str, List[float]] = OrderedDict()
 
 
 def _client_identity(request: Request) -> str:
@@ -122,6 +128,26 @@ def _record_recovery_failure(client_id: str) -> None:
 
 def _clear_recovery_failures(client_id: str) -> None:
     _recovery_failures.pop(client_id, None)
+
+
+def _assert_and_record_oidc_start(client_id: str) -> None:
+    """Bound transaction allocation per client before any IdP network work occurs."""
+    now = time.time()
+    cutoff = now - OIDC_START_WINDOW_SECONDS
+    for candidate, starts in list(_oidc_starts.items()):
+        if not starts or starts[-1] < cutoff:
+            _oidc_starts.pop(candidate, None)
+    starts = [timestamp for timestamp in _oidc_starts.get(client_id, []) if timestamp >= cutoff]
+    if len(starts) >= OIDC_START_MAX_ATTEMPTS:
+        raise HTTPException(
+            status_code=429,
+            detail="Too many OIDC sign-in attempts. Please wait before trying again.",
+        )
+    if client_id not in _oidc_starts and len(_oidc_starts) >= OIDC_START_MAX_TRACKED_CLIENTS:
+        _oidc_starts.popitem(last=False)
+    starts.append(now)
+    _oidc_starts[client_id] = starts
+    _oidc_starts.move_to_end(client_id)
 
 
 def _assert_recovery_ingress(request: Request) -> None:
