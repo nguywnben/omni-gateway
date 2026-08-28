@@ -263,6 +263,7 @@ class OidcJwksCache:
         self._expires_at = 0.0
         self._retry_after = 0.0
         self._retry_delay_seconds = min(5, max(1, policy.connect_timeout_seconds))
+        self._unknown_refresh_after = 0.0
         self._generation = 0
         self._refresh_attempt = 0
         self._lock = asyncio.Lock()
@@ -307,12 +308,14 @@ class OidcJwksCache:
         observed_generation = self._generation
         observed_attempt = self._refresh_attempt
         now = self._now()
-        if now < self._retry_after:
-            raise OidcJwksError
         if not force_refresh and self._fresh(now):
             return self._keys
+        if now < self._retry_after:
+            raise OidcJwksError
         async with self._lock:
             now = self._now()
+            if not force_refresh and self._fresh(now):
+                return self._keys
             if now < self._retry_after:
                 raise OidcJwksError
             if self._refresh_attempt != observed_attempt:
@@ -320,8 +323,6 @@ class OidcJwksCache:
                     return self._keys
                 raise OidcJwksError
             if force_refresh and self._generation != observed_generation and self._fresh(now):
-                return self._keys
-            if not force_refresh and self._fresh(now):
                 return self._keys
             self._refresh_attempt += 1
             try:
@@ -350,11 +351,15 @@ class OidcJwksCache:
         if type(refresh_if_missing) is not bool:
             raise OidcJwksError
         initial_generation = self._generation
+        had_snapshot = initial_generation > 0
         await self.get_keys()
         found = self._by_kid.get(normalized_kid)
         if found is not None or not refresh_if_missing:
             return found
-        if self._generation != initial_generation:
+        if had_snapshot and self._generation != initial_generation:
+            return None
+        if self._now() < self._unknown_refresh_after:
             return None
         await self.get_keys(force_refresh=True)
+        self._unknown_refresh_after = self._now() + self._retry_delay_seconds
         return self._by_kid.get(normalized_kid)

@@ -35,6 +35,11 @@ from core.identity.oidc_http import (
     OidcHttpError,
     validate_oidc_endpoint_url,
 )
+from core.identity.oidc_id_token import (
+    OidcIdTokenError,
+    OidcIdTokenVerifier,
+    VerifiedOidcIdToken,
+)
 from core.identity.oidc_jwks import OidcJwk, OidcJwksCache, OidcJwksError
 from core.identity.oidc_policy import (
     OIDC_POLICY_SCHEMA_VERSION,
@@ -113,6 +118,9 @@ __all__ = [
     "OidcHttpClient",
     "OidcHttpError",
     "validate_oidc_endpoint_url",
+    "OidcIdTokenError",
+    "OidcIdTokenVerifier",
+    "VerifiedOidcIdToken",
     "OidcJwk",
     "OidcJwksCache",
     "OidcJwksError",

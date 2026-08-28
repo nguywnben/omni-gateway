@@ -207,6 +207,38 @@ class OidcJwksCacheTests(unittest.IsolatedAsyncioTestCase):
         with self.assertRaises(OidcJwksError):
             await cache.get_key("x" * 129)
 
+    async def test_sequential_unknown_kids_share_a_bounded_refresh_cooldown(self):
+        now = [100.0]
+        client = QueueClient(
+            {"keys": [_rsa_key("old")]},
+            {"keys": [_rsa_key("still-old")]},
+            {"keys": [_rsa_key("latest-old")]},
+        )
+        cache = OidcJwksCache(_policy(), _discovery(), client, clock=lambda: now[0])
+        await cache.get_keys()
+
+        self.assertIsNone(await cache.get_key("attacker-kid-1"))
+        self.assertIsNone(await cache.get_key("attacker-kid-2"))
+        self.assertEqual(len(client.calls), 2)
+
+        now[0] = 105.0
+        self.assertIsNone(await cache.get_key("attacker-kid-3"))
+        self.assertEqual(len(client.calls), 3)
+
+    async def test_failed_unknown_kid_refresh_does_not_poison_fresh_known_keys(self):
+        client = QueueClient(
+            {"keys": [_rsa_key("known")]},
+            RuntimeError("provider detail must not escape"),
+        )
+        cache = OidcJwksCache(_policy(), _discovery(), client, clock=lambda: 100.0)
+        await cache.get_keys()
+
+        with self.assertRaisesRegex(OidcJwksError, "OIDC JWKS failed"):
+            await cache.get_key("unknown")
+
+        self.assertEqual((await cache.get_key("known")).kid, "known")
+        self.assertEqual(len(client.calls), 2)
+
     async def test_poisoned_rotation_never_replaces_last_valid_snapshot(self):
         now = [100.0]
         client = QueueClient(
