@@ -58,16 +58,13 @@ async def _default_connector(
     server_hostname: str,
     connect_timeout: int,
 ) -> tuple[asyncio.StreamReader, asyncio.StreamWriter]:
-    return await asyncio.wait_for(
-        asyncio.open_connection(
-            address,
-            port,
-            ssl=ssl_context,
-            server_hostname=server_hostname,
-            ssl_handshake_timeout=connect_timeout,
-            limit=_MAX_HEADER_BYTES,
-        ),
-        timeout=connect_timeout,
+    return await asyncio.open_connection(
+        address,
+        port,
+        ssl=ssl_context,
+        server_hostname=server_hostname,
+        ssl_handshake_timeout=connect_timeout,
+        limit=_MAX_HEADER_BYTES,
     )
 
 
@@ -335,7 +332,7 @@ def _strict_json(body: bytes) -> object:
             parse_constant=reject_constant,
             object_pairs_hook=reject_duplicate_keys,
         )
-    except (UnicodeError, ValueError, json.JSONDecodeError) as exc:
+    except (UnicodeError, ValueError) as exc:
         raise OidcHttpError from exc
 
 
@@ -396,8 +393,6 @@ class OidcHttpClient:
                 )
             except asyncio.CancelledError:
                 raise
-            except OidcHttpError:
-                continue
             except Exception:
                 continue
         raise OidcHttpError

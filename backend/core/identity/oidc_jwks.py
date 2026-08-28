@@ -346,10 +346,7 @@ class OidcJwksCache:
         *,
         refresh_if_missing: bool = True,
     ) -> OidcJwk | None:
-        try:
-            normalized_kid = _visible_text(kid, maximum=_MAX_KID_LENGTH)
-        except OidcJwksError:
-            raise
+        normalized_kid = _visible_text(kid, maximum=_MAX_KID_LENGTH)
         if type(refresh_if_missing) is not bool:
             raise OidcJwksError
         initial_generation = self._generation
