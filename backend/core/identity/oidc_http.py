@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import base64
 import ipaddress
 import json
 import re
@@ -10,7 +11,7 @@ import socket
 import ssl
 from collections.abc import Awaitable, Callable, Sequence
 from typing import Any
-from urllib.parse import SplitResult, urlsplit
+from urllib.parse import SplitResult, quote_plus, urlencode, urlsplit
 
 from core.identity.oidc_policy import OidcPolicy
 
@@ -21,7 +22,10 @@ _MAX_HEADERS = 64
 _MAX_CHUNK_LINE_BYTES = 128
 _MAX_TRAILER_BYTES = 8_192
 _MAX_TRAILERS = 32
+_MAX_FORM_FIELDS = 16
+_MAX_FORM_BODY_BYTES = 16_384
 _HEADER_NAME_PATTERN = re.compile(rb"^[!#$%&'*+.^_`|~0-9A-Za-z-]+$")
+_FORM_NAME_PATTERN = re.compile(r"^[A-Za-z][A-Za-z0-9_]{0,63}$")
 
 Resolver = Callable[[str, int], Awaitable[Sequence[str]]]
 Connector = Callable[..., Awaitable[tuple[asyncio.StreamReader, Any]]]
@@ -336,6 +340,48 @@ def _strict_json(body: bytes) -> object:
         raise OidcHttpError from exc
 
 
+def _form_body(fields: object) -> bytes:
+    if type(fields) is not tuple or not 1 <= len(fields) <= _MAX_FORM_FIELDS:
+        raise OidcHttpError
+    normalized: list[tuple[str, str]] = []
+    names: set[str] = set()
+    for item in fields:
+        if type(item) is not tuple or len(item) != 2:
+            raise OidcHttpError
+        name, value = item
+        if (
+            type(name) is not str
+            or not _FORM_NAME_PATTERN.fullmatch(name)
+            or name in names
+            or type(value) is not str
+            or not value
+            or any(ord(character) < 0x20 or ord(character) == 0x7F for character in value)
+        ):
+            raise OidcHttpError
+        names.add(name)
+        normalized.append((name, value))
+    encoded = urlencode(normalized).encode("ascii")
+    if len(encoded) > _MAX_FORM_BODY_BYTES:
+        raise OidcHttpError
+    return encoded
+
+
+def _basic_authorization(value: object) -> str:
+    if type(value) is not tuple or len(value) != 2:
+        raise OidcHttpError
+    client_id, client_secret = value
+    if any(
+        type(item) is not str
+        or not item
+        or len(item) > 4_096
+        or any(ord(character) < 0x20 or ord(character) == 0x7F for character in item)
+        for item in (client_id, client_secret)
+    ):
+        raise OidcHttpError
+    credentials = f"{quote_plus(client_id)}:{quote_plus(client_secret)}".encode("ascii")
+    return base64.b64encode(credentials).decode("ascii")
+
+
 class OidcHttpClient:
     """Fetch OIDC JSON without redirects, proxies, compression, or DNS re-resolution."""
 
@@ -398,9 +444,8 @@ class OidcHttpClient:
         raise OidcHttpError
 
     async def get_json(self, url: str) -> object:
-        parsed = _endpoint_url(url, self._policy)
-        reader, writer = await self._connect(parsed)
         try:
+            parsed = _endpoint_url(url, self._policy)
             host_header = parsed.netloc
             target = parsed.path + (f"?{parsed.query}" if parsed.query else "")
             request = (
@@ -412,6 +457,50 @@ class OidcHttpClient:
                 "User-Agent: Omni-Gateway-OIDC/1\r\n"
                 "\r\n"
             ).encode("ascii")
+            return await self._send_json(parsed, request)
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            raise OidcHttpError from None
+
+    async def post_form_json(
+        self,
+        url: str,
+        fields: tuple[tuple[str, str], ...],
+        *,
+        basic_auth: tuple[str, str] | None = None,
+    ) -> object:
+        """POST one bounded OAuth form without redirects or ambient credentials."""
+        try:
+            parsed = _endpoint_url(url, self._policy)
+            body = _form_body(fields)
+            authorization = (
+                f"Authorization: Basic {_basic_authorization(basic_auth)}\r\n"
+                if basic_auth is not None
+                else ""
+            )
+            target = parsed.path + (f"?{parsed.query}" if parsed.query else "")
+            request = (
+                f"POST {target} HTTP/1.1\r\n"
+                f"Host: {parsed.netloc}\r\n"
+                "Accept: application/json\r\n"
+                "Accept-Encoding: identity\r\n"
+                "Content-Type: application/x-www-form-urlencoded\r\n"
+                f"Content-Length: {len(body)}\r\n"
+                f"{authorization}"
+                "Connection: close\r\n"
+                "User-Agent: Omni-Gateway-OIDC/1\r\n"
+                "\r\n"
+            ).encode("ascii") + body
+            return await self._send_json(parsed, request)
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            raise OidcHttpError from None
+
+    async def _send_json(self, parsed: SplitResult, request: bytes) -> object:
+        reader, writer = await self._connect(parsed)
+        try:
             writer.write(request)
             await _timed(writer.drain(), self._policy.read_timeout_seconds)
             raw_headers = await _read_headers(reader, self._policy.read_timeout_seconds)
@@ -425,12 +514,6 @@ class OidcHttpClient:
                 maximum=self._policy.max_response_bytes,
             )
             return _strict_json(body)
-        except asyncio.CancelledError:
-            raise
-        except OidcHttpError:
-            raise
-        except Exception as exc:
-            raise OidcHttpError from exc
         finally:
             writer.close()
             try:

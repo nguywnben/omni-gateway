@@ -1,9 +1,11 @@
 import asyncio
+import base64
 import ssl
 import sys
 import unittest
 from datetime import datetime, timezone
 from pathlib import Path
+from urllib.parse import parse_qs
 
 BACKEND_DIR = Path(__file__).resolve().parents[1]
 if str(BACKEND_DIR) not in sys.path:
@@ -292,6 +294,88 @@ class OidcHttpClientTests(unittest.IsolatedAsyncioTestCase):
             )
             with self.assertRaises(OidcHttpError):
                 await client.get_json("https://identity.example.com/metadata")
+
+    async def test_post_form_json_uses_bounded_body_and_oauth_basic_auth(self):
+        writer = FakeWriter()
+        body = b'{"token_type":"Bearer","access_token":"opaque","id_token":"signed"}'
+
+        async def connector(address, port, **kwargs):
+            return _reader(_response(body)), writer
+
+        client = OidcHttpClient(
+            _policy(),
+            resolver=lambda host, port: asyncio.sleep(0, result=("93.184.216.34",)),
+            connector=connector,
+        )
+        payload = await client.post_form_json(
+            "https://identity.example.com/token?tenant=enterprise",
+            (
+                ("grant_type", "authorization_code"),
+                ("code", "provider-code"),
+                ("redirect_uri", "https://gateway.example.com/auth/oidc/callback"),
+                ("code_verifier", "A" * 43),
+            ),
+            basic_auth=("client:id", "secret:value"),
+        )
+
+        headers, encoded_body = writer.request.split(b"\r\n\r\n", 1)
+        request_line = headers.split(b"\r\n", 1)[0]
+        self.assertEqual(
+            request_line,
+            b"POST /token?tenant=enterprise HTTP/1.1",
+        )
+        self.assertNotIn(b"provider-code", request_line)
+        self.assertNotIn(b"secret", request_line)
+        self.assertIn(b"Content-Type: application/x-www-form-urlencoded\r\n", headers)
+        self.assertIn(f"Content-Length: {len(encoded_body)}\r\n".encode("ascii"), headers)
+        authorization = next(
+            line.removeprefix(b"Authorization: Basic ")
+            for line in headers.split(b"\r\n")
+            if line.startswith(b"Authorization: Basic ")
+        )
+        self.assertEqual(
+            base64.b64decode(authorization),
+            b"client%3Aid:secret%3Avalue",
+        )
+        self.assertEqual(
+            parse_qs(encoded_body.decode("ascii"), strict_parsing=True),
+            {
+                "grant_type": ["authorization_code"],
+                "code": ["provider-code"],
+                "redirect_uri": ["https://gateway.example.com/auth/oidc/callback"],
+                "code_verifier": ["A" * 43],
+            },
+        )
+        self.assertEqual(payload["id_token"], "signed")
+        self.assertTrue(writer.closed)
+
+    async def test_post_form_json_rejects_malformed_or_oversized_inputs_before_dns(self):
+        resolver_called = False
+
+        async def resolver(host, port):
+            nonlocal resolver_called
+            resolver_called = True
+            return ("93.184.216.34",)
+
+        client = OidcHttpClient(_policy(), resolver=resolver)
+        invalid_requests = (
+            (("not-a-pair",),),
+            (("code", "one"), ("code", "two")),
+            (("bad field", "value"),),
+            (("code", "line\nbreak"),),
+            (("code", "x" * 16_385),),
+            tuple((f"field_{index}", "value") for index in range(17)),
+        )
+        for fields in invalid_requests:
+            with self.subTest(fields_type=type(fields).__name__):
+                with self.assertRaisesRegex(OidcHttpError, "OIDC HTTPS request failed") as caught:
+                    await client.post_form_json(
+                        "https://identity.example.com/token",
+                        fields,
+                    )
+                self.assertIsNone(caught.exception.__cause__)
+                self.assertTrue(caught.exception.__suppress_context__)
+        self.assertFalse(resolver_called)
 
 
 if __name__ == "__main__":
