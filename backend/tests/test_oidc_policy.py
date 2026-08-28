@@ -209,6 +209,18 @@ class OidcPolicyTests(unittest.TestCase):
                         environ=_enabled_environment() | {"OIDC_GROUPS_CLAIM": claim},
                     )
 
+        for claims in (
+            {"OIDC_GROUPS_CLAIM": "sub"},
+            {"OIDC_GROUPS_CLAIM": "iss"},
+            {
+                "OIDC_USERNAME_CLAIM": "profile",
+                "OIDC_DISPLAY_NAME_CLAIM": "profile",
+            },
+        ):
+            with self.subTest(claims=claims):
+                with self.assertRaisesRegex(OidcConfigurationError, "claim"):
+                    load_oidc_configuration(_revision(), environ=_enabled_environment() | claims)
+
     def test_endpoint_origins_and_private_hosts_reject_wildcards_and_urls(self):
         environment = _enabled_environment() | {
             "OIDC_ALLOWED_ENDPOINT_ORIGINS": (

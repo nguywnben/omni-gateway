@@ -26,6 +26,24 @@ _MAX_ENDPOINT_ORIGINS = 16
 _MAX_PRIVATE_HOSTS = 32
 _ALLOWED_ID_TOKEN_ALGORITHMS = frozenset({"RS256", "PS256", "ES256"})
 _CLAIM_NAME_PATTERN = re.compile(r"^[A-Za-z_][A-Za-z0-9_.:-]{0,63}$")
+_OIDC_PROTOCOL_CLAIMS = frozenset(
+    {
+        "acr",
+        "amr",
+        "at_hash",
+        "aud",
+        "auth_time",
+        "azp",
+        "c_hash",
+        "exp",
+        "iat",
+        "iss",
+        "nbf",
+        "nonce",
+        "s_hash",
+        "sub",
+    }
+)
 _SCOPE_PATTERN = re.compile(r"^[\x21\x23-\x5b\x5d-\x7e]{1,64}$")
 _HOST_LABEL_PATTERN = re.compile(r"^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$")
 
@@ -43,17 +61,22 @@ class OidcClaimPolicy:
     groups: str
 
     def __post_init__(self) -> None:
-        for value in (
+        values = (
             self.subject,
             self.username,
             self.display_name,
             self.email,
             self.groups,
-        ):
+        )
+        for value in values:
             if type(value) is not str or not _CLAIM_NAME_PATTERN.fullmatch(value):
                 raise OidcConfigurationError("OIDC claim configuration is invalid.")
         if self.subject != "sub":
             raise OidcConfigurationError("The OIDC subject claim must remain 'sub'.")
+        if len(values) != len(set(values)) or any(
+            value in _OIDC_PROTOCOL_CLAIMS for value in values[1:]
+        ):
+            raise OidcConfigurationError("OIDC claim configuration is invalid.")
 
 
 @dataclass(frozen=True, slots=True)
