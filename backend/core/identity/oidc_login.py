@@ -51,10 +51,7 @@ def _decode_master_key(value: object) -> bytes:
         decoded = base64.b64decode(value, altchars=b"-_", validate=True)
     except (ValueError, binascii.Error) as exc:
         raise OidcLoginError from exc
-    if (
-        len(decoded) != _OIDC_TRANSACTION_MASTER_KEY_BYTES
-        or _encode_master_key(decoded) != value
-    ):
+    if len(decoded) != _OIDC_TRANSACTION_MASTER_KEY_BYTES or _encode_master_key(decoded) != value:
         raise OidcLoginError
     return decoded
 
@@ -62,9 +59,7 @@ def _decode_master_key(value: object) -> bytes:
 async def _transaction_hmac_key(storage: Any) -> bytes:
     encoded = await storage.get_config(_OIDC_TRANSACTION_MASTER_KEY_CONFIG, None)
     if encoded is None:
-        generated = _encode_master_key(
-            secrets.token_bytes(_OIDC_TRANSACTION_MASTER_KEY_BYTES)
-        )
+        generated = _encode_master_key(secrets.token_bytes(_OIDC_TRANSACTION_MASTER_KEY_BYTES))
         if not await storage.set_config(_OIDC_TRANSACTION_MASTER_KEY_CONFIG, generated):
             raise OidcLoginError
         encoded = await storage.get_config(_OIDC_TRANSACTION_MASTER_KEY_CONFIG, None)

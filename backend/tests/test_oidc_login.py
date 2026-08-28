@@ -38,9 +38,7 @@ class OidcLoginServiceTests(unittest.IsolatedAsyncioTestCase):
                 "OIDC_ISSUER": "https://identity.example.com/tenant",
                 "OIDC_CLIENT_ID": "omni-gateway",
                 "OIDC_CLIENT_SECRET": "enterprise-client-secret",
-                "OIDC_REDIRECT_URI": (
-                    "https://gateway.example.com/api/identity/oidc/callback"
-                ),
+                "OIDC_REDIRECT_URI": ("https://gateway.example.com/api/identity/oidc/callback"),
                 "OIDC_ROLE_MAPPINGS": '{"operators":"operator"}',
             },
         )
@@ -95,9 +93,7 @@ class OidcLoginServiceTests(unittest.IsolatedAsyncioTestCase):
             ),
             patch("core.identity.oidc_login.OidcJwksCache", return_value=MagicMock()),
             patch("core.identity.oidc_login.OidcIdTokenVerifier", return_value=MagicMock()),
-            patch(
-                "core.identity.oidc_login.OidcAuthorizationCodeFlow", return_value=flow
-            ),
+            patch("core.identity.oidc_login.OidcAuthorizationCodeFlow", return_value=flow),
             patch("core.identity.oidc_login.OidcIdentityResolver", return_value=resolver),
         ):
             self.assertNotIn("enterprise-client-secret", repr(service))

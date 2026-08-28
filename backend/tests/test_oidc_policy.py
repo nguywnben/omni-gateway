@@ -87,9 +87,9 @@ class OidcPolicyTests(unittest.TestCase):
             '{"":"viewer"}',
             '{" bad":"viewer"}',
             '{"gateway":"administrator"}',
-            '[]',
-            '{broken',
-            "{" + ",".join(f'\"group-{index}\":\"viewer\"' for index in range(65)) + "}",
+            "[]",
+            "{broken",
+            "{" + ",".join(f'"group-{index}":"viewer"' for index in range(65)) + "}",
         )
         for mappings in invalid_mappings:
             with self.subTest(mappings=mappings[:80]):

@@ -73,7 +73,9 @@ class OidcIdentityResolverTests(unittest.IsolatedAsyncioTestCase):
         self.temp_dir = workspace_temp_directory()
         temp_path = self.temp_dir.__enter__()
         self.addCleanup(self.temp_dir.__exit__, None, None, None)
-        self.repository = SQLiteIdentityRepository(Path(temp_path) / "identity.db", clock=lambda: NOW)
+        self.repository = SQLiteIdentityRepository(
+            Path(temp_path) / "identity.db", clock=lambda: NOW
+        )
         await self.repository.initialize()
 
     async def test_direct_exact_subject_binding_wins_over_claims(self):
@@ -119,7 +121,9 @@ class OidcIdentityResolverTests(unittest.IsolatedAsyncioTestCase):
 
         for groups in ((), ("unknown",), ("operators", "viewers"), ("",), ("x" * 257,)):
             with self.subTest(groups=groups), self.assertRaises(OidcIdentityResolutionError):
-                await resolver.resolve(_token(subject=f"subject-{len(groups)}-{groups[:1]}", groups=groups))
+                await resolver.resolve(
+                    _token(subject=f"subject-{len(groups)}-{groups[:1]}", groups=groups)
+                )
 
     async def test_same_role_matches_are_not_ambiguous(self):
         resolver = OidcIdentityResolver(
@@ -147,7 +151,9 @@ class OidcIdentityResolverTests(unittest.IsolatedAsyncioTestCase):
         stored = await self.repository.get_identity(created.identity.identity_id)
 
         self.assertIs(resolved.principal.role, ManagementRole.VIEWER)
-        self.assertGreater(resolved.identity_authorization_epoch, created.identity.authorization_epoch)
+        self.assertGreater(
+            resolved.identity_authorization_epoch, created.identity.authorization_epoch
+        )
         self.assertIs(stored.binding.role, ManagementRole.VIEWER)
 
     async def test_disabled_identity_and_stale_policy_revision_cannot_authenticate(self):
