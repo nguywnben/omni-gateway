@@ -44,6 +44,11 @@ from core.identity.oidc_id_token import (
     OidcIdTokenVerifier,
     VerifiedOidcIdToken,
 )
+from core.identity.oidc_identity import (
+    OidcIdentityResolutionError,
+    OidcIdentityResolver,
+    ResolvedOidcIdentity,
+)
 from core.identity.oidc_jwks import OidcJwk, OidcJwksCache, OidcJwksError
 from core.identity.oidc_policy import (
     OIDC_POLICY_SCHEMA_VERSION,
@@ -133,6 +138,9 @@ __all__ = [
     "OidcIdTokenError",
     "OidcIdTokenVerifier",
     "VerifiedOidcIdToken",
+    "OidcIdentityResolutionError",
+    "OidcIdentityResolver",
+    "ResolvedOidcIdentity",
     "OidcJwk",
     "OidcJwksCache",
     "OidcJwksError",

@@ -73,7 +73,7 @@ def _policy(**environment_overrides):
         "OIDC_ISSUER": _ISSUER,
         "OIDC_CLIENT_ID": _CLIENT_ID,
         "OIDC_CLIENT_SECRET": "enterprise-client-secret",
-        "OIDC_REDIRECT_URI": "https://gateway.example.com/auth/oidc/callback",
+        "OIDC_REDIRECT_URI": "https://gateway.example.com/api/identity/oidc/callback",
         "OIDC_ID_TOKEN_SIGNING_ALGORITHMS": "RS256,PS256,ES256",
         "OIDC_CLOCK_SKEW_SECONDS": "60",
         "OIDC_MAX_ID_TOKEN_AGE_SECONDS": "300",

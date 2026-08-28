@@ -40,7 +40,7 @@ def _policy():
             "OIDC_ISSUER": _ISSUER,
             "OIDC_CLIENT_ID": "omni-gateway",
             "OIDC_CLIENT_SECRET": "enterprise-client-secret",
-            "OIDC_REDIRECT_URI": "https://gateway.example.com/auth/oidc/callback",
+            "OIDC_REDIRECT_URI": "https://gateway.example.com/api/identity/oidc/callback",
             "OIDC_SCOPES": "openid profile email",
         },
     ).policy
@@ -98,7 +98,7 @@ class OidcAuthorizationTransactionTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(parameters["client_id"], ["omni-gateway"])
         self.assertEqual(
             parameters["redirect_uri"],
-            ["https://gateway.example.com/auth/oidc/callback"],
+            ["https://gateway.example.com/api/identity/oidc/callback"],
         )
         self.assertEqual(parameters["scope"], ["openid profile email"])
         self.assertEqual(parameters["state"], [_STATE])

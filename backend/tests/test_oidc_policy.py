@@ -27,7 +27,7 @@ def _enabled_environment() -> dict[str, str]:
         "OIDC_ISSUER": "https://identity.example.com/tenant",
         "OIDC_CLIENT_ID": "omni-gateway",
         "OIDC_CLIENT_SECRET": "enterprise-client-secret",
-        "OIDC_REDIRECT_URI": "https://gateway.example.com/auth/oidc/callback",
+        "OIDC_REDIRECT_URI": "https://gateway.example.com/api/identity/oidc/callback",
     }
 
 
@@ -50,6 +50,7 @@ class OidcPolicyTests(unittest.TestCase):
         self.assertEqual(configuration.policy.id_token_signing_algorithms, ("RS256",))
         self.assertEqual(configuration.policy.claims.subject, "sub")
         self.assertEqual(configuration.policy.claims.groups, "groups")
+        self.assertEqual(configuration.policy.role_mappings, ())
         self.assertEqual(configuration.policy.clock_skew_seconds, 60)
         self.assertEqual(configuration.policy.max_id_token_age_seconds, 300)
         self.assertEqual(
@@ -57,6 +58,59 @@ class OidcPolicyTests(unittest.TestCase):
             ("https://identity.example.com",),
         )
         self.assertTrue(configuration.secret_configured)
+
+    def test_role_mappings_are_explicit_bounded_and_never_assign_owner(self):
+        configuration = load_oidc_configuration(
+            _revision(),
+            environ=_enabled_environment()
+            | {
+                "OIDC_ROLE_MAPPINGS": (
+                    '{"gateway-viewers":"viewer",'
+                    '"gateway-operators":"operator",'
+                    '"gateway-security":"security_admin"}'
+                )
+            },
+        )
+
+        self.assertEqual(
+            configuration.policy.role_mappings,
+            (
+                ("gateway-operators", "operator"),
+                ("gateway-security", "security_admin"),
+                ("gateway-viewers", "viewer"),
+            ),
+        )
+
+        invalid_mappings = (
+            '{"gateway-owner":"owner"}',
+            '{"gateway-viewers":"viewer","gateway-viewers":"operator"}',
+            '{"":"viewer"}',
+            '{" bad":"viewer"}',
+            '{"gateway":"administrator"}',
+            '[]',
+            '{broken',
+            "{" + ",".join(f'\"group-{index}\":\"viewer\"' for index in range(65)) + "}",
+        )
+        for mappings in invalid_mappings:
+            with self.subTest(mappings=mappings[:80]):
+                with self.assertRaisesRegex(OidcConfigurationError, "role mapping"):
+                    load_oidc_configuration(
+                        _revision(),
+                        environ=_enabled_environment() | {"OIDC_ROLE_MAPPINGS": mappings},
+                    )
+
+    def test_callback_path_is_fixed_to_the_registered_gateway_route(self):
+        for redirect_uri in (
+            "https://gateway.example.com/auth/oidc/callback",
+            "https://gateway.example.com/api/identity/oidc/callback/",
+            "https://gateway.example.com/api/identity/other",
+        ):
+            with self.subTest(redirect_uri=redirect_uri):
+                with self.assertRaisesRegex(OidcConfigurationError, "callback"):
+                    load_oidc_configuration(
+                        _revision(),
+                        environ=_enabled_environment() | {"OIDC_REDIRECT_URI": redirect_uri},
+                    )
 
     def test_secret_is_never_in_repr_str_or_serialized_policy(self):
         secret = "secret-value-that-must-not-leak"
@@ -164,10 +218,10 @@ class OidcPolicyTests(unittest.TestCase):
                     )
 
         invalid_redirects = (
-            "http://gateway.example.com/auth/oidc/callback",
+            "http://gateway.example.com/api/identity/oidc/callback",
             "https://gateway.example.com",
-            "https://gateway.example.com/auth/oidc/callback?next=/admin",
-            "https://gateway.example.com/auth/oidc/callback#fragment",
+            "https://gateway.example.com/api/identity/oidc/callback?next=/admin",
+            "https://gateway.example.com/api/identity/oidc/callback#fragment",
             "https://gateway.example.com/auth/oidc/cállback",
         )
         for redirect in invalid_redirects:

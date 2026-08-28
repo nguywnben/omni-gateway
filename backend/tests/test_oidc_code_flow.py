@@ -44,7 +44,7 @@ def _configuration(*, revision_number=1):
             "OIDC_ISSUER": _ISSUER,
             "OIDC_CLIENT_ID": _CLIENT_ID,
             "OIDC_CLIENT_SECRET": _CLIENT_SECRET,
-            "OIDC_REDIRECT_URI": "https://gateway.example.com/auth/oidc/callback",
+            "OIDC_REDIRECT_URI": "https://gateway.example.com/api/identity/oidc/callback",
         },
     )
 
@@ -191,7 +191,7 @@ class OidcAuthorizationCodeFlowTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(field_map["code"], "provider-code")
         self.assertEqual(
             field_map["redirect_uri"],
-            "https://gateway.example.com/auth/oidc/callback",
+            "https://gateway.example.com/api/identity/oidc/callback",
         )
         self.assertRegex(field_map["code_verifier"], r"^[A-Za-z0-9_-]{43}$")
         self.assertEqual(basic_auth, (_CLIENT_ID, _CLIENT_SECRET))

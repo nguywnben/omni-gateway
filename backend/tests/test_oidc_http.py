@@ -22,7 +22,7 @@ def _policy(**environment_overrides):
         "OIDC_ISSUER": "https://identity.example.com/tenant",
         "OIDC_CLIENT_ID": "omni-gateway",
         "OIDC_CLIENT_SECRET": "enterprise-client-secret",
-        "OIDC_REDIRECT_URI": "https://gateway.example.com/auth/oidc/callback",
+        "OIDC_REDIRECT_URI": "https://gateway.example.com/api/identity/oidc/callback",
     } | environment_overrides
     revision = OidcPolicyRevisionRecord.initial(
         now=datetime(2026, 8, 27, 12, 0, tzinfo=timezone.utc)
@@ -312,7 +312,7 @@ class OidcHttpClientTests(unittest.IsolatedAsyncioTestCase):
             (
                 ("grant_type", "authorization_code"),
                 ("code", "provider-code"),
-                ("redirect_uri", "https://gateway.example.com/auth/oidc/callback"),
+                ("redirect_uri", "https://gateway.example.com/api/identity/oidc/callback"),
                 ("code_verifier", "A" * 43),
             ),
             basic_auth=("client:id", "secret:value"),
@@ -342,7 +342,7 @@ class OidcHttpClientTests(unittest.IsolatedAsyncioTestCase):
             {
                 "grant_type": ["authorization_code"],
                 "code": ["provider-code"],
-                "redirect_uri": ["https://gateway.example.com/auth/oidc/callback"],
+                "redirect_uri": ["https://gateway.example.com/api/identity/oidc/callback"],
                 "code_verifier": ["A" * 43],
             },
         )

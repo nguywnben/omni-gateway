@@ -55,7 +55,7 @@ def _policy(**environment_overrides):
         "OIDC_ISSUER": "https://identity.example.com/tenant",
         "OIDC_CLIENT_ID": "omni-gateway",
         "OIDC_CLIENT_SECRET": "enterprise-client-secret",
-        "OIDC_REDIRECT_URI": "https://gateway.example.com/auth/oidc/callback",
+        "OIDC_REDIRECT_URI": "https://gateway.example.com/api/identity/oidc/callback",
         "OIDC_ID_TOKEN_SIGNING_ALGORITHMS": "RS256,ES256",
         "OIDC_JWKS_TTL_SECONDS": "30",
     } | environment_overrides

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import ipaddress
+import json
 import os
 import re
 import stat
@@ -15,6 +16,7 @@ from core.identity.repository import OidcPolicyRevisionRecord
 from pydantic import SecretStr
 
 OIDC_POLICY_SCHEMA_VERSION = 1
+OIDC_CALLBACK_PATH = "/api/identity/oidc/callback"
 
 _MAX_URL_LENGTH = 2_048
 _MAX_CLIENT_ID_LENGTH = 256
@@ -24,6 +26,10 @@ _MAX_CLIENT_SECRET_FILE_BYTES = 4_096
 _MAX_SCOPES = 16
 _MAX_ENDPOINT_ORIGINS = 16
 _MAX_PRIVATE_HOSTS = 32
+_MAX_ROLE_MAPPINGS = 64
+_MAX_ROLE_MAPPINGS_BYTES = 16_384
+_MAX_ROLE_MAPPING_VALUE_LENGTH = 256
+_ALLOWED_CLAIM_MAPPED_ROLES = frozenset({"viewer", "operator", "security_admin"})
 _ALLOWED_ID_TOKEN_ALGORITHMS = frozenset({"RS256", "PS256", "ES256"})
 _CLAIM_NAME_PATTERN = re.compile(r"^[A-Za-z_][A-Za-z0-9_.:-]{0,63}$")
 _OIDC_PROTOCOL_CLAIMS = frozenset(
@@ -91,6 +97,7 @@ class OidcPolicy:
     scopes: tuple[str, ...]
     id_token_signing_algorithms: tuple[str, ...]
     claims: OidcClaimPolicy
+    role_mappings: tuple[tuple[str, str], ...]
     allowed_endpoint_origins: tuple[str, ...]
     allowed_private_hosts: tuple[str, ...]
     connect_timeout_seconds: int
@@ -114,6 +121,29 @@ class OidcPolicy:
             raise OidcConfigurationError("OIDC enabled state is invalid.")
         if type(self.claims) is not OidcClaimPolicy:
             raise OidcConfigurationError("OIDC claim policy is invalid.")
+        if (
+            type(self.role_mappings) is not tuple
+            or len(self.role_mappings) > _MAX_ROLE_MAPPINGS
+            or self.role_mappings != tuple(sorted(self.role_mappings))
+        ):
+            raise OidcConfigurationError("OIDC role mapping configuration is invalid.")
+        seen_groups: set[str] = set()
+        for mapping in self.role_mappings:
+            if type(mapping) is not tuple or len(mapping) != 2:
+                raise OidcConfigurationError("OIDC role mapping configuration is invalid.")
+            group, role = mapping
+            if (
+                type(group) is not str
+                or not group
+                or group != group.strip()
+                or len(group) > _MAX_ROLE_MAPPING_VALUE_LENGTH
+                or any(ord(character) < 0x20 or ord(character) == 0x7F for character in group)
+                or group in seen_groups
+                or type(role) is not str
+                or role not in _ALLOWED_CLAIM_MAPPED_ROLES
+            ):
+                raise OidcConfigurationError("OIDC role mapping configuration is invalid.")
+            seen_groups.add(group)
         for value, minimum, maximum, label in (
             (self.connect_timeout_seconds, 1, 30, "connect timeout"),
             (self.read_timeout_seconds, 1, 60, "read timeout"),
@@ -134,6 +164,7 @@ class OidcPolicy:
                     self.redirect_uri,
                     self.scopes,
                     self.id_token_signing_algorithms,
+                    self.role_mappings,
                     self.allowed_endpoint_origins,
                     self.allowed_private_hosts,
                 )
@@ -151,7 +182,7 @@ class OidcPolicy:
         redirect = _split_https_url(self.redirect_uri, "OIDC_REDIRECT_URI")
         if issuer.query:
             raise OidcConfigurationError("OIDC issuer is invalid.")
-        if redirect.query or redirect.path in {"", "/"} or not redirect.path.startswith("/"):
+        if redirect.query or redirect.path != OIDC_CALLBACK_PATH:
             raise OidcConfigurationError("OIDC redirect URI is invalid.")
         if (
             not self.client_id
@@ -308,9 +339,50 @@ def _issuer_url(environment: Mapping[str, str]) -> tuple[str, str]:
 def _redirect_url(environment: Mapping[str, str]) -> str:
     value = _required_text(environment, "OIDC_REDIRECT_URI", maximum=_MAX_URL_LENGTH)
     parsed = _split_https_url(value, "OIDC_REDIRECT_URI")
-    if parsed.query or parsed.path in {"", "/"} or not parsed.path.startswith("/"):
+    if parsed.query or parsed.path != OIDC_CALLBACK_PATH:
         raise OidcConfigurationError("OIDC_REDIRECT_URI must be an exact HTTPS callback URL.")
     return value
+
+
+def _role_mappings(environment: Mapping[str, str]) -> tuple[tuple[str, str], ...]:
+    raw_value = environment.get("OIDC_ROLE_MAPPINGS", "{}")
+    if type(raw_value) is not str or len(raw_value.encode("utf-8")) > _MAX_ROLE_MAPPINGS_BYTES:
+        raise OidcConfigurationError("OIDC role mapping configuration is invalid.")
+
+    duplicate = False
+
+    def pairs_hook(pairs: list[tuple[object, object]]) -> dict[object, object]:
+        nonlocal duplicate
+        result: dict[object, object] = {}
+        for key, value in pairs:
+            if key in result:
+                duplicate = True
+            result[key] = value
+        return result
+
+    try:
+        parsed = json.loads(raw_value, object_pairs_hook=pairs_hook)
+    except (json.JSONDecodeError, UnicodeError) as exc:
+        raise OidcConfigurationError("OIDC role mapping configuration is invalid.") from exc
+    if type(parsed) is not dict or duplicate or len(parsed) > _MAX_ROLE_MAPPINGS:
+        raise OidcConfigurationError("OIDC role mapping configuration is invalid.")
+    mappings = tuple(sorted(parsed.items()))
+    try:
+        # Reuse the immutable policy validator without accepting alternate JSON shapes.
+        for group, role in mappings:
+            if (
+                type(group) is not str
+                or not group
+                or group != group.strip()
+                or len(group) > _MAX_ROLE_MAPPING_VALUE_LENGTH
+                or any(ord(character) < 0x20 or ord(character) == 0x7F for character in group)
+                or type(role) is not str
+                or role not in _ALLOWED_CLAIM_MAPPED_ROLES
+            ):
+                raise ValueError
+    except (TypeError, ValueError) as exc:
+        raise OidcConfigurationError("OIDC role mapping configuration is invalid.") from exc
+    return mappings
 
 
 def _origin(parsed: SplitResult) -> str:
@@ -528,6 +600,7 @@ def _disabled_policy(revision: OidcPolicyRevisionRecord) -> OidcPolicy:
         scopes=(),
         id_token_signing_algorithms=(),
         claims=OidcClaimPolicy("sub", "preferred_username", "name", "email", "groups"),
+        role_mappings=(),
         allowed_endpoint_origins=(),
         allowed_private_hosts=(),
         connect_timeout_seconds=5,
@@ -569,6 +642,7 @@ def load_oidc_configuration(
         scopes=_scope_policy(environment),
         id_token_signing_algorithms=_algorithm_policy(environment),
         claims=_claim_policy(environment),
+        role_mappings=_role_mappings(environment),
         allowed_endpoint_origins=_endpoint_origins(environment, issuer_origin),
         allowed_private_hosts=_private_hosts(environment),
         connect_timeout_seconds=_bounded_integer(
