@@ -501,16 +501,28 @@ async def verify_panel_token(
     return token
 
 
+def _trusted_route_template(request: Request) -> str | None:
+    """Return FastAPI's effective template while preserving a fail-closed fallback."""
+    route = request.scope.get("route")
+    fastapi_scope = request.scope.get("fastapi")
+    if isinstance(fastapi_scope, dict):
+        effective_context = fastapi_scope.get("effective_route_context")
+        if getattr(effective_context, "original_route", None) is route:
+            effective_path = getattr(effective_context, "path_format", None)
+            if type(effective_path) is str:
+                return effective_path
+    route_path = getattr(route, "path_format", None) or getattr(route, "path", None)
+    return route_path if type(route_path) is str else None
+
+
 def _authorize_panel_request(request: Request, principal: ManagementPrincipal) -> None:
     """Enforce the policy for the trusted route template selected by FastAPI."""
-    route = request.scope.get("route")
-    route_path = getattr(route, "path_format", None) or getattr(route, "path", None)
     try:
         require_management_route(
             principal,
             transport=ManagementRouteTransport.HTTP,
             method=request.method,
-            path=route_path,
+            path=_trusted_route_template(request),
         )
     except AuthorizationDenied as exc:
         raise HTTPException(status_code=403, detail="Management permission denied.") from exc

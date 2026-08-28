@@ -11,7 +11,8 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
-from fastapi import HTTPException
+import httpx
+from fastapi import APIRouter, Depends, FastAPI, HTTPException
 from fastapi.security import HTTPAuthorizationCredentials
 from starlette.requests import Request
 from starlette.responses import JSONResponse
@@ -310,6 +311,33 @@ class PanelSessionCookieTests(unittest.IsolatedAsyncioTestCase):
             token = await verify_panel_token(request, credentials=None)
 
         self.assertEqual(token, "cookie-session")
+
+    async def test_nested_fastapi_router_uses_the_effective_route_template(self):
+        leaf_router = APIRouter()
+
+        @leaf_router.get("/status")
+        async def status(_token: str = Depends(verify_panel_token)) -> dict[str, bool]:
+            return {"ok": True}
+
+        panel_router = APIRouter()
+        panel_router.include_router(leaf_router, prefix="/api/credentials")
+        app = FastAPI()
+        app.include_router(panel_router)
+        transport = httpx.ASGITransport(app=app)
+
+        with patch(
+            "core.utils.verify_panel_token_value",
+            new=AsyncMock(return_value="cookie-session"),
+        ):
+            async with httpx.AsyncClient(
+                transport=transport,
+                base_url="http://test",
+                cookies={PANEL_SESSION_COOKIE: "cookie-session"},
+            ) as client:
+                response = await client.get("/api/credentials/status")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json(), {"ok": True})
 
     async def test_same_origin_cookie_request_is_accepted(self):
         request = build_request(
