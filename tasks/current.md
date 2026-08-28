@@ -4,7 +4,7 @@
 
 - Updated: 2026-08-28 (Asia/Saigon).
 - Branch: `codex/enterprise-overhaul`.
-- Implementation baseline: `d0874f7 refactor(identity): simplify OIDC control flow`.
+- Implementation baseline: `3ce001b fix(auth): authorize nested FastAPI routes`.
 - Completed scope: Waves 1–3 / Phases 0–5 plus Wave 4 slices W4.1–W4.7 and checkpoint W4-A.
 - Original program progress: 21/28 approved checklist items complete (including specification and
   Phase 6 ADR approval), exactly 75.0%; wave execution-slice checkboxes are refinements and are not
@@ -14,8 +14,9 @@
 - Expected worktree state at this checkpoint: clean after the W4.7 documentation commit.
 - Expected runtime: one Omni Gateway listener on `http://127.0.0.1:4283`; `/health` and `/ready`
   return HTTP 200.
-- Last verified full suite: 867 tests passed on Python 3.12 with 14 opt-in live backend tests skipped
-  because no test URI was configured. Repository-wide Ruff lint/format, compileall, route contract,
+- Last verified full suite: 868 tests passed on Python 3.12 and Python 3.14 with 14 opt-in live
+  backend tests skipped because no test URI was configured. Repository-wide Ruff lint/format,
+  compileall, route contract,
   pip consistency, lockfile installation, and vulnerability audit pass for W4.7. The earlier W3-C
   JavaScript, YAML, shell-syntax, and authenticated 360/768/1024/1440 browser matrix remain the
   latest evidence for unchanged areas; the local Bash registration is currently unavailable, so
@@ -317,9 +318,12 @@ silently choosing a new design.
   `55c81d6` closes duplicate-JSON, secret-file replacement-race, forged-JWKS-URI, and concurrent
   failed-refresh gaps; `d0874f7` simplifies the reviewed control flow without changing behavior.
   Thirty-eight focused tests cover invalid configuration, SSRF/mixed DNS, redirects, timeouts,
-  oversized or poisoned metadata/JWKS, key bounds/rotation, and refresh coalescing. All 867 tests
-  pass on Python 3.12 with 14 opt-in live-backend skips; Ruff lint/format, compile, route-contract,
-  dependency consistency, and vulnerability gates are clean. `docs/oidc-foundation.md` records the
+  oversized or poisoned metadata/JWKS, key bounds/rotation, and refresh coalescing. Runtime smoke
+  then exposed a FastAPI nested-router prefix regression; `3ce001b` restores authorization against
+  the framework's trusted effective route template and adds an ASGI regression test. All 868 tests
+  pass on Python 3.12 and Python 3.14 with 14 opt-in live-backend skips; Ruff lint/format, compile,
+  route-contract, dependency consistency, and vulnerability gates are clean.
+  `docs/oidc-foundation.md` records the
   operator and activation boundary. No login, callback, token verification, or OIDC session path is
   active; local-owner recovery and the single-worker/single-replica boundary are unchanged.
 

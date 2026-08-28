@@ -490,9 +490,11 @@ JWKS caching, endpoint-host controls, and environment-locked secret handling.
   disabled-by-default policy, environment/file-secret isolation, exact origin and pinned-address
   HTTPS transport, strict discovery metadata, bounded public-key validation, and atomic
   single-flight JWKS rotation. Review closed duplicate-JSON, secret-file replacement, forged-JWKS-
-  URI, and refresh-storm gaps. Thirty-eight focused tests and all 867 tests pass on Python 3.12;
-  Ruff lint/format, compile, route contract, dependency consistency, and vulnerability audit pass.
-  The operator boundary is maintained in `docs/oidc-foundation.md`; no login route is active.
+  URI, and refresh-storm gaps. Checkpoint runtime fix `3ce001b` handles FastAPI's trusted effective
+  template for nested management routers and adds a real ASGI regression. Thirty-eight OIDC-focused
+  tests and all 868 tests pass on Python 3.12 and Python 3.14; Ruff lint/format, compile, route
+  contract, dependency consistency, and vulnerability audit pass. The operator boundary is
+  maintained in `docs/oidc-foundation.md`; no login route is active.
 
 ### W4.8 — ID Token verifier
 
