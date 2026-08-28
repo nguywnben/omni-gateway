@@ -50,6 +50,8 @@ class OidcPolicyTests(unittest.TestCase):
         self.assertEqual(configuration.policy.id_token_signing_algorithms, ("RS256",))
         self.assertEqual(configuration.policy.claims.subject, "sub")
         self.assertEqual(configuration.policy.claims.groups, "groups")
+        self.assertEqual(configuration.policy.clock_skew_seconds, 60)
+        self.assertEqual(configuration.policy.max_id_token_age_seconds, 300)
         self.assertEqual(
             configuration.policy.allowed_endpoint_origins,
             ("https://identity.example.com",),
@@ -247,6 +249,8 @@ class OidcPolicyTests(unittest.TestCase):
             "OIDC_READ_TIMEOUT_SECONDS": "61",
             "OIDC_MAX_RESPONSE_BYTES": "100",
             "OIDC_JWKS_TTL_SECONDS": "3601",
+            "OIDC_CLOCK_SKEW_SECONDS": "301",
+            "OIDC_MAX_ID_TOKEN_AGE_SECONDS": "3601",
         }
         for name, value in invalid_values.items():
             with self.subTest(name=name):
@@ -254,6 +258,17 @@ class OidcPolicyTests(unittest.TestCase):
                     load_oidc_configuration(
                         _revision(), environ=_enabled_environment() | {name: value}
                     )
+
+        policy = load_oidc_configuration(
+            _revision(),
+            environ=_enabled_environment()
+            | {
+                "OIDC_CLOCK_SKEW_SECONDS": "0",
+                "OIDC_MAX_ID_TOKEN_AGE_SECONDS": "60",
+            },
+        ).policy
+        self.assertEqual(policy.clock_skew_seconds, 0)
+        self.assertEqual(policy.max_id_token_age_seconds, 60)
 
     def test_revision_record_type_is_mandatory(self):
         with self.assertRaisesRegex(OidcConfigurationError, "revision"):
@@ -267,6 +282,8 @@ class OidcPolicyTests(unittest.TestCase):
             (disabled, {"schema_version": True}),
             (disabled, {"issuer": "https://identity.example.com"}),
             (enabled, {"connect_timeout_seconds": 0}),
+            (enabled, {"clock_skew_seconds": True}),
+            (enabled, {"max_id_token_age_seconds": 59}),
             (enabled, {"allowed_endpoint_origins": ("http://identity.example.com",)}),
             (enabled, {"id_token_signing_algorithms": ("HS256",)}),
         )

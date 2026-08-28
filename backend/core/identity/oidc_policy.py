@@ -74,6 +74,8 @@ class OidcPolicy:
     read_timeout_seconds: int
     max_response_bytes: int
     jwks_ttl_seconds: int
+    clock_skew_seconds: int
+    max_id_token_age_seconds: int
 
     def __post_init__(self) -> None:
         if (
@@ -94,6 +96,8 @@ class OidcPolicy:
             (self.read_timeout_seconds, 1, 60, "read timeout"),
             (self.max_response_bytes, 4_096, 1_048_576, "response size"),
             (self.jwks_ttl_seconds, 30, 3_600, "JWKS lifetime"),
+            (self.clock_skew_seconds, 0, 300, "clock skew"),
+            (self.max_id_token_age_seconds, 60, 3_600, "ID Token age"),
         ):
             if type(value) is not int or not minimum <= value <= maximum:
                 raise OidcConfigurationError(f"OIDC {label} is invalid.")
@@ -506,6 +510,8 @@ def _disabled_policy(revision: OidcPolicyRevisionRecord) -> OidcPolicy:
         read_timeout_seconds=10,
         max_response_bytes=262_144,
         jwks_ttl_seconds=300,
+        clock_skew_seconds=60,
+        max_id_token_age_seconds=300,
     )
 
 
@@ -567,6 +573,20 @@ def load_oidc_configuration(
             "OIDC_JWKS_TTL_SECONDS",
             default=300,
             minimum=30,
+            maximum=3_600,
+        ),
+        clock_skew_seconds=_bounded_integer(
+            environment,
+            "OIDC_CLOCK_SKEW_SECONDS",
+            default=60,
+            minimum=0,
+            maximum=300,
+        ),
+        max_id_token_age_seconds=_bounded_integer(
+            environment,
+            "OIDC_MAX_ID_TOKEN_AGE_SECONDS",
+            default=300,
+            minimum=60,
             maximum=3_600,
         ),
     )
