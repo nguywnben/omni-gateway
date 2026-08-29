@@ -168,7 +168,8 @@ failure cannot block startup or local recovery; bounded admission and shared fai
 serialized discovery storms. Session authorization accepts only a typed verified principal, and a
 failed claim-role re-evaluation advances the identity epoch so older sessions become stale.
 Identity management APIs and typed actor-aware audit are active as of W4.11. Console activation
-remains gated by W4.12 and checkpoint W4-B.
+is implemented by the dedicated localized [Identity console](identity-console.md) in W4.12 and
+remains subject to checkpoint W4-B browser and release gates.
 
 The Render Blueprint deliberately uses a paid persistent disk. Free Render services have ephemeral filesystems and are not suitable for durable credential storage.
 

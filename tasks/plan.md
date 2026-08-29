@@ -46,13 +46,13 @@ or Phase 5 request tracing.
 - Wave 3 completion checkpoint: `76315e7` (`docs: close wave 3 operational evidence`).
 - Completed product scope: Phases 0–5; Wave 3 was accepted by the human on 2026-08-26 through the
   instruction to start the project and execute the next plan.
-- Active approved scope: Wave 4 under accepted ADR-007/ADR-008; W4.1–W4.11 and checkpoint W4-A are
-  complete and W4.12 is the next implementation slice.
-- State: **READY — W4.12 NEXT**. Typed bounded identity/session management APIs, exact permissions,
-  optimistic revisions, non-secret session references, and actor-aware audit are complete; the
-  localized Identity console is the next gated slice.
-- Still gated by later slices and evidence: W4-B enterprise OIDC activation, distributed-state activation, multiple
-  workers/replicas, destructive migration, and production release activation.
+- Active approved scope: Wave 4 under accepted ADR-007/ADR-008; W4.1–W4.12 and checkpoints W4-A/W4-B
+  are complete and W4.13 is the next implementation slice.
+- State: **READY — W4.13 NEXT**. The localized Identity console, authenticated browser matrix, and
+  complete OIDC/API/audit/recovery checkpoint gates are closed; the resumable durable-ledger
+  migration contract is next.
+- Still gated by later slices and evidence: distributed-state activation, multiple workers/
+  replicas, destructive migration, and production release activation.
 
 ## Architecture Decisions
 
@@ -597,15 +597,46 @@ Implementation slices:
 Add a dedicated Identity destination for current principal, OIDC readiness, identities/roles,
 session revocation, and recovery health without overloading the API-key Access page.
 
+Implementation slices:
+
+1. Add the `/identity` navigation destination, assembled fragment/style/script assets, and static
+   console contract tests. Render current-principal, OIDC-readiness, and recovery summaries from
+   the exact W4.11 response shapes with explicit loading, unavailable, and permission-denied states.
+2. Add bounded identity inventory pagination plus create, enable/disable, and direct-role workflows.
+   Derive every control from effective permissions, preserve submitted values on HTTP 409, and use
+   explicit native-dialog confirmation for owner or access-removing changes.
+3. Add bounded active-session inventory and revocation, plus OIDC authorization-epoch advancement.
+   Mark the current session clearly, confirm disruptive actions, refresh affected resources after
+   success, and surface incomplete eager revocation without weakening durable invalidation.
+4. Add a dedicated curated Identity locale catalog for all 15 supported locales and responsive
+   design-system styling. Enforce semantic headings, labels, status/live regions, focus containment
+   and return, reduced motion, no horizontal overflow, and no secret-named DOM or browser storage.
+5. Close static/API integration, JavaScript syntax, i18n, permission, stale-revision, DOM-secret,
+   accessibility, theme, locale, console/network, and 360/768/1024/1440 browser matrices. Run a
+   fresh-context adversarial review, reconcile findings, document the operator experience, commit
+   W4.12, and then execute checkpoint W4-B.
+
 - Acceptance: controls follow server permissions, risky changes use explicit confirmation, all 15
   locales are curated, and no session/OIDC secret enters DOM or browser storage.
 - Verification: 360/768/1024/1440, themes, locales, keyboard/focus, stale revision, clean
   console/network, and permission matrix browser tests.
 - Dependencies: W4.11.
 - Likely files: Identity fragment/feature/CSS/locales and frontend tests.
+- Completed in `0d1f608`: the dedicated permission-derived Identity console, bounded inventories,
+  guarded mutations, 15 curated locales, responsive styling, authentication-boundary cleanup, and
+  executable client contracts are active. Cross-model findings corrected pagination re-entrancy
+  and create-conflict semantics. Authenticated browser closure additionally corrected exact token
+  normalization, legacy alias translation, and Escape handling. All 960 tests pass with 14 opt-in
+  external-backend skips; Ruff lint/format, compileall, pip consistency, 45 JavaScript syntax
+  checks, diff, dependency audit, and the 360/768/1024/1440 browser matrix pass.
 
 Checkpoint W4-B follows W4.7–W4.12: protocol, abuse, API, audit, migration, recovery, i18n,
 accessibility, and authenticated browser gates pass before distributed-state work.
+
+Checkpoint W4-B completed on 2026-08-29 after the W4.7–W4.12 protocol, abuse, identity, session,
+audit, recovery, i18n, accessibility, dependency, full-regression, and authenticated browser gates
+all passed. OIDC remains disabled by default and the supported runtime remains one worker and one
+replica until W4-C.
 
 ### W4.13 — Durable-ledger inventory and migration contract
 

@@ -190,8 +190,17 @@ These queue items refine Phases 4–5 and do not add to the 28-item program deno
     ingress reporting and added the SQLite pagination-order index. All 946 tests pass on Python
     3.14.6 with 14 opt-in live-backend skips; repository lint/format/compile/dependency, JavaScript
     syntax, diff, and vulnerability gates pass.
-- [ ] W4.12 Build the localized Identity console.
-- [ ] Checkpoint W4-B: OIDC, API, audit, recovery, i18n, accessibility, and browser gates pass.
+- [x] W4.12 Build the localized Identity console.
+  - Completed on 2026-08-29 in `0d1f608`. The dedicated Identity destination derives controls from
+    exact effective permissions, bounds identity/session pagination, preserves stale drafts,
+    confirms disruptive changes, resets state across authentication boundaries, and supplies
+    curated copy for all 15 locales. Cross-model and authenticated-browser findings were fixed
+    with regression tests. All 960 tests and repository gates pass.
+- [x] Checkpoint W4-B: OIDC, API, audit, recovery, i18n, accessibility, and browser gates pass.
+  - Completed on 2026-08-29. Authenticated 360/768/1024/1440, system/light/dark,
+    Vietnamese/English/Simplified-Chinese, keyboard/focus, accessible-name, endpoint, and clean
+    console checks passed without executing a governance mutation. OIDC remains disabled by
+    default; one worker and one replica remain enforced until W4-C.
 - [ ] W4.13 Add the resumable durable-ledger migration contract.
 - [ ] W4.14 Complete durable usage ledger and backend parity.
 - [ ] W4.15 Implement Redis semantic primitive parity.

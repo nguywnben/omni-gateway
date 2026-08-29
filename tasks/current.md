@@ -4,23 +4,22 @@
 
 - Updated: 2026-08-29 (Asia/Saigon).
 - Branch: `codex/enterprise-overhaul`.
-- Implementation baseline: `798d2ae feat(identity): add bounded management APIs`.
-- Completed scope: Waves 1–3 / Phases 0–5 plus Wave 4 slices W4.1–W4.11 and checkpoint W4-A.
+- Implementation baseline: `0d1f608 feat(identity): add localized governance console`.
+- Completed scope: Waves 1–3 / Phases 0–5 plus Wave 4 slices W4.1–W4.12 and checkpoints W4-A/W4-B.
 - Original program progress: 21/28 approved checklist items complete (including specification and
   Phase 6 ADR approval), exactly 75.0%; wave execution-slice checkboxes are refinements and are not
   added to that denominator.
-- Active scope: Wave 4 W4.12, localized Identity console.
-- Control state: **READY — W4.12 NEXT**.
-- Expected worktree state at this checkpoint: clean after the W4.11 documentation commit.
+- Active scope: Wave 4 W4.13, resumable durable-ledger migration contract.
+- Control state: **READY — W4.13 NEXT**.
+- Expected worktree state at this checkpoint: clean after the W4.12 documentation commit.
 - Expected runtime: one Omni Gateway listener on `http://127.0.0.1:4283`; `/health` and `/ready`
   return HTTP 200.
-- Last verified full suite: 946 tests passed on Python 3.14.6 with 14 opt-in live backend tests
+- Last verified full suite: 960 tests passed on Python 3.14.6 with 14 opt-in live backend tests
   skipped because no test URI was configured. Repository-wide Ruff lint/format, compileall, pip
-  consistency, diff, 42 frontend JavaScript syntax checks, and dependency vulnerability audit pass
-  for W4.11; Python 3.12 compileall also passes. The earlier W4.7 route contract and W3-C
-  JavaScript, YAML, shell-syntax, and authenticated 360/768/1024/1440 browser matrix remain the
-  latest evidence for unchanged areas; the local Bash registration is currently unavailable, so
-  shell syntax was not rerun in W4.7.
+  consistency, diff, 45 frontend JavaScript syntax checks, and dependency vulnerability audit pass
+  for W4.12. The authenticated Identity browser matrix passed 360/768/1024/1440 widths,
+  light/dark/system themes, Vietnamese/English/Simplified Chinese, keyboard/focus, accessible-name,
+  endpoint, and clean console checks without submitting a governance mutation.
 
 Wave 2 was accepted and pushed by the human on 2026-08-24. Wave 3 / Phases 4–5 was accepted on
 2026-08-26. ADR-007/ADR-008 and the Wave 4 queue were accepted later that day when the human again
@@ -373,7 +372,20 @@ silently choosing a new design.
   adversarial review corrected recovery ingress reporting and added the SQLite pagination-order
   index. All 946 tests pass on Python 3.14.6 with 14 opt-in live-backend skips; Ruff lint/format,
   compileall, pip consistency, 42 JavaScript syntax checks, diff, and vulnerability gates pass.
-  W4.12 and checkpoint W4-B still gate the localized enterprise Identity UI.
+  The API contract is consumed by the W4.12 Identity console.
+- W4.12/W4-B Identity-console evidence: `0d1f608` adds a dedicated localized destination for
+  current authority, OIDC and recovery readiness, direct identities, and active sessions. Controls
+  are permission-derived; collections and cursors are bounded; risky mutations are confirmed;
+  revisions preserve operator drafts; and authentication reset aborts stale responses. The
+  external review corrected pagination re-entrancy and create-conflict semantics. Authenticated
+  browser closure corrected verified-token wrapper normalization, legacy dialog-alias lookup, and
+  explicit Escape cleanup with regression tests. All 960 tests pass with 14 opt-in live-backend
+  skips; Ruff lint/format, compileall, pip consistency, dependency audit, 45 JavaScript syntax
+  checks, and diff-check pass. The browser matrix has no horizontal overflow at
+  360/768/1024/1440, passes system/light/dark and vi/en/zh-CN, exposes localized dialog names,
+  restores focus on Escape, returns HTTP 200 from every Identity resource, and has no console
+  warning/error. OIDC remains disabled by default and distributed runtime activation remains
+  gated by W4-C.
 
 ## Approved vs. Proposed Scope
 
@@ -400,12 +412,13 @@ silently choosing a new design.
 ### Approved and in progress
 
 - The Phase 6 specification, ADR-007, ADR-008, and Wave 4 execution queue.
-- W4.1–W4.11 and checkpoint W4-A are complete; W4.12 is the active next slice.
+- W4.1–W4.12 and checkpoints W4-A/W4-B are complete; W4.13 is the active next slice.
 
 ### Approved for staged implementation, not active yet
 
-- Enterprise OIDC activation, Redis coordination, durable HA migration, and multiple workers/
-  replicas remain gated by W4.12–W4.19 and their checkpoints.
+- Redis coordination, durable HA migration, and multiple workers/replicas remain gated by
+  W4.13–W4.19 and checkpoint W4-C. OIDC code is complete but remains disabled by default until an
+  operator supplies the accepted configuration.
 - Phase 7 release activation, production deployment, or destructive migration.
 
 Foundations borrowed from Phase 4 or Phase 5 remain partial and must not cause those phase
@@ -427,13 +440,12 @@ checkboxes to be marked complete.
 
 ## Immediate Next Action
 
-Begin W4.12 with a dedicated localized Identity destination for current-principal context, OIDC
-readiness, direct identity/role management, active-session revocation, and recovery health. Drive
-controls from server permissions, require explicit confirmation for risky changes, handle stale
-revisions without discarding operator input, and curate all 15 locales. No session/OIDC secret may
-enter the DOM or browser storage. Close 360/768/1024/1440, light/dark/system, keyboard/focus,
-accessibility, permission, locale, console, and network matrices before checkpoint W4-B. Preserve
-`WORKERS=1`, one replica, disabled-by-default OIDC, and local-owner recovery.
+Begin W4.13 by inventorying every usage, audit, trace, configuration, credential, identity, and
+session-related durable record, then define a resumable copy/checksum/authority-switch/rollback
+contract. At every checkpoint exactly one backend remains authoritative; interruption or checksum
+failure must leave standalone operation authoritative and safely resumable. Preserve `WORKERS=1`,
+one replica, disabled-by-default OIDC, and local-owner recovery while distributed activation
+remains gated.
 
 ## Update Rule
 
