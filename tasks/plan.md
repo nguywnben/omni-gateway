@@ -643,11 +643,26 @@ replica until W4-C.
 Inventory every usage/audit/trace/config/credential/identity record and define resumable copy,
 checksum, authority-switch, and rollback checkpoints without indefinite dual-write.
 
+Implementation slices:
+
+1. Commit the closed versioned durable-record inventory and authority/checkpoint state machine,
+   including explicit usage-ledger and reservation-journal readiness gaps.
+2. Add strict record, manifest, checkpoint, repository, and copy/verification interfaces. Begin
+   with failing abuse and transition tests; keep payloads outside metadata and exceptions.
+3. Add a bounded one-page-at-a-time runner with idempotent replay, keyed canonical checksums,
+   optimistic checkpoint updates, fail-closed corruption handling, and no automatic authority
+   switch.
+4. Add durable checkpoint repositories behind the storage adapter and prove optimistic conflict,
+   corruption, restart/resume, and backend selection behavior.
+5. Publish the operator contract, reconcile an adversarial review, run repository-wide gates,
+   restart the committed standalone service, and leave all activation controls unchanged.
+
 - Acceptance: each record has one authoritative backend at every step; incomplete verification
   leaves standalone authoritative and can resume idempotently.
 - Verification: interruption, duplicate, corruption, checksum, restart, and rollback tests.
 - Dependencies: W4-B.
 - Likely files: migration contract/runner, storage adapter, tests, operator guide.
+- Maintained detailed contract: `docs/specs/durable-ledger-migration.md`.
 
 ### W4.14 — Durable usage and backend parity
 
