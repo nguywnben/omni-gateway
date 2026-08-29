@@ -24,6 +24,22 @@ _QUALITY_PROFILES = frozenset(QUALITY_PROFILES)
 _COMPRESSION_REASONS = frozenset(COMPRESSION_REASONS) | {"unknown"}
 
 
+class UsageLedgerError(RuntimeError):
+    """Generic durable-ledger failure with no record attribution."""
+
+
+class UsageLedgerConflict(UsageLedgerError):
+    """An idempotency key was replayed with different immutable content."""
+
+
+class UsageLedgerStateConflict(UsageLedgerError):
+    """A requested journal transition contradicts its durable state."""
+
+
+class UsageLedgerCorrupt(UsageLedgerError):
+    """Stored usage or reservation data failed strict reconstruction."""
+
+
 def _strict_int(value: object, label: str, *, minimum: int = 0, maximum: int) -> int:
     if type(value) is not int or not minimum <= value <= maximum:
         raise ValueError(f"{label} is invalid.")
@@ -73,6 +89,80 @@ def usd_to_nanos(value: object) -> int:
 def nanos_to_usd(value: int) -> float:
     nanos = _strict_int(value, "Nano-USD cost", maximum=MAX_COST_NANOS)
     return float(Decimal(nanos) / NANOS_PER_USD)
+
+
+@dataclass(frozen=True, slots=True)
+class UsageAppendResult:
+    inserted: bool
+    idempotent: bool
+
+    def __post_init__(self) -> None:
+        if type(self.inserted) is not bool or type(self.idempotent) is not bool:
+            raise ValueError("Usage append result is invalid.")
+        if self.inserted == self.idempotent:
+            raise ValueError("Usage append result is contradictory.")
+
+
+@dataclass(frozen=True, slots=True)
+class BudgetReservationDecision:
+    accepted: bool
+    reservation_id: str
+    reason: str = ""
+    idempotent: bool = False
+
+    def __post_init__(self) -> None:
+        if type(self.accepted) is not bool or type(self.idempotent) is not bool:
+            raise ValueError("Budget reservation decision is invalid.")
+        if not isinstance(self.reservation_id, str) or not _RESERVATION_ID.fullmatch(
+            self.reservation_id
+        ):
+            raise ValueError("Budget reservation decision ID is invalid.")
+        if self.reason not in {"", "daily_budget", "monthly_budget"}:
+            raise ValueError("Budget reservation decision reason is invalid.")
+        if self.accepted == bool(self.reason) or (not self.accepted and self.idempotent):
+            raise ValueError("Budget reservation decision is contradictory.")
+
+
+@dataclass(frozen=True, slots=True)
+class BudgetCommitResult:
+    committed: bool
+    overspent: bool = False
+    idempotent: bool = False
+
+    def __post_init__(self) -> None:
+        if any(
+            type(value) is not bool for value in (self.committed, self.overspent, self.idempotent)
+        ):
+            raise ValueError("Budget commit result is invalid.")
+        if self.committed and self.idempotent:
+            raise ValueError("Budget commit result is contradictory.")
+
+
+@dataclass(frozen=True, slots=True)
+class BudgetReleaseResult:
+    released: bool
+    idempotent: bool = False
+
+    def __post_init__(self) -> None:
+        if type(self.released) is not bool or type(self.idempotent) is not bool:
+            raise ValueError("Budget release result is invalid.")
+        if self.released and self.idempotent:
+            raise ValueError("Budget release result is contradictory.")
+
+
+@dataclass(frozen=True, slots=True)
+class SpendSnapshot:
+    cost_nanos: int
+    total_tokens: int
+    calls: int
+    available: bool
+
+    def __post_init__(self) -> None:
+        _strict_int(self.cost_nanos, "Spend cost", maximum=MAX_COST_NANOS)
+        _strict_int(self.total_tokens, "Spend token count", maximum=9_223_372_036_854_775_807)
+        _strict_int(self.calls, "Spend call count", maximum=9_223_372_036_854_775_807)
+        if type(self.available) is not bool:
+            raise ValueError("Spend availability is invalid.")
 
 
 @dataclass(frozen=True, slots=True)
