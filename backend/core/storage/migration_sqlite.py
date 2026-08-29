@@ -58,6 +58,8 @@ class SQLiteMigrationCheckpointRepository:
     async def create(self, checkpoint: MigrationCheckpoint) -> MigrationCheckpoint:
         self._ensure_initialized()
         require_checkpoint(checkpoint)
+        if checkpoint.revision != 1:
+            raise ValueError("A new migration checkpoint must start at revision one.")
         encoded = encode_checkpoint(checkpoint)
         try:
             async with aiosqlite.connect(self._database_path) as db:

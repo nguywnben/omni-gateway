@@ -18,10 +18,11 @@ from types import MappingProxyType
 from typing import Any, Mapping
 
 MIGRATION_SCHEMA_VERSION = 1
-MAX_COPY_CURSOR_LENGTH = 512
+DURABLE_MANIFEST_VERSION = 1
 _PLAN_ID = re.compile(r"dmg_[0-9a-f]{32}")
 _LOGICAL_ID = re.compile(r"[a-z]{3}_[0-9a-f]{16,64}")
-_OPAQUE_CURSOR = re.compile(r"cur_[A-Za-z0-9_-]{16,508}")
+_INSTANCE_ID = re.compile(r"ins_[0-9a-f]{32}")
+_BARRIER_ID = re.compile(r"bar_[0-9a-f]{32}")
 _FAILURE_CODE = re.compile(r"[a-z][a-z0-9_]{0,63}")
 _CHECKSUM = re.compile(r"[0-9a-f]{64}")
 
@@ -68,6 +69,7 @@ class DurableInventoryEntry:
     family: DurableFamily
     current_owner: str
     switch_ready: bool
+    copy_required: bool
     contains_sensitive_payload: bool
     implementation_note: str
 
@@ -78,6 +80,8 @@ class DurableInventoryEntry:
             raise ValueError("Durable owner is invalid.")
         if type(self.switch_ready) is not bool:
             raise ValueError("Durable readiness is invalid.")
+        if type(self.copy_required) is not bool:
+            raise ValueError("Durable copy requirement is invalid.")
         if type(self.contains_sensitive_payload) is not bool:
             raise ValueError("Durable sensitivity is invalid.")
         if not isinstance(self.implementation_note, str) or not self.implementation_note.strip():
@@ -90,11 +94,13 @@ DURABLE_INVENTORY = (
         "selected_backend.config",
         True,
         True,
+        True,
         "Versioned configuration and internal key material.",
     ),
     DurableInventoryEntry(
         DurableFamily.PROVIDER_CREDENTIAL,
         "selected_backend.credentials",
+        True,
         True,
         True,
         "Provider-pool credential payload and current stored state.",
@@ -104,11 +110,13 @@ DURABLE_INVENTORY = (
         "selected_backend.primary_credentials",
         True,
         True,
+        True,
         "Primary credential payload and current stored state.",
     ),
     DurableInventoryEntry(
         DurableFamily.VIRTUAL_KEY,
         "selected_backend.config.virtual_keys",
+        True,
         True,
         True,
         "Authorization and billing metadata currently stored as a versioned config document.",
@@ -118,11 +126,13 @@ DURABLE_INVENTORY = (
         "identity_repository.identities",
         True,
         True,
+        True,
         "Management identities and authorization epochs.",
     ),
     DurableInventoryEntry(
         DurableFamily.ROLE_BINDING,
         "identity_repository.role_bindings",
+        True,
         True,
         True,
         "Explicit role bindings and revisions.",
@@ -131,12 +141,14 @@ DURABLE_INVENTORY = (
         DurableFamily.OIDC_POLICY_REVISION,
         "identity_repository.oidc_policy_revision",
         True,
+        True,
         False,
         "OIDC policy and authorization epoch only; client secrets are environment-owned.",
     ),
     DurableInventoryEntry(
         DurableFamily.IDENTITY_SCHEMA_EVIDENCE,
         "identity_repository.identity_migrations",
+        True,
         True,
         False,
         "Additive management-identity schema evidence.",
@@ -145,12 +157,14 @@ DURABLE_INVENTORY = (
         DurableFamily.AUDIT_EVENT,
         "audit_repository",
         True,
+        True,
         False,
         "Append-only redacted management evidence.",
     ),
     DurableInventoryEntry(
         DurableFamily.REQUEST_TRACE,
         "request_trace_repository",
+        True,
         True,
         False,
         "Bounded request decision evidence without prompts or bodies.",
@@ -160,12 +174,14 @@ DURABLE_INVENTORY = (
         "standalone_usage_stats_db",
         False,
         True,
+        True,
         "Selected-backend repository parity is deferred to W4.14.",
     ),
     DurableInventoryEntry(
         DurableFamily.HARD_BUDGET_RESERVATION,
         "not_implemented",
         False,
+        True,
         True,
         "Durable reservation journal is deferred to W4.14/W4.17.",
     ),
@@ -174,9 +190,42 @@ DURABLE_INVENTORY = (
         "migration_checkpoint_repository",
         True,
         False,
+        False,
         "Versioned metadata-only resumability evidence.",
     ),
 )
+
+
+def _manifest_checksum() -> str:
+    payload = [
+        {
+            "family": entry.family.value,
+            "current_owner": entry.current_owner,
+            "switch_ready": entry.switch_ready,
+            "copy_required": entry.copy_required,
+            "contains_sensitive_payload": entry.contains_sensitive_payload,
+        }
+        for entry in DURABLE_INVENTORY
+    ]
+    return hashlib.sha256(
+        json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    ).hexdigest()
+
+
+DURABLE_MANIFEST_CHECKSUM = _manifest_checksum()
+DURABLE_COPY_FAMILIES = tuple(entry.family for entry in DURABLE_INVENTORY if entry.copy_required)
+
+
+@dataclass(frozen=True, slots=True)
+class MigrationEndpointDescriptor:
+    backend: DurableBackend
+    instance_id: str
+
+    def __post_init__(self) -> None:
+        if type(self.backend) is not DurableBackend:
+            raise ValueError("Migration endpoint backend is invalid.")
+        if not isinstance(self.instance_id, str) or not _INSTANCE_ID.fullmatch(self.instance_id):
+            raise ValueError("Migration endpoint instance ID is invalid.")
 
 
 def _strict_non_negative_int(value: object, label: str) -> int:
@@ -282,30 +331,50 @@ class DurableRecord:
 def compute_records_digest(
     records: tuple[DurableRecord, ...] | list[DurableRecord], *, integrity_key: bytes
 ) -> str:
-    if not isinstance(integrity_key, bytes) or len(integrity_key) < 32:
-        raise ValueError("Migration integrity key is too short.")
     ordered = sorted(records, key=lambda item: (item.family.value, item.logical_id))
-    seen: set[tuple[DurableFamily, str]] = set()
-    digest = hmac.new(integrity_key, digestmod=hashlib.sha256)
+    digest = MigrationDigest(integrity_key=integrity_key)
     for record in ordered:
+        digest.add(record)
+    return digest.hexdigest()
+
+
+class MigrationDigest:
+    """Incremental keyed digest over strictly ordered durable records."""
+
+    def __init__(self, *, integrity_key: bytes) -> None:
+        if not isinstance(integrity_key, bytes) or len(integrity_key) < 32:
+            raise ValueError("Migration integrity key is too short.")
+        self._digest = hmac.new(integrity_key, digestmod=hashlib.sha256)
+        self._last_identity: tuple[str, str] | None = None
+        self._count = 0
+
+    @property
+    def count(self) -> int:
+        return self._count
+
+    def add(self, record: DurableRecord) -> None:
         if type(record) is not DurableRecord:
             raise ValueError("Migration digest record is invalid.")
-        identity = (record.family, record.logical_id)
-        if identity in seen:
-            raise ValueError("Migration digest contains a duplicate logical record.")
-        seen.add(identity)
+        identity = (record.family.value, record.logical_id)
+        if self._last_identity is not None and identity <= self._last_identity:
+            raise ValueError("Migration digest records are duplicated or out of order.")
         encoded = _canonical_record(record)
-        digest.update(len(encoded).to_bytes(8, "big"))
-        digest.update(encoded)
-    return digest.hexdigest()
+        self._digest.update(len(encoded).to_bytes(8, "big"))
+        self._digest.update(encoded)
+        self._last_identity = identity
+        self._count += 1
+
+    def hexdigest(self) -> str:
+        return self._digest.hexdigest()
 
 
 @dataclass(frozen=True, slots=True)
 class FamilyProgress:
     family: DurableFamily
-    copy_cursor: str | None
+    copy_offset: int
     copied_count: int
     copy_complete: bool
+    explicitly_empty: bool
     source_count: int | None
     target_count: int | None
     source_checksum: str | None
@@ -315,15 +384,16 @@ class FamilyProgress:
     def __post_init__(self) -> None:
         if type(self.family) is not DurableFamily:
             raise ValueError("Migration family is invalid.")
-        if self.copy_cursor is not None and (
-            not isinstance(self.copy_cursor, str) or not _OPAQUE_CURSOR.fullmatch(self.copy_cursor)
-        ):
-            raise ValueError("Migration copy cursor is invalid.")
+        _strict_non_negative_int(self.copy_offset, "Migration copy offset")
         _strict_non_negative_int(self.copied_count, "Migration copied count")
-        if type(self.copy_complete) is not bool or type(self.verified) is not bool:
+        if (
+            type(self.copy_complete) is not bool
+            or type(self.explicitly_empty) is not bool
+            or type(self.verified) is not bool
+        ):
             raise ValueError("Migration progress flag is invalid.")
-        if self.copy_complete and self.copy_cursor is not None:
-            raise ValueError("Completed migration copy cannot retain a cursor.")
+        if self.copy_offset != self.copied_count:
+            raise ValueError("Migration copy position is inconsistent.")
         for count, label in (
             (self.source_count, "Migration source count"),
             (self.target_count, "Migration target count"),
@@ -350,15 +420,17 @@ class FamilyProgress:
             or self.source_count != self.target_count
             or self.source_checksum != self.target_checksum
             or self.source_count is None
+            or (self.source_count == 0) != self.explicitly_empty
         ):
             raise ValueError("Migration verification evidence does not match.")
 
     def to_record(self) -> dict[str, object]:
         return {
             "family": self.family.value,
-            "copy_cursor": self.copy_cursor,
+            "copy_offset": self.copy_offset,
             "copied_count": self.copied_count,
             "copy_complete": self.copy_complete,
+            "explicitly_empty": self.explicitly_empty,
             "source_count": self.source_count,
             "target_count": self.target_count,
             "source_checksum": self.source_checksum,
@@ -386,9 +458,14 @@ _VERIFIED_PHASES = {
 @dataclass(frozen=True, slots=True)
 class MigrationCheckpoint:
     schema_version: int
+    manifest_version: int
+    manifest_checksum: str
     plan_id: str
     source_backend: DurableBackend
     target_backend: DurableBackend
+    source_instance_id: str
+    target_instance_id: str
+    source_barrier_id: str
     phase: MigrationPhase
     authority: AuthoritySide
     revision: int
@@ -400,6 +477,12 @@ class MigrationCheckpoint:
     def __post_init__(self) -> None:
         if type(self.schema_version) is not int or self.schema_version != MIGRATION_SCHEMA_VERSION:
             raise ValueError("Migration checkpoint schema version is unsupported.")
+        if (
+            type(self.manifest_version) is not int
+            or self.manifest_version != DURABLE_MANIFEST_VERSION
+            or self.manifest_checksum != DURABLE_MANIFEST_CHECKSUM
+        ):
+            raise ValueError("Migration manifest is unsupported.")
         if not isinstance(self.plan_id, str) or not _PLAN_ID.fullmatch(self.plan_id):
             raise ValueError("Migration plan ID is invalid.")
         if (
@@ -407,8 +490,15 @@ class MigrationCheckpoint:
             or type(self.target_backend) is not DurableBackend
         ):
             raise ValueError("Migration backend is invalid.")
-        if self.source_backend is self.target_backend:
-            raise ValueError("Migration source and target must differ.")
+        for instance_id in (self.source_instance_id, self.target_instance_id):
+            if not isinstance(instance_id, str) or not _INSTANCE_ID.fullmatch(instance_id):
+                raise ValueError("Migration endpoint instance ID is invalid.")
+        if self.source_instance_id == self.target_instance_id:
+            raise ValueError("Migration source and target instances must differ.")
+        if not isinstance(self.source_barrier_id, str) or not _BARRIER_ID.fullmatch(
+            self.source_barrier_id
+        ):
+            raise ValueError("Migration source barrier ID is invalid.")
         if type(self.phase) is not MigrationPhase or type(self.authority) is not AuthoritySide:
             raise ValueError("Migration phase or authority is invalid.")
         if self.phase in _SOURCE_PHASES and self.authority is not AuthoritySide.SOURCE:
@@ -423,10 +513,16 @@ class MigrationCheckpoint:
         family_names = [progress.family for progress in self.families]
         if len(set(family_names)) != len(family_names):
             raise ValueError("Migration families contain a duplicate.")
+        if tuple(family_names) != DURABLE_COPY_FAMILIES:
+            raise ValueError("Migration checkpoint does not cover the canonical manifest.")
         if self.phase in _VERIFIED_PHASES and not all(
             progress.verified for progress in self.families
         ):
             raise ValueError("Migration phase requires complete verification.")
+        if self.phase in _VERIFIED_PHASES and not all(
+            entry.switch_ready for entry in DURABLE_INVENTORY
+        ):
+            raise ValueError("Migration manifest is not ready for authority transition.")
         if self.failure_code is not None and (
             not isinstance(self.failure_code, str) or not _FAILURE_CODE.fullmatch(self.failure_code)
         ):
@@ -439,9 +535,14 @@ class MigrationCheckpoint:
     def to_record(self) -> dict[str, object]:
         return {
             "schema_version": self.schema_version,
+            "manifest_version": self.manifest_version,
+            "manifest_checksum": self.manifest_checksum,
             "plan_id": self.plan_id,
             "source_backend": self.source_backend.value,
             "target_backend": self.target_backend.value,
+            "source_instance_id": self.source_instance_id,
+            "target_instance_id": self.target_instance_id,
+            "source_barrier_id": self.source_barrier_id,
             "phase": self.phase.value,
             "authority": self.authority.value,
             "revision": self.revision,

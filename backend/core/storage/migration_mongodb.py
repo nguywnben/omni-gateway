@@ -45,6 +45,8 @@ class MongoMigrationCheckpointRepository:
     async def create(self, checkpoint: MigrationCheckpoint) -> MigrationCheckpoint:
         self._ensure_initialized()
         require_checkpoint(checkpoint)
+        if checkpoint.revision != 1:
+            raise ValueError("A new migration checkpoint must start at revision one.")
         try:
             await self._collection.insert_one(self._document(checkpoint))
         except DuplicateKeyError as exc:

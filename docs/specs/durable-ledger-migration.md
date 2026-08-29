@@ -9,8 +9,10 @@ limit. Those actions remain gated by W4.14–W4.19 and explicit operator approva
 
 ## Durable inventory
 
-The migration manifest is closed and versioned. It covers every durable record named by ADR-006
-and ADR-008, including implementation gaps rather than hiding them:
+The migration manifest is closed, canonical, and versioned. Its checksum covers each semantic
+field (family, current owner, readiness, copy requirement, and payload sensitivity), so a caller
+cannot omit a family or substitute a private inventory. It covers every durable record named by
+ADR-006 and ADR-008, including implementation gaps rather than hiding them:
 
 | Family | Current physical owner | Shared parity | Notes |
 | --- | --- | --- | --- |
@@ -26,20 +28,23 @@ and ADR-008, including implementation gaps rather than hiding them:
 | Request traces | bounded trace repository | Yes | Prompt/body content is excluded by the trace contract. |
 | Usage/cost ledger | standalone `usage_stats.db` | No | W4.14 must add selected-backend repositories before authority can switch. |
 | Hard-budget reservation journal | not implemented | No | W4.14/W4.17 must provide durable journal and reconciliation semantics. |
-| Migration checkpoints | versioned checkpoint repository | W4.13 | Contains metadata only; never record payloads, names, prompts, credentials, or identity attributes. |
+| Migration checkpoints | versioned checkpoint repository | W4.13 | Control-plane metadata, not a copied data family; otherwise the checkpoint would recursively inventory itself. Never contains record payloads, names, prompts, credentials, or identity attributes. |
 
 A manifest entry explicitly declares its readiness. A migration plan containing any non-ready
 family cannot reach the authority-switch state.
 
 ## Record and integrity contract
 
-Each source repository exposes records in stable logical-key order through a bounded opaque cursor.
+Each source repository exposes records in stable logical-key order through a bounded numeric
+offset. The offset is derived only from the number of accepted records; repositories cannot inject
+an opaque cursor into durable metadata.
 A record has a closed family, a stable bounded logical ID, a positive schema version, and a JSON
 payload. The payload may contain sensitive durable data and is passed only from the source reader
 to the target writer; it is excluded from checkpoints, logs, exceptions, and representations.
 
-Copy is idempotent by `(family, logical ID)`. Replaying an identical record is accepted. A target
-record with the same key but different canonical content is corruption and stops the migration.
+Copy is idempotent by `(family, logical ID)`. The target operation is strictly
+`put-if-absent-or-equal`: replaying an identical record is accepted, while a target record with the
+same key but different canonical content is corruption and stops the migration.
 Canonical JSON rejects unsupported/non-finite values. Counts and content checksums are calculated
 independently over a stable full scan of source and target. Checkpoint digests use HMAC-SHA-256 with
 an injected deployment secret so low-entropy configuration values cannot be tested offline from
@@ -49,13 +54,16 @@ checkpoint data.
 
 Exactly one backend is authoritative throughout the contract:
 
-1. `planned` — source is authoritative; immutable plan and manifest are recorded.
-2. `copying` — source remains authoritative; bounded pages are upserted idempotently.
+1. `planned` — source is authoritative; immutable plan, canonical manifest, source mutation-barrier
+   evidence, and the exact source/target instance identities are recorded.
+2. `copying` — source remains authoritative and write-fenced by the recorded barrier; bounded pages
+   are written with put-if-absent-or-equal semantics.
 3. `verifying` — source remains authoritative; source and target are scanned independently.
 4. `ready_to_switch` — source remains authoritative; all requested families have equal non-zero or
    explicitly empty counts and equal keyed checksums, and all manifest entries are switch-ready.
 5. `target_authoritative` — the target becomes the sole authority through an explicit compare-and-
-   set transition. This contract does not invoke the transition automatically.
+   set transition. This contract does not invoke the transition automatically, and W4.13 cannot
+   reach it because the usage and reservation families are not switch-ready.
 6. `rollback_ready` — target remains authoritative while an operator drains and verifies the
    reverse path.
 7. `rolled_back` — source becomes the sole authority after the rollback barrier.
@@ -63,26 +71,37 @@ Exactly one backend is authoritative throughout the contract:
 There is no dual-authoritative or indefinite dual-write state. An interruption before
 `target_authoritative`, including copy, verification, checksum, corruption, or restart failure,
 leaves the source authoritative. Resume repeats at most the last uncheckpointed page and relies on
-idempotent target upsert.
+strict idempotent target writes. The source mutation barrier is revalidated before copy, after
+target writes, before verification, after both scans, and immediately before any future activation
+transition. Losing the barrier leaves the source authoritative and prevents new verification
+evidence from being published.
 
 ## Checkpoint contract
 
-Checkpoint records use optimistic compare-and-set revisions and persist plan ID, source/target
-backend types, phase, sole authority, opaque copy cursor, copied count, verified source/target
-counts and HMAC digests, timestamps, and a bounded machine-readable failure code. Stored records
-are reconstructed through the same closed validators used for new records. Unknown fields,
-versions, phases, backends, authority contradictions, malformed cursors/checksums, revision gaps,
-or target-authoritative state without completed verification fail closed as corruption.
+Checkpoint records use optimistic compare-and-set revisions and persist plan ID, schema and
+manifest versions, manifest checksum, source/target backend categories and instance identities,
+source barrier ID, phase, sole authority, safe numeric copy offset, copied count, explicit-empty
+declarations, verified source/target counts and HMAC digests, timestamps, and a bounded
+machine-readable failure code. Stored records are reconstructed through the same closed validators
+used for new records. Unknown fields, versions, phases, backends, authority contradictions,
+malformed offsets/checksums, a non-one initial revision, a non-monotonic compare-and-set update, or
+target-authoritative state without completed verification fail closed as corruption.
 
 Checkpoint creation and updates are additive. No API deletes a checkpoint or copied durable data.
-Rollback changes authority only after a separate drain/reconciliation barrier and never truncates
-audit, trace, identity, usage, configuration, or credential history.
+W4.13 defines rollback states and invariants but intentionally provides no boolean or operator-
+supplied shortcut that can make the source authoritative. W4.18 must provide evidence-bearing
+reverse migration, drain, reconciliation, and barrier verification. Rollback never truncates audit,
+trace, identity, usage, configuration, or credential history.
 
 ## Verification and activation boundary
 
-W4.13 closes only when contract tests cover interruption, duplicate replay, conflicting duplicate,
-checksum mismatch, corrupt persisted checkpoint, optimistic conflict, restart/resume, invalid
-transition, and rollback authority. W4.14 must close the usage and reservation-journal gaps and
-live backend parity before any migration may reach `ready_to_switch`. W4.18 provides operator
-commands and readiness integration; W4.19 supplies canary/failure evidence and the separate
+Verification is streaming and bounded-memory. A process restart during verification safely rescans
+the current family from offset zero; it does not retain payloads or repository-provided cursors in
+the checkpoint. W4.13 closes only when contract tests cover interruption, duplicate replay,
+conflicting duplicate, checksum mismatch, corrupt persisted checkpoint, optimistic conflict,
+restart/resume, invalid transition, endpoint mismatch, barrier loss, explicit-empty proof, and
+rollback invariants. W4.14 must close the usage and reservation-journal gaps, supply production
+record adapters with stable non-secret instance fingerprints, and prove live backend parity before
+any migration may reach `ready_to_switch`. W4.18 provides operator commands, reverse-reconciliation
+evidence, and readiness integration; W4.19 supplies canary/failure evidence and the separate
 activation decision.

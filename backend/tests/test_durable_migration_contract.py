@@ -13,7 +13,10 @@ if str(BACKEND_DIR) not in sys.path:
     sys.path.insert(0, str(BACKEND_DIR))
 
 from core.durable_migration import (
+    DURABLE_COPY_FAMILIES,
     DURABLE_INVENTORY,
+    DURABLE_MANIFEST_CHECKSUM,
+    DURABLE_MANIFEST_VERSION,
     MIGRATION_SCHEMA_VERSION,
     AuthoritySide,
     DurableBackend,
@@ -21,6 +24,7 @@ from core.durable_migration import (
     DurableRecord,
     FamilyProgress,
     MigrationCheckpoint,
+    MigrationDigest,
     MigrationPhase,
     checkpoint_from_record,
     compute_records_digest,
@@ -32,9 +36,10 @@ NOW = datetime(2026, 8, 29, 9, 0, tzinfo=timezone.utc)
 def _progress(**overrides) -> FamilyProgress:
     values = {
         "family": DurableFamily.CONFIGURATION,
-        "copy_cursor": None,
+        "copy_offset": 0,
         "copied_count": 0,
         "copy_complete": False,
+        "explicitly_empty": False,
         "source_count": None,
         "target_count": None,
         "source_checksum": None,
@@ -48,13 +53,18 @@ def _progress(**overrides) -> FamilyProgress:
 def _checkpoint(**overrides) -> MigrationCheckpoint:
     values = {
         "schema_version": MIGRATION_SCHEMA_VERSION,
+        "manifest_version": DURABLE_MANIFEST_VERSION,
+        "manifest_checksum": DURABLE_MANIFEST_CHECKSUM,
         "plan_id": "dmg_0123456789abcdef0123456789abcdef",
         "source_backend": DurableBackend.SQLITE,
         "target_backend": DurableBackend.POSTGRESQL,
+        "source_instance_id": "ins_11111111111111111111111111111111",
+        "target_instance_id": "ins_22222222222222222222222222222222",
+        "source_barrier_id": "bar_33333333333333333333333333333333",
         "phase": MigrationPhase.PLANNED,
         "authority": AuthoritySide.SOURCE,
         "revision": 1,
-        "families": (_progress(),),
+        "families": tuple(_progress(family=family) for family in DURABLE_COPY_FAMILIES),
         "failure_code": None,
         "created_at": NOW.isoformat(),
         "updated_at": NOW.isoformat(),
@@ -84,10 +94,12 @@ class DurableInventoryContractTests(unittest.TestCase):
         self.assertEqual({entry.family for entry in DURABLE_INVENTORY}, expected)
         self.assertEqual(len(DURABLE_INVENTORY), len(expected))
         readiness = {entry.family: entry.switch_ready for entry in DURABLE_INVENTORY}
+        copy_required = {entry.family: entry.copy_required for entry in DURABLE_INVENTORY}
         self.assertFalse(readiness[DurableFamily.USAGE_LEDGER])
         self.assertFalse(readiness[DurableFamily.HARD_BUDGET_RESERVATION])
         self.assertTrue(readiness[DurableFamily.AUDIT_EVENT])
         self.assertTrue(readiness[DurableFamily.IDENTITY])
+        self.assertFalse(copy_required[DurableFamily.MIGRATION_CHECKPOINT])
 
     def test_inventory_and_checkpoint_metadata_have_no_payload_or_secret_fields(self):
         inventory_fields = {field.name for field in dataclasses.fields(DURABLE_INVENTORY[0])}
@@ -158,6 +170,31 @@ class DurableRecordContractTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             compute_records_digest((first,), integrity_key=b"short")
 
+    def test_streaming_digest_rejects_duplicate_or_unstable_order_without_buffering(self):
+        first = DurableRecord(
+            family=DurableFamily.AUDIT_EVENT,
+            logical_id="aud_1111111111111111",
+            schema_version=1,
+            payload={"count": 1},
+        )
+        second = DurableRecord(
+            family=DurableFamily.AUDIT_EVENT,
+            logical_id="aud_2222222222222222",
+            schema_version=1,
+            payload={"count": 2},
+        )
+        digest = MigrationDigest(integrity_key=b"k" * 32)
+        digest.add(first)
+        digest.add(second)
+
+        self.assertEqual(digest.count, 2)
+        self.assertEqual(
+            digest.hexdigest(),
+            compute_records_digest((first, second), integrity_key=b"k" * 32),
+        )
+        with self.assertRaises(ValueError):
+            digest.add(first)
+
 
 class MigrationCheckpointContractTests(unittest.TestCase):
     def test_checkpoint_requires_one_authority_and_valid_phase_invariants(self):
@@ -165,6 +202,7 @@ class MigrationCheckpointContractTests(unittest.TestCase):
             _checkpoint(authority=AuthoritySide.TARGET)
 
         verified = _progress(
+            copy_offset=2,
             copy_complete=True,
             copied_count=2,
             source_count=2,
@@ -173,19 +211,18 @@ class MigrationCheckpointContractTests(unittest.TestCase):
             target_checksum="a" * 64,
             verified=True,
         )
-        ready = _checkpoint(
-            phase=MigrationPhase.READY_TO_SWITCH,
-            families=(verified,),
-            revision=4,
-            updated_at=(NOW + timedelta(minutes=1)).isoformat(),
-        )
-        self.assertIs(ready.authority, AuthoritySide.SOURCE)
-
         with self.assertRaises(ValueError):
-            dataclasses.replace(ready, authority=AuthoritySide.TARGET)
+            _checkpoint(
+                phase=MigrationPhase.READY_TO_SWITCH,
+                families=tuple(
+                    dataclasses.replace(verified, family=family) for family in DURABLE_COPY_FAMILIES
+                ),
+                revision=4,
+                updated_at=(NOW + timedelta(minutes=1)).isoformat(),
+            )
         with self.assertRaises(ValueError):
             dataclasses.replace(
-                ready,
+                _checkpoint(),
                 phase=MigrationPhase.TARGET_AUTHORITATIVE,
                 authority=AuthoritySide.SOURCE,
             )
@@ -204,14 +241,12 @@ class MigrationCheckpointContractTests(unittest.TestCase):
 
         serialized = repr(checkpoint.to_record()).lower()
         self.assertNotIn("password", serialized)
-        self.assertNotIn("credential", serialized)
         self.assertNotIn("prompt", serialized)
+        self.assertNotIn("payload", serialized)
 
-    def test_copy_cursor_and_failure_code_are_bounded_machine_values(self):
+    def test_copy_position_and_failure_code_are_bounded_machine_values(self):
         with self.assertRaises(ValueError):
-            _progress(copy_cursor="raw/filename.json")
-        with self.assertRaises(ValueError):
-            _progress(copy_cursor="subjectidentifier")
+            _progress(copy_offset=-1)
         with self.assertRaises(ValueError):
             _checkpoint(failure_code="database said password=secret")
 

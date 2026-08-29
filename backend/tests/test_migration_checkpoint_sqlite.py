@@ -17,6 +17,9 @@ if str(BACKEND_DIR) not in sys.path:
     sys.path.insert(0, str(BACKEND_DIR))
 
 from core.durable_migration import (
+    DURABLE_COPY_FAMILIES,
+    DURABLE_MANIFEST_CHECKSUM,
+    DURABLE_MANIFEST_VERSION,
     MIGRATION_SCHEMA_VERSION,
     AuthoritySide,
     DurableBackend,
@@ -42,24 +45,31 @@ PLAN_ID = "dmg_0123456789abcdef0123456789abcdef"
 def _checkpoint(*, revision=1, phase=MigrationPhase.PLANNED, updated_at=NOW):
     return MigrationCheckpoint(
         schema_version=MIGRATION_SCHEMA_VERSION,
+        manifest_version=DURABLE_MANIFEST_VERSION,
+        manifest_checksum=DURABLE_MANIFEST_CHECKSUM,
         plan_id=PLAN_ID,
         source_backend=DurableBackend.SQLITE,
         target_backend=DurableBackend.POSTGRESQL,
+        source_instance_id="ins_11111111111111111111111111111111",
+        target_instance_id="ins_22222222222222222222222222222222",
+        source_barrier_id="bar_33333333333333333333333333333333",
         phase=phase,
         authority=AuthoritySide.SOURCE,
         revision=revision,
-        families=(
+        families=tuple(
             FamilyProgress(
-                family=DurableFamily.CONFIGURATION,
-                copy_cursor=None,
+                family=family,
+                copy_offset=0,
                 copied_count=0,
                 copy_complete=False,
+                explicitly_empty=family is not DurableFamily.CONFIGURATION,
                 source_count=None,
                 target_count=None,
                 source_checksum=None,
                 target_checksum=None,
                 verified=False,
-            ),
+            )
+            for family in DURABLE_COPY_FAMILIES
         ),
         failure_code=None,
         created_at=NOW.isoformat(),
@@ -89,6 +99,8 @@ class SQLiteMigrationCheckpointRepositoryTests(unittest.IsolatedAsyncioTestCase)
 
     async def test_create_is_unique_and_compare_and_set_is_monotonic(self):
         checkpoint = _checkpoint()
+        with self.assertRaises(ValueError):
+            await self.repository.create(dataclasses.replace(checkpoint, revision=17))
         await self.repository.create(checkpoint)
         with self.assertRaises(CheckpointRevisionConflict):
             await self.repository.create(checkpoint)

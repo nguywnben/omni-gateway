@@ -15,6 +15,9 @@ if str(BACKEND_DIR) not in sys.path:
     sys.path.insert(0, str(BACKEND_DIR))
 
 from core.durable_migration import (
+    DURABLE_COPY_FAMILIES,
+    DURABLE_MANIFEST_CHECKSUM,
+    DURABLE_MANIFEST_VERSION,
     MIGRATION_SCHEMA_VERSION,
     AuthoritySide,
     DurableBackend,
@@ -36,24 +39,31 @@ PLAN_ID = "dmg_0123456789abcdef0123456789abcdef"
 def _checkpoint():
     return MigrationCheckpoint(
         schema_version=MIGRATION_SCHEMA_VERSION,
+        manifest_version=DURABLE_MANIFEST_VERSION,
+        manifest_checksum=DURABLE_MANIFEST_CHECKSUM,
         plan_id=PLAN_ID,
         source_backend=DurableBackend.SQLITE,
         target_backend=DurableBackend.POSTGRESQL,
+        source_instance_id="ins_11111111111111111111111111111111",
+        target_instance_id="ins_22222222222222222222222222222222",
+        source_barrier_id="bar_33333333333333333333333333333333",
         phase=MigrationPhase.PLANNED,
         authority=AuthoritySide.SOURCE,
         revision=1,
-        families=(
+        families=tuple(
             FamilyProgress(
-                family=DurableFamily.CONFIGURATION,
-                copy_cursor=None,
+                family=family,
+                copy_offset=0,
                 copied_count=0,
                 copy_complete=False,
+                explicitly_empty=family is not DurableFamily.CONFIGURATION,
                 source_count=None,
                 target_count=None,
                 source_checksum=None,
                 target_checksum=None,
                 verified=False,
-            ),
+            )
+            for family in DURABLE_COPY_FAMILIES
         ),
         failure_code=None,
         created_at=NOW.isoformat(),
@@ -116,6 +126,8 @@ class PostgreSQLMigrationCheckpointTests(unittest.IsolatedAsyncioTestCase):
         await self.repository.initialize()
 
     async def test_schema_is_additive_and_writes_are_parameterized(self):
+        with self.assertRaises(ValueError):
+            await self.repository.create(replace(_checkpoint(), revision=17))
         await self.repository.create(_checkpoint())
         sql = "\n".join(statement for statement, _args in self.connection.executions)
         args = tuple(value for _sql, values in self.connection.executions for value in values)
@@ -190,6 +202,8 @@ class MongoMigrationCheckpointTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_index_has_no_ttl_and_document_is_closed_metadata(self):
         checkpoint = _checkpoint()
+        with self.assertRaises(ValueError):
+            await self.repository.create(replace(checkpoint, revision=17))
         await self.repository.create(checkpoint)
         self.assertTrue(self.collection.indexes)
         self.assertTrue(

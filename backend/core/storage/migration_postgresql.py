@@ -57,6 +57,8 @@ class PostgreSQLMigrationCheckpointRepository:
     async def create(self, checkpoint: MigrationCheckpoint) -> MigrationCheckpoint:
         self._ensure_initialized()
         require_checkpoint(checkpoint)
+        if checkpoint.revision != 1:
+            raise ValueError("A new migration checkpoint must start at revision one.")
         try:
             async with self._pool.acquire() as connection:
                 await connection.execute(
