@@ -10,6 +10,7 @@ from core.identity.repository import (
     LOCAL_OWNER_ID,
     IdentityAlreadyExists,
     IdentityOwnerInvariant,
+    IdentityPageCursor,
     IdentityRevisionConflict,
     RoleBindingSource,
 )
@@ -90,6 +91,15 @@ class IdentityRepositoryParityMixin:
         for invalid_limit in (0, 201, True, "10"):
             with self.subTest(limit=invalid_limit), self.assertRaises(ValueError):
                 await self.repository.list_identities(limit=invalid_limit)
+
+        first_page = await self.repository.list_identities(limit=2)
+        second_page = await self.repository.list_identities(
+            limit=2,
+            after=IdentityPageCursor.from_identity(first_page[-1].identity),
+        )
+        self.assertEqual(first_page + second_page, identities)
+        with self.assertRaises(ValueError):
+            await self.repository.list_identities(limit=2, after="not-a-cursor")
 
     async def test_parity_identity_and_binding_revisions_are_independent(self):
         created = await self.repository.create_oidc_identity(

@@ -148,13 +148,19 @@ def _assert_and_record_oidc_start(client_id: str) -> None:
     _oidc_starts.move_to_end(client_id)
 
 
-def _assert_recovery_ingress(request: Request) -> None:
-    if os.getenv("PANEL_RECOVERY_LOCAL_ONLY", "").strip().lower() not in {
+def recovery_local_only_enabled() -> bool:
+    """Return the effective recovery ingress policy without trusting proxy metadata."""
+
+    return os.getenv("PANEL_RECOVERY_LOCAL_ONLY", "").strip().lower() in {
         "1",
         "true",
         "yes",
         "on",
-    }:
+    }
+
+
+def _assert_recovery_ingress(request: Request) -> None:
+    if not recovery_local_only_enabled():
         return
     hostname = (request.url.hostname or "").strip().lower()
     peer = request.client.host if request.client else ""

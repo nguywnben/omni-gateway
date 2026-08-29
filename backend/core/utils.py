@@ -540,6 +540,9 @@ def _trusted_route_template(request: Request) -> str | None:
 
 def _authorize_panel_request(request: Request, principal: ManagementPrincipal) -> None:
     """Enforce the policy for the trusted route template selected by FastAPI."""
+    # Retain the verified principal even when authorization fails so the audit
+    # middleware can attribute a denial without persisting raw credentials.
+    request.state.management_principal = principal
     try:
         require_management_route(
             principal,
@@ -555,4 +558,3 @@ def _authorize_panel_request(request: Request, principal: ManagementPrincipal) -
             status_code=500,
             detail="Management authorization policy is incomplete.",
         ) from exc
-    request.state.management_principal = principal

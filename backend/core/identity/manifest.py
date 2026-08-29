@@ -181,6 +181,31 @@ _MANAGEMENT_ROUTE_MANIFEST = (
     ),
     *_http(ManagementPermission.TRACES_MANAGE, ("PUT", "/api/traces/retention")),
     *_http(ManagementPermission.TRACES_EXPORT, ("GET", "/api/traces/export")),
+    *_http(
+        ManagementPermission.IDENTITY_READ,
+        ("GET", "/api/identity/session"),
+        ("GET", "/api/identity/identities"),
+        ("GET", "/api/identity/oidc-policy"),
+    ),
+    *_http(
+        ManagementPermission.IDENTITY_MANAGE,
+        ("POST", "/api/identity/identities"),
+        ("PATCH", "/api/identity/identities/{identity_id}"),
+        ("PUT", "/api/identity/identities/{identity_id}/role-binding"),
+    ),
+    *_http(
+        ManagementPermission.SESSIONS_MANAGE,
+        ("GET", "/api/identity/sessions"),
+        ("POST", "/api/identity/sessions/{session_reference}/revoke"),
+    ),
+    *_http(
+        ManagementPermission.OIDC_MANAGE,
+        ("POST", "/api/identity/oidc-policy/advance"),
+    ),
+    *_http(
+        ManagementPermission.RECOVERY_MANAGE,
+        ("GET", "/api/identity/recovery"),
+    ),
     ManagementRoutePolicy(
         ManagementRouteTransport.WEBSOCKET,
         "WEBSOCKET",

@@ -80,6 +80,18 @@ class ManagementRouteManifestCoverageTests(unittest.TestCase):
             ("GET", "/api/audit/export"): ManagementPermission.AUDIT_EXPORT,
             ("GET", "/api/traces/export"): ManagementPermission.TRACES_EXPORT,
             ("WEBSOCKET", "/api/logs/stream"): ManagementPermission.LOGS_READ,
+            ("GET", "/api/identity/session"): ManagementPermission.IDENTITY_READ,
+            ("POST", "/api/identity/identities"): ManagementPermission.IDENTITY_MANAGE,
+            ("GET", "/api/identity/sessions"): ManagementPermission.SESSIONS_MANAGE,
+            (
+                "POST",
+                "/api/identity/sessions/{session_reference}/revoke",
+            ): ManagementPermission.SESSIONS_MANAGE,
+            (
+                "POST",
+                "/api/identity/oidc-policy/advance",
+            ): ManagementPermission.OIDC_MANAGE,
+            ("GET", "/api/identity/recovery"): ManagementPermission.RECOVERY_MANAGE,
         }
         actual = {
             (entry.method, entry.path): entry.permission for entry in management_route_manifest()
@@ -192,7 +204,9 @@ class ManagementRouteAuthorizationMatrixTests(unittest.TestCase):
             if entry.transport is not ManagementRouteTransport.HTTP:
                 continue
             with self.subTest(entry=entry):
-                if entry.method in {"GET", "HEAD", "OPTIONS"}:
+                if entry.method in {"GET", "HEAD", "OPTIONS"} and not entry.path.startswith(
+                    "/api/identity/"
+                ):
                     self.assertTrue(
                         require_management_route(
                             reader,
@@ -219,14 +233,23 @@ class ManagementRouteAuthorizationMatrixTests(unittest.TestCase):
         for entry in management_route_manifest():
             if entry.transport is ManagementRouteTransport.HTTP:
                 with self.subTest(entry=entry):
-                    self.assertTrue(
-                        require_management_route(
-                            writer,
-                            transport=entry.transport,
-                            method=entry.method,
-                            path=entry.path,
-                        ).allowed
-                    )
+                    if entry.path.startswith("/api/identity/"):
+                        with self.assertRaises(AuthorizationDenied):
+                            require_management_route(
+                                writer,
+                                transport=entry.transport,
+                                method=entry.method,
+                                path=entry.path,
+                            )
+                    else:
+                        self.assertTrue(
+                            require_management_route(
+                                writer,
+                                transport=entry.transport,
+                                method=entry.method,
+                                path=entry.path,
+                            ).allowed
+                        )
 
     def test_legacy_keys_gain_no_future_identity_or_ha_permission(self):
         writer = ManagementPrincipal.virtual_key(

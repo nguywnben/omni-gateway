@@ -3,8 +3,9 @@
 Wave 4 slices W4.7–W4.10 establish the configuration, discovery transport, metadata validation,
 JWKS cache, strict ID Token verifier, one-time Authorization Code protocol core, deny-by-default
 identity resolution, and revision-bound OIDC sessions. W4.10 exposes the browser flow only when
-`OIDC_ENABLED=true` and the complete trust configuration is valid. Identity/session management
-APIs and the localized console remain gated by W4.11–W4.12 and checkpoint W4-B.
+`OIDC_ENABLED=true` and the complete trust configuration is valid. The bounded identity/session
+management APIs are active as of W4.11; the localized console remains gated by W4.12 and
+checkpoint W4-B.
 
 The local-owner login and recovery path remain available and independent of the identity provider.
 `WORKERS=1` and one application replica remain the only supported topology.
@@ -45,8 +46,10 @@ closed unless every required value is valid.
 
 Secrets are excluded from the public immutable policy and its string representation. Configuration
 uses the durable OIDC policy revision and authorization epoch already provided by the identity
-repository. W4.11 will own mutation APIs, optimistic concurrency, readiness preview, and revision
-advancement. Environment changes require a controlled restart.
+repository. W4.11 owns mutation APIs, optimistic concurrency, readiness projection, and revision
+advancement. The API reports only a secret-configured marker and cannot read or write the client
+secret. Environment changes require a controlled restart. See
+[Identity and Session Management API](identity-management-api.md).
 
 ## Discovery and Network Safety
 

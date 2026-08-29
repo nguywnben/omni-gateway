@@ -11,6 +11,8 @@ from core.audit import (
     AUDIT_CHANGE_CODES,
     AUDIT_TARGET_TYPES,
 )
+from core.identity.authorization import ManagementPrincipal, PrincipalType
+from core.identity.manifest import ManagementRouteTransport, management_route_manifest
 
 
 @dataclass(frozen=True, slots=True)
@@ -171,6 +173,19 @@ MANAGEMENT_MUTATIONS: dict[tuple[str, str], ManagementMutation] = {
     ("PUT", "/api/quality-policy"): _mutation(
         "quality_policy.update", "quality_policy", "policy_changed"
     ),
+    ("POST", "/api/identity/identities"): _mutation("identity.create", "identity", "created"),
+    ("PATCH", "/api/identity/identities/{identity_id}"): _mutation(
+        "identity.update", "identity", "updated"
+    ),
+    ("PUT", "/api/identity/identities/{identity_id}/role-binding"): _mutation(
+        "role_binding.update", "role_binding", "updated"
+    ),
+    ("POST", "/api/identity/sessions/{session_reference}/revoke"): _mutation(
+        "session.revoke", "session", "revoked"
+    ),
+    ("POST", "/api/identity/oidc-policy/advance"): _mutation(
+        "oidc_policy.advance", "oidc_policy", "policy_changed"
+    ),
 }
 
 MANAGEMENT_AUDIT_EXCLUSIONS: dict[tuple[str, str], str] = {
@@ -202,6 +217,12 @@ _RUNTIME_MUTATIONS = tuple(
     for (method, path), mutation in MANAGEMENT_MUTATIONS.items()
 )
 
+_RUNTIME_PROTECTED_HTTP_ROUTES = tuple(
+    (entry.method, entry.path, _compile_template(entry.path))
+    for entry in management_route_manifest()
+    if entry.transport is ManagementRouteTransport.HTTP
+)
+
 
 def _bounded_target_identifier(value: str) -> str:
     if len(value) <= 512:
@@ -218,6 +239,8 @@ def _semantic_target_identifier(
     groups = matched.groupdict()
     if "key_id" in groups:
         return _bounded_target_identifier(groups["key_id"])
+    if "identity_id" in groups:
+        return _bounded_target_identifier(groups["identity_id"])
     if "filename" in groups:
         return _bounded_target_identifier(groups["filename"])
     if "provider_id" in groups and "model_id" in groups:
@@ -234,6 +257,7 @@ def _semantic_target_identifier(
         "model_pool": "omway",
         "model_blacklist": "global",
         "trace_policy": "request-traces",
+        "oidc_policy": "global",
     }
     if mutation.target_type in fixed_targets:
         return fixed_targets[mutation.target_type]
@@ -273,6 +297,22 @@ def classify_management_mutation(
     return None
 
 
+def classify_management_denial(method: str, path: str) -> ManagementMutation | None:
+    """Classify a denied protected route without retaining concrete path parameters."""
+
+    normalized_method = str(method or "").upper()
+    normalized_path = str(path or "")
+    for candidate_method, template, pattern in _RUNTIME_PROTECTED_HTTP_ROUTES:
+        if candidate_method == normalized_method and pattern.fullmatch(normalized_path):
+            return ManagementMutation(
+                action="management.access_denied",
+                target_type="management_route",
+                change_codes=("no_change",),
+                target_identifier=template,
+            )
+    return None
+
+
 def _outcome_for_status(status_code: int) -> str:
     if 200 <= status_code < 400:
         return "succeeded"
@@ -297,6 +337,7 @@ async def record_management_response(
     path: str,
     status_code: int,
     request_id: str,
+    principal: ManagementPrincipal | None = None,
 ):
     """Append one correlated event for a classified management response."""
 
@@ -307,6 +348,7 @@ async def record_management_response(
         mutation,
         status_code=status_code,
         request_id=request_id,
+        principal=principal,
     )
 
 
@@ -315,6 +357,7 @@ async def record_classified_management_response(
     *,
     status_code: int,
     request_id: str,
+    principal: ManagementPrincipal | None = None,
 ):
     """Append a mutation already resolved from trusted request routing metadata."""
 
@@ -323,14 +366,29 @@ async def record_classified_management_response(
 
     outcome = _outcome_for_status(status_code)
     unauthenticated_action = mutation.action in {"auth.login", "auth.recovery", "auth.setup"}
-    denied = outcome == "denied"
     virtual_key_id = get_api_key_id()
-    if unauthenticated_action or denied:
+    if unauthenticated_action:
         actor_type = "system"
         actor_identifier = "unauthenticated-control-plane"
+    elif type(principal) is ManagementPrincipal:
+        if principal.principal_type is PrincipalType.LOCAL_OWNER:
+            actor_type = "local_owner"
+            actor_identifier = principal.principal_id
+        elif principal.principal_type is PrincipalType.OIDC_USER:
+            actor_type = "oidc_user"
+            actor_identifier = f"{principal.issuer}\0{principal.subject}"
+        elif principal.principal_type is PrincipalType.VIRTUAL_KEY:
+            actor_type = "virtual_key"
+            actor_identifier = principal.principal_id
+        else:
+            actor_type = "system"
+            actor_identifier = principal.principal_id
     elif virtual_key_id:
         actor_type = "virtual_key"
         actor_identifier = virtual_key_id
+    elif outcome == "denied":
+        actor_type = "system"
+        actor_identifier = "unauthenticated-control-plane"
     else:
         actor_type = "panel_session"
         actor_identifier = "panel-owner"

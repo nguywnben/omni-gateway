@@ -319,6 +319,23 @@ class ManagedIdentity:
 
 
 @dataclass(frozen=True, slots=True)
+class IdentityPageCursor:
+    created_at: str
+    identity_id: str
+
+    def __post_init__(self) -> None:
+        _timestamp(self.created_at, "Identity cursor timestamp")
+        if self.identity_id != LOCAL_OWNER_ID:
+            _identifier(self.identity_id, prefix="idn_", label="Identity cursor identifier")
+
+    @classmethod
+    def from_identity(cls, identity: IdentityRecord) -> IdentityPageCursor:
+        if type(identity) is not IdentityRecord:
+            raise ValueError("Identity cursor source is invalid.")
+        return cls(identity.created_at, identity.identity_id)
+
+
+@dataclass(frozen=True, slots=True)
 class OidcPolicyRevisionRecord:
     schema_version: int
     revision: int
@@ -422,7 +439,12 @@ class IdentityRepository(Protocol):
         self, *, issuer: str, subject: str
     ) -> ManagedIdentity | None: ...
 
-    async def list_identities(self, *, limit: int = 100) -> list[ManagedIdentity]: ...
+    async def list_identities(
+        self,
+        *,
+        limit: int = 100,
+        after: IdentityPageCursor | None = None,
+    ) -> list[ManagedIdentity]: ...
 
     async def create_oidc_identity(
         self,

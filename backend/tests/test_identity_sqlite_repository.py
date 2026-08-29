@@ -67,7 +67,11 @@ class SQLiteIdentityRepositoryTests(
         self.assertEqual((policy.revision, policy.authorization_epoch), (1, 1))
         async with aiosqlite.connect(self.db_path) as db:
             row = await (await db.execute("SELECT value FROM existing_config")).fetchone()
+            indexes = await (
+                await db.execute("PRAGMA index_list('management_identities')")
+            ).fetchall()
         self.assertEqual(row[0], "preserved")
+        self.assertIn("idx_management_identity_order", {index[1] for index in indexes})
 
     async def test_exact_oidc_identity_is_case_sensitive_and_duplicate_safe(self):
         first = await self.repository.create_oidc_identity(

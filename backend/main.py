@@ -26,6 +26,7 @@ from core.identity import (
 )
 from core.keep_alive import keep_alive_service
 from core.management_audit import (
+    classify_management_denial,
     classify_management_mutation,
     record_classified_management_response,
 )
@@ -374,7 +375,20 @@ async def add_security_headers(request, call_next):
                     management_mutation,
                     status_code=response.status_code,
                     request_id=request_id,
+                    principal=getattr(request.state, "management_principal", None),
                 )
+            elif response.status_code in {401, 403}:
+                management_denial = classify_management_denial(
+                    request.method,
+                    request.scope.get("path", request.url.path),
+                )
+                if management_denial is not None:
+                    await record_classified_management_response(
+                        management_denial,
+                        status_code=response.status_code,
+                        request_id=request_id,
+                        principal=getattr(request.state, "management_principal", None),
+                    )
         except Exception as exc:
             log.critical(
                 "Durable management audit append failed "

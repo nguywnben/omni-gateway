@@ -18,6 +18,7 @@ from core.identity.repository import (
     IdentityMigrationRecord,
     IdentityNotFound,
     IdentityOwnerInvariant,
+    IdentityPageCursor,
     IdentityRecord,
     IdentityRevisionConflict,
     IdentityStoreCorrupt,
@@ -167,11 +168,24 @@ class MongoDBIdentityRepository:
         )
         return None if document is None else self._managed_from_document(document)
 
-    async def list_identities(self, *, limit: int = 100) -> list[ManagedIdentity]:
+    async def list_identities(
+        self, *, limit: int = 100, after: IdentityPageCursor | None = None
+    ) -> list[ManagedIdentity]:
         self._ensure_initialized()
         if type(limit) is not int or not 1 <= limit <= MAX_IDENTITY_PAGE_SIZE:
             raise ValueError("Identity page size is invalid.")
-        cursor = self._collection.find({"document_type": _MANAGED_DOCUMENT})
+        if after is not None and type(after) is not IdentityPageCursor:
+            raise ValueError("Identity cursor is invalid.")
+        query: dict[str, object] = {"document_type": _MANAGED_DOCUMENT}
+        if after is not None:
+            query["$or"] = [
+                {"identity.created_at": {"$gt": after.created_at}},
+                {
+                    "identity.created_at": after.created_at,
+                    "identity.identity_id": {"$gt": after.identity_id},
+                },
+            ]
+        cursor = self._collection.find(query)
         cursor = cursor.sort(
             [("identity.created_at", ASCENDING), ("identity.identity_id", ASCENDING)]
         )

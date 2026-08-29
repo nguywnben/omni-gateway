@@ -19,6 +19,7 @@ from core.identity.repository import (
     IdentityMigrationRecord,
     IdentityNotFound,
     IdentityOwnerInvariant,
+    IdentityPageCursor,
     IdentityRecord,
     IdentityRevisionConflict,
     IdentityStoreCorrupt,
@@ -138,6 +139,10 @@ class SQLiteIdentityRepository:
             ON management_identities(issuer, subject)
         """)
         await db.execute("""
+            CREATE INDEX IF NOT EXISTS idx_management_identity_order
+            ON management_identities(created_at, identity_id)
+        """)
+        await db.execute("""
             CREATE INDEX IF NOT EXISTS idx_management_binding_identity
             ON management_role_bindings(identity_id)
         """)
@@ -247,17 +252,29 @@ class SQLiteIdentityRepository:
                 row = await cursor.fetchone()
         return None if row is None else self._managed_from_row(row)
 
-    async def list_identities(self, *, limit: int = 100) -> list[ManagedIdentity]:
+    async def list_identities(
+        self, *, limit: int = 100, after: IdentityPageCursor | None = None
+    ) -> list[ManagedIdentity]:
         self._ensure_initialized()
         if type(limit) is not int or not 1 <= limit <= MAX_IDENTITY_PAGE_SIZE:
             raise ValueError("Identity page size is invalid.")
+        if after is not None and type(after) is not IdentityPageCursor:
+            raise ValueError("Identity cursor is invalid.")
+        where = ""
+        parameters: tuple[object, ...] = (limit,)
+        if after is not None:
+            where = (
+                "WHERE (i.created_at > ? COLLATE BINARY OR "
+                "(i.created_at = ? COLLATE BINARY AND i.identity_id > ? COLLATE BINARY)) "
+            )
+            parameters = (after.created_at, after.created_at, after.identity_id, limit)
         async with aiosqlite.connect(self._database_path) as db:
             await self._prepare_connection(db)
             async with db.execute(
                 f"SELECT {self._joined_columns()} FROM management_identities AS i "
                 "JOIN management_role_bindings AS b ON b.identity_id = i.identity_id "
-                "ORDER BY i.created_at ASC, i.identity_id ASC LIMIT ?",
-                (limit,),
+                f"{where}ORDER BY i.created_at ASC, i.identity_id ASC LIMIT ?",
+                parameters,
             ) as cursor:
                 rows = await cursor.fetchall()
         return [self._managed_from_row(row) for row in rows]

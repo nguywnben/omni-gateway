@@ -281,6 +281,7 @@ class PanelSessionCookieTests(unittest.IsolatedAsyncioTestCase):
             key_preview="sk-ogw-vk-...ader",
             scopes=("management:read",),
         )
+        request = build_request(method="POST", route_path="/api/config/save")
         with (
             patch(
                 "core.virtual_keys.virtual_key_manager.verify",
@@ -292,13 +293,11 @@ class PanelSessionCookieTests(unittest.IsolatedAsyncioTestCase):
             ) as note_last_used,
             self.assertRaises(HTTPException) as context,
         ):
-            await verify_panel_token(
-                build_request(method="POST", route_path="/api/config/save"),
-                credentials=credentials,
-            )
+            await verify_panel_token(request, credentials=credentials)
 
         self.assertEqual(context.exception.status_code, 403)
         self.assertEqual(context.exception.detail, "Management permission denied.")
+        self.assertEqual(request.state.management_principal.principal_id, "vk_reader")
         note_last_used.assert_not_awaited()
 
     async def test_unclassified_protected_route_fails_closed_before_handler(self):
@@ -515,6 +514,7 @@ class PanelSessionLifecycleTests(unittest.IsolatedAsyncioTestCase):
                 await verify_panel_token(write_request, credentials=None)
 
         self.assertEqual(context.exception.status_code, 403)
+        self.assertEqual(write_request.state.management_principal, principal)
 
     async def test_legacy_jwt_is_accepted_only_inside_its_bounded_migration_window(self):
         now = int(time.time())

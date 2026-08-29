@@ -8,9 +8,9 @@ This contract applies to the supported
 single-worker, single-replica standalone topology. Shared session coordination remains gated by
 W4.16 and HA activation remains gated by W4.18–W4.19.
 
-The identity/session inventory API and console are intentionally deferred to W4.11–W4.12. W4.6
-changes the authentication foundation without exposing session identifiers or recovery controls in
-the browser UI.
+The bounded identity/session inventory and revocation API is active as of W4.11; the localized
+console remains deferred to W4.12. The API exposes no bearer token or internal digest, and no
+recovery control is added to the browser UI before W4.12.
 
 ## Session Contract
 
@@ -34,6 +34,10 @@ the browser UI.
   evaluation. A failed claim-role re-evaluation advances the identity epoch, and request
   authorization requires the verifier's typed principal; OIDC principals are never promoted to
   local owner or replaced with an implicit owner fallback.
+- W4.11 exposes only independently domain-separated `ssr_` revocation references. These references
+  cannot authenticate requests, are never stored in audit events, and support bounded pagination
+  and single-session revocation. Durable identity/policy epochs remain authoritative if eager
+  removal fails. See [Identity and Session Management API](identity-management-api.md).
 
 The browser cookie remains named `panel_session` and uses `HttpOnly`, `SameSite=Lax`, and `Path=/`.
 It is `Secure` when the request is authoritatively HTTPS or when a trusted proxy reports HTTPS.

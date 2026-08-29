@@ -84,6 +84,28 @@ class AuditEventContractTests(unittest.TestCase):
                 with self.assertRaises(ValueError):
                     create_audit_event(**(base | patch))
 
+    def test_oidc_actor_and_identity_target_are_hmac_redacted(self):
+        stable_actor = "https://idp.example/tenant\0subject-123"
+        identity_id = "idn_0123456789abcdef0123456789abcdef"
+
+        event = create_audit_event(
+            request_id="request-identity-update",
+            actor_type="oidc_user",
+            actor_identifier=stable_actor,
+            action="identity.update",
+            target_type="identity",
+            target_identifier=identity_id,
+            outcome="succeeded",
+            change_codes=("updated",),
+            fingerprint_key=FINGERPRINT_KEY,
+        )
+
+        serialized = json.dumps(event.to_record(), sort_keys=True)
+        self.assertNotIn(stable_actor, serialized)
+        self.assertNotIn("subject-123", serialized)
+        self.assertNotIn(identity_id, serialized)
+        self.assertRegex(event.actor_fingerprint, r"^[0-9a-f]{20}$")
+
     def test_direct_event_construction_cannot_bypass_redaction_validation(self):
         with self.assertRaises(ValueError):
             AuditEvent(

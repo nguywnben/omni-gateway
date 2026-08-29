@@ -20,7 +20,7 @@ from core.identity import (  # noqa: E402
     OidcLoginDisabled,
     OidcLoginError,
 )
-from core.panel.identity_routes import OIDC_BROWSER_COOKIE, router  # noqa: E402
+from core.panel.identity_browser_routes import OIDC_BROWSER_COOKIE, router  # noqa: E402
 from core.utils import PANEL_SESSION_COOKIE  # noqa: E402
 
 
@@ -43,7 +43,7 @@ class OidcBrowserRoutesTests(unittest.IsolatedAsyncioTestCase):
             complete=AsyncMock(return_value=SimpleNamespace(token="ogs_" + "S" * 43)),
         )
         self.patch = patch(
-            "core.panel.identity_routes.get_or_initialize_oidc_login_service",
+            "core.panel.identity_browser_routes.get_or_initialize_oidc_login_service",
             new=AsyncMock(return_value=self.service),
         )
         self.patch.start()

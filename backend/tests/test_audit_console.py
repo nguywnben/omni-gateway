@@ -73,6 +73,28 @@ class AuditConsoleContractTests(unittest.TestCase):
         for forbidden in ("prompt", "api_key", "credential_name", "raw_secret"):
             self.assertNotIn(forbidden, source)
 
+    def test_identity_audit_vocabulary_is_supported_end_to_end(self):
+        source = AUDIT_SCRIPT_PATH.read_text(encoding="utf-8")
+        body = serve_control_panel().body.decode("utf-8")
+
+        for value in (
+            "local_owner",
+            "oidc_user",
+            "identity.create",
+            "identity.update",
+            "role_binding.update",
+            "session.revoke",
+            "oidc_policy.advance",
+            "management.access_denied",
+            "identity",
+            "role_binding",
+            "oidc_policy",
+            "management_route",
+        ):
+            with self.subTest(value=value):
+                self.assertIn(f"'{value}'", source)
+                self.assertIn(f'value="{value}"', body)
+
     def test_persisted_filters_exclude_correlating_identifiers(self):
         source = AUDIT_SCRIPT_PATH.read_text(encoding="utf-8")
         persistence_block = source.split("const AUDIT_PERSISTED_FILTERS", 1)[1].split("];", 1)[0]

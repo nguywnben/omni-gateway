@@ -35,7 +35,9 @@ MAX_ACTIVE_SESSIONS = 100_000
 
 _SESSION_TOKEN_PATTERN = re.compile(r"^ogs_[A-Za-z0-9_-]{43}$")
 _SESSION_DIGEST_PATTERN = re.compile(r"^[0-9a-f]{64}$")
+_SESSION_REFERENCE_PATTERN = re.compile(r"^ssr_[0-9a-f]{32}$")
 _SESSION_HMAC_DOMAIN = b"omni-gateway:management-session:v1\0"
+_SESSION_REFERENCE_DOMAIN = b"omni-gateway:management-session-reference:v1\0"
 _SESSION_MASTER_KEY_CONFIG = "_internal_session_master_key_v1"
 _SESSION_MASTER_KEY_BYTES = 32
 _SESSION_METRIC_ACTIONS = frozenset({"issue", "resolve", "revoke", "revoke_principal"})
@@ -192,6 +194,31 @@ class IssuedSession:
         return f"IssuedSession(token='<redacted>', session={self.session!r})"
 
 
+@dataclass(frozen=True, slots=True)
+class ManagedSession:
+    """A non-secret management view that can be used for bounded revocation."""
+
+    reference: str
+    principal: ManagementPrincipal
+    issued_at: float
+    last_seen_at: float
+    idle_expires_at: float
+    absolute_expires_at: float
+    authentication_method: SessionAuthenticationMethod
+
+    def __post_init__(self) -> None:
+        if not _SESSION_REFERENCE_PATTERN.fullmatch(self.reference):
+            raise ValueError("Session reference is invalid.")
+        if type(self.principal) is not ManagementPrincipal:
+            raise ValueError("Session principal is invalid.")
+        if type(self.authentication_method) is not SessionAuthenticationMethod:
+            raise ValueError("Session authentication method is invalid.")
+        _strict_timestamp(self.issued_at, "Session issue timestamp")
+        _strict_timestamp(self.last_seen_at, "Session last-seen timestamp")
+        _strict_timestamp(self.idle_expires_at, "Session idle expiry")
+        _strict_timestamp(self.absolute_expires_at, "Session absolute expiry")
+
+
 class SessionStore(Protocol):
     async def issue(
         self,
@@ -229,6 +256,22 @@ class SessionStore(Protocol):
 
     async def revoke_principal(self, principal: ManagementPrincipal) -> int: ...
 
+    async def revoke_principal_type(self, principal_type: PrincipalType) -> int: ...
+
+    async def list_active(
+        self,
+        *,
+        limit: int,
+        now: float,
+        after_reference: str | None = None,
+    ) -> list[ManagedSession]: ...
+
+    async def reference_for_token(self, token: str, *, now: float) -> str: ...
+
+    async def managed_for_token(self, token: str, *, now: float) -> ManagedSession: ...
+
+    async def revoke_reference(self, reference: str) -> bool: ...
+
 
 class InProcessSessionStore:
     """Atomic single-process store that never retains a plaintext session token."""
@@ -255,6 +298,28 @@ class InProcessSessionStore:
             _SESSION_HMAC_DOMAIN + token.encode("ascii"),
             hashlib.sha256,
         ).hex()
+
+    def _reference(self, digest: str) -> str:
+        return (
+            "ssr_"
+            + hmac.digest(
+                self._hmac_key,
+                _SESSION_REFERENCE_DOMAIN + digest.encode("ascii"),
+                hashlib.sha256,
+            ).hex()[:32]
+        )
+
+    @staticmethod
+    def _managed_session(reference: str, record: SessionRecord) -> ManagedSession:
+        return ManagedSession(
+            reference=reference,
+            principal=record.principal,
+            issued_at=record.issued_at,
+            last_seen_at=record.last_seen_at,
+            idle_expires_at=record.idle_expires_at,
+            absolute_expires_at=record.absolute_expires_at,
+            authentication_method=record.authentication_method,
+        )
 
     @staticmethod
     def _validated_token(token: object) -> str:
@@ -519,6 +584,98 @@ class InProcessSessionStore:
                 self._sessions.pop(digest, None)
             return len(digests)
 
+    async def revoke_principal_type(self, principal_type: PrincipalType) -> int:
+        if type(principal_type) is not PrincipalType:
+            raise ValueError("A validated principal type is required.")
+        async with self._lock:
+            digests = [
+                digest
+                for digest, record in self._sessions.items()
+                if record.principal.principal_type is principal_type
+            ]
+            for digest in digests:
+                self._sessions.pop(digest, None)
+            return len(digests)
+
+    async def list_active(
+        self,
+        *,
+        limit: int,
+        now: float,
+        after_reference: str | None = None,
+    ) -> list[ManagedSession]:
+        if type(limit) is not int or not 1 <= limit <= 200:
+            raise ValueError("Session page size is invalid.")
+        now = _strict_timestamp(now, "Session timestamp")
+        if after_reference is not None and (
+            type(after_reference) is not str
+            or not _SESSION_REFERENCE_PATTERN.fullmatch(after_reference)
+        ):
+            raise ValueError("Session cursor is invalid.")
+        async with self._lock:
+            expired = [
+                digest
+                for digest, record in self._sessions.items()
+                if now >= record.idle_expires_at or now >= record.absolute_expires_at
+            ]
+            for digest in expired:
+                self._sessions.pop(digest, None)
+            inventory = sorted(
+                (
+                    self._reference(digest),
+                    record,
+                )
+                for digest, record in self._sessions.items()
+            )
+            if after_reference is not None:
+                inventory = [item for item in inventory if item[0] > after_reference]
+            return [
+                self._managed_session(reference, record) for reference, record in inventory[:limit]
+            ]
+
+    async def reference_for_token(self, token: str, *, now: float) -> str:
+        token = self._validated_token(token)
+        now = _strict_timestamp(now, "Session timestamp")
+        async with self._lock:
+            record = self._resolve_locked(
+                token,
+                current_authorization_epoch=None,
+                current_oidc_policy_authorization_epoch=None,
+                now=now,
+                touch=False,
+            )
+            return self._reference(record.digest)
+
+    async def managed_for_token(self, token: str, *, now: float) -> ManagedSession:
+        token = self._validated_token(token)
+        now = _strict_timestamp(now, "Session timestamp")
+        async with self._lock:
+            record = self._resolve_locked(
+                token,
+                current_authorization_epoch=None,
+                current_oidc_policy_authorization_epoch=None,
+                now=now,
+                touch=False,
+            )
+            return self._managed_session(self._reference(record.digest), record)
+
+    async def revoke_reference(self, reference: str) -> bool:
+        if type(reference) is not str or not _SESSION_REFERENCE_PATTERN.fullmatch(reference):
+            return False
+        async with self._lock:
+            digest = next(
+                (
+                    candidate
+                    for candidate in self._sessions
+                    if hmac.compare_digest(self._reference(candidate), reference)
+                ),
+                None,
+            )
+            if digest is None:
+                return False
+            self._sessions.pop(digest, None)
+            return True
+
 
 def _encode_master_key(value: bytes) -> str:
     return base64.urlsafe_b64encode(value).decode("ascii")
@@ -754,12 +911,58 @@ class SessionService:
         _record_session_metric("revoke", "succeeded" if revoked else "not_found")
         return revoked
 
+    async def list_active(
+        self,
+        *,
+        limit: int,
+        now: float,
+        after_reference: str | None = None,
+    ) -> list[ManagedSession]:
+        return await self._store.list_active(
+            limit=limit,
+            now=now,
+            after_reference=after_reference,
+        )
+
+    async def reference_for_token(self, token: str, *, now: float) -> str:
+        return await self._store.reference_for_token(token, now=now)
+
+    async def managed_for_token(self, token: str, *, now: float) -> ManagedSession:
+        return await self._store.managed_for_token(token, now=now)
+
+    async def revoke_reference(self, reference: str) -> bool:
+        try:
+            revoked = await self._store.revoke_reference(reference)
+        except Exception:
+            _record_session_metric("revoke", "failed")
+            raise
+        _record_session_metric("revoke", "succeeded" if revoked else "not_found")
+        return revoked
+
     async def revoke_local_owner_sessions(self) -> int:
         try:
             owner = await self._local_owner()
             revoked = await self._store.revoke_principal(
                 ManagementPrincipal.local_owner(owner.identity.identity_id)
             )
+        except Exception:
+            _record_session_metric("revoke_principal", "failed")
+            raise
+        _record_session_metric("revoke_principal", "succeeded")
+        return revoked
+
+    async def revoke_principal(self, principal: ManagementPrincipal) -> int:
+        try:
+            revoked = await self._store.revoke_principal(principal)
+        except Exception:
+            _record_session_metric("revoke_principal", "failed")
+            raise
+        _record_session_metric("revoke_principal", "succeeded")
+        return revoked
+
+    async def revoke_oidc_sessions(self) -> int:
+        try:
+            revoked = await self._store.revoke_principal_type(PrincipalType.OIDC_USER)
         except Exception:
             _record_session_metric("revoke_principal", "failed")
             raise

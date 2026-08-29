@@ -11,9 +11,11 @@ BACKEND_DIR = Path(__file__).resolve().parents[1]
 if str(BACKEND_DIR) not in sys.path:
     sys.path.insert(0, str(BACKEND_DIR))
 
+from core.identity import ManagementPrincipal, ManagementRole
 from core.management_audit import (
     MANAGEMENT_AUDIT_EXCLUSIONS,
     MANAGEMENT_MUTATIONS,
+    classify_management_denial,
     classify_management_mutation,
     record_management_response,
 )
@@ -75,6 +77,17 @@ class ManagementAuditMatrixTests(unittest.TestCase):
             with self.subTest(path=path):
                 self.assertIsNone(classify_management_mutation("POST", path))
 
+    def test_protected_read_denials_use_template_target_without_path_parameters(self):
+        denial = classify_management_denial(
+            "GET",
+            "/api/identity/identities",
+        )
+
+        self.assertEqual(denial.action, "management.access_denied")
+        self.assertEqual(denial.target_type, "management_route")
+        self.assertEqual(denial.target_identifier, "/api/identity/identities")
+        self.assertEqual(denial.change_codes, ("no_change",))
+
 
 class ManagementAuditResponseTests(unittest.IsolatedAsyncioTestCase):
     async def test_response_status_maps_to_bounded_outcome_and_actor(self):
@@ -129,6 +142,47 @@ class ManagementAuditResponseTests(unittest.IsolatedAsyncioTestCase):
         kwargs = service.record.await_args.kwargs
         self.assertEqual(kwargs["actor_type"], "virtual_key")
         self.assertEqual(kwargs["actor_identifier"], "vk_operations")
+
+    async def test_authenticated_oidc_denial_keeps_typed_redacted_actor(self):
+        service = AsyncMock()
+        principal = ManagementPrincipal.oidc_user(
+            issuer="https://idp.example/tenant",
+            subject="subject-123",
+            role=ManagementRole.VIEWER,
+        )
+
+        with patch("core.audit_service.get_audit_service", return_value=service):
+            await record_management_response(
+                method="POST",
+                path="/api/config/save",
+                status_code=403,
+                request_id="request-oidc-denied",
+                principal=principal,
+            )
+
+        kwargs = service.record.await_args.kwargs
+        self.assertEqual(kwargs["outcome"], "denied")
+        self.assertEqual(kwargs["actor_type"], "oidc_user")
+        self.assertEqual(
+            kwargs["actor_identifier"],
+            "https://idp.example/tenant\0subject-123",
+        )
+
+    async def test_local_owner_uses_typed_actor(self):
+        service = AsyncMock()
+
+        with patch("core.audit_service.get_audit_service", return_value=service):
+            await record_management_response(
+                method="POST",
+                path="/api/config/save",
+                status_code=200,
+                request_id="request-owner",
+                principal=ManagementPrincipal.local_owner(),
+            )
+
+        kwargs = service.record.await_args.kwargs
+        self.assertEqual(kwargs["actor_type"], "local_owner")
+        self.assertEqual(kwargs["actor_identifier"], "local-owner")
 
     async def test_excluded_route_does_not_touch_audit_service(self):
         with patch("core.audit_service.get_audit_service") as get_service:

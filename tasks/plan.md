@@ -46,11 +46,11 @@ or Phase 5 request tracing.
 - Wave 3 completion checkpoint: `76315e7` (`docs: close wave 3 operational evidence`).
 - Completed product scope: Phases 0–5; Wave 3 was accepted by the human on 2026-08-26 through the
   instruction to start the project and execute the next plan.
-- Active approved scope: Wave 4 under accepted ADR-007/ADR-008; W4.1–W4.10 and checkpoint W4-A are
-  complete and W4.11 is the next implementation slice.
-- State: **READY — W4.11 NEXT**. Deny-by-default role resolution, exact OIDC browser login, and
-  identity/policy-revision-bound sessions are complete; bounded identity/session management APIs
-  and actor-aware audit are the next gated slice.
+- Active approved scope: Wave 4 under accepted ADR-007/ADR-008; W4.1–W4.11 and checkpoint W4-A are
+  complete and W4.12 is the next implementation slice.
+- State: **READY — W4.12 NEXT**. Typed bounded identity/session management APIs, exact permissions,
+  optimistic revisions, non-secret session references, and actor-aware audit are complete; the
+  localized Identity console is the next gated slice.
 - Still gated by later slices and evidence: W4-B enterprise OIDC activation, distributed-state activation, multiple
   workers/replicas, destructive migration, and production release activation.
 
@@ -562,11 +562,34 @@ users without assigning owner from claims.
 Add typed bounded APIs for current session, OIDC policy, identities, role bindings, sessions, and
 recovery verification with complete mutation evidence.
 
+Implementation slices:
+
+1. Attribute authenticated denials to the verified typed principal and extend the closed audit
+   vocabulary for identity, role-binding, session, OIDC-policy, and recovery events.
+2. Add bounded repository/session inventory primitives with opaque cursors or non-secret revocation
+   references; plaintext bearer tokens and internal token digests never cross the service boundary.
+3. Add typed read APIs for the current session, OIDC readiness, identities, active sessions, and
+   recovery health with exact manifest permissions and no secret/profile-claim output.
+4. Add optimistic-concurrency mutations for direct OIDC identities, enablement, role bindings,
+   session revocation, and OIDC authorization-epoch advancement; owner transitions require the
+   dedicated owner permission.
+5. Close the API, permission, audit, redaction, and conflict test matrices; document the contract,
+   run an independent adversarial review, reconcile findings, and commit the slice checkpoint.
+
 - Acceptance: pagination/revisions/permissions/errors are consistent; every mutation and denial is
   attributed to a redacted typed actor; exports or token-returning endpoints are absent.
 - Verification: API contract, permission, audit matrix, redaction, and concurrent conflict tests.
 - Dependencies: W4.10.
 - Likely files: identity routes/schemas, audit matrix/vocabulary, API tests/docs.
+- Completed: typed exact-route APIs now cover current principal, OIDC readiness, direct identities,
+  active sessions, revocation, policy-epoch advancement, and recovery status. Stable bounded
+  pagination, optimistic revisions, owner-transition permission checks, durable invalidation,
+  HMAC-derived session references, typed actor attribution, and closed audit vocabularies prevent
+  secret or privilege ambiguity. A fresh-context adversarial review corrected recovery ingress
+  reporting and added the SQLite pagination-order index. All 946 tests pass with 14 opt-in live
+  backend skips; repository Ruff/format/compile/dependency, JavaScript syntax, diff, and
+  vulnerability gates pass. The maintained contract is `docs/identity-management-api.md`, and the
+  reconciled review is `docs/w4.11-adversarial-review.md`.
 
 ### W4.12 — Localized Identity console
 
@@ -871,7 +894,7 @@ new policy plane, verify telemetry, and retain a tested rollback image/data path
 
 ## Open Questions
 
-No decision gate blocks W4.11. The accepted constraints keep SCIM and tenant isolation out of Wave
+No decision gate blocks W4.12. The accepted constraints keep SCIM and tenant isolation out of Wave
 4, use exact OIDC issuer/subject identity, approve an audited `PyJWT[crypto]` addition in W4.7, and
 require 99.9% end-to-end availability, 60-second supported failover recovery, zero correctness
 violations, and bounded performance impact before coordinated activation. Enabling OIDC by default,

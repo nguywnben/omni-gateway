@@ -97,6 +97,35 @@ class InProcessSessionStoreTests(unittest.IsolatedAsyncioTestCase):
         with self.assertRaises(dataclasses.FrozenInstanceError):
             issued.session.authorization_epoch = 8
 
+    async def test_inventory_uses_bounded_non_secret_references_for_revocation(self):
+        first = await self._issue(now=1_000.0)
+        second = await self._issue(now=1_001.0)
+
+        page = await self.store.list_active(limit=1, now=1_002.0)
+        self.assertEqual(len(page), 1)
+        self.assertRegex(page[0].reference, r"^ssr_[0-9a-f]{32}$")
+        self.assertFalse(hasattr(page[0], "digest"))
+        self.assertNotIn(first.token, repr(page))
+        self.assertNotIn(second.token, repr(page))
+
+        remaining = await self.store.list_active(
+            limit=10,
+            after_reference=page[0].reference,
+            now=1_002.0,
+        )
+        self.assertEqual(len(remaining), 1)
+        self.assertGreater(remaining[0].reference, page[0].reference)
+        self.assertTrue(await self.store.revoke_reference(remaining[0].reference))
+        self.assertFalse(await self.store.revoke_reference(remaining[0].reference))
+
+    async def test_current_reference_is_derived_without_returning_digest(self):
+        issued = await self._issue()
+
+        reference = await self.store.reference_for_token(issued.token, now=1_001.0)
+
+        self.assertRegex(reference, r"^ssr_[0-9a-f]{32}$")
+        self.assertNotEqual(reference.removeprefix("ssr_"), issued.session.digest)
+
     async def test_resolve_slides_idle_expiry_without_extending_absolute_expiry(self):
         issued = await self._issue()
 

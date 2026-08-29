@@ -167,8 +167,8 @@ bound independently to identity and policy authorization epochs. Discovery stays
 failure cannot block startup or local recovery; bounded admission and shared failure backoff avoid
 serialized discovery storms. Session authorization accepts only a typed verified principal, and a
 failed claim-role re-evaluation advances the identity epoch so older sessions become stale.
-Identity management APIs, audit completion, and console activation remain gated by W4.11–W4.12
-and checkpoint W4-B.
+Identity management APIs and typed actor-aware audit are active as of W4.11. Console activation
+remains gated by W4.12 and checkpoint W4-B.
 
 The Render Blueprint deliberately uses a paid persistent disk. Free Render services have ephemeral filesystems and are not suitable for durable credential storage.
 

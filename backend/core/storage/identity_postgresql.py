@@ -19,6 +19,7 @@ from core.identity.repository import (
     IdentityMigrationRecord,
     IdentityNotFound,
     IdentityOwnerInvariant,
+    IdentityPageCursor,
     IdentityRecord,
     IdentityRevisionConflict,
     IdentityStoreCorrupt,
@@ -230,16 +231,27 @@ class PostgreSQLIdentityRepository:
             )
         return None if row is None else self._managed_from_row(row)
 
-    async def list_identities(self, *, limit: int = 100) -> list[ManagedIdentity]:
+    async def list_identities(
+        self, *, limit: int = 100, after: IdentityPageCursor | None = None
+    ) -> list[ManagedIdentity]:
         self._ensure_initialized()
         if type(limit) is not int or not 1 <= limit <= MAX_IDENTITY_PAGE_SIZE:
             raise ValueError("Identity page size is invalid.")
+        if after is not None and type(after) is not IdentityPageCursor:
+            raise ValueError("Identity cursor is invalid.")
+        where = ""
+        arguments: tuple[object, ...] = (limit,)
+        limit_placeholder = "$1"
+        if after is not None:
+            where = "WHERE (i.created_at, i.identity_id) > ($1, $2) "
+            arguments = (datetime.fromisoformat(after.created_at), after.identity_id, limit)
+            limit_placeholder = "$3"
         async with self._pool.acquire() as connection:
             rows = await connection.fetch(
                 f"SELECT {self._joined_columns()} FROM management_identities AS i "
                 "JOIN management_role_bindings AS b ON b.identity_id = i.identity_id "
-                "ORDER BY i.created_at ASC, i.identity_id ASC LIMIT $1",
-                limit,
+                f"{where}ORDER BY i.created_at ASC, i.identity_id ASC LIMIT {limit_placeholder}",
+                *arguments,
             )
         return [self._managed_from_row(row) for row in rows]
 

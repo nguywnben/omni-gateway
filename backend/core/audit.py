@@ -28,6 +28,8 @@ MAX_RETENTION_EVENTS = 10_000_000
 
 AUDIT_ACTOR_TYPES = frozenset(
     {
+        "local_owner",
+        "oidc_user",
         "panel_session",
         "root_key",
         "virtual_key",
@@ -73,6 +75,12 @@ AUDIT_ACTIONS = frozenset(
         "model_blacklist.clear",
         "model_pool.update",
         "logs.clear",
+        "identity.create",
+        "identity.update",
+        "role_binding.update",
+        "session.revoke",
+        "oidc_policy.advance",
+        "management.access_denied",
     }
 )
 AUDIT_TARGET_TYPES = frozenset(
@@ -90,6 +98,10 @@ AUDIT_TARGET_TYPES = frozenset(
         "model_blacklist",
         "model_pool",
         "log_store",
+        "identity",
+        "role_binding",
+        "oidc_policy",
+        "management_route",
     }
 )
 AUDIT_OUTCOMES = frozenset(
