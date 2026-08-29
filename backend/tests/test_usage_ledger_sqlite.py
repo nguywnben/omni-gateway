@@ -181,6 +181,18 @@ class SQLiteUsageLedgerTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(reconciled, 1)
         self.assertEqual(repeated, 0)
 
+        late_release_request = _reservation("c")
+        await self.repository.reserve_budget(late_release_request)
+        with self.assertRaises(UsageLedgerStateConflict):
+            await self.repository.release_reservation(
+                late_release_request.reservation_id,
+                transitioned_at=NOW + 61,
+            )
+        self.assertEqual(
+            await self.repository.reconcile_expired(now=NOW + 61, limit=100),
+            0,
+        )
+
     async def test_conflicting_reservation_replay_and_expired_commit_fail_closed(self):
         request = _reservation("a")
         await self.repository.reserve_budget(request)
@@ -194,6 +206,53 @@ class SQLiteUsageLedgerTests(unittest.IsolatedAsyncioTestCase):
                 _usage(occurred_at=NOW + 61),
                 transitioned_at=NOW + 61,
             )
+
+    async def test_reporting_and_credential_retirement_use_committed_rows_only(self):
+        await self.repository.append_usage(_usage("a"))
+        await self.repository.append_usage(
+            _usage(
+                "b",
+                occurred_at=NOW + 20,
+                success=False,
+                status_code=503,
+                total_tokens=0,
+                cost_nanos=0,
+            )
+        )
+        request = _reservation("c", created_at=NOW + 30, expires_at=NOW + 90)
+        await self.repository.reserve_budget(request)
+        await self.repository.commit_reservation(
+            request.reservation_id,
+            _usage("c", occurred_at=NOW + 40, provider="anthropic", cost_nanos=10),
+            transitioned_at=NOW + 40,
+        )
+
+        credentials = await self.repository.aggregate_credentials(since=NOW)
+        self.assertEqual(len(credentials), 1)
+        self.assertEqual(credentials[0].calls, 3)
+        self.assertEqual(credentials[0].successful_calls, 2)
+        self.assertEqual(credentials[0].failed_calls, 1)
+
+        providers = await self.repository.aggregate_providers()
+        self.assertEqual([row.provider for row in providers], ["anthropic", "openai"])
+        self.assertEqual(sum(row.calls for row in providers), 3)
+
+        buckets = await self.repository.aggregate_time_series(
+            since=NOW,
+            until=NOW + 60,
+            points=3,
+        )
+        self.assertEqual([bucket.requests for bucket in buckets], [1, 1, 1])
+
+        changed = await self.repository.retire_credential(
+            "account.json",
+            "__deleted_credential__openai.json",
+            provider="openai",
+            limit=100,
+        )
+        self.assertEqual(changed, 3)
+        retired = await self.repository.aggregate_credentials(since=NOW)
+        self.assertEqual(retired[0].credential_ref, "__deleted_credential__openai.json")
 
 
 class UsageLedgerSelectionTests(unittest.IsolatedAsyncioTestCase):

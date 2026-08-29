@@ -165,6 +165,94 @@ class SpendSnapshot:
             raise ValueError("Spend availability is invalid.")
 
 
+@dataclass(frozen=True, slots=True)
+class CredentialUsageAggregate:
+    credential_ref: str
+    provider: str
+    calls: int
+    successful_calls: int
+    failed_calls: int
+    input_tokens: int
+    output_tokens: int
+    total_tokens: int
+    cached_tokens: int
+    reasoning_tokens: int
+    estimated_input_tokens: int
+    estimated_tokens_saved: int
+    compressed_messages: int
+    total_latency_ms: int
+    retry_count: int
+    cost_nanos: int
+
+    def __post_init__(self) -> None:
+        _bounded_text(
+            self.credential_ref,
+            "Usage aggregate credential reference",
+            maximum=255,
+            required=True,
+        )
+        _bounded_text(self.provider, "Usage aggregate provider", maximum=64)
+        for field in fields(self):
+            if field.name not in {"credential_ref", "provider"}:
+                _strict_int(
+                    getattr(self, field.name),
+                    f"Usage aggregate {field.name}",
+                    maximum=MAX_COST_NANOS,
+                )
+        if self.successful_calls + self.failed_calls != self.calls:
+            raise ValueError("Usage aggregate call totals are contradictory.")
+
+
+@dataclass(frozen=True, slots=True)
+class ProviderUsageAggregate:
+    provider: str
+    calls: int
+    successful_calls: int
+    failed_calls: int
+    total_tokens: int
+    total_latency_ms: int
+    cost_nanos: int
+
+    def __post_init__(self) -> None:
+        _bounded_text(self.provider, "Provider usage aggregate", maximum=64, required=True)
+        for field in fields(self):
+            if field.name != "provider":
+                _strict_int(
+                    getattr(self, field.name),
+                    f"Provider usage aggregate {field.name}",
+                    maximum=MAX_COST_NANOS,
+                )
+        if self.successful_calls + self.failed_calls != self.calls:
+            raise ValueError("Provider usage aggregate call totals are contradictory.")
+
+
+@dataclass(frozen=True, slots=True)
+class UsageTimeBucket:
+    started_at: float
+    ended_at: float
+    requests: int
+    successful_requests: int
+    failed_requests: int
+    tokens: int
+    cached_tokens: int
+    cost_nanos: int
+
+    def __post_init__(self) -> None:
+        started_at = _timestamp(self.started_at, "Usage bucket start")
+        ended_at = _timestamp(self.ended_at, "Usage bucket end")
+        if ended_at <= started_at:
+            raise ValueError("Usage bucket interval is invalid.")
+        for field in fields(self):
+            if field.name not in {"started_at", "ended_at"}:
+                _strict_int(
+                    getattr(self, field.name),
+                    f"Usage bucket {field.name}",
+                    maximum=MAX_COST_NANOS,
+                )
+        if self.successful_requests + self.failed_requests != self.requests:
+            raise ValueError("Usage bucket request totals are contradictory.")
+
+
 class UsageLedgerRepository(Protocol):
     async def initialize(self) -> None: ...
 
@@ -192,6 +280,25 @@ class UsageLedgerRepository(Protocol):
     async def reconcile_expired(self, *, now: float, limit: int) -> int: ...
 
     async def get_spend(self, *, since: float, api_key_id: str = "") -> SpendSnapshot: ...
+
+    async def aggregate_credentials(
+        self, *, since: float | None = None
+    ) -> list[CredentialUsageAggregate]: ...
+
+    async def aggregate_providers(self) -> list[ProviderUsageAggregate]: ...
+
+    async def aggregate_time_series(
+        self, *, since: float, until: float, points: int
+    ) -> list[UsageTimeBucket]: ...
+
+    async def retire_credential(
+        self,
+        credential_ref: str,
+        replacement_ref: str,
+        *,
+        provider: str,
+        limit: int,
+    ) -> int: ...
 
 
 @dataclass(frozen=True, slots=True)

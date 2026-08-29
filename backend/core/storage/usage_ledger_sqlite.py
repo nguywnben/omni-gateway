@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import math
 import sqlite3
 from contextlib import asynccontextmanager
 from dataclasses import replace
@@ -10,18 +11,22 @@ from pathlib import Path
 
 import aiosqlite
 from core.usage_ledger import (
+    MAX_COST_NANOS,
     BudgetCommitResult,
     BudgetReleaseResult,
     BudgetReservation,
     BudgetReservationDecision,
     BudgetReservationRequest,
     BudgetReservationState,
+    CredentialUsageAggregate,
+    ProviderUsageAggregate,
     SpendSnapshot,
     UsageAppendResult,
     UsageLedgerConflict,
     UsageLedgerCorrupt,
     UsageLedgerEntry,
     UsageLedgerStateConflict,
+    UsageTimeBucket,
     budget_reservation_from_record,
     usage_entry_from_record,
 )
@@ -305,6 +310,16 @@ class SQLiteUsageLedgerRepository:
                     return BudgetReleaseResult(False, idempotent=True)
                 if reservation.state is not BudgetReservationState.ACTIVE:
                     raise UsageLedgerStateConflict("Budget reservation state conflict.")
+                if transitioned_at >= reservation.expires_at:
+                    expired = replace(
+                        reservation,
+                        state=BudgetReservationState.EXPIRED,
+                        revision=2,
+                        transitioned_at=transitioned_at,
+                    )
+                    await self._update_reservation_locked(db, expired)
+                    await db.commit()
+                    raise UsageLedgerStateConflict("Budget reservation expired before release.")
                 released = replace(
                     reservation,
                     state=BudgetReservationState.RELEASED,
@@ -357,6 +372,245 @@ class SQLiteUsageLedgerRepository:
             calls=int(row[2] or 0),
             available=True,
         )
+
+    async def aggregate_credentials(
+        self, *, since: float | None = None
+    ) -> list[CredentialUsageAggregate]:
+        entries = await self._committed_entries(since=since)
+        grouped: dict[str, list[int]] = {}
+        providers: dict[str, str] = {}
+        for entry in entries:
+            credential_ref = entry.credential_ref
+            totals = grouped.setdefault(credential_ref, [0] * 14)
+            providers[credential_ref] = max(providers.get(credential_ref, ""), entry.provider)
+            values = (
+                1,
+                1 if entry.success else 0,
+                0 if entry.success else 1,
+                entry.input_tokens,
+                entry.output_tokens,
+                entry.total_tokens,
+                entry.cached_tokens,
+                entry.reasoning_tokens,
+                entry.estimated_input_tokens,
+                entry.estimated_tokens_saved,
+                entry.compressed_messages,
+                entry.latency_ms,
+                entry.retry_count,
+                entry.cost_nanos,
+            )
+            for index, value in enumerate(values):
+                totals[index] = self._checked_sum(totals[index], value)
+        return [
+            CredentialUsageAggregate(
+                credential_ref,
+                providers[credential_ref],
+                *totals,
+            )
+            for credential_ref, totals in sorted(grouped.items())
+        ]
+
+    async def aggregate_providers(self) -> list[ProviderUsageAggregate]:
+        entries = await self._committed_entries()
+        grouped: dict[str, list[int]] = {}
+        for entry in entries:
+            provider = entry.provider or "unknown"
+            totals = grouped.setdefault(provider, [0] * 6)
+            values = (
+                1,
+                1 if entry.success else 0,
+                0 if entry.success else 1,
+                entry.total_tokens,
+                entry.latency_ms,
+                entry.cost_nanos,
+            )
+            for index, value in enumerate(values):
+                totals[index] = self._checked_sum(totals[index], value)
+        return [
+            ProviderUsageAggregate(provider, *totals)
+            for provider, totals in sorted(grouped.items())
+        ]
+
+    async def aggregate_time_series(
+        self, *, since: float, until: float, points: int
+    ) -> list[UsageTimeBucket]:
+        since = self._report_timestamp(since, "Usage time-series start")
+        until = self._report_timestamp(until, "Usage time-series end")
+        if until <= since or type(points) is not int or not 1 <= points <= 1_000:
+            raise ValueError("Usage time-series interval is invalid.")
+        step = (until - since) / points
+        totals = [[0] * 6 for _ in range(points)]
+        for entry in await self._committed_entries(since=since, until=until):
+            index = min(int((entry.occurred_at - since) / step), points - 1)
+            values = (
+                1,
+                1 if entry.success else 0,
+                0 if entry.success else 1,
+                entry.total_tokens,
+                entry.cached_tokens,
+                entry.cost_nanos,
+            )
+            for value_index, value in enumerate(values):
+                totals[index][value_index] = self._checked_sum(totals[index][value_index], value)
+        return [
+            UsageTimeBucket(
+                since + (index * step),
+                since + ((index + 1) * step),
+                *values,
+            )
+            for index, values in enumerate(totals)
+        ]
+
+    async def retire_credential(
+        self,
+        credential_ref: str,
+        replacement_ref: str,
+        *,
+        provider: str,
+        limit: int,
+    ) -> int:
+        self._validate_attribution(credential_ref, provider, limit)
+        self._validate_attribution(replacement_ref, provider, limit)
+        if credential_ref == replacement_ref:
+            return 0
+        async with self._connection() as db:
+            await db.execute("BEGIN IMMEDIATE")
+            try:
+                rows = await (
+                    await db.execute(
+                        f"""
+                        SELECT {", ".join(_COLUMNS)}
+                        FROM durable_usage_ledger
+                        WHERE occurred_at IS NOT NULL AND credential_ref = ?
+                        ORDER BY occurred_at, record_id
+                        LIMIT ?
+                        """,
+                        (credential_ref, limit),
+                    )
+                ).fetchall()
+                for row in rows:
+                    decoded = self._decode_row(row)
+                    if type(decoded) is UsageLedgerEntry:
+                        rewritten: UsageLedgerEntry | BudgetReservation = replace(
+                            decoded,
+                            credential_ref=replacement_ref,
+                            provider=provider,
+                        )
+                    else:
+                        if decoded.usage is None:
+                            raise UsageLedgerCorrupt(
+                                "Committed reservation is missing usage attribution."
+                            )
+                        rewritten = replace(
+                            decoded,
+                            usage=replace(
+                                decoded.usage,
+                                credential_ref=replacement_ref,
+                                provider=provider,
+                            ),
+                        )
+                    await self._rewrite_attribution_locked(db, row, rewritten)
+                await db.commit()
+                return len(rows)
+            except Exception:
+                await db.rollback()
+                raise
+
+    async def _committed_entries(
+        self, *, since: float | None = None, until: float | None = None
+    ) -> list[UsageLedgerEntry]:
+        where = "occurred_at IS NOT NULL"
+        parameters: list[object] = []
+        if since is not None:
+            where += " AND occurred_at >= ?"
+            parameters.append(self._report_timestamp(since, "Usage aggregate start"))
+        if until is not None:
+            where += " AND occurred_at < ?"
+            parameters.append(self._report_timestamp(until, "Usage aggregate end"))
+        async with self._connection() as db:
+            rows = await (
+                await db.execute(
+                    f"""
+                    SELECT {", ".join(_COLUMNS)} FROM durable_usage_ledger
+                    WHERE {where} ORDER BY occurred_at, record_id
+                    """,
+                    tuple(parameters),
+                )
+            ).fetchall()
+        entries: list[UsageLedgerEntry] = []
+        for row in rows:
+            decoded = self._decode_row(row)
+            if type(decoded) is UsageLedgerEntry:
+                entries.append(decoded)
+            elif decoded.state is BudgetReservationState.COMMITTED and decoded.usage is not None:
+                entries.append(decoded.usage)
+            else:
+                raise UsageLedgerCorrupt("Stored committed usage row is invalid.")
+        return entries
+
+    async def _rewrite_attribution_locked(
+        self,
+        db: aiosqlite.Connection,
+        original: aiosqlite.Row,
+        rewritten: UsageLedgerEntry | BudgetReservation,
+    ) -> None:
+        usage = rewritten if type(rewritten) is UsageLedgerEntry else rewritten.usage
+        if usage is None:
+            raise UsageLedgerCorrupt("Stored usage attribution is missing.")
+        cursor = await db.execute(
+            """
+            UPDATE durable_usage_ledger
+            SET credential_ref = ?, provider = ?, payload = ?
+            WHERE record_id = ? AND revision = ? AND credential_ref = ?
+            """,
+            (
+                usage.credential_ref,
+                usage.provider,
+                self._payload(rewritten),
+                original["record_id"],
+                original["revision"],
+                original["credential_ref"],
+            ),
+        )
+        if cursor.rowcount != 1:
+            raise UsageLedgerStateConflict("Usage attribution revision conflict.")
+
+    @staticmethod
+    def _report_timestamp(value: float, label: str) -> float:
+        if type(value) not in {int, float}:
+            raise ValueError(f"{label} is invalid.")
+        timestamp = float(value)
+        if not math.isfinite(timestamp) or timestamp < 0:
+            raise ValueError(f"{label} is invalid.")
+        return timestamp
+
+    @staticmethod
+    def _checked_sum(current: int, value: int) -> int:
+        total = current + value
+        if total > MAX_COST_NANOS:
+            raise UsageLedgerCorrupt("Usage aggregate exceeds the supported range.")
+        return total
+
+    @staticmethod
+    def _validate_attribution(credential_ref: str, provider: str, limit: int) -> None:
+        if (
+            not isinstance(credential_ref, str)
+            or not credential_ref
+            or len(credential_ref) > 255
+            or credential_ref in {".", ".."}
+            or "/" in credential_ref
+            or "\\" in credential_ref
+            or any(ord(character) < 32 or ord(character) == 127 for character in credential_ref)
+        ):
+            raise ValueError("Usage credential reference is invalid.")
+        if (
+            not isinstance(provider, str)
+            or len(provider) > 64
+            or any(ord(character) < 32 or ord(character) == 127 for character in provider)
+        ):
+            raise ValueError("Usage provider is invalid.")
+        if type(limit) is not int or not 1 <= limit <= MAX_RECONCILE_BATCH:
+            raise ValueError("Usage retirement limit is invalid.")
 
     @asynccontextmanager
     async def _connection(self, *, allow_initializing: bool = False):
