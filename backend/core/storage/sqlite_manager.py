@@ -10,6 +10,7 @@ from paths import DEFAULT_CREDENTIALS_DIR
 
 if TYPE_CHECKING:
     from core.audit import AuditRepository
+    from core.durable_migration_runner import MigrationCheckpointRepository
     from core.identity.repository import IdentityRepository
 
 
@@ -338,6 +339,16 @@ class SQLiteManager:
         from .identity_sqlite import SQLiteIdentityRepository
 
         repository = SQLiteIdentityRepository(self._db_path)
+        await repository.initialize()
+        return repository
+
+    async def create_migration_checkpoint_repository(
+        self,
+    ) -> "MigrationCheckpointRepository":
+        self._ensure_initialized()
+        from .migration_sqlite import SQLiteMigrationCheckpointRepository
+
+        repository = SQLiteMigrationCheckpointRepository(self._db_path)
         await repository.initialize()
         return repository
 

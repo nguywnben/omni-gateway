@@ -211,6 +211,8 @@ class MigrationCheckpointContractTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             _progress(copy_cursor="raw/filename.json")
         with self.assertRaises(ValueError):
+            _progress(copy_cursor="subjectidentifier")
+        with self.assertRaises(ValueError):
             _checkpoint(failure_code="database said password=secret")
 
 

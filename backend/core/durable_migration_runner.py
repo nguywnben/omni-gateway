@@ -35,6 +35,10 @@ class CheckpointRevisionConflict(MigrationError):
     """The checkpoint changed since the caller read it."""
 
 
+class CheckpointStoreCorrupt(MigrationError):
+    """Persisted checkpoint data failed strict reconstruction."""
+
+
 class CheckpointNotFound(MigrationError):
     """The requested migration checkpoint does not exist."""
 

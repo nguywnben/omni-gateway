@@ -9,6 +9,7 @@ from pymongo.asynchronous.database import AsyncDatabase
 
 if TYPE_CHECKING:
     from core.audit import AuditRepository
+    from core.durable_migration_runner import MigrationCheckpointRepository
     from core.identity.repository import IdentityRepository
 
 
@@ -487,6 +488,16 @@ class MongoDBManager:
         from .identity_mongodb import MongoDBIdentityRepository
 
         repository = MongoDBIdentityRepository(self._db["management_identity_state"])
+        await repository.initialize()
+        return repository
+
+    async def create_migration_checkpoint_repository(
+        self,
+    ) -> "MigrationCheckpointRepository":
+        self._ensure_initialized()
+        from .migration_mongodb import MongoMigrationCheckpointRepository
+
+        repository = MongoMigrationCheckpointRepository(self._db["durable_migration_checkpoints"])
         await repository.initialize()
         return repository
 

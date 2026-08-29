@@ -21,7 +21,7 @@ MIGRATION_SCHEMA_VERSION = 1
 MAX_COPY_CURSOR_LENGTH = 512
 _PLAN_ID = re.compile(r"dmg_[0-9a-f]{32}")
 _LOGICAL_ID = re.compile(r"[a-z]{3}_[0-9a-f]{16,64}")
-_OPAQUE_CURSOR = re.compile(r"[A-Za-z0-9_-]{1,512}")
+_OPAQUE_CURSOR = re.compile(r"cur_[A-Za-z0-9_-]{16,508}")
 _FAILURE_CODE = re.compile(r"[a-z][a-z0-9_]{0,63}")
 _CHECKSUM = re.compile(r"[0-9a-f]{64}")
 

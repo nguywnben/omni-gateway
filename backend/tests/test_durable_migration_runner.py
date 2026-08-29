@@ -57,10 +57,10 @@ class MemoryRecords:
             (record for (kind, _), record in self.records.items() if kind is family),
             key=lambda record: record.logical_id,
         )
-        offset = int(cursor or "0")
+        offset = int(cursor.removeprefix("cur_") or "0") if cursor else 0
         page = tuple(records[offset : offset + limit])
         next_offset = offset + len(page)
-        next_cursor = str(next_offset) if next_offset < len(records) else None
+        next_cursor = f"cur_{next_offset:016d}" if next_offset < len(records) else None
         return MigrationRecordPage(records=page, next_cursor=next_cursor)
 
     async def upsert(self, record):
@@ -171,11 +171,11 @@ class MigrationCopyTests(unittest.IsolatedAsyncioTestCase):
             now=NOW,
         )
         first_page = await first_process.copy_next(PLAN_ID, now=NOW + timedelta(seconds=1))
-        self.assertEqual(first_page.families[0].copy_cursor, "1")
+        self.assertEqual(first_page.families[0].copy_cursor, "cur_0000000000000001")
 
         restarted = _runner(source, target, checkpoints, batch_size=1)
         second_page = await restarted.copy_next(PLAN_ID, now=NOW + timedelta(seconds=2))
-        self.assertEqual(second_page.families[0].copy_cursor, "2")
+        self.assertEqual(second_page.families[0].copy_cursor, "cur_0000000000000002")
         completed = await restarted.copy_next(PLAN_ID, now=NOW + timedelta(seconds=3))
         self.assertIs(completed.phase, MigrationPhase.VERIFYING)
         self.assertEqual(completed.families[0].copied_count, 3)

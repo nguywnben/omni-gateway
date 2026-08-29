@@ -7,6 +7,7 @@ from log import log
 
 if TYPE_CHECKING:
     from core.audit import AuditRepository
+    from core.durable_migration_runner import MigrationCheckpointRepository
     from core.identity.repository import IdentityRepository
     from core.request_trace import RequestTraceRepository
 
@@ -66,6 +67,10 @@ class StorageBackend(Protocol):
     async def create_audit_repository(self, *, cursor_signing_key: bytes) -> "AuditRepository": ...
 
     async def create_identity_repository(self) -> "IdentityRepository": ...
+
+    async def create_migration_checkpoint_repository(
+        self,
+    ) -> "MigrationCheckpointRepository": ...
 
     async def create_request_trace_repository(
         self, *, cursor_signing_key: bytes
@@ -223,6 +228,14 @@ class StorageAdapter:
 
         self._ensure_initialized()
         return await self._backend.create_identity_repository()
+
+    async def create_migration_checkpoint_repository(
+        self,
+    ) -> "MigrationCheckpointRepository":
+        """Create the migration checkpoint repository owned by the selected backend."""
+
+        self._ensure_initialized()
+        return await self._backend.create_migration_checkpoint_repository()
 
     async def create_request_trace_repository(
         self, *, cursor_signing_key: bytes

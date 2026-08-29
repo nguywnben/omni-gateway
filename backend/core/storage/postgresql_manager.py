@@ -9,6 +9,7 @@ from log import log
 
 if TYPE_CHECKING:
     from core.audit import AuditRepository
+    from core.durable_migration_runner import MigrationCheckpointRepository
     from core.identity.repository import IdentityRepository
 
 
@@ -240,6 +241,16 @@ class PostgreSQLManager:
         from .identity_postgresql import PostgreSQLIdentityRepository
 
         repository = PostgreSQLIdentityRepository(self._pool)
+        await repository.initialize()
+        return repository
+
+    async def create_migration_checkpoint_repository(
+        self,
+    ) -> "MigrationCheckpointRepository":
+        self._ensure_initialized()
+        from .migration_postgresql import PostgreSQLMigrationCheckpointRepository
+
+        repository = PostgreSQLMigrationCheckpointRepository(self._pool)
         await repository.initialize()
         return repository
 
