@@ -2,27 +2,22 @@
 
 ## Resume Here
 
-- Updated: 2026-08-28 (Asia/Saigon).
+- Updated: 2026-08-29 (Asia/Saigon).
 - Branch: `codex/enterprise-overhaul`.
-- Implementation baseline: `a02d0af fix(identity): harden OIDC failure boundaries`.
-- Completed scope: Waves 1–3 / Phases 0–5 plus Wave 4 slices W4.1–W4.10 and checkpoint W4-A.
+- Implementation baseline: `798d2ae feat(identity): add bounded management APIs`.
+- Completed scope: Waves 1–3 / Phases 0–5 plus Wave 4 slices W4.1–W4.11 and checkpoint W4-A.
 - Original program progress: 21/28 approved checklist items complete (including specification and
   Phase 6 ADR approval), exactly 75.0%; wave execution-slice checkboxes are refinements and are not
   added to that denominator.
-- Active scope: Wave 4 W4.11, bounded identity/session management APIs and actor-aware audit.
-- Control state: **READY — W4.11 NEXT**.
-- Expected worktree state at this checkpoint: clean after the W4.10 documentation commit.
+- Active scope: Wave 4 W4.12, localized Identity console.
+- Control state: **READY — W4.12 NEXT**.
+- Expected worktree state at this checkpoint: clean after the W4.11 documentation commit.
 - Expected runtime: one Omni Gateway listener on `http://127.0.0.1:4283`; `/health` and `/ready`
   return HTTP 200.
-- Last verified full suite: 929 tests passed on Python 3.14 with 14 opt-in live backend tests
-  skipped because no test URI was configured. The preceding 926-test checkpoint passed in full on
-  Python 3.12 and Python 3.14; after adversarial hardening, all 40 affected identity/OIDC/session
-  tests and compileall pass on Python 3.12. The full Python 3.12 rerun could not use its temporary
-  dependency bundle because the host ACL made that bundle unreadable and the Codex environment's
-  dependency-download quota was exhausted; this limitation is recorded rather than reported as a
-  pass. Repository-wide Ruff lint/format, compileall, pip consistency, hash-locked dry-run
-  installation, diff, and vulnerability audit otherwise pass for W4.10.
-  The earlier W4.7 route contract and W3-C
+- Last verified full suite: 946 tests passed on Python 3.14.6 with 14 opt-in live backend tests
+  skipped because no test URI was configured. Repository-wide Ruff lint/format, compileall, pip
+  consistency, diff, 42 frontend JavaScript syntax checks, and dependency vulnerability audit pass
+  for W4.11; Python 3.12 compileall also passes. The earlier W4.7 route contract and W3-C
   JavaScript, YAML, shell-syntax, and authenticated 360/768/1024/1440 browser matrix remain the
   latest evidence for unchanged areas; the local Bash registration is currently unavailable, so
   shell syntax was not rerun in W4.7.
@@ -368,7 +363,17 @@ silently choosing a new design.
   Python 3.14; the 40 affected tests and compileall pass on Python 3.12, following the prior full
   926-test dual-interpreter checkpoint. Repository-wide Ruff lint/format, compileall, pip
   consistency, hash-locked install dry run, diff, and vulnerability audit pass. OIDC remains false
-  by default; W4.11–W4.12 and checkpoint W4-B still gate enterprise management/audit/UI activation.
+  by default; W4.12 and checkpoint W4-B still gate enterprise management/audit/UI activation.
+- W4.11 identity-management evidence: `798d2ae` adds exact typed routes for current principal, OIDC
+  readiness, direct identities, active sessions, revocation, policy-epoch advancement, and recovery
+  status. Stable bounded pagination, optimistic revisions, owner-transition permission checks,
+  durable authorization invalidation, HMAC-derived non-secret session references, verified-principal
+  denial attribution, and closed audit vocabularies are enforced without returning bearer tokens,
+  internal digests, provider tokens, profile claims, groups, or configured secrets. The independent
+  adversarial review corrected recovery ingress reporting and added the SQLite pagination-order
+  index. All 946 tests pass on Python 3.14.6 with 14 opt-in live-backend skips; Ruff lint/format,
+  compileall, pip consistency, 42 JavaScript syntax checks, diff, and vulnerability gates pass.
+  W4.12 and checkpoint W4-B still gate the localized enterprise Identity UI.
 
 ## Approved vs. Proposed Scope
 
@@ -395,12 +400,12 @@ silently choosing a new design.
 ### Approved and in progress
 
 - The Phase 6 specification, ADR-007, ADR-008, and Wave 4 execution queue.
-- W4.1–W4.10 and checkpoint W4-A are complete; W4.11 is the active next slice.
+- W4.1–W4.11 and checkpoint W4-A are complete; W4.12 is the active next slice.
 
 ### Approved for staged implementation, not active yet
 
 - Enterprise OIDC activation, Redis coordination, durable HA migration, and multiple workers/
-  replicas remain gated by W4.11–W4.19 and their checkpoints.
+  replicas remain gated by W4.12–W4.19 and their checkpoints.
 - Phase 7 release activation, production deployment, or destructive migration.
 
 Foundations borrowed from Phase 4 or Phase 5 remain partial and must not cause those phase
@@ -422,11 +427,13 @@ checkboxes to be marked complete.
 
 ## Immediate Next Action
 
-Begin W4.11 with typed bounded resource APIs for the current session, OIDC policy/readiness,
-identities, role bindings, session revocation, and recovery verification. Apply exact permission
-manifest entries, optimistic revisions, bounded pagination, generic errors, and complete redacted
-actor-aware audit for every mutation and denial. Do not expose bearer tokens, provider claims, or
-secret-returning/export endpoints. Preserve `WORKERS=1`, one replica, and local-owner recovery.
+Begin W4.12 with a dedicated localized Identity destination for current-principal context, OIDC
+readiness, direct identity/role management, active-session revocation, and recovery health. Drive
+controls from server permissions, require explicit confirmation for risky changes, handle stale
+revisions without discarding operator input, and curate all 15 locales. No session/OIDC secret may
+enter the DOM or browser storage. Close 360/768/1024/1440, light/dark/system, keyboard/focus,
+accessibility, permission, locale, console, and network matrices before checkpoint W4-B. Preserve
+`WORKERS=1`, one replica, disabled-by-default OIDC, and local-owner recovery.
 
 ## Update Rule
 

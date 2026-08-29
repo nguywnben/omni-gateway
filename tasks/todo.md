@@ -179,7 +179,17 @@ These queue items refine Phases 4–5 and do not add to the 28-item program deno
     and never makes local-owner recovery depend on IdP availability. Adversarial closure removed
     implicit owner fallback, added bounded shared discovery-failure backoff, and made failed claim
     re-evaluation stale every older session for that identity.
-- [ ] W4.11 Add bounded identity/session APIs and complete actor-aware audit.
+- [x] W4.11 Add bounded identity/session APIs and complete actor-aware audit.
+  - Completed on 2026-08-29 in `798d2ae`. Exact typed routes expose current principal, OIDC
+    readiness, direct identities, active sessions, revocation, policy-epoch advancement, and
+    recovery status through granular permissions, bounded stable pagination, optimistic revisions,
+    and dedicated owner-transition authority. Sessions use non-secret HMAC references; responses
+    exclude bearer tokens, internal digests, provider tokens, claims, groups, and configured
+    secrets. Verified denials retain a typed redacted actor, and every identity/session/policy
+    mutation uses the closed audit matrix. Fresh-context adversarial review corrected recovery
+    ingress reporting and added the SQLite pagination-order index. All 946 tests pass on Python
+    3.14.6 with 14 opt-in live-backend skips; repository lint/format/compile/dependency, JavaScript
+    syntax, diff, and vulnerability gates pass.
 - [ ] W4.12 Build the localized Identity console.
 - [ ] Checkpoint W4-B: OIDC, API, audit, recovery, i18n, accessibility, and browser gates pass.
 - [ ] W4.13 Add the resumable durable-ledger migration contract.

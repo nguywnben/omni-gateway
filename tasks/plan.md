@@ -581,7 +581,8 @@ Implementation slices:
 - Verification: API contract, permission, audit matrix, redaction, and concurrent conflict tests.
 - Dependencies: W4.10.
 - Likely files: identity routes/schemas, audit matrix/vocabulary, API tests/docs.
-- Completed: typed exact-route APIs now cover current principal, OIDC readiness, direct identities,
+- Completed in `798d2ae`: typed exact-route APIs now cover current principal, OIDC readiness,
+  direct identities,
   active sessions, revocation, policy-epoch advancement, and recovery status. Stable bounded
   pagination, optimistic revisions, owner-transition permission checks, durable invalidation,
   HMAC-derived session references, typed actor attribution, and closed audit vocabularies prevent
