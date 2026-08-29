@@ -10,6 +10,8 @@ const ROUTE_MAP = {
 
     '/access': 'access',
 
+    '/identity': 'identity',
+
     '/pool': 'pool',
 
     '/models': 'models',
@@ -36,6 +38,7 @@ const TAB_MAP = {
     dashboard: '/dashboard',
     quality: '/ai-quality',
     access: '/access',
+    identity: '/identity',
     pool: '/pool',
     models: '/models',
     providers: '/providers',
@@ -211,6 +214,8 @@ function getTabDataLoader(tabName) {
         quality: () => loadQualityPolicy(),
 
         access: () => loadAccessPage(),
+
+        identity: () => loadIdentityConsole(),
 
         pool: () => AppState.primaryCreds.refresh(),
 

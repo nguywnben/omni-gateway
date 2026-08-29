@@ -175,7 +175,7 @@ async def _management_context(
     principal = getattr(request.state, "management_principal", None)
     if type(principal) is not ManagementPrincipal:
         raise HTTPException(status_code=500, detail="Management identity is unavailable.")
-    return _ManagementContext(token=token, principal=principal)
+    return _ManagementContext(token=str(token), principal=principal)
 
 
 ManagementContext = Annotated[_ManagementContext, Depends(_management_context)]

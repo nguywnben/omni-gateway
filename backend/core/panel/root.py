@@ -22,6 +22,7 @@ CONSOLE_FRAGMENT_PATHS = (
     "pages/dashboard.html",
     "pages/ai-quality.html",
     "pages/access.html",
+    "pages/identity.html",
     "pages/pool.html",
     "pages/models.html",
     "pages/providers.html",
@@ -39,6 +40,7 @@ CONSOLE_STYLE_ASSETS = (
     "css/forms-and-data.css",
     "css/quality-policy.css",
     "css/access.css",
+    "css/identity.css",
     "css/audit.css",
     "css/observability.css",
     "css/components.css",
@@ -55,6 +57,8 @@ CONSOLE_SCRIPT_ASSETS = (
     "js/core/trace-locales.js",
     "js/core/operational-locales.js",
     "js/core/i18n.js",
+    "js/core/identity-locales.js",
+    "js/core/identity-contract.js",
     "js/core/navigation.js",
     "js/core/credential-manager.js",
     "js/core/upload-manager.js",
@@ -67,6 +71,7 @@ CONSOLE_SCRIPT_ASSETS = (
     "js/ui/credential-cards.js",
     "js/features/authentication.js",
     "js/features/virtual-keys.js",
+    "js/features/identity.js",
     "js/features/audit.js",
     "js/features/traces.js",
     "js/features/navigation.js",
@@ -342,6 +347,7 @@ async def serve_oauth_callback(request: Request):
 @router.get("/dashboard", response_class=HTMLResponse, include_in_schema=False)
 @router.get("/ai-quality", response_class=HTMLResponse, include_in_schema=False)
 @router.get("/access", response_class=HTMLResponse, include_in_schema=False)
+@router.get("/identity", response_class=HTMLResponse, include_in_schema=False)
 @router.get("/code_assist", response_class=HTMLResponse, include_in_schema=False)
 @router.get("/pool", response_class=HTMLResponse, include_in_schema=False)
 @router.get("/models", response_class=HTMLResponse, include_in_schema=False)

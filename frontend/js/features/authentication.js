@@ -26,6 +26,8 @@ async function refreshSetupStatus() {
 
         }
 
+        if (!AppState.authenticated) resetIdentityConsoleState();
+
         return AppState.setupRequired;
 
     } catch (error) {
@@ -86,6 +88,8 @@ async function completeInitialSetup() {
 
         if (response.ok) {
 
+            resetIdentityConsoleState();
+
             AppState.setupRequired = false;
 
             AppState.authenticated = true;
@@ -137,6 +141,8 @@ async function login() {
         const data = await response.json();
 
         if (response.ok) {
+
+            resetIdentityConsoleState();
 
             AppState.authenticated = true;
 
@@ -215,6 +221,8 @@ async function logout() {
     }
 
     AppState.authenticated = false;
+
+    resetIdentityConsoleState();
 
     showStatus(t('logged_out'), 'info');
 

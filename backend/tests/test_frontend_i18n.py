@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import json
 import re
+import shutil
+import subprocess
 import unittest
 from pathlib import Path
 
@@ -12,6 +14,9 @@ FRONTEND = ROOT / "frontend"
 LOCALE_SOURCE = (FRONTEND / "js" / "core" / "locales.js").read_text(encoding="utf-8")
 PAGE_LOCALE_SOURCE = (FRONTEND / "js" / "core" / "page-locales.js").read_text(encoding="utf-8")
 AUDIT_LOCALE_SOURCE = (FRONTEND / "js" / "core" / "audit-locales.js").read_text(encoding="utf-8")
+IDENTITY_LOCALE_SOURCE = (FRONTEND / "js" / "core" / "identity-locales.js").read_text(
+    encoding="utf-8"
+)
 TRACE_LOCALE_SOURCE = (FRONTEND / "js" / "core" / "trace-locales.js").read_text(encoding="utf-8")
 OPERATIONAL_LOCALE_SOURCE = (FRONTEND / "js" / "core" / "operational-locales.js").read_text(
     encoding="utf-8"
@@ -31,6 +36,42 @@ def _frontend_sources() -> list[Path]:
 
 
 class FrontendLocaleContractTests(unittest.TestCase):
+    def test_identity_aliases_resolve_to_localized_copy(self):
+        node = shutil.which("node")
+        if node is None:
+            self.skipTest("Node.js is required for the locale behavior contract.")
+        source = "\n".join(
+            (
+                LOCALE_SOURCE,
+                PAGE_LOCALE_SOURCE,
+                AUDIT_LOCALE_SOURCE,
+                TRACE_LOCALE_SOURCE,
+                OPERATIONAL_LOCALE_SOURCE,
+                I18N_SOURCE.split("installLocalizedFetch();", 1)[0],
+                IDENTITY_LOCALE_SOURCE,
+                "console.log(JSON.stringify(Object.fromEntries(Object.entries("
+                "PAGE_LOCALE_TRANSLATIONS).map(([locale, messages]) => [locale, {"
+                "cancel: messages['identity.cancel'], close: messages['identity.close']}]))));",
+            )
+        )
+        result = subprocess.run(
+            [node],
+            cwd=ROOT,
+            capture_output=True,
+            encoding="utf-8",
+            input=source,
+            text=True,
+            timeout=15,
+            check=False,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr or result.stdout)
+        aliases = json.loads(result.stdout)
+        self.assertEqual(len(aliases), 15)
+        for locale, messages in aliases.items():
+            with self.subTest(locale=locale):
+                self.assertNotEqual(messages["cancel"], "btn_cancel")
+                self.assertNotEqual(messages["close"], "btn_close")
+
     def test_trace_catalog_is_complete_for_every_locale(self):
         keys = re.findall(
             r"'(trace\.[a-z0-9_]+)'", _extract_array(TRACE_LOCALE_SOURCE, "TRACE_KEYS")
@@ -268,6 +309,7 @@ class FrontendLocaleContractTests(unittest.TestCase):
         combined_catalog = (
             LOCALE_SOURCE
             + PAGE_LOCALE_SOURCE
+            + IDENTITY_LOCALE_SOURCE
             + AUDIT_LOCALE_SOURCE
             + TRACE_LOCALE_SOURCE
             + OPERATIONAL_LOCALE_SOURCE
@@ -293,13 +335,16 @@ class FrontendLocaleContractTests(unittest.TestCase):
             "CREDENTIAL_FLEET_KEYS",
             "CREDENTIAL_OPERATION_KEYS",
             "CREDENTIAL_TIER_KEYS",
+            "IDENTITY_KEYS",
             "AUDIT_KEYS",
             "TRACE_KEYS",
             "TRACE_CONTEXT_KEYS",
             "OPERATIONAL_HEALTH_KEYS",
         ):
             source = (
-                AUDIT_LOCALE_SOURCE
+                IDENTITY_LOCALE_SOURCE
+                if variable == "IDENTITY_KEYS"
+                else AUDIT_LOCALE_SOURCE
                 if variable == "AUDIT_KEYS"
                 else TRACE_LOCALE_SOURCE
                 if variable in {"TRACE_KEYS", "TRACE_CONTEXT_KEYS"}

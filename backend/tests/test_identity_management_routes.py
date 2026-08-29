@@ -9,7 +9,7 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
-from fastapi import HTTPException
+from fastapi import HTTPException, Request
 
 BACKEND_DIR = Path(__file__).resolve().parents[1]
 if str(BACKEND_DIR) not in sys.path:
@@ -37,6 +37,7 @@ from core.panel.identity_routes import (
     CreateIdentityRequest,
     SetIdentityEnabledRequest,
     SetRoleBindingRequest,
+    _management_context,
     _ManagementContext,
     advance_oidc_policy,
     create_identity,
@@ -49,6 +50,7 @@ from core.panel.identity_routes import (
     set_identity_enabled,
     set_role_binding,
 )
+from core.utils import _VerifiedPanelToken
 
 NOW = datetime(2026, 8, 28, 14, 0, tzinfo=timezone.utc)
 
@@ -226,6 +228,44 @@ class IdentityManagementRouteTests(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn(issued.token, serialized)
         self.assertNotIn(issued.session.digest, serialized)
         self.assertRegex(current.session.reference, r"^ssr_[0-9a-f]{32}$")
+        self.assertTrue(current.session.current)
+
+    async def test_verified_token_wrapper_is_normalized_before_session_lookup(self):
+        store = InProcessSessionStore(
+            hmac_key=b"s" * 32,
+            policy=SessionPolicy(idle_ttl_seconds=300, absolute_ttl_seconds=900),
+        )
+        issued = await store.issue(
+            principal=ManagementPrincipal.local_owner(),
+            authentication_method=SessionAuthenticationMethod.LOCAL_PASSWORD,
+            authorization_epoch=1,
+            now=1_000.0,
+        )
+        service = SessionService(store, identity_repository=self.repository)
+        request = Request(
+            {
+                "type": "http",
+                "method": "GET",
+                "path": "/api/identity/session",
+                "headers": [],
+            }
+        )
+        request.state.management_principal = issued.session.principal
+        verified = _VerifiedPanelToken(issued.token, issued.session.principal)
+
+        with (
+            patch(
+                "core.panel.identity_routes._identity_repository",
+                new=AsyncMock(return_value=self.repository),
+            ),
+            patch("core.panel.identity_routes.get_session_service", return_value=service),
+            patch("core.panel.identity_routes.time.time", return_value=1_001.0),
+        ):
+            context = await _management_context(request, verified)
+            current = await get_current_session(context)
+
+        self.assertEqual(type(context.token), str)
+        self.assertEqual(current.authentication_context, "opaque_session")
         self.assertTrue(current.session.current)
 
     async def test_legacy_migration_session_returns_no_synthetic_identifier(self):
