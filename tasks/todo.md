@@ -201,7 +201,13 @@ These queue items refine Phases 4–5 and do not add to the 28-item program deno
     Vietnamese/English/Simplified-Chinese, keyboard/focus, accessible-name, endpoint, and clean
     console checks passed without executing a governance mutation. OIDC remains disabled by
     default; one worker and one replica remain enforced until W4-C.
-- [ ] W4.13 Add the resumable durable-ledger migration contract.
+- [x] W4.13 Add the resumable durable-ledger migration contract.
+  - Completed on 2026-08-29. The closed semantic manifest binds every durable family and excludes
+    checkpoint control metadata from recursive copying. Source mutation barriers, exact endpoint
+    instances, strict add-or-equal target writes, explicit-empty declarations, streaming keyed
+    verification, and revision-one/CAS checkpoints fail closed. SQLite restart/corruption behavior
+    and PostgreSQL/MongoDB driver boundaries pass; live backend parity remains W4.14. All 987 tests
+    pass with 14 configured live-backend skips.
 - [ ] W4.14 Complete durable usage ledger and backend parity.
 - [ ] W4.15 Implement Redis semantic primitive parity.
 - [ ] W4.16 Coordinate identity/session/security runtime state.

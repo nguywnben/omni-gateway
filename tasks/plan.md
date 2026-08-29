@@ -46,11 +46,11 @@ or Phase 5 request tracing.
 - Wave 3 completion checkpoint: `76315e7` (`docs: close wave 3 operational evidence`).
 - Completed product scope: Phases 0–5; Wave 3 was accepted by the human on 2026-08-26 through the
   instruction to start the project and execute the next plan.
-- Active approved scope: Wave 4 under accepted ADR-007/ADR-008; W4.1–W4.12 and checkpoints W4-A/W4-B
-  are complete and W4.13 is the next implementation slice.
-- State: **READY — W4.13 NEXT**. The localized Identity console, authenticated browser matrix, and
-  complete OIDC/API/audit/recovery checkpoint gates are closed; the resumable durable-ledger
-  migration contract is next.
+- Active approved scope: Wave 4 under accepted ADR-007/ADR-008; W4.1–W4.13 and checkpoints W4-A/W4-B
+  are complete and W4.14 is the next implementation slice.
+- State: **READY — W4.14 NEXT**. The closed migration manifest, fail-closed authority contract,
+  bounded runner, and durable checkpoint repositories are complete; durable usage and live backend
+  parity are next.
 - Still gated by later slices and evidence: distributed-state activation, multiple workers/
   replicas, destructive migration, and production release activation.
 
@@ -656,6 +656,13 @@ Implementation slices:
    corruption, restart/resume, and backend selection behavior.
 5. Publish the operator contract, reconcile an adversarial review, run repository-wide gates,
    restart the committed standalone service, and leave all activation controls unchanged.
+
+Completed on 2026-08-29. Commits `ed707cc`, `691984b`, `6ed71e8`, and `f7ba28b` define the canonical
+manifest, strict resumable runner, three checkpoint repositories, and adversarial hardening. The
+usage ledger and hard-budget reservation journal deliberately remain not ready, so W4.13 cannot
+reach authority activation. All 987 tests pass with 14 opt-in live-backend skips; repository gates
+are clean. The maintained operator contract and review reconciliation are published with the
+closure checkpoint.
 
 - Acceptance: each record has one authoritative backend at every step; incomplete verification
   leaves standalone authoritative and can resume idempotently.

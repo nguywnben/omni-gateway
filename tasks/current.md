@@ -4,22 +4,22 @@
 
 - Updated: 2026-08-29 (Asia/Saigon).
 - Branch: `codex/enterprise-overhaul`.
-- Implementation baseline: `0d1f608 feat(identity): add localized governance console`.
-- Completed scope: Waves 1–3 / Phases 0–5 plus Wave 4 slices W4.1–W4.12 and checkpoints W4-A/W4-B.
+- Implementation baseline: `f7ba28b fix(storage): harden migration authority invariants`.
+- Completed scope: Waves 1–3 / Phases 0–5 plus Wave 4 slices W4.1–W4.13 and checkpoints W4-A/W4-B.
 - Original program progress: 21/28 approved checklist items complete (including specification and
   Phase 6 ADR approval), exactly 75.0%; wave execution-slice checkboxes are refinements and are not
   added to that denominator.
-- Active scope: Wave 4 W4.13, resumable durable-ledger migration contract.
-- Control state: **READY — W4.13 NEXT**.
-- Expected worktree state at this checkpoint: clean after the W4.12 documentation commit.
+- Active scope: Wave 4 W4.14, durable usage and backend parity.
+- Control state: **READY — W4.14 NEXT**.
+- Expected worktree state at this checkpoint: clean after the W4.13 closure commit.
 - Expected runtime: one Omni Gateway listener on `http://127.0.0.1:4283`; `/health` and `/ready`
   return HTTP 200.
-- Last verified full suite: 960 tests passed on Python 3.14.6 with 14 opt-in live backend tests
+- Last verified full suite: 987 tests passed on Python 3.14.6 with 14 opt-in live backend tests
   skipped because no test URI was configured. Repository-wide Ruff lint/format, compileall, pip
-  consistency, diff, 45 frontend JavaScript syntax checks, and dependency vulnerability audit pass
-  for W4.12. The authenticated Identity browser matrix passed 360/768/1024/1440 widths,
-  light/dark/system themes, Vietnamese/English/Simplified Chinese, keyboard/focus, accessible-name,
-  endpoint, and clean console checks without submitting a governance mutation.
+  consistency, YAML/shell syntax, diff, 45 frontend JavaScript syntax checks, and dependency
+  vulnerability audit pass for W4.13. The 17 dependency-free domain/runner tests and compileall
+  also pass on Python 3.12; repository tests requiring aiosqlite/pymongo were not run in that
+  interpreter because its global environment does not have those packages.
 
 Wave 2 was accepted and pushed by the human on 2026-08-24. Wave 3 / Phases 4–5 was accepted on
 2026-08-26. ADR-007/ADR-008 and the Wave 4 queue were accepted later that day when the human again
@@ -386,6 +386,17 @@ silently choosing a new design.
   restores focus on Escape, returns HTTP 200 from every Identity resource, and has no console
   warning/error. OIDC remains disabled by default and distributed runtime activation remains
   gated by W4-C.
+- W4.13 durable-migration evidence: `ed707cc` closes and versions the semantic inventory;
+  `691984b` adds the bounded resumable copy/streaming-verification runner; `6ed71e8` persists strict
+  checkpoints through SQLite, PostgreSQL, and MongoDB storage adapters; and `f7ba28b` reconciles the
+  fresh-context adversarial review. The hardening binds the canonical manifest and exact endpoint
+  instances, requires a source mutation barrier and put-if-absent-or-equal target writes, records
+  only safe numeric offsets, requires explicit-empty evidence, streams keyed digests, and removes
+  the forgeable rollback boolean. Usage and reservation families remain explicitly not ready, so
+  runtime authority activation is structurally unreachable in W4.13. All 987 tests pass with 14
+  opt-in live-backend skips; 17 dependency-free focused tests and compileall pass on Python 3.12.
+  Ruff lint/format, Python compile, pip consistency/audit, YAML/shell syntax, 45 JavaScript syntax,
+  secret, and whitespace gates pass. No W4.13 source was sent to an external model.
 
 ## Approved vs. Proposed Scope
 
@@ -412,7 +423,7 @@ silently choosing a new design.
 ### Approved and in progress
 
 - The Phase 6 specification, ADR-007, ADR-008, and Wave 4 execution queue.
-- W4.1–W4.12 and checkpoints W4-A/W4-B are complete; W4.13 is the active next slice.
+- W4.1–W4.13 and checkpoints W4-A/W4-B are complete; W4.14 is the active next slice.
 
 ### Approved for staged implementation, not active yet
 
@@ -440,12 +451,11 @@ checkboxes to be marked complete.
 
 ## Immediate Next Action
 
-Begin W4.13 by inventorying every usage, audit, trace, configuration, credential, identity, and
-session-related durable record, then define a resumable copy/checksum/authority-switch/rollback
-contract. At every checkpoint exactly one backend remains authoritative; interruption or checksum
-failure must leave standalone operation authoritative and safely resumable. Preserve `WORKERS=1`,
-one replica, disabled-by-default OIDC, and local-owner recovery while distributed activation
-remains gated.
+Begin W4.14 by replacing the standalone `usage_stats.db` authority with selected-backend usage and
+hard-budget reservation-journal repositories. Define estimate/commit/release/reconcile semantics,
+prove concurrency and restart behavior, and add live PostgreSQL/MongoDB parity tests before changing
+the manifest readiness flags. Preserve `WORKERS=1`, one replica, disabled-by-default OIDC, and
+source authority; W4.14 must not activate migration or coordinated mode.
 
 ## Update Rule
 
