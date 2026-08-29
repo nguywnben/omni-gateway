@@ -7,12 +7,15 @@ import dataclasses
 import sys
 import unittest
 from pathlib import Path
+from unittest.mock import AsyncMock, Mock, patch
 
 BACKEND_DIR = Path(__file__).resolve().parents[1]
 if str(BACKEND_DIR) not in sys.path:
     sys.path.insert(0, str(BACKEND_DIR))
 
+from core.storage.sqlite_manager import SQLiteManager
 from core.storage.usage_ledger_sqlite import SQLiteUsageLedgerRepository
+from core.storage_adapter import StorageAdapter
 from core.usage_ledger import (
     USAGE_LEDGER_SCHEMA_VERSION,
     BudgetReservationRequest,
@@ -191,6 +194,38 @@ class SQLiteUsageLedgerTests(unittest.IsolatedAsyncioTestCase):
                 _usage(occurred_at=NOW + 61),
                 transitioned_at=NOW + 61,
             )
+
+
+class UsageLedgerSelectionTests(unittest.IsolatedAsyncioTestCase):
+    async def test_adapter_forwards_creation_to_selected_backend(self):
+        expected = object()
+        backend = Mock()
+        backend.create_usage_ledger_repository = AsyncMock(return_value=expected)
+        adapter = StorageAdapter()
+        adapter._backend = backend
+        adapter._initialized = True
+
+        selected = await adapter.create_usage_ledger_repository()
+
+        self.assertIs(selected, expected)
+        backend.create_usage_ledger_repository.assert_awaited_once_with()
+
+    async def test_sqlite_manager_constructs_and_initializes_repository(self):
+        manager = SQLiteManager()
+        manager._db_path = "credentials.db"
+        manager._initialized = True
+        repository = Mock()
+        repository.initialize = AsyncMock()
+
+        with patch(
+            "core.storage.usage_ledger_sqlite.SQLiteUsageLedgerRepository",
+            return_value=repository,
+        ) as repository_class:
+            selected = await manager.create_usage_ledger_repository()
+
+        repository_class.assert_called_once_with("credentials.db")
+        repository.initialize.assert_awaited_once_with()
+        self.assertIs(selected, repository)
 
 
 if __name__ == "__main__":

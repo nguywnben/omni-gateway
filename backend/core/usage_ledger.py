@@ -7,7 +7,7 @@ import re
 from dataclasses import dataclass, fields
 from decimal import ROUND_CEILING, Decimal, InvalidOperation
 from enum import StrEnum
-from typing import Any, Mapping
+from typing import Any, Mapping, Protocol
 
 from core.quality_decision import COMPRESSION_REASONS, MAX_POLICY_REVISION, QUALITY_PROFILES
 
@@ -163,6 +163,35 @@ class SpendSnapshot:
         _strict_int(self.calls, "Spend call count", maximum=9_223_372_036_854_775_807)
         if type(self.available) is not bool:
             raise ValueError("Spend availability is invalid.")
+
+
+class UsageLedgerRepository(Protocol):
+    async def initialize(self) -> None: ...
+
+    async def append_usage(self, entry: UsageLedgerEntry) -> UsageAppendResult: ...
+
+    async def reserve_budget(
+        self, request: BudgetReservationRequest
+    ) -> BudgetReservationDecision: ...
+
+    async def commit_reservation(
+        self,
+        reservation_id: str,
+        usage: UsageLedgerEntry,
+        *,
+        transitioned_at: float,
+    ) -> BudgetCommitResult: ...
+
+    async def release_reservation(
+        self,
+        reservation_id: str,
+        *,
+        transitioned_at: float,
+    ) -> BudgetReleaseResult: ...
+
+    async def reconcile_expired(self, *, now: float, limit: int) -> int: ...
+
+    async def get_spend(self, *, since: float, api_key_id: str = "") -> SpendSnapshot: ...
 
 
 @dataclass(frozen=True, slots=True)

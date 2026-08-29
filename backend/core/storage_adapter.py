@@ -10,6 +10,7 @@ if TYPE_CHECKING:
     from core.durable_migration_runner import MigrationCheckpointRepository
     from core.identity.repository import IdentityRepository
     from core.request_trace import RequestTraceRepository
+    from core.usage_ledger import UsageLedgerRepository
 
 
 class StorageBackend(Protocol):
@@ -75,6 +76,8 @@ class StorageBackend(Protocol):
     async def create_request_trace_repository(
         self, *, cursor_signing_key: bytes
     ) -> "RequestTraceRepository": ...
+
+    async def create_usage_ledger_repository(self) -> "UsageLedgerRepository": ...
 
 
 class StorageAdapter:
@@ -246,6 +249,12 @@ class StorageAdapter:
         return await self._backend.create_request_trace_repository(
             cursor_signing_key=cursor_signing_key
         )
+
+    async def create_usage_ledger_repository(self) -> "UsageLedgerRepository":
+        """Create the usage ledger owned by the selected storage backend."""
+
+        self._ensure_initialized()
+        return await self._backend.create_usage_ledger_repository()
 
     async def export_credential_to_json(self, filename: str, output_path: str = None) -> bool:
         self._ensure_initialized()
