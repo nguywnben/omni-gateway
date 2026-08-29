@@ -676,11 +676,27 @@ closure checkpoint.
 Move remaining usage/cost ledger records behind selected-backend repositories and complete live
 SQLite/PostgreSQL/MongoDB parity.
 
+Implementation slices:
+
+1. Commit the strict usage-entry/reservation domain, async repository interface, threat model, and
+   migration/authority contract with failing abuse and concurrency tests.
+2. Implement real SQLite append/report/reserve/commit/release/reconcile semantics and additive
+   verified import from legacy `usage_stats.db`.
+3. Move the runtime `usage_stats` compatibility facade and its call sites to the async repository;
+   prove no silent zero, double commit, or private local database remains on the selected path.
+4. Implement PostgreSQL and transaction-capable MongoDB repositories against the same contract,
+   with deterministic driver-boundary tests and opt-in live parity suites.
+5. Integrate durable hard-budget journal admission/settlement with the in-process quota store while
+   leaving RPM/TPM coordination and Redis semantics for W4.15.
+6. Reconcile an adversarial review, publish migration/operations evidence, run repository-wide
+   gates, restart the committed standalone service, and leave every HA control unchanged.
+
 - Acceptance: estimate/commit/release/reconcile and reporting survive restart/migration with no
   double count or silent zero during outage.
 - Verification: concurrency, restart, migration, ledger-outage, and live backend tests.
 - Dependencies: W4.13.
 - Likely files: usage repository implementations, adapter, focused parity tests.
+- Maintained detailed contract: `docs/specs/durable-usage-ledger.md`.
 
 ### W4.15 — Redis semantic primitive parity
 
