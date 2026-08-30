@@ -207,6 +207,8 @@ class SQLiteUsageLedgerRepository:
                     decoded = self._decode_reservation(existing)
                     if self._request_from_reservation(decoded) != request:
                         raise UsageLedgerConflict("Budget reservation idempotency conflict.")
+                    if decoded.state is not BudgetReservationState.ACTIVE:
+                        raise UsageLedgerStateConflict("Budget reservation state conflict.")
                     await db.rollback()
                     return BudgetReservationDecision(
                         True,

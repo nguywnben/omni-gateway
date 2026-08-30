@@ -193,6 +193,8 @@ class SQLiteUsageLedgerTests(unittest.IsolatedAsyncioTestCase):
             await self.repository.reconcile_expired(now=NOW + 61, limit=100),
             0,
         )
+        with self.assertRaises(UsageLedgerStateConflict):
+            await self.repository.reserve_budget(late_release_request)
 
     async def test_conflicting_reservation_replay_and_expired_commit_fail_closed(self):
         request = _reservation("a")
