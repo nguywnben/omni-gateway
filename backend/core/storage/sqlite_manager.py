@@ -369,6 +369,7 @@ class SQLiteManager:
 
         repository = SQLiteUsageLedgerRepository(self._db_path)
         await repository.initialize()
+        await repository.import_legacy_usage(os.path.join(self._credentials_dir, "usage_stats.db"))
         return repository
 
     def _get_table_name(self, mode: str) -> str:

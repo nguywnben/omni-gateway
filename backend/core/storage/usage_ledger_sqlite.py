@@ -2,16 +2,21 @@
 
 from __future__ import annotations
 
+import asyncio
+import hashlib
 import json
 import math
 import sqlite3
+import time
 from contextlib import asynccontextmanager
-from dataclasses import replace
+from dataclasses import dataclass, replace
 from pathlib import Path
 
 import aiosqlite
+from core.quality_decision import normalize_quality_decision
 from core.usage_ledger import (
     MAX_COST_NANOS,
+    USAGE_LEDGER_SCHEMA_VERSION,
     BudgetCommitResult,
     BudgetReleaseResult,
     BudgetReservation,
@@ -29,11 +34,35 @@ from core.usage_ledger import (
     UsageTimeBucket,
     budget_reservation_from_record,
     usage_entry_from_record,
+    usd_to_nanos,
 )
 
 DAILY_WINDOW_SECONDS = 86_400.0
 MONTHLY_WINDOW_SECONDS = 30 * DAILY_WINDOW_SECONDS
 MAX_RECONCILE_BATCH = 1_000
+
+_LEGACY_OPTIONAL_DEFAULTS: dict[str, object] = {
+    "request_id": "",
+    "model": "",
+    "provider": "",
+    "status_code": 200,
+    "success": 1,
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "total_tokens": 0,
+    "cached_tokens": 0,
+    "reasoning_tokens": 0,
+    "estimated_input_tokens": 0,
+    "estimated_tokens_saved": 0,
+    "compressed_messages": 0,
+    "quality_profile": "",
+    "quality_policy_revision": 0,
+    "compression_reason": "",
+    "latency_ms": 0,
+    "retry_count": 0,
+    "cost_usd": 0,
+    "api_key_id": "",
+}
 
 _COLUMNS = (
     "record_id",
@@ -57,6 +86,14 @@ _COLUMNS = (
     "api_key_id",
     "payload",
 )
+
+
+@dataclass(frozen=True, slots=True)
+class LegacyUsageImportResult:
+    source_count: int
+    imported_count: int
+    source_checksum: str
+    verified: bool
 
 
 class SQLiteUsageLedgerRepository:
@@ -124,6 +161,16 @@ class SQLiteUsageLedgerRepository:
                 CREATE INDEX IF NOT EXISTS idx_durable_usage_credential
                 ON durable_usage_ledger(credential_ref, occurred_at)
                 WHERE occurred_at IS NOT NULL
+                """
+            )
+            await db.execute(
+                """
+                CREATE TABLE IF NOT EXISTS durable_usage_migrations (
+                    source_key TEXT PRIMARY KEY,
+                    source_count INTEGER NOT NULL,
+                    source_checksum TEXT NOT NULL,
+                    completed_at REAL NOT NULL
+                )
                 """
             )
             await db.commit()
@@ -373,6 +420,57 @@ class SQLiteUsageLedgerRepository:
             available=True,
         )
 
+    async def import_legacy_usage(self, source_path: str) -> LegacyUsageImportResult:
+        if not isinstance(source_path, str) or not source_path.strip():
+            raise ValueError("Legacy usage source path is invalid.")
+        source, exists, is_file = await asyncio.to_thread(self._legacy_source_details, source_path)
+        if not exists:
+            return LegacyUsageImportResult(0, 0, hashlib.sha256(b"").hexdigest(), True)
+        target = await asyncio.to_thread(Path(self._database_path).resolve)
+        if not is_file or source == target:
+            raise ValueError("Legacy usage source path is invalid.")
+
+        source_key = hashlib.sha256(str(source).casefold().encode("utf-8")).hexdigest()
+        entries = await asyncio.to_thread(self._read_legacy_entries, source, source_key)
+        source_hasher = hashlib.sha256()
+        imported = 0
+        for entry in entries:
+            source_hasher.update(self._payload(entry).encode("utf-8"))
+            source_hasher.update(b"\n")
+            async with self._connection() as db:
+                row = await self._get_by_event_locked(db, entry.event_id)
+            if row is None:
+                result = await self.append_usage(entry)
+                imported += 1 if result.inserted else 0
+                continue
+            decoded = self._decode_row(row)
+            if type(decoded) is not UsageLedgerEntry or self._migration_record(
+                decoded
+            ) != self._migration_record(entry):
+                raise UsageLedgerConflict("Legacy usage target verification conflict.")
+
+        checksum = source_hasher.hexdigest()
+        async with self._connection() as db:
+            await db.execute("BEGIN IMMEDIATE")
+            try:
+                await db.execute(
+                    """
+                    INSERT INTO durable_usage_migrations (
+                        source_key, source_count, source_checksum, completed_at
+                    ) VALUES (?, ?, ?, ?)
+                    ON CONFLICT(source_key) DO UPDATE SET
+                        source_count = excluded.source_count,
+                        source_checksum = excluded.source_checksum,
+                        completed_at = excluded.completed_at
+                    """,
+                    (source_key, len(entries), checksum, time.time()),
+                )
+                await db.commit()
+            except Exception:
+                await db.rollback()
+                raise
+        return LegacyUsageImportResult(len(entries), imported, checksum, True)
+
     async def aggregate_credentials(
         self, *, since: float | None = None
     ) -> list[CredentialUsageAggregate]:
@@ -574,6 +672,86 @@ class SQLiteUsageLedgerRepository:
         )
         if cursor.rowcount != 1:
             raise UsageLedgerStateConflict("Usage attribution revision conflict.")
+
+    @staticmethod
+    def _legacy_source_details(source_path: str) -> tuple[Path, bool, bool]:
+        source = Path(source_path).resolve()
+        return source, source.exists(), source.is_file()
+
+    @staticmethod
+    def _read_legacy_entries(source: Path, source_key: str) -> list[UsageLedgerEntry]:
+        connection = sqlite3.connect(f"{source.as_uri()}?mode=ro", uri=True)
+        connection.row_factory = sqlite3.Row
+        try:
+            table = connection.execute(
+                "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'usage_logs'"
+            ).fetchone()
+            if table is None:
+                raise UsageLedgerCorrupt("Legacy usage source schema is missing.")
+            columns = {str(row[1]) for row in connection.execute("PRAGMA table_info(usage_logs)")}
+            if not {"id", "filename", "timestamp"}.issubset(columns):
+                raise UsageLedgerCorrupt("Legacy usage source schema is invalid.")
+            selected = ["id", "filename", "timestamp"] + [
+                name for name in _LEGACY_OPTIONAL_DEFAULTS if name in columns
+            ]
+            rows = connection.execute(
+                f"SELECT {', '.join(selected)} FROM usage_logs ORDER BY id"
+            ).fetchall()
+        finally:
+            connection.close()
+
+        entries: list[UsageLedgerEntry] = []
+        for row in rows:
+            legacy_id = row["id"]
+            if type(legacy_id) is not int or legacy_id <= 0:
+                raise UsageLedgerCorrupt("Legacy usage source identity is invalid.")
+            values = {
+                name: (row[name] if name in row.keys() and row[name] is not None else default)
+                for name, default in _LEGACY_OPTIONAL_DEFAULTS.items()
+            }
+            if type(values["success"]) is not int or values["success"] not in {0, 1}:
+                raise UsageLedgerCorrupt("Legacy usage success flag is invalid.")
+            quality = normalize_quality_decision(values)
+            event_digest = hashlib.sha256(f"{source_key}:{legacy_id}".encode()).hexdigest()
+            try:
+                entries.append(
+                    UsageLedgerEntry(
+                        schema_version=USAGE_LEDGER_SCHEMA_VERSION,
+                        event_id=f"use_{event_digest[:32]}",
+                        occurred_at=row["timestamp"],
+                        credential_ref=row["filename"],
+                        request_id=values["request_id"],
+                        model=values["model"],
+                        provider=values["provider"],
+                        status_code=values["status_code"],
+                        success=bool(values["success"]),
+                        input_tokens=values["input_tokens"],
+                        output_tokens=values["output_tokens"],
+                        total_tokens=values["total_tokens"],
+                        cached_tokens=values["cached_tokens"],
+                        reasoning_tokens=values["reasoning_tokens"],
+                        estimated_input_tokens=values["estimated_input_tokens"],
+                        estimated_tokens_saved=values["estimated_tokens_saved"],
+                        compressed_messages=values["compressed_messages"],
+                        quality_profile=quality["quality_profile"],
+                        quality_policy_revision=quality["quality_policy_revision"],
+                        compression_reason=quality["compression_reason"],
+                        latency_ms=values["latency_ms"],
+                        retry_count=values["retry_count"],
+                        cost_nanos=usd_to_nanos(values["cost_usd"]),
+                        api_key_id=values["api_key_id"],
+                    )
+                )
+            except (TypeError, ValueError) as exc:
+                raise UsageLedgerCorrupt("Legacy usage source record is invalid.") from exc
+        return entries
+
+    @staticmethod
+    def _migration_record(entry: UsageLedgerEntry) -> dict[str, object]:
+        record = entry.to_record()
+        record.pop("credential_ref")
+        record.pop("provider")
+        return record
 
     @staticmethod
     def _report_timestamp(value: float, label: str) -> float:

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import dataclasses
+import sqlite3
 import sys
 import unittest
 from pathlib import Path
@@ -254,6 +255,93 @@ class SQLiteUsageLedgerTests(unittest.IsolatedAsyncioTestCase):
         retired = await self.repository.aggregate_credentials(since=NOW)
         self.assertEqual(retired[0].credential_ref, "__deleted_credential__openai.json")
 
+    async def test_legacy_import_is_read_only_verified_and_incremental(self):
+        source_path = str(Path(self.database_path).with_name("usage_stats.db"))
+        connection = sqlite3.connect(source_path)
+        try:
+            connection.execute(
+                """
+                CREATE TABLE usage_logs (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    filename TEXT NOT NULL,
+                    timestamp REAL NOT NULL,
+                    request_id TEXT DEFAULT '', model TEXT DEFAULT '',
+                    provider TEXT DEFAULT '', status_code INTEGER DEFAULT 200,
+                    success INTEGER DEFAULT 1, input_tokens INTEGER DEFAULT 0,
+                    output_tokens INTEGER DEFAULT 0, total_tokens INTEGER DEFAULT 0,
+                    cached_tokens INTEGER DEFAULT 0, reasoning_tokens INTEGER DEFAULT 0,
+                    estimated_input_tokens INTEGER DEFAULT 0,
+                    estimated_tokens_saved INTEGER DEFAULT 0,
+                    compressed_messages INTEGER DEFAULT 0,
+                    quality_profile TEXT DEFAULT '',
+                    quality_policy_revision INTEGER DEFAULT 0,
+                    compression_reason TEXT DEFAULT '', latency_ms INTEGER DEFAULT 0,
+                    retry_count INTEGER DEFAULT 0, cost_usd REAL DEFAULT 0,
+                    api_key_id TEXT DEFAULT ''
+                )
+                """
+            )
+            connection.execute(
+                """
+                INSERT INTO usage_logs (
+                    filename, timestamp, request_id, model, provider, total_tokens,
+                    quality_profile, compression_reason, cost_usd, api_key_id
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    "legacy.json",
+                    NOW,
+                    "request-legacy",
+                    "gpt-5.6",
+                    "openai",
+                    42,
+                    "balanced",
+                    "target_reached",
+                    0.125,
+                    KEY_ID,
+                ),
+            )
+            connection.commit()
+        finally:
+            connection.close()
+        source_before = await asyncio.to_thread(Path(source_path).read_bytes)
+
+        first = await self.repository.import_legacy_usage(source_path)
+        replay = await self.repository.import_legacy_usage(source_path)
+        self.assertEqual(first.source_count, 1)
+        self.assertEqual(first.imported_count, 1)
+        self.assertTrue(first.verified)
+        self.assertEqual(replay.imported_count, 0)
+        self.assertTrue(replay.verified)
+        self.assertEqual(await asyncio.to_thread(Path(source_path).read_bytes), source_before)
+        self.assertEqual((await self.repository.get_spend(since=0)).calls, 1)
+        self.assertEqual(
+            await self.repository.retire_credential(
+                "legacy.json",
+                "__deleted_credential__openai.json",
+                provider="openai",
+                limit=100,
+            ),
+            1,
+        )
+        self.assertTrue((await self.repository.import_legacy_usage(source_path)).verified)
+
+        connection = sqlite3.connect(source_path)
+        try:
+            connection.execute(
+                "INSERT INTO usage_logs (filename, timestamp) VALUES (?, ?)",
+                ("second.json", NOW + 1),
+            )
+            connection.commit()
+        finally:
+            connection.close()
+
+        incremental = await self.repository.import_legacy_usage(source_path)
+        self.assertEqual(incremental.source_count, 2)
+        self.assertEqual(incremental.imported_count, 1)
+        self.assertTrue(incremental.verified)
+        self.assertEqual((await self.repository.get_spend(since=0)).calls, 2)
+
 
 class UsageLedgerSelectionTests(unittest.IsolatedAsyncioTestCase):
     async def test_adapter_forwards_creation_to_selected_backend(self):
@@ -272,9 +360,11 @@ class UsageLedgerSelectionTests(unittest.IsolatedAsyncioTestCase):
     async def test_sqlite_manager_constructs_and_initializes_repository(self):
         manager = SQLiteManager()
         manager._db_path = "credentials.db"
+        manager._credentials_dir = "credentials"
         manager._initialized = True
         repository = Mock()
         repository.initialize = AsyncMock()
+        repository.import_legacy_usage = AsyncMock()
 
         with patch(
             "core.storage.usage_ledger_sqlite.SQLiteUsageLedgerRepository",
@@ -284,6 +374,9 @@ class UsageLedgerSelectionTests(unittest.IsolatedAsyncioTestCase):
 
         repository_class.assert_called_once_with("credentials.db")
         repository.initialize.assert_awaited_once_with()
+        repository.import_legacy_usage.assert_awaited_once_with(
+            str(Path("credentials") / "usage_stats.db")
+        )
         self.assertIs(selected, repository)
 
 
