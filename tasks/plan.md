@@ -46,11 +46,10 @@ or Phase 5 request tracing.
 - Wave 3 completion checkpoint: `76315e7` (`docs: close wave 3 operational evidence`).
 - Completed product scope: Phases 0–5; Wave 3 was accepted by the human on 2026-08-26 through the
   instruction to start the project and execute the next plan.
-- Active approved scope: Wave 4 under accepted ADR-007/ADR-008; W4.1–W4.13 and checkpoints W4-A/W4-B
-  are complete and W4.14 is the next implementation slice.
-- State: **READY — W4.14 NEXT**. The closed migration manifest, fail-closed authority contract,
-  bounded runner, and durable checkpoint repositories are complete; durable usage and live backend
-  parity are next.
+- Active approved scope: Wave 4 under accepted ADR-007/ADR-008; W4.1–W4.14 and checkpoints W4-A/W4-B
+  are complete and W4.15 is the next implementation slice.
+- State: **READY — W4.15 NEXT**. Selected-backend durable usage and hard-budget journals are
+  complete for standalone runtime; versioned Redis semantic primitives are next.
 - Still gated by later slices and evidence: distributed-state activation, multiple workers/
   replicas, destructive migration, and production release activation.
 
@@ -697,6 +696,13 @@ Implementation slices:
 - Dependencies: W4.13.
 - Likely files: usage repository implementations, adapter, focused parity tests.
 - Maintained detailed contract: `docs/specs/durable-usage-ledger.md`.
+
+Completed on 2026-08-30. Commits `aa3ab21`, `4443e4c`, `8bbae51`, `9860eb8`, `2dd0fbd`, `d0f1e98`,
+`763fd36`, `d51f5c0`, `52e707c`, `5d61244`, `8447ab0`, and `763662f` define the strict domain,
+SQLite authority/import, selected-backend lifecycle and reporting, PostgreSQL/MongoDB parity,
+runtime hard-budget settlement, and adversarial hardening. All 1,042 tests pass with 18 opt-in live
+backend skips; repository gates and the dependency audit are clean. Migration switch readiness
+remains fail-closed until W4.18 supplies production adapters, live evidence, and operator tooling.
 
 ### W4.15 — Redis semantic primitive parity
 

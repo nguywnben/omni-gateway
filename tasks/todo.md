@@ -208,7 +208,13 @@ These queue items refine Phases 4–5 and do not add to the 28-item program deno
     verification, and revision-one/CAS checkpoints fail closed. SQLite restart/corruption behavior
     and PostgreSQL/MongoDB driver boundaries pass; live backend parity remains W4.14. All 987 tests
     pass with 14 configured live-backend skips.
-- [ ] W4.14 Complete durable usage ledger and backend parity.
+- [x] W4.14 Complete durable usage ledger and backend parity.
+  - Completed on 2026-08-30. Selected-backend SQLite/PostgreSQL/MongoDB repositories own strict
+    usage entries, reporting, and durable hard-budget reserve/commit/release/reconcile semantics.
+    Legacy SQLite import is atomic, append-only, and verified; uncertain success settlement remains
+    conservatively charged instead of becoming silent zero spend. Internal adversarial review is
+    reconciled, all 1,042 tests pass with 18 opt-in live-backend skips, and repository gates plus
+    dependency audit are clean. Migration activation and Redis coordination remain closed.
 - [ ] W4.15 Implement Redis semantic primitive parity.
 - [ ] W4.16 Coordinate identity/session/security runtime state.
 - [ ] W4.17 Coordinate routing/governance/cache runtime state.
