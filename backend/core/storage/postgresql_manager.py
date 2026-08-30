@@ -265,6 +265,14 @@ class PostgreSQLManager:
         await repository.initialize()
         return repository
 
+    async def create_usage_ledger_repository(self):
+        self._ensure_initialized()
+        from .usage_ledger_postgresql import PostgreSQLUsageLedgerRepository
+
+        repository = PostgreSQLUsageLedgerRepository(self._pool)
+        await repository.initialize()
+        return repository
+
     def _get_table_name(self, mode: str) -> str:
         if mode == "primary":
             return "primary_credentials"

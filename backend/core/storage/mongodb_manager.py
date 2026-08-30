@@ -512,6 +512,18 @@ class MongoDBManager:
         await repository.initialize()
         return repository
 
+    async def create_usage_ledger_repository(self):
+        self._ensure_initialized()
+        from .usage_ledger_mongodb import MongoDBUsageLedgerRepository
+
+        repository = MongoDBUsageLedgerRepository(
+            self._client,
+            self._db["durable_usage_ledger"],
+            self._db["durable_usage_budget_keys"],
+        )
+        await repository.initialize()
+        return repository
+
     def _get_collection_name(self, mode: str) -> str:
         if mode == "primary":
             return "primary_credentials"
