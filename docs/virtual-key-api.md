@@ -84,18 +84,33 @@ highest calculated cost across its eligible concrete candidates. TPM reserves es
 tokens plus the requested maximum output; when no output maximum is supplied, the bounded default
 is 4,096 tokens. Local count-token operations reserve RPM only.
 
-Successful provider calls replace the estimate with normalized actual tokens and the policy cost
-written to the durable usage ledger. Successful non-generation endpoints retain their estimate;
-provider errors, response errors, disconnects, and cancelled streams release active capacity.
-Commit and release are idempotent. Active reservations expire after 15 minutes, while completed RPM
-and TPM usage remains in the rolling 60-second window. Actual usage above the estimate is committed
-and emits overspend telemetry so later requests observe the exceeded limit.
+Requests with a daily or monthly hard budget first write an active reservation to the usage ledger
+owned by the selected storage backend. The reserve transaction serializes decisions per virtual key
+and evaluates committed spend plus every active estimate in integer nano-USD. A ledger outage or an
+unknown transaction result fails authentication with HTTP 503; no cached snapshot can admit a
+hard-budget request.
 
-Daily and monthly budget snapshots are reconciled with unreconciled in-process commits without
-double counting. A spend-ledger outage fails hard-budget authentication with HTTP 503. Atomic
-enforcement currently uses the in-process state-store implementation and therefore does not relax
-the documented `WORKERS=1` and single-replica restriction. Prometheus exposes only bounded event
-labels in `omni_virtual_key_quota_events_total`; key IDs and request contents are never labels.
+Successful provider calls atomically replace the durable estimate with normalized actual tokens
+and policy cost. This prevents a crash window between recording usage and settling its reservation.
+Provider errors, response errors, disconnects, cancelled streams, and later RPM/TPM rejection
+release the durable estimate. Commit and release are idempotent, and terminal reservations cannot
+become active again. Active reservations expire after 15 minutes. Actual usage above the estimate
+is committed and emits overspend telemetry so later requests observe the exceeded limit.
+
+If the provider succeeded but ledger settlement is unavailable or uncertain, cleanup retains the
+durable reservation instead of releasing it. Once expired, its estimate is conservatively included
+in hard-budget enforcement for the rest of the applicable rolling window. Actual usage reports do
+not present that estimate as measured spend. This fail-closed posture can temporarily reduce
+available budget during an outage, but prevents a successful request from becoming unaccounted
+zero spend after restart. Local pending-settlement tracking expires with the reservation and is
+hard-capped; capacity exhaustion rejects new hard-budget requests with HTTP 503 rather than growing
+process memory without bound.
+
+RPM and TPM still use the in-process state-store boundary and completed rate usage remains in its
+rolling 60-second window. W4.14 therefore does not relax the documented `WORKERS=1` and
+single-replica restriction. Prometheus exposes only bounded event labels in
+`omni_virtual_key_quota_events_total` and `omni_usage_ledger_operations_total`; key IDs, request
+contents, amounts, and attribution never become labels.
 
 ## Management routes
 

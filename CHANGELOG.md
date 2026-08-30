@@ -12,6 +12,18 @@ All notable user-facing changes are documented in this file. Omni Gateway follow
 - Added disabled-by-default enterprise OIDC browser login with Authorization Code + PKCE,
   exact issuer/subject identities, explicit non-owner group-to-role mappings, and revocable
   sessions bound to identity and policy authorization revisions.
+- Added selected-backend durable usage and cost repositories for SQLite, PostgreSQL, and
+  transaction-capable MongoDB, including idempotent hard-budget reservation journals, restart-safe
+  settlement, read-only verified legacy SQLite import, and bounded ledger operation metrics.
+
+### Changed
+
+- Hard daily and monthly virtual-key budgets now reserve and settle against the selected durable
+  ledger before provider admission. RPM and TPM remain single-process until the Redis coordination
+  phase, so worker and replica limits are unchanged.
+- Successful provider responses with uncertain ledger settlement retain a conservative durable
+  estimate instead of being released as zero spend. Readiness now actively probes the selected
+  usage ledger, and compatibility reports fail closed at a bounded row ceiling.
 
 ### Fixed
 

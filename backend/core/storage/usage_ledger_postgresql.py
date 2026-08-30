@@ -12,6 +12,7 @@ from core.usage_ledger import (
     DAILY_WINDOW_SECONDS,
     MAX_COST_NANOS,
     MAX_RECONCILE_BATCH,
+    MAX_USAGE_REPORT_ROWS,
     MONTHLY_WINDOW_SECONDS,
     BudgetCommitResult,
     BudgetReleaseResult,
@@ -54,6 +55,41 @@ _COLUMNS = (
     "api_key_id",
     "payload",
 )
+
+_POSTGRES_LEDGER_SCHEMA = {
+    "record_id": ("text", "NO"),
+    "kind": ("text", "NO"),
+    "state": ("text", "NO"),
+    "revision": ("integer", "NO"),
+    "key_id": ("text", "NO"),
+    "created_at": ("double precision", "NO"),
+    "expires_at": ("double precision", "YES"),
+    "transitioned_at": ("double precision", "YES"),
+    "estimated_cost_nanos": ("bigint", "YES"),
+    "daily_budget_nanos": ("bigint", "YES"),
+    "monthly_budget_nanos": ("bigint", "YES"),
+    "event_id": ("text", "YES"),
+    "occurred_at": ("double precision", "YES"),
+    "credential_ref": ("text", "YES"),
+    "provider": ("text", "YES"),
+    "success": ("boolean", "YES"),
+    "total_tokens": ("bigint", "YES"),
+    "cost_nanos": ("bigint", "YES"),
+    "api_key_id": ("text", "YES"),
+    "payload": ("jsonb", "NO"),
+}
+_POSTGRES_SCHEMAS = {
+    "durable_usage_budget_keys": {"key_id": ("text", "NO")},
+    "durable_usage_ledger": _POSTGRES_LEDGER_SCHEMA,
+}
+_POSTGRES_REQUIRED_INDEXES = {
+    "idx_durable_usage_pg_spend": ("(api_key_id, occurred_at)", "cost_nanos is not null"),
+    "idx_durable_usage_pg_budget": ("(key_id, state, expires_at)", "kind = 'reservation'"),
+    "idx_durable_usage_pg_credential": (
+        "(credential_ref, occurred_at)",
+        "occurred_at is not null",
+    ),
+}
 
 
 class PostgreSQLUsageLedgerRepository:
@@ -109,9 +145,92 @@ class PostgreSQLUsageLedgerRepository:
             """,
         )
         async with self._pool.acquire() as connection:
-            for statement in statements:
+            for index, statement in enumerate(statements):
                 await connection.execute(statement)
+                if index == len(statements) - 1:
+                    rows = await connection.fetch(
+                        """
+                        SELECT table_name, column_name, data_type, is_nullable
+                        FROM information_schema.columns
+                        WHERE table_schema = current_schema()
+                          AND table_name IN (
+                              'durable_usage_budget_keys', 'durable_usage_ledger'
+                          )
+                        """
+                    )
+                    try:
+                        actual_schemas: dict[str, dict[str, tuple[str, str]]] = {}
+                        for row in rows:
+                            actual_schemas.setdefault(str(row["table_name"]), {})[
+                                str(row["column_name"])
+                            ] = (str(row["data_type"]), str(row["is_nullable"]))
+                    except (KeyError, TypeError) as exc:
+                        raise UsageLedgerCorrupt("Usage ledger schema is incompatible.") from exc
+                    if actual_schemas != _POSTGRES_SCHEMAS:
+                        raise UsageLedgerCorrupt("Usage ledger schema is incompatible.")
+                    constraint_rows = await connection.fetch(
+                        """
+                        SELECT table_ref.relname AS table_name, constraint_ref.contype,
+                               pg_get_constraintdef(constraint_ref.oid) AS definition
+                        FROM pg_constraint AS constraint_ref
+                        JOIN pg_class AS table_ref
+                          ON table_ref.oid = constraint_ref.conrelid
+                        JOIN pg_namespace AS namespace_ref
+                          ON namespace_ref.oid = table_ref.relnamespace
+                        WHERE namespace_ref.nspname = current_schema()
+                          AND table_ref.relname IN (
+                              'durable_usage_budget_keys', 'durable_usage_ledger'
+                          )
+                        """
+                    )
+                    constraints = {
+                        (
+                            str(row["table_name"]),
+                            str(row["contype"]),
+                            " ".join(str(row["definition"]).lower().split()),
+                        )
+                        for row in constraint_rows
+                    }
+                    required_constraints = {
+                        ("durable_usage_budget_keys", "p", "primary key (key_id)"),
+                        ("durable_usage_ledger", "p", "primary key (record_id)"),
+                        ("durable_usage_ledger", "u", "unique (event_id)"),
+                    }
+                    kind_checks = [
+                        definition
+                        for table_name, constraint_type, definition in constraints
+                        if table_name == "durable_usage_ledger" and constraint_type == "c"
+                    ]
+                    if not required_constraints.issubset(constraints) or not any(
+                        all(fragment in definition for fragment in ("kind", "usage", "reservation"))
+                        for definition in kind_checks
+                    ):
+                        raise UsageLedgerCorrupt("Usage ledger constraints are incompatible.")
+                    index_rows = await connection.fetch(
+                        """
+                        SELECT indexname, indexdef FROM pg_indexes
+                        WHERE schemaname = current_schema()
+                          AND tablename = 'durable_usage_ledger'
+                        """
+                    )
+                    indexes = {
+                        str(row["indexname"]): " ".join(str(row["indexdef"]).lower().split())
+                        for row in index_rows
+                    }
+                    for index_name, fragments in _POSTGRES_REQUIRED_INDEXES.items():
+                        definition = indexes.get(index_name, "")
+                        if any(fragment not in definition for fragment in fragments):
+                            raise UsageLedgerCorrupt("Usage ledger index schema is incompatible.")
         self._initialized = True
+
+    async def check_available(self) -> None:
+        self._ensure_initialized()
+        async with self._pool.acquire() as connection:
+            result = await connection.fetchval(
+                "SELECT COUNT(*) FROM durable_usage_ledger WHERE FALSE"
+            )
+        if result != 0:
+            raise UsageLedgerCorrupt("Usage ledger availability probe failed.")
 
     async def append_usage(self, entry: UsageLedgerEntry) -> UsageAppendResult:
         self._ensure_initialized()
@@ -422,12 +541,17 @@ class PostgreSQLUsageLedgerRepository:
         if until is not None:
             parameters.append(self._timestamp(until))
             clauses.append(f"occurred_at < ${len(parameters)}")
+        parameters.append(MAX_USAGE_REPORT_ROWS + 1)
+        limit_parameter = len(parameters)
         async with self._pool.acquire() as connection:
             rows = await connection.fetch(
                 f"SELECT {', '.join(_COLUMNS)} FROM durable_usage_ledger "
-                f"WHERE {' AND '.join(clauses)} ORDER BY occurred_at, record_id",
+                f"WHERE {' AND '.join(clauses)} ORDER BY occurred_at, record_id "
+                f"LIMIT ${limit_parameter}",
                 *parameters,
             )
+        if len(rows) > MAX_USAGE_REPORT_ROWS:
+            raise UsageLedgerCorrupt("Usage report exceeds the bounded row limit.")
         entries = []
         for row in rows:
             decoded = self._decode(row)
@@ -506,8 +630,19 @@ class PostgreSQLUsageLedgerRepository:
         return int(
             await connection.fetchval(
                 """
-                SELECT COALESCE(SUM(cost_nanos), 0) FROM durable_usage_ledger
-                WHERE api_key_id = $1 AND occurred_at >= $2 AND cost_nanos IS NOT NULL
+                SELECT COALESCE(SUM(
+                    CASE
+                        WHEN kind = 'reservation' THEN estimated_cost_nanos
+                        ELSE cost_nanos
+                    END
+                ), 0) FROM durable_usage_ledger
+                WHERE (
+                    api_key_id = $1 AND occurred_at >= $2 AND cost_nanos IS NOT NULL
+                ) OR (
+                    kind = 'reservation' AND state = 'expired'
+                    AND key_id = $1 AND created_at >= $2
+                    AND estimated_cost_nanos IS NOT NULL
+                )
                 """,
                 key_id,
                 since,

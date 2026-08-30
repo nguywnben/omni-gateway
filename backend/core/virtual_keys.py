@@ -50,6 +50,7 @@ LAST_USED_PERSIST_INTERVAL_SECONDS = 60.0
 RESERVATION_TTL_SECONDS = 15 * 60.0
 DEFAULT_RESERVED_OUTPUT_TOKENS = 4096
 MAX_RESERVED_TOKENS = 2_000_000
+MAX_LOCAL_DURABLE_RESERVATIONS = 100_000
 VIRTUAL_KEY_SCHEMA_VERSION = 2
 MAX_MODEL_PATTERNS = 64
 MAX_MODEL_PATTERN_LENGTH = 128
@@ -313,6 +314,9 @@ class VirtualKeyManager:
         self._state_store = state_store or InMemoryStateStore()
         self._usage_ledger_service = usage_ledger_service
         self._durable_reservation_ids: set[str] = set()
+        self._pending_durable_settlement_ids: set[str] = set()
+        self._durable_reservation_expiries: dict[str, float] = {}
+        self._durable_tracking_lock = threading.Lock()
 
     # ------------------------------------------------------------------
     # Persistence
@@ -611,6 +615,7 @@ class VirtualKeyManager:
     ) -> Optional[str]:
         """Authorize and atomically reserve constrained inference capacity."""
         current = time.time() if now is None else float(now)
+        self._prune_local_durable_reservations(current)
         self._enforce_active(record)
         required_scope = f"inference:{str(protocol or '').strip().lower()}"
         if required_scope not in INFERENCE_SCOPES or required_scope not in record.scopes:
@@ -663,6 +668,16 @@ class VirtualKeyManager:
                 if re.fullmatch(r"qrs_[0-9a-f]{32}", supplied_id)
                 else f"qrs_{secrets.token_hex(16)}"
             )
+            if not self._claim_local_durable_reservation(
+                internal_id,
+                now=current,
+                expires_at=current + RESERVATION_TTL_SECONDS,
+            ):
+                _increment_quota_metric("ledger_capacity_denied")
+                raise HTTPException(
+                    status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                    detail="API key budget enforcement is temporarily unavailable.",
+                )
             try:
                 durable_decision = await self._usage_ledger().reserve_budget(
                     BudgetReservationRequest(
@@ -686,6 +701,7 @@ class VirtualKeyManager:
                     )
                 )
             except Exception as exc:
+                self._discard_local_durable_reservation(internal_id)
                 _increment_quota_metric("ledger_unavailable")
                 log.error(
                     f"[virtual-keys] durable budget unavailable (error_type={type(exc).__name__})"
@@ -702,13 +718,13 @@ class VirtualKeyManager:
                     detail="API key budget enforcement is temporarily unavailable.",
                 ) from exc
             if not durable_decision.accepted:
+                self._discard_local_durable_reservation(internal_id)
                 _increment_quota_metric(f"rejected_{durable_decision.reason or 'unknown'}")
                 self._raise_reservation_rejection(
                     record,
                     durable_decision.reason,
                     0,
                 )
-            self._durable_reservation_ids.add(internal_id)
         else:
             internal_id = str(supplied_id or f"qrr_{secrets.token_hex(16)}")[:128]
         try:
@@ -839,7 +855,46 @@ class VirtualKeyManager:
         return get_usage_ledger_service()
 
     def is_durable_reservation(self, reservation_id: Optional[str]) -> bool:
-        return bool(reservation_id and reservation_id in self._durable_reservation_ids)
+        with self._durable_tracking_lock:
+            return bool(reservation_id and reservation_id in self._durable_reservation_ids)
+
+    def _claim_local_durable_reservation(
+        self,
+        reservation_id: str,
+        *,
+        now: float,
+        expires_at: float,
+    ) -> bool:
+        with self._durable_tracking_lock:
+            self._prune_local_durable_reservations_locked(now)
+            if reservation_id in self._durable_reservation_expiries:
+                return True
+            if len(self._durable_reservation_expiries) >= MAX_LOCAL_DURABLE_RESERVATIONS:
+                return False
+            self._durable_reservation_ids.add(reservation_id)
+            self._durable_reservation_expiries[reservation_id] = expires_at
+            return True
+
+    def _discard_local_durable_reservation(self, reservation_id: str) -> None:
+        with self._durable_tracking_lock:
+            self._durable_reservation_expiries.pop(reservation_id, None)
+            self._durable_reservation_ids.discard(reservation_id)
+            self._pending_durable_settlement_ids.discard(reservation_id)
+
+    def _prune_local_durable_reservations(self, now: float) -> None:
+        with self._durable_tracking_lock:
+            self._prune_local_durable_reservations_locked(now)
+
+    def _prune_local_durable_reservations_locked(self, now: float) -> None:
+        expired_ids = tuple(
+            reservation_id
+            for reservation_id, expires_at in self._durable_reservation_expiries.items()
+            if expires_at <= now
+        )
+        for reservation_id in expired_ids:
+            self._durable_reservation_expiries.pop(reservation_id, None)
+            self._durable_reservation_ids.discard(reservation_id)
+            self._pending_durable_settlement_ids.discard(reservation_id)
 
     async def _release_durable_after_admission_failure(
         self, reservation_id: str, transitioned_at: float
@@ -857,7 +912,7 @@ class VirtualKeyManager:
                 f"(error_type={type(exc).__name__})"
             )
         finally:
-            self._durable_reservation_ids.discard(reservation_id)
+            self._discard_local_durable_reservation(reservation_id)
 
     def _estimate_cost(
         self,
@@ -947,12 +1002,24 @@ class VirtualKeyManager:
     ) -> QuotaCommitResult:
         if not reservation_id:
             return QuotaCommitResult(False)
-        if durable_cost_recorded:
-            self._durable_reservation_ids.discard(str(reservation_id))
+        internal_id = str(reservation_id)
+        transitioned_at = time.time() if now is None else float(now)
+        self._prune_local_durable_reservations(transitioned_at)
+        with self._durable_tracking_lock:
+            if internal_id in self._durable_reservation_ids:
+                if durable_cost_recorded:
+                    self._durable_reservation_ids.discard(internal_id)
+                    self._pending_durable_settlement_ids.discard(internal_id)
+                    self._durable_reservation_expiries.pop(internal_id, None)
+                else:
+                    # The provider response succeeded but durable settlement did not.
+                    # Retain the durable reservation so final request cleanup cannot
+                    # erase the only crash-safe evidence of the admitted spend.
+                    self._pending_durable_settlement_ids.add(internal_id)
         result = await self._state_store.commit_quota(
             QuotaCommitRequest(
-                reservation_id=str(reservation_id),
-                now=time.time() if now is None else float(now),
+                reservation_id=internal_id,
+                now=transitioned_at,
                 actual_tokens=None if actual_tokens is None else max(0, int(actual_tokens)),
                 actual_cost_usd=(
                     None if actual_cost_usd is None else max(0.0, float(actual_cost_usd))
@@ -986,6 +1053,7 @@ class VirtualKeyManager:
             return False
         internal_id = str(reservation_id)
         transitioned_at = time.time() if now is None else float(now)
+        self._prune_local_durable_reservations(transitioned_at)
         released = False
         state_error: Exception | None = None
         try:
@@ -993,14 +1061,19 @@ class VirtualKeyManager:
         except Exception as exc:
             state_error = exc
         durable_released = False
-        if internal_id in self._durable_reservation_ids:
+        with self._durable_tracking_lock:
+            should_release_durable = (
+                internal_id in self._durable_reservation_ids
+                and internal_id not in self._pending_durable_settlement_ids
+            )
+        if should_release_durable:
             result = await self._usage_ledger().release_reservation(
                 internal_id,
                 transitioned_at=transitioned_at,
             )
             durable_released = result.released or result.idempotent
             if durable_released:
-                self._durable_reservation_ids.discard(internal_id)
+                self._discard_local_durable_reservation(internal_id)
         if released or durable_released:
             _increment_quota_metric("released")
             trace_decision(
@@ -1059,7 +1132,10 @@ class VirtualKeyManager:
     def reset_runtime_state(self) -> None:
         """Testing/maintenance hook: clear windows and caches, keep keys."""
         self._state_store = InMemoryStateStore()
-        self._durable_reservation_ids.clear()
+        with self._durable_tracking_lock:
+            self._durable_reservation_ids.clear()
+            self._pending_durable_settlement_ids.clear()
+            self._durable_reservation_expiries.clear()
 
     def invalidate(self) -> None:
         """Force a reload from storage on next access."""

@@ -129,6 +129,18 @@ class MongoDBUsageLedgerTests(unittest.IsolatedAsyncioTestCase):
         ledger.aggregate.assert_awaited_once()
         self.assertEqual((spend.cost_nanos, spend.total_tokens, spend.calls), (250, 12, 1))
 
+    async def test_availability_probe_rejects_a_missing_collection(self):
+        database = Mock()
+        database.list_collection_names = AsyncMock(return_value=[])
+        ledger = Mock(name="durable_usage_ledger")
+        ledger.name = "durable_usage_ledger"
+        ledger.database = database
+        repository = MongoDBUsageLedgerRepository(Mock(), ledger, Mock())
+        repository._initialized = True
+
+        with self.assertRaises(UsageLedgerCorrupt):
+            await repository.check_available()
+
     def test_strict_decode_checks_materialized_fields_against_payload(self):
         entry = _entry()
         repository = MongoDBUsageLedgerRepository(Mock(), Mock(), Mock())
@@ -145,10 +157,16 @@ class MongoDBUsageLedgerTests(unittest.IsolatedAsyncioTestCase):
         manager._initialized = True
         repository = Mock()
         repository.initialize = AsyncMock()
-        with patch(
-            "core.storage.usage_ledger_mongodb.MongoDBUsageLedgerRepository",
-            return_value=repository,
-        ) as repository_class:
+        with (
+            patch(
+                "core.storage.usage_legacy_gate.require_external_usage_migration_ready",
+                new=AsyncMock(),
+            ),
+            patch(
+                "core.storage.usage_ledger_mongodb.MongoDBUsageLedgerRepository",
+                return_value=repository,
+            ) as repository_class,
+        ):
             selected = await manager.create_usage_ledger_repository()
 
         repository_class.assert_called_once_with(

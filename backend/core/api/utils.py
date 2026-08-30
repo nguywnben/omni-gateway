@@ -226,7 +226,7 @@ async def _record_success_usage(
             )
         )
     except Exception as exc:
-        log.error(f"Failed to record successful usage for {filename}: {exc}")
+        log.error(f"Failed to record successful usage (error_type={type(exc).__name__}).")
 
     if reservation_id and actual_cost_calculated:
         try:
@@ -237,12 +237,9 @@ async def _record_success_usage(
                 durable_cost_recorded=durable_cost_recorded,
             )
             if result.overspent:
-                log.warning(
-                    "[virtual-keys] actual usage exceeded reserved capacity "
-                    f"for key id={api_key_id}"
-                )
+                log.warning("[virtual-keys] actual usage exceeded reserved capacity")
         except Exception as exc:
-            log.error(f"Failed to commit quota reservation for {api_key_id}: {exc}")
+            log.error(f"Failed to commit quota reservation (error_type={type(exc).__name__}).")
     trace_decision(
         category="usage",
         action="recorded",

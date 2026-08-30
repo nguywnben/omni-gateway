@@ -11,6 +11,7 @@ from core.usage_ledger import (
     DAILY_WINDOW_SECONDS,
     MAX_COST_NANOS,
     MAX_RECONCILE_BATCH,
+    MAX_USAGE_REPORT_ROWS,
     MONTHLY_WINDOW_SECONDS,
     BudgetCommitResult,
     BudgetReleaseResult,
@@ -119,6 +120,14 @@ class MongoDBUsageLedgerRepository:
                 "MongoDB usage ledger requires transaction-capable deployment."
             ) from exc
         self._initialized = True
+
+    async def check_available(self) -> None:
+        self._ensure_initialized()
+        names = await self._ledger.database.list_collection_names(
+            filter={"name": self._ledger.name}
+        )
+        if self._ledger.name not in names:
+            raise UsageLedgerCorrupt("Usage ledger collection is unavailable.")
 
     async def append_usage(self, entry: UsageLedgerEntry) -> UsageAppendResult:
         self._ensure_initialized()
@@ -449,11 +458,15 @@ class MongoDBUsageLedgerRepository:
             occurred["$gte"] = self._timestamp(since)
         if until is not None:
             occurred["$lt"] = self._timestamp(until)
-        cursor = self._ledger.find({"occurred_at": occurred}).sort(
-            [("occurred_at", ASCENDING), ("_id", ASCENDING)]
+        cursor = (
+            self._ledger.find({"occurred_at": occurred})
+            .sort([("occurred_at", ASCENDING), ("_id", ASCENDING)])
+            .limit(MAX_USAGE_REPORT_ROWS + 1)
         )
         entries: list[UsageLedgerEntry] = []
         async for document in cursor:
+            if len(entries) >= MAX_USAGE_REPORT_ROWS:
+                raise UsageLedgerCorrupt("Usage report exceeds the bounded row limit.")
             decoded = self._decode(document)
             if type(decoded) is UsageLedgerEntry:
                 entries.append(decoded)
@@ -539,7 +552,7 @@ class MongoDBUsageLedgerRepository:
         )
 
     async def _committed_cost(self, key_id: str, since: float, session: Any) -> int:
-        return await self._sum(
+        committed = await self._sum(
             {
                 "api_key_id": key_id,
                 "occurred_at": {"$gte": since},
@@ -548,6 +561,18 @@ class MongoDBUsageLedgerRepository:
             "cost_nanos",
             session,
         )
+        unresolved = await self._sum(
+            {
+                "kind": "reservation",
+                "state": "expired",
+                "key_id": key_id,
+                "created_at": {"$gte": since},
+                "estimated_cost_nanos": {"$ne": None},
+            },
+            "estimated_cost_nanos",
+            session,
+        )
+        return committed + unresolved
 
     async def _sum(self, query: dict[str, Any], field: str, session: Any) -> int:
         cursor = await self._ledger.aggregate(

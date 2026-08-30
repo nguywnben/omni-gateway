@@ -18,6 +18,7 @@ from core.usage_ledger import (
     DAILY_WINDOW_SECONDS,
     MAX_COST_NANOS,
     MAX_RECONCILE_BATCH,
+    MAX_USAGE_REPORT_ROWS,
     MONTHLY_WINDOW_SECONDS,
     USAGE_LEDGER_SCHEMA_VERSION,
     BudgetCommitResult,
@@ -86,6 +87,41 @@ _COLUMNS = (
     "payload",
 )
 
+_SQLITE_LEDGER_SCHEMA = {
+    "record_id": ("TEXT", 0, 1),
+    "kind": ("TEXT", 1, 0),
+    "state": ("TEXT", 1, 0),
+    "revision": ("INTEGER", 1, 0),
+    "key_id": ("TEXT", 1, 0),
+    "created_at": ("REAL", 1, 0),
+    "expires_at": ("REAL", 0, 0),
+    "transitioned_at": ("REAL", 0, 0),
+    "estimated_cost_nanos": ("INTEGER", 0, 0),
+    "daily_budget_nanos": ("INTEGER", 0, 0),
+    "monthly_budget_nanos": ("INTEGER", 0, 0),
+    "event_id": ("TEXT", 0, 0),
+    "occurred_at": ("REAL", 0, 0),
+    "credential_ref": ("TEXT", 0, 0),
+    "provider": ("TEXT", 0, 0),
+    "success": ("INTEGER", 0, 0),
+    "total_tokens": ("INTEGER", 0, 0),
+    "cost_nanos": ("INTEGER", 0, 0),
+    "api_key_id": ("TEXT", 0, 0),
+    "payload": ("TEXT", 1, 0),
+}
+_SQLITE_MIGRATION_SCHEMA = {
+    "source_key": ("TEXT", 0, 1),
+    "source_count": ("INTEGER", 1, 0),
+    "source_checksum": ("TEXT", 1, 0),
+    "completed_at": ("REAL", 1, 0),
+}
+_SQLITE_REQUIRED_INDEXES = {
+    "idx_durable_usage_event": (1, 1, ("event_id",)),
+    "idx_durable_usage_spend": (0, 1, ("api_key_id", "occurred_at")),
+    "idx_durable_usage_active_budget": (0, 1, ("key_id", "state", "expires_at")),
+    "idx_durable_usage_credential": (0, 1, ("credential_ref", "occurred_at")),
+}
+
 
 @dataclass(frozen=True, slots=True)
 class LegacyUsageImportResult:
@@ -134,6 +170,14 @@ class SQLiteUsageLedgerRepository:
                 )
                 """
             )
+            ledger_columns = {
+                str(row[1])
+                for row in await (
+                    await db.execute("PRAGMA table_info(durable_usage_ledger)")
+                ).fetchall()
+            }
+            if ledger_columns != set(_COLUMNS):
+                raise UsageLedgerCorrupt("Usage ledger schema is incompatible.")
             await db.execute(
                 """
                 CREATE UNIQUE INDEX IF NOT EXISTS idx_durable_usage_event
@@ -172,8 +216,29 @@ class SQLiteUsageLedgerRepository:
                 )
                 """
             )
+            migration_columns = {
+                str(row[1])
+                for row in await (
+                    await db.execute("PRAGMA table_info(durable_usage_migrations)")
+                ).fetchall()
+            }
+            if migration_columns != {
+                "source_key",
+                "source_count",
+                "source_checksum",
+                "completed_at",
+            }:
+                raise UsageLedgerCorrupt("Usage migration schema is incompatible.")
+            await self._validate_schema_locked(db)
             await db.commit()
         self._initialized = True
+
+    async def check_available(self) -> None:
+        self._ensure_initialized()
+        async with self._connection() as db:
+            await (
+                await db.execute("SELECT record_id FROM durable_usage_ledger LIMIT 1")
+            ).fetchone()
 
     async def append_usage(self, entry: UsageLedgerEntry) -> UsageAppendResult:
         self._require_entry(entry)
@@ -384,6 +449,7 @@ class SQLiteUsageLedgerRepository:
     async def reconcile_expired(self, *, now: float, limit: int) -> int:
         if type(limit) is not int or not 1 <= limit <= MAX_RECONCILE_BATCH:
             raise ValueError("Usage reconciliation limit is invalid.")
+        now = self._report_timestamp(now, "Usage reconciliation timestamp")
         async with self._connection() as db:
             await db.execute("BEGIN IMMEDIATE")
             try:
@@ -397,7 +463,7 @@ class SQLiteUsageLedgerRepository:
     async def get_spend(self, *, since: float, api_key_id: str = "") -> SpendSnapshot:
         self._ensure_initialized()
         where = "occurred_at >= ? AND cost_nanos IS NOT NULL"
-        parameters: list[object] = [float(since)]
+        parameters: list[object] = [self._report_timestamp(since, "Usage spend start")]
         if api_key_id:
             where += " AND api_key_id = ?"
             parameters.append(api_key_id)
@@ -433,27 +499,59 @@ class SQLiteUsageLedgerRepository:
 
         source_key = hashlib.sha256(str(source).casefold().encode("utf-8")).hexdigest()
         entries = await asyncio.to_thread(self._read_legacy_entries, source, source_key)
-        source_hasher = hashlib.sha256()
+        checksum = self._migration_checksum(entries)
         imported = 0
-        for entry in entries:
-            source_hasher.update(self._payload(entry).encode("utf-8"))
-            source_hasher.update(b"\n")
-            async with self._connection() as db:
-                row = await self._get_by_event_locked(db, entry.event_id)
-            if row is None:
-                result = await self.append_usage(entry)
-                imported += 1 if result.inserted else 0
-                continue
-            decoded = self._decode_row(row)
-            if type(decoded) is not UsageLedgerEntry or self._migration_record(
-                decoded
-            ) != self._migration_record(entry):
-                raise UsageLedgerConflict("Legacy usage target verification conflict.")
-
-        checksum = source_hasher.hexdigest()
         async with self._connection() as db:
             await db.execute("BEGIN IMMEDIATE")
             try:
+                marker = await (
+                    await db.execute(
+                        """
+                        SELECT source_count, source_checksum
+                        FROM durable_usage_migrations WHERE source_key = ?
+                        """,
+                        (source_key,),
+                    )
+                ).fetchone()
+                if marker is not None:
+                    previous_count = int(marker["source_count"])
+                    previous_checksum = str(marker["source_checksum"])
+                    current_prefix_checksum = self._migration_checksum(entries[:previous_count])
+                    legacy_prefix_checksum = self._legacy_full_checksum(entries[:previous_count])
+                    if len(entries) < previous_count or previous_checksum not in {
+                        current_prefix_checksum,
+                        legacy_prefix_checksum,
+                    }:
+                        raise UsageLedgerConflict("Legacy usage source changed after verification.")
+
+                target_hasher = hashlib.sha256()
+                for entry in entries:
+                    row = await self._get_by_event_locked(db, entry.event_id)
+                    if row is None:
+                        await self._insert_usage_locked(db, entry)
+                        imported += 1
+                        decoded = entry
+                    else:
+                        decoded = self._decode_row(row)
+                    if type(decoded) is not UsageLedgerEntry or self._migration_record(
+                        decoded
+                    ) != self._migration_record(entry):
+                        raise UsageLedgerConflict("Legacy usage target verification conflict.")
+                    target_hasher.update(self._migration_payload(decoded))
+                    target_hasher.update(b"\n")
+
+                # Re-read before the atomic target commit to detect a moving source.
+                verified_entries = await asyncio.to_thread(
+                    self._read_legacy_entries, source, source_key
+                )
+                if (
+                    len(verified_entries) != len(entries)
+                    or self._migration_checksum(verified_entries) != checksum
+                ):
+                    raise UsageLedgerConflict("Legacy usage source changed during verification.")
+                if target_hasher.hexdigest() != checksum:
+                    raise UsageLedgerConflict("Legacy usage target checksum mismatch.")
+
                 await db.execute(
                     """
                     INSERT INTO durable_usage_migrations (
@@ -632,10 +730,13 @@ class SQLiteUsageLedgerRepository:
                     f"""
                     SELECT {", ".join(_COLUMNS)} FROM durable_usage_ledger
                     WHERE {where} ORDER BY occurred_at, record_id
+                    LIMIT ?
                     """,
-                    tuple(parameters),
+                    tuple([*parameters, MAX_USAGE_REPORT_ROWS + 1]),
                 )
             ).fetchall()
+        if len(rows) > MAX_USAGE_REPORT_ROWS:
+            raise UsageLedgerCorrupt("Usage report exceeds the bounded row limit.")
         entries: list[UsageLedgerEntry] = []
         for row in rows:
             decoded = self._decode_row(row)
@@ -754,6 +855,31 @@ class SQLiteUsageLedgerRepository:
         record.pop("provider")
         return record
 
+    @classmethod
+    def _migration_payload(cls, entry: UsageLedgerEntry) -> bytes:
+        return json.dumps(
+            cls._migration_record(entry),
+            ensure_ascii=False,
+            allow_nan=False,
+            sort_keys=True,
+        ).encode("utf-8")
+
+    @classmethod
+    def _migration_checksum(cls, entries: list[UsageLedgerEntry]) -> str:
+        hasher = hashlib.sha256()
+        for entry in entries:
+            hasher.update(cls._migration_payload(entry))
+            hasher.update(b"\n")
+        return hasher.hexdigest()
+
+    @classmethod
+    def _legacy_full_checksum(cls, entries: list[UsageLedgerEntry]) -> str:
+        hasher = hashlib.sha256()
+        for entry in entries:
+            hasher.update(cls._payload(entry).encode("utf-8"))
+            hasher.update(b"\n")
+        return hasher.hexdigest()
+
     @staticmethod
     def _report_timestamp(value: float, label: str) -> float:
         if type(value) not in {int, float}:
@@ -805,6 +931,36 @@ class SQLiteUsageLedgerRepository:
     def _ensure_initialized(self, *, allow_initializing: bool = False) -> None:
         if not self._initialized and not allow_initializing:
             raise RuntimeError("Usage ledger repository is not initialized.")
+
+    @staticmethod
+    async def _validate_schema_locked(db: aiosqlite.Connection) -> None:
+        async def table_schema(table_name: str) -> dict[str, tuple[str, int, int]]:
+            rows = await (await db.execute(f"PRAGMA table_info({table_name})")).fetchall()
+            return {str(row[1]): (str(row[2]).upper(), int(row[3]), int(row[5])) for row in rows}
+
+        if await table_schema("durable_usage_ledger") != _SQLITE_LEDGER_SCHEMA:
+            raise UsageLedgerCorrupt("Usage ledger schema is incompatible.")
+        if await table_schema("durable_usage_migrations") != _SQLITE_MIGRATION_SCHEMA:
+            raise UsageLedgerCorrupt("Usage migration schema is incompatible.")
+
+        index_rows = await (await db.execute("PRAGMA index_list(durable_usage_ledger)")).fetchall()
+        indexes = {str(row[1]): (int(row[2]), int(row[4])) for row in index_rows}
+        for index_name, (unique, partial, expected_columns) in _SQLITE_REQUIRED_INDEXES.items():
+            if indexes.get(index_name) != (unique, partial):
+                raise UsageLedgerCorrupt("Usage ledger index schema is incompatible.")
+            column_rows = await (await db.execute(f"PRAGMA index_info({index_name})")).fetchall()
+            if tuple(str(row[2]) for row in column_rows) != expected_columns:
+                raise UsageLedgerCorrupt("Usage ledger index schema is incompatible.")
+
+        row = await (
+            await db.execute(
+                "SELECT sql FROM sqlite_master WHERE type = 'table' "
+                "AND name = 'durable_usage_ledger'"
+            )
+        ).fetchone()
+        schema_sql = " ".join(str(row[0] if row else "").lower().split())
+        if "check (kind in ('usage', 'reservation'))" not in schema_sql:
+            raise UsageLedgerCorrupt("Usage ledger constraints are incompatible.")
 
     @staticmethod
     def _require_entry(entry: UsageLedgerEntry) -> None:
@@ -996,11 +1152,22 @@ class SQLiteUsageLedgerRepository:
         row = await (
             await db.execute(
                 """
-                SELECT COALESCE(SUM(cost_nanos), 0)
+                SELECT COALESCE(SUM(
+                    CASE
+                        WHEN kind = 'reservation' THEN estimated_cost_nanos
+                        ELSE cost_nanos
+                    END
+                ), 0)
                 FROM durable_usage_ledger
-                WHERE api_key_id = ? AND occurred_at >= ? AND cost_nanos IS NOT NULL
+                WHERE (
+                    api_key_id = ? AND occurred_at >= ? AND cost_nanos IS NOT NULL
+                ) OR (
+                    kind = 'reservation' AND state = 'expired'
+                    AND key_id = ? AND created_at >= ?
+                    AND estimated_cost_nanos IS NOT NULL
+                )
                 """,
-                (key_id, float(since)),
+                (key_id, float(since), key_id, float(since)),
             )
         ).fetchone()
         return int(row[0] or 0)

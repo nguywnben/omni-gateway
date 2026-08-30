@@ -86,6 +86,9 @@ class UsageLedgerService:
             "recovered_at": self._recovered_at,
         }
 
+    async def check_available(self) -> None:
+        await self._run("health", self._repository.check_available())
+
     async def append_usage(self, entry: UsageLedgerEntry) -> UsageAppendResult:
         return await self._run("append", self._repository.append_usage(entry))
 

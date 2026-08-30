@@ -204,6 +204,13 @@ class BudgetReservationTests(unittest.TestCase):
                 with self.assertRaises(ValueError):
                     budget_reservation_from_record(record)
 
+    def test_reservation_revision_rejects_bool_and_float(self):
+        active = BudgetReservation.active(_request())
+        for revision in (True, 1.0):
+            with self.subTest(revision=revision):
+                with self.assertRaises(ValueError):
+                    dataclasses.replace(active, revision=revision)
+
     def test_stored_reservation_rejects_unknown_state_and_fields(self):
         record = BudgetReservation.active(_request()).to_record()
         record["state"] = "cancelled"

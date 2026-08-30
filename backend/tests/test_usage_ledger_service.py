@@ -74,6 +74,17 @@ class UsageLedgerServiceTests(unittest.IsolatedAsyncioTestCase):
             metrics,
         )
 
+    async def test_availability_check_actively_probes_repository(self):
+        repository = Mock()
+        repository.check_available = AsyncMock()
+        storage = Mock()
+        storage.create_usage_ledger_repository = AsyncMock(return_value=repository)
+        service = await initialize_usage_ledger_service(storage)
+
+        await service.check_available()
+
+        repository.check_available.assert_awaited_once_with()
+
 
 if __name__ == "__main__":
     unittest.main()

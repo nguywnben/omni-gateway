@@ -26,6 +26,7 @@ class HealthProbeTests(unittest.IsolatedAsyncioTestCase):
         storage = AsyncMock()
         storage.get_all_config.return_value = {}
         ledger = Mock()
+        ledger.check_available = AsyncMock()
         ledger.health_snapshot.return_value = {"available": True}
         with (
             patch(
@@ -38,6 +39,7 @@ class HealthProbeTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(json.loads(response.body)["storage"], "available")
+        ledger.check_available.assert_awaited_once_with()
 
     async def test_readiness_returns_503_without_exposing_exception(self):
         with patch(
@@ -55,6 +57,7 @@ class HealthProbeTests(unittest.IsolatedAsyncioTestCase):
         storage = AsyncMock()
         storage.get_all_config.return_value = {}
         ledger = Mock()
+        ledger.check_available = AsyncMock(side_effect=RuntimeError("offline"))
         ledger.health_snapshot.return_value = {"available": False}
         with (
             patch(

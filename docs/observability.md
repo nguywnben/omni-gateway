@@ -15,8 +15,10 @@ request IDs, trace IDs, credential identifiers, exception text, or model-route d
 Prometheus requires both `PROMETHEUS_EXPORT_ENABLED=true` and a `METRICS_TOKEN` of at least 32
 UTF-8 bytes. Scrapes of `GET /metrics` must send `Authorization: Bearer <token>`. The endpoint
 returns 404 while disabled, 503 for an unsafe enabled configuration, and compares tokens in
-constant time. Provider is the only deployment-derived label on ledger counters; RED metrics use
-only fixed quantile, category, and status vocabularies.
+constant time. Provider is the only deployment-derived label on spend counters. Durable-ledger
+operation counters use only closed backend, operation, and result labels; RED metrics use only fixed
+quantile, category, and status vocabularies. No virtual-key ID, request ID, credential reference,
+model, cost, or driver error becomes a metric label.
 
 OpenTelemetry requires `OTEL_EXPORT_ENABLED=true` and an HTTPS
 `OTEL_EXPORTER_OTLP_ENDPOINT`. The gateway sends aggregate OTLP/HTTP JSON gauges to `/v1/metrics`

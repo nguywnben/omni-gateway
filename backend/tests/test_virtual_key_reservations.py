@@ -23,7 +23,7 @@ from core.usage_ledger import (
     UsageLedgerError,
 )
 from core.usage_ledger_service import UsageLedgerService
-from core.virtual_keys import VirtualKey, VirtualKeyManager
+from core.virtual_keys import RESERVATION_TTL_SECONDS, VirtualKey, VirtualKeyManager
 from fastapi import HTTPException
 
 from backend.tests.support import workspace_temp_directory
@@ -227,6 +227,122 @@ class VirtualKeyReservationTests(unittest.IsolatedAsyncioTestCase):
             transitioned_at=1001.0,
         )
 
+    async def test_failed_success_settlement_never_releases_durable_reservation(self):
+        record = self._key(budget_daily_usd=10.0, rpm_limit=10)
+        reservation_id = await self.manager.enforce(
+            record,
+            requested_model="gpt-4o-mini",
+            request_body=self._body(),
+            now=1000.0,
+        )
+
+        await self.manager.commit_reservation(
+            reservation_id,
+            actual_tokens=120,
+            actual_cost_usd=0.25,
+            durable_cost_recorded=False,
+            now=1001.0,
+        )
+        released = await self.manager.release_reservation(reservation_id, now=1002.0)
+
+        self.assertFalse(released)
+        self.ledger.release_reservation.assert_not_awaited()
+        self.assertTrue(self.manager.is_durable_reservation(reservation_id))
+
+    async def test_expired_pending_settlement_ids_are_pruned_locally(self):
+        record = self._key(budget_daily_usd=100.0, rpm_limit=10)
+        first_id = await self.manager.enforce(
+            record,
+            requested_model="gpt-4o-mini",
+            request_body=self._body(),
+            now=1000.0,
+        )
+        await self.manager.commit_reservation(
+            first_id,
+            actual_tokens=120,
+            actual_cost_usd=0.25,
+            durable_cost_recorded=False,
+            now=1001.0,
+        )
+
+        second_id = await self.manager.enforce(
+            record,
+            requested_model="gpt-4o-mini",
+            request_body=self._body(),
+            now=1000.0 + RESERVATION_TTL_SECONDS + 1,
+        )
+
+        self.assertNotIn(first_id, self.manager._durable_reservation_ids)
+        self.assertNotIn(first_id, self.manager._pending_durable_settlement_ids)
+        self.assertEqual(self.manager._durable_reservation_ids, {second_id})
+
+    async def test_pending_settlement_tracking_has_a_hard_capacity_bound(self):
+        record = self._key(budget_daily_usd=100.0, rpm_limit=10)
+        first_id = await self.manager.enforce(
+            record,
+            requested_model="gpt-4o-mini",
+            request_body=self._body(),
+            now=1000.0,
+        )
+        await self.manager.commit_reservation(
+            first_id,
+            actual_tokens=120,
+            actual_cost_usd=0.25,
+            durable_cost_recorded=False,
+            now=1001.0,
+        )
+
+        with (
+            patch("core.virtual_keys.MAX_LOCAL_DURABLE_RESERVATIONS", 1),
+            self.assertRaises(HTTPException) as raised,
+        ):
+            await self.manager.enforce(
+                record,
+                requested_model="gpt-4o-mini",
+                request_body=self._body(),
+                now=1002.0,
+            )
+
+        self.assertEqual(raised.exception.status_code, 503)
+
+    async def test_pending_capacity_claim_is_atomic_across_concurrent_admission(self):
+        record = self._key(budget_daily_usd=100.0, rpm_limit=10)
+        first_started = asyncio.Event()
+        release_first = asyncio.Event()
+        reserve_calls = 0
+
+        async def reserve(request):
+            nonlocal reserve_calls
+            reserve_calls += 1
+            if reserve_calls == 1:
+                first_started.set()
+                await release_first.wait()
+            return BudgetReservationDecision(True, request.reservation_id)
+
+        self.ledger.reserve_budget.side_effect = reserve
+        with patch("core.virtual_keys.MAX_LOCAL_DURABLE_RESERVATIONS", 1):
+            first = asyncio.create_task(
+                self.manager.enforce(
+                    record,
+                    requested_model="gpt-4o-mini",
+                    request_body=self._body(),
+                    now=1000.0,
+                )
+            )
+            await first_started.wait()
+            with self.assertRaises(HTTPException) as raised:
+                await self.manager.enforce(
+                    record,
+                    requested_model="gpt-4o-mini",
+                    request_body=self._body(),
+                    now=1001.0,
+                )
+            release_first.set()
+            await first
+
+        self.assertEqual(raised.exception.status_code, 503)
+        self.assertEqual(reserve_calls, 1)
+
     async def test_durable_release_still_runs_when_rate_state_is_unavailable(self):
         record = self._key(budget_daily_usd=10.0, rpm_limit=10)
         reservation_id = await self.manager.enforce(
@@ -340,6 +456,52 @@ class DurableVirtualKeyRuntimeTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(raised.exception.status_code, 429)
         spend = await restarted_repository.get_spend(since=0, api_key_id=record.id)
         self.assertEqual((spend.calls, spend.cost_nanos), (1, 100_000_000))
+
+    async def test_unsettled_success_estimate_survives_restart_fail_closed(self):
+        now = time.time()
+        record = VirtualKeyReservationTests._key(
+            id="vk_unsettled_budget",
+            budget_daily_usd=0.15,
+            unknown_pricing_policy="fallback",
+            fallback_price_usd_per_million=1_000.0,
+        )
+        body = {
+            "model": "private-unpriced-model",
+            "messages": [],
+            "max_tokens": 100,
+        }
+        reservation_id = await self.manager.enforce(
+            record,
+            requested_model="private-unpriced-model",
+            request_body=body,
+            now=now,
+        )
+        await self.manager.commit_reservation(
+            reservation_id,
+            actual_tokens=100,
+            actual_cost_usd=0.1,
+            durable_cost_recorded=False,
+            now=now + 1,
+        )
+        await self.manager.release_reservation(reservation_id, now=now + 2)
+
+        restarted_repository = SQLiteUsageLedgerRepository(self.database_path)
+        await restarted_repository.initialize()
+        restarted_service = UsageLedgerService(restarted_repository)
+        restarted_manager = VirtualKeyManager(
+            state_store=InMemoryStateStore(),
+            usage_ledger_service=restarted_service,
+        )
+        restarted_manager._loaded = True
+        with self.assertRaises(HTTPException) as raised:
+            await restarted_manager.enforce(
+                record,
+                requested_model="private-unpriced-model",
+                request_body=body,
+                now=now + 61,
+            )
+
+        self.assertEqual(raised.exception.status_code, 429)
 
 
 if __name__ == "__main__":

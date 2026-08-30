@@ -34,7 +34,9 @@ async def ready() -> JSONResponse:
             },
         )
     try:
-        ledger = get_usage_ledger_service().health_snapshot()
+        service = get_usage_ledger_service()
+        await service.check_available()
+        ledger = service.health_snapshot()
         if not ledger["available"]:
             raise RuntimeError("Usage ledger is unavailable.")
     except Exception:

@@ -21,6 +21,7 @@ from core.usage_ledger import (
     USAGE_LEDGER_SCHEMA_VERSION,
     BudgetReservationRequest,
     UsageLedgerConflict,
+    UsageLedgerCorrupt,
     UsageLedgerEntry,
     UsageLedgerStateConflict,
     usd_to_nanos,
@@ -107,6 +108,54 @@ class SQLiteUsageLedgerTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(spend.total_tokens, 120)
         self.assertEqual(spend.cost_nanos, usd_to_nanos("0.25"))
 
+    async def test_initialize_rejects_an_existing_incompatible_schema(self):
+        incompatible_path = str(Path(self.database_path).with_name("incompatible.db"))
+        connection = sqlite3.connect(incompatible_path)
+        try:
+            connection.execute("CREATE TABLE durable_usage_ledger (record_id TEXT PRIMARY KEY)")
+            connection.commit()
+        finally:
+            connection.close()
+
+        repository = SQLiteUsageLedgerRepository(incompatible_path)
+        with self.assertRaises(UsageLedgerCorrupt):
+            await repository.initialize()
+
+    async def test_initialize_rejects_wrong_types_and_index_definitions(self):
+        incompatible_path = str(Path(self.database_path).with_name("wrong-types.db"))
+        connection = sqlite3.connect(incompatible_path)
+        try:
+            connection.execute(
+                """
+                CREATE TABLE durable_usage_ledger (
+                    record_id TEXT PRIMARY KEY, kind TEXT NOT NULL, state TEXT NOT NULL,
+                    revision TEXT NOT NULL, key_id TEXT NOT NULL, created_at REAL NOT NULL,
+                    expires_at REAL, transitioned_at REAL, estimated_cost_nanos TEXT,
+                    daily_budget_nanos INTEGER, monthly_budget_nanos INTEGER, event_id TEXT,
+                    occurred_at REAL, credential_ref TEXT, provider TEXT, success INTEGER,
+                    total_tokens INTEGER, cost_nanos TEXT, api_key_id TEXT, payload TEXT NOT NULL
+                )
+                """
+            )
+            connection.commit()
+        finally:
+            connection.close()
+
+        repository = SQLiteUsageLedgerRepository(incompatible_path)
+        with self.assertRaises(UsageLedgerCorrupt):
+            await repository.initialize()
+
+    async def test_availability_probe_touches_the_ledger_table(self):
+        connection = sqlite3.connect(self.database_path)
+        try:
+            connection.execute("DROP TABLE durable_usage_ledger")
+            connection.commit()
+        finally:
+            connection.close()
+
+        with self.assertRaises(sqlite3.OperationalError):
+            await self.repository.check_available()
+
     async def test_concurrent_reservations_cannot_knowingly_overspend(self):
         first, second = await asyncio.gather(
             self.repository.reserve_budget(_reservation("a")),
@@ -182,7 +231,7 @@ class SQLiteUsageLedgerTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(reconciled, 1)
         self.assertEqual(repeated, 0)
 
-        late_release_request = _reservation("c")
+        late_release_request = _reservation("c", daily_budget_nanos=usd_to_nanos("2.00"))
         await self.repository.reserve_budget(late_release_request)
         with self.assertRaises(UsageLedgerStateConflict):
             await self.repository.release_reservation(
@@ -256,6 +305,22 @@ class SQLiteUsageLedgerTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(changed, 3)
         retired = await self.repository.aggregate_credentials(since=NOW)
         self.assertEqual(retired[0].credential_ref, "__deleted_credential__openai.json")
+
+    async def test_public_timestamps_are_strict_and_finite(self):
+        for invalid in (True, float("nan"), float("inf"), -1):
+            with self.subTest(invalid=invalid):
+                with self.assertRaises(ValueError):
+                    await self.repository.get_spend(since=invalid)
+                with self.assertRaises(ValueError):
+                    await self.repository.reconcile_expired(now=invalid, limit=1)
+
+    async def test_reporting_fails_closed_before_materializing_unbounded_rows(self):
+        await self.repository.append_usage(_usage("a"))
+        await self.repository.append_usage(_usage("b"))
+
+        with patch("core.storage.usage_ledger_sqlite.MAX_USAGE_REPORT_ROWS", 1):
+            with self.assertRaises(UsageLedgerCorrupt):
+                await self.repository.aggregate_providers()
 
     async def test_legacy_import_is_read_only_verified_and_incremental(self):
         source_path = str(Path(self.database_path).with_name("usage_stats.db"))
@@ -343,6 +408,15 @@ class SQLiteUsageLedgerTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(incremental.imported_count, 1)
         self.assertTrue(incremental.verified)
         self.assertEqual((await self.repository.get_spend(since=0)).calls, 2)
+
+        connection = sqlite3.connect(source_path)
+        try:
+            connection.execute("DELETE FROM usage_logs WHERE id = 2")
+            connection.commit()
+        finally:
+            connection.close()
+        with self.assertRaises(UsageLedgerConflict):
+            await self.repository.import_legacy_usage(source_path)
 
 
 class UsageLedgerSelectionTests(unittest.IsolatedAsyncioTestCase):

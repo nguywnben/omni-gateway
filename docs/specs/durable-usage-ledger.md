@@ -61,18 +61,27 @@ repository result or an unavailable ledger.
 Commit atomically replaces the estimate with one actual usage entry. Exact replay is idempotent;
 a different actual event or amount conflicts. Release is idempotent and cannot release a committed
 reservation. Reconciliation expires only active reservations whose deadline passed and reports
-bounded counts; it never deletes usage or terminal journal history.
+bounded counts; it never deletes usage or terminal journal history. If a provider response
+succeeded but exact durable settlement could not be confirmed, request cleanup must not release
+the durable estimate. After expiry that unresolved estimate remains a conservative enforcement-
+only charge for the remainder of its daily/monthly window. It is deliberately absent from actual-
+usage reports because provider attribution and exact token/cost evidence were not committed. Local
+settlement tracking is pruned at the durable reservation TTL and has a 100,000-entry hard ceiling;
+new hard-budget admission fails with 503 at capacity. Durable expired evidence remains in the
+selected repository after local tracking is pruned. This may deny later work during an outage, but
+it cannot turn a known admitted request into silent zero spend.
 
 ## Repository interface
 
 SQLite, PostgreSQL, and MongoDB implement the same async semantic interface:
 
-1. initialize additive schema/indexes and validate capability;
+1. initialize additive schema/indexes, validate required schema, and actively probe availability;
 2. append an unreserved usage entry idempotently;
 3. reserve hard-budget capacity atomically per virtual key;
 4. atomically commit one reservation with its usage entry;
 5. release or expire an active reservation idempotently;
-6. query spend, credential aggregates, provider aggregates, and bounded time-series data;
+6. query spend, credential aggregates, provider aggregates, and bounded time-series data, failing
+   closed before more than 100,000 committed rows can be materialized by compatibility reporting;
 7. anonymize a retired credential reference without deleting history;
 8. enumerate/import W4.13 migration records in stable logical-key order.
 
@@ -89,9 +98,12 @@ threads.
 
 Legacy `usage_stats.db` remains read-only migration input and is never truncated:
 
-- SQLite standalone performs an additive, idempotent local import into `credentials.db`, records a
-  migration marker, verifies source/target counts and keyed content checksums, then selects the new
-  repository. Failure leaves the legacy source authoritative and startup unready.
+- SQLite standalone performs one atomic, additive, idempotent local import into `credentials.db`,
+  records an append-only source marker, verifies source/target counts and keyed immutable-content
+  checksums, then selects the new repository. Source shrink or prefix mutation fails closed; new
+  rows may be appended. Credential/provider attribution is excluded from the immutable checksum so
+  later credential retirement can anonymize it without invalidating the import evidence. Failure
+  rolls back target rows and leaves the legacy source authoritative and startup unready.
 - PostgreSQL/MongoDB do not silently import a host-local file or treat an empty target as zero. If
   legacy records exist without verified migration evidence, initialization reports
   `usage_migration_required`; W4.18 tooling performs the explicit cross-backend copy.
@@ -102,8 +114,11 @@ Legacy `usage_stats.db` remains read-only migration input and is never truncated
 On-call questions are: is the ledger available, are durable reservations balanced, are commits
 idempotent/conflicting, and is reconciliation lag growing? W4.14 emits only bounded event names and
 low-cardinality counters by backend/result. It never logs filenames, virtual-key IDs, request IDs,
-model text, costs tied to an identity, payloads, or driver/DSN secrets. Readiness must not report
-success when the selected repository is unavailable or migration is required.
+model text, costs tied to an identity, payloads, or driver/DSN secrets. Readiness performs a bounded
+selected-repository probe on every request and must not report success when that repository
+relation/collection is missing, unreadable, unavailable, or migration is required. Initialization
+validates required column types/nullability, primary and unique constraints, the closed record-kind
+check, and required index definitions before the repository can become ready.
 
 ## Verification and closure
 

@@ -18,6 +18,7 @@ MAX_RESERVATION_TTL_SECONDS = 86_400.0
 DAILY_WINDOW_SECONDS = 86_400.0
 MONTHLY_WINDOW_SECONDS = 30 * DAILY_WINDOW_SECONDS
 MAX_RECONCILE_BATCH = 1_000
+MAX_USAGE_REPORT_ROWS = 100_000
 
 _EVENT_ID = re.compile(r"use_[0-9a-f]{32}")
 _RESERVATION_ID = re.compile(r"qrs_[0-9a-f]{32}")
@@ -263,6 +264,8 @@ class UsageTimeBucket:
 class UsageLedgerRepository(Protocol):
     async def initialize(self) -> None: ...
 
+    async def check_available(self) -> None: ...
+
     async def append_usage(self, entry: UsageLedgerEntry) -> UsageAppendResult: ...
 
     async def reserve_budget(
@@ -483,6 +486,7 @@ class BudgetReservation:
         )
         if type(self.state) is not BudgetReservationState:
             raise ValueError("Budget reservation state is invalid.")
+        _strict_int(self.revision, "Budget reservation revision", minimum=1, maximum=2)
         if self.state is BudgetReservationState.ACTIVE:
             if self.revision != 1 or self.transitioned_at is not None or self.usage is not None:
                 raise ValueError("Active budget reservation evidence is invalid.")
