@@ -16,6 +16,7 @@ from core.usage_ledger_service import (
     close_usage_ledger_service,
     get_usage_ledger_service,
     initialize_usage_ledger_service,
+    render_usage_ledger_metrics,
 )
 
 
@@ -63,6 +64,15 @@ class UsageLedgerServiceTests(unittest.IsolatedAsyncioTestCase):
         recovered = await service.get_spend(since=0, api_key_id="vk_enterprise")
         self.assertEqual(recovered.calls, 3)
         self.assertTrue(service.health_snapshot()["available"])
+        metrics = render_usage_ledger_metrics()
+        self.assertIn(
+            'backend="unknown",operation="spend",result="error"',
+            metrics,
+        )
+        self.assertIn(
+            'backend="unknown",operation="spend",result="success"',
+            metrics,
+        )
 
 
 if __name__ == "__main__":

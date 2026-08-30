@@ -197,6 +197,9 @@ async def _record_success_usage(
     cost_override_usd = None
     durable_cost_recorded = False
     actual_cost_calculated = not bool(api_key_id)
+    durable_reservation_id = (
+        reservation_id if virtual_key_manager.is_durable_reservation(reservation_id) else ""
+    )
     try:
         if api_key_id:
             actual_cost_usd = await virtual_key_manager.calculate_actual_cost(
@@ -219,6 +222,7 @@ async def _record_success_usage(
                 request_id=get_request_id(),
                 api_key_id=api_key_id,
                 cost_override_usd=cost_override_usd,
+                durable_reservation_id=durable_reservation_id,
             )
         )
     except Exception as exc:

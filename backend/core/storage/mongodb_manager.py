@@ -514,8 +514,15 @@ class MongoDBManager:
 
     async def create_usage_ledger_repository(self):
         self._ensure_initialized()
-        from .usage_ledger_mongodb import MongoDBUsageLedgerRepository
+        from paths import DEFAULT_CREDENTIALS_DIR
 
+        from .usage_ledger_mongodb import MongoDBUsageLedgerRepository
+        from .usage_legacy_gate import require_external_usage_migration_ready
+
+        credentials_dir = os.getenv("CREDENTIALS_DIR", str(DEFAULT_CREDENTIALS_DIR))
+        await require_external_usage_migration_ready(
+            os.path.join(credentials_dir, "usage_stats.db")
+        )
         repository = MongoDBUsageLedgerRepository(
             self._client,
             self._db["durable_usage_ledger"],

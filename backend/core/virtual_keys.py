@@ -34,12 +34,16 @@ from core.state_store import (
     QuotaReservationRequest,
 )
 from core.token_estimator import estimate_input_tokens
+from core.usage_ledger import (
+    USAGE_LEDGER_SCHEMA_VERSION,
+    BudgetReservationRequest,
+    usd_to_nanos,
+)
 from fastapi import HTTPException, status
 from log import log
 
 VIRTUAL_KEYS_CONFIG_KEY = "virtual_keys"
 KEY_ID_PREFIX = "vk_"
-BUDGET_CACHE_TTL_SECONDS = 15.0
 DAILY_WINDOW_SECONDS = 86_400
 MONTHLY_WINDOW_SECONDS = 30 * 86_400
 LAST_USED_PERSIST_INTERVAL_SECONDS = 60.0
@@ -297,12 +301,18 @@ class VirtualKey:
 class VirtualKeyManager:
     """Loads, verifies, and enforces virtual API keys."""
 
-    def __init__(self, *, state_store: Optional[BaseStateStore] = None) -> None:
+    def __init__(
+        self,
+        *,
+        state_store: Optional[BaseStateStore] = None,
+        usage_ledger_service: Any = None,
+    ) -> None:
         self._keys_by_hash: Dict[str, VirtualKey] = {}
         self._loaded = False
         self._lock = asyncio.Lock()
-        self._budget_cache: Dict[str, Tuple[float, float, float]] = {}
         self._state_store = state_store or InMemoryStateStore()
+        self._usage_ledger_service = usage_ledger_service
+        self._durable_reservation_ids: set[str] = set()
 
     # ------------------------------------------------------------------
     # Persistence
@@ -406,7 +416,7 @@ class VirtualKeyManager:
         async with self._lock:
             self._keys_by_hash[record.key_hash] = record
             await self._persist()
-        log.info(f"[virtual-keys] created key id={record.id} name={record.name!r}")
+        log.info("[virtual-keys] created a virtual key")
         return record.to_public_dict(), plaintext
 
     async def update_key(
@@ -499,7 +509,7 @@ class VirtualKeyManager:
             self._keys_by_hash.pop(old_hash, None)
             self._keys_by_hash[record.key_hash] = record
             await self._persist()
-            log.info(f"[virtual-keys] rotated key id={record.id}")
+            log.info("[virtual-keys] rotated a virtual key")
             return record.to_public_dict(), plaintext
 
     async def revoke_key(
@@ -521,7 +531,7 @@ class VirtualKeyManager:
             record.revoked_at = time.time()
             record.revision += 1
             await self._persist()
-            log.info(f"[virtual-keys] revoked key id={record.id}")
+            log.info("[virtual-keys] revoked a virtual key")
             return record.to_public_dict()
 
     async def delete_key(self, key_id: str) -> bool:
@@ -531,13 +541,8 @@ class VirtualKeyManager:
             if record is None:
                 return False
             self._keys_by_hash.pop(record.key_hash, None)
-            self._budget_cache = {
-                cache_key: value
-                for cache_key, value in self._budget_cache.items()
-                if not cache_key.startswith(f"{record.id}:")
-            }
             await self._persist()
-            log.info(f"[virtual-keys] deleted key id={record.id}")
+            log.info("[virtual-keys] deleted a virtual key")
             return True
 
     def _find_by_id_locked(self, key_id: str) -> Optional[VirtualKey]:
@@ -650,21 +655,62 @@ class VirtualKeyManager:
             input_tokens=estimated_input,
             output_tokens=estimated_output,
         )
-        daily_spend, daily_snapshot_at = await self._get_spend_snapshot(
-            record.id,
-            "daily",
-            DAILY_WINDOW_SECONDS,
-            current,
-            enabled=record.budget_daily_usd is not None,
-        )
-        monthly_spend, monthly_snapshot_at = await self._get_spend_snapshot(
-            record.id,
-            "monthly",
-            MONTHLY_WINDOW_SECONDS,
-            current,
-            enabled=record.budget_monthly_usd is not None,
-        )
-        internal_id = str(reservation_id or f"qrs_{secrets.token_hex(16)}")[:128]
+        hard_budget = self._has_hard_budget(record)
+        supplied_id = str(reservation_id or "")
+        if hard_budget:
+            internal_id = (
+                supplied_id
+                if re.fullmatch(r"qrs_[0-9a-f]{32}", supplied_id)
+                else f"qrs_{secrets.token_hex(16)}"
+            )
+            try:
+                durable_decision = await self._usage_ledger().reserve_budget(
+                    BudgetReservationRequest(
+                        schema_version=USAGE_LEDGER_SCHEMA_VERSION,
+                        reservation_id=internal_id,
+                        key_id=record.id,
+                        created_at=current,
+                        expires_at=current + RESERVATION_TTL_SECONDS,
+                        estimated_tokens=estimated_tokens,
+                        estimated_cost_nanos=usd_to_nanos(estimated_cost),
+                        daily_budget_nanos=(
+                            None
+                            if record.budget_daily_usd is None
+                            else usd_to_nanos(record.budget_daily_usd)
+                        ),
+                        monthly_budget_nanos=(
+                            None
+                            if record.budget_monthly_usd is None
+                            else usd_to_nanos(record.budget_monthly_usd)
+                        ),
+                    )
+                )
+            except Exception as exc:
+                _increment_quota_metric("ledger_unavailable")
+                log.error(
+                    f"[virtual-keys] durable budget unavailable (error_type={type(exc).__name__})"
+                )
+                trace_decision(
+                    category="quota",
+                    action="denied",
+                    result="failed",
+                    reason="policy_unavailable",
+                    model=requested_model,
+                )
+                raise HTTPException(
+                    status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                    detail="API key budget enforcement is temporarily unavailable.",
+                ) from exc
+            if not durable_decision.accepted:
+                _increment_quota_metric(f"rejected_{durable_decision.reason or 'unknown'}")
+                self._raise_reservation_rejection(
+                    record,
+                    durable_decision.reason,
+                    0,
+                )
+            self._durable_reservation_ids.add(internal_id)
+        else:
+            internal_id = str(supplied_id or f"qrr_{secrets.token_hex(16)}")[:128]
         try:
             decision = await self._state_store.reserve_quota(
                 QuotaReservationRequest(
@@ -673,19 +719,20 @@ class VirtualKeyManager:
                     now=current,
                     ttl_seconds=RESERVATION_TTL_SECONDS,
                     estimated_tokens=estimated_tokens,
-                    estimated_cost_usd=estimated_cost,
+                    estimated_cost_usd=0.0 if hard_budget else estimated_cost,
                     rpm_limit=record.rpm_limit,
                     tpm_limit=record.tpm_limit,
-                    daily_budget_usd=record.budget_daily_usd,
-                    monthly_budget_usd=record.budget_monthly_usd,
-                    daily_spend_usd=daily_spend,
-                    monthly_spend_usd=monthly_spend,
-                    daily_snapshot_started_at=daily_snapshot_at,
-                    monthly_snapshot_started_at=monthly_snapshot_at,
+                    daily_budget_usd=None,
+                    monthly_budget_usd=None,
+                    daily_spend_usd=0.0,
+                    monthly_spend_usd=0.0,
+                    daily_snapshot_started_at=current,
+                    monthly_snapshot_started_at=current,
                 )
             )
         except Exception as exc:
-            log.error(f"[virtual-keys] quota state unavailable for key id={record.id}: {exc}")
+            await self._release_durable_after_admission_failure(internal_id, current)
+            log.error(f"[virtual-keys] quota state unavailable (error_type={type(exc).__name__})")
             trace_decision(
                 category="quota",
                 action="denied",
@@ -698,6 +745,7 @@ class VirtualKeyManager:
                 detail="API key quota enforcement is temporarily unavailable.",
             ) from exc
         if not decision.accepted:
+            await self._release_durable_after_admission_failure(internal_id, current)
             _increment_quota_metric(f"rejected_{decision.reason or 'unknown'}")
             trace_decision(
                 category="quota",
@@ -783,6 +831,34 @@ class VirtualKeyManager:
     def _has_hard_budget(record: VirtualKey) -> bool:
         return record.budget_daily_usd is not None or record.budget_monthly_usd is not None
 
+    def _usage_ledger(self) -> Any:
+        if self._usage_ledger_service is not None:
+            return self._usage_ledger_service
+        from core.usage_ledger_service import get_usage_ledger_service
+
+        return get_usage_ledger_service()
+
+    def is_durable_reservation(self, reservation_id: Optional[str]) -> bool:
+        return bool(reservation_id and reservation_id in self._durable_reservation_ids)
+
+    async def _release_durable_after_admission_failure(
+        self, reservation_id: str, transitioned_at: float
+    ) -> None:
+        if reservation_id not in self._durable_reservation_ids:
+            return
+        try:
+            await self._usage_ledger().release_reservation(
+                reservation_id,
+                transitioned_at=transitioned_at,
+            )
+        except Exception as exc:
+            log.error(
+                "[virtual-keys] failed to release durable budget after admission failure "
+                f"(error_type={type(exc).__name__})"
+            )
+        finally:
+            self._durable_reservation_ids.discard(reservation_id)
+
     def _estimate_cost(
         self,
         record: VirtualKey,
@@ -821,8 +897,7 @@ class VirtualKeyManager:
             if record.unknown_pricing_policy == "warn":
                 _increment_quota_metric("pricing_warned")
                 log.warning(
-                    "[virtual-keys] allowing unpriced budget reservation under warn policy "
-                    f"for key id={record.id}"
+                    "[virtual-keys] allowing an unpriced budget reservation under warn policy"
                 )
             if record.unknown_pricing_policy == "fallback":
                 _increment_quota_metric("pricing_fallback")
@@ -861,35 +936,6 @@ class VirtualKeyManager:
             headers=headers,
         )
 
-    async def _get_spend_snapshot(
-        self,
-        key_id: str,
-        window_name: str,
-        window_seconds: int,
-        now: float,
-        *,
-        enabled: bool,
-    ) -> Tuple[float, float]:
-        if not enabled:
-            return 0.0, now
-        cache_key = f"{key_id}:{window_name}"
-        cached = self._budget_cache.get(cache_key)
-        if cached is not None and (now - cached[0]) < BUDGET_CACHE_TTL_SECONDS:
-            return cached[1], cached[0]
-
-        from core.usage_stats import get_spend_since
-
-        spend_snapshot = await get_spend_since(now - window_seconds, key_id)
-        if spend_snapshot.get("available", True) is False:
-            _increment_quota_metric("ledger_unavailable")
-            raise HTTPException(
-                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail="API key budget enforcement is temporarily unavailable.",
-            )
-        spend = float(spend_snapshot.get("cost_usd") or 0.0)
-        self._budget_cache[cache_key] = (now, spend, float(window_seconds))
-        return spend, now
-
     async def commit_reservation(
         self,
         reservation_id: str,
@@ -901,6 +947,8 @@ class VirtualKeyManager:
     ) -> QuotaCommitResult:
         if not reservation_id:
             return QuotaCommitResult(False)
+        if durable_cost_recorded:
+            self._durable_reservation_ids.discard(str(reservation_id))
         result = await self._state_store.commit_quota(
             QuotaCommitRequest(
                 reservation_id=str(reservation_id),
@@ -936,11 +984,24 @@ class VirtualKeyManager:
     ) -> bool:
         if not reservation_id:
             return False
-        released = await self._state_store.release_quota(
-            str(reservation_id),
-            now=time.time() if now is None else float(now),
-        )
-        if released:
+        internal_id = str(reservation_id)
+        transitioned_at = time.time() if now is None else float(now)
+        released = False
+        state_error: Exception | None = None
+        try:
+            released = await self._state_store.release_quota(internal_id, now=transitioned_at)
+        except Exception as exc:
+            state_error = exc
+        durable_released = False
+        if internal_id in self._durable_reservation_ids:
+            result = await self._usage_ledger().release_reservation(
+                internal_id,
+                transitioned_at=transitioned_at,
+            )
+            durable_released = result.released or result.idempotent
+            if durable_released:
+                self._durable_reservation_ids.discard(internal_id)
+        if released or durable_released:
             _increment_quota_metric("released")
             trace_decision(
                 category="quota",
@@ -948,7 +1009,9 @@ class VirtualKeyManager:
                 result="succeeded",
                 reason="completed",
             )
-        return released
+        if state_error is not None:
+            raise state_error
+        return released or durable_released
 
     async def calculate_actual_cost(
         self,
@@ -996,7 +1059,7 @@ class VirtualKeyManager:
     def reset_runtime_state(self) -> None:
         """Testing/maintenance hook: clear windows and caches, keep keys."""
         self._state_store = InMemoryStateStore()
-        self._budget_cache.clear()
+        self._durable_reservation_ids.clear()
 
     def invalidate(self) -> None:
         """Force a reload from storage on next access."""

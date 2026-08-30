@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import sys
+import time
 import unittest
 from pathlib import Path
 from unittest.mock import AsyncMock, patch
@@ -16,6 +17,7 @@ if str(TESTS_DIR) not in sys.path:
 
 from core import usage_stats
 from core.storage.usage_ledger_sqlite import SQLiteUsageLedgerRepository
+from core.usage_ledger import USAGE_LEDGER_SCHEMA_VERSION, BudgetReservationRequest
 from core.usage_ledger_service import UsageLedgerService
 from support import workspace_temp_directory
 
@@ -98,6 +100,36 @@ class UsageStatsTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(row.total_latency_ms, 125)
         self.assertEqual(row.retry_count, 2)
         self.assertEqual((await usage_stats.get_spend_since(0))["cost_usd"], 0.125)
+
+    async def test_record_call_atomically_settles_durable_budget_reservation(self):
+        now = time.time()
+        reservation_id = "qrs_" + ("a" * 32)
+        await self.service.reserve_budget(
+            BudgetReservationRequest(
+                schema_version=USAGE_LEDGER_SCHEMA_VERSION,
+                reservation_id=reservation_id,
+                key_id="vk_enterprise",
+                created_at=now,
+                expires_at=now + 60,
+                estimated_tokens=200,
+                estimated_cost_nanos=200_000_000,
+                daily_budget_nanos=1_000_000_000,
+                monthly_budget_nanos=None,
+            )
+        )
+
+        recorded = await usage_stats.record_call(
+            "credential.json",
+            provider="openai",
+            token_usage={"input_tokens": 80, "output_tokens": 20, "total_tokens": 100},
+            api_key_id="vk_enterprise",
+            cost_override_usd=0.125,
+            durable_reservation_id=reservation_id,
+        )
+
+        spend = await self.repository.get_spend(since=0, api_key_id="vk_enterprise")
+        self.assertTrue(recorded)
+        self.assertEqual((spend.calls, spend.total_tokens, spend.cost_nanos), (1, 100, 125_000_000))
 
     async def test_invalid_cost_override_is_rejected_without_a_record(self):
         with self.assertRaises(ValueError):

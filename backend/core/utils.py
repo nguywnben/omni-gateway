@@ -279,7 +279,7 @@ async def authenticate_flexible(
     set_virtual_key_reservation_id(reservation_id or "")
     if reservation_id:
         request.state.virtual_key_reservation_id = reservation_id
-    log.debug(f"Authentication successful using {auth_method} (virtual key id={record.id})")
+    log.debug(f"Authentication successful using {auth_method} (virtual key)")
     return token
 
 

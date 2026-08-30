@@ -27,6 +27,7 @@ from core.request_trace_service import get_request_trace_service
 from core.response_cache import response_cache
 from core.storage_adapter import get_storage_adapter
 from core.telemetry_policy import TelemetryConfigurationError, get_telemetry_policy
+from core.usage_ledger_service import render_usage_ledger_metrics
 from core.usage_stats import get_provider_metrics
 from core.virtual_keys import render_virtual_key_quota_metrics
 from fastapi import APIRouter, Header, Response, status
@@ -147,6 +148,7 @@ def render_prometheus_metrics(
     lines.extend(render_credential_operation_metrics().rstrip().splitlines())
     lines.extend(render_management_session_metrics().rstrip().splitlines())
     lines.extend(render_virtual_key_quota_metrics().rstrip().splitlines())
+    lines.extend(render_usage_ledger_metrics().rstrip().splitlines())
     emit("omni_storage_ready", "gauge", "Whether the configured durable storage is reachable.")
     lines.append(f"omni_storage_ready {int(storage_ready)}")
 

@@ -96,6 +96,10 @@ class QuotaSuccessCommitTests(unittest.IsolatedAsyncioTestCase):
             request_scope("request-success"),
             patch("core.api.utils.virtual_key_manager.calculate_actual_cost", cost),
             patch("core.api.utils.virtual_key_manager.commit_reservation", commit),
+            patch(
+                "core.api.utils.virtual_key_manager.is_durable_reservation",
+                return_value=True,
+            ),
             patch("core.api.utils.record_call", ledger),
         ):
             set_api_key_id("vk_success")
@@ -109,6 +113,7 @@ class QuotaSuccessCommitTests(unittest.IsolatedAsyncioTestCase):
             )
 
         self.assertEqual(ledger.call_args.kwargs["cost_override_usd"], 0.125)
+        self.assertEqual(ledger.call_args.kwargs["durable_reservation_id"], "reservation-success")
         commit.assert_awaited_once_with(
             "reservation-success",
             actual_tokens=100,

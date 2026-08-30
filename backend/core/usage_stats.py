@@ -304,6 +304,7 @@ async def record_call(
     request_id: str = "",
     api_key_id: str = "",
     cost_override_usd: Optional[float] = None,
+    durable_reservation_id: str = "",
 ) -> bool:
     filename = os.path.basename(filename)
     if not filename:
@@ -326,10 +327,17 @@ async def record_call(
         if not math.isfinite(cost_usd) or cost_usd < 0:
             raise ValueError("Cost override must be a finite non-negative amount.")
     try:
+        occurred_at = time.time()
+        reservation_id = str(durable_reservation_id or "")
+        event_id = (
+            f"use_{reservation_id[4:]}"
+            if reservation_id.startswith("qrs_") and len(reservation_id) == 36
+            else f"use_{secrets.token_hex(16)}"
+        )
         entry = UsageLedgerEntry(
             schema_version=USAGE_LEDGER_SCHEMA_VERSION,
-            event_id=f"use_{secrets.token_hex(16)}",
-            occurred_at=time.time(),
+            event_id=event_id,
+            occurred_at=occurred_at,
             credential_ref=filename,
             request_id=str(request_id or "")[:128],
             model=model or "",
@@ -352,8 +360,18 @@ async def record_call(
             cost_nanos=usd_to_nanos(cost_usd),
             api_key_id=str(api_key_id or "")[:64],
         )
-        result = await get_usage_ledger_service().append_usage(entry)
-        return result.inserted or result.idempotent
+        service = get_usage_ledger_service()
+        if reservation_id:
+            result = await service.commit_reservation(
+                reservation_id,
+                entry,
+                transitioned_at=max(occurred_at, time.time()),
+            )
+            if result.overspent:
+                log.warning("Durable budget settlement exceeded its reserved estimate.")
+            return result.committed or result.idempotent
+        appended = await service.append_usage(entry)
+        return appended.inserted or appended.idempotent
     except Exception as exc:
         log.error(f"Failed to record usage call: {type(exc).__name__}")
         return False

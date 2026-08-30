@@ -18,6 +18,7 @@ if str(TESTS_DIR) not in sys.path:
 import asyncio
 
 from core import virtual_keys
+from core.usage_ledger import BudgetReleaseResult, BudgetReservationDecision
 from core.virtual_keys import (
     VirtualKey,
     VirtualKeyManager,
@@ -40,7 +41,15 @@ class _FakeStorage:
 
 
 def _patched_manager(storage: _FakeStorage) -> VirtualKeyManager:
-    manager = VirtualKeyManager()
+    ledger = AsyncMock()
+
+    async def reserve(request):
+        return BudgetReservationDecision(True, request.reservation_id)
+
+    ledger.reserve_budget.side_effect = reserve
+    ledger.release_reservation.return_value = BudgetReleaseResult(True)
+    manager = VirtualKeyManager(usage_ledger_service=ledger)
+    manager._test_usage_ledger = ledger
     return manager
 
 
@@ -139,7 +148,7 @@ class VirtualKeyEnforcementTests(unittest.TestCase):
         return VirtualKey(**defaults)
 
     def setUp(self):
-        self.manager = VirtualKeyManager()
+        self.manager = _patched_manager(_FakeStorage())
         self.manager._loaded = True
 
     def test_disabled_key_rejected_401(self):
@@ -199,36 +208,29 @@ class VirtualKeyEnforcementTests(unittest.TestCase):
 
     def test_budget_exceeded_rejected_429(self):
         record = self._make_key(budget_daily_usd=1.0)
-        with patch(
-            "core.usage_stats.get_spend_since",
-            new=AsyncMock(return_value={"cost_usd": 2.5, "total_tokens": 0, "calls": 3}),
-        ):
-            with self.assertRaises(HTTPException) as ctx:
-                _run(self.manager.enforce(record))
+
+        async def reject(request):
+            return BudgetReservationDecision(False, request.reservation_id, reason="daily_budget")
+
+        self.manager._test_usage_ledger.reserve_budget.side_effect = reject
+        with self.assertRaises(HTTPException) as ctx:
+            _run(self.manager.enforce(record))
         self.assertEqual(ctx.exception.status_code, 429)
         self.assertIn("Budget exceeded", ctx.exception.detail)
 
     def test_budget_under_limit_allows_request(self):
         record = self._make_key(budget_daily_usd=10.0)
-        with patch(
-            "core.usage_stats.get_spend_since",
-            new=AsyncMock(return_value={"cost_usd": 2.5, "total_tokens": 0, "calls": 3}),
-        ):
-            _run(self.manager.enforce(record))
+        _run(self.manager.enforce(record))
 
-    def test_budget_cache_avoids_repeated_ledger_queries(self):
+    def test_each_budget_admission_uses_atomic_ledger(self):
         record = self._make_key(budget_daily_usd=10.0)
-        with patch(
-            "core.usage_stats.get_spend_since",
-            new=AsyncMock(return_value={"cost_usd": 0.5, "total_tokens": 0, "calls": 1}),
-        ) as spend_mock:
 
-            async def scenario():
-                await self.manager.enforce(record)
-                await self.manager.enforce(record)
+        async def scenario():
+            await self.manager.enforce(record)
+            await self.manager.enforce(record)
 
-            _run(scenario())
-        self.assertEqual(spend_mock.call_count, 1)
+        _run(scenario())
+        self.assertEqual(self.manager._test_usage_ledger.reserve_budget.await_count, 2)
 
 
 class ExtractRequestedModelTests(unittest.TestCase):

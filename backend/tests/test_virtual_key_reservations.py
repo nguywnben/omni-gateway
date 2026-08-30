@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import re
 import sys
 import time
 import unittest
@@ -13,14 +14,33 @@ BACKEND_DIR = Path(__file__).resolve().parents[1]
 if str(BACKEND_DIR) not in sys.path:
     sys.path.insert(0, str(BACKEND_DIR))
 
+from core import usage_stats
 from core.state_store import InMemoryStateStore
+from core.storage.usage_ledger_sqlite import SQLiteUsageLedgerRepository
+from core.usage_ledger import (
+    BudgetReleaseResult,
+    BudgetReservationDecision,
+    UsageLedgerError,
+)
+from core.usage_ledger_service import UsageLedgerService
 from core.virtual_keys import VirtualKey, VirtualKeyManager
 from fastapi import HTTPException
+
+from backend.tests.support import workspace_temp_directory
 
 
 class VirtualKeyReservationTests(unittest.IsolatedAsyncioTestCase):
     def setUp(self) -> None:
-        self.manager = VirtualKeyManager(state_store=InMemoryStateStore())
+        self.ledger = AsyncMock()
+
+        async def reserve(request):
+            return BudgetReservationDecision(True, request.reservation_id)
+
+        self.ledger.reserve_budget.side_effect = reserve
+        self.ledger.release_reservation.return_value = BudgetReleaseResult(True)
+        self.manager = VirtualKeyManager(
+            state_store=InMemoryStateStore(), usage_ledger_service=self.ledger
+        )
         self.manager._loaded = True
 
     @staticmethod
@@ -117,20 +137,22 @@ class VirtualKeyReservationTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_warn_unknown_pricing_allows_bounded_reservation(self):
         record = self._key(budget_daily_usd=1.0, unknown_pricing_policy="warn")
-        with patch(
-            "core.usage_stats.get_spend_since",
-            new=AsyncMock(return_value={"cost_usd": 0.0}),
-        ):
-            reservation_id = await self.manager.enforce(
-                record,
-                requested_model="unpriced-enterprise-model",
-                candidate_models=["unpriced-enterprise-model"],
-                request_body=self._body(model="unpriced-enterprise-model"),
-                reservation_id="unpriced-warning",
-                now=1000.0,
-            )
+        reservation_id = await self.manager.enforce(
+            record,
+            requested_model="unpriced-enterprise-model",
+            candidate_models=["unpriced-enterprise-model"],
+            request_body=self._body(model="unpriced-enterprise-model"),
+            reservation_id="unpriced-warning",
+            now=1000.0,
+        )
 
-        self.assertEqual(reservation_id, "unpriced-warning")
+        self.assertRegex(reservation_id, re.compile(r"qrs_[0-9a-f]{32}"))
+        durable_request = self.ledger.reserve_budget.await_args.args[0]
+        self.assertEqual(durable_request.reservation_id, reservation_id)
+        state_request = self.manager._state_store._quota_reservations[reservation_id].request
+        self.assertIsNone(state_request.daily_budget_usd)
+        self.assertIsNone(state_request.monthly_budget_usd)
+        self.assertEqual(state_request.estimated_cost_usd, 0.0)
 
     async def test_fallback_pricing_reserves_cost_for_unknown_model(self):
         record = self._key(
@@ -138,39 +160,92 @@ class VirtualKeyReservationTests(unittest.IsolatedAsyncioTestCase):
             unknown_pricing_policy="fallback",
             fallback_price_usd_per_million=10.0,
         )
-        with patch(
-            "core.usage_stats.get_spend_since",
-            new=AsyncMock(return_value={"cost_usd": 0.0}),
-        ):
-            with self.assertRaises(HTTPException) as raised:
-                await self.manager.enforce(
-                    record,
-                    requested_model="unpriced-enterprise-model",
-                    candidate_models=["unpriced-enterprise-model"],
-                    request_body=self._body(model="unpriced-enterprise-model"),
-                    reservation_id="fallback-priced",
-                    now=1000.0,
-                )
+
+        async def reject(request):
+            return BudgetReservationDecision(False, request.reservation_id, reason="daily_budget")
+
+        self.ledger.reserve_budget.side_effect = reject
+        with self.assertRaises(HTTPException) as raised:
+            await self.manager.enforce(
+                record,
+                requested_model="unpriced-enterprise-model",
+                candidate_models=["unpriced-enterprise-model"],
+                request_body=self._body(model="unpriced-enterprise-model"),
+                reservation_id="fallback-priced",
+                now=1000.0,
+            )
 
         self.assertEqual(raised.exception.status_code, 429)
         self.assertIn("Budget", raised.exception.detail)
 
     async def test_hard_budget_fails_closed_when_ledger_is_unavailable(self):
         record = self._key(budget_daily_usd=10.0)
-        with patch(
-            "core.usage_stats.get_spend_since",
-            new=AsyncMock(return_value={"cost_usd": 0.0, "available": False}),
-        ):
-            with self.assertRaises(HTTPException) as raised:
-                await self.manager.enforce(
-                    record,
-                    requested_model="gpt-4o-mini",
-                    request_body=self._body(),
-                    reservation_id="ledger-unavailable",
-                    now=1000.0,
-                )
+        self.ledger.reserve_budget.side_effect = UsageLedgerError("offline")
+        with self.assertRaises(HTTPException) as raised:
+            await self.manager.enforce(
+                record,
+                requested_model="gpt-4o-mini",
+                request_body=self._body(),
+                reservation_id="ledger-unavailable",
+                now=1000.0,
+            )
 
         self.assertEqual(raised.exception.status_code, 503)
+
+    async def test_rate_rejection_releases_durable_budget_reservation(self):
+        record = self._key(budget_daily_usd=10.0, tpm_limit=1)
+
+        with self.assertRaises(HTTPException) as raised:
+            await self.manager.enforce(
+                record,
+                requested_model="gpt-4o-mini",
+                request_body=self._body(),
+                now=1000.0,
+            )
+
+        self.assertEqual(raised.exception.status_code, 429)
+        durable_request = self.ledger.reserve_budget.await_args.args[0]
+        self.ledger.release_reservation.assert_awaited_once_with(
+            durable_request.reservation_id,
+            transitioned_at=1000.0,
+        )
+
+    async def test_release_finalizes_both_rate_and_durable_reservations(self):
+        record = self._key(budget_daily_usd=10.0, rpm_limit=10)
+        reservation_id = await self.manager.enforce(
+            record,
+            requested_model="gpt-4o-mini",
+            request_body=self._body(),
+            now=1000.0,
+        )
+
+        released = await self.manager.release_reservation(reservation_id, now=1001.0)
+
+        self.assertTrue(released)
+        self.ledger.release_reservation.assert_awaited_once_with(
+            reservation_id,
+            transitioned_at=1001.0,
+        )
+
+    async def test_durable_release_still_runs_when_rate_state_is_unavailable(self):
+        record = self._key(budget_daily_usd=10.0, rpm_limit=10)
+        reservation_id = await self.manager.enforce(
+            record,
+            requested_model="gpt-4o-mini",
+            request_body=self._body(),
+            now=1000.0,
+        )
+        self.manager._state_store.release_quota = AsyncMock(
+            side_effect=RuntimeError("state unavailable")
+        )
+
+        with self.assertRaisesRegex(RuntimeError, "state unavailable"):
+            await self.manager.release_reservation(reservation_id, now=1001.0)
+
+        self.ledger.release_reservation.assert_awaited_once_with(
+            reservation_id,
+            transitioned_at=1001.0,
+        )
 
     async def test_commit_replaces_estimate_with_actual_usage(self):
         record = self._key(tpm_limit=100)
@@ -191,6 +266,80 @@ class VirtualKeyReservationTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertTrue(result.committed)
         self.assertTrue(result.overspent)
+
+
+class DurableVirtualKeyRuntimeTests(unittest.IsolatedAsyncioTestCase):
+    async def asyncSetUp(self):
+        self.temp_dir = workspace_temp_directory()
+        self.database_path = str(Path(self.temp_dir.__enter__()) / "usage.db")
+        repository = SQLiteUsageLedgerRepository(self.database_path)
+        await repository.initialize()
+        self.service = UsageLedgerService(repository)
+        self.manager = VirtualKeyManager(
+            state_store=InMemoryStateStore(),
+            usage_ledger_service=self.service,
+        )
+        self.manager._loaded = True
+
+    async def asyncTearDown(self):
+        self.temp_dir.__exit__(None, None, None)
+
+    async def test_committed_budget_survives_restart_without_double_counting(self):
+        now = time.time()
+        record = VirtualKeyReservationTests._key(
+            id="vk_restart_budget",
+            budget_daily_usd=0.15,
+            unknown_pricing_policy="fallback",
+            fallback_price_usd_per_million=1_000.0,
+        )
+        body = {
+            "model": "private-unpriced-model",
+            "messages": [],
+            "max_tokens": 100,
+        }
+        reservation_id = await self.manager.enforce(
+            record,
+            requested_model="private-unpriced-model",
+            request_body=body,
+            now=now,
+        )
+        with patch.object(usage_stats, "get_usage_ledger_service", return_value=self.service):
+            recorded = await usage_stats.record_call(
+                "credential.json",
+                provider="openai",
+                token_usage={"input_tokens": 0, "output_tokens": 100, "total_tokens": 100},
+                api_key_id=record.id,
+                cost_override_usd=0.1,
+                durable_reservation_id=reservation_id,
+            )
+        self.assertTrue(recorded)
+        await self.manager.commit_reservation(
+            reservation_id,
+            actual_tokens=100,
+            actual_cost_usd=0.1,
+            durable_cost_recorded=True,
+            now=now + 1,
+        )
+
+        restarted_repository = SQLiteUsageLedgerRepository(self.database_path)
+        await restarted_repository.initialize()
+        restarted_service = UsageLedgerService(restarted_repository)
+        restarted_manager = VirtualKeyManager(
+            state_store=InMemoryStateStore(),
+            usage_ledger_service=restarted_service,
+        )
+        restarted_manager._loaded = True
+        with self.assertRaises(HTTPException) as raised:
+            await restarted_manager.enforce(
+                record,
+                requested_model="private-unpriced-model",
+                request_body=body,
+                now=now + 2,
+            )
+
+        self.assertEqual(raised.exception.status_code, 429)
+        spend = await restarted_repository.get_spend(since=0, api_key_id=record.id)
+        self.assertEqual((spend.calls, spend.cost_nanos), (1, 100_000_000))
 
 
 if __name__ == "__main__":

@@ -43,6 +43,10 @@ class UsageLedgerCorrupt(UsageLedgerError):
     """Stored usage or reservation data failed strict reconstruction."""
 
 
+class UsageMigrationRequired(UsageLedgerError):
+    """Host-local legacy usage exists without verified external migration evidence."""
+
+
 def _strict_int(value: object, label: str, *, minimum: int = 0, maximum: int) -> int:
     if type(value) is not int or not minimum <= value <= maximum:
         raise ValueError(f"{label} is invalid.")

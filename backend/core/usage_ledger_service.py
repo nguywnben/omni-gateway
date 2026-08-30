@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import threading
 import time
 from collections.abc import Awaitable
 from typing import Any, TypeVar
@@ -16,12 +17,47 @@ from core.usage_ledger import (
     ProviderUsageAggregate,
     SpendSnapshot,
     UsageAppendResult,
+    UsageLedgerConflict,
     UsageLedgerEntry,
     UsageLedgerRepository,
+    UsageLedgerStateConflict,
     UsageTimeBucket,
 )
 
 _Result = TypeVar("_Result")
+_METRICS_LOCK = threading.Lock()
+_OPERATION_METRICS: dict[tuple[str, str, str], int] = {}
+
+
+def _repository_backend(repository: UsageLedgerRepository) -> str:
+    name = type(repository).__name__.lower()
+    for backend in ("sqlite", "postgresql", "mongodb"):
+        if backend in name:
+            return backend
+    return "unknown"
+
+
+def _increment_operation_metric(backend: str, operation: str, result: str) -> None:
+    with _METRICS_LOCK:
+        key = (backend, operation, result)
+        _OPERATION_METRICS[key] = _OPERATION_METRICS.get(key, 0) + 1
+
+
+def render_usage_ledger_metrics() -> str:
+    """Render bounded, attribution-free selected-ledger operation counters."""
+
+    with _METRICS_LOCK:
+        snapshot = dict(_OPERATION_METRICS)
+    lines = [
+        "# HELP omni_usage_ledger_operations_total Durable usage ledger operations.",
+        "# TYPE omni_usage_ledger_operations_total counter",
+    ]
+    for (backend, operation, result), count in sorted(snapshot.items()):
+        lines.append(
+            "omni_usage_ledger_operations_total"
+            f'{{backend="{backend}",operation="{operation}",result="{result}"}} {count}'
+        )
+    return "\n".join(lines) + "\n"
 
 
 class UsageLedgerService:
@@ -29,6 +65,7 @@ class UsageLedgerService:
 
     def __init__(self, repository: UsageLedgerRepository) -> None:
         self._repository = repository
+        self._backend = _repository_backend(repository)
         self._available = True
         self._failure_count = 0
         self._last_error_type = ""
@@ -50,10 +87,10 @@ class UsageLedgerService:
         }
 
     async def append_usage(self, entry: UsageLedgerEntry) -> UsageAppendResult:
-        return await self._run(self._repository.append_usage(entry))
+        return await self._run("append", self._repository.append_usage(entry))
 
     async def reserve_budget(self, request: BudgetReservationRequest) -> BudgetReservationDecision:
-        return await self._run(self._repository.reserve_budget(request))
+        return await self._run("reserve", self._repository.reserve_budget(request))
 
     async def commit_reservation(
         self,
@@ -63,11 +100,12 @@ class UsageLedgerService:
         transitioned_at: float,
     ) -> BudgetCommitResult:
         return await self._run(
+            "commit",
             self._repository.commit_reservation(
                 reservation_id,
                 usage,
                 transitioned_at=transitioned_at,
-            )
+            ),
         )
 
     async def release_reservation(
@@ -77,31 +115,39 @@ class UsageLedgerService:
         transitioned_at: float,
     ) -> BudgetReleaseResult:
         return await self._run(
+            "release",
             self._repository.release_reservation(
                 reservation_id,
                 transitioned_at=transitioned_at,
-            )
+            ),
         )
 
     async def reconcile_expired(self, *, now: float, limit: int) -> int:
-        return await self._run(self._repository.reconcile_expired(now=now, limit=limit))
+        return await self._run(
+            "reconcile", self._repository.reconcile_expired(now=now, limit=limit)
+        )
 
     async def get_spend(self, *, since: float, api_key_id: str = "") -> SpendSnapshot:
-        return await self._run(self._repository.get_spend(since=since, api_key_id=api_key_id))
+        return await self._run(
+            "spend", self._repository.get_spend(since=since, api_key_id=api_key_id)
+        )
 
     async def aggregate_credentials(
         self, *, since: float | None = None
     ) -> list[CredentialUsageAggregate]:
-        return await self._run(self._repository.aggregate_credentials(since=since))
+        return await self._run(
+            "report_credentials", self._repository.aggregate_credentials(since=since)
+        )
 
     async def aggregate_providers(self) -> list[ProviderUsageAggregate]:
-        return await self._run(self._repository.aggregate_providers())
+        return await self._run("report_providers", self._repository.aggregate_providers())
 
     async def aggregate_time_series(
         self, *, since: float, until: float, points: int
     ) -> list[UsageTimeBucket]:
         return await self._run(
-            self._repository.aggregate_time_series(since=since, until=until, points=points)
+            "report_time_series",
+            self._repository.aggregate_time_series(since=since, until=until, points=points),
         )
 
     async def retire_credential(
@@ -113,15 +159,16 @@ class UsageLedgerService:
         limit: int,
     ) -> int:
         return await self._run(
+            "retire_credential",
             self._repository.retire_credential(
                 credential_ref,
                 replacement_ref,
                 provider=provider,
                 limit=limit,
-            )
+            ),
         )
 
-    async def _run(self, operation: Awaitable[_Result]) -> _Result:
+    async def _run(self, operation_name: str, operation: Awaitable[_Result]) -> _Result:
         try:
             result = await operation
         except Exception as exc:
@@ -129,10 +176,21 @@ class UsageLedgerService:
             self._failure_count += 1
             self._last_error_type = type(exc).__name__
             self._last_failure_at = time.time()
+            if isinstance(exc, UsageLedgerConflict):
+                metric_result = "conflict"
+            elif isinstance(exc, UsageLedgerStateConflict):
+                metric_result = "state_conflict"
+            else:
+                metric_result = "error"
+            _increment_operation_metric(self._backend, operation_name, metric_result)
             raise
         if not self._available:
             self._recovered_at = time.time()
         self._available = True
+        metric_result = "idempotent" if bool(getattr(result, "idempotent", False)) else "success"
+        if hasattr(result, "accepted") and not bool(getattr(result, "accepted")):
+            metric_result = "rejected"
+        _increment_operation_metric(self._backend, operation_name, metric_result)
         return result
 
 
