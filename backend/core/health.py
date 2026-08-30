@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from core.storage_adapter import get_storage_adapter
+from core.usage_ledger_service import get_usage_ledger_service
 from fastapi import APIRouter
 from fastapi.responses import JSONResponse
 from log import log
@@ -26,6 +27,26 @@ async def ready() -> JSONResponse:
         log.warning("Readiness check failed because storage is unavailable.")
         return JSONResponse(
             status_code=503,
-            content={"status": "unavailable", "storage": "unavailable"},
+            content={
+                "status": "unavailable",
+                "storage": "unavailable",
+                "usage_ledger": "unavailable",
+            },
         )
-    return JSONResponse(content={"status": "ok", "storage": "available"})
+    try:
+        ledger = get_usage_ledger_service().health_snapshot()
+        if not ledger["available"]:
+            raise RuntimeError("Usage ledger is unavailable.")
+    except Exception:
+        log.warning("Readiness check failed because the usage ledger is unavailable.")
+        return JSONResponse(
+            status_code=503,
+            content={
+                "status": "unavailable",
+                "storage": "available",
+                "usage_ledger": "unavailable",
+            },
+        )
+    return JSONResponse(
+        content={"status": "ok", "storage": "available", "usage_ledger": "available"}
+    )

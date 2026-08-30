@@ -7,7 +7,7 @@ import sys
 import time
 import unittest
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 
 BACKEND_DIR = Path(__file__).resolve().parents[1]
 if str(BACKEND_DIR) not in sys.path:
@@ -117,7 +117,10 @@ class VirtualKeyReservationTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_warn_unknown_pricing_allows_bounded_reservation(self):
         record = self._key(budget_daily_usd=1.0, unknown_pricing_policy="warn")
-        with patch("core.usage_stats.get_spend_since", return_value={"cost_usd": 0.0}):
+        with patch(
+            "core.usage_stats.get_spend_since",
+            new=AsyncMock(return_value={"cost_usd": 0.0}),
+        ):
             reservation_id = await self.manager.enforce(
                 record,
                 requested_model="unpriced-enterprise-model",
@@ -135,7 +138,10 @@ class VirtualKeyReservationTests(unittest.IsolatedAsyncioTestCase):
             unknown_pricing_policy="fallback",
             fallback_price_usd_per_million=10.0,
         )
-        with patch("core.usage_stats.get_spend_since", return_value={"cost_usd": 0.0}):
+        with patch(
+            "core.usage_stats.get_spend_since",
+            new=AsyncMock(return_value={"cost_usd": 0.0}),
+        ):
             with self.assertRaises(HTTPException) as raised:
                 await self.manager.enforce(
                     record,
@@ -153,7 +159,7 @@ class VirtualKeyReservationTests(unittest.IsolatedAsyncioTestCase):
         record = self._key(budget_daily_usd=10.0)
         with patch(
             "core.usage_stats.get_spend_since",
-            return_value={"cost_usd": 0.0, "available": False},
+            new=AsyncMock(return_value={"cost_usd": 0.0, "available": False}),
         ):
             with self.assertRaises(HTTPException) as raised:
                 await self.manager.enforce(

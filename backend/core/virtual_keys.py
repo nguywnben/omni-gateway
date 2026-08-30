@@ -879,7 +879,7 @@ class VirtualKeyManager:
 
         from core.usage_stats import get_spend_since
 
-        spend_snapshot = await asyncio.to_thread(get_spend_since, now - window_seconds, key_id)
+        spend_snapshot = await get_spend_since(now - window_seconds, key_id)
         if spend_snapshot.get("available", True) is False:
             _increment_quota_metric("ledger_unavailable")
             raise HTTPException(
@@ -989,8 +989,8 @@ class VirtualKeyManager:
         from core.usage_stats import get_spend_since
 
         now = time.time()
-        daily = await asyncio.to_thread(get_spend_since, now - DAILY_WINDOW_SECONDS, key_id)
-        monthly = await asyncio.to_thread(get_spend_since, now - MONTHLY_WINDOW_SECONDS, key_id)
+        daily = await get_spend_since(now - DAILY_WINDOW_SECONDS, key_id)
+        monthly = await get_spend_since(now - MONTHLY_WINDOW_SECONDS, key_id)
         return {"daily": daily, "monthly": monthly}
 
     def reset_runtime_state(self) -> None:

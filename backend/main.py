@@ -58,6 +58,10 @@ from core.router.vertex.openai import router as vertex_openai_router
 from core.storage_adapter import close_storage_adapter
 from core.task_manager import create_managed_task, shutdown_all_tasks
 from core.telemetry_policy import get_telemetry_policy
+from core.usage_ledger_service import (
+    close_usage_ledger_service,
+    initialize_usage_ledger_service,
+)
 from fastapi import FastAPI, Request, Response
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
@@ -156,6 +160,18 @@ async def lifespan(app: FastAPI):
         raise RuntimeError("Request trace service initialization failed.") from e
 
     try:
+        await initialize_usage_ledger_service()
+        log.info("Durable usage ledger service initialized.")
+    except Exception as e:
+        log.critical(f"Usage ledger service initialization failed: {type(e).__name__}")
+        await close_request_trace_service()
+        await close_session_service()
+        await close_audit_service()
+        await credential_manager.close()
+        await close_storage_adapter()
+        raise RuntimeError("Usage ledger service initialization failed.") from e
+
+    try:
         telemetry_policy = get_telemetry_policy()
         if telemetry_policy.otel_enabled:
             create_managed_task(
@@ -164,6 +180,7 @@ async def lifespan(app: FastAPI):
             log.info("Content-free OpenTelemetry aggregate export enabled.")
     except Exception as e:
         log.critical(f"External telemetry configuration failed: {type(e).__name__}")
+        await close_usage_ledger_service()
         await close_request_trace_service()
         await close_session_service()
         await close_audit_service()
@@ -191,6 +208,12 @@ async def lifespan(app: FastAPI):
             log.info("All asynchronous tasks have been shut down.")
         except Exception as e:
             log.error(f"Error while shutting down asynchronous tasks: {e}")
+
+        try:
+            await close_usage_ledger_service()
+            log.info("Usage ledger service closed.")
+        except Exception as e:
+            log.error(f"Error while closing the usage ledger service: {e}")
 
         try:
             await close_request_trace_service()

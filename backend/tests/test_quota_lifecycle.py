@@ -6,7 +6,7 @@ import asyncio
 import sys
 import unittest
 from pathlib import Path
-from unittest.mock import AsyncMock, Mock, patch
+from unittest.mock import AsyncMock, patch
 
 BACKEND_DIR = Path(__file__).resolve().parents[1]
 if str(BACKEND_DIR) not in sys.path:
@@ -90,7 +90,7 @@ class QuotaSuccessCommitTests(unittest.IsolatedAsyncioTestCase):
         credential_manager = AsyncMock()
         cost = AsyncMock(return_value=0.125)
         commit = AsyncMock(return_value=QuotaCommitResult(True))
-        ledger = Mock(return_value=True)
+        ledger = AsyncMock(return_value=True)
 
         with (
             request_scope("request-success"),

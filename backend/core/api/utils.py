@@ -208,8 +208,7 @@ async def _record_success_usage(
             cost_override_usd = actual_cost_usd
             actual_cost_calculated = True
         durable_cost_recorded = bool(
-            await asyncio.to_thread(
-                record_call,
+            await record_call(
                 filename,
                 model=model_name,
                 provider=provider,
@@ -316,8 +315,7 @@ async def record_api_call_error(
 ) -> None:
     if credential_manager and credential_name:
         try:
-            await asyncio.to_thread(
-                record_call,
+            await record_call(
                 credential_name,
                 model=model_name or "",
                 provider=provider or mode,
@@ -370,8 +368,7 @@ async def record_model_route_miss(
         log.error(f"Failed to set model cooldown for {credential_name}: {exc}")
 
     try:
-        await asyncio.to_thread(
-            record_call,
+        await record_call(
             credential_name,
             model=model_name,
             provider=provider,
@@ -403,8 +400,7 @@ async def record_unassigned_api_call_error(
 ) -> None:
     """Record a gateway-level request failure that cannot be attributed to a credential."""
     try:
-        await asyncio.to_thread(
-            record_call,
+        await record_call(
             UNASSIGNED_USAGE_FILENAME,
             model=model_name or "",
             provider=mode,

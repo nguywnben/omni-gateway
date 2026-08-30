@@ -197,7 +197,7 @@ class CredentialManager:
                 )
                 return False
 
-            retire_credential_usage(
+            await retire_credential_usage(
                 credential_name,
                 provider_id,
                 credential_type=credential_data.get("credential_type", ""),

@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import asyncio
 import hmac
 import time
 from typing import Dict, List, Optional
@@ -222,7 +221,7 @@ async def metrics(authorization: Optional[str] = Header(None)) -> Response:
             media_type="text/plain",
         )
 
-    provider_rows = await asyncio.to_thread(get_provider_metrics)
+    provider_rows = await get_provider_metrics()
     try:
         operational = await get_operational_health_snapshot(
             get_request_trace_service(), window_seconds=900

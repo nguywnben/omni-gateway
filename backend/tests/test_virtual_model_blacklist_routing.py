@@ -28,7 +28,7 @@ class VirtualModelBlacklistRoutingTests(unittest.IsolatedAsyncioTestCase):
     async def test_model_route_miss_sets_a_credential_scoped_cooldown(self):
         manager = AsyncMock()
 
-        with patch("core.api.utils.asyncio.to_thread", AsyncMock()) as record_mock:
+        with patch("core.api.utils.record_call", AsyncMock(return_value=True)) as record_mock:
             await record_model_route_miss(
                 manager,
                 "credential.json",

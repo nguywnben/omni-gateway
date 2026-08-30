@@ -61,6 +61,8 @@ class ApplicationLifecycleTests(unittest.IsolatedAsyncioTestCase):
             patch("main.close_oidc_login_service", new=AsyncMock()) as close_oidc,
             patch("main.initialize_request_trace_service", new=AsyncMock()),
             patch("main.close_request_trace_service", new=AsyncMock()),
+            patch("main.initialize_usage_ledger_service", new=AsyncMock()),
+            patch("main.close_usage_ledger_service", new=AsyncMock()) as close_usage,
             patch("main.close_audit_service", new=AsyncMock()) as close_audit,
             patch("main.credential_manager.close", new=AsyncMock()) as close_manager,
             patch("main.close_storage_adapter", new=AsyncMock()) as close_storage,
@@ -73,6 +75,7 @@ class ApplicationLifecycleTests(unittest.IsolatedAsyncioTestCase):
 
         stop_keep_alive.assert_awaited_once_with()
         shutdown_tasks.assert_awaited_once_with(timeout=10.0)
+        close_usage.assert_awaited_once_with()
         close_audit.assert_awaited_once_with()
         close_session.assert_awaited_once_with()
         close_oidc.assert_awaited_once_with()

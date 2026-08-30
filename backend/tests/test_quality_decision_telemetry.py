@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import asyncio
-import sqlite3
 import sys
 import unittest
 from pathlib import Path
@@ -16,10 +15,8 @@ if str(BACKEND_DIR) not in sys.path:
 if str(TESTS_DIR) not in sys.path:
     sys.path.insert(0, str(TESTS_DIR))
 
-from core import usage_stats
 from core.api.utils import _generation_trace_metadata, _schedule_trace_export
 from core.quality_decision import normalize_quality_decision
-from support import workspace_temp_directory
 
 
 class QualityDecisionTelemetryTests(unittest.TestCase):
@@ -78,48 +75,6 @@ class QualityDecisionTelemetryTests(unittest.TestCase):
                 "compression_reason": "below_threshold",
             },
         )
-
-    def test_init_db_adds_quality_columns_without_losing_legacy_rows(self):
-        original_db_path = usage_stats.db_path
-        with workspace_temp_directory() as temp_dir:
-            try:
-                usage_stats.db_path = str(Path(temp_dir) / "usage.db")
-                connection = sqlite3.connect(usage_stats.db_path)
-                connection.execute(
-                    """
-                    CREATE TABLE usage_logs (
-                        id INTEGER PRIMARY KEY AUTOINCREMENT,
-                        filename TEXT NOT NULL,
-                        timestamp REAL NOT NULL
-                    )
-                    """
-                )
-                connection.execute(
-                    "INSERT INTO usage_logs (filename, timestamp) VALUES (?, ?)",
-                    ("legacy.json", 1.0),
-                )
-                connection.commit()
-                connection.close()
-
-                usage_stats.init_db()
-
-                connection = sqlite3.connect(usage_stats.db_path)
-                try:
-                    columns = {
-                        row[1] for row in connection.execute("PRAGMA table_info(usage_logs)")
-                    }
-                    legacy_row = connection.execute(
-                        "SELECT filename FROM usage_logs WHERE filename = 'legacy.json'"
-                    ).fetchone()
-                finally:
-                    connection.close()
-
-                self.assertTrue(
-                    {"quality_profile", "quality_policy_revision", "compression_reason"} <= columns
-                )
-                self.assertEqual(legacy_row, ("legacy.json",))
-            finally:
-                usage_stats.db_path = original_db_path
 
 
 class QualityDecisionTraceWiringTests(unittest.IsolatedAsyncioTestCase):

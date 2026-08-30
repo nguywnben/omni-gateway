@@ -6,7 +6,7 @@ import json
 import sys
 import unittest
 from pathlib import Path
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, Mock, patch
 
 BACKEND_DIR = Path(__file__).resolve().parents[1]
 if str(BACKEND_DIR) not in sys.path:
@@ -25,9 +25,14 @@ class HealthProbeTests(unittest.IsolatedAsyncioTestCase):
     async def test_readiness_reports_available_storage(self):
         storage = AsyncMock()
         storage.get_all_config.return_value = {}
-        with patch(
-            "core.health.get_storage_adapter",
-            new=AsyncMock(return_value=storage),
+        ledger = Mock()
+        ledger.health_snapshot.return_value = {"available": True}
+        with (
+            patch(
+                "core.health.get_storage_adapter",
+                new=AsyncMock(return_value=storage),
+            ),
+            patch("core.health.get_usage_ledger_service", return_value=ledger),
         ):
             response = await ready()
 
@@ -45,3 +50,21 @@ class HealthProbeTests(unittest.IsolatedAsyncioTestCase):
         body = response.body.decode()
         self.assertNotIn("database password leaked", body)
         self.assertEqual(json.loads(body)["storage"], "unavailable")
+
+    async def test_readiness_fails_when_usage_ledger_is_unavailable(self):
+        storage = AsyncMock()
+        storage.get_all_config.return_value = {}
+        ledger = Mock()
+        ledger.health_snapshot.return_value = {"available": False}
+        with (
+            patch(
+                "core.health.get_storage_adapter",
+                new=AsyncMock(return_value=storage),
+            ),
+            patch("core.health.get_usage_ledger_service", return_value=ledger),
+        ):
+            response = await ready()
+
+        self.assertEqual(response.status_code, 503)
+        self.assertEqual(json.loads(response.body)["storage"], "available")
+        self.assertEqual(json.loads(response.body)["usage_ledger"], "unavailable")

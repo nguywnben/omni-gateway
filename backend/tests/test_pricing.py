@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-import sqlite3
 import sys
 import unittest
 from pathlib import Path
@@ -17,6 +16,8 @@ if str(TESTS_DIR) not in sys.path:
     sys.path.insert(0, str(TESTS_DIR))
 
 from core import pricing, usage_stats
+from core.storage.usage_ledger_sqlite import SQLiteUsageLedgerRepository
+from core.usage_ledger_service import UsageLedgerService
 from support import workspace_temp_directory
 
 
@@ -116,86 +117,78 @@ class PricingOverridesTests(unittest.TestCase):
             self.assertEqual(entry.input_per_million, 2.50)
 
 
-class CostLedgerIntegrationTests(unittest.TestCase):
-    def test_record_call_persists_cost_and_api_key_id(self):
-        original_db_path = usage_stats.db_path
-        with workspace_temp_directory() as temp_dir:
-            try:
-                usage_stats.db_path = str(Path(temp_dir) / "usage.db")
-                usage_stats.record_call(
-                    "credential.json",
-                    model="gemini-2.5-flash",
-                    provider="google_ai_studio",
-                    token_usage={
-                        "promptTokenCount": 1_000_000,
-                        "candidatesTokenCount": 100_000,
-                        "totalTokenCount": 1_100_000,
-                    },
-                    request_id="request-cost-1",
-                    api_key_id="vk_test123",
-                )
+class CostLedgerIntegrationTests(unittest.IsolatedAsyncioTestCase):
+    async def asyncSetUp(self):
+        self.temp_dir = workspace_temp_directory()
+        repository = SQLiteUsageLedgerRepository(
+            str(Path(self.temp_dir.__enter__()) / "credentials.db")
+        )
+        await repository.initialize()
+        self.repository = repository
+        self.service_patch = patch.object(
+            usage_stats,
+            "get_usage_ledger_service",
+            return_value=UsageLedgerService(repository),
+        )
+        self.service_patch.start()
 
-                connection = sqlite3.connect(usage_stats.db_path)
-                try:
-                    row = connection.execute(
-                        "SELECT cost_usd, api_key_id FROM usage_logs"
-                    ).fetchone()
-                finally:
-                    connection.close()
+    async def asyncTearDown(self):
+        self.service_patch.stop()
+        self.temp_dir.__exit__(None, None, None)
 
-                # gemini-2.5-flash: 1M input * $0.30/1M + 0.1M output * $2.50/1M
-                self.assertAlmostEqual(row[0], 0.30 + 0.25, places=6)
-                self.assertEqual(row[1], "vk_test123")
-            finally:
-                usage_stats.db_path = original_db_path
+    async def test_record_call_persists_cost_and_api_key_id(self):
+        await usage_stats.record_call(
+            "credential.json",
+            model="gemini-2.5-flash",
+            provider="google_ai_studio",
+            token_usage={
+                "promptTokenCount": 1_000_000,
+                "candidatesTokenCount": 100_000,
+                "totalTokenCount": 1_100_000,
+            },
+            request_id="request-cost-1",
+            api_key_id="vk_test123",
+        )
 
-    def test_get_spend_since_filters_by_api_key(self):
-        original_db_path = usage_stats.db_path
-        with workspace_temp_directory() as temp_dir:
-            try:
-                usage_stats.db_path = str(Path(temp_dir) / "usage.db")
-                for key_id in ("vk_a", "vk_a", "vk_b"):
-                    usage_stats.record_call(
-                        "credential.json",
-                        model="gpt-4o-mini",
-                        provider="openai_platform",
-                        token_usage={
-                            "prompt_tokens": 1_000_000,
-                            "completion_tokens": 0,
-                            "total_tokens": 1_000_000,
-                        },
-                        api_key_id=key_id,
-                    )
+        spend = await usage_stats.get_spend_since(0, api_key_id="vk_test123")
+        self.assertAlmostEqual(spend["cost_usd"], 0.30 + 0.25, places=6)
+        self.assertEqual(spend["calls"], 1)
 
-                spend_all = usage_stats.get_spend_since(0)
-                spend_a = usage_stats.get_spend_since(0, api_key_id="vk_a")
-                spend_b = usage_stats.get_spend_since(0, api_key_id="vk_b")
+    async def test_get_spend_since_filters_by_api_key(self):
+        for key_id in ("vk_a", "vk_a", "vk_b"):
+            await usage_stats.record_call(
+                "credential.json",
+                model="gpt-4o-mini",
+                provider="openai_platform",
+                token_usage={
+                    "prompt_tokens": 1_000_000,
+                    "completion_tokens": 0,
+                    "total_tokens": 1_000_000,
+                },
+                api_key_id=key_id,
+            )
 
-                self.assertEqual(spend_all["calls"], 3)
-                self.assertEqual(spend_a["calls"], 2)
-                self.assertEqual(spend_b["calls"], 1)
-                self.assertAlmostEqual(spend_all["cost_usd"], 0.45, places=6)
-                self.assertAlmostEqual(spend_a["cost_usd"], 0.30, places=6)
-                self.assertGreater(spend_a["total_tokens"], 0)
-            finally:
-                usage_stats.db_path = original_db_path
+        spend_all = await usage_stats.get_spend_since(0)
+        spend_a = await usage_stats.get_spend_since(0, api_key_id="vk_a")
+        spend_b = await usage_stats.get_spend_since(0, api_key_id="vk_b")
 
-    def test_spend_since_future_timestamp_returns_zero(self):
-        original_db_path = usage_stats.db_path
-        with workspace_temp_directory() as temp_dir:
-            try:
-                usage_stats.db_path = str(Path(temp_dir) / "usage.db")
-                usage_stats.record_call(
-                    "credential.json",
-                    model="gpt-4o",
-                    provider="openai_platform",
-                    token_usage={"prompt_tokens": 1000, "completion_tokens": 100},
-                )
-                spend = usage_stats.get_spend_since(9_999_999_999)
-                self.assertEqual(spend["calls"], 0)
-                self.assertEqual(spend["cost_usd"], 0.0)
-            finally:
-                usage_stats.db_path = original_db_path
+        self.assertEqual(spend_all["calls"], 3)
+        self.assertEqual(spend_a["calls"], 2)
+        self.assertEqual(spend_b["calls"], 1)
+        self.assertAlmostEqual(spend_all["cost_usd"], 0.45, places=6)
+        self.assertAlmostEqual(spend_a["cost_usd"], 0.30, places=6)
+        self.assertGreater(spend_a["total_tokens"], 0)
+
+    async def test_spend_since_future_timestamp_returns_zero(self):
+        await usage_stats.record_call(
+            "credential.json",
+            model="gpt-4o",
+            provider="openai_platform",
+            token_usage={"prompt_tokens": 1000, "completion_tokens": 100},
+        )
+        spend = await usage_stats.get_spend_since(9_999_999_999)
+        self.assertEqual(spend["calls"], 0)
+        self.assertEqual(spend["cost_usd"], 0.0)
 
 
 if __name__ == "__main__":

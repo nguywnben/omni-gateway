@@ -6,7 +6,7 @@ import asyncio
 import sys
 import unittest
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 
 BACKEND_DIR = Path(__file__).resolve().parents[1]
 TESTS_DIR = Path(__file__).resolve().parent
@@ -22,6 +22,8 @@ from core.credential_operation_evidence import (
     record_credential_mutation,
 )
 from core.metrics import metrics, render_prometheus_metrics
+from core.storage.usage_ledger_sqlite import SQLiteUsageLedgerRepository
+from core.usage_ledger_service import UsageLedgerService
 from support import workspace_temp_directory
 
 
@@ -136,7 +138,11 @@ class MetricsEndpointTests(unittest.TestCase):
         env = {"PROMETHEUS_EXPORT_ENABLED": "true", "METRICS_TOKEN": "x" * 32}
         with (
             patch.dict("os.environ", env, clear=True),
-            patch.object(metrics_module, "get_provider_metrics", return_value=SAMPLE_ROWS),
+            patch.object(
+                metrics_module,
+                "get_provider_metrics",
+                new=AsyncMock(return_value=SAMPLE_ROWS),
+            ),
         ):
             response = _run(metrics(authorization=f"Bearer {'x' * 32}"))
         self.assertEqual(response.status_code, 200)
@@ -155,7 +161,11 @@ class MetricsEndpointTests(unittest.TestCase):
     def test_token_protection_accepts_valid_bearer(self):
         env = {"PROMETHEUS_EXPORT_ENABLED": "true", "METRICS_TOKEN": "s" * 32}
         with patch.dict("os.environ", env, clear=True):
-            with patch.object(metrics_module, "get_provider_metrics", return_value=[]):
+            with patch.object(
+                metrics_module,
+                "get_provider_metrics",
+                new=AsyncMock(return_value=[]),
+            ):
                 response = _run(metrics(authorization=f"Bearer {'s' * 32}"))
         self.assertEqual(response.status_code, 200)
 
@@ -166,33 +176,34 @@ class MetricsEndpointTests(unittest.TestCase):
         self.assertEqual(response.status_code, 503)
 
 
-class ProviderMetricsLedgerTests(unittest.TestCase):
-    def test_get_provider_metrics_groups_by_provider(self):
-        original_db_path = usage_stats.db_path
+class ProviderMetricsLedgerTests(unittest.IsolatedAsyncioTestCase):
+    async def test_get_provider_metrics_groups_by_provider(self):
         with workspace_temp_directory() as temp_dir:
-            try:
-                usage_stats.db_path = str(Path(temp_dir) / "usage.db")
-                usage_stats.record_call(
+            repository = SQLiteUsageLedgerRepository(str(Path(temp_dir) / "credentials.db"))
+            await repository.initialize()
+            service = UsageLedgerService(repository)
+            with patch.object(usage_stats, "get_usage_ledger_service", return_value=service):
+                await usage_stats.record_call(
                     "a.json",
                     model="gpt-4o-mini",
                     provider="openai_platform",
                     token_usage={"prompt_tokens": 100, "completion_tokens": 10},
                 )
-                usage_stats.record_call(
+                await usage_stats.record_call(
                     "a.json",
                     model="gpt-4o-mini",
                     provider="openai_platform",
                     status_code=500,
                     success=False,
                 )
-                usage_stats.record_call(
+                await usage_stats.record_call(
                     "b.json",
                     model="gemini-2.5-flash",
                     provider="google_ai_studio",
                     token_usage={"promptTokenCount": 50, "candidatesTokenCount": 5},
                 )
 
-                rows = usage_stats.get_provider_metrics()
+                rows = await usage_stats.get_provider_metrics()
                 by_provider = {row["provider"]: row for row in rows}
 
                 self.assertEqual(by_provider["openai_platform"]["calls"], 2)
@@ -200,8 +211,6 @@ class ProviderMetricsLedgerTests(unittest.TestCase):
                 self.assertEqual(by_provider["openai_platform"]["failed_calls"], 1)
                 self.assertEqual(by_provider["google_ai_studio"]["calls"], 1)
                 self.assertGreater(by_provider["google_ai_studio"]["total_tokens"], 0)
-            finally:
-                usage_stats.db_path = original_db_path
 
 
 class TelemetryConfigTests(unittest.TestCase):

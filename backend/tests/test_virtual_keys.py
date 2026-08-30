@@ -201,7 +201,7 @@ class VirtualKeyEnforcementTests(unittest.TestCase):
         record = self._make_key(budget_daily_usd=1.0)
         with patch(
             "core.usage_stats.get_spend_since",
-            return_value={"cost_usd": 2.5, "total_tokens": 0, "calls": 3},
+            new=AsyncMock(return_value={"cost_usd": 2.5, "total_tokens": 0, "calls": 3}),
         ):
             with self.assertRaises(HTTPException) as ctx:
                 _run(self.manager.enforce(record))
@@ -212,7 +212,7 @@ class VirtualKeyEnforcementTests(unittest.TestCase):
         record = self._make_key(budget_daily_usd=10.0)
         with patch(
             "core.usage_stats.get_spend_since",
-            return_value={"cost_usd": 2.5, "total_tokens": 0, "calls": 3},
+            new=AsyncMock(return_value={"cost_usd": 2.5, "total_tokens": 0, "calls": 3}),
         ):
             _run(self.manager.enforce(record))
 
@@ -220,7 +220,7 @@ class VirtualKeyEnforcementTests(unittest.TestCase):
         record = self._make_key(budget_daily_usd=10.0)
         with patch(
             "core.usage_stats.get_spend_since",
-            return_value={"cost_usd": 0.5, "total_tokens": 0, "calls": 1},
+            new=AsyncMock(return_value={"cost_usd": 0.5, "total_tokens": 0, "calls": 1}),
         ) as spend_mock:
 
             async def scenario():

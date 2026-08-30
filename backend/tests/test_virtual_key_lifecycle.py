@@ -113,7 +113,18 @@ class VirtualKeyLifecycleTests(unittest.IsolatedAsyncioTestCase):
     async def test_plaintext_is_absent_from_all_non_reveal_records(self):
         created, plaintext = await self.manager.create_key("automation")
         listed = await self.manager.list_keys()
-        usage = await self.manager.get_key_usage(created["id"])
+        with patch(
+            "core.usage_stats.get_spend_since",
+            new=AsyncMock(
+                return_value={
+                    "cost_usd": 0.0,
+                    "total_tokens": 0,
+                    "calls": 0,
+                    "available": True,
+                }
+            ),
+        ):
+            usage = await self.manager.get_key_usage(created["id"])
 
         self.assertNotIn(plaintext, str(created))
         self.assertNotIn(plaintext, str(listed))
