@@ -12,9 +12,11 @@ import heapq
 import math
 import time
 from dataclasses import dataclass
-from typing import Any, Callable, Dict, Optional, Tuple
+from typing import Any, Callable, Dict, Literal, Optional, Tuple
 
 from core.coordination import (
+    MAX_COORDINATION_INTEGER,
+    MAX_IDENTIFIER_LENGTH,
     CasRequest,
     CasResult,
     CoordinationReconciliationRequiredError,
@@ -36,12 +38,6 @@ QUOTA_MONTHLY_WINDOW_SECONDS = 30 * QUOTA_DAILY_WINDOW_SECONDS
 
 
 @dataclass
-class _ActiveQuotaReservation:
-    request: QuotaReservationRequest
-    expires_at: float
-
-
-@dataclass
 class _CommittedQuotaReservation:
     reservation_id: str
     key_id: str
@@ -54,6 +50,18 @@ class _CommittedQuotaReservation:
     expires_at: float
 
 
+@dataclass
+class _QuotaLifecycleRecord:
+    request: QuotaReservationRequest
+    reserve_fingerprint: tuple[object, ...]
+    reserve_result: QuotaReservationDecision
+    state: Literal["active", "committed", "released", "expired"]
+    active_expires_at: float
+    retained_until: float
+    next_expiry_at: float
+    committed: _CommittedQuotaReservation | None = None
+
+
 @dataclass(frozen=True)
 class _CasRecord:
     revision: int
@@ -63,6 +71,14 @@ class _CasRecord:
 
 @dataclass(frozen=True)
 class _Replay:
+    fingerprint: object
+    result: object
+    expires_at: float
+
+
+@dataclass(frozen=True)
+class _QuotaReplay:
+    key_id: object
     fingerprint: object
     result: object
     expires_at: float
@@ -124,12 +140,15 @@ class InMemoryStateStore(BaseStateStore):
 
     _MAX_PRUNED_PER_MUTATION = 256
     _DEFAULT_QUOTA_RECORD_LIMIT = 100_000
+    _DEFAULT_QUOTA_REPLAY_LIMIT = 100_000
+    _UNKNOWN_QUOTA_KEY = ("unknown-reservation",)
 
     def __init__(
         self,
         *,
         clock: Callable[[], float] = time.monotonic,
         _quota_record_limit_for_testing: int | None = None,
+        _quota_replay_limit_for_testing: int | None = None,
     ) -> None:
         self._clock = clock
         self._store: Dict[str, Tuple[Optional[float], Any]] = {}
@@ -144,16 +163,21 @@ class InMemoryStateStore(BaseStateStore):
         self._invalidation_generations: Dict[str, int] = {}
         self._invalidation_replays: Dict[str, _Replay] = {}
         self._invalidation_replay_expiries: list[tuple[float, str]] = []
-        self._quota_reservations: Dict[str, _ActiveQuotaReservation] = {}
-        self._quota_committed: Dict[str, _CommittedQuotaReservation] = {}
-        self._quota_reservation_expiries: list[tuple[float, str]] = []
-        self._quota_committed_expiries: list[tuple[float, str]] = []
-        self._quota_replays: Dict[str, _Replay] = {}
-        self._quota_record_counts: Dict[str, int] = {}
+        self._quota_records: Dict[str, _QuotaLifecycleRecord] = {}
+        self._quota_ids_by_key: Dict[str, set[str]] = {}
+        self._quota_lifecycle_expiries: Dict[str, list[tuple[float, str]]] = {}
+        self._quota_replays: Dict[str, _QuotaReplay] = {}
+        self._quota_replay_expiries: Dict[object, list[tuple[float, str]]] = {}
+        self._quota_replay_counts: Dict[object, int] = {}
         self._quota_record_limit = (
             self._DEFAULT_QUOTA_RECORD_LIMIT
             if _quota_record_limit_for_testing is None
             else _quota_record_limit_for_testing
+        )
+        self._quota_replay_limit = (
+            self._DEFAULT_QUOTA_REPLAY_LIMIT
+            if _quota_replay_limit_for_testing is None
+            else _quota_replay_limit_for_testing
         )
         self._closed = False
         self._async_lock = asyncio.Lock()
@@ -165,16 +189,16 @@ class InMemoryStateStore(BaseStateStore):
     def _prune_heap_locked(
         self, heap: list[tuple[float, str]], mapping: Dict[str, Any], now: float, budget: int
     ) -> int:
-        pruned = 0
+        work = 0
         while heap and heap[0][0] <= now:
-            if pruned == budget:
+            if work == budget:
                 raise CoordinationReconciliationRequiredError("Reconciliation is required.")
             expires_at, identifier = heapq.heappop(heap)
+            work += 1
             record = mapping.get(identifier)
             if record is not None and record.expires_at == expires_at:
                 mapping.pop(identifier, None)
-                pruned += 1
-        return pruned
+        return work
 
     def _prune_coordination_locked(self) -> None:
         now = self._clock()
@@ -203,6 +227,7 @@ class InMemoryStateStore(BaseStateStore):
         return (
             request.reservation_id,
             request.key_id,
+            request.now,
             request.ttl_seconds,
             request.estimated_tokens,
             request.estimated_cost_usd,
@@ -315,6 +340,9 @@ class InMemoryStateStore(BaseStateStore):
     async def compare_and_set(self, request: CasRequest) -> CasResult:
         async with self._async_lock:
             self._ensure_open_locked()
+            if not self._is_ready_locked(request.epoch):
+                return CasResult(False, None)
+            self._prune_coordination_locked()
             fingerprint = self._cas_fingerprint(request)
             replay = self._cas_replays.get(request.operation_id)
             if replay is not None:
@@ -323,15 +351,16 @@ class InMemoryStateStore(BaseStateStore):
                     assert isinstance(result, CasResult)
                     return CasResult(result.applied, result.revision, idempotent=True)
                 return CasResult(False, None)
-            if not self._is_ready_locked(request.epoch):
-                return CasResult(False, None)
-            self._prune_coordination_locked()
             existing = self._cas.get(request.key)
             revision = 1 if existing is None else existing.revision + 1
             if (existing is None and request.expected_revision != 0) or (
                 existing is not None and existing.revision != request.expected_revision
             ):
-                return CasResult(False, None)
+                result = CasResult(False, None)
+                expires_at = self._clock() + request.ttl_seconds
+                self._cas_replays[request.operation_id] = _Replay(fingerprint, result, expires_at)
+                heapq.heappush(self._cas_replay_expiries, (expires_at, request.operation_id))
+                return result
             expires_at = self._clock() + request.ttl_seconds
             result = CasResult(True, revision)
             self._cas[request.key] = _CasRecord(revision, request.payload, expires_at)
@@ -343,6 +372,9 @@ class InMemoryStateStore(BaseStateStore):
     async def invalidate(self, request: InvalidationRequest) -> InvalidationResult:
         async with self._async_lock:
             self._ensure_open_locked()
+            if not self._is_ready_locked(request.epoch):
+                return InvalidationResult(False, None)
+            self._prune_coordination_locked()
             replay = self._invalidation_replays.get(request.operation_id)
             fingerprint = (request.scope, request.epoch, request.replay_ttl_seconds)
             if replay is not None:
@@ -351,9 +383,6 @@ class InMemoryStateStore(BaseStateStore):
                     assert isinstance(result, InvalidationResult)
                     return InvalidationResult(result.applied, result.generation, idempotent=True)
                 return InvalidationResult(False, None)
-            if not self._is_ready_locked(request.epoch):
-                return InvalidationResult(False, None)
-            self._prune_coordination_locked()
             generation = self._invalidation_generations.get(request.scope, 0) + 1
             result = InvalidationResult(True, generation)
             expires_at = self._clock() + request.replay_ttl_seconds
@@ -370,27 +399,140 @@ class InMemoryStateStore(BaseStateStore):
             self._prune_coordination_locked()
             return InvalidationGeneration(self._invalidation_generations.get(scope))
 
-    def _prune_quota_locked(self, now: float) -> bool:
-        pruned = 0
-        while self._quota_reservation_expiries and self._quota_reservation_expiries[0][0] <= now:
-            if pruned == self._MAX_PRUNED_PER_MUTATION:
+    @staticmethod
+    def _quota_evidence_retention_seconds(request: QuotaReservationRequest) -> float:
+        windows = [QUOTA_RATE_WINDOW_SECONDS]
+        if request.daily_budget_usd is not None:
+            windows.append(QUOTA_DAILY_WINDOW_SECONDS)
+        if request.monthly_budget_usd is not None:
+            windows.append(QUOTA_MONTHLY_WINDOW_SECONDS)
+        return min(max(windows), QUOTA_MONTHLY_WINDOW_SECONDS)
+
+    @staticmethod
+    def _validate_quota_release(
+        reservation_id: object,
+        now: object,
+        fencing_epoch: object,
+        operation_id: object,
+    ) -> tuple[str, float, int, str | None]:
+        for value, label in (
+            (reservation_id, "Reservation ID"),
+            (operation_id, "Operation ID"),
+        ):
+            if value is None and label == "Operation ID":
+                continue
+            if (
+                not isinstance(value, str)
+                or not 1 <= len(value) <= MAX_IDENTIFIER_LENGTH
+                or any(ord(character) < 32 or ord(character) > 126 for character in value)
+            ):
+                raise ValueError(f"{label} is invalid.")
+        if (
+            isinstance(now, bool)
+            or not isinstance(now, (int, float))
+            or not math.isfinite(float(now))
+            or not 0.0 <= float(now) <= MAX_COORDINATION_INTEGER
+        ):
+            raise ValueError("Quota time is invalid.")
+        if (
+            isinstance(fencing_epoch, bool)
+            or not isinstance(fencing_epoch, int)
+            or not 1 <= fencing_epoch <= MAX_COORDINATION_INTEGER
+        ):
+            raise ValueError("Epoch is invalid.")
+        assert isinstance(reservation_id, str)
+        assert operation_id is None or isinstance(operation_id, str)
+        return reservation_id, float(now), fencing_epoch, operation_id
+
+    def _remove_quota_record_locked(self, reservation_id: str) -> None:
+        record = self._quota_records.pop(reservation_id, None)
+        if record is None:
+            return
+        identifiers = self._quota_ids_by_key.get(record.request.key_id)
+        if identifiers is not None:
+            identifiers.discard(reservation_id)
+            if not identifiers:
+                self._quota_ids_by_key.pop(record.request.key_id, None)
+
+    def _apply_quota_lifecycle_expiry_locked(
+        self, key_id: str, reservation_id: str, expires_at: float
+    ) -> None:
+        record = self._quota_records.get(reservation_id)
+        if record is None or record.request.key_id != key_id or record.next_expiry_at != expires_at:
+            return
+        if expires_at >= record.retained_until:
+            self._remove_quota_record_locked(reservation_id)
+            return
+        if record.state == "active" and expires_at == record.active_expires_at:
+            record.state = "expired"
+        record.next_expiry_at = record.retained_until
+        heapq.heappush(
+            self._quota_lifecycle_expiries.setdefault(key_id, []),
+            (record.retained_until, reservation_id),
+        )
+
+    def _apply_quota_replay_expiry_locked(
+        self, key_id: object, replay_key: str, expires_at: float
+    ) -> None:
+        replay = self._quota_replays.get(replay_key)
+        if replay is None or replay.key_id != key_id or replay.expires_at != expires_at:
+            return
+        self._quota_replays.pop(replay_key, None)
+        remaining = self._quota_replay_counts.get(key_id, 0) - 1
+        if remaining:
+            self._quota_replay_counts[key_id] = remaining
+        else:
+            self._quota_replay_counts.pop(key_id, None)
+
+    def _prune_quota_key_locked(self, key_id: object, now: float, budget: int) -> int | None:
+        lifecycle_heap = (
+            self._quota_lifecycle_expiries.get(key_id, []) if isinstance(key_id, str) else []
+        )
+        replay_heap = self._quota_replay_expiries.get(key_id, [])
+        while budget:
+            lifecycle_due = bool(lifecycle_heap and lifecycle_heap[0][0] <= now)
+            replay_due = bool(replay_heap and replay_heap[0][0] <= now)
+            if not lifecycle_due and not replay_due:
+                return budget
+            if lifecycle_due and (not replay_due or lifecycle_heap[0][0] <= replay_heap[0][0]):
+                expires_at, reservation_id = heapq.heappop(lifecycle_heap)
+                self._apply_quota_lifecycle_expiry_locked(str(key_id), reservation_id, expires_at)
+            else:
+                expires_at, replay_key = heapq.heappop(replay_heap)
+                self._apply_quota_replay_expiry_locked(key_id, replay_key, expires_at)
+            budget -= 1
+        if (lifecycle_heap and lifecycle_heap[0][0] <= now) or (
+            replay_heap and replay_heap[0][0] <= now
+        ):
+            return None
+        return budget
+
+    def _prune_quota_keys_locked(self, key_ids: list[object], now: float) -> bool:
+        budget = self._MAX_PRUNED_PER_MUTATION
+        seen: set[object] = set()
+        for key_id in key_ids:
+            if key_id in seen:
+                continue
+            seen.add(key_id)
+            remaining = self._prune_quota_key_locked(key_id, now, budget)
+            if remaining is None:
                 return False
-            expires_at, reservation_id = heapq.heappop(self._quota_reservation_expiries)
-            active = self._quota_reservations.get(reservation_id)
-            if active is not None and active.expires_at == expires_at:
-                self._quota_reservations.pop(reservation_id, None)
-                self._quota_replays.pop(f"reserve:{reservation_id}", None)
-                self._quota_record_counts[active.request.key_id] -= 1
-                pruned += 1
-        while self._quota_committed_expiries and self._quota_committed_expiries[0][0] <= now:
-            if pruned == self._MAX_PRUNED_PER_MUTATION:
-                return False
-            expires_at, reservation_id = heapq.heappop(self._quota_committed_expiries)
-            committed = self._quota_committed.get(reservation_id)
-            if committed is not None and committed.expires_at == expires_at:
-                self._quota_committed.pop(reservation_id, None)
-                self._quota_record_counts[committed.key_id] -= 1
-                pruned += 1
+            budget = remaining
+        return True
+
+    def _store_quota_replay_locked(
+        self,
+        replay_key: str,
+        key_id: object,
+        fingerprint: object,
+        result: object,
+        expires_at: float,
+    ) -> bool:
+        if self._quota_replay_counts.get(key_id, 0) >= self._quota_replay_limit:
+            return False
+        self._quota_replays[replay_key] = _QuotaReplay(key_id, fingerprint, result, expires_at)
+        self._quota_replay_counts[key_id] = self._quota_replay_counts.get(key_id, 0) + 1
+        heapq.heappush(self._quota_replay_expiries.setdefault(key_id, []), (expires_at, replay_key))
         return True
 
     @staticmethod
@@ -408,8 +550,14 @@ class InMemoryStateStore(BaseStateStore):
     def _reconcile_committed_for_key_locked(
         self, key_id: str, daily_snapshot_started_at: float, monthly_snapshot_started_at: float
     ) -> None:
-        for committed in self._quota_committed.values():
-            if committed.key_id != key_id or not committed.durable_cost_recorded:
+        for reservation_id in self._quota_ids_by_key.get(key_id, ()):
+            record = self._quota_records[reservation_id]
+            committed = record.committed
+            if (
+                record.state != "committed"
+                or committed is None
+                or not committed.durable_cost_recorded
+            ):
                 continue
             if daily_snapshot_started_at >= committed.committed_at:
                 committed.daily_reconciled = True
@@ -418,15 +566,26 @@ class InMemoryStateStore(BaseStateStore):
             expires_at = self._committed_expiry(committed)
             if expires_at < committed.expires_at:
                 committed.expires_at = expires_at
+                record.next_expiry_at = min(expires_at, record.retained_until)
                 heapq.heappush(
-                    self._quota_committed_expiries, (expires_at, committed.reservation_id)
+                    self._quota_lifecycle_expiries.setdefault(key_id, []),
+                    (record.next_expiry_at, committed.reservation_id),
                 )
 
-    def _active_for_key_locked(self, key_id: str) -> list[_ActiveQuotaReservation]:
-        return [item for item in self._quota_reservations.values() if item.request.key_id == key_id]
+    def _active_for_key_locked(self, key_id: str) -> list[_QuotaLifecycleRecord]:
+        return [
+            record
+            for reservation_id in self._quota_ids_by_key.get(key_id, ())
+            if (record := self._quota_records[reservation_id]).state == "active"
+        ]
 
     def _committed_for_key_locked(self, key_id: str) -> list[_CommittedQuotaReservation]:
-        return [item for item in self._quota_committed.values() if item.key_id == key_id]
+        return [
+            committed
+            for reservation_id in self._quota_ids_by_key.get(key_id, ())
+            if (record := self._quota_records[reservation_id]).state == "committed"
+            and (committed := record.committed) is not None
+        ]
 
     @staticmethod
     def _retry_after(now: float, timestamps: list[float]) -> int:
@@ -444,8 +603,25 @@ class InMemoryStateStore(BaseStateStore):
     async def reserve_quota(self, request: QuotaReservationRequest) -> QuotaReservationDecision:
         async with self._async_lock:
             self._ensure_open_locked()
+            if not self._is_ready_locked(request.fencing_epoch):
+                reason = (
+                    "reconciling" if self._epoch.state is EpochState.RECONCILING else "stale_epoch"
+                )
+                return QuotaReservationDecision(False, request.reservation_id, reason)
             fingerprint = self._quota_reserve_fingerprint(request)
-            replay = self._quota_replays.get(f"reserve:{request.reservation_id}")
+            replay_key = f"reserve:{request.operation_id or request.reservation_id}"
+            record = self._quota_records.get(request.reservation_id)
+            replay = self._quota_replays.get(replay_key)
+            cleanup_keys = [
+                replay.key_id if replay is not None else request.key_id,
+                record.request.key_id if record is not None else request.key_id,
+                request.key_id,
+            ]
+            if not self._prune_quota_keys_locked(cleanup_keys, request.now):
+                return QuotaReservationDecision(
+                    False, request.reservation_id, "reconciliation_required"
+                )
+            replay = self._quota_replays.get(replay_key)
             if replay is not None:
                 if replay.fingerprint != fingerprint:
                     return QuotaReservationDecision(False, request.reservation_id, "conflict")
@@ -458,12 +634,19 @@ class InMemoryStateStore(BaseStateStore):
                     result.retry_after_seconds,
                     True,
                 )
-            if not self._is_ready_locked(request.fencing_epoch):
-                reason = (
-                    "reconciling" if self._epoch.state is EpochState.RECONCILING else "stale_epoch"
+            record = self._quota_records.get(request.reservation_id)
+            if record is not None:
+                if record.reserve_fingerprint != fingerprint:
+                    return QuotaReservationDecision(False, request.reservation_id, "conflict")
+                result = record.reserve_result
+                return QuotaReservationDecision(
+                    result.accepted,
+                    result.reservation_id,
+                    result.reason,
+                    result.retry_after_seconds,
+                    True,
                 )
-                return QuotaReservationDecision(False, request.reservation_id, reason)
-            if not self._prune_quota_locked(request.now):
+            if self._quota_replay_counts.get(request.key_id, 0) >= self._quota_replay_limit:
                 return QuotaReservationDecision(
                     False, request.reservation_id, "reconciliation_required"
                 )
@@ -474,26 +657,32 @@ class InMemoryStateStore(BaseStateStore):
             )
             active = self._active_for_key_locked(request.key_id)
             committed = self._committed_for_key_locked(request.key_id)
-            if self._quota_record_counts.get(request.key_id, 0) >= self._quota_record_limit:
-                return QuotaReservationDecision(False, request.reservation_id, "capacity")
+            result: QuotaReservationDecision | None = None
+            if len(self._quota_ids_by_key.get(request.key_id, ())) >= self._quota_record_limit:
+                result = QuotaReservationDecision(False, request.reservation_id, "capacity")
             rate_cutoff = request.now - QUOTA_RATE_WINDOW_SECONDS
             active_rate = [item for item in active if item.request.now > rate_cutoff]
             committed_rate = [item for item in committed if item.committed_at > rate_cutoff]
             timestamps = [item.request.now for item in active_rate] + [
                 item.committed_at for item in committed_rate
             ]
-            if request.rpm_limit is not None and len(timestamps) >= request.rpm_limit:
-                return QuotaReservationDecision(
+            if (
+                result is None
+                and request.rpm_limit is not None
+                and len(timestamps) >= request.rpm_limit
+            ):
+                result = QuotaReservationDecision(
                     False, request.reservation_id, "rpm", self._retry_after(request.now, timestamps)
                 )
             reserved_tokens = sum(item.request.estimated_tokens for item in active_rate)
             committed_tokens = sum(item.actual_tokens for item in committed_rate)
             if (
-                request.tpm_limit is not None
+                result is None
+                and request.tpm_limit is not None
                 and reserved_tokens + committed_tokens + request.estimated_tokens
                 > request.tpm_limit
             ):
-                return QuotaReservationDecision(
+                result = QuotaReservationDecision(
                     False, request.reservation_id, "tpm", self._retry_after(request.now, timestamps)
                 )
             active_cost = sum(item.request.estimated_cost_usd for item in active)
@@ -504,35 +693,69 @@ class InMemoryStateStore(BaseStateStore):
                 item.actual_cost_usd for item in committed if not item.monthly_reconciled
             )
             if (
-                request.daily_budget_usd is not None
+                result is None
+                and request.daily_budget_usd is not None
                 and request.daily_spend_usd
                 + daily_unreconciled
                 + active_cost
                 + request.estimated_cost_usd
                 > request.daily_budget_usd
             ):
-                return QuotaReservationDecision(False, request.reservation_id, "daily_budget")
+                result = QuotaReservationDecision(False, request.reservation_id, "daily_budget")
             if (
-                request.monthly_budget_usd is not None
+                result is None
+                and request.monthly_budget_usd is not None
                 and request.monthly_spend_usd
                 + monthly_unreconciled
                 + active_cost
                 + request.estimated_cost_usd
                 > request.monthly_budget_usd
             ):
-                return QuotaReservationDecision(False, request.reservation_id, "monthly_budget")
-            expires_at = request.now + max(1.0, request.ttl_seconds)
+                result = QuotaReservationDecision(False, request.reservation_id, "monthly_budget")
+            if result is not None:
+                if not self._store_quota_replay_locked(
+                    replay_key,
+                    request.key_id,
+                    fingerprint,
+                    result,
+                    request.now + request.ttl_seconds,
+                ):
+                    return QuotaReservationDecision(
+                        False, request.reservation_id, "reconciliation_required"
+                    )
+                return result
+
             result = QuotaReservationDecision(True, request.reservation_id)
-            self._quota_reservations[request.reservation_id] = _ActiveQuotaReservation(
-                request, expires_at
+            active_expires_at = request.now + request.ttl_seconds
+            retained_until = max(
+                active_expires_at,
+                request.now + self._quota_evidence_retention_seconds(request),
             )
-            self._quota_replays[f"reserve:{request.reservation_id}"] = _Replay(
-                fingerprint, result, expires_at
+            if request.operation_id is not None and not self._store_quota_replay_locked(
+                replay_key,
+                request.key_id,
+                fingerprint,
+                result,
+                retained_until,
+            ):
+                return QuotaReservationDecision(
+                    False, request.reservation_id, "reconciliation_required"
+                )
+            lifecycle = _QuotaLifecycleRecord(
+                request,
+                fingerprint,
+                result,
+                "active",
+                active_expires_at,
+                retained_until,
+                min(active_expires_at, retained_until),
             )
-            self._quota_record_counts[request.key_id] = (
-                self._quota_record_counts.get(request.key_id, 0) + 1
+            self._quota_records[request.reservation_id] = lifecycle
+            self._quota_ids_by_key.setdefault(request.key_id, set()).add(request.reservation_id)
+            heapq.heappush(
+                self._quota_lifecycle_expiries.setdefault(request.key_id, []),
+                (lifecycle.next_expiry_at, request.reservation_id),
             )
-            heapq.heappush(self._quota_reservation_expiries, (expires_at, request.reservation_id))
             return result
 
     async def commit_quota(self, request: QuotaCommitRequest) -> QuotaCommitResult:
@@ -540,10 +763,16 @@ class InMemoryStateStore(BaseStateStore):
             self._ensure_open_locked()
             if not self._is_ready_locked(request.fencing_epoch):
                 return QuotaCommitResult(False)
-            if not self._prune_quota_locked(request.now):
-                raise CoordinationReconciliationRequiredError("Reconciliation is required.")
             replay_key = f"commit:{request.operation_id or request.reservation_id}"
             fingerprint = self._quota_commit_fingerprint(request)
+            record = self._quota_records.get(request.reservation_id)
+            replay = self._quota_replays.get(replay_key)
+            target_key: object = (
+                record.request.key_id if record is not None else self._UNKNOWN_QUOTA_KEY
+            )
+            cleanup_keys = [replay.key_id if replay is not None else target_key, target_key]
+            if not self._prune_quota_keys_locked(cleanup_keys, request.now):
+                raise CoordinationReconciliationRequiredError("Reconciliation is required.")
             replay = self._quota_replays.get(replay_key)
             if replay is not None:
                 if replay.fingerprint != fingerprint:
@@ -551,10 +780,23 @@ class InMemoryStateStore(BaseStateStore):
                 result = replay.result
                 assert isinstance(result, QuotaCommitResult)
                 return QuotaCommitResult(result.committed, result.overspent, True)
-            active = self._quota_reservations.pop(request.reservation_id, None)
-            if active is None or active.expires_at <= request.now:
-                return QuotaCommitResult(False)
-            source = active.request
+            record = self._quota_records.get(request.reservation_id)
+            target_key = record.request.key_id if record is not None else self._UNKNOWN_QUOTA_KEY
+            if self._quota_replay_counts.get(target_key, 0) >= self._quota_replay_limit:
+                raise CoordinationReconciliationRequiredError("Reconciliation is required.")
+            if record is None or record.state != "active":
+                result = QuotaCommitResult(False)
+                self._store_quota_replay_locked(
+                    replay_key,
+                    target_key,
+                    fingerprint,
+                    result,
+                    record.retained_until
+                    if record is not None
+                    else request.now + QUOTA_MONTHLY_WINDOW_SECONDS,
+                )
+                return result
+            source = record.request
             tokens = (
                 source.estimated_tokens
                 if request.actual_tokens is None
@@ -577,10 +819,13 @@ class InMemoryStateStore(BaseStateStore):
                 request.now + QUOTA_MONTHLY_WINDOW_SECONDS,
             )
             committed.expires_at = self._committed_expiry(committed)
-            self._quota_committed[request.reservation_id] = committed
+            record.state = "committed"
+            record.committed = committed
+            record.retained_until = request.now + self._quota_evidence_retention_seconds(source)
+            record.next_expiry_at = min(committed.expires_at, record.retained_until)
             heapq.heappush(
-                self._quota_committed_expiries,
-                (committed.expires_at, request.reservation_id),
+                self._quota_lifecycle_expiries.setdefault(source.key_id, []),
+                (record.next_expiry_at, request.reservation_id),
             )
             active_for_key = self._active_for_key_locked(source.key_id)
             committed_for_key = self._committed_for_key_locked(source.key_id)
@@ -624,8 +869,12 @@ class InMemoryStateStore(BaseStateStore):
                 )
             )
             result = QuotaCommitResult(True, overspent)
-            self._quota_replays[replay_key] = _Replay(
-                fingerprint, result, request.now + QUOTA_MONTHLY_WINDOW_SECONDS
+            self._store_quota_replay_locked(
+                replay_key,
+                source.key_id,
+                fingerprint,
+                result,
+                record.retained_until,
             )
             return result
 
@@ -639,22 +888,50 @@ class InMemoryStateStore(BaseStateStore):
     ) -> bool:
         async with self._async_lock:
             self._ensure_open_locked()
+            identifier, now, fencing_epoch, operation_id = self._validate_quota_release(
+                reservation_id, now, fencing_epoch, operation_id
+            )
             if not self._is_ready_locked(fencing_epoch):
                 return False
-            if not self._prune_quota_locked(now):
-                raise CoordinationReconciliationRequiredError("Reconciliation is required.")
-            identifier = str(reservation_id or "")
             replay_key = f"release:{operation_id or identifier}"
             fingerprint = (identifier, fencing_epoch)
+            record = self._quota_records.get(identifier)
+            replay = self._quota_replays.get(replay_key)
+            target_key: object = (
+                record.request.key_id if record is not None else self._UNKNOWN_QUOTA_KEY
+            )
+            cleanup_keys = [replay.key_id if replay is not None else target_key, target_key]
+            if not self._prune_quota_keys_locked(cleanup_keys, now):
+                raise CoordinationReconciliationRequiredError("Reconciliation is required.")
             replay = self._quota_replays.get(replay_key)
             if replay is not None:
                 return False
-            active = self._quota_reservations.pop(identifier, None)
-            result = active is not None and active.expires_at > now
-            if active is not None:
-                self._quota_record_counts[active.request.key_id] -= 1
-            self._quota_replays[replay_key] = _Replay(
-                fingerprint, result, now + QUOTA_MONTHLY_WINDOW_SECONDS
+            record = self._quota_records.get(identifier)
+            target_key = record.request.key_id if record is not None else self._UNKNOWN_QUOTA_KEY
+            if self._quota_replay_counts.get(target_key, 0) >= self._quota_replay_limit:
+                raise CoordinationReconciliationRequiredError("Reconciliation is required.")
+            result = record is not None and record.state == "active"
+            expires_at = (
+                record.retained_until if record is not None else now + QUOTA_MONTHLY_WINDOW_SECONDS
+            )
+            if result:
+                record.state = "released"
+                record.retained_until = max(
+                    now,
+                    record.request.now + self._quota_evidence_retention_seconds(record.request),
+                )
+                record.next_expiry_at = record.retained_until
+                expires_at = record.retained_until
+                heapq.heappush(
+                    self._quota_lifecycle_expiries.setdefault(record.request.key_id, []),
+                    (record.next_expiry_at, identifier),
+                )
+            self._store_quota_replay_locked(
+                replay_key,
+                target_key,
+                fingerprint,
+                result,
+                expires_at,
             )
             return result
 

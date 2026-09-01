@@ -149,7 +149,7 @@ class VirtualKeyReservationTests(unittest.IsolatedAsyncioTestCase):
         self.assertRegex(reservation_id, re.compile(r"qrs_[0-9a-f]{32}"))
         durable_request = self.ledger.reserve_budget.await_args.args[0]
         self.assertEqual(durable_request.reservation_id, reservation_id)
-        state_request = self.manager._state_store._quota_reservations[reservation_id].request
+        state_request = self.manager._state_store._quota_records[reservation_id].request
         self.assertIsNone(state_request.daily_budget_usd)
         self.assertIsNone(state_request.monthly_budget_usd)
         self.assertEqual(state_request.estimated_cost_usd, 0.0)
