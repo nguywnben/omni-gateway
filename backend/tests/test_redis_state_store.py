@@ -625,7 +625,12 @@ class StatefulRedisClient(FakeRedisClient):
             record["durable"] = durable
             record["daily_reconciled"] = record["daily_budget"] is None
             record["monthly_reconciled"] = record["monthly_budget"] is None
-            record["retained_until"] = self.now_ms + int(record["retention"])
+            evidence_retention = 60_000
+            if record["daily_budget"] is not None:
+                evidence_retention = max(evidence_retention, 86_400_000)
+            if record["monthly_budget"] is not None:
+                evidence_retention = max(evidence_retention, 30 * 86_400_000)
+            record["retained_until"] = self.now_ms + evidence_retention
             active, committed = self._quota_active(key_id), self._quota_committed(key_id)
             cutoff = self.now_ms - 60_000
             overspent = (
@@ -1495,6 +1500,51 @@ class RedisStateStoreTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(healthy.accepted)
         self.assertIn(b"due-256", client.quota_records)
 
+    async def test_stateful_long_active_ttl_keeps_lifecycle_and_locator_reachable(self) -> None:
+        client = StatefulRedisClient()
+        store = RedisStateStore(
+            "redis://redis.example/0",
+            deployment_namespace="quota-long-active",
+            _redis_module_for_testing=FakeRedisModule(client),
+        )
+
+        def reservation(identifier: str) -> QuotaReservationRequest:
+            return QuotaReservationRequest(
+                identifier,
+                "key-a",
+                1_000.0,
+                3_600.0,
+                1,
+                0.1,
+                None,
+                None,
+                None,
+                None,
+                0.0,
+                0.0,
+                1_000.0,
+                1_000.0,
+            )
+
+        self.assertTrue((await store.reserve_quota(reservation("commit-long"))).accepted)
+        commit_locator = client.script_calls[-1][1][5]
+        commit_record = client.quota_records[b"commit-long"]
+        self.assertGreaterEqual(client.values[commit_locator][1], commit_record["active_until"])
+        self.assertTrue((await store.reserve_quota(reservation("release-long"))).accepted)
+        release_locator = client.script_calls[-1][1][5]
+        release_record = client.quota_records[b"release-long"]
+        self.assertGreaterEqual(client.values[release_locator][1], release_record["active_until"])
+
+        client.advance(3_599_000)
+        self.assertTrue(
+            (
+                await store.commit_quota(
+                    QuotaCommitRequest("commit-long", 1_100.0, None, None, False)
+                )
+            ).committed
+        )
+        self.assertTrue(await store.release_quota("release-long", now=1_100.0))
+
     def test_scripts_are_fixed_cluster_safe_and_bounded(self) -> None:
         self.assertEqual(
             set(SCRIPT_SOURCES),
@@ -1594,6 +1644,12 @@ class RedisStateStoreTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("monthly_snapshot", quota_reserve)
         self.assertIn("daily_budget", quota_reserve)
         self.assertIn("monthly_budget", quota_reserve)
+
+        for name in ("quota_reserve", "quota_commit", "quota_release"):
+            source = SCRIPT_SOURCES[name]
+            marker = source.index("-- apply validated mutation")
+            for operation in ("HDEL", "ZREM", "HSET", "ZADD", "SET", "PEXPIREAT", "DEL", "HINCRBY"):
+                self.assertNotIn(f"redis.call('{operation}'", source[:marker])
 
         quota_commit = SCRIPT_SOURCES["quota_commit"]
         self.assertIn("aggregate_target_records", quota_commit)
