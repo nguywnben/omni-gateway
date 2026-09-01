@@ -134,8 +134,9 @@ reloading the fixed application-owned script and retrying `EVALSHA` once through
   coordination-unavailable/corrupt error and never return an allow decision.
 - A caller may retry the identical operation ID after cancellation or an unknown response. The
   result is idempotent if the first execution committed.
-- Commit/release retries remain permitted while new admission is closed during reconciliation.
-  They still require the exact current epoch and exact replay evidence.
+- Commit/release retries remain idempotent only while their exact epoch is `ready`. During
+  `reconciling`, every caller mutation fails closed; W4.18 reconciliation tooling owns settlement
+  of durable evidence left by an earlier epoch.
 - Closing the store is idempotent. Use after close fails closed.
 
 ## Operability
