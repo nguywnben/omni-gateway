@@ -171,12 +171,30 @@ class InvalidationResult:
         )
 
 
+@dataclass(frozen=True, slots=True)
+class InvalidationGeneration:
+    """The current generation for one scope; ``None`` means no invalidation yet."""
+
+    generation: int | None
+
+    def __post_init__(self) -> None:
+        if self.generation is not None:
+            _require_int(
+                self.generation,
+                "Invalidation generation",
+                minimum=1,
+                maximum=MAX_COORDINATION_INTEGER,
+            )
+
+
 def _require_reply_fields(reply: object, expected: frozenset[str]) -> Mapping[str, object]:
     if not isinstance(reply, Mapping) or set(reply) != expected:
         raise CoordinationCorruptError("Coordination reply is invalid.")
+    schema_version = reply.get("schema_version")
     if (
-        isinstance(reply.get("schema_version"), bool)
-        or reply.get("schema_version") != COORDINATION_SCHEMA_VERSION
+        isinstance(schema_version, bool)
+        or not isinstance(schema_version, int)
+        or schema_version != COORDINATION_SCHEMA_VERSION
     ):
         raise CoordinationCorruptError("Coordination reply is invalid.")
     return reply
@@ -219,6 +237,17 @@ def decode_invalidation_result(reply: object) -> InvalidationResult:
         raise CoordinationCorruptError("Coordination invalidation reply is invalid.") from exc
 
 
+def decode_invalidation_generation(reply: object) -> InvalidationGeneration:
+    """Decode the exact transport-neutral result of a non-mutating generation read."""
+    data = _require_reply_fields(reply, frozenset({"schema_version", "generation"}))
+    try:
+        return InvalidationGeneration(generation=data["generation"])
+    except (TypeError, ValueError) as exc:
+        raise CoordinationCorruptError(
+            "Coordination invalidation generation reply is invalid."
+        ) from exc
+
+
 class CoordinationStore(Protocol):
     """The fenced coordination operations shared by every backend implementation."""
 
@@ -231,5 +260,7 @@ class CoordinationStore(Protocol):
     async def compare_and_set(self, request: CasRequest) -> CasResult: ...
 
     async def invalidate(self, request: InvalidationRequest) -> InvalidationResult: ...
+
+    async def read_invalidation_generation(self, scope: str) -> InvalidationGeneration: ...
 
     async def close(self) -> None: ...

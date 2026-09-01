@@ -15,12 +15,15 @@ from core.coordination import (
     MAX_PAYLOAD_BYTES,
     CasRequest,
     CasResult,
+    CoordinationCorruptError,
     Epoch,
     EpochState,
+    InvalidationGeneration,
     InvalidationRequest,
     InvalidationResult,
     decode_cas_result,
     decode_epoch,
+    decode_invalidation_generation,
     decode_invalidation_result,
 )
 
@@ -81,19 +84,24 @@ class CoordinationDomainTests(unittest.TestCase):
             ),
             InvalidationResult(applied=True, generation=2, idempotent=True),
         )
+        self.assertEqual(
+            decode_invalidation_generation({"schema_version": 1, "generation": 2}),
+            InvalidationGeneration(generation=2),
+        )
         for reply in (
             {"schema_version": 1, "epoch": 2, "state": "ready", "extra": "no"},
             {"schema_version": 1, "epoch": True, "state": "ready"},
+            {"schema_version": 1.0, "epoch": 2, "state": "ready"},
             {"schema_version": 1, "epoch": 2, "state": "unknown"},
         ):
-            with self.subTest(reply=reply), self.assertRaises(ValueError):
+            with self.subTest(reply=reply), self.assertRaises(CoordinationCorruptError):
                 decode_epoch(reply)
 
     def test_representations_never_include_payload_or_operation_id(self) -> None:
         secret = "Bearer top-secret-token"
         values = (
-            CasRequest("key", 0, secret.encode(), 1.0, 1, secret),
-            InvalidationRequest("scope", 1, secret),
+            CasRequest(secret, 0, secret.encode(), 1.0, 1, secret),
+            InvalidationRequest(secret, 1, secret),
         )
         for value in values:
             with self.subTest(value=type(value).__name__):
