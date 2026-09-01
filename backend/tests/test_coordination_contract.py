@@ -22,12 +22,36 @@ from core.coordination import (
     InvalidationGeneration,
     InvalidationRequest,
     InvalidationResult,
+    QuotaCommitResult,
+    QuotaReservationDecision,
+    QuotaReservationRequest,
     decode_cas_result,
     decode_epoch,
     decode_invalidation_generation,
     decode_invalidation_result,
     validate_deployment_namespace,
 )
+
+
+def _quota_request(**overrides: object) -> QuotaReservationRequest:
+    values: dict[str, object] = {
+        "reservation_id": "reservation",
+        "key_id": "key",
+        "now": 1_000.0,
+        "ttl_seconds": 10.0,
+        "estimated_tokens": 1,
+        "estimated_cost_usd": 0.0,
+        "rpm_limit": None,
+        "tpm_limit": None,
+        "daily_budget_usd": None,
+        "monthly_budget_usd": None,
+        "daily_spend_usd": 0.0,
+        "monthly_spend_usd": 0.0,
+        "daily_snapshot_started_at": 1_000.0,
+        "monthly_snapshot_started_at": 1_000.0,
+    }
+    values.update(overrides)
+    return QuotaReservationRequest(**values)  # type: ignore[arg-type]
 
 
 class CoordinationDomainTests(unittest.TestCase):
@@ -84,6 +108,62 @@ class CoordinationDomainTests(unittest.TestCase):
         for epoch in (0, -1, 2**63):
             with self.subTest(epoch=epoch), self.assertRaises(ValueError):
                 InvalidationRequest("scope", epoch, "op")
+
+    def test_quota_snapshots_must_be_ordered_and_not_from_the_future(self) -> None:
+        for overrides in (
+            {"daily_snapshot_started_at": 1_001.0},
+            {
+                "daily_snapshot_started_at": 999.0,
+                "monthly_snapshot_started_at": 999.5,
+            },
+        ):
+            with self.subTest(overrides=overrides), self.assertRaises(ValueError):
+                _quota_request(**overrides)
+
+    def test_quota_result_objects_reject_cross_field_contradictions(self) -> None:
+        non_rate_denials = (
+            "daily_budget",
+            "monthly_budget",
+            "capacity",
+            "conflict",
+            "stale_epoch",
+            "reconciling",
+            "reconciliation_required",
+        )
+        invalid_decisions = (
+            (True, "rpm", 1),
+            (True, "", 1),
+            (False, "", 0),
+            (False, "rpm", 0),
+            (False, "tpm", 0),
+            (False, "unknown", 0),
+            (False, [], 0),
+            *((False, reason, 1) for reason in non_rate_denials),
+        )
+        for accepted, reason, retry_after in invalid_decisions:
+            with (
+                self.subTest(accepted=accepted, reason=reason, retry_after=retry_after),
+                self.assertRaises(ValueError),
+            ):
+                QuotaReservationDecision(
+                    accepted,
+                    "reservation",
+                    reason,
+                    retry_after,  # type: ignore[arg-type]
+                )
+
+        for reason, retry_after in (
+            ("rpm", 1),
+            ("tpm", 2),
+            *((reason, 0) for reason in non_rate_denials),
+        ):
+            with self.subTest(reason=reason):
+                QuotaReservationDecision(False, "reservation", reason, retry_after, True)
+        QuotaReservationDecision(True, "reservation")
+
+        with self.assertRaises(ValueError):
+            QuotaCommitResult(False, overspent=True)
+        QuotaCommitResult(False, idempotent=True)
 
     def test_requests_reject_malformed_identifiers_and_oversized_payloads(self) -> None:
         for identifier in ("", "\n", "has\x00control", "x" * 129):

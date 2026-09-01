@@ -105,3 +105,47 @@ No Redis implementation, activation, caller, or deployment behavior changed. Pub
 ### Commit
 
 `fix(coordination): retain bounded quota lifecycle`
+
+## Fix Round 5 (final)
+
+Closed the full-net review findings under controller rulings 11-12. Commit replay identity now includes the commit timestamp, while the legacy release fingerprint still intentionally excludes time. Quota requests enforce `monthly_snapshot_started_at <= daily_snapshot_started_at <= now`, and public quota result constructors reject contradictory accepted/reason/retry and committed/overspent combinations.
+
+Raw epoch mutation boundaries now use the canonical epoch and operation-ID validators before cleanup or state mutation. Epoch advance, epoch ready, CAS, and invalidation each have an independent 100,000-entry production replay cap with one private common test override. Epoch evidence retains for 30 days; CAS and invalidation retain for the original request TTL. Exact lookup precedes bounded cleanup and capacity admission, so an exact retry at capacity succeeds without extending expiry. Capacity exhaustion raises `CoordinationReconciliationRequiredError` before the relevant transition, CAS write/decision, or invalidation increment.
+
+The two epoch expiry heaps participate in the same 256-pop coordination cleanup budget as CAS and invalidation; every due stale or live pop consumes the budget. Quota cleanup now removes per-key lifecycle and replay heap buckets once their heaps are empty.
+
+### RED -> GREEN evidence
+
+RED command:
+
+`.\.venv\Scripts\python.exe -m unittest backend.tests.test_coordination_contract backend.tests.test_coordination_in_memory -v`
+
+Observed result before the implementation: `Ran 35 tests ... FAILED (failures=15, errors=5)`. Failures discriminated commit timestamp identity, future/misordered snapshots, result cross-field contradictions, raw epoch validation, all four replay-category limits, and historical empty quota heap buckets.
+
+Final required GREEN command:
+
+`.\.venv\Scripts\python.exe -m unittest backend.tests.test_coordination_contract backend.tests.test_coordination_in_memory backend.tests.test_quota_reservations backend.tests.test_state_store backend.tests.test_virtual_key_reservations backend.tests.test_virtual_keys`
+
+Fresh result: `Ran 84 tests ... OK`.
+
+### Files and ruling application
+
+- Modified `backend/core/coordination.py`: canonical raw validators, quota snapshot ordering, and fail-closed public result invariants.
+- Modified `backend/core/state_store.py`: commit-time fingerprinting, bounded/expiring non-quota replay evidence, shared cleanup accounting, capacity admission, and empty quota heap-bucket removal.
+- Modified `backend/tests/test_coordination_contract.py`: constructor and cross-field validation regressions across the complete closed denial-reason set.
+- Modified `backend/tests/test_coordination_in_memory.py`: changed-time commit conflict, invalid raw boundaries, future-snapshot non-reconciliation, per-category replay caps/expiry/no-mutation, and empty-heap regressions.
+
+Ruling 11 is applied per category, with no cross-category eviction and no unbounded cleanup. Ruling 12 is enforced in the canonical public domain types, allowing future backends and decoders to fail closed on impossible values. No Redis, activation, caller, deployment, or networking behavior changed.
+
+### Quality checks and self-review
+
+- `.\.venv\Scripts\ruff.exe check backend`: `All checks passed!`
+- `.\.venv\Scripts\ruff.exe format --check backend`: `312 files already formatted`
+- `.\.venv\Scripts\python.exe -m compileall -q backend`: exited successfully
+- `git diff --check`: exited successfully
+- Scoped diff review confirmed validation precedes cleanup/mutation, exact replay precedes capacity checks, failed admission leaves business state unchanged, retry does not extend expiry, and the four limits are independent.
+- The focused run continues to emit pre-existing Python 3.14 deprecation/resource warnings from `test_virtual_keys`; they do not fail the suite and are outside this fix.
+
+### Commit
+
+`fix(coordination): close reference store bounds`

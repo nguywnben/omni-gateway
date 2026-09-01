@@ -14,7 +14,13 @@ if str(TESTS_DIR) not in sys.path:
     sys.path.insert(0, str(TESTS_DIR))
 
 from coordination_store_contract import CoordinationStoreContract
-from core.coordination import CasRequest, CoordinationReconciliationRequiredError, EpochState
+from core.coordination import (
+    CasRequest,
+    CoordinationReconciliationRequiredError,
+    Epoch,
+    EpochState,
+    InvalidationRequest,
+)
 from core.state_store import InMemoryStateStore, QuotaCommitRequest, QuotaReservationRequest
 
 
@@ -95,7 +101,12 @@ class InMemoryCoordinationTests(CoordinationStoreContract, unittest.IsolatedAsyn
         await self.store.advance_epoch(1, "advance-for-stale")
 
         denied = await self.store.reserve_quota(
-            _reservation("stale", fencing_epoch=1, daily_snapshot_started_at=2_000.0)
+            _reservation(
+                "stale",
+                now=2_000.0,
+                fencing_epoch=1,
+                daily_snapshot_started_at=2_000.0,
+            )
         )
 
         self.assertFalse(denied.accepted)
@@ -153,6 +164,64 @@ class InMemoryCoordinationTests(CoordinationStoreContract, unittest.IsolatedAsyn
         self.assertFalse(conflict.committed)
         self.assertFalse(stale_release)
         self.assertTrue(still_active)
+
+    async def test_commit_changed_time_is_a_conflict_but_exact_time_replays(self) -> None:
+        self.assertTrue(
+            (await self.store.reserve_quota(_reservation("commit-time", ttl_seconds=10.0))).accepted
+        )
+        request = QuotaCommitRequest("commit-time", 1_001.0, 2, 0.0, True, 1, "commit-time-op")
+        committed = await self.store.commit_quota(request)
+        replay = await self.store.commit_quota(request)
+        changed_time = await self.store.commit_quota(
+            QuotaCommitRequest("commit-time", 1_002.0, 2, 0.0, True, 1, "commit-time-op")
+        )
+
+        record = self.store._quota_records["commit-time"]
+        assert record.committed is not None
+        self.assertTrue(committed.committed)
+        self.assertTrue(replay.committed)
+        self.assertTrue(replay.idempotent)
+        self.assertFalse(changed_time.committed)
+        self.assertFalse(changed_time.idempotent)
+        self.assertEqual(record.committed.committed_at, 1_001.0)
+
+    async def test_future_snapshot_cannot_reconcile_committed_evidence(self) -> None:
+        self.assertTrue(
+            (
+                await self.store.reserve_quota(
+                    _reservation(
+                        "snapshot-evidence",
+                        ttl_seconds=10.0,
+                        daily_budget_usd=1.0,
+                        monthly_budget_usd=1.0,
+                    )
+                )
+            ).accepted
+        )
+        self.assertTrue(
+            (
+                await self.store.commit_quota(
+                    QuotaCommitRequest(
+                        "snapshot-evidence", 1_001.0, 1, 0.1, True, 1, "commit-snapshot"
+                    )
+                )
+            ).committed
+        )
+        committed = self.store._quota_records["snapshot-evidence"].committed
+        assert committed is not None
+
+        with self.assertRaises(ValueError):
+            await self.store.reserve_quota(
+                _reservation(
+                    "future-snapshot",
+                    now=1_002.0,
+                    daily_snapshot_started_at=1_003.0,
+                    monthly_snapshot_started_at=1_003.0,
+                )
+            )
+
+        self.assertFalse(committed.daily_reconciled)
+        self.assertFalse(committed.monthly_reconciled)
 
     async def test_ready_denied_cas_replays_until_its_ttl_without_flipping(self) -> None:
         self.assertTrue(
@@ -383,6 +452,101 @@ class InMemoryCoordinationTests(CoordinationStoreContract, unittest.IsolatedAsyn
             await self.store.release_quota("release", now=float("nan"))
         with self.assertRaises(ValueError):
             await self.store.release_quota("release", now=1_000.0, operation_id="bad\n")
+
+    async def test_raw_epoch_mutations_validate_before_state_changes(self) -> None:
+        invalid_epochs = (True, 1.0, 0, -1, 2**63)
+        invalid_operations = ("", b"bytes", "bad\n", "x" * 129)
+        for value in invalid_epochs:
+            store = InMemoryStateStore(clock=self.clock)
+            with self.subTest(method="advance", value=value), self.assertRaises(ValueError):
+                await store.advance_epoch(value, "operation")  # type: ignore[arg-type]
+            self.assertEqual(await store.read_epoch(), Epoch(1, EpochState.READY))
+        for value in invalid_operations:
+            store = InMemoryStateStore(clock=self.clock)
+            with self.subTest(method="advance", value=value), self.assertRaises(ValueError):
+                await store.advance_epoch(1, value)  # type: ignore[arg-type]
+            self.assertEqual(await store.read_epoch(), Epoch(1, EpochState.READY))
+
+        for value in (*invalid_epochs, *invalid_operations):
+            store = InMemoryStateStore(clock=self.clock)
+            await store.advance_epoch(1, "advance")
+            with self.subTest(method="ready", value=value), self.assertRaises(ValueError):
+                if value in invalid_epochs:
+                    await store.mark_epoch_ready(value, "operation")  # type: ignore[arg-type]
+                else:
+                    await store.mark_epoch_ready(2, value)  # type: ignore[arg-type]
+            self.assertEqual(await store.read_epoch(), Epoch(2, EpochState.RECONCILING))
+
+    async def test_epoch_advance_replay_capacity_is_bounded_and_expires(self) -> None:
+        store = InMemoryStateStore(clock=self.clock, _coordination_replay_limit_for_testing=1)
+        first = await store.advance_epoch(1, "advance-1")
+        self.assertEqual(await store.advance_epoch(1, "advance-1"), first)
+        await store.mark_epoch_ready(2, "ready-2")
+
+        with self.assertRaises(CoordinationReconciliationRequiredError):
+            await store.advance_epoch(2, "advance-2")
+        self.assertEqual(await store.read_epoch(), Epoch(2, EpochState.READY))
+
+        self.clock.advance(30 * 86_400 + 1)
+        advanced = await store.advance_epoch(2, "advance-2")
+        self.assertEqual(advanced, Epoch(3, EpochState.RECONCILING))
+
+    async def test_epoch_ready_replay_capacity_is_bounded_and_expires(self) -> None:
+        store = InMemoryStateStore(clock=self.clock, _coordination_replay_limit_for_testing=1)
+        store._epoch = Epoch(2, EpochState.RECONCILING)
+        first = await store.mark_epoch_ready(2, "ready-2")
+        self.assertEqual(await store.mark_epoch_ready(2, "ready-2"), first)
+        store._epoch = Epoch(3, EpochState.RECONCILING)
+
+        with self.assertRaises(CoordinationReconciliationRequiredError):
+            await store.mark_epoch_ready(3, "ready-3")
+        self.assertEqual(await store.read_epoch(), Epoch(3, EpochState.RECONCILING))
+
+        self.clock.advance(30 * 86_400 + 1)
+        ready = await store.mark_epoch_ready(3, "ready-3")
+        self.assertEqual(ready, Epoch(3, EpochState.READY))
+
+    async def test_cas_replay_capacity_is_bounded_and_expires(self) -> None:
+        store = InMemoryStateStore(clock=self.clock, _coordination_replay_limit_for_testing=1)
+        first_request = CasRequest("first", 0, b"first", 10.0, 1, "cas-1")
+        first = await store.compare_and_set(first_request)
+        replay = await store.compare_and_set(first_request)
+        self.assertTrue(first.applied)
+        self.assertTrue(replay.idempotent)
+
+        with self.assertRaises(CoordinationReconciliationRequiredError):
+            await store.compare_and_set(CasRequest("second", 0, b"second", 10.0, 1, "cas-2"))
+        self.assertNotIn("second", store._cas)
+
+        self.clock.advance(10.1)
+        admitted = await store.compare_and_set(CasRequest("second", 0, b"second", 10.0, 1, "cas-2"))
+        self.assertTrue(admitted.applied)
+
+    async def test_invalidation_replay_capacity_is_bounded_and_expires(self) -> None:
+        store = InMemoryStateStore(clock=self.clock, _coordination_replay_limit_for_testing=1)
+        first_request = InvalidationRequest("scope-1", 1, "invalidate-1", 10.0)
+        first = await store.invalidate(first_request)
+        replay = await store.invalidate(first_request)
+        self.assertTrue(first.applied)
+        self.assertTrue(replay.idempotent)
+
+        with self.assertRaises(CoordinationReconciliationRequiredError):
+            await store.invalidate(InvalidationRequest("scope-2", 1, "invalidate-2", 10.0))
+        self.assertNotIn("scope-2", store._invalidation_generations)
+
+        self.clock.advance(10.1)
+        admitted = await store.invalidate(InvalidationRequest("scope-2", 1, "invalidate-2", 10.0))
+        self.assertTrue(admitted.applied)
+
+    async def test_fully_expired_quota_key_removes_empty_heap_buckets(self) -> None:
+        store = InMemoryStateStore(clock=self.clock)
+        request = _reservation("one-shot", key_id="one-shot-key", operation_id="reserve-op")
+        self.assertTrue((await store.reserve_quota(request)).accepted)
+
+        self.assertFalse(await store.release_quota("one-shot", now=1_062.0))
+
+        self.assertNotIn("one-shot-key", store._quota_lifecycle_expiries)
+        self.assertNotIn("one-shot-key", store._quota_replay_expiries)
 
     async def test_capacity_exhaustion_is_a_closed_admission_decision(self) -> None:
         store = InMemoryStateStore(clock=self.clock, _quota_record_limit_for_testing=2)

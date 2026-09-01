@@ -30,6 +30,8 @@ from core.coordination import (
     QuotaCommitResult,
     QuotaReservationDecision,
     QuotaReservationRequest,
+    validate_epoch,
+    validate_operation_id,
 )
 
 QUOTA_RATE_WINDOW_SECONDS = 60.0
@@ -139,6 +141,7 @@ class InMemoryStateStore(BaseStateStore):
     """Bounded, deterministic reference implementation of coordination semantics."""
 
     _MAX_PRUNED_PER_MUTATION = 256
+    _DEFAULT_COORDINATION_REPLAY_LIMIT = 100_000
     _DEFAULT_QUOTA_RECORD_LIMIT = 100_000
     _DEFAULT_QUOTA_REPLAY_LIMIT = 100_000
     _UNKNOWN_QUOTA_KEY = ("unknown-reservation",)
@@ -147,6 +150,7 @@ class InMemoryStateStore(BaseStateStore):
         self,
         *,
         clock: Callable[[], float] = time.monotonic,
+        _coordination_replay_limit_for_testing: int | None = None,
         _quota_record_limit_for_testing: int | None = None,
         _quota_replay_limit_for_testing: int | None = None,
     ) -> None:
@@ -154,8 +158,10 @@ class InMemoryStateStore(BaseStateStore):
         self._store: Dict[str, Tuple[Optional[float], Any]] = {}
         self._locks: Dict[str, float] = {}
         self._epoch = Epoch(1, EpochState.READY)
-        self._epoch_advances: Dict[str, Epoch] = {}
-        self._epoch_ready: Dict[str, Epoch] = {}
+        self._epoch_advances: Dict[str, _Replay] = {}
+        self._epoch_ready: Dict[str, _Replay] = {}
+        self._epoch_advance_expiries: list[tuple[float, str]] = []
+        self._epoch_ready_expiries: list[tuple[float, str]] = []
         self._cas: Dict[str, _CasRecord] = {}
         self._cas_replays: Dict[str, _Replay] = {}
         self._cas_expiries: list[tuple[float, str]] = []
@@ -169,6 +175,11 @@ class InMemoryStateStore(BaseStateStore):
         self._quota_replays: Dict[str, _QuotaReplay] = {}
         self._quota_replay_expiries: Dict[object, list[tuple[float, str]]] = {}
         self._quota_replay_counts: Dict[object, int] = {}
+        self._coordination_replay_limit = (
+            self._DEFAULT_COORDINATION_REPLAY_LIMIT
+            if _coordination_replay_limit_for_testing is None
+            else _coordination_replay_limit_for_testing
+        )
         self._quota_record_limit = (
             self._DEFAULT_QUOTA_RECORD_LIMIT
             if _quota_record_limit_for_testing is None
@@ -200,9 +211,15 @@ class InMemoryStateStore(BaseStateStore):
                 mapping.pop(identifier, None)
         return work
 
-    def _prune_coordination_locked(self) -> None:
-        now = self._clock()
+    def _prune_coordination_locked(self, now: float | None = None) -> None:
+        now = self._clock() if now is None else now
         budget = self._MAX_PRUNED_PER_MUTATION
+        budget -= self._prune_heap_locked(
+            self._epoch_advance_expiries, self._epoch_advances, now, budget
+        )
+        budget -= self._prune_heap_locked(
+            self._epoch_ready_expiries, self._epoch_ready, now, budget
+        )
         budget -= self._prune_heap_locked(self._cas_expiries, self._cas, now, budget)
         budget -= self._prune_heap_locked(self._cas_replay_expiries, self._cas_replays, now, budget)
         self._prune_heap_locked(
@@ -246,6 +263,7 @@ class InMemoryStateStore(BaseStateStore):
     def _quota_commit_fingerprint(request: QuotaCommitRequest) -> tuple[object, ...]:
         return (
             request.reservation_id,
+            request.now,
             request.actual_tokens,
             request.actual_cost_usd,
             request.durable_cost_recorded,
@@ -318,23 +336,49 @@ class InMemoryStateStore(BaseStateStore):
     async def advance_epoch(self, expected_epoch: int, operation_id: str) -> Epoch:
         async with self._async_lock:
             self._ensure_open_locked()
-            self._prune_coordination_locked()
-            if operation_id in self._epoch_advances:
-                return self._epoch_advances[operation_id]
+            expected_epoch = validate_epoch(expected_epoch)
+            operation_id = validate_operation_id(operation_id)
+            fingerprint = (expected_epoch,)
+            now = self._clock()
+            replay = self._epoch_advances.get(operation_id)
+            if replay is not None and replay.expires_at > now:
+                if replay.fingerprint == fingerprint:
+                    result = replay.result
+                    assert isinstance(result, Epoch)
+                    return result
+                return self._epoch
+            self._prune_coordination_locked(now)
             if self._epoch.epoch == expected_epoch and self._epoch.state is EpochState.READY:
+                if len(self._epoch_advances) >= self._coordination_replay_limit:
+                    raise CoordinationReconciliationRequiredError("Reconciliation is required.")
                 self._epoch = Epoch(expected_epoch + 1, EpochState.RECONCILING)
-                self._epoch_advances[operation_id] = self._epoch
+                expires_at = now + QUOTA_MONTHLY_WINDOW_SECONDS
+                self._epoch_advances[operation_id] = _Replay(fingerprint, self._epoch, expires_at)
+                heapq.heappush(self._epoch_advance_expiries, (expires_at, operation_id))
             return self._epoch
 
     async def mark_epoch_ready(self, epoch: int, operation_id: str) -> Epoch:
         async with self._async_lock:
             self._ensure_open_locked()
-            self._prune_coordination_locked()
-            if operation_id in self._epoch_ready:
-                return self._epoch_ready[operation_id]
+            epoch = validate_epoch(epoch)
+            operation_id = validate_operation_id(operation_id)
+            fingerprint = (epoch,)
+            now = self._clock()
+            replay = self._epoch_ready.get(operation_id)
+            if replay is not None and replay.expires_at > now:
+                if replay.fingerprint == fingerprint:
+                    result = replay.result
+                    assert isinstance(result, Epoch)
+                    return result
+                return self._epoch
+            self._prune_coordination_locked(now)
             if self._epoch.epoch == epoch and self._epoch.state is EpochState.RECONCILING:
+                if len(self._epoch_ready) >= self._coordination_replay_limit:
+                    raise CoordinationReconciliationRequiredError("Reconciliation is required.")
                 self._epoch = Epoch(epoch, EpochState.READY)
-                self._epoch_ready[operation_id] = self._epoch
+                expires_at = now + QUOTA_MONTHLY_WINDOW_SECONDS
+                self._epoch_ready[operation_id] = _Replay(fingerprint, self._epoch, expires_at)
+                heapq.heappush(self._epoch_ready_expiries, (expires_at, operation_id))
             return self._epoch
 
     async def compare_and_set(self, request: CasRequest) -> CasResult:
@@ -342,26 +386,29 @@ class InMemoryStateStore(BaseStateStore):
             self._ensure_open_locked()
             if not self._is_ready_locked(request.epoch):
                 return CasResult(False, None)
-            self._prune_coordination_locked()
             fingerprint = self._cas_fingerprint(request)
+            now = self._clock()
             replay = self._cas_replays.get(request.operation_id)
-            if replay is not None:
+            if replay is not None and replay.expires_at > now:
                 if replay.fingerprint == fingerprint:
                     result = replay.result
                     assert isinstance(result, CasResult)
                     return CasResult(result.applied, result.revision, idempotent=True)
                 return CasResult(False, None)
+            self._prune_coordination_locked(now)
+            if len(self._cas_replays) >= self._coordination_replay_limit:
+                raise CoordinationReconciliationRequiredError("Reconciliation is required.")
             existing = self._cas.get(request.key)
             revision = 1 if existing is None else existing.revision + 1
             if (existing is None and request.expected_revision != 0) or (
                 existing is not None and existing.revision != request.expected_revision
             ):
                 result = CasResult(False, None)
-                expires_at = self._clock() + request.ttl_seconds
+                expires_at = now + request.ttl_seconds
                 self._cas_replays[request.operation_id] = _Replay(fingerprint, result, expires_at)
                 heapq.heappush(self._cas_replay_expiries, (expires_at, request.operation_id))
                 return result
-            expires_at = self._clock() + request.ttl_seconds
+            expires_at = now + request.ttl_seconds
             result = CasResult(True, revision)
             self._cas[request.key] = _CasRecord(revision, request.payload, expires_at)
             self._cas_replays[request.operation_id] = _Replay(fingerprint, result, expires_at)
@@ -374,18 +421,21 @@ class InMemoryStateStore(BaseStateStore):
             self._ensure_open_locked()
             if not self._is_ready_locked(request.epoch):
                 return InvalidationResult(False, None)
-            self._prune_coordination_locked()
-            replay = self._invalidation_replays.get(request.operation_id)
             fingerprint = (request.scope, request.epoch, request.replay_ttl_seconds)
-            if replay is not None:
+            now = self._clock()
+            replay = self._invalidation_replays.get(request.operation_id)
+            if replay is not None and replay.expires_at > now:
                 if replay.fingerprint == fingerprint:
                     result = replay.result
                     assert isinstance(result, InvalidationResult)
                     return InvalidationResult(result.applied, result.generation, idempotent=True)
                 return InvalidationResult(False, None)
+            self._prune_coordination_locked(now)
+            if len(self._invalidation_replays) >= self._coordination_replay_limit:
+                raise CoordinationReconciliationRequiredError("Reconciliation is required.")
             generation = self._invalidation_generations.get(request.scope, 0) + 1
             result = InvalidationResult(True, generation)
-            expires_at = self._clock() + request.replay_ttl_seconds
+            expires_at = now + request.replay_ttl_seconds
             self._invalidation_generations[request.scope] = generation
             self._invalidation_replays[request.operation_id] = _Replay(
                 fingerprint, result, expires_at
@@ -484,6 +534,17 @@ class InMemoryStateStore(BaseStateStore):
         else:
             self._quota_replay_counts.pop(key_id, None)
 
+    def _remove_empty_quota_expiry_heaps_locked(
+        self,
+        key_id: object,
+        lifecycle_heap: list[tuple[float, str]],
+        replay_heap: list[tuple[float, str]],
+    ) -> None:
+        if isinstance(key_id, str) and not lifecycle_heap:
+            self._quota_lifecycle_expiries.pop(key_id, None)
+        if not replay_heap:
+            self._quota_replay_expiries.pop(key_id, None)
+
     def _prune_quota_key_locked(self, key_id: object, now: float, budget: int) -> int | None:
         lifecycle_heap = (
             self._quota_lifecycle_expiries.get(key_id, []) if isinstance(key_id, str) else []
@@ -493,6 +554,7 @@ class InMemoryStateStore(BaseStateStore):
             lifecycle_due = bool(lifecycle_heap and lifecycle_heap[0][0] <= now)
             replay_due = bool(replay_heap and replay_heap[0][0] <= now)
             if not lifecycle_due and not replay_due:
+                self._remove_empty_quota_expiry_heaps_locked(key_id, lifecycle_heap, replay_heap)
                 return budget
             if lifecycle_due and (not replay_due or lifecycle_heap[0][0] <= replay_heap[0][0]):
                 expires_at, reservation_id = heapq.heappop(lifecycle_heap)
@@ -501,6 +563,7 @@ class InMemoryStateStore(BaseStateStore):
                 expires_at, replay_key = heapq.heappop(replay_heap)
                 self._apply_quota_replay_expiry_locked(key_id, replay_key, expires_at)
             budget -= 1
+        self._remove_empty_quota_expiry_heaps_locked(key_id, lifecycle_heap, replay_heap)
         if (lifecycle_heap and lifecycle_heap[0][0] <= now) or (
             replay_heap and replay_heap[0][0] <= now
         ):

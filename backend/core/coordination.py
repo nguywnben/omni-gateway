@@ -65,6 +65,16 @@ def _require_identifier(value: object, label: str) -> str:
     return value
 
 
+def validate_epoch(value: object) -> int:
+    """Validate an epoch at raw method boundaries and in typed requests."""
+    return _require_int(value, "Epoch", minimum=1, maximum=MAX_COORDINATION_INTEGER)
+
+
+def validate_operation_id(value: object) -> str:
+    """Validate a replay identifier at raw method boundaries and in typed requests."""
+    return _require_identifier(value, "Operation ID")
+
+
 def validate_deployment_namespace(value: object) -> str:
     """Validate the human-facing namespace before a backend hashes it for keys."""
     if not isinstance(value, str) or not 3 <= len(value) <= 64:
@@ -80,7 +90,7 @@ class Epoch:
     state: EpochState
 
     def __post_init__(self) -> None:
-        _require_int(self.epoch, "Epoch", minimum=1, maximum=MAX_COORDINATION_INTEGER)
+        validate_epoch(self.epoch)
         if not isinstance(self.state, EpochState):
             raise ValueError("Epoch state is invalid.")
 
@@ -110,8 +120,8 @@ class CasRequest:
             minimum=MIN_TTL_SECONDS,
             maximum=MAX_TTL_SECONDS,
         )
-        _require_int(self.epoch, "Epoch", minimum=1, maximum=MAX_COORDINATION_INTEGER)
-        _require_identifier(self.operation_id, "Operation ID")
+        validate_epoch(self.epoch)
+        validate_operation_id(self.operation_id)
 
 
 @dataclass(frozen=True, slots=True)
@@ -144,8 +154,8 @@ class InvalidationRequest:
 
     def __post_init__(self) -> None:
         _require_identifier(self.scope, "Invalidation scope")
-        _require_int(self.epoch, "Epoch", minimum=1, maximum=MAX_COORDINATION_INTEGER)
-        _require_identifier(self.operation_id, "Operation ID")
+        validate_epoch(self.epoch)
+        validate_operation_id(self.operation_id)
         _require_finite_float(
             self.replay_ttl_seconds,
             "Replay TTL",
@@ -232,6 +242,8 @@ class QuotaReservationRequest:
             _require_finite_float(
                 value, label, minimum=0.0, maximum=float(MAX_COORDINATION_INTEGER)
             )
+        if not self.monthly_snapshot_started_at <= self.daily_snapshot_started_at <= self.now:
+            raise ValueError("Quota snapshot times are invalid.")
         for value, label in ((self.rpm_limit, "RPM limit"), (self.tpm_limit, "TPM limit")):
             if value is not None:
                 _require_int(value, label, minimum=1, maximum=MAX_COORDINATION_INTEGER)
@@ -243,9 +255,9 @@ class QuotaReservationRequest:
                 _require_finite_float(
                     value, label, minimum=0.0, maximum=float(MAX_COORDINATION_INTEGER)
                 )
-        _require_int(self.fencing_epoch, "Epoch", minimum=1, maximum=MAX_COORDINATION_INTEGER)
+        validate_epoch(self.fencing_epoch)
         if self.operation_id is not None:
-            _require_identifier(self.operation_id, "Operation ID")
+            validate_operation_id(self.operation_id)
 
 
 @dataclass(frozen=True, slots=True)
@@ -260,8 +272,7 @@ class QuotaReservationDecision:
         if not isinstance(self.accepted, bool) or not isinstance(self.idempotent, bool):
             raise ValueError("Quota decision is invalid.")
         _require_identifier(self.reservation_id, "Reservation ID")
-        if self.reason not in {
-            "",
+        denied_reasons = {
             "rpm",
             "tpm",
             "daily_budget",
@@ -271,11 +282,20 @@ class QuotaReservationDecision:
             "capacity",
             "reconciliation_required",
             "conflict",
-        }:
+        }
+        if not isinstance(self.reason, str):
             raise ValueError("Quota decision is invalid.")
-        _require_int(
+        retry_after = _require_int(
             self.retry_after_seconds, "Retry-after", minimum=0, maximum=MAX_COORDINATION_INTEGER
         )
+        if self.accepted:
+            if self.reason or retry_after:
+                raise ValueError("Quota decision is invalid.")
+            return
+        if self.reason not in denied_reasons:
+            raise ValueError("Quota decision is invalid.")
+        if (self.reason in {"rpm", "tpm"}) != (retry_after > 0):
+            raise ValueError("Quota decision is invalid.")
 
 
 @dataclass(frozen=True, slots=True)
@@ -304,9 +324,9 @@ class QuotaCommitRequest:
             )
         if not isinstance(self.durable_cost_recorded, bool):
             raise ValueError("Durable cost state is invalid.")
-        _require_int(self.fencing_epoch, "Epoch", minimum=1, maximum=MAX_COORDINATION_INTEGER)
+        validate_epoch(self.fencing_epoch)
         if self.operation_id is not None:
-            _require_identifier(self.operation_id, "Operation ID")
+            validate_operation_id(self.operation_id)
 
 
 @dataclass(frozen=True, slots=True)
@@ -319,6 +339,8 @@ class QuotaCommitResult:
         if not all(
             isinstance(value, bool) for value in (self.committed, self.overspent, self.idempotent)
         ):
+            raise ValueError("Quota commit result is invalid.")
+        if not self.committed and self.overspent:
             raise ValueError("Quota commit result is invalid.")
 
 
