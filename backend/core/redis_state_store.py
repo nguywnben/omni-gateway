@@ -93,8 +93,9 @@ local function valid_replay(value, score)
   if not value or not score or not valid_integer(score) then return false end
   local schema, fingerprint, saved_epoch, saved_state, saved_expiry =
     string.match(value, '^([^|]+)|([^|]+)|([^|]+)|([^|]+)|([^|]+)$')
-  return schema == '1' and fingerprint and valid_integer(saved_epoch)
-    and (saved_state == 'ready' or saved_state == 'reconciling')
+  return schema == '1' and fingerprint and valid_integer(fingerprint)
+    and valid_integer(saved_epoch) and saved_epoch == next_integer(fingerprint)
+    and saved_state == 'reconciling'
     and valid_integer(saved_expiry) and saved_expiry == score
 end
 local count = redis.call('HLEN', KEYS[1])
@@ -124,9 +125,6 @@ end
 if replay and tonumber(replay_expiry) > now_ms then
   local _, fingerprint, saved_epoch, saved_state =
     string.match(replay, '^([^|]+)|([^|]+)|([^|]+)|([^|]+)|([^|]+)$')
-  if saved_epoch ~= next_integer(ARGV[1]) or saved_state ~= 'reconciling' then
-    return redis.error_reply('COORDINATION_CORRUPT')
-  end
   if fingerprint == ARGV[1] then
     return {'1', 'ok', saved_epoch, saved_state}
   end
@@ -175,8 +173,8 @@ local function valid_replay(value, score)
   if not value or not score or not valid_integer(score) then return false end
   local schema, fingerprint, saved_epoch, saved_state, saved_expiry =
     string.match(value, '^([^|]+)|([^|]+)|([^|]+)|([^|]+)|([^|]+)$')
-  return schema == '1' and fingerprint and valid_integer(saved_epoch)
-    and (saved_state == 'ready' or saved_state == 'reconciling')
+  return schema == '1' and fingerprint and valid_integer(fingerprint)
+    and valid_integer(saved_epoch) and saved_epoch == fingerprint and saved_state == 'ready'
     and valid_integer(saved_expiry) and saved_expiry == score
 end
 local count = redis.call('HLEN', KEYS[1])
@@ -203,9 +201,6 @@ end
 if replay and tonumber(replay_expiry) > now_ms then
   local _, fingerprint, saved_epoch, saved_state =
     string.match(replay, '^([^|]+)|([^|]+)|([^|]+)|([^|]+)|([^|]+)$')
-  if saved_epoch ~= ARGV[1] or saved_state ~= 'ready' then
-    return redis.error_reply('COORDINATION_CORRUPT')
-  end
   if fingerprint == ARGV[1] then
     return {'1', 'ok', saved_epoch, saved_state}
   end
@@ -568,8 +563,6 @@ def _decode_cas_reply(reply: object) -> CasResult:
     applied = values[1] == b"applied"
     if applied == (values[2] == b""):
         raise CoordinationCorruptError("Coordination reply is invalid.")
-    if not applied and values[3] != b"0":
-        raise CoordinationCorruptError("Coordination reply is invalid.")
     revision = _strict_positive_int(values[2]) if applied else None
     return CasResult(applied, revision, values[3] == b"1")
 
@@ -796,17 +789,15 @@ class RedisStateStore:
         token = self._lock_tokens.get(task, {}).get(redis_key) if task is not None else None
         if token is None:
             return
-        try:
-            reply = await self._run_script("lock_release", keys=[redis_key], args=[token])
-            deleted = _decode_integer_reply(reply, nonnegative=True)
-            if deleted not in {0, 1}:
-                raise CoordinationCorruptError("Coordination reply is invalid.")
-        finally:
-            owned_tokens = self._lock_tokens.get(task) if task is not None else None
-            if owned_tokens is not None and owned_tokens.get(redis_key) == token:
-                owned_tokens.pop(redis_key, None)
-                if not owned_tokens:
-                    self._lock_tokens.pop(task, None)
+        reply = await self._run_script("lock_release", keys=[redis_key], args=[token])
+        deleted = _decode_integer_reply(reply, nonnegative=True)
+        if deleted not in {0, 1}:
+            raise CoordinationCorruptError("Coordination reply is invalid.")
+        owned_tokens = self._lock_tokens.get(task) if task is not None else None
+        if owned_tokens is not None and owned_tokens.get(redis_key) == token:
+            owned_tokens.pop(redis_key, None)
+            if not owned_tokens:
+                self._lock_tokens.pop(task, None)
 
     async def read_epoch(self) -> Epoch:
         reply = await self._run_script("epoch_read", keys=[self._key("epoch")], args=[])

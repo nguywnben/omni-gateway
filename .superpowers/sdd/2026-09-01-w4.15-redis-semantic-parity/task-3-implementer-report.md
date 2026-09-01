@@ -58,6 +58,57 @@ git diff --check
 exit 0
 ```
 
+## Fix Round 2: preserve replay semantics
+
+### Review findings addressed
+
+- Epoch replay validation now checks the stored fingerprint first. Advance records require a
+  canonical stored fingerprint, `saved_epoch == fingerprint + 1`, and `reconciling`; ready
+  records require a canonical stored fingerprint, `saved_epoch == fingerprint`, and `ready`.
+  Only after that internal check does either script compare the fingerprint with the incoming
+  expected epoch. Thus an unchanged operation replays exactly, while the same operation ID with a
+  changed expected epoch returns the current epoch as a normal conflict rather than corruption.
+- CAS now accepts a `not_applied` reply with absent revision and idempotent flag `1`: it is the
+  valid exact replay form of a ready-epoch business denial. Invalidation remains stricter because
+  its not-applied fencing result is never replayed.
+- Lock release now drops the task/key token only after a valid canonical `0` or `1` response.
+  Cancellation, timeout, transport/protocol failure, or corrupt response retain ownership so the
+  same task can retry the uncertain compare/delete with the identical token.
+
+### RED -> GREEN
+
+The re-review RED cases were: an internally valid epoch replay combined with a changed incoming
+expected epoch was incorrectly classified as corrupt; a valid CAS-denial replay was rejected;
+and a failed lock release lost the retry token. Focused regression tests were added for advance
+and ready changed-input conflicts, statefully injected malformed stored replays, stored
+fingerprint invariants, denial replay/conflict distinction, and uncertain lock
+release retry/definitive-zero cleanup.
+
+```text
+.venv\\Scripts\\python.exe -m unittest -q backend.tests.test_redis_state_store
+Ran 25 tests in 0.562s
+OK
+
+.venv\\Scripts\\python.exe -m unittest -q backend.tests.test_coordination_contract backend.tests.test_coordination_in_memory backend.tests.test_quota_reservations backend.tests.test_quota_lifecycle backend.tests.test_state_store backend.tests.test_redis_state_store
+Ran 79 tests in 1.668s
+OK
+
+.venv\\Scripts\\python.exe -m compileall -q backend\\core\\redis_state_store.py backend\\core\\state_store.py backend\\tests\\test_redis_state_store.py
+exit 0
+
+.venv\\Scripts\\ruff.exe check backend\\core\\redis_state_store.py backend\\core\\state_store.py backend\\tests\\test_redis_state_store.py
+All checks passed!
+
+.venv\\Scripts\\ruff.exe format --check backend\\core\\redis_state_store.py backend\\core\\state_store.py backend\\tests\\test_redis_state_store.py
+3 files already formatted
+
+.venv\\Scripts\\python.exe -m pip check
+No broken requirements found.
+
+git diff --check
+exit 0
+```
+
 The installed client is `redis 8.1.0`; the repository range is
 `redis>=8.1.0,<9.0` in `requirements.txt`.
 

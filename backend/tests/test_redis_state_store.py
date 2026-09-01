@@ -140,6 +140,7 @@ class StatefulRedisClient(FakeRedisClient):
         self.replays: defaultdict[str, dict[bytes, tuple[bytes, list[bytes], int]]] = defaultdict(
             dict
         )
+        self.corrupt_replays: set[tuple[str, bytes]] = set()
         self.values: dict[str, tuple[bytes, int | None]] = {}
 
     def register_script(self, source: str) -> StatefulRegisteredScript:
@@ -154,6 +155,8 @@ class StatefulRedisClient(FakeRedisClient):
         return expires_at is not None and expires_at <= self.now_ms
 
     def _replay(self, name: str, operation_id: bytes, fingerprint: bytes) -> list[bytes] | None:
+        if (name, operation_id) in self.corrupt_replays:
+            raise RuntimeError("COORDINATION_CORRUPT")
         entries = self.replays[name]
         due = [
             identifier
@@ -512,13 +515,14 @@ class RedisStateStoreTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_operation_specific_reply_forms_reject_impossible_replay_flags(self) -> None:
         self.queue("cas", [b"1", b"not_applied", b"", b"1"], [b"1", b"applied", b"", b"0"])
-        for request in (
-            CasRequest("key", 0, b"value", 1, 1, "not-applied-replay"),
-            CasRequest("key", 0, b"value", 1, 1, "missing-revision"),
-        ):
-            with self.subTest(request=request.operation_id):
-                with self.assertRaises(CoordinationCorruptError):
-                    await self.store.compare_and_set(request)
+        replay = await self.store.compare_and_set(
+            CasRequest("key", 0, b"value", 1, 1, "not-applied-replay")
+        )
+        self.assertEqual((replay.applied, replay.revision, replay.idempotent), (False, None, True))
+        with self.assertRaises(CoordinationCorruptError):
+            await self.store.compare_and_set(
+                CasRequest("key", 0, b"value", 1, 1, "missing-revision")
+            )
 
         self.queue(
             "invalidation",
@@ -633,10 +637,15 @@ class RedisStateStoreTests(unittest.IsolatedAsyncioTestCase):
         )
         self.assertEqual((await store.read_epoch()).state, EpochState.READY)
         self.assertEqual((await store.advance_epoch(1, "advance")).state, EpochState.RECONCILING)
+        self.assertEqual(
+            (await store.advance_epoch(2, "advance")).state,
+            EpochState.RECONCILING,
+        )
         self.assertFalse(
             (await store.compare_and_set(CasRequest("key", 0, b"one", 1, 1, "stale"))).applied
         )
         self.assertEqual((await store.mark_epoch_ready(2, "ready")).state, EpochState.READY)
+        self.assertEqual((await store.mark_epoch_ready(3, "ready")).state, EpochState.READY)
 
         created = await store.compare_and_set(CasRequest("key", 0, b"one", 1, 2, "create"))
         replay = await store.compare_and_set(CasRequest("key", 0, b"one", 1, 2, "create"))
@@ -644,6 +653,14 @@ class RedisStateStoreTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual((created.applied, created.revision), (True, 1))
         self.assertTrue(replay.idempotent)
         self.assertFalse(conflict.applied)
+        denied = await store.compare_and_set(CasRequest("denied", 1, b"one", 1, 2, "deny"))
+        denial_replay = await store.compare_and_set(CasRequest("denied", 1, b"one", 1, 2, "deny"))
+        denial_conflict = await store.compare_and_set(
+            CasRequest("denied", 1, b"changed", 1, 2, "deny")
+        )
+        self.assertEqual((denied.applied, denied.idempotent), (False, False))
+        self.assertEqual((denial_replay.applied, denial_replay.idempotent), (False, True))
+        self.assertEqual((denial_conflict.applied, denial_conflict.idempotent), (False, False))
         client.advance(1_000)
         self.assertTrue(
             (await store.compare_and_set(CasRequest("key", 0, b"two", 1, 2, "expired"))).applied
@@ -681,6 +698,28 @@ class RedisStateStoreTests(unittest.IsolatedAsyncioTestCase):
         )
         with self.assertRaises(CoordinationReconciliationRequiredError):
             await cleanup_store.compare_and_set(CasRequest("cleanup", 0, b"one", 5, 1, "cleanup"))
+
+    async def test_stateful_epoch_replay_distinguishes_corrupt_record_from_changed_input(
+        self,
+    ) -> None:
+        client = StatefulRedisClient()
+        store = RedisStateStore(
+            "redis://redis.example/0",
+            deployment_namespace="prod-west",
+            _redis_module_for_testing=FakeRedisModule(client),
+        )
+
+        await store.advance_epoch(1, "advance")
+        await store.mark_epoch_ready(2, "ready")
+        self.assertEqual((await store.advance_epoch(99, "advance")).epoch, 2)
+        self.assertEqual((await store.mark_epoch_ready(99, "ready")).epoch, 2)
+
+        client.corrupt_replays.update({("epoch_advance", b"advance"), ("epoch_ready", b"ready")})
+        with self.assertRaises(CoordinationCorruptError):
+            await store.advance_epoch(99, "advance")
+        with self.assertRaises(CoordinationCorruptError):
+            await store.mark_epoch_ready(99, "ready")
+        self.assertEqual((await store.read_epoch()).epoch, 2)
 
     async def test_lock_release_is_bound_to_the_acquiring_task(self) -> None:
         client = StatefulRedisClient()
@@ -721,6 +760,21 @@ class RedisStateStoreTests(unittest.IsolatedAsyncioTestCase):
         new_token = client.command_calls[1][1][1]
         self.assertEqual(release_calls[0][2], [old_token])
         self.assertEqual(release_calls[1][2], [new_token])
+
+    async def test_lock_release_retries_uncertain_result_with_the_same_task_token(self) -> None:
+        self.client.command_replies["set"].append(True)
+        self.client.script_replies["lock_release"].extend(
+            [RuntimeError("connection reset"), [b"1", b"ok", b"0"]]
+        )
+        self.assertTrue(await self.store.acquire_lock("retry-lock"))
+        with self.assertRaises(CoordinationUnavailableError):
+            await self.store.release_lock("retry-lock")
+        await self.store.release_lock("retry-lock")
+        await self.store.release_lock("retry-lock")
+
+        release_calls = [call for call in self.client.script_calls if call[0] == "lock_release"]
+        self.assertEqual(len(release_calls), 2)
+        self.assertEqual(release_calls[0][2], release_calls[1][2])
 
     async def test_quota_methods_fail_closed_until_task_four(self) -> None:
         reserve = QuotaReservationRequest(
@@ -800,10 +854,17 @@ class RedisStateStoreTests(unittest.IsolatedAsyncioTestCase):
                 )
                 self.assertIn("string.format('%.0f', expires_at)", SCRIPT_SOURCES[name])
 
-        self.assertIn("saved_epoch ~= next_integer(ARGV[1])", SCRIPT_SOURCES["epoch_advance"])
-        self.assertIn("saved_state ~= 'reconciling'", SCRIPT_SOURCES["epoch_advance"])
-        self.assertIn("saved_epoch ~= ARGV[1]", SCRIPT_SOURCES["epoch_ready"])
-        self.assertIn("saved_state ~= 'ready'", SCRIPT_SOURCES["epoch_ready"])
+        advance_source = SCRIPT_SOURCES["epoch_advance"]
+        self.assertIn("valid_integer(fingerprint)", advance_source)
+        self.assertIn("saved_epoch == next_integer(fingerprint)", advance_source)
+        self.assertIn("saved_state == 'reconciling'", advance_source)
+        self.assertNotIn("next_integer(ARGV[1])", advance_source)
+
+        ready_source = SCRIPT_SOURCES["epoch_ready"]
+        self.assertIn("valid_integer(fingerprint)", ready_source)
+        self.assertIn("saved_epoch == fingerprint", ready_source)
+        self.assertIn("saved_state == 'ready'", ready_source)
+        self.assertNotIn("saved_epoch ~= ARGV[1]", ready_source)
 
     def test_compatibility_reexport_and_virtual_subclass(self) -> None:
         self.assertIs(CompatibilityRedisStateStore, RedisStateStore)
