@@ -129,9 +129,9 @@ class StatefulRedisClient(FakeRedisClient):
         "invalidation_read": (1, 0),
         "increment": (1, 2),
         "lock_release": (1, 1),
-        "quota_reserve": (5, 20),
-        "quota_commit": (5, 8),
-        "quota_release": (5, 5),
+        "quota_reserve": (7, 20),
+        "quota_commit": (7, 12),
+        "quota_release": (7, 8),
     }
 
     def __init__(self) -> None:
@@ -311,7 +311,7 @@ class StatefulRedisClient(FakeRedisClient):
             )
             return [b"1", b"ok", str(value).encode()]
         if name.startswith("quota_"):
-            return self._run_quota_script(name, byte_args)
+            return self._run_quota_script(name, byte_args, keys)
         assert name == "lock_release"
         stored = self.values.get(keys[0])
         deleted = stored is not None and not self._expired(stored[1]) and stored[0] == byte_args[0]
@@ -360,6 +360,35 @@ class StatefulRedisClient(FakeRedisClient):
         replay[-1] = b"1"
         return replay, key_id
 
+    def _quota_locator(self, key: str, field_count: int) -> list[bytes] | None:
+        stored = self.values.get(key)
+        if stored is None or self._expired(stored[1]):
+            self.values.pop(key, None)
+            return None
+        if stored[1] is None:
+            raise RuntimeError("COORDINATION_CORRUPT")
+        fields = stored[0].split(b"|")
+        invalid_hex = any(value not in b"0123456789abcdef" for value in fields[1])
+        fingerprint_invalid = field_count == 3 and (
+            len(fields[2]) != 64 or any(value not in b"0123456789abcdef" for value in fields[2])
+        )
+        if (
+            len(fields) != field_count
+            or fields[0] != b"1"
+            or len(fields[1]) != 64
+            or invalid_hex
+            or fingerprint_invalid
+        ):
+            raise RuntimeError("COORDINATION_CORRUPT")
+        return fields
+
+    def _quota_locators_match(self, keys: list[str], target_key: bytes, fingerprint: bytes) -> bool:
+        reservation = self._quota_locator(keys[5], 2)
+        operation = self._quota_locator(keys[6], 3)
+        if reservation is not None and reservation[1] != target_key:
+            return False
+        return operation is None or (operation[1] == target_key and operation[2] == fingerprint)
+
     def _remember_quota(
         self,
         operation_id: bytes,
@@ -399,9 +428,9 @@ class StatefulRedisClient(FakeRedisClient):
 
     @staticmethod
     def _as_float(value: bytes) -> float:
-        return float.fromhex(value.decode("ascii"))
+        return float(value.decode("ascii"))
 
-    def _run_quota_script(self, name: str, args: list[bytes]) -> list[bytes]:
+    def _run_quota_script(self, name: str, args: list[bytes], keys: list[str]) -> list[bytes]:
         epoch = int(args[0])
         if self.epoch != (epoch, b"ready"):
             if name == "quota_reserve":
@@ -420,6 +449,8 @@ class StatefulRedisClient(FakeRedisClient):
             )
         if name == "quota_reserve":
             reservation_id, key_id, fingerprint, operation_id = args[1:5]
+            if not self._quota_locators_match(keys, key_id, fingerprint):
+                return [b"1", b"denied", reservation_id, b"conflict", b"0", b"0"]
             ttl, retention, record_limit, replay_limit = map(int, args[5:9])
             request_now = self._as_float(args[9])
             tokens, cost = int(args[10]), self._as_float(args[11])
@@ -519,14 +550,18 @@ class StatefulRedisClient(FakeRedisClient):
                         "retained_until": self.now_ms + retention,
                         "tokens": tokens,
                         "cost": cost,
+                        "rpm": rpm,
+                        "tpm": tpm,
                         "daily_budget": daily_budget,
                         "monthly_budget": monthly_budget,
                         "daily_spend": daily_spend,
                         "monthly_spend": monthly_spend,
+                        "retention": retention,
                     }
+                    self.values[keys[5]] = (b"1|" + key_id, self.now_ms + retention)
                     result = [b"1", b"accepted", reservation_id, b"", b"0", b"0"]
             expiry = (
-                self.now_ms + retention
+                self.now_ms + ttl
                 if result[1] == b"denied"
                 else int(self.quota_records[reservation_id]["retained_until"])
             )
@@ -534,15 +569,26 @@ class StatefulRedisClient(FakeRedisClient):
                 operation_id, fingerprint, result, expiry, key_id, replay_limit
             ):
                 return [b"1", b"denied", reservation_id, b"reconciliation_required", b"0", b"0"]
+            self.values[keys[6]] = (
+                b"1|" + key_id + b"|" + fingerprint,
+                expiry,
+            )
             return result
         if name == "quota_commit":
-            fingerprint, operation_id, reservation_id = args[1:4]
-            request_now = self._as_float(args[4])
-            actual_tokens = None if args[5] == b"" else int(args[5])
-            actual_cost = None if args[6] == b"" else self._as_float(args[6])
-            durable = args[7] == b"1"
+            fingerprint, operation_id, reservation_id, target_key = args[1:5]
+            if not self._quota_locators_match(keys, target_key, fingerprint):
+                return [b"1", b"not_committed", b"0", b"0"]
+            request_now = self._as_float(args[5])
+            actual_tokens = None if args[6] == b"" else int(args[6])
+            actual_cost = None if args[7] == b"" else self._as_float(args[7])
+            durable = args[8] == b"1"
+            replay_limit, unknown_retention = int(args[10]), int(args[11])
+            key_id = target_key
             record = self.quota_records.get(reservation_id)
-            key_id = b"" if record is None else record["key"]
+            if record is not None and record["key"] != key_id:
+                record = None
+            if self._quota_locator(keys[5], 2) is not None and record is None:
+                raise RuntimeError("COORDINATION_CORRUPT")
             if not self._quota_prune(key_id):
                 return [b"1", b"reconciliation_required", b"0", b"0"]
             replay, replay_key = self._quota_replay(operation_id, fingerprint)
@@ -560,9 +606,13 @@ class StatefulRedisClient(FakeRedisClient):
                     operation_id,
                     fingerprint,
                     result,
-                    self.now_ms + 30 * 86_400 * 1000,
+                    self.now_ms + unknown_retention,
                     key_id,
-                    100_000,
+                    replay_limit,
+                )
+                self.values[keys[6]] = (
+                    b"1|" + key_id + b"|" + fingerprint,
+                    self.now_ms + unknown_retention,
                 )
                 return result
             record["state"] = "committed"
@@ -575,37 +625,69 @@ class StatefulRedisClient(FakeRedisClient):
             record["durable"] = durable
             record["daily_reconciled"] = record["daily_budget"] is None
             record["monthly_reconciled"] = record["monthly_budget"] is None
+            record["retained_until"] = self.now_ms + int(record["retention"])
             active, committed = self._quota_active(key_id), self._quota_committed(key_id)
             cutoff = self.now_ms - 60_000
             overspent = (
-                record["daily_budget"] is not None
-                and float(record["daily_spend"])
-                + sum(float(item["cost"]) for item in active)
-                + sum(
-                    float(item["actual_cost"])
-                    for item in committed
-                    if not bool(item["daily_reconciled"])
+                (
+                    record.get("tpm") is not None
+                    and sum(
+                        int(item["tokens"]) for item in active if int(item["created_at"]) > cutoff
+                    )
+                    + sum(
+                        int(item["actual_tokens"])
+                        for item in committed
+                        if int(item["committed_at"]) > cutoff
+                    )
+                    > int(record["tpm"])
                 )
-                > float(record["daily_budget"])
-            ) or (
-                record["monthly_budget"] is not None
-                and float(record["monthly_spend"])
-                + sum(float(item["cost"]) for item in active)
-                + sum(
-                    float(item["actual_cost"])
-                    for item in committed
-                    if not bool(item["monthly_reconciled"])
+                or (
+                    record["daily_budget"] is not None
+                    and float(record["daily_spend"])
+                    + sum(float(item["cost"]) for item in active)
+                    + sum(
+                        float(item["actual_cost"])
+                        for item in committed
+                        if not bool(item["daily_reconciled"])
+                    )
+                    > float(record["daily_budget"])
                 )
-                > float(record["monthly_budget"])
+                or (
+                    record["monthly_budget"] is not None
+                    and float(record["monthly_spend"])
+                    + sum(float(item["cost"]) for item in active)
+                    + sum(
+                        float(item["actual_cost"])
+                        for item in committed
+                        if not bool(item["monthly_reconciled"])
+                    )
+                    > float(record["monthly_budget"])
+                )
             )
             result = [b"1", b"committed", b"1" if overspent else b"0", b"0"]
             self._remember_quota(
-                operation_id, fingerprint, result, int(record["retained_until"]), key_id, 100_000
+                operation_id,
+                fingerprint,
+                result,
+                int(record["retained_until"]),
+                key_id,
+                replay_limit,
+            )
+            self.values[keys[5]] = (b"1|" + key_id, int(record["retained_until"]))
+            self.values[keys[6]] = (
+                b"1|" + key_id + b"|" + fingerprint,
+                int(record["retained_until"]),
             )
             return result
-        fingerprint, operation_id, reservation_id, retention = args[1:]
+        fingerprint, operation_id, reservation_id, target_key, retention, _, replay_limit = args[1:]
+        if not self._quota_locators_match(keys, target_key, fingerprint):
+            return [b"1", b"ok", b"0", b"0"]
         record = self.quota_records.get(reservation_id)
-        key_id = b"" if record is None else record["key"]
+        key_id = target_key
+        if record is not None and record["key"] != key_id:
+            record = None
+        if self._quota_locator(keys[5], 2) is not None and record is None:
+            raise RuntimeError("COORDINATION_CORRUPT")
         if not self._quota_prune(key_id):
             return [b"1", b"reconciliation_required", b"0", b"0"]
         replay, replay_key = self._quota_replay(operation_id, fingerprint)
@@ -624,7 +706,8 @@ class StatefulRedisClient(FakeRedisClient):
             int(record["retained_until"]) if record is not None else self.now_ms + int(retention)
         )
         result = [b"1", b"ok", b"1" if released else b"0", b"0"]
-        self._remember_quota(operation_id, fingerprint, result, expiry, key_id, 100_000)
+        self._remember_quota(operation_id, fingerprint, result, expiry, key_id, int(replay_limit))
+        self.values[keys[6]] = (b"1|" + key_id + b"|" + fingerprint, expiry)
         return result
 
 
@@ -1117,6 +1200,9 @@ class RedisStateStoreTests(unittest.IsolatedAsyncioTestCase):
         )
         self.queue("quota_commit", [b"1", b"committed", b"0", b"0"])
         self.queue("quota_release", [b"1", b"ok", b"1", b"0"])
+        key_digest = sha256(len(b"key").to_bytes(8, "big") + b"key").hexdigest().encode("ascii")
+        locator = b"1|" + key_digest
+        self.client.command_replies["get"].extend([locator, None, locator, None])
 
         decision = await self.store.reserve_quota(reserve)
         committed = await self.store.commit_quota(commit)
@@ -1129,8 +1215,13 @@ class RedisStateStoreTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(
             [call[0] for call in quota_calls], ["quota_reserve", "quota_commit", "quota_release"]
         )
-        self.assertEqual([len(call[1]) for call in quota_calls], [5, 5, 5])
-        self.assertTrue(all(len(call[2]) >= 4 for call in quota_calls))
+        self.assertEqual([len(call[1]) for call in quota_calls], [7, 7, 7])
+        self.assertEqual([len(call[2]) for call in quota_calls], [20, 12, 8])
+        self.assertEqual(quota_calls[0][2][2], key_digest)
+        self.assertEqual(quota_calls[1][2][4], key_digest)
+        self.assertEqual(quota_calls[2][2][4], key_digest)
+        self.assertEqual(quota_calls[0][1][1:5], quota_calls[1][1][1:5])
+        self.assertEqual(quota_calls[1][1][1:5], quota_calls[2][1][1:5])
 
     async def test_stateful_quota_lifecycle_replay_capacity_and_terminal_retention(self) -> None:
         client = StatefulRedisClient()
@@ -1286,6 +1377,124 @@ class RedisStateStoreTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(tpm_denied.reason, "tpm")
         self.assertTrue(reconciled.accepted)
 
+    async def test_stateful_quota_commit_discriminates_overspent_and_fallback(self) -> None:
+        client = StatefulRedisClient()
+        store = RedisStateStore(
+            "redis://redis.example/0",
+            deployment_namespace="quota-accounting",
+            _redis_module_for_testing=FakeRedisModule(client),
+        )
+
+        def reservation(identifier: str, key_id: str, **changes: object) -> QuotaReservationRequest:
+            values: dict[str, object] = {
+                "reservation_id": identifier,
+                "key_id": key_id,
+                "now": 1_000.0,
+                "ttl_seconds": 20.0,
+                "estimated_tokens": 1,
+                "estimated_cost_usd": 0.1,
+                "rpm_limit": None,
+                "tpm_limit": None,
+                "daily_budget_usd": None,
+                "monthly_budget_usd": None,
+                "daily_spend_usd": 0.0,
+                "monthly_spend_usd": 0.0,
+                "daily_snapshot_started_at": 1_000.0,
+                "monthly_snapshot_started_at": 1_000.0,
+            }
+            values.update(changes)
+            return QuotaReservationRequest(**values)  # type: ignore[arg-type]
+
+        self.assertTrue(
+            (await store.reserve_quota(reservation("tpm", "tpm", tpm_limit=100))).accepted
+        )
+        tpm = await store.commit_quota(QuotaCommitRequest("tpm", 1_000.0, 101, 0.1, False))
+        self.assertTrue(tpm.committed)
+        self.assertTrue(tpm.overspent)
+
+        self.assertTrue(
+            (
+                await store.reserve_quota(
+                    reservation("fallback", "fallback", estimated_tokens=7, tpm_limit=7)
+                )
+            ).accepted
+        )
+        fallback = await store.commit_quota(
+            QuotaCommitRequest("fallback", 1_000.0, None, None, False)
+        )
+        self.assertTrue(fallback.committed)
+        self.assertFalse(fallback.overspent)
+        self.assertEqual(client.quota_records[b"fallback"]["actual_tokens"], 7)
+        self.assertEqual(client.quota_records[b"fallback"]["actual_cost"], 0.1)
+
+        self.assertTrue(
+            (
+                await store.reserve_quota(reservation("daily", "daily", daily_budget_usd=0.5))
+            ).accepted
+        )
+        daily = await store.commit_quota(QuotaCommitRequest("daily", 1_000.0, 1, 0.6, False))
+        self.assertTrue(daily.overspent)
+
+        self.assertTrue(
+            (
+                await store.reserve_quota(reservation("monthly", "monthly", monthly_budget_usd=0.5))
+            ).accepted
+        )
+        monthly = await store.commit_quota(QuotaCommitRequest("monthly", 1_000.0, 1, 0.6, False))
+        self.assertTrue(monthly.overspent)
+
+    async def test_stateful_quota_locator_races_and_target_backlog_fail_closed(self) -> None:
+        client = StatefulRedisClient()
+        store = RedisStateStore(
+            "redis://redis.example/0",
+            deployment_namespace="quota-locators",
+            _redis_module_for_testing=FakeRedisModule(client),
+        )
+
+        def reservation(identifier: str, key_id: str = "key-a") -> QuotaReservationRequest:
+            return QuotaReservationRequest(
+                identifier,
+                key_id,
+                1_000.0,
+                20.0,
+                1,
+                0.1,
+                None,
+                None,
+                None,
+                None,
+                0.0,
+                0.0,
+                1_000.0,
+                1_000.0,
+            )
+
+        self.assertTrue((await store.reserve_quota(reservation("locator"))).accepted)
+        locator_key = client.script_calls[-1][1][5]
+        client.values[locator_key] = (b"1|" + b"b" * 64, client.now_ms + 60_000)
+        with self.assertRaises(CoordinationCorruptError):
+            await store.commit_quota(QuotaCommitRequest("locator", 1_000.0, 1, 0.1, False))
+        self.assertTrue((await store.reserve_quota(reservation("isolated", "key-b"))).accepted)
+
+        self.assertTrue((await store.reserve_quota(reservation("persistent", "key-c"))).accepted)
+        persistent_locator = client.script_calls[-1][1][5]
+        client.values[persistent_locator] = (client.values[persistent_locator][0], None)
+        with self.assertRaises(CoordinationCorruptError):
+            await store.release_quota("persistent", now=1_000.0)
+
+        self.assertTrue((await store.reserve_quota(reservation("backlog", "key-d"))).accepted)
+        source = client.quota_records[b"backlog"]
+        for index in range(257):
+            client.quota_records[f"due-{index}".encode()] = {
+                **source,
+                "retained_until": client.now_ms,
+            }
+        blocked = await store.reserve_quota(reservation("blocked", "key-d"))
+        healthy = await store.reserve_quota(reservation("healthy", "key-e"))
+        self.assertEqual(blocked.reason, "reconciliation_required")
+        self.assertTrue(healthy.accepted)
+        self.assertIn(b"due-256", client.quota_records)
+
     def test_scripts_are_fixed_cluster_safe_and_bounded(self) -> None:
         self.assertEqual(
             set(SCRIPT_SOURCES),
@@ -1313,12 +1522,20 @@ class RedisStateStoreTests(unittest.IsolatedAsyncioTestCase):
                 self.assertNotIn("WHILE ", upper)
                 if "ZRANGEBYSCORE" in upper:
                     self.assertIn("LIMIT', 0, 257", source)
-                    self.assertIn("#due > 256", source)
                     self.assertIn("redis.call('ZCARD'", source)
-                    self.assertLess(
-                        source.index("local due = redis.call('ZRANGEBYSCORE'"),
-                        source.index("redis.call('HDEL'"),
-                    )
+                    if name.startswith("quota_"):
+                        self.assertIn("#replay_due > 256", source)
+                        self.assertIn("#lifecycle_due > 256", source)
+                        self.assertLess(
+                            source.index("for _, operation_id in ipairs(replay_due) do"),
+                            source.index("redis.call('HDEL'"),
+                        )
+                    else:
+                        self.assertIn("#due > 256", source)
+                        self.assertLess(
+                            source.index("local due = redis.call('ZRANGEBYSCORE'"),
+                            source.index("redis.call('HDEL'"),
+                        )
 
         cas_source = SCRIPT_SOURCES["cas"]
         self.assertIn("redis.call('PTTL', KEYS[2])", cas_source)
@@ -1357,10 +1574,35 @@ class RedisStateStoreTests(unittest.IsolatedAsyncioTestCase):
                 self.assertIn("KEYS[1]", source)
                 self.assertIn("ZRANGEBYSCORE", source)
                 self.assertIn("LIMIT', 0, 257", source)
-                self.assertIn("#due > 256", source)
-                self.assertIn("redis.call('HLEN', KEYS[4]) ~= redis.call('ZCARD', KEYS[5])", source)
+                self.assertIn("#replay_due > 256", source)
+                self.assertIn("replay_count ~= replay_expiry_count", source)
+                self.assertIn("record_count ~= lifecycle_count", source)
                 self.assertNotIn("KEYS(", source.upper())
                 self.assertNotIn("SCAN", source.upper())
+
+        quota_reserve = SCRIPT_SOURCES["quota_reserve"]
+        self.assertIn("redis.call('HGETALL', KEYS[2])", quota_reserve)
+        self.assertIn("if #fields ~= 24 then return nil end", quota_reserve)
+        self.assertIn("^[+-]?0[1-9]$", quota_reserve)
+        self.assertIn("read_reservation_locator", quota_reserve)
+        self.assertIn("redis.call('PTTL', key) <= 0", quota_reserve)
+        self.assertLess(
+            quota_reserve.index("local record_count = redis.call('HLEN', KEYS[2])"),
+            quota_reserve.index("redis.call('HGETALL', KEYS[2])"),
+        )
+        self.assertIn("daily_snapshot", quota_reserve)
+        self.assertIn("monthly_snapshot", quota_reserve)
+        self.assertIn("daily_budget", quota_reserve)
+        self.assertIn("monthly_budget", quota_reserve)
+
+        quota_commit = SCRIPT_SOURCES["quota_commit"]
+        self.assertIn("aggregate_target_records", quota_commit)
+        self.assertIn("record.tpm_limit", quota_commit)
+        self.assertIn("record.daily_spend", quota_commit)
+        self.assertIn("record.monthly_spend", quota_commit)
+        self.assertIn("local overspent_value =", quota_commit)
+        self.assertIn("aggregate.rate_tokens > tonumber(record.tpm_limit)", quota_commit)
+        self.assertNotIn("'|committed|0|'", quota_commit)
 
     def test_compatibility_reexport_and_virtual_subclass(self) -> None:
         self.assertIs(CompatibilityRedisStateStore, RedisStateStore)
