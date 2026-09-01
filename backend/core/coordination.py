@@ -1,0 +1,235 @@
+"""Strict, versioned domain contract for coordination backends.
+
+This module deliberately contains no transport or runtime-selection logic.  It
+defines the small, fenced semantic boundary consumed by the in-memory and
+Redis implementations.
+"""
+
+from __future__ import annotations
+
+import math
+from collections.abc import Mapping
+from dataclasses import dataclass, field
+from enum import Enum
+from typing import Protocol
+
+COORDINATION_SCHEMA_VERSION = 1
+MAX_IDENTIFIER_LENGTH = 128
+MAX_PAYLOAD_BYTES = 16 * 1024
+MIN_TTL_SECONDS = 1.0
+MAX_TTL_SECONDS = 30.0 * 86_400.0
+MAX_COORDINATION_INTEGER = 2**63 - 1
+
+
+class CoordinationError(RuntimeError):
+    """Base error for a coordination backend that cannot safely decide."""
+
+
+class CoordinationUnavailableError(CoordinationError):
+    """The backend was unavailable or returned an unusable response."""
+
+
+class CoordinationCorruptError(CoordinationError, ValueError):
+    """Stored coordination state did not satisfy the closed version-one schema."""
+
+
+class EpochState(str, Enum):
+    READY = "ready"
+    RECONCILING = "reconciling"
+
+
+def _require_int(value: object, label: str, *, minimum: int, maximum: int) -> int:
+    if isinstance(value, bool) or not isinstance(value, int) or not minimum <= value <= maximum:
+        raise ValueError(f"{label} is invalid.")
+    return value
+
+
+def _require_finite_float(value: object, label: str, *, minimum: float, maximum: float) -> float:
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        raise ValueError(f"{label} is invalid.")
+    number = float(value)
+    if not math.isfinite(number) or not minimum <= number <= maximum:
+        raise ValueError(f"{label} is invalid.")
+    return number
+
+
+def _require_identifier(value: object, label: str) -> str:
+    if not isinstance(value, str) or not 1 <= len(value) <= MAX_IDENTIFIER_LENGTH:
+        raise ValueError(f"{label} is invalid.")
+    if any(ord(character) < 32 or ord(character) > 126 for character in value):
+        raise ValueError(f"{label} is invalid.")
+    return value
+
+
+def validate_deployment_namespace(value: object) -> str:
+    """Validate the human-facing namespace before a backend hashes it for keys."""
+    if not isinstance(value, str) or not 3 <= len(value) <= 64:
+        raise ValueError("Deployment namespace is invalid.")
+    if any(character not in "abcdefghijklmnopqrstuvwxyz0123456789-" for character in value):
+        raise ValueError("Deployment namespace is invalid.")
+    return value
+
+
+@dataclass(frozen=True, slots=True)
+class Epoch:
+    epoch: int
+    state: EpochState
+
+    def __post_init__(self) -> None:
+        _require_int(self.epoch, "Epoch", minimum=1, maximum=MAX_COORDINATION_INTEGER)
+        if not isinstance(self.state, EpochState):
+            raise ValueError("Epoch state is invalid.")
+
+
+@dataclass(frozen=True, slots=True)
+class CasRequest:
+    key: str = field(repr=False)
+    expected_revision: int
+    payload: bytes = field(repr=False)
+    ttl_seconds: float
+    epoch: int
+    operation_id: str = field(repr=False)
+
+    def __post_init__(self) -> None:
+        _require_identifier(self.key, "Coordination key")
+        _require_int(
+            self.expected_revision,
+            "Expected revision",
+            minimum=0,
+            maximum=MAX_COORDINATION_INTEGER,
+        )
+        if not isinstance(self.payload, bytes) or len(self.payload) > MAX_PAYLOAD_BYTES:
+            raise ValueError("Coordination payload is invalid.")
+        _require_finite_float(
+            self.ttl_seconds,
+            "Coordination TTL",
+            minimum=MIN_TTL_SECONDS,
+            maximum=MAX_TTL_SECONDS,
+        )
+        _require_int(self.epoch, "Epoch", minimum=1, maximum=MAX_COORDINATION_INTEGER)
+        _require_identifier(self.operation_id, "Operation ID")
+
+
+@dataclass(frozen=True, slots=True)
+class CasResult:
+    applied: bool
+    revision: int | None
+    idempotent: bool = False
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.applied, bool) or not isinstance(self.idempotent, bool):
+            raise ValueError("CAS result is invalid.")
+        if self.revision is None:
+            if self.applied or self.idempotent:
+                raise ValueError("CAS result is invalid.")
+            return
+        _require_int(
+            self.revision,
+            "CAS revision",
+            minimum=1,
+            maximum=MAX_COORDINATION_INTEGER,
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class InvalidationRequest:
+    scope: str = field(repr=False)
+    epoch: int
+    operation_id: str = field(repr=False)
+    replay_ttl_seconds: float = MIN_TTL_SECONDS
+
+    def __post_init__(self) -> None:
+        _require_identifier(self.scope, "Invalidation scope")
+        _require_int(self.epoch, "Epoch", minimum=1, maximum=MAX_COORDINATION_INTEGER)
+        _require_identifier(self.operation_id, "Operation ID")
+        _require_finite_float(
+            self.replay_ttl_seconds,
+            "Replay TTL",
+            minimum=MIN_TTL_SECONDS,
+            maximum=MAX_TTL_SECONDS,
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class InvalidationResult:
+    applied: bool
+    generation: int | None
+    idempotent: bool = False
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.applied, bool) or not isinstance(self.idempotent, bool):
+            raise ValueError("Invalidation result is invalid.")
+        if self.generation is None:
+            if self.applied or self.idempotent:
+                raise ValueError("Invalidation result is invalid.")
+            return
+        _require_int(
+            self.generation,
+            "Invalidation generation",
+            minimum=1,
+            maximum=MAX_COORDINATION_INTEGER,
+        )
+
+
+def _require_reply_fields(reply: object, expected: frozenset[str]) -> Mapping[str, object]:
+    if not isinstance(reply, Mapping) or set(reply) != expected:
+        raise CoordinationCorruptError("Coordination reply is invalid.")
+    if (
+        isinstance(reply.get("schema_version"), bool)
+        or reply.get("schema_version") != COORDINATION_SCHEMA_VERSION
+    ):
+        raise CoordinationCorruptError("Coordination reply is invalid.")
+    return reply
+
+
+def decode_epoch(reply: object) -> Epoch:
+    """Decode a closed-schema stored epoch record, failing closed on corruption."""
+    data = _require_reply_fields(reply, frozenset({"schema_version", "epoch", "state"}))
+    try:
+        return Epoch(epoch=data["epoch"], state=EpochState(data["state"]))
+    except (TypeError, ValueError) as exc:
+        raise CoordinationCorruptError("Coordination epoch reply is invalid.") from exc
+
+
+def decode_cas_result(reply: object) -> CasResult:
+    """Decode the exact transport-neutral stored result for a CAS mutation."""
+    data = _require_reply_fields(
+        reply, frozenset({"schema_version", "applied", "revision", "idempotent"})
+    )
+    try:
+        return CasResult(
+            applied=data["applied"], revision=data["revision"], idempotent=data["idempotent"]
+        )
+    except (TypeError, ValueError) as exc:
+        raise CoordinationCorruptError("Coordination CAS reply is invalid.") from exc
+
+
+def decode_invalidation_result(reply: object) -> InvalidationResult:
+    """Decode the exact transport-neutral stored result for an invalidation mutation."""
+    data = _require_reply_fields(
+        reply, frozenset({"schema_version", "applied", "generation", "idempotent"})
+    )
+    try:
+        return InvalidationResult(
+            applied=data["applied"],
+            generation=data["generation"],
+            idempotent=data["idempotent"],
+        )
+    except (TypeError, ValueError) as exc:
+        raise CoordinationCorruptError("Coordination invalidation reply is invalid.") from exc
+
+
+class CoordinationStore(Protocol):
+    """The fenced coordination operations shared by every backend implementation."""
+
+    async def read_epoch(self) -> Epoch: ...
+
+    async def advance_epoch(self, expected_epoch: int, operation_id: str) -> Epoch: ...
+
+    async def mark_epoch_ready(self, epoch: int, operation_id: str) -> Epoch: ...
+
+    async def compare_and_set(self, request: CasRequest) -> CasResult: ...
+
+    async def invalidate(self, request: InvalidationRequest) -> InvalidationResult: ...
+
+    async def close(self) -> None: ...
