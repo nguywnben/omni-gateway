@@ -44,7 +44,8 @@ _THIRTY_DAYS_MS = 30 * 86_400 * 1000
 _DEFAULT_REPLAY_LIMIT = 100_000
 _MAX_CLEANUP = 256
 _MAX_INTEGER_TEXT = "9223372036854775807"
-_QUOTA_UNAVAILABLE = "Redis quota reservations are not available until Task 4/HA activation."
+_QUOTA_RATE_WINDOW_MS = 60_000
+_QUOTA_MONTHLY_WINDOW_MS = _THIRTY_DAYS_MS
 _CORRUPT_DRIVER_ERROR_MARKERS = (
     "COORDINATION_CORRUPT",
     "WRONGTYPE",
@@ -450,6 +451,170 @@ end
 return {'1', 'ok', deleted}
 """
 
+# Quota state deliberately uses one fixed, deployment-slot-local five-key bundle.  The record
+# hash is field-partitioned by the already-digested virtual-key identifier; no caller supplied
+# identifier is ever made into a Redis key.  Every mutation validates the replay hash/ZSET pair
+# before it removes due members.  The production scripts keep the lifecycle data in canonical
+# records; the Python reply codec remains the trust boundary for Redis output.
+_QUOTA_RESERVE_SCRIPT = """-- omni:quota_reserve:v1
+local function valid_integer(value)
+  return value and string.match(value, '^[1-9][0-9]*$')
+    and (#value < 19 or (#value == 19 and value <= '9223372036854775807'))
+end
+local function valid_replay(value, score)
+  if not value or not score or not valid_integer(score) then return false end
+  local fingerprint, status, reason, retry_after, saved_expiry =
+    string.match(value, '^([^|]+)|([^|]+)|([^|]*)|([^|]+)|([^|]+)$')
+  return fingerprint and #fingerprint == 64 and (status == 'accepted' or status == 'denied')
+    and (reason == '' or reason == 'rpm' or reason == 'tpm' or reason == 'daily_budget'
+      or reason == 'monthly_budget' or reason == 'capacity')
+    and (retry_after == '0' or valid_integer(retry_after))
+    and valid_integer(saved_expiry) and saved_expiry == score
+end
+local epoch_count = redis.call('HLEN', KEYS[1])
+if epoch_count == 0 then
+  redis.call('HSET', KEYS[1], 'schema_version', '1', 'epoch', '1', 'state', 'ready')
+elseif epoch_count ~= 3 then return redis.error_reply('COORDINATION_CORRUPT') end
+local epoch = redis.call('HMGET', KEYS[1], 'schema_version', 'epoch', 'state')
+if #epoch ~= 3 or epoch[1] ~= '1' or not valid_integer(epoch[2])
+  or (epoch[3] ~= 'ready' and epoch[3] ~= 'reconciling') then
+  return redis.error_reply('COORDINATION_CORRUPT')
+end
+if epoch[2] ~= ARGV[1] or epoch[3] ~= 'ready' then
+  return {'1', 'denied', ARGV[2], epoch[3] == 'reconciling' and 'reconciling' or 'stale_epoch', '0', '0'}
+end
+local clock = redis.call('TIME')
+local now_ms = (clock[1] * 1000) + math.floor(clock[2] / 1000)
+if redis.call('HLEN', KEYS[4]) ~= redis.call('ZCARD', KEYS[5]) then
+  return redis.error_reply('COORDINATION_CORRUPT')
+end
+local replay = redis.call('HGET', KEYS[4], ARGV[5])
+local replay_expiry = redis.call('ZSCORE', KEYS[5], ARGV[5])
+if not valid_replay(replay, replay_expiry) and (replay or replay_expiry) then
+  return redis.error_reply('COORDINATION_CORRUPT')
+end
+if replay and tonumber(replay_expiry) > now_ms then
+  local fingerprint, status, reason, retry_after =
+    string.match(replay, '^([^|]+)|([^|]+)|([^|]*)|([^|]+)|([^|]+)$')
+  if fingerprint == ARGV[4] then
+    return {'1', status, ARGV[2], reason, retry_after, '1'}
+  end
+  return {'1', 'denied', ARGV[2], 'conflict', '0', '0'}
+end
+local due = redis.call('ZRANGEBYSCORE', KEYS[5], '-inf', now_ms, 'LIMIT', 0, 257)
+local lifecycle_due = redis.call('ZRANGEBYSCORE', KEYS[3], '-inf', now_ms, 'LIMIT', 0, 257)
+if #due > 256 or #lifecycle_due > 256 or #due + #lifecycle_due > 256 then return {'1', 'denied', ARGV[2], 'reconciliation_required', '0', '0'} end
+for _, operation_id in ipairs(due) do
+  if not valid_replay(redis.call('HGET', KEYS[4], operation_id), redis.call('ZSCORE', KEYS[5], operation_id)) then
+    return redis.error_reply('COORDINATION_CORRUPT')
+  end
+end
+if #due > 0 then redis.call('HDEL', KEYS[4], unpack(due)); redis.call('ZREM', KEYS[5], unpack(due)) end
+for _, reservation_id in ipairs(lifecycle_due) do
+  local stale = redis.call('HGET', KEYS[2], reservation_id)
+  local stale_fingerprint, stale_key, stale_state, stale_active, stale_retained
+  if stale then stale_fingerprint, stale_key, stale_state, stale_active, stale_retained = string.match(stale, '^([^|]+)|([^|]+)|([^|]+)|([^|]+)|([^|]+)$') end
+  if not stale or not stale_fingerprint or #stale_fingerprint ~= 64 or not stale_key or (stale_state ~= 'active' and stale_state ~= 'committed' and stale_state ~= 'released' and stale_state ~= 'expired') or not valid_integer(stale_active) or not valid_integer(stale_retained) or tonumber(stale_retained) > now_ms then return redis.error_reply('COORDINATION_CORRUPT') end
+  local remaining = redis.call('HINCRBY', KEYS[2], 'count:' .. stale_key, -1)
+  if remaining < 0 then return redis.error_reply('COORDINATION_CORRUPT') end
+  redis.call('HDEL', KEYS[2], reservation_id)
+end
+if #lifecycle_due > 0 then redis.call('ZREM', KEYS[3], unpack(lifecycle_due)) end
+local existing = redis.call('HGET', KEYS[2], ARGV[2])
+if existing then
+  local saved_fingerprint = string.match(existing, '^([^|]+)|')
+  if saved_fingerprint ~= ARGV[4] then return {'1', 'denied', ARGV[2], 'conflict', '0', '0'} end
+  return {'1', 'accepted', ARGV[2], '', '0', '1'}
+end
+local count_field = 'count:' .. ARGV[3]
+local record_count = redis.call('HGET', KEYS[2], count_field)
+if record_count and (not string.match(record_count, '^[0-9]+$') or tonumber(record_count) > tonumber(ARGV[8])) then
+  return redis.error_reply('COORDINATION_CORRUPT')
+end
+if tonumber(record_count or '0') >= tonumber(ARGV[8]) then
+  return {'1', 'denied', ARGV[2], 'capacity', '0', '0'}
+end
+if redis.call('HLEN', KEYS[4]) >= tonumber(ARGV[9]) then
+  return {'1', 'denied', ARGV[2], 'reconciliation_required', '0', '0'}
+end
+local expires_at = now_ms + tonumber(ARGV[6])
+local retained_until = now_ms + tonumber(ARGV[7])
+local expiry_text = string.format('%.0f', retained_until)
+redis.call('HSET', KEYS[2], ARGV[2], ARGV[4] .. '|' .. ARGV[3] .. '|active|' .. string.format('%.0f', expires_at) .. '|' .. expiry_text)
+redis.call('HINCRBY', KEYS[2], count_field, 1)
+redis.call('ZADD', KEYS[3], retained_until, ARGV[2])
+redis.call('HSET', KEYS[4], ARGV[5], ARGV[4] .. '|accepted||0|' .. expiry_text)
+redis.call('ZADD', KEYS[5], retained_until, ARGV[5])
+return {'1', 'accepted', ARGV[2], '', '0', '0'}
+"""
+
+_QUOTA_COMMIT_SCRIPT = """-- omni:quota_commit:v1
+local function valid_integer(value) return value and string.match(value, '^[1-9][0-9]*$') end
+local epoch_count = redis.call('HLEN', KEYS[1])
+if epoch_count == 0 then redis.call('HSET', KEYS[1], 'schema_version', '1', 'epoch', '1', 'state', 'ready') elseif epoch_count ~= 3 then return redis.error_reply('COORDINATION_CORRUPT') end
+local epoch = redis.call('HMGET', KEYS[1], 'schema_version', 'epoch', 'state')
+if #epoch ~= 3 or epoch[1] ~= '1' or not valid_integer(epoch[2]) or (epoch[3] ~= 'ready' and epoch[3] ~= 'reconciling') then return redis.error_reply('COORDINATION_CORRUPT') end
+if epoch[2] ~= ARGV[1] or epoch[3] ~= 'ready' then return {'1', 'not_committed', '0', '0'} end
+local clock = redis.call('TIME'); local now_ms = (clock[1] * 1000) + math.floor(clock[2] / 1000)
+if redis.call('HLEN', KEYS[4]) ~= redis.call('ZCARD', KEYS[5]) then return redis.error_reply('COORDINATION_CORRUPT') end
+local replay = redis.call('HGET', KEYS[4], ARGV[3]); local score = redis.call('ZSCORE', KEYS[5], ARGV[3])
+if (replay and not score) or (score and not replay) then return redis.error_reply('COORDINATION_CORRUPT') end
+if replay and tonumber(score) > now_ms then
+  local fingerprint, status, overspent = string.match(replay, '^([^|]+)|([^|]+)|([^|]+)|[^|]+$')
+  if not fingerprint or #fingerprint ~= 64 or (status ~= 'committed' and status ~= 'not_committed') or (overspent ~= '0' and overspent ~= '1') then return redis.error_reply('COORDINATION_CORRUPT') end
+  if fingerprint == ARGV[2] then return {'1', status, overspent, '1'} end
+  return {'1', 'not_committed', '0', '0'}
+end
+local due = redis.call('ZRANGEBYSCORE', KEYS[5], '-inf', now_ms, 'LIMIT', 0, 257)
+if #due > 256 then return {'1', 'reconciliation_required', '0', '0'} end
+for _, operation_id in ipairs(due) do if not redis.call('HGET', KEYS[4], operation_id) or not redis.call('ZSCORE', KEYS[5], operation_id) then return redis.error_reply('COORDINATION_CORRUPT') end end
+if #due > 0 then redis.call('HDEL', KEYS[4], unpack(due)); redis.call('ZREM', KEYS[5], unpack(due)) end
+local record = redis.call('HGET', KEYS[2], ARGV[4])
+if not record then return {'1', 'not_committed', '0', '0'} end
+local reserve_fingerprint, key_digest, state, active_expiry, retained_until = string.match(record, '^([^|]+)|([^|]+)|([^|]+)|([^|]+)|([^|]+)$')
+if not reserve_fingerprint or #reserve_fingerprint ~= 64 or not valid_integer(active_expiry) or not valid_integer(retained_until) then return redis.error_reply('COORDINATION_CORRUPT') end
+if state ~= 'active' or tonumber(active_expiry) <= now_ms then return {'1', 'not_committed', '0', '0'} end
+redis.call('HSET', KEYS[2], ARGV[4], reserve_fingerprint .. '|' .. key_digest .. '|committed|' .. active_expiry .. '|' .. retained_until)
+redis.call('HSET', KEYS[4], ARGV[3], ARGV[2] .. '|committed|0|' .. retained_until)
+redis.call('ZADD', KEYS[5], tonumber(retained_until), ARGV[3])
+return {'1', 'committed', '0', '0'}
+"""
+
+_QUOTA_RELEASE_SCRIPT = """-- omni:quota_release:v1
+local function valid_integer(value) return value and string.match(value, '^[1-9][0-9]*$') end
+local epoch_count = redis.call('HLEN', KEYS[1])
+if epoch_count == 0 then redis.call('HSET', KEYS[1], 'schema_version', '1', 'epoch', '1', 'state', 'ready') elseif epoch_count ~= 3 then return redis.error_reply('COORDINATION_CORRUPT') end
+local epoch = redis.call('HMGET', KEYS[1], 'schema_version', 'epoch', 'state')
+if #epoch ~= 3 or epoch[1] ~= '1' or not valid_integer(epoch[2]) or (epoch[3] ~= 'ready' and epoch[3] ~= 'reconciling') then return redis.error_reply('COORDINATION_CORRUPT') end
+if epoch[2] ~= ARGV[1] or epoch[3] ~= 'ready' then return {'1', 'ok', '0', '0'} end
+local clock = redis.call('TIME'); local now_ms = (clock[1] * 1000) + math.floor(clock[2] / 1000)
+if redis.call('HLEN', KEYS[4]) ~= redis.call('ZCARD', KEYS[5]) then return redis.error_reply('COORDINATION_CORRUPT') end
+local replay = redis.call('HGET', KEYS[4], ARGV[3]); local score = redis.call('ZSCORE', KEYS[5], ARGV[3])
+if (replay and not score) or (score and not replay) then return redis.error_reply('COORDINATION_CORRUPT') end
+if replay and tonumber(score) > now_ms then
+  local fingerprint, released = string.match(replay, '^([^|]+)|released|([01])|[^|]+$')
+  if not fingerprint or #fingerprint ~= 64 then return redis.error_reply('COORDINATION_CORRUPT') end
+  if fingerprint == ARGV[2] then return {'1', 'ok', released, '1'} end
+  return {'1', 'ok', '0', '0'}
+end
+local due = redis.call('ZRANGEBYSCORE', KEYS[5], '-inf', now_ms, 'LIMIT', 0, 257)
+if #due > 256 then return {'1', 'reconciliation_required', '0', '0'} end
+for _, operation_id in ipairs(due) do if not redis.call('HGET', KEYS[4], operation_id) or not redis.call('ZSCORE', KEYS[5], operation_id) then return redis.error_reply('COORDINATION_CORRUPT') end end
+if #due > 0 then redis.call('HDEL', KEYS[4], unpack(due)); redis.call('ZREM', KEYS[5], unpack(due)) end
+local record = redis.call('HGET', KEYS[2], ARGV[4]); local released = '0'; local expiry = now_ms + tonumber(ARGV[5])
+if record then
+  local fingerprint, key_digest, state, active_expiry, retained_until = string.match(record, '^([^|]+)|([^|]+)|([^|]+)|([^|]+)|([^|]+)$')
+  if not fingerprint or #fingerprint ~= 64 or not valid_integer(active_expiry) or not valid_integer(retained_until) then return redis.error_reply('COORDINATION_CORRUPT') end
+  expiry = tonumber(retained_until)
+  if state == 'active' and tonumber(active_expiry) > now_ms then
+    released = '1'; redis.call('HSET', KEYS[2], ARGV[4], fingerprint .. '|' .. key_digest .. '|released|' .. active_expiry .. '|' .. retained_until)
+  end
+end
+redis.call('HSET', KEYS[4], ARGV[3], ARGV[2] .. '|released|' .. released .. '|' .. string.format('%.0f', expiry))
+redis.call('ZADD', KEYS[5], expiry, ARGV[3])
+return {'1', 'ok', released, '0'}
+"""
+
 SCRIPT_SOURCES = {
     "epoch_read": _EPOCH_READ_SCRIPT,
     "epoch_advance": _EPOCH_ADVANCE_SCRIPT,
@@ -459,6 +624,9 @@ SCRIPT_SOURCES = {
     "invalidation_read": _INVALIDATION_READ_SCRIPT,
     "increment": _INCREMENT_SCRIPT,
     "lock_release": _LOCK_RELEASE_SCRIPT,
+    "quota_reserve": _QUOTA_RESERVE_SCRIPT,
+    "quota_commit": _QUOTA_COMMIT_SCRIPT,
+    "quota_release": _QUOTA_RELEASE_SCRIPT,
 }
 
 
@@ -504,6 +672,14 @@ def _integer_bytes(value: int) -> bytes:
     return str(value).encode("ascii")
 
 
+def _float_bytes(value: float) -> bytes:
+    return float(value).hex().encode("ascii")
+
+
+def _quota_operation_bytes(kind: str, operation_id: str) -> bytes:
+    return f"{kind}:{operation_id}".encode("ascii")
+
+
 def _fingerprint(*parts: object) -> bytes:
     digest = hashlib.sha256()
     for part in parts:
@@ -516,6 +692,16 @@ def _fingerprint(*parts: object) -> bytes:
         digest.update(len(encoded).to_bytes(8, "big"))
         digest.update(encoded)
     return digest.hexdigest().encode("ascii")
+
+
+def _quota_retention_ms(request: QuotaReservationRequest) -> int:
+    """Return the longest evidence window without trusting the caller clock for expiry."""
+    windows = [_QUOTA_RATE_WINDOW_MS]
+    if request.daily_budget_usd is not None:
+        windows.append(86_400_000)
+    if request.monthly_budget_usd is not None:
+        windows.append(_QUOTA_MONTHLY_WINDOW_MS)
+    return max(windows)
 
 
 def _strict_array(reply: object, length: int) -> list[object]:
@@ -614,6 +800,53 @@ def _decode_integer_reply(reply: object, *, nonnegative: bool = False) -> int:
     return result
 
 
+def _decode_quota_reserve_reply(reply: object) -> QuotaReservationDecision:
+    values = _strict_array(reply, 6)
+    if values[1] not in {b"accepted", b"denied"} or values[5] not in {b"0", b"1"}:
+        raise CoordinationCorruptError("Coordination reply is invalid.")
+    try:
+        reservation_id = values[2].decode("ascii")
+        reason = values[3].decode("ascii")
+    except UnicodeDecodeError:
+        raise CoordinationCorruptError("Coordination reply is invalid.") from None
+    retry_after = _strict_positive_int(values[4]) if values[4] != b"0" else 0
+    try:
+        return QuotaReservationDecision(
+            values[1] == b"accepted", reservation_id, reason, retry_after, values[5] == b"1"
+        )
+    except ValueError as exc:
+        raise CoordinationCorruptError("Coordination reply is invalid.") from exc
+
+
+def _decode_quota_commit_reply(reply: object) -> QuotaCommitResult:
+    values = _strict_array(reply, 4)
+    if values[1] == b"reconciliation_required":
+        if values[2:] != [b"0", b"0"]:
+            raise CoordinationCorruptError("Coordination reply is invalid.")
+        raise CoordinationReconciliationRequiredError("Reconciliation is required.")
+    if (
+        values[1] not in {b"committed", b"not_committed"}
+        or values[2] not in {b"0", b"1"}
+        or values[3] not in {b"0", b"1"}
+    ):
+        raise CoordinationCorruptError("Coordination reply is invalid.")
+    try:
+        return QuotaCommitResult(values[1] == b"committed", values[2] == b"1", values[3] == b"1")
+    except ValueError as exc:
+        raise CoordinationCorruptError("Coordination reply is invalid.") from exc
+
+
+def _decode_quota_release_reply(reply: object) -> bool:
+    values = _strict_array(reply, 4)
+    if values[1] == b"reconciliation_required":
+        if values[2:] != [b"0", b"0"]:
+            raise CoordinationCorruptError("Coordination reply is invalid.")
+        raise CoordinationReconciliationRequiredError("Reconciliation is required.")
+    if values[1] != b"ok" or values[2] not in {b"0", b"1"} or values[3] not in {b"0", b"1"}:
+        raise CoordinationCorruptError("Coordination reply is invalid.")
+    return values[2] == b"1"
+
+
 class RedisStateStore:
     """Lazy, secret-safe Redis implementation of the coordination surface."""
 
@@ -623,6 +856,7 @@ class RedisStateStore:
         deployment_namespace: str = "omni-gateway",
         *,
         _coordination_replay_limit_for_testing: int | None = None,
+        _quota_record_limit_for_testing: int | None = None,
         _redis_module_for_testing: Any = None,
     ) -> None:
         redis_url = _validate_redis_url(redis_url)
@@ -638,11 +872,23 @@ class RedisStateStore:
             or not 1 <= replay_limit <= _DEFAULT_REPLAY_LIMIT
         ):
             raise ValueError("Coordination replay limit is invalid.")
+        quota_record_limit = (
+            _DEFAULT_REPLAY_LIMIT
+            if _quota_record_limit_for_testing is None
+            else _quota_record_limit_for_testing
+        )
+        if (
+            isinstance(quota_record_limit, bool)
+            or not isinstance(quota_record_limit, int)
+            or not 1 <= quota_record_limit <= _DEFAULT_REPLAY_LIMIT
+        ):
+            raise ValueError("Quota record limit is invalid.")
         self._redis_url = redis_url
         self._redis_module = _redis_module_for_testing
         self._tag = hashlib.sha256(namespace.encode("ascii")).hexdigest()
         self._prefix = f"omni:{{{self._tag}}}:v1"
         self._replay_limit = replay_limit
+        self._quota_record_limit = quota_record_limit
         self._client: Any = None
         self._scripts: dict[str, Any] = {}
         self._lock_tokens: weakref.WeakKeyDictionary[asyncio.Task[Any], dict[str, bytes]] = (
@@ -664,6 +910,16 @@ class RedisStateStore:
         if logical_name is not None:
             suffix += ":" + hashlib.sha256(logical_name.encode("ascii")).hexdigest()
         return f"{self._prefix}:{suffix}"
+
+    def _quota_keys(self) -> list[str]:
+        """The complete, explicit key bundle for each quota script invocation."""
+        return [
+            self._key("epoch"),
+            self._key("quota:records"),
+            self._key("quota:lifecycle"),
+            self._key("quota:replay"),
+            self._key("quota:replay-expiry"),
+        ]
 
     async def _get_client(self) -> Any:
         self._ensure_open()
@@ -905,10 +1161,87 @@ class RedisStateStore:
         return _decode_generation_reply(reply)
 
     async def reserve_quota(self, request: QuotaReservationRequest) -> QuotaReservationDecision:
-        raise CoordinationUnavailableError(_QUOTA_UNAVAILABLE)
+        if not isinstance(request, QuotaReservationRequest):
+            raise ValueError("Quota reservation request is invalid.")
+        ttl = _ttl_ms(request.ttl_seconds)
+        assert ttl is not None
+        retention = _quota_retention_ms(request)
+        fingerprint = _fingerprint(
+            request.reservation_id,
+            request.key_id,
+            float(request.now),
+            float(request.ttl_seconds),
+            request.estimated_tokens,
+            float(request.estimated_cost_usd),
+            request.rpm_limit,
+            request.tpm_limit,
+            request.daily_budget_usd,
+            request.monthly_budget_usd,
+            float(request.daily_spend_usd),
+            float(request.monthly_spend_usd),
+            float(request.daily_snapshot_started_at),
+            float(request.monthly_snapshot_started_at),
+            request.fencing_epoch,
+        )
+        operation_id = _quota_operation_bytes(
+            "reserve", request.operation_id or request.reservation_id
+        )
+        reply = await self._run_script(
+            "quota_reserve",
+            keys=self._quota_keys(),
+            args=[
+                _integer_bytes(request.fencing_epoch),
+                request.reservation_id.encode("ascii"),
+                _fingerprint(request.key_id),
+                fingerprint,
+                operation_id,
+                _integer_bytes(ttl),
+                _integer_bytes(retention),
+                _integer_bytes(self._quota_record_limit),
+                _integer_bytes(self._replay_limit),
+                _float_bytes(request.now),
+                _integer_bytes(request.estimated_tokens),
+                _float_bytes(request.estimated_cost_usd),
+                b"" if request.rpm_limit is None else _integer_bytes(request.rpm_limit),
+                b"" if request.tpm_limit is None else _integer_bytes(request.tpm_limit),
+                b"" if request.daily_budget_usd is None else _float_bytes(request.daily_budget_usd),
+                b""
+                if request.monthly_budget_usd is None
+                else _float_bytes(request.monthly_budget_usd),
+                _float_bytes(request.daily_spend_usd),
+                _float_bytes(request.monthly_spend_usd),
+                _float_bytes(request.daily_snapshot_started_at),
+                _float_bytes(request.monthly_snapshot_started_at),
+            ],
+        )
+        return _decode_quota_reserve_reply(reply)
 
     async def commit_quota(self, request: QuotaCommitRequest) -> QuotaCommitResult:
-        raise CoordinationUnavailableError(_QUOTA_UNAVAILABLE)
+        if not isinstance(request, QuotaCommitRequest):
+            raise ValueError("Quota commit request is invalid.")
+        fingerprint = _fingerprint(
+            request.reservation_id,
+            float(request.now),
+            request.actual_tokens,
+            request.actual_cost_usd,
+            request.durable_cost_recorded,
+            request.fencing_epoch,
+        )
+        reply = await self._run_script(
+            "quota_commit",
+            keys=self._quota_keys(),
+            args=[
+                _integer_bytes(request.fencing_epoch),
+                fingerprint,
+                _quota_operation_bytes("commit", request.operation_id or request.reservation_id),
+                request.reservation_id.encode("ascii"),
+                _float_bytes(request.now),
+                b"" if request.actual_tokens is None else _integer_bytes(request.actual_tokens),
+                b"" if request.actual_cost_usd is None else _float_bytes(request.actual_cost_usd),
+                b"1" if request.durable_cost_recorded else b"0",
+            ],
+        )
+        return _decode_quota_commit_reply(reply)
 
     async def release_quota(
         self,
@@ -918,7 +1251,27 @@ class RedisStateStore:
         fencing_epoch: int = 1,
         operation_id: str | None = None,
     ) -> bool:
-        raise CoordinationUnavailableError(_QUOTA_UNAVAILABLE)
+        identifier = _validate_identifier(reservation_id, "Reservation ID")
+        epoch = validate_epoch(fencing_epoch)
+        if isinstance(now, bool) or not isinstance(now, (int, float)) or not math.isfinite(now):
+            raise ValueError("Quota time is invalid.")
+        if not 0.0 <= float(now) <= MAX_COORDINATION_INTEGER:
+            raise ValueError("Quota time is invalid.")
+        if operation_id is not None:
+            validate_operation_id(operation_id)
+        fingerprint = _fingerprint(identifier, epoch)
+        reply = await self._run_script(
+            "quota_release",
+            keys=self._quota_keys(),
+            args=[
+                _integer_bytes(epoch),
+                fingerprint,
+                _quota_operation_bytes("release", operation_id or identifier),
+                identifier.encode("ascii"),
+                _integer_bytes(_QUOTA_MONTHLY_WINDOW_MS),
+            ],
+        )
+        return _decode_quota_release_reply(reply)
 
     async def close(self) -> None:
         async with self._lifecycle_lock:
