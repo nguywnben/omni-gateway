@@ -1003,64 +1003,6 @@ class InMemoryStateStore(BaseStateStore):
             self._closed = True
 
 
-class RedisStateStore(BaseStateStore):
-    """Distributed state store utilizing Redis or Valkey."""
+from core.redis_state_store import RedisStateStore  # noqa: E402
 
-    def __init__(self, redis_url: str) -> None:
-        self.redis_url = redis_url
-        self._client: Any = None
-
-    async def _get_client(self) -> Any:
-        if self._client is None:
-            import redis.asyncio as redis
-
-            self._client = redis.from_url(self.redis_url, decode_responses=True)
-        return self._client
-
-    async def get(self, key: str) -> Optional[Any]:
-        client = await self._get_client()
-        return await client.get(key)
-
-    async def set(self, key: str, value: Any, ttl_seconds: Optional[float] = None) -> None:
-        client = await self._get_client()
-        if ttl_seconds is not None:
-            await client.set(key, str(value), ex=int(ttl_seconds))
-        else:
-            await client.set(key, str(value))
-
-    async def delete(self, key: str) -> None:
-        client = await self._get_client()
-        await client.delete(key)
-
-    async def increment(
-        self, key: str, amount: int = 1, ttl_seconds: Optional[float] = None
-    ) -> int:
-        client = await self._get_client()
-        val = await client.incrby(key, amount)
-        if ttl_seconds is not None:
-            await client.expire(key, int(ttl_seconds))
-        return val
-
-    async def acquire_lock(self, lock_key: str, ttl_seconds: float = 10.0) -> bool:
-        client = await self._get_client()
-        res = await client.set(f"lock:{lock_key}", "1", nx=True, ex=int(ttl_seconds))
-        return bool(res)
-
-    async def release_lock(self, lock_key: str) -> None:
-        client = await self._get_client()
-        await client.delete(f"lock:{lock_key}")
-
-    async def reserve_quota(self, request: QuotaReservationRequest) -> QuotaReservationDecision:
-        raise RuntimeError(
-            "Redis quota reservations are not available until distributed HA is activated."
-        )
-
-    async def commit_quota(self, request: QuotaCommitRequest) -> QuotaCommitResult:
-        raise RuntimeError(
-            "Redis quota reservations are not available until distributed HA is activated."
-        )
-
-    async def release_quota(self, reservation_id: str, *, now: float) -> bool:
-        raise RuntimeError(
-            "Redis quota reservations are not available until distributed HA is activated."
-        )
+BaseStateStore.register(RedisStateStore)
