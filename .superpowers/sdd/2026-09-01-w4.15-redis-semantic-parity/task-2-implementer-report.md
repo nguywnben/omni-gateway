@@ -47,3 +47,11 @@ Full discovery was invoked twice with `python -m unittest discover -s backend\\t
 ## Commit
 
 `feat(coordination): add in-process reference semantics`
+
+## Fix Round 1
+
+Added strict validation for canonical quota request/result types, including boolean-as-integer rejection, identifier, TTL, epoch, amount, limit, and finite-number checks. Moved reserve fencing ahead of quota cleanup and durable reconciliation; commit and release now fence before cleanup. Stale reserve regression coverage proves it cannot mutate committed reconciliation flags.
+
+Controller ruling 9 resolves the replay conflict: fencing/reconciling/unavailable denials do not create replay state because they are not admitted business decisions. The unchanged shared fixture therefore permits the same operation ID after reconciliation. Ready-state successful and business-decision replay behavior remains retained.
+
+Fix RED: focused coordination/domain suite failed on missing quota validation and stale reserve changing reconciliation evidence. Fix GREEN: `python -m unittest backend.tests.test_coordination_contract backend.tests.test_coordination_in_memory backend.tests.test_quota_reservations backend.tests.test_state_store backend.tests.test_virtual_key_reservations -v` ran 47 tests and returned `OK`. Ruff, format check, compileall, and `git diff --check` passed.

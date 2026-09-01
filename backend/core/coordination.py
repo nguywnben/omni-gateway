@@ -124,7 +124,7 @@ class CasResult:
         if not isinstance(self.applied, bool) or not isinstance(self.idempotent, bool):
             raise ValueError("CAS result is invalid.")
         if self.revision is None:
-            if self.applied or self.idempotent:
+            if self.applied:
                 raise ValueError("CAS result is invalid.")
             return
         _require_int(
@@ -164,7 +164,7 @@ class InvalidationResult:
         if not isinstance(self.applied, bool) or not isinstance(self.idempotent, bool):
             raise ValueError("Invalidation result is invalid.")
         if self.generation is None:
-            if self.applied or self.idempotent:
+            if self.applied:
                 raise ValueError("Invalidation result is invalid.")
             return
         _require_int(
@@ -212,6 +212,41 @@ class QuotaReservationRequest:
     fencing_epoch: int = 1
     operation_id: str | None = None
 
+    def __post_init__(self) -> None:
+        _require_identifier(self.reservation_id, "Reservation ID")
+        _require_identifier(self.key_id, "Quota key ID")
+        _require_finite_float(self.now, "Quota time", minimum=0.0, maximum=MAX_COORDINATION_INTEGER)
+        _require_finite_float(
+            self.ttl_seconds, "Quota TTL", minimum=MIN_TTL_SECONDS, maximum=MAX_TTL_SECONDS
+        )
+        _require_int(
+            self.estimated_tokens, "Estimated tokens", minimum=0, maximum=MAX_COORDINATION_INTEGER
+        )
+        for value, label in (
+            (self.estimated_cost_usd, "Estimated cost"),
+            (self.daily_spend_usd, "Daily spend"),
+            (self.monthly_spend_usd, "Monthly spend"),
+            (self.daily_snapshot_started_at, "Daily snapshot time"),
+            (self.monthly_snapshot_started_at, "Monthly snapshot time"),
+        ):
+            _require_finite_float(
+                value, label, minimum=0.0, maximum=float(MAX_COORDINATION_INTEGER)
+            )
+        for value, label in ((self.rpm_limit, "RPM limit"), (self.tpm_limit, "TPM limit")):
+            if value is not None:
+                _require_int(value, label, minimum=1, maximum=MAX_COORDINATION_INTEGER)
+        for value, label in (
+            (self.daily_budget_usd, "Daily budget"),
+            (self.monthly_budget_usd, "Monthly budget"),
+        ):
+            if value is not None:
+                _require_finite_float(
+                    value, label, minimum=0.0, maximum=float(MAX_COORDINATION_INTEGER)
+                )
+        _require_int(self.fencing_epoch, "Epoch", minimum=1, maximum=MAX_COORDINATION_INTEGER)
+        if self.operation_id is not None:
+            _require_identifier(self.operation_id, "Operation ID")
+
 
 @dataclass(frozen=True, slots=True)
 class QuotaReservationDecision:
@@ -220,6 +255,27 @@ class QuotaReservationDecision:
     reason: str = ""
     retry_after_seconds: int = 0
     idempotent: bool = False
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.accepted, bool) or not isinstance(self.idempotent, bool):
+            raise ValueError("Quota decision is invalid.")
+        _require_identifier(self.reservation_id, "Reservation ID")
+        if self.reason not in {
+            "",
+            "rpm",
+            "tpm",
+            "daily_budget",
+            "monthly_budget",
+            "reconciling",
+            "stale_epoch",
+            "capacity",
+            "reconciliation_required",
+            "conflict",
+        }:
+            raise ValueError("Quota decision is invalid.")
+        _require_int(
+            self.retry_after_seconds, "Retry-after", minimum=0, maximum=MAX_COORDINATION_INTEGER
+        )
 
 
 @dataclass(frozen=True, slots=True)
@@ -232,12 +288,38 @@ class QuotaCommitRequest:
     fencing_epoch: int = 1
     operation_id: str | None = None
 
+    def __post_init__(self) -> None:
+        _require_identifier(self.reservation_id, "Reservation ID")
+        _require_finite_float(self.now, "Quota time", minimum=0.0, maximum=MAX_COORDINATION_INTEGER)
+        if self.actual_tokens is not None:
+            _require_int(
+                self.actual_tokens, "Actual tokens", minimum=0, maximum=MAX_COORDINATION_INTEGER
+            )
+        if self.actual_cost_usd is not None:
+            _require_finite_float(
+                self.actual_cost_usd,
+                "Actual cost",
+                minimum=0.0,
+                maximum=float(MAX_COORDINATION_INTEGER),
+            )
+        if not isinstance(self.durable_cost_recorded, bool):
+            raise ValueError("Durable cost state is invalid.")
+        _require_int(self.fencing_epoch, "Epoch", minimum=1, maximum=MAX_COORDINATION_INTEGER)
+        if self.operation_id is not None:
+            _require_identifier(self.operation_id, "Operation ID")
+
 
 @dataclass(frozen=True, slots=True)
 class QuotaCommitResult:
     committed: bool
     overspent: bool = False
     idempotent: bool = False
+
+    def __post_init__(self) -> None:
+        if not all(
+            isinstance(value, bool) for value in (self.committed, self.overspent, self.idempotent)
+        ):
+            raise ValueError("Quota commit result is invalid.")
 
 
 def _require_reply_fields(reply: object, expected: frozenset[str]) -> Mapping[str, object]:

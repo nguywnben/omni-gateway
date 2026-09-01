@@ -53,6 +53,26 @@ class CoordinationDomainTests(unittest.TestCase):
             CasRequest("key", 0, b"payload", 1.0, 1, True)
         with self.assertRaises(ValueError):
             InvalidationRequest("scope", 1, "op", replay_ttl_seconds=True)
+        from core.coordination import QuotaReservationRequest
+
+        with self.assertRaises(ValueError):
+            QuotaReservationRequest(
+                "reservation",
+                "key",
+                1.0,
+                1.0,
+                1,
+                0.0,
+                None,
+                None,
+                None,
+                None,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                True,
+            )
 
     def test_requests_reject_non_finite_and_out_of_range_values(self) -> None:
         for value in (math.nan, math.inf, -math.inf, 0.0, 30 * 86_400 + 1):

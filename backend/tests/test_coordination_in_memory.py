@@ -77,6 +77,29 @@ class InMemoryCoordinationTests(CoordinationStoreContract, unittest.IsolatedAsyn
         accepted = await self.store.reserve_quota(_reservation("ready", fencing_epoch=2))
         self.assertTrue(accepted.accepted)
 
+    async def test_stale_reserve_does_not_reconcile_committed_evidence(self) -> None:
+        accepted = await self.store.reserve_quota(
+            _reservation("committed", daily_budget_usd=1.0, ttl_seconds=10.0)
+        )
+        self.assertTrue(accepted.accepted)
+        self.assertTrue(
+            (
+                await self.store.commit_quota(
+                    QuotaCommitRequest("committed", 1_001.0, 1, 0.1, True)
+                )
+            ).committed
+        )
+        committed = self.store._quota_committed["committed"]
+        self.assertFalse(committed.daily_reconciled)
+        await self.store.advance_epoch(1, "advance-for-stale")
+
+        denied = await self.store.reserve_quota(
+            _reservation("stale", fencing_epoch=1, daily_snapshot_started_at=2_000.0)
+        )
+
+        self.assertFalse(denied.accepted)
+        self.assertFalse(committed.daily_reconciled)
+
     async def test_quota_replay_with_changed_payload_conflicts(self) -> None:
         first = await self.store.reserve_quota(_reservation("same", fencing_epoch=1))
         replay = await self.store.reserve_quota(_reservation("same", fencing_epoch=1))

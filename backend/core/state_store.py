@@ -315,7 +315,6 @@ class InMemoryStateStore(BaseStateStore):
     async def compare_and_set(self, request: CasRequest) -> CasResult:
         async with self._async_lock:
             self._ensure_open_locked()
-            self._prune_coordination_locked()
             fingerprint = self._cas_fingerprint(request)
             replay = self._cas_replays.get(request.operation_id)
             if replay is not None:
@@ -326,6 +325,7 @@ class InMemoryStateStore(BaseStateStore):
                 return CasResult(False, None)
             if not self._is_ready_locked(request.epoch):
                 return CasResult(False, None)
+            self._prune_coordination_locked()
             existing = self._cas.get(request.key)
             revision = 1 if existing is None else existing.revision + 1
             if (existing is None and request.expected_revision != 0) or (
@@ -343,7 +343,6 @@ class InMemoryStateStore(BaseStateStore):
     async def invalidate(self, request: InvalidationRequest) -> InvalidationResult:
         async with self._async_lock:
             self._ensure_open_locked()
-            self._prune_coordination_locked()
             replay = self._invalidation_replays.get(request.operation_id)
             fingerprint = (request.scope, request.epoch, request.replay_ttl_seconds)
             if replay is not None:
@@ -354,6 +353,7 @@ class InMemoryStateStore(BaseStateStore):
                 return InvalidationResult(False, None)
             if not self._is_ready_locked(request.epoch):
                 return InvalidationResult(False, None)
+            self._prune_coordination_locked()
             generation = self._invalidation_generations.get(request.scope, 0) + 1
             result = InvalidationResult(True, generation)
             expires_at = self._clock() + request.replay_ttl_seconds
@@ -444,20 +444,6 @@ class InMemoryStateStore(BaseStateStore):
     async def reserve_quota(self, request: QuotaReservationRequest) -> QuotaReservationDecision:
         async with self._async_lock:
             self._ensure_open_locked()
-            if not self._prune_quota_locked(request.now):
-                return QuotaReservationDecision(
-                    False, request.reservation_id, "reconciliation_required"
-                )
-            self._reconcile_committed_for_key_locked(
-                request.key_id,
-                request.daily_snapshot_started_at,
-                request.monthly_snapshot_started_at,
-            )
-            if not self._is_ready_locked(request.fencing_epoch):
-                reason = (
-                    "reconciling" if self._epoch.state is EpochState.RECONCILING else "stale_epoch"
-                )
-                return QuotaReservationDecision(False, request.reservation_id, reason)
             fingerprint = self._quota_reserve_fingerprint(request)
             replay = self._quota_replays.get(f"reserve:{request.reservation_id}")
             if replay is not None:
@@ -472,6 +458,20 @@ class InMemoryStateStore(BaseStateStore):
                     result.retry_after_seconds,
                     True,
                 )
+            if not self._is_ready_locked(request.fencing_epoch):
+                reason = (
+                    "reconciling" if self._epoch.state is EpochState.RECONCILING else "stale_epoch"
+                )
+                return QuotaReservationDecision(False, request.reservation_id, reason)
+            if not self._prune_quota_locked(request.now):
+                return QuotaReservationDecision(
+                    False, request.reservation_id, "reconciliation_required"
+                )
+            self._reconcile_committed_for_key_locked(
+                request.key_id,
+                request.daily_snapshot_started_at,
+                request.monthly_snapshot_started_at,
+            )
             active = self._active_for_key_locked(request.key_id)
             committed = self._committed_for_key_locked(request.key_id)
             if self._quota_record_counts.get(request.key_id, 0) >= self._quota_record_limit:
@@ -538,10 +538,10 @@ class InMemoryStateStore(BaseStateStore):
     async def commit_quota(self, request: QuotaCommitRequest) -> QuotaCommitResult:
         async with self._async_lock:
             self._ensure_open_locked()
-            if not self._prune_quota_locked(request.now):
-                raise CoordinationReconciliationRequiredError("Reconciliation is required.")
             if not self._is_ready_locked(request.fencing_epoch):
                 return QuotaCommitResult(False)
+            if not self._prune_quota_locked(request.now):
+                raise CoordinationReconciliationRequiredError("Reconciliation is required.")
             replay_key = f"commit:{request.operation_id or request.reservation_id}"
             fingerprint = self._quota_commit_fingerprint(request)
             replay = self._quota_replays.get(replay_key)
@@ -639,10 +639,10 @@ class InMemoryStateStore(BaseStateStore):
     ) -> bool:
         async with self._async_lock:
             self._ensure_open_locked()
-            if not self._prune_quota_locked(now):
-                raise CoordinationReconciliationRequiredError("Reconciliation is required.")
             if not self._is_ready_locked(fencing_epoch):
                 return False
+            if not self._prune_quota_locked(now):
+                raise CoordinationReconciliationRequiredError("Reconciliation is required.")
             identifier = str(reservation_id or "")
             replay_key = f"release:{operation_id or identifier}"
             fingerprint = (identifier, fencing_epoch)
