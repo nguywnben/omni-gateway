@@ -17,7 +17,9 @@ if str(TESTS_DIR) not in sys.path:
 
 from core import metrics as metrics_module
 from core import usage_stats
+from core.coordination import QuotaCommitRequest, QuotaCommitResult
 from core.coordination_service import (
+    CoordinationService,
     clear_coordination_operation_metrics_for_testing,
     record_coordination_operation_for_testing,
 )
@@ -55,6 +57,14 @@ SAMPLE_ROWS = [
         "total_latency_ms": 300,
     },
 ]
+
+
+class _RejectedQuotaCommitStore:
+    async def commit_quota(self, _request):
+        return QuotaCommitResult(False)
+
+    async def close(self):
+        return None
 
 
 class RenderPrometheusMetricsTests(unittest.TestCase):
@@ -147,6 +157,18 @@ class RenderPrometheusMetricsTests(unittest.TestCase):
         self.assertNotIn("untrusted", output)
         self.assertNotIn("tenant/key", output)
         self.assertNotIn("top-secret", output)
+
+    def test_stale_quota_commit_renders_as_rejected_not_success(self):
+        service = CoordinationService(_RejectedQuotaCommitStore())
+        result = _run(service.commit_quota(QuotaCommitRequest("stale", 1.0, None, None, False)))
+
+        self.assertFalse(result.committed)
+        output = render_prometheus_metrics([])
+        self.assertIn(
+            'omni_coordination_operations_total{backend="unknown",operation="commit_quota",result="rejected"} 1',
+            output,
+        )
+        self.assertNotIn('operation="commit_quota",result="success"', output)
 
 
 class MetricsEndpointTests(unittest.TestCase):

@@ -18,6 +18,8 @@ from core.coordination import (
     CoordinationUnavailableError,
     Epoch,
     EpochState,
+    QuotaCommitRequest,
+    QuotaCommitResult,
 )
 from core.coordination_service import (
     CoordinationService,
@@ -59,6 +61,32 @@ class _RecoveringStore:
         self.close_calls += 1
 
 
+class _RejectedQuotaCommitStore:
+    async def commit_quota(self, _request):
+        return QuotaCommitResult(False)
+
+    async def close(self):
+        return None
+
+
+class _ControlledCloseStore:
+    def __init__(self) -> None:
+        self.close_calls = 0
+        self.close_started = asyncio.Event()
+        self.allow_close = asyncio.Event()
+        self.fail_close = False
+
+    async def close(self) -> None:
+        self.close_calls += 1
+        self.close_started.set()
+        await self.allow_close.wait()
+        if self.fail_close:
+            raise RuntimeError("close failure")
+
+    async def read_epoch(self) -> Epoch:
+        return Epoch(1, EpochState.READY)
+
+
 class CoordinationServiceTests(unittest.IsolatedAsyncioTestCase):
     def setUp(self) -> None:
         clear_coordination_operation_metrics_for_testing()
@@ -93,6 +121,16 @@ class CoordinationServiceTests(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn(secret, output)
         self.assertNotIn("payload", output)
 
+    async def test_stale_quota_commit_is_rejected_not_success(self) -> None:
+        service = CoordinationService(_RejectedQuotaCommitStore())
+
+        result = await service.commit_quota(QuotaCommitRequest("stale", 1.0, None, None, False))
+
+        self.assertFalse(result.committed)
+        output = render_coordination_operation_metrics()
+        self.assertIn('operation="commit_quota",result="rejected"', output)
+        self.assertNotIn('operation="commit_quota",result="success"', output)
+
     async def test_failure_categories_are_fixed_and_recovery_is_recorded(self) -> None:
         service = CoordinationService(_RecoveringStore())
         with self.assertRaises(CoordinationReconciliationRequiredError):
@@ -119,16 +157,63 @@ class CoordinationServiceTests(unittest.IsolatedAsyncioTestCase):
                 self.assertEqual(snapshot["last_error_category"], category)
                 self.assertNotIn("secret", repr(snapshot))
 
-    async def test_close_is_idempotent_and_does_not_close_the_backend_twice(self) -> None:
-        store = _RecoveringStore()
+    async def test_concurrent_close_is_cancellation_safe_and_later_close_is_idempotent(
+        self,
+    ) -> None:
+        store = _ControlledCloseStore()
         service = CoordinationService(store)
-        await asyncio.gather(service.close(), service.close())
+        cancelled_waiter = asyncio.create_task(service.close())
+        await store.close_started.wait()
+        successful_waiter = asyncio.create_task(service.close())
+        await asyncio.sleep(0)
+
+        cancelled_waiter.cancel()
+        with self.assertRaises(asyncio.CancelledError):
+            await cancelled_waiter
+        self.assertEqual(store.close_calls, 1)
+        with self.assertRaises(CoordinationUnavailableError):
+            await service.read_epoch()
+
+        store.allow_close.set()
+        await successful_waiter
+        await service.close()
 
         self.assertEqual(store.close_calls, 1)
         self.assertTrue(service.health_snapshot()["closed"])
         output = render_coordination_operation_metrics()
-        self.assertIn('operation="close",result="success"', output)
-        self.assertIn('operation="close",result="idempotent"', output)
+        self.assertEqual(output.count('operation="close",result="success"'), 1)
+        self.assertEqual(output.count('operation="close",result="idempotent"'), 1)
+
+    async def test_close_failure_is_shared_and_retry_can_close_without_false_success_health(
+        self,
+    ) -> None:
+        store = _ControlledCloseStore()
+        store.fail_close = True
+        service = CoordinationService(store)
+        first = asyncio.create_task(service.close())
+        await store.close_started.wait()
+        second = asyncio.create_task(service.close())
+        await asyncio.sleep(0)
+        store.allow_close.set()
+
+        outcomes = await asyncio.gather(first, second, return_exceptions=True)
+        self.assertEqual([type(outcome) for outcome in outcomes], [RuntimeError, RuntimeError])
+        failed = service.health_snapshot()
+        self.assertFalse(failed["closed"])
+        self.assertFalse(failed["available"])
+        self.assertEqual(failed["last_error_category"], "unexpected")
+        output = render_coordination_operation_metrics()
+        self.assertEqual(output.count('operation="close",result="unexpected"'), 1)
+        self.assertNotIn('operation="close",result="success"', output)
+
+        store.fail_close = False
+        await service.close()
+
+        recovered = service.health_snapshot()
+        self.assertTrue(recovered["closed"])
+        self.assertTrue(recovered["available"])
+        self.assertIsNotNone(recovered["recovered_at"])
+        self.assertEqual(store.close_calls, 2)
 
     def test_empty_renderer_still_has_help_and_type(self) -> None:
         self.assertEqual(

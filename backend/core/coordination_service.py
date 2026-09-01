@@ -137,6 +137,8 @@ def _error_category(exc: BaseException) -> str:
 def _result_category(result: object) -> str:
     if bool(getattr(result, "idempotent", False)):
         return "idempotent"
+    if hasattr(result, "committed") and not bool(getattr(result, "committed")):
+        return "rejected"
     if hasattr(result, "accepted") and not bool(getattr(result, "accepted")):
         return "rejected"
     if hasattr(result, "applied") and not bool(getattr(result, "applied")):
@@ -154,11 +156,13 @@ class CoordinationService:
         self._backend = _backend_name(store)
         self._available = True
         self._closed = False
+        self._closing = False
         self._failure_count = 0
         self._last_error_category = ""
         self._last_failure_at: float | None = None
         self._recovered_at: float | None = None
         self._lifecycle_lock = asyncio.Lock()
+        self._close_task: asyncio.Task[None] | None = None
 
     def health_snapshot(self) -> dict[str, object]:
         """Return attribution-free lifecycle evidence suitable for diagnostics."""
@@ -180,7 +184,7 @@ class CoordinationService:
         *args: object,
         **kwargs: object,
     ) -> _Result:
-        if self._closed:
+        if self._closed or self._closing:
             error = CoordinationUnavailableError("Coordination service is closed.")
             self._record_failure(operation_name, error)
             raise error
@@ -255,14 +259,33 @@ class CoordinationService:
         return await self._run("release_quota", self._store.release_quota, reservation_id, **kwargs)
 
     async def close(self) -> None:
+        """Close the supplied backend once, without letting waiter cancellation abort it."""
+
         async with self._lifecycle_lock:
             if self._closed:
                 _increment_operation_metric(self._backend, "close", "idempotent")
                 return
-            self._closed = True
-            try:
-                await self._store.close()
-            except Exception as exc:
+            if self._close_task is None:
+                self._closing = True
+                self._close_task = asyncio.create_task(self._close_backend())
+            close_task = self._close_task
+        await asyncio.shield(close_task)
+
+    async def _close_backend(self) -> None:
+        try:
+            await self._store.close()
+        except BaseException as exc:
+            async with self._lifecycle_lock:
+                self._closing = False
+                self._close_task = None
                 self._record_failure("close", exc)
-                raise
+            raise
+
+        async with self._lifecycle_lock:
+            if not self._available:
+                self._recovered_at = time.time()
+            self._available = True
+            self._closed = True
+            self._closing = False
+            self._close_task = None
             _increment_operation_metric(self._backend, "close", "success")

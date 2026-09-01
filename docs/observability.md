@@ -55,6 +55,12 @@ a unique validated lowercase/hyphen namespace and teardown scans and deletes onl
 run's derived deployment prefix/hash tag. It never uses `FLUSHDB`, broad deletion, or `SCRIPT
 FLUSH`; the latter is server-global and therefore not safe for a shared endpoint.
 
+The normal opt-in suite verifies registered Lua execution against a real endpoint. Separate,
+deterministic driver-boundary tests inject cancellation only after the stateful script has applied
+its mutation and replay record, proving a retried operation is replayed rather than applied twice.
+They are not timing-based live cancellation tests. Both paths keep Redis URIs, credentials, and
+driver exception text out of diagnostics and metric labels.
+
 This evidence does not activate HA Redis selection, `/ready` checks, deployment changes,
 multi-worker/replica operation, or caller migration. W4.18 activation still requires an explicit
 runtime-selection and lifecycle design, readiness and failure-policy review, safe deployment and

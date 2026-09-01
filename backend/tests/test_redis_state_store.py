@@ -114,7 +114,11 @@ class StatefulRegisteredScript:
 
     async def __call__(self, *, keys: list[str], args: list[object]) -> object:
         self.client.script_calls.append((self.name, keys, args))
-        return self.client.run_script(self.name, keys, args)
+        reply = self.client.run_script(self.name, keys, args)
+        if self.name in self.client.cancel_after_response_boundary:
+            self.client.cancel_after_response_boundary.remove(self.name)
+            raise asyncio.CancelledError()
+        return reply
 
 
 class StatefulRedisClient(FakeRedisClient):
@@ -149,6 +153,7 @@ class StatefulRedisClient(FakeRedisClient):
         self.quota_records: dict[bytes, dict[str, object]] = {}
         self.quota_replays: dict[bytes, tuple[bytes, list[bytes], int, bytes]] = {}
         self.corrupt_quota_pairs = False
+        self.cancel_after_response_boundary: set[str] = set()
 
     def register_script(self, source: str) -> StatefulRegisteredScript:
         script = StatefulRegisteredScript(self, source)
@@ -1137,6 +1142,76 @@ class RedisStateStoreTests(unittest.IsolatedAsyncioTestCase):
         with self.assertRaises(CoordinationCorruptError):
             await store.mark_epoch_ready(99, "ready")
         self.assertEqual((await store.read_epoch()).epoch, 2)
+
+    async def test_cancelled_cas_response_replays_without_a_second_mutation(self) -> None:
+        client = StatefulRedisClient()
+        client.cancel_after_response_boundary = {"cas"}
+        store = RedisStateStore(
+            "redis://alice:top-secret@redis.example/0",
+            deployment_namespace="cancel-cas",
+            _redis_module_for_testing=FakeRedisModule(client),
+        )
+        request = CasRequest("key", 0, b"value", 5, 1, "cancelled-cas")
+
+        with self.assertRaises(asyncio.CancelledError):
+            await store.compare_and_set(request)
+
+        self.assertEqual(len(client.cas), 1)
+        replay = await store.compare_and_set(request)
+        conflict = await store.compare_and_set(
+            CasRequest("key", 0, b"changed", 5, 1, "cancelled-cas")
+        )
+        self.assertTrue(replay.idempotent)
+        self.assertTrue(replay.applied)
+        self.assertFalse(conflict.applied)
+        self.assertEqual(len(client.cas), 1)
+        self.assertNotIn("alice", repr(store))
+        self.assertNotIn("top-secret", repr(store))
+
+    async def test_cancelled_quota_response_replays_without_a_second_mutation(self) -> None:
+        client = StatefulRedisClient()
+        client.cancel_after_response_boundary = {"quota_reserve"}
+        store = RedisStateStore(
+            "redis://alice:top-secret@redis.example/0",
+            deployment_namespace="cancel-quota",
+            _redis_module_for_testing=FakeRedisModule(client),
+        )
+
+        def reservation(**changes: object) -> QuotaReservationRequest:
+            values: dict[str, object] = {
+                "reservation_id": "cancelled-quota",
+                "key_id": "key-a",
+                "now": 1_000.0,
+                "ttl_seconds": 5.0,
+                "estimated_tokens": 1,
+                "estimated_cost_usd": 0.1,
+                "rpm_limit": None,
+                "tpm_limit": None,
+                "daily_budget_usd": None,
+                "monthly_budget_usd": None,
+                "daily_spend_usd": 0.0,
+                "monthly_spend_usd": 0.0,
+                "daily_snapshot_started_at": 1_000.0,
+                "monthly_snapshot_started_at": 1_000.0,
+            }
+            values.update(changes)
+            return QuotaReservationRequest(**values)  # type: ignore[arg-type]
+
+        request = reservation(operation_id="cancelled-quota-op")
+        with self.assertRaises(asyncio.CancelledError):
+            await store.reserve_quota(request)
+
+        self.assertEqual(len(client.quota_records), 1)
+        replay = await store.reserve_quota(request)
+        conflict = await store.reserve_quota(
+            reservation(estimated_tokens=2, operation_id="cancelled-quota-op")
+        )
+        self.assertTrue(replay.accepted)
+        self.assertTrue(replay.idempotent)
+        self.assertEqual(conflict.reason, "conflict")
+        self.assertEqual(len(client.quota_records), 1)
+        self.assertNotIn("alice", repr(store))
+        self.assertNotIn("top-secret", repr(store))
 
     async def test_lock_release_is_bound_to_the_acquiring_task(self) -> None:
         client = StatefulRedisClient()
