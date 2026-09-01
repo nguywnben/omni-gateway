@@ -138,6 +138,7 @@ class StatefulRedisClient(FakeRedisClient):
         super().__init__()
         self.now_ms = 1_000_000
         self.epoch = (1, b"ready")
+        self.epoch_exists = True
         self.cas: dict[str, tuple[int, bytes, int]] = {}
         self.generations: dict[str, int] = {}
         self.replays: defaultdict[str, dict[bytes, tuple[bytes, list[bytes], int]]] = defaultdict(
@@ -432,6 +433,18 @@ class StatefulRedisClient(FakeRedisClient):
 
     def _run_quota_script(self, name: str, args: list[bytes], keys: list[str]) -> list[bytes]:
         epoch = int(args[0])
+        if not self.epoch_exists and epoch != 1:
+            return (
+                [b"1", b"denied", args[1], b"stale_epoch", b"0", b"0"]
+                if name == "quota_reserve"
+                else [b"1", b"not_committed", b"0", b"0"]
+                if name == "quota_commit"
+                else [b"1", b"ok", b"0", b"0"]
+            )
+        if not self.epoch_exists and self.corrupt_quota_pairs:
+            raise RuntimeError("COORDINATION_CORRUPT")
+        if not self.epoch_exists:
+            self.epoch_exists = True
         if self.epoch != (epoch, b"ready"):
             if name == "quota_reserve":
                 return [
@@ -1545,6 +1558,59 @@ class RedisStateStoreTests(unittest.IsolatedAsyncioTestCase):
         )
         self.assertTrue(await store.release_quota("release-long", now=1_100.0))
 
+    async def test_stateful_quota_epoch_bootstrap_is_applied_only_after_validation(self) -> None:
+        def reservation(identifier: str, epoch: int = 1) -> QuotaReservationRequest:
+            return QuotaReservationRequest(
+                identifier,
+                "key-a",
+                1_000.0,
+                1.0,
+                1,
+                0.1,
+                None,
+                None,
+                None,
+                None,
+                0.0,
+                0.0,
+                1_000.0,
+                1_000.0,
+                fencing_epoch=epoch,
+            )
+
+        client = StatefulRedisClient()
+        client.epoch_exists = False
+        store = RedisStateStore(
+            "redis://redis.example/0",
+            deployment_namespace="quota-bootstrap",
+            _redis_module_for_testing=FakeRedisModule(client),
+        )
+        self.assertTrue((await store.reserve_quota(reservation("bootstrap"))).accepted)
+        self.assertTrue(client.epoch_exists)
+
+        stale_client = StatefulRedisClient()
+        stale_client.epoch_exists = False
+        stale_store = RedisStateStore(
+            "redis://redis.example/0",
+            deployment_namespace="quota-bootstrap-stale",
+            _redis_module_for_testing=FakeRedisModule(stale_client),
+        )
+        stale = await stale_store.reserve_quota(reservation("stale", epoch=2))
+        self.assertEqual(stale.reason, "stale_epoch")
+        self.assertFalse(stale_client.epoch_exists)
+
+        corrupt_client = StatefulRedisClient()
+        corrupt_client.epoch_exists = False
+        corrupt_client.corrupt_quota_pairs = True
+        corrupt_store = RedisStateStore(
+            "redis://redis.example/0",
+            deployment_namespace="quota-bootstrap-corrupt",
+            _redis_module_for_testing=FakeRedisModule(corrupt_client),
+        )
+        with self.assertRaises(CoordinationCorruptError):
+            await corrupt_store.reserve_quota(reservation("corrupt"))
+        self.assertFalse(corrupt_client.epoch_exists)
+
     def test_scripts_are_fixed_cluster_safe_and_bounded(self) -> None:
         self.assertEqual(
             set(SCRIPT_SOURCES),
@@ -1650,6 +1716,17 @@ class RedisStateStoreTests(unittest.IsolatedAsyncioTestCase):
             marker = source.index("-- apply validated mutation")
             for operation in ("HDEL", "ZREM", "HSET", "ZADD", "SET", "PEXPIREAT", "DEL", "HINCRBY"):
                 self.assertNotIn(f"redis.call('{operation}'", source[:marker])
+            self.assertIn("bootstrap_epoch", source[marker:])
+            self.assertIn(
+                "redis.call('HSET', KEYS[1], 'schema_version', '1', 'epoch', '1', 'state', 'ready')",
+                source[marker:],
+            )
+
+        self.assertIn(
+            "tonumber(r.retained_until) ~= tonumber(r.accepted_at) + tonumber(r.retention_ms)",
+            quota_reserve,
+        )
+        self.assertIn("tonumber(r.retention_ms) > 2592000000", quota_reserve)
 
         quota_commit = SCRIPT_SOURCES["quota_commit"]
         self.assertIn("aggregate_target_records", quota_commit)
