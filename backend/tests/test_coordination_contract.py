@@ -25,10 +25,19 @@ from core.coordination import (
     decode_epoch,
     decode_invalidation_generation,
     decode_invalidation_result,
+    validate_deployment_namespace,
 )
 
 
 class CoordinationDomainTests(unittest.TestCase):
+    def test_deployment_namespace_accepts_only_bounded_lowercase_ascii(self) -> None:
+        for namespace in ("abc", "tenant-1", "a" * 64):
+            with self.subTest(namespace=namespace):
+                self.assertEqual(validate_deployment_namespace(namespace), namespace)
+        for namespace in ("ab", "a" * 65, "Upper", "under_score", "has space", b"bytes"):
+            with self.subTest(namespace=namespace), self.assertRaises(ValueError):
+                validate_deployment_namespace(namespace)
+
     def test_requests_reject_boolean_integer_fields(self) -> None:
         with self.assertRaises(ValueError):
             Epoch(epoch=True, state=EpochState.READY)
