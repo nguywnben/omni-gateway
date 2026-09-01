@@ -124,3 +124,80 @@ focused test then passed, followed by the suites above.
 No live Redis server was configured for this local finalization, so Redis cluster runtime behavior
 is covered by driver-boundary fakes plus static script inspection rather than an integration server.
 Task 5 owns opt-in live Redis parity and operability evidence.
+
+## Fix Round 1: driver semantics hardening
+
+### Review findings addressed
+
+- Epoch replay records now include their expiry and reject impossible exact replays: advance
+  requires `saved_epoch == expected_epoch + 1` and `reconciling`; ready requires the requested
+  epoch and `ready`.
+- Each replay-bearing script verifies the touched HGET/ZSCORE pair before converting its score.
+  It also validates every due member's bidirectional pair and encoded canonical expiry before
+  deleting any member or performing business mutation. CAS replay entries enforce their
+  status/revision shape, and invalidation now has the missing reverse current-operation check.
+  Replay expiry text uses `string.format('%.0f', expires_at)` so Lua never persists exponent
+  notation that the strict canonical integer codec would reject.
+- Lock tokens are scoped to the acquiring `asyncio.Task` through a `WeakKeyDictionary`. A stale
+  task can only present its own old token, which cannot delete a replacement lease.
+- Generic get/set restores legacy text behavior on the binary client: set writes
+  `str(value).encode('utf-8')`, get returns decoded text, and non-UTF-8 replies fail closed.
+- Reply decoders reject impossible non-applied idempotent flags and noncanonical signed integers
+  such as `-0`, `+1`, or leading zero forms.
+
+### Bounded integrity ruling
+
+The Lua scripts retain `HLEN == ZCARD` as a bounded global count check. They additionally verify
+the operation being touched and each of at most 257 due members both directions, including the
+replay's encoded expiry equal to its ZSET score, before cleanup. An unrelated same-cardinality
+mismatch cannot be discovered without an unbounded scan; the local touched/due validation plus
+global cardinality check is the approved bounded Task 3 contract.
+
+### Stateful driver evidence
+
+`StatefulRedisClient` models the registered fixed-script boundary across public calls instead of
+dequeuing canned results. It verifies the exact script identity, KEYS/ARGV counts, binary args,
+and common key hash tag while exercising bootstrap, advance, reconciling denial, ready, CAS
+create/replay/conflict/expiry, invalidation read/replay, increment, replay-cap exhaustion, and
+cleanup-backlog exhaustion. A concurrent-task regression proves a stale task's release uses its
+old token and the new owner uses its replacement token.
+
+The stateful harness is Task 3 driver-boundary evidence only. Actual Lua execution remains
+unverified because this environment intentionally has no Redis/Lua runtime and Task 5 owns live
+Redis parity; no dependency, Docker, or network side effect was added.
+
+### RED -> GREEN
+
+```text
+RED
+.venv\\Scripts\\python.exe -m unittest -q backend.tests.test_redis_state_store
+Ran 22 tests in 0.538s
+FAILED (5 failures, 1 error)
+
+The failures exposed stale binary-value/lock expectations and the old static replay-score
+assertion while the new strict replay, task-ownership, and compatibility tests were introduced.
+
+GREEN
+.venv\\Scripts\\python.exe -m unittest -q backend.tests.test_redis_state_store
+Ran 23 tests in 0.525s
+OK
+
+.venv\\Scripts\\python.exe -m unittest -q backend.tests.test_coordination_contract backend.tests.test_coordination_in_memory backend.tests.test_quota_reservations backend.tests.test_quota_lifecycle backend.tests.test_state_store backend.tests.test_redis_state_store
+Ran 77 tests in 5.074s
+OK
+
+.venv\\Scripts\\python.exe -m compileall -q backend\\core\\redis_state_store.py backend\\core\\state_store.py backend\\tests\\test_redis_state_store.py
+exit 0
+
+.venv\\Scripts\\ruff.exe check backend\\core\\redis_state_store.py backend\\core\\state_store.py backend\\tests\\test_redis_state_store.py
+All checks passed!
+
+.venv\\Scripts\\ruff.exe format --check backend\\core\\redis_state_store.py backend\\core\\state_store.py backend\\tests\\test_redis_state_store.py
+3 files already formatted
+
+.venv\\Scripts\\python.exe -m pip check
+No broken requirements found.
+
+git diff --check
+exit 0
+```

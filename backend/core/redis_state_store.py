@@ -11,6 +11,7 @@ import hashlib
 import importlib
 import math
 import secrets
+import weakref
 from typing import Any, Optional
 from urllib.parse import urlsplit
 
@@ -77,6 +78,25 @@ local function valid_integer(value)
   return value and string.match(value, '^[1-9][0-9]*$')
     and (#value < 19 or (#value == 19 and value <= '9223372036854775807'))
 end
+local function next_integer(value)
+  if value == '9223372036854775807' then return nil end
+  local digits, carry = {}, 1
+  for index = #value, 1, -1 do
+    local digit = string.byte(value, index) - 48 + carry
+    if digit == 10 then digit, carry = 0, 1 else carry = 0 end
+    table.insert(digits, 1, string.char(digit + 48))
+  end
+  if carry == 1 then table.insert(digits, 1, '1') end
+  return table.concat(digits)
+end
+local function valid_replay(value, score)
+  if not value or not score or not valid_integer(score) then return false end
+  local schema, fingerprint, saved_epoch, saved_state, saved_expiry =
+    string.match(value, '^([^|]+)|([^|]+)|([^|]+)|([^|]+)|([^|]+)$')
+  return schema == '1' and fingerprint and valid_integer(saved_epoch)
+    and (saved_state == 'ready' or saved_state == 'reconciling')
+    and valid_integer(saved_expiry) and saved_expiry == score
+end
 local count = redis.call('HLEN', KEYS[1])
 if count == 0 then
   redis.call('HSET', KEYS[1], 'schema_version', '1', 'epoch', '1', 'state', 'ready')
@@ -88,6 +108,9 @@ if epoch[1] ~= '1' or not valid_integer(epoch[2])
   or (epoch[3] ~= 'ready' and epoch[3] ~= 'reconciling') then
   return redis.error_reply('COORDINATION_CORRUPT')
 end
+if not valid_integer(ARGV[1]) then
+  return redis.error_reply('COORDINATION_CORRUPT')
+end
 local clock = redis.call('TIME')
 local now_ms = (clock[1] * 1000) + math.floor(clock[2] / 1000)
 if redis.call('HLEN', KEYS[2]) ~= redis.call('ZCARD', KEYS[3]) then
@@ -95,15 +118,13 @@ if redis.call('HLEN', KEYS[2]) ~= redis.call('ZCARD', KEYS[3]) then
 end
 local replay = redis.call('HGET', KEYS[2], ARGV[2])
 local replay_expiry = redis.call('ZSCORE', KEYS[3], ARGV[2])
-if (replay and not replay_expiry) or (replay_expiry and not replay)
-  or (replay_expiry and not valid_integer(replay_expiry)) then
+if not valid_replay(replay, replay_expiry) and (replay or replay_expiry) then
   return redis.error_reply('COORDINATION_CORRUPT')
 end
 if replay and tonumber(replay_expiry) > now_ms then
-  local schema, fingerprint, saved_epoch, saved_state =
-    string.match(replay, '^([^|]+)|([^|]+)|([^|]+)|([^|]+)$')
-  if schema ~= '1' or not fingerprint or not valid_integer(saved_epoch)
-    or (saved_state ~= 'ready' and saved_state ~= 'reconciling') then
+  local _, fingerprint, saved_epoch, saved_state =
+    string.match(replay, '^([^|]+)|([^|]+)|([^|]+)|([^|]+)|([^|]+)$')
+  if saved_epoch ~= next_integer(ARGV[1]) or saved_state ~= 'reconciling' then
     return redis.error_reply('COORDINATION_CORRUPT')
   end
   if fingerprint == ARGV[1] then
@@ -114,6 +135,12 @@ end
 local due = redis.call('ZRANGEBYSCORE', KEYS[3], '-inf', now_ms, 'LIMIT', 0, 257)
 if #due > 256 then
   return {'1', 'reconciliation_required', '', ''}
+end
+for _, operation_id in ipairs(due) do
+  if not valid_replay(redis.call('HGET', KEYS[2], operation_id),
+      redis.call('ZSCORE', KEYS[3], operation_id)) then
+    return redis.error_reply('COORDINATION_CORRUPT')
+  end
 end
 if #due > 0 then
   redis.call('HDEL', KEYS[2], unpack(due))
@@ -132,7 +159,9 @@ redis.call('HINCRBY', KEYS[1], 'epoch', 1)
 redis.call('HSET', KEYS[1], 'state', 'reconciling')
 local new_epoch = redis.call('HGET', KEYS[1], 'epoch')
 local expires_at = now_ms + tonumber(ARGV[3])
-redis.call('HSET', KEYS[2], ARGV[2], '1|' .. ARGV[1] .. '|' .. new_epoch .. '|reconciling')
+local expires_text = string.format('%.0f', expires_at)
+redis.call('HSET', KEYS[2], ARGV[2],
+  '1|' .. ARGV[1] .. '|' .. new_epoch .. '|reconciling|' .. expires_text)
 redis.call('ZADD', KEYS[3], expires_at, ARGV[2])
 return {'1', 'ok', new_epoch, 'reconciling'}
 """
@@ -141,6 +170,14 @@ _EPOCH_READY_SCRIPT = """-- omni:epoch_ready:v1
 local function valid_integer(value)
   return value and string.match(value, '^[1-9][0-9]*$')
     and (#value < 19 or (#value == 19 and value <= '9223372036854775807'))
+end
+local function valid_replay(value, score)
+  if not value or not score or not valid_integer(score) then return false end
+  local schema, fingerprint, saved_epoch, saved_state, saved_expiry =
+    string.match(value, '^([^|]+)|([^|]+)|([^|]+)|([^|]+)|([^|]+)$')
+  return schema == '1' and fingerprint and valid_integer(saved_epoch)
+    and (saved_state == 'ready' or saved_state == 'reconciling')
+    and valid_integer(saved_expiry) and saved_expiry == score
 end
 local count = redis.call('HLEN', KEYS[1])
 if count == 0 then
@@ -160,15 +197,13 @@ if redis.call('HLEN', KEYS[2]) ~= redis.call('ZCARD', KEYS[3]) then
 end
 local replay = redis.call('HGET', KEYS[2], ARGV[2])
 local replay_expiry = redis.call('ZSCORE', KEYS[3], ARGV[2])
-if (replay and not replay_expiry) or (replay_expiry and not replay)
-  or (replay_expiry and not valid_integer(replay_expiry)) then
+if not valid_replay(replay, replay_expiry) and (replay or replay_expiry) then
   return redis.error_reply('COORDINATION_CORRUPT')
 end
 if replay and tonumber(replay_expiry) > now_ms then
-  local schema, fingerprint, saved_epoch, saved_state =
-    string.match(replay, '^([^|]+)|([^|]+)|([^|]+)|([^|]+)$')
-  if schema ~= '1' or not fingerprint or not valid_integer(saved_epoch)
-    or (saved_state ~= 'ready' and saved_state ~= 'reconciling') then
+  local _, fingerprint, saved_epoch, saved_state =
+    string.match(replay, '^([^|]+)|([^|]+)|([^|]+)|([^|]+)|([^|]+)$')
+  if saved_epoch ~= ARGV[1] or saved_state ~= 'ready' then
     return redis.error_reply('COORDINATION_CORRUPT')
   end
   if fingerprint == ARGV[1] then
@@ -179,6 +214,12 @@ end
 local due = redis.call('ZRANGEBYSCORE', KEYS[3], '-inf', now_ms, 'LIMIT', 0, 257)
 if #due > 256 then
   return {'1', 'reconciliation_required', '', ''}
+end
+for _, operation_id in ipairs(due) do
+  if not valid_replay(redis.call('HGET', KEYS[2], operation_id),
+      redis.call('ZSCORE', KEYS[3], operation_id)) then
+    return redis.error_reply('COORDINATION_CORRUPT')
+  end
 end
 if #due > 0 then
   redis.call('HDEL', KEYS[2], unpack(due))
@@ -192,7 +233,9 @@ if redis.call('HLEN', KEYS[2]) >= tonumber(ARGV[4]) then
 end
 redis.call('HSET', KEYS[1], 'state', 'ready')
 local expires_at = now_ms + tonumber(ARGV[3])
-redis.call('HSET', KEYS[2], ARGV[2], '1|' .. ARGV[1] .. '|' .. epoch[2] .. '|ready')
+local expires_text = string.format('%.0f', expires_at)
+redis.call('HSET', KEYS[2], ARGV[2],
+  '1|' .. ARGV[1] .. '|' .. epoch[2] .. '|ready|' .. expires_text)
 redis.call('ZADD', KEYS[3], expires_at, ARGV[2])
 return {'1', 'ok', epoch[2], 'ready'}
 """
@@ -202,6 +245,15 @@ local function valid_integer(value, allow_zero)
   if allow_zero and value == '0' then return true end
   return value and string.match(value, '^[1-9][0-9]*$')
     and (#value < 19 or (#value == 19 and value <= '9223372036854775807'))
+end
+local function valid_replay(value, score)
+  if not value or not score or not valid_integer(score, false) then return false end
+  local schema, fingerprint, status, revision, saved_expiry =
+    string.match(value, '^([^|]+)|([^|]+)|([^|]+)|([^|]*)|([^|]+)$')
+  if schema ~= '1' or not fingerprint or not valid_integer(saved_expiry, false)
+    or saved_expiry ~= score then return false end
+  return (status == 'applied' and valid_integer(revision, false))
+    or (status == 'not_applied' and revision == '')
 end
 local epoch_count = redis.call('HLEN', KEYS[1])
 if epoch_count == 0 then
@@ -224,17 +276,12 @@ if redis.call('HLEN', KEYS[3]) ~= redis.call('ZCARD', KEYS[4]) then
 end
 local replay = redis.call('HGET', KEYS[3], ARGV[5])
 local replay_expiry = redis.call('ZSCORE', KEYS[4], ARGV[5])
-if (replay and not replay_expiry) or (replay_expiry and not replay)
-  or (replay_expiry and not valid_integer(replay_expiry)) then
+if not valid_replay(replay, replay_expiry) and (replay or replay_expiry) then
   return redis.error_reply('COORDINATION_CORRUPT')
 end
 if replay and tonumber(replay_expiry) > now_ms then
-  local schema, fingerprint, status, revision =
-    string.match(replay, '^([^|]+)|([^|]+)|([^|]+)|(.*)$')
-  if schema ~= '1' or not fingerprint or (status ~= 'applied' and status ~= 'not_applied')
-    or (revision ~= '' and not valid_integer(revision, false)) then
-    return redis.error_reply('COORDINATION_CORRUPT')
-  end
+  local _, fingerprint, status, revision =
+    string.match(replay, '^([^|]+)|([^|]+)|([^|]+)|([^|]*)|([^|]+)$')
   if fingerprint == ARGV[6] then
     return {'1', status, revision, '1'}
   end
@@ -243,6 +290,12 @@ end
 local due = redis.call('ZRANGEBYSCORE', KEYS[4], '-inf', now_ms, 'LIMIT', 0, 257)
 if #due > 256 then
   return {'1', 'reconciliation_required', '', '0'}
+end
+for _, operation_id in ipairs(due) do
+  if not valid_replay(redis.call('HGET', KEYS[3], operation_id),
+      redis.call('ZSCORE', KEYS[4], operation_id)) then
+    return redis.error_reply('COORDINATION_CORRUPT')
+  end
 end
 if #due > 0 then
   redis.call('HDEL', KEYS[3], unpack(due))
@@ -282,7 +335,9 @@ if (not current_revision and ARGV[1] == '0')
   redis.call('PEXPIRE', KEYS[2], tonumber(ARGV[3]))
 end
 local expires_at = now_ms + tonumber(ARGV[3])
-redis.call('HSET', KEYS[3], ARGV[5], '1|' .. ARGV[6] .. '|' .. status .. '|' .. revision)
+local expires_text = string.format('%.0f', expires_at)
+redis.call('HSET', KEYS[3], ARGV[5],
+  '1|' .. ARGV[6] .. '|' .. status .. '|' .. revision .. '|' .. expires_text)
 redis.call('ZADD', KEYS[4], expires_at, ARGV[5])
 return {'1', status, revision, '0'}
 """
@@ -291,6 +346,13 @@ _INVALIDATION_SCRIPT = """-- omni:invalidation:v1
 local function valid_integer(value)
   return value and string.match(value, '^[1-9][0-9]*$')
     and (#value < 19 or (#value == 19 and value <= '9223372036854775807'))
+end
+local function valid_replay(value, score)
+  if not value or not score or not valid_integer(score) then return false end
+  local schema, fingerprint, generation, saved_expiry =
+    string.match(value, '^([^|]+)|([^|]+)|([^|]+)|([^|]+)$')
+  return schema == '1' and fingerprint and valid_integer(generation)
+    and valid_integer(saved_expiry) and saved_expiry == score
 end
 local epoch_count = redis.call('HLEN', KEYS[1])
 if epoch_count == 0 then
@@ -313,20 +375,24 @@ if redis.call('HLEN', KEYS[3]) ~= redis.call('ZCARD', KEYS[4]) then
 end
 local replay = redis.call('HGET', KEYS[3], ARGV[2])
 local replay_expiry = redis.call('ZSCORE', KEYS[4], ARGV[2])
-if (replay and not replay_expiry) or (replay_expiry and not valid_integer(replay_expiry)) then
+if not valid_replay(replay, replay_expiry) and (replay or replay_expiry) then
   return redis.error_reply('COORDINATION_CORRUPT')
 end
 if replay and tonumber(replay_expiry) > now_ms then
-  local schema, fingerprint, generation = string.match(replay, '^([^|]+)|([^|]+)|([^|]+)$')
-  if schema ~= '1' or not fingerprint or not valid_integer(generation) then
-    return redis.error_reply('COORDINATION_CORRUPT')
-  end
+  local _, fingerprint, generation =
+    string.match(replay, '^([^|]+)|([^|]+)|([^|]+)|([^|]+)$')
   if fingerprint == ARGV[4] then return {'1', 'applied', generation, '1'} end
   return {'1', 'not_applied', '', '0'}
 end
 local due = redis.call('ZRANGEBYSCORE', KEYS[4], '-inf', now_ms, 'LIMIT', 0, 257)
 if #due > 256 then
   return {'1', 'reconciliation_required', '', '0'}
+end
+for _, operation_id in ipairs(due) do
+  if not valid_replay(redis.call('HGET', KEYS[3], operation_id),
+      redis.call('ZSCORE', KEYS[4], operation_id)) then
+    return redis.error_reply('COORDINATION_CORRUPT')
+  end
 end
 if #due > 0 then
   redis.call('HDEL', KEYS[3], unpack(due))
@@ -352,7 +418,9 @@ else
   return redis.error_reply('COORDINATION_CORRUPT')
 end
 local expires_at = now_ms + tonumber(ARGV[3])
-redis.call('HSET', KEYS[3], ARGV[2], '1|' .. ARGV[4] .. '|' .. generation)
+local expires_text = string.format('%.0f', expires_at)
+redis.call('HSET', KEYS[3], ARGV[2],
+  '1|' .. ARGV[4] .. '|' .. generation .. '|' .. expires_text)
 redis.call('ZADD', KEYS[4], expires_at, ARGV[2])
 return {'1', 'applied', generation, '0'}
 """
@@ -500,6 +568,8 @@ def _decode_cas_reply(reply: object) -> CasResult:
     applied = values[1] == b"applied"
     if applied == (values[2] == b""):
         raise CoordinationCorruptError("Coordination reply is invalid.")
+    if not applied and values[3] != b"0":
+        raise CoordinationCorruptError("Coordination reply is invalid.")
     revision = _strict_positive_int(values[2]) if applied else None
     return CasResult(applied, revision, values[3] == b"1")
 
@@ -514,6 +584,8 @@ def _decode_invalidation_reply(reply: object) -> InvalidationResult:
         raise CoordinationCorruptError("Coordination reply is invalid.")
     applied = values[1] == b"applied"
     if applied == (values[2] == b""):
+        raise CoordinationCorruptError("Coordination reply is invalid.")
+    if not applied and values[3] != b"0":
         raise CoordinationCorruptError("Coordination reply is invalid.")
     generation = _strict_positive_int(values[2]) if applied else None
     return InvalidationResult(applied, generation, values[3] == b"1")
@@ -536,7 +608,12 @@ def _decode_integer_reply(reply: object, *, nonnegative: bool = False) -> int:
         digits = raw[1:]
     else:
         digits = raw
-    if not digits or (len(digits) > 1 and digits.startswith(b"0")) or not digits.isdigit():
+    if (
+        not digits
+        or not digits.isdigit()
+        or (len(digits) > 1 and digits.startswith(b"0"))
+        or raw == b"-0"
+    ):
         raise CoordinationCorruptError("Coordination reply is invalid.")
     result = int(raw)
     if abs(result) > MAX_COORDINATION_INTEGER or (nonnegative and result < 0):
@@ -575,7 +652,9 @@ class RedisStateStore:
         self._replay_limit = replay_limit
         self._client: Any = None
         self._scripts: dict[str, Any] = {}
-        self._lock_tokens: dict[str, bytes] = {}
+        self._lock_tokens: weakref.WeakKeyDictionary[asyncio.Task[Any], dict[str, bytes]] = (
+            weakref.WeakKeyDictionary()
+        )
         self._closed = False
         self._lifecycle_lock = asyncio.Lock()
 
@@ -648,19 +727,17 @@ class RedisStateStore:
         reply = await self._run_command("get", self._key("generic", logical_key))
         if reply is not None and not isinstance(reply, bytes):
             raise CoordinationCorruptError("Coordination reply is invalid.")
-        return reply
+        if reply is None:
+            return None
+        try:
+            return reply.decode("utf-8")
+        except UnicodeDecodeError:
+            raise CoordinationCorruptError("Coordination reply is invalid.") from None
 
     async def set(self, key: str, value: Any, ttl_seconds: Optional[float] = None) -> None:
         logical_key = _validate_identifier(key, "State key")
         ttl = _ttl_ms(ttl_seconds, optional=True)
-        if isinstance(value, bytes):
-            payload = value
-        elif isinstance(value, float) and math.isfinite(value):
-            payload = str(value).encode("utf-8")
-        elif isinstance(value, (str, int)) and not isinstance(value, bool):
-            payload = str(value).encode("utf-8")
-        else:
-            raise ValueError("State value is invalid.")
+        payload = str(value).encode("utf-8")
         if len(payload) > MAX_PAYLOAD_BYTES:
             raise ValueError("State value is invalid.")
         options = {} if ttl is None else {"px": ttl}
@@ -705,22 +782,31 @@ class RedisStateStore:
             return False
         if reply is not True:
             raise CoordinationCorruptError("Coordination reply is invalid.")
-        self._lock_tokens[redis_key] = token
+        task = asyncio.current_task()
+        if task is None:
+            raise CoordinationUnavailableError("Redis coordination is unavailable.")
+        self._lock_tokens.setdefault(task, {})[redis_key] = token
         return True
 
     async def release_lock(self, lock_key: str) -> None:
         logical_key = _validate_identifier(lock_key, "Lock key")
         self._ensure_open()
         redis_key = self._key("lock", logical_key)
-        token = self._lock_tokens.get(redis_key)
+        task = asyncio.current_task()
+        token = self._lock_tokens.get(task, {}).get(redis_key) if task is not None else None
         if token is None:
             return
-        reply = await self._run_script("lock_release", keys=[redis_key], args=[token])
-        deleted = _decode_integer_reply(reply, nonnegative=True)
-        if deleted not in {0, 1}:
-            raise CoordinationCorruptError("Coordination reply is invalid.")
-        if self._lock_tokens.get(redis_key) == token:
-            self._lock_tokens.pop(redis_key, None)
+        try:
+            reply = await self._run_script("lock_release", keys=[redis_key], args=[token])
+            deleted = _decode_integer_reply(reply, nonnegative=True)
+            if deleted not in {0, 1}:
+                raise CoordinationCorruptError("Coordination reply is invalid.")
+        finally:
+            owned_tokens = self._lock_tokens.get(task) if task is not None else None
+            if owned_tokens is not None and owned_tokens.get(redis_key) == token:
+                owned_tokens.pop(redis_key, None)
+                if not owned_tokens:
+                    self._lock_tokens.pop(task, None)
 
     async def read_epoch(self) -> Epoch:
         reply = await self._run_script("epoch_read", keys=[self._key("epoch")], args=[])
