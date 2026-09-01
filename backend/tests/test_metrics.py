@@ -17,6 +17,10 @@ if str(TESTS_DIR) not in sys.path:
 
 from core import metrics as metrics_module
 from core import usage_stats
+from core.coordination_service import (
+    clear_coordination_operation_metrics_for_testing,
+    record_coordination_operation_for_testing,
+)
 from core.credential_operation_evidence import (
     clear_credential_operation_evidence_for_testing,
     record_credential_mutation,
@@ -56,6 +60,7 @@ SAMPLE_ROWS = [
 class RenderPrometheusMetricsTests(unittest.TestCase):
     def setUp(self):
         clear_credential_operation_evidence_for_testing()
+        clear_coordination_operation_metrics_for_testing()
 
     def test_renders_per_provider_counters(self):
         output = render_prometheus_metrics(SAMPLE_ROWS)
@@ -126,6 +131,22 @@ class RenderPrometheusMetricsTests(unittest.TestCase):
         )
         self.assertIn("# TYPE omni_credential_operation_duration_seconds histogram", output)
         self.assertNotIn("must-not-appear", output)
+
+    def test_coordination_metrics_are_exposed_with_fixed_labels_and_empty_metadata(self):
+        empty = render_prometheus_metrics([])
+        self.assertIn("# HELP omni_coordination_operations_total", empty)
+        self.assertIn("# TYPE omni_coordination_operations_total counter", empty)
+
+        record_coordination_operation_for_testing("redis", "reserve_quota", "rejected")
+        record_coordination_operation_for_testing(["untrusted"], ["tenant/key"], ["top-secret"])
+        output = render_prometheus_metrics([])
+        self.assertIn(
+            'omni_coordination_operations_total{backend="redis",operation="reserve_quota",result="rejected"} 1',
+            output,
+        )
+        self.assertNotIn("untrusted", output)
+        self.assertNotIn("tenant/key", output)
+        self.assertNotIn("top-secret", output)
 
 
 class MetricsEndpointTests(unittest.TestCase):

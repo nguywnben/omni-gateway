@@ -32,6 +32,34 @@ The reference rules are in `deploy/observability/prometheus-alerts.yml`. Tune th
 after establishing a traffic baseline; the supplied error and latency alerts require a minimum
 sample so idle or new installations do not page.
 
+## Coordination evidence
+
+`omni_coordination_operations_total{backend,operation,result}` is a process-local counter for the
+currently supplied coordination store. `backend` is fixed to `in_memory`, `redis`, or `unknown`.
+`operation` is one of the fixed coordination and quota lifecycle calls (for example
+`reserve_quota`, `commit_quota`, `compare_and_set`, or `close`). `result` is fixed to `success`,
+`rejected`, `idempotent`, `unavailable`, `corrupt`, `reconciliation_required`, or `unexpected`.
+The renderer always emits its HELP and TYPE metadata, including before any operation occurs.
+
+Use the counter to ask: is Redis becoming unavailable, are corruption or reconciliation-required
+outcomes increasing, are quota admissions being rejected unexpectedly, and is a process closing
+repeatedly? The lifecycle boundary also retains an in-process, content-free health snapshot with
+only backend class, availability/closed state, failure count, fixed error category, and timestamps.
+It never places a logical key, scope, reservation, operation ID, provider, Redis URI, or exception
+message in metric labels or health evidence.
+
+The semantic Redis execution suite is opt-in: set `OMNI_TEST_REDIS_URI` and run
+`backend.tests.test_coordination_redis_live`. With the variable absent, unittest reports each live
+test as an explicit skip; with it present, a connection failure is a real failure. Each run derives
+a unique validated lowercase/hyphen namespace and teardown scans and deletes only keys under that
+run's derived deployment prefix/hash tag. It never uses `FLUSHDB`, broad deletion, or `SCRIPT
+FLUSH`; the latter is server-global and therefore not safe for a shared endpoint.
+
+This evidence does not activate HA Redis selection, `/ready` checks, deployment changes,
+multi-worker/replica operation, or caller migration. W4.18 activation still requires an explicit
+runtime-selection and lifecycle design, readiness and failure-policy review, safe deployment and
+rollback procedures, multi-worker/replica validation, and migrated callers.
+
 ## Symptom runbooks
 
 - [High error rate](runbooks/high-error-rate.md)

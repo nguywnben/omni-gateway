@@ -15,6 +15,9 @@ All notable user-facing changes are documented in this file. Omni Gateway follow
 - Added selected-backend durable usage and cost repositories for SQLite, PostgreSQL, and
   transaction-capable MongoDB, including idempotent hard-budget reservation journals, restart-safe
   settlement, read-only verified legacy SQLite import, and bounded ledger operation metrics.
+- Added Redis coordination semantic primitives, opt-in isolated live parity evidence, and bounded
+  coordination operation metrics. The standalone in-memory default and runtime selection remain
+  unchanged; this release does not activate HA Redis operation.
 
 ### Changed
 
