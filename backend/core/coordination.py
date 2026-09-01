@@ -29,6 +29,10 @@ class CoordinationUnavailableError(CoordinationError):
     """The backend was unavailable or returned an unusable response."""
 
 
+class CoordinationReconciliationRequiredError(CoordinationUnavailableError):
+    """Bounded cleanup found more expired state than this mutation may reconcile."""
+
+
 class CoordinationCorruptError(CoordinationError, ValueError):
     """Stored coordination state did not satisfy the closed version-one schema."""
 
@@ -185,6 +189,55 @@ class InvalidationGeneration:
                 minimum=1,
                 maximum=MAX_COORDINATION_INTEGER,
             )
+
+
+@dataclass(frozen=True, slots=True)
+class QuotaReservationRequest:
+    """One atomic request against a virtual key's active quota windows."""
+
+    reservation_id: str
+    key_id: str
+    now: float
+    ttl_seconds: float
+    estimated_tokens: int
+    estimated_cost_usd: float
+    rpm_limit: int | None
+    tpm_limit: int | None
+    daily_budget_usd: float | None
+    monthly_budget_usd: float | None
+    daily_spend_usd: float
+    monthly_spend_usd: float
+    daily_snapshot_started_at: float
+    monthly_snapshot_started_at: float
+    fencing_epoch: int = 1
+    operation_id: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class QuotaReservationDecision:
+    accepted: bool
+    reservation_id: str
+    reason: str = ""
+    retry_after_seconds: int = 0
+    idempotent: bool = False
+
+
+@dataclass(frozen=True, slots=True)
+class QuotaCommitRequest:
+    reservation_id: str
+    now: float
+    actual_tokens: int | None
+    actual_cost_usd: float | None
+    durable_cost_recorded: bool
+    fencing_epoch: int = 1
+    operation_id: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class QuotaCommitResult:
+    committed: bool
+    overspent: bool = False
+    idempotent: bool = False
 
 
 def _require_reply_fields(reply: object, expected: frozenset[str]) -> Mapping[str, object]:

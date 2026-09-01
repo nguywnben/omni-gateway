@@ -16,6 +16,7 @@ from core.coordination import (
     CasRequest,
     CasResult,
     CoordinationCorruptError,
+    CoordinationReconciliationRequiredError,
     Epoch,
     EpochState,
     InvalidationGeneration,
@@ -30,6 +31,13 @@ from core.coordination import (
 
 
 class CoordinationDomainTests(unittest.TestCase):
+    def test_reconciliation_required_is_a_typed_unavailable_error(self) -> None:
+        from core.coordination import CoordinationUnavailableError
+
+        self.assertTrue(
+            issubclass(CoordinationReconciliationRequiredError, CoordinationUnavailableError)
+        )
+
     def test_deployment_namespace_accepts_only_bounded_lowercase_ascii(self) -> None:
         for namespace in ("abc", "tenant-1", "a" * 64):
             with self.subTest(namespace=namespace):

@@ -11,6 +11,8 @@ BACKEND_DIR = Path(__file__).resolve().parents[1]
 if str(BACKEND_DIR) not in sys.path:
     sys.path.insert(0, str(BACKEND_DIR))
 
+from core.coordination import QuotaCommitRequest as CanonicalQuotaCommitRequest
+from core.coordination import QuotaReservationRequest as CanonicalQuotaReservationRequest
 from core.state_store import (
     InMemoryStateStore,
     QuotaCommitRequest,
@@ -175,6 +177,18 @@ class AtomicQuotaReservationTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(first.accepted)
         self.assertTrue(repeated.accepted)
         self.assertTrue(repeated.idempotent)
+
+    async def test_same_reservation_id_with_changed_request_conflicts(self):
+        first = await self.store.reserve_quota(_reservation("res_same", estimated_tokens=100))
+        changed = await self.store.reserve_quota(_reservation("res_same", estimated_tokens=101))
+
+        self.assertTrue(first.accepted)
+        self.assertFalse(changed.accepted)
+        self.assertEqual(changed.reason, "conflict")
+
+    def test_quota_request_imports_remain_compatible_aliases(self):
+        self.assertIs(QuotaReservationRequest, CanonicalQuotaReservationRequest)
+        self.assertIs(QuotaCommitRequest, CanonicalQuotaCommitRequest)
 
     async def test_actual_usage_above_reservation_reports_overspend(self):
         await self.store.reserve_quota(
