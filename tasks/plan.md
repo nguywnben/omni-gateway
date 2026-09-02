@@ -46,10 +46,10 @@ or Phase 5 request tracing.
 - Wave 3 completion checkpoint: `76315e7` (`docs: close wave 3 operational evidence`).
 - Completed product scope: Phases 0–5; Wave 3 was accepted by the human on 2026-08-26 through the
   instruction to start the project and execute the next plan.
-- Active approved scope: Wave 4 under accepted ADR-007/ADR-008; W4.1–W4.14 and checkpoints W4-A/W4-B
-  are complete and W4.15 is the next implementation slice.
-- State: **READY — W4.15 NEXT**. Selected-backend durable usage and hard-budget journals are
-  complete for standalone runtime; versioned Redis semantic primitives are next.
+- Active approved scope: Wave 4 under accepted ADR-007/ADR-008; W4.1–W4.15 and checkpoints W4-A/W4-B
+  are complete and W4.16 is the next implementation slice.
+- State: **READY — W4.16 NEXT**. Versioned in-process/Redis coordination primitives now have shared
+  semantic evidence without runtime activation; identity and security state coordination is next.
 - Still gated by later slices and evidence: distributed-state activation, multiple workers/
   replicas, destructive migration, and production release activation.
 
@@ -714,6 +714,14 @@ and fencing-epoch semantics against Redis without exposing Redis commands to cal
 - Verification: live Redis atomicity, expiry, restart, cancellation, and fault-injection tests.
 - Dependencies: W4.14.
 - Likely files: state-store interface/Redis implementation, contract tests, configuration.
+
+Completed on 2026-09-02. Commits `a60dcf9` through `be5e3b7` deliver the strict contract,
+in-process reference, Redis transport/Lua semantics, quota lifecycle, metrics/live-test harness,
+and reconciled adversarial fixes. The complete backend suite passes 1,147 tests with 25 explicit
+opt-in live-backend skips; Ruff lint/format, compileall, pip consistency/audit, JavaScript, YAML,
+shell, secret, and diff gates pass. The committed standalone runtime has exactly one listener and
+HTTP 200 health/readiness. Redis remains inactive: W4.18 owns namespace-loss protection and W4.19
+must measure or redesign the bounded O(n) quota scan before activation.
 
 ### W4.16 — Coordinate identity and security state
 

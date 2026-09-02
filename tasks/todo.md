@@ -215,7 +215,14 @@ These queue items refine Phases 4–5 and do not add to the 28-item program deno
     conservatively charged instead of becoming silent zero spend. Internal adversarial review is
     reconciled, all 1,042 tests pass with 18 opt-in live-backend skips, and repository gates plus
     dependency audit are clean. Migration activation and Redis coordination remain closed.
-- [ ] W4.15 Implement Redis semantic primitive parity.
+- [x] W4.15 Implement Redis semantic primitive parity.
+  - Completed on 2026-09-02 in `be5e3b7`. The shared contract, in-process reference, Redis
+    transport/Lua scripts, quota lifecycle, metrics, and opt-in live harness now fail closed for
+    stale fencing, partial/corrupt state, duplicate/expired replay, cleanup backlog, unsafe numeric
+    values, and cancellation. All 1,147 tests pass with 25 explicit live-backend skips; repository
+    gates and dependency audit are clean. The committed standalone runtime has one listener and
+    HTTP 200 health/readiness. Redis selection, caller migration, scale-out, and the O(n) quota
+    performance boundary remain gated by W4.16-W4.19.
 - [ ] W4.16 Coordinate identity/session/security runtime state.
 - [ ] W4.17 Coordinate routing/governance/cache runtime state.
 - [ ] W4.18 Add the HA deployment gate, readiness, alerts, runbooks, and rollback.
