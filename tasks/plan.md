@@ -47,10 +47,10 @@ or Phase 5 request tracing.
 - Completed product scope: Phases 0–5; Wave 3 was accepted by the human on 2026-08-26 through the
   instruction to start the project and execute the next plan.
 - Active approved scope: Wave 4 under accepted ADR-007/ADR-008; W4.1–W4.15 and checkpoints W4-A/W4-B
-  are complete and W4.16 is the next implementation slice.
-- State: **IN PROGRESS — W4.16 TASK 2 NEXT**. The strict opaque security-state domain and shared
-  behavioral fixture are verified; the in-process fenced reference is next. Runtime activation
-  remains unchanged.
+  are complete and W4.16 is the active implementation slice.
+- State: **IN PROGRESS — W4.16 TASK 3 NEXT**. The strict opaque security-state domain, shared
+  behavioral fixture, and in-process fenced reference are verified; Redis session lifecycle parity
+  is next. Runtime activation remains unchanged.
 - Still gated by later slices and evidence: distributed-state activation, multiple workers/
   replicas, destructive migration, and production release activation.
 
@@ -739,6 +739,8 @@ to the W4.15 boundary.
   `docs/superpowers/plans/2026-09-02-w4.16-identity-security-coordination.md`.
 
 Implementation slices:
+
+Progress: Tasks 1–2 complete; Task 3 is next. Runtime selection and HA activation remain unchanged.
 
 1. Define the strict opaque security-state domain and reusable behavioral fixture.
 2. Implement the in-process fenced reference for sessions, attempts, and one-time transactions.

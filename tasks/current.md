@@ -4,22 +4,24 @@
 
 - Updated: 2026-09-02 (Asia/Saigon).
 - Branch: `codex/enterprise-overhaul`.
-- Implementation baseline: `be5e3b7 fix(coordination): close semantic parity review`.
+- Implementation baseline: W4.16 Task 2 (`feat(identity): add in-process security coordination`).
 - Completed scope: Waves 1–3 / Phases 0–5 plus Wave 4 slices W4.1–W4.15 and checkpoints W4-A/W4-B.
 - Original program progress: 21/28 approved checklist items complete (including specification and
   Phase 6 ADR approval), exactly 75.0%; wave execution-slice checkboxes are refinements and are not
   added to that denominator.
 - Active scope: Wave 4 W4.16, identity/session/security state coordination.
-- Control state: **IN PROGRESS — W4.16 TASK 2 NEXT**.
-- Expected worktree state at this checkpoint: clean after the W4.16 Task 1 contract commit.
+- Control state: **IN PROGRESS — W4.16 TASK 3 NEXT**.
+- Expected worktree state at this checkpoint: clean after the W4.16 Task 2 implementation commit.
 - Expected runtime: one Omni Gateway listener on `http://127.0.0.1:4283`; `/health` and `/ready`
   return HTTP 200.
-- Last verified full suite: 1,147 tests passed on Python 3.14.6 with 25 opt-in live backend tests
-  skipped because no test URI was configured. Repository-wide Ruff lint/format, compileall, pip
-  consistency, YAML/shell syntax, diff, 45 frontend JavaScript syntax checks, and dependency
-  vulnerability audit pass for W4.15. The internal review's 12 findings are reconciled; the
-  user-supplied Gemini cross-model review is recorded as a false negative. Runtime `be5e3b7` is the
-  sole listener on port 4283 and health/readiness return HTTP 200.
+- Last verified full suite: 1,169 tests passed on Python 3.14.6 with 25 opt-in live backend tests
+  skipped because no test URI was configured. The W4.16 Task 2 focused matrix passes 101 tests;
+  repository-wide Ruff lint/format, compileall, pip consistency, diff, and all 45 frontend
+  JavaScript syntax checks pass. No dependency, YAML, or shell file changed in this slice. The
+  dependency audit remains the clean W4.15 result because the current sandbox proxy denied a fresh
+  PyPI query; broad YAML/shell reruns were non-authoritative because Helm templates are not plain
+  YAML and the Windows host denied both WSL registration and Git Bash signal-pipe creation. Runtime
+  `be5e3b7` remains the sole listener on port 4283 and health/readiness return HTTP 200.
 
 Wave 2 was accepted and pushed by the human on 2026-08-24. Wave 3 / Phases 4–5 was accepted on
 2026-08-26. ADR-007/ADR-008 and the Wave 4 queue were accepted later that day when the human again
@@ -406,6 +408,15 @@ silently choosing a new design.
   (PID 26300) with HTTP 200 `/health` and `/ready`. Redis is not selected by runtime, no caller was
   migrated, and W4.19 still blocks activation until the O(n) quota scan has measured evidence and
   a supported cap or redesign.
+- W4.16 Task 2 in-process security coordination: the standalone reference now implements fenced
+  session issue/resolve/touch/rotate/revoke/list operations, category-isolated attempt admission,
+  and one-time browser-bound OIDC transactions under a lock and store clock. Exact indexed expiry
+  heaps provide bounded preflight cleanup without copying or scanning the full store; stable replay
+  evidence, complete reverse-index validation, regressing-clock rejection, and post-close failure
+  prevent stale privilege, identifier reuse, corrupt-index authorization, and replay resurrection.
+  Reviewer findings were first reproduced as failing tests and reconciled. The 101-test focused
+  matrix and 1,169-test full suite pass. This reference is not wired into runtime yet; Redis and HA
+  activation remain gated.
 
 ## Approved vs. Proposed Scope
 
@@ -460,11 +471,12 @@ checkboxes to be marked complete.
 
 ## Immediate Next Action
 
-Execute W4.16 Task 2 from
-`docs/superpowers/plans/2026-09-02-w4.16-identity-security-coordination.md`: implement the
-in-process security-state reference against the shared session/throttle/OIDC behavioral fixture.
-Preserve `WORKERS=1`, one replica, disabled-by-default OIDC, source authority, and every HA
-activation gate; routing, quota, cache, readiness, and deployment activation remain out of scope.
+Execute W4.16 Task 3 from
+`docs/superpowers/plans/2026-09-02-w4.16-identity-security-coordination.md`: add Redis session
+lifecycle and index parity through fixed, two-phase-validated, bounded Lua using Redis server time.
+Keep the transport inactive and preserve `WORKERS=1`, one replica, disabled-by-default OIDC,
+source authority, and every HA activation gate; throttle/OIDC Redis parity, caller migration,
+routing, quota, cache, readiness, and deployment activation remain out of scope.
 
 ## Update Rule
 

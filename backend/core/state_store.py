@@ -9,9 +9,10 @@ from __future__ import annotations
 import abc
 import asyncio
 import heapq
+import hmac
 import math
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, Literal, Optional, Tuple
 
 from core.coordination import (
@@ -19,6 +20,7 @@ from core.coordination import (
     MAX_IDENTIFIER_LENGTH,
     CasRequest,
     CasResult,
+    CoordinationCorruptError,
     CoordinationReconciliationRequiredError,
     CoordinationUnavailableError,
     Epoch,
@@ -32,6 +34,33 @@ from core.coordination import (
     QuotaReservationRequest,
     validate_epoch,
     validate_operation_id,
+)
+from core.security_coordination import (
+    MAX_OIDC_TRANSACTION_TTL_SECONDS,
+    MAX_SECURITY_SESSION_TTL_SECONDS,
+    MAX_SECURITY_TIMESTAMP,
+    MIN_SECURITY_ATTEMPT_WINDOW_SECONDS,
+    AttemptClearRequest,
+    AttemptClearResult,
+    AttemptReservationDecision,
+    AttemptReservationRequest,
+    OidcTransactionConsumeRequest,
+    OidcTransactionConsumeResult,
+    OidcTransactionCreateRequest,
+    SecurityAttemptCategory,
+    SecurityPrincipalType,
+    SecuritySessionState,
+    SessionIssueRequest,
+    SessionListRequest,
+    SessionMutationResult,
+    SessionPage,
+    SessionResolveRequest,
+    SessionResolveResult,
+    SessionRevokeRequest,
+    SessionRevokeResult,
+    SessionRevokeTarget,
+    SessionRotateRequest,
+    TransactionCreateResult,
 )
 
 QUOTA_RATE_WINDOW_SECONDS = 60.0
@@ -86,6 +115,135 @@ class _QuotaReplay:
     fingerprint: object
     result: object
     expires_at: float
+
+
+@dataclass(frozen=True)
+class _SecurityAttemptRecord:
+    count: int
+    expires_at: float
+
+
+@dataclass(frozen=True)
+class _OidcTransactionRecord:
+    browser_index: str
+    payload: bytes
+    expires_at: float
+
+
+@dataclass
+class _IndexedExpiryHeap:
+    """Exact indexed heap with bounded, non-mutating due-entry preflight."""
+
+    entries: list[tuple[float, str]] = field(default_factory=list)
+    positions: Dict[str, int] = field(default_factory=dict)
+
+    def __len__(self) -> int:
+        return len(self.entries)
+
+    def expiry_for(self, identifier: str) -> float | None:
+        index = self.positions.get(identifier)
+        if index is None:
+            return None
+        expires_at, indexed_identifier = self.entries[index]
+        if indexed_identifier != identifier:
+            raise CoordinationCorruptError("Coordination state is invalid.")
+        parent = (index - 1) // 2
+        left = 2 * index + 1
+        right = left + 1
+        if (
+            (index and self.entries[parent] > self.entries[index])
+            or (left < len(self.entries) and self.entries[index] > self.entries[left])
+            or (right < len(self.entries) and self.entries[index] > self.entries[right])
+        ):
+            raise CoordinationCorruptError("Coordination state is invalid.")
+        return expires_at
+
+    def _swap(self, left: int, right: int) -> None:
+        self.entries[left], self.entries[right] = self.entries[right], self.entries[left]
+        self.positions[self.entries[left][1]] = left
+        self.positions[self.entries[right][1]] = right
+
+    def _sift_up(self, index: int) -> None:
+        while index:
+            parent = (index - 1) // 2
+            if self.entries[parent] <= self.entries[index]:
+                return
+            self._swap(parent, index)
+            index = parent
+
+    def _sift_down(self, index: int) -> None:
+        size = len(self.entries)
+        while True:
+            left = 2 * index + 1
+            if left >= size:
+                return
+            right = left + 1
+            smallest = right if right < size and self.entries[right] < self.entries[left] else left
+            if self.entries[index] <= self.entries[smallest]:
+                return
+            self._swap(index, smallest)
+            index = smallest
+
+    def replace(self, identifier: str, expires_at: float) -> None:
+        entry = (expires_at, identifier)
+        index = self.positions.get(identifier)
+        if index is None:
+            self.positions[identifier] = len(self.entries)
+            self.entries.append(entry)
+            self._sift_up(len(self.entries) - 1)
+            return
+        previous = self.entries[index]
+        self.entries[index] = entry
+        if entry < previous:
+            self._sift_up(index)
+        elif entry > previous:
+            self._sift_down(index)
+
+    def discard(self, identifier: str) -> None:
+        index = self.positions.pop(identifier, None)
+        if index is None:
+            return
+        last = self.entries.pop()
+        if index == len(self.entries):
+            return
+        self.entries[index] = last
+        self.positions[last[1]] = index
+        parent = (index - 1) // 2
+        if index and self.entries[index] < self.entries[parent]:
+            self._sift_up(index)
+        else:
+            self._sift_down(index)
+
+    def plan_due(
+        self,
+        mapping: Dict[str, Any],
+        now: float,
+        expiry: Callable[[Any], float],
+        maximum: int,
+    ) -> list[str]:
+        if len(self.entries) != len(self.positions) or len(mapping) != len(self.entries):
+            raise CoordinationCorruptError("Coordination state is invalid.")
+        if maximum <= 0 or not self.entries or self.entries[0][0] > now:
+            return []
+        frontier = [(self.entries[0][0], self.entries[0][1], 0)]
+        due: list[str] = []
+        while frontier and frontier[0][0] <= now and len(due) < maximum:
+            expires_at, identifier, index = heapq.heappop(frontier)
+            if self.positions.get(identifier) != index:
+                raise CoordinationCorruptError("Coordination state is invalid.")
+            record = mapping.get(identifier)
+            if record is None or expiry(record) != expires_at:
+                raise CoordinationCorruptError("Coordination state is invalid.")
+            due.append(identifier)
+            left = 2 * index + 1
+            right = left + 1
+            if left < len(self.entries):
+                left_entry = self.entries[left]
+                heapq.heappush(frontier, (left_entry[0], left_entry[1], left))
+            if right < len(self.entries):
+                right_entry = self.entries[right]
+                heapq.heappush(frontier, (right_entry[0], right_entry[1], right))
+        return due
 
 
 class BaseStateStore(abc.ABC):
@@ -146,6 +304,10 @@ class InMemoryStateStore(BaseStateStore):
     _DEFAULT_COORDINATION_REPLAY_LIMIT = 100_000
     _DEFAULT_QUOTA_RECORD_LIMIT = 100_000
     _DEFAULT_QUOTA_REPLAY_LIMIT = 100_000
+    _DEFAULT_SECURITY_SESSION_LIMIT = 10_000
+    _DEFAULT_SECURITY_ATTEMPT_LIMIT = 100_000
+    _DEFAULT_OIDC_TRANSACTION_LIMIT = 1_000
+    _DEFAULT_SECURITY_REPLAY_LIMIT = 100_000
     _UNKNOWN_QUOTA_KEY = ("unknown-reservation",)
 
     def __init__(
@@ -155,6 +317,10 @@ class InMemoryStateStore(BaseStateStore):
         _coordination_replay_limit_for_testing: int | None = None,
         _quota_record_limit_for_testing: int | None = None,
         _quota_replay_limit_for_testing: int | None = None,
+        _security_session_limit_for_testing: int | None = None,
+        _security_attempt_limit_for_testing: int | None = None,
+        _oidc_transaction_limit_for_testing: int | None = None,
+        _security_replay_limit_for_testing: int | None = None,
     ) -> None:
         self._clock = clock
         self._store: Dict[str, Tuple[Optional[float], Any]] = {}
@@ -177,6 +343,30 @@ class InMemoryStateStore(BaseStateStore):
         self._quota_replays: Dict[str, _QuotaReplay] = {}
         self._quota_replay_expiries: Dict[object, list[tuple[float, str]]] = {}
         self._quota_replay_counts: Dict[object, int] = {}
+        self._security_sessions: Dict[str, SecuritySessionState] = {}
+        self._security_digest_by_reference: Dict[str, str] = {}
+        self._security_digests_by_principal: Dict[str, set[str]] = {}
+        self._security_digests_by_principal_type: Dict[SecurityPrincipalType, set[str]] = {}
+        self._security_session_expiries = _IndexedExpiryHeap()
+        self._security_session_replays: Dict[str, _Replay] = {}
+        self._security_session_replay_expiries = _IndexedExpiryHeap()
+        self._security_attempts: Dict[
+            SecurityAttemptCategory, Dict[str, _SecurityAttemptRecord]
+        ] = {category: {} for category in SecurityAttemptCategory}
+        self._security_attempt_expiries: Dict[SecurityAttemptCategory, _IndexedExpiryHeap] = {
+            category: _IndexedExpiryHeap() for category in SecurityAttemptCategory
+        }
+        self._security_attempt_replays: Dict[SecurityAttemptCategory, Dict[str, _Replay]] = {
+            category: {} for category in SecurityAttemptCategory
+        }
+        self._security_attempt_replay_expiries: Dict[
+            SecurityAttemptCategory, _IndexedExpiryHeap
+        ] = {category: _IndexedExpiryHeap() for category in SecurityAttemptCategory}
+        self._oidc_transactions: Dict[str, _OidcTransactionRecord] = {}
+        self._oidc_transaction_expiries = _IndexedExpiryHeap()
+        self._oidc_transaction_replays: Dict[str, _Replay] = {}
+        self._oidc_transaction_replay_expiries = _IndexedExpiryHeap()
+        self._security_last_clock: float | None = None
         self._coordination_replay_limit = (
             self._DEFAULT_COORDINATION_REPLAY_LIMIT
             if _coordination_replay_limit_for_testing is None
@@ -191,6 +381,26 @@ class InMemoryStateStore(BaseStateStore):
             self._DEFAULT_QUOTA_REPLAY_LIMIT
             if _quota_replay_limit_for_testing is None
             else _quota_replay_limit_for_testing
+        )
+        self._security_session_limit = (
+            self._DEFAULT_SECURITY_SESSION_LIMIT
+            if _security_session_limit_for_testing is None
+            else _security_session_limit_for_testing
+        )
+        self._security_attempt_limit = (
+            self._DEFAULT_SECURITY_ATTEMPT_LIMIT
+            if _security_attempt_limit_for_testing is None
+            else _security_attempt_limit_for_testing
+        )
+        self._oidc_transaction_limit = (
+            self._DEFAULT_OIDC_TRANSACTION_LIMIT
+            if _oidc_transaction_limit_for_testing is None
+            else _oidc_transaction_limit_for_testing
+        )
+        self._security_replay_limit = (
+            self._DEFAULT_SECURITY_REPLAY_LIMIT
+            if _security_replay_limit_for_testing is None
+            else _security_replay_limit_for_testing
         )
         self._closed = False
         self._async_lock = asyncio.Lock()
@@ -273,6 +483,237 @@ class InMemoryStateStore(BaseStateStore):
             request.actual_cost_usd,
             request.durable_cost_recorded,
             request.fencing_epoch,
+        )
+
+    def _security_now_locked(self) -> float:
+        now = self._clock()
+        if (
+            type(now) not in {int, float}
+            or not math.isfinite(now)
+            or not 0 <= now <= MAX_SECURITY_TIMESTAMP - MAX_SECURITY_SESSION_TTL_SECONDS
+            or (self._security_last_clock is not None and now < self._security_last_clock)
+        ):
+            raise CoordinationCorruptError("Coordination state is invalid.")
+        self._security_last_clock = float(now)
+        return self._security_last_clock
+
+    def _security_epoch_denial_locked(self, epoch: int) -> str | None:
+        if self._is_ready_locked(epoch):
+            return None
+        return "reconciling" if self._epoch.state is EpochState.RECONCILING else "stale_epoch"
+
+    def _require_security_epoch_locked(self, epoch: int) -> None:
+        if self._security_epoch_denial_locked(epoch) is not None:
+            raise CoordinationUnavailableError("Coordination store is not ready.")
+
+    def _validate_security_session_locked(self, digest: str) -> SecuritySessionState:
+        session = self._security_sessions.get(digest)
+        if session is None:
+            raise CoordinationCorruptError("Coordination state is invalid.")
+        if (
+            session.session_digest != digest
+            or self._security_digest_by_reference.get(session.session_reference) != digest
+            or digest not in self._security_digests_by_principal.get(session.principal_index, ())
+            or digest
+            not in self._security_digests_by_principal_type.get(session.principal_type, ())
+            or self._security_session_expiries.expiry_for(digest)
+            != min(session.idle_expires_at, session.absolute_expires_at)
+        ):
+            raise CoordinationCorruptError("Coordination state is invalid.")
+        return session
+
+    def _validate_security_session_indexes_locked(self) -> None:
+        expected_references: Dict[str, str] = {}
+        expected_principals: Dict[str, set[str]] = {}
+        expected_principal_types: Dict[SecurityPrincipalType, set[str]] = {}
+        for digest, session in self._security_sessions.items():
+            self._validate_security_session_locked(digest)
+            expected_references[session.session_reference] = digest
+            expected_principals.setdefault(session.principal_index, set()).add(digest)
+            expected_principal_types.setdefault(session.principal_type, set()).add(digest)
+        if (
+            self._security_digest_by_reference != expected_references
+            or self._security_digests_by_principal != expected_principals
+            or self._security_digests_by_principal_type != expected_principal_types
+        ):
+            raise CoordinationCorruptError("Coordination state is invalid.")
+
+    def _validate_oidc_transaction_locked(self, state_index: str) -> _OidcTransactionRecord:
+        transaction = self._oidc_transactions.get(state_index)
+        if (
+            transaction is None
+            or self._oidc_transaction_expiries.expiry_for(state_index) != transaction.expires_at
+        ):
+            raise CoordinationCorruptError("Coordination state is invalid.")
+        return transaction
+
+    def _remove_security_session_locked(self, digest: str, *, update_heap: bool = True) -> None:
+        session = self._security_sessions.pop(digest)
+        self._security_digest_by_reference.pop(session.session_reference, None)
+        principal = self._security_digests_by_principal[session.principal_index]
+        principal.discard(digest)
+        if not principal:
+            self._security_digests_by_principal.pop(session.principal_index, None)
+        principal_type = self._security_digests_by_principal_type[session.principal_type]
+        principal_type.discard(digest)
+        if not principal_type:
+            self._security_digests_by_principal_type.pop(session.principal_type, None)
+        if update_heap:
+            self._security_session_expiries.discard(digest)
+
+    def _add_security_session_locked(self, session: SecuritySessionState) -> None:
+        digest = session.session_digest
+        self._security_sessions[digest] = session
+        self._security_digest_by_reference[session.session_reference] = digest
+        self._security_digests_by_principal.setdefault(session.principal_index, set()).add(digest)
+        self._security_digests_by_principal_type.setdefault(session.principal_type, set()).add(
+            digest
+        )
+        self._security_session_expiries.replace(
+            digest,
+            min(session.idle_expires_at, session.absolute_expires_at),
+        )
+
+    def _cleanup_security_sessions_locked(self, now: float) -> None:
+        session_due = self._security_session_expiries.plan_due(
+            self._security_sessions,
+            now,
+            lambda item: min(item.idle_expires_at, item.absolute_expires_at),
+            self._MAX_PRUNED_PER_MUTATION + 1,
+        )
+        if len(session_due) > self._MAX_PRUNED_PER_MUTATION:
+            raise CoordinationReconciliationRequiredError("Reconciliation is required.")
+        replay_due = self._security_session_replay_expiries.plan_due(
+            self._security_session_replays,
+            now,
+            lambda item: item.expires_at,
+            self._MAX_PRUNED_PER_MUTATION + 1 - len(session_due),
+        )
+        if len(session_due) + len(replay_due) > self._MAX_PRUNED_PER_MUTATION:
+            raise CoordinationReconciliationRequiredError("Reconciliation is required.")
+        for digest in session_due:
+            self._validate_security_session_locked(digest)
+        for digest in session_due:
+            self._remove_security_session_locked(digest)
+        for operation_key in replay_due:
+            self._security_session_replays.pop(operation_key, None)
+            self._security_session_replay_expiries.discard(operation_key)
+
+    def _cleanup_security_attempts_locked(
+        self, category: SecurityAttemptCategory, now: float
+    ) -> None:
+        records = self._security_attempts[category]
+        replays = self._security_attempt_replays[category]
+        record_due = self._security_attempt_expiries[category].plan_due(
+            records,
+            now,
+            lambda item: item.expires_at,
+            self._MAX_PRUNED_PER_MUTATION + 1,
+        )
+        if len(record_due) > self._MAX_PRUNED_PER_MUTATION:
+            raise CoordinationReconciliationRequiredError("Reconciliation is required.")
+        replay_due = self._security_attempt_replay_expiries[category].plan_due(
+            replays,
+            now,
+            lambda item: item.expires_at,
+            self._MAX_PRUNED_PER_MUTATION + 1 - len(record_due),
+        )
+        if len(record_due) + len(replay_due) > self._MAX_PRUNED_PER_MUTATION:
+            raise CoordinationReconciliationRequiredError("Reconciliation is required.")
+        for client_index in record_due:
+            records.pop(client_index, None)
+            self._security_attempt_expiries[category].discard(client_index)
+        for operation_key in replay_due:
+            replays.pop(operation_key, None)
+            self._security_attempt_replay_expiries[category].discard(operation_key)
+
+    def _cleanup_oidc_transactions_locked(self, now: float) -> None:
+        transaction_due = self._oidc_transaction_expiries.plan_due(
+            self._oidc_transactions,
+            now,
+            lambda item: item.expires_at,
+            self._MAX_PRUNED_PER_MUTATION + 1,
+        )
+        if len(transaction_due) > self._MAX_PRUNED_PER_MUTATION:
+            raise CoordinationReconciliationRequiredError("Reconciliation is required.")
+        replay_due = self._oidc_transaction_replay_expiries.plan_due(
+            self._oidc_transaction_replays,
+            now,
+            lambda item: item.expires_at,
+            self._MAX_PRUNED_PER_MUTATION + 1 - len(transaction_due),
+        )
+        if len(transaction_due) + len(replay_due) > self._MAX_PRUNED_PER_MUTATION:
+            raise CoordinationReconciliationRequiredError("Reconciliation is required.")
+        for state_index in transaction_due:
+            self._oidc_transactions.pop(state_index, None)
+            self._oidc_transaction_expiries.discard(state_index)
+        for operation_key in replay_due:
+            self._oidc_transaction_replays.pop(operation_key, None)
+            self._oidc_transaction_replay_expiries.discard(operation_key)
+
+    def _store_security_replay_locked(
+        self,
+        mapping: Dict[str, _Replay],
+        heap: _IndexedExpiryHeap,
+        operation_key: str,
+        fingerprint: object,
+        result: object,
+        expires_at: float,
+    ) -> bool:
+        if operation_key not in mapping and len(mapping) >= self._security_replay_limit:
+            return False
+        mapping[operation_key] = _Replay(fingerprint, result, expires_at)
+        heap.replace(operation_key, expires_at)
+        return True
+
+    @staticmethod
+    def _session_issue_fingerprint(request: SessionIssueRequest) -> tuple[object, ...]:
+        return (
+            request.session_digest,
+            request.session_reference,
+            request.principal_index,
+            request.principal_type,
+            request.payload,
+            request.idle_ttl_seconds,
+            request.absolute_ttl_seconds,
+            request.fencing_epoch,
+        )
+
+    @staticmethod
+    def _session_from_issue(request: SessionIssueRequest, now: float) -> SecuritySessionState:
+        return SecuritySessionState(
+            request.session_digest,
+            request.session_reference,
+            request.principal_index,
+            request.principal_type,
+            request.payload,
+            now,
+            now,
+            now + request.idle_ttl_seconds,
+            now + request.absolute_ttl_seconds,
+        )
+
+    @staticmethod
+    def _same_security_session_evidence(
+        current: SecuritySessionState,
+        original: SecuritySessionState | None,
+    ) -> bool:
+        return original is not None and (
+            current.session_digest,
+            current.session_reference,
+            current.principal_index,
+            current.principal_type,
+            current.payload,
+            current.issued_at,
+            current.absolute_expires_at,
+        ) == (
+            original.session_digest,
+            original.session_reference,
+            original.principal_index,
+            original.principal_type,
+            original.payload,
+            original.issued_at,
+            original.absolute_expires_at,
         )
 
     async def get(self, key: str) -> Optional[Any]:
@@ -1102,6 +1543,631 @@ class InMemoryStateStore(BaseStateStore):
                 result,
                 expires_at,
             )
+            return result
+
+    async def issue_security_session(self, request: SessionIssueRequest) -> SessionMutationResult:
+        async with self._async_lock:
+            self._ensure_open_locked()
+            denial = self._security_epoch_denial_locked(request.fencing_epoch)
+            if denial is not None:
+                return SessionMutationResult(False, None, denial)
+            now = self._security_now_locked()
+            try:
+                self._cleanup_security_sessions_locked(now)
+            except CoordinationReconciliationRequiredError:
+                return SessionMutationResult(False, None, "reconciliation_required")
+
+            operation_key = f"issue:{request.operation_id}"
+            fingerprint = self._session_issue_fingerprint(request)
+            replay = self._security_session_replays.get(operation_key)
+            if replay is not None:
+                if replay.fingerprint != fingerprint:
+                    return SessionMutationResult(False, None, "conflict")
+                result = replay.result
+                assert isinstance(result, SessionMutationResult)
+                if result.applied:
+                    current = self._security_sessions.get(request.session_digest)
+                    if current is None or not self._same_security_session_evidence(
+                        current, result.session
+                    ):
+                        return SessionMutationResult(False, None, "conflict")
+                    current = self._validate_security_session_locked(request.session_digest)
+                    return SessionMutationResult(True, current, idempotent=True)
+                return SessionMutationResult(
+                    result.applied,
+                    result.session,
+                    result.reason,
+                    idempotent=True,
+                )
+
+            collision_digest = request.session_digest in self._security_sessions
+            collision_reference = self._security_digest_by_reference.get(request.session_reference)
+            if collision_digest:
+                self._validate_security_session_locked(request.session_digest)
+            if collision_reference is not None:
+                self._validate_security_session_locked(collision_reference)
+            if collision_digest or collision_reference is not None:
+                result = SessionMutationResult(False, None, "conflict")
+                if not self._store_security_replay_locked(
+                    self._security_session_replays,
+                    self._security_session_replay_expiries,
+                    operation_key,
+                    fingerprint,
+                    result,
+                    now + request.absolute_ttl_seconds,
+                ):
+                    return SessionMutationResult(False, None, "reconciliation_required")
+                return result
+            if len(self._security_sessions) >= self._security_session_limit:
+                result = SessionMutationResult(False, None, "capacity")
+                if not self._store_security_replay_locked(
+                    self._security_session_replays,
+                    self._security_session_replay_expiries,
+                    operation_key,
+                    fingerprint,
+                    result,
+                    now + request.absolute_ttl_seconds,
+                ):
+                    return SessionMutationResult(False, None, "reconciliation_required")
+                return result
+
+            session = self._session_from_issue(request, now)
+            result = SessionMutationResult(True, session)
+            if not self._store_security_replay_locked(
+                self._security_session_replays,
+                self._security_session_replay_expiries,
+                operation_key,
+                fingerprint,
+                result,
+                session.absolute_expires_at,
+            ):
+                return SessionMutationResult(False, None, "reconciliation_required")
+            self._add_security_session_locked(session)
+            return result
+
+    async def resolve_security_session(
+        self, request: SessionResolveRequest
+    ) -> SessionResolveResult:
+        async with self._async_lock:
+            self._ensure_open_locked()
+            denial = self._security_epoch_denial_locked(request.fencing_epoch)
+            if denial is not None:
+                return SessionResolveResult(False, None, denial)
+            now = self._security_now_locked()
+            existing = self._security_sessions.get(request.session_digest)
+            was_expired = (
+                existing is not None
+                and min(existing.idle_expires_at, existing.absolute_expires_at) <= now
+            )
+            try:
+                self._cleanup_security_sessions_locked(now)
+            except CoordinationReconciliationRequiredError:
+                return SessionResolveResult(False, None, "reconciliation_required")
+
+            operation_key = f"resolve:{request.operation_id}"
+            fingerprint = (
+                request.session_digest,
+                request.idle_ttl_seconds,
+                request.fencing_epoch,
+            )
+            replay = self._security_session_replays.get(operation_key)
+            if replay is not None:
+                if replay.fingerprint != fingerprint:
+                    return SessionResolveResult(False, None, "reconciliation_required")
+                result = replay.result
+                assert isinstance(result, SessionResolveResult)
+                if result.resolved:
+                    current = self._security_sessions.get(request.session_digest)
+                    if current is None:
+                        return SessionResolveResult(False, None, "not_found")
+                    current = self._validate_security_session_locked(request.session_digest)
+                    return SessionResolveResult(True, current, idempotent=True)
+                return SessionResolveResult(
+                    result.resolved,
+                    result.session,
+                    result.reason,
+                    idempotent=True,
+                )
+
+            session = self._security_sessions.get(request.session_digest)
+            if session is None:
+                result = SessionResolveResult(
+                    False,
+                    None,
+                    "expired" if was_expired else "not_found",
+                )
+                if not self._store_security_replay_locked(
+                    self._security_session_replays,
+                    self._security_session_replay_expiries,
+                    operation_key,
+                    fingerprint,
+                    result,
+                    now + request.idle_ttl_seconds,
+                ):
+                    return SessionResolveResult(False, None, "reconciliation_required")
+                return result
+
+            session = self._validate_security_session_locked(request.session_digest)
+            idle_expires_at = min(
+                now + request.idle_ttl_seconds,
+                session.absolute_expires_at,
+            )
+            if idle_expires_at <= now:
+                raise CoordinationCorruptError("Coordination state is invalid.")
+            touched = SecuritySessionState(
+                session.session_digest,
+                session.session_reference,
+                session.principal_index,
+                session.principal_type,
+                session.payload,
+                session.issued_at,
+                now,
+                idle_expires_at,
+                session.absolute_expires_at,
+            )
+            result = SessionResolveResult(True, touched)
+            if not self._store_security_replay_locked(
+                self._security_session_replays,
+                self._security_session_replay_expiries,
+                operation_key,
+                fingerprint,
+                result,
+                touched.idle_expires_at,
+            ):
+                return SessionResolveResult(False, None, "reconciliation_required")
+            self._security_sessions[request.session_digest] = touched
+            self._security_session_expiries.replace(
+                request.session_digest,
+                min(touched.idle_expires_at, touched.absolute_expires_at),
+            )
+            return result
+
+    async def rotate_security_session(self, request: SessionRotateRequest) -> SessionMutationResult:
+        async with self._async_lock:
+            self._ensure_open_locked()
+            denial = self._security_epoch_denial_locked(request.fencing_epoch)
+            if denial is not None:
+                return SessionMutationResult(False, None, denial)
+            now = self._security_now_locked()
+            try:
+                self._cleanup_security_sessions_locked(now)
+            except CoordinationReconciliationRequiredError:
+                return SessionMutationResult(False, None, "reconciliation_required")
+
+            operation_key = f"rotate:{request.operation_id}"
+            fingerprint = (
+                request.current_session_digest,
+                self._session_issue_fingerprint(request.replacement),
+                request.fencing_epoch,
+            )
+            replay = self._security_session_replays.get(operation_key)
+            if replay is not None:
+                if replay.fingerprint != fingerprint:
+                    return SessionMutationResult(False, None, "conflict")
+                result = replay.result
+                assert isinstance(result, SessionMutationResult)
+                if result.applied:
+                    current = self._security_sessions.get(request.replacement.session_digest)
+                    if current is None or not self._same_security_session_evidence(
+                        current, result.session
+                    ):
+                        return SessionMutationResult(False, None, "not_found")
+                    current = self._validate_security_session_locked(
+                        request.replacement.session_digest
+                    )
+                    return SessionMutationResult(True, current, idempotent=True)
+                return SessionMutationResult(
+                    result.applied,
+                    result.session,
+                    result.reason,
+                    idempotent=True,
+                )
+
+            current = self._security_sessions.get(request.current_session_digest)
+            if current is None:
+                result = SessionMutationResult(False, None, "not_found")
+                if not self._store_security_replay_locked(
+                    self._security_session_replays,
+                    self._security_session_replay_expiries,
+                    operation_key,
+                    fingerprint,
+                    result,
+                    now + request.replacement.absolute_ttl_seconds,
+                ):
+                    return SessionMutationResult(False, None, "reconciliation_required")
+                return result
+            current = self._validate_security_session_locked(request.current_session_digest)
+            replacement_digest = self._security_sessions.get(request.replacement.session_digest)
+            replacement_reference_digest = self._security_digest_by_reference.get(
+                request.replacement.session_reference
+            )
+            if replacement_digest is not None:
+                self._validate_security_session_locked(request.replacement.session_digest)
+            if (
+                replacement_reference_digest is not None
+                and replacement_reference_digest != request.current_session_digest
+            ):
+                self._validate_security_session_locked(replacement_reference_digest)
+            if replacement_digest is not None or (
+                replacement_reference_digest is not None
+                and replacement_reference_digest != request.current_session_digest
+            ):
+                result = SessionMutationResult(False, None, "conflict")
+                if not self._store_security_replay_locked(
+                    self._security_session_replays,
+                    self._security_session_replay_expiries,
+                    operation_key,
+                    fingerprint,
+                    result,
+                    now + request.replacement.absolute_ttl_seconds,
+                ):
+                    return SessionMutationResult(False, None, "reconciliation_required")
+                return result
+
+            replacement = self._session_from_issue(request.replacement, now)
+            result = SessionMutationResult(True, replacement)
+            if not self._store_security_replay_locked(
+                self._security_session_replays,
+                self._security_session_replay_expiries,
+                operation_key,
+                fingerprint,
+                result,
+                replacement.absolute_expires_at,
+            ):
+                return SessionMutationResult(False, None, "reconciliation_required")
+            self._remove_security_session_locked(current.session_digest)
+            self._add_security_session_locked(replacement)
+            return result
+
+    async def revoke_security_sessions(self, request: SessionRevokeRequest) -> SessionRevokeResult:
+        async with self._async_lock:
+            self._ensure_open_locked()
+            self._require_security_epoch_locked(request.fencing_epoch)
+            now = self._security_now_locked()
+            self._cleanup_security_sessions_locked(now)
+            self._validate_security_session_indexes_locked()
+            operation_key = f"revoke:{request.operation_id}"
+            fingerprint = (
+                request.target,
+                request.target_value,
+                request.fencing_epoch,
+                request.replay_ttl_seconds,
+            )
+            replay = self._security_session_replays.get(operation_key)
+            if replay is not None:
+                if replay.fingerprint != fingerprint:
+                    raise CoordinationUnavailableError("Coordination operation conflicts.")
+                result = replay.result
+                assert isinstance(result, SessionRevokeResult)
+                return SessionRevokeResult(result.revoked_count, idempotent=True)
+
+            if request.target is SessionRevokeTarget.DIGEST:
+                digests = (
+                    {request.target_value}
+                    if request.target_value in self._security_sessions
+                    else set()
+                )
+            elif request.target is SessionRevokeTarget.REFERENCE:
+                digest = self._security_digest_by_reference.get(request.target_value)
+                digests = {digest} if digest is not None else set()
+            elif request.target is SessionRevokeTarget.PRINCIPAL:
+                digests = set(self._security_digests_by_principal.get(request.target_value, ()))
+            else:
+                principal_type = SecurityPrincipalType(request.target_value)
+                digests = set(self._security_digests_by_principal_type.get(principal_type, ()))
+            for digest in sorted(digests):
+                self._validate_security_session_locked(digest)
+
+            result = SessionRevokeResult(len(digests))
+            if not self._store_security_replay_locked(
+                self._security_session_replays,
+                self._security_session_replay_expiries,
+                operation_key,
+                fingerprint,
+                result,
+                now + request.replay_ttl_seconds,
+            ):
+                raise CoordinationReconciliationRequiredError("Reconciliation is required.")
+            for digest in sorted(digests):
+                self._remove_security_session_locked(digest)
+            return result
+
+    async def list_security_sessions(self, request: SessionListRequest) -> SessionPage:
+        async with self._async_lock:
+            self._ensure_open_locked()
+            self._require_security_epoch_locked(request.fencing_epoch)
+            now = self._security_now_locked()
+            self._cleanup_security_sessions_locked(now)
+            self._validate_security_session_indexes_locked()
+            sessions = list(self._security_sessions.values())
+            sessions.sort(key=lambda item: item.session_reference)
+            if request.after_reference is not None:
+                sessions = [
+                    item for item in sessions if item.session_reference >= request.after_reference
+                ]
+            page = tuple(sessions[: request.limit])
+            next_reference = (
+                sessions[request.limit].session_reference if len(sessions) > request.limit else None
+            )
+            return SessionPage(page, next_reference)
+
+    async def reserve_security_attempt(
+        self, request: AttemptReservationRequest
+    ) -> AttemptReservationDecision:
+        async with self._async_lock:
+            self._ensure_open_locked()
+            denial = self._security_epoch_denial_locked(request.fencing_epoch)
+            if denial is not None:
+                return AttemptReservationDecision(False, 0, 0, denial)
+            now = self._security_now_locked()
+            try:
+                self._cleanup_security_attempts_locked(request.category, now)
+            except CoordinationReconciliationRequiredError:
+                return AttemptReservationDecision(False, 0, 0, "reconciliation_required")
+
+            records = self._security_attempts[request.category]
+            replays = self._security_attempt_replays[request.category]
+            replay_heap = self._security_attempt_replay_expiries[request.category]
+            operation_key = f"reserve:{request.operation_id}"
+            fingerprint = (
+                request.client_index,
+                request.limit,
+                request.window_seconds,
+                request.fencing_epoch,
+            )
+            replay = replays.get(operation_key)
+            if replay is not None:
+                if replay.fingerprint != fingerprint:
+                    return AttemptReservationDecision(False, 0, 0, "reconciliation_required")
+                result = replay.result
+                assert isinstance(result, AttemptReservationDecision)
+                return AttemptReservationDecision(
+                    result.allowed,
+                    result.remaining_attempts,
+                    result.retry_after_seconds,
+                    result.reason,
+                    idempotent=True,
+                )
+
+            record = records.get(request.client_index)
+            if (
+                record is not None
+                and self._security_attempt_expiries[request.category].expiry_for(
+                    request.client_index
+                )
+                != record.expires_at
+            ):
+                raise CoordinationCorruptError("Coordination state is invalid.")
+            expires_at = record.expires_at if record is not None else now + request.window_seconds
+            if record is None and len(records) >= self._security_attempt_limit:
+                result = AttemptReservationDecision(False, 0, 0, "capacity")
+            elif record is not None and record.count >= request.limit:
+                result = AttemptReservationDecision(
+                    False,
+                    0,
+                    max(1, math.ceil(record.expires_at - now)),
+                    "limited",
+                )
+            else:
+                count = 1 if record is None else record.count + 1
+                result = AttemptReservationDecision(
+                    True,
+                    max(0, request.limit - count),
+                    0,
+                )
+            if not self._store_security_replay_locked(
+                replays,
+                replay_heap,
+                operation_key,
+                fingerprint,
+                result,
+                expires_at,
+            ):
+                return AttemptReservationDecision(False, 0, 0, "reconciliation_required")
+            if result.allowed:
+                records[request.client_index] = _SecurityAttemptRecord(
+                    1 if record is None else record.count + 1,
+                    expires_at,
+                )
+                self._security_attempt_expiries[request.category].replace(
+                    request.client_index,
+                    expires_at,
+                )
+            return result
+
+    async def clear_security_attempts(self, request: AttemptClearRequest) -> AttemptClearResult:
+        async with self._async_lock:
+            self._ensure_open_locked()
+            self._require_security_epoch_locked(request.fencing_epoch)
+            now = self._security_now_locked()
+            self._cleanup_security_attempts_locked(request.category, now)
+            records = self._security_attempts[request.category]
+            replays = self._security_attempt_replays[request.category]
+            replay_heap = self._security_attempt_replay_expiries[request.category]
+            operation_key = f"clear:{request.operation_id}"
+            fingerprint = (request.client_index, request.fencing_epoch)
+            replay = replays.get(operation_key)
+            if replay is not None:
+                if replay.fingerprint != fingerprint:
+                    raise CoordinationUnavailableError("Coordination operation conflicts.")
+                result = replay.result
+                assert isinstance(result, AttemptClearResult)
+                return AttemptClearResult(result.cleared, idempotent=True)
+
+            record = records.get(request.client_index)
+            if (
+                record is not None
+                and self._security_attempt_expiries[request.category].expiry_for(
+                    request.client_index
+                )
+                != record.expires_at
+            ):
+                raise CoordinationCorruptError("Coordination state is invalid.")
+            result = AttemptClearResult(record is not None)
+            expires_at = (
+                record.expires_at
+                if record is not None
+                else now + MIN_SECURITY_ATTEMPT_WINDOW_SECONDS
+            )
+            if not self._store_security_replay_locked(
+                replays,
+                replay_heap,
+                operation_key,
+                fingerprint,
+                result,
+                expires_at,
+            ):
+                raise CoordinationReconciliationRequiredError("Reconciliation is required.")
+            if record is not None:
+                records.pop(request.client_index, None)
+                self._security_attempt_expiries[request.category].discard(request.client_index)
+            return result
+
+    async def create_oidc_transaction(
+        self, request: OidcTransactionCreateRequest
+    ) -> TransactionCreateResult:
+        async with self._async_lock:
+            self._ensure_open_locked()
+            denial = self._security_epoch_denial_locked(request.fencing_epoch)
+            if denial is not None:
+                return TransactionCreateResult(False, denial)
+            now = self._security_now_locked()
+            try:
+                self._cleanup_oidc_transactions_locked(now)
+            except CoordinationReconciliationRequiredError:
+                return TransactionCreateResult(False, "reconciliation_required")
+
+            operation_key = f"create:{request.operation_id}"
+            fingerprint = (
+                request.state_index,
+                request.browser_index,
+                request.payload,
+                request.ttl_seconds,
+                request.fencing_epoch,
+            )
+            replay = self._oidc_transaction_replays.get(operation_key)
+            if replay is not None:
+                if replay.fingerprint != fingerprint:
+                    return TransactionCreateResult(False, "conflict")
+                result = replay.result
+                assert isinstance(result, TransactionCreateResult)
+                if result.applied:
+                    expected = _OidcTransactionRecord(
+                        request.browser_index,
+                        request.payload,
+                        replay.expires_at,
+                    )
+                    if self._oidc_transactions.get(request.state_index) != expected:
+                        return TransactionCreateResult(False, "conflict")
+                    self._validate_oidc_transaction_locked(request.state_index)
+                return TransactionCreateResult(
+                    result.applied,
+                    result.reason,
+                    idempotent=True,
+                )
+
+            if request.state_index in self._oidc_transactions:
+                self._validate_oidc_transaction_locked(request.state_index)
+                result = TransactionCreateResult(False, "conflict")
+            elif len(self._oidc_transactions) >= self._oidc_transaction_limit:
+                result = TransactionCreateResult(False, "capacity")
+            else:
+                result = TransactionCreateResult(True)
+            expires_at = now + request.ttl_seconds
+            if not self._store_security_replay_locked(
+                self._oidc_transaction_replays,
+                self._oidc_transaction_replay_expiries,
+                operation_key,
+                fingerprint,
+                result,
+                expires_at,
+            ):
+                return TransactionCreateResult(False, "reconciliation_required")
+            if result.applied:
+                self._oidc_transactions[request.state_index] = _OidcTransactionRecord(
+                    request.browser_index,
+                    request.payload,
+                    expires_at,
+                )
+                self._oidc_transaction_expiries.replace(
+                    request.state_index,
+                    expires_at,
+                )
+            return result
+
+    async def consume_oidc_transaction(
+        self, request: OidcTransactionConsumeRequest
+    ) -> OidcTransactionConsumeResult:
+        async with self._async_lock:
+            self._ensure_open_locked()
+            denial = self._security_epoch_denial_locked(request.fencing_epoch)
+            if denial is not None:
+                return OidcTransactionConsumeResult(False, None, denial)
+            now = self._security_now_locked()
+            existing = self._oidc_transactions.get(request.state_index)
+            if existing is not None:
+                existing = self._validate_oidc_transaction_locked(request.state_index)
+            was_expired = existing is not None and existing.expires_at <= now
+            try:
+                self._cleanup_oidc_transactions_locked(now)
+            except CoordinationReconciliationRequiredError:
+                return OidcTransactionConsumeResult(False, None, "reconciliation_required")
+
+            operation_key = f"consume:{request.operation_id}"
+            fingerprint = (
+                request.state_index,
+                request.browser_index,
+                request.fencing_epoch,
+            )
+            replay = self._oidc_transaction_replays.get(operation_key)
+            if replay is not None:
+                if replay.fingerprint != fingerprint:
+                    return OidcTransactionConsumeResult(False, None, "reconciliation_required")
+                result = replay.result
+                assert isinstance(result, OidcTransactionConsumeResult)
+                if result.consumed:
+                    return OidcTransactionConsumeResult(
+                        False,
+                        None,
+                        "not_found",
+                        idempotent=True,
+                    )
+                return OidcTransactionConsumeResult(
+                    result.consumed,
+                    result.payload,
+                    result.reason,
+                    idempotent=True,
+                )
+
+            transaction = self._oidc_transactions.get(request.state_index)
+            if transaction is None:
+                result = OidcTransactionConsumeResult(
+                    False,
+                    None,
+                    "expired" if was_expired else "not_found",
+                )
+                expires_at = now + MAX_OIDC_TRANSACTION_TTL_SECONDS
+            elif not hmac.compare_digest(
+                transaction.browser_index,
+                request.browser_index,
+            ):
+                result = OidcTransactionConsumeResult(False, None, "browser_mismatch")
+                expires_at = transaction.expires_at
+            else:
+                result = OidcTransactionConsumeResult(True, transaction.payload)
+                expires_at = transaction.expires_at
+            if not self._store_security_replay_locked(
+                self._oidc_transaction_replays,
+                self._oidc_transaction_replay_expiries,
+                operation_key,
+                fingerprint,
+                result,
+                expires_at,
+            ):
+                return OidcTransactionConsumeResult(False, None, "reconciliation_required")
+            if result.consumed:
+                self._oidc_transactions.pop(request.state_index, None)
+                self._oidc_transaction_expiries.discard(request.state_index)
             return result
 
     async def close(self) -> None:
