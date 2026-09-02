@@ -7,6 +7,7 @@ state-store import can re-export this class without creating a cycle.
 from __future__ import annotations
 
 import asyncio
+import base64
 import hashlib
 import importlib
 import math
@@ -38,6 +39,20 @@ from core.coordination import (
     validate_epoch,
     validate_operation_id,
 )
+from core.security_coordination import (
+    MAX_SECURITY_PAGE_SIZE,
+    SecurityPrincipalType,
+    SecuritySessionState,
+    SessionIssueRequest,
+    SessionListRequest,
+    SessionMutationResult,
+    SessionPage,
+    SessionResolveRequest,
+    SessionResolveResult,
+    SessionRevokeRequest,
+    SessionRevokeResult,
+    SessionRotateRequest,
+)
 
 _SCHEMA = b"1"
 _THIRTY_DAYS_MS = 30 * 86_400 * 1000
@@ -46,6 +61,10 @@ _MAX_CLEANUP = 256
 _MAX_INTEGER_TEXT = "9223372036854775807"
 _QUOTA_RATE_WINDOW_MS = 60_000
 _QUOTA_MONTHLY_WINDOW_MS = _THIRTY_DAYS_MS
+_DEFAULT_SECURITY_SESSION_LIMIT = 10_000
+_DEFAULT_SECURITY_ATTEMPT_LIMIT = 100_000
+_DEFAULT_OIDC_TRANSACTION_LIMIT = 1_000
+_DEFAULT_SECURITY_REPLAY_LIMIT = 100_000
 _CORRUPT_DRIVER_ERROR_MARKERS = (
     "COORDINATION_CORRUPT",
     "WRONGTYPE",
@@ -1131,6 +1150,425 @@ return {'1', 'ok', released, '0'}
 """
 )
 
+
+_SECURITY_SESSION_COMMON = r"""
+local function valid_integer(value)
+  return value and (value == '0' or string.match(value, '^[1-9][0-9]*$'))
+    and (#value < 16 or (#value == 16 and value <= '9007199254740991'))
+end
+local function ready_epoch(expected)
+  local marker, encoded = redis.call('GET', KEYS[2]), redis.call('GET', KEYS[1])
+  if marker ~= '1|initialized' or not encoded or redis.call('PTTL', KEYS[2]) ~= -1
+    or redis.call('PTTL', KEYS[1]) ~= -1 then return nil, nil end
+  local schema, epoch, state = string.match(encoded, '^([^|]+)|([^|]+)|([^|]+)$')
+  if schema ~= '1' or not valid_integer(epoch)
+    or (state ~= 'ready' and state ~= 'reconciling') then return nil, nil end
+  return epoch == expected and state == 'ready', state
+end
+local function now_milliseconds()
+  local clock = redis.call('TIME')
+  return (clock[1] * 1000) + math.floor(clock[2] / 1000)
+end
+local function parse_session(value)
+  if not value then return nil end
+  local schema, reference, principal, principal_type, payload, issued, last_seen, idle_expiry,
+    absolute_expiry = string.match(value,
+      '^([^|]+)|([^|]+)|([^|]+)|([^|]+)|([^|]+)|([^|]+)|([^|]+)|([^|]+)|([^|]+)$')
+  if schema ~= '1' or not reference or not principal or not principal_type or not payload
+    or not valid_integer(issued) or not valid_integer(last_seen)
+    or not valid_integer(idle_expiry) or not valid_integer(absolute_expiry)
+    or tonumber(issued) > tonumber(last_seen) or tonumber(last_seen) >= tonumber(idle_expiry)
+    or tonumber(idle_expiry) > tonumber(absolute_expiry) then return nil end
+  return {reference=reference, principal=principal, principal_type=principal_type, payload=payload,
+    issued=issued, last_seen=last_seen, idle_expiry=idle_expiry,
+    absolute_expiry=absolute_expiry}
+end
+local function validate_session(digest, value)
+  local session = parse_session(value)
+  if not session then return nil end
+  local expected_expiry = string.format('%.0f',
+    math.min(tonumber(session.idle_expiry), tonumber(session.absolute_expiry)))
+  if redis.call('ZSCORE', KEYS[4], digest) ~= expected_expiry
+    or redis.call('HGET', KEYS[5], session.reference) ~= digest
+    or not redis.call('ZSCORE', KEYS[6], session.reference)
+    or not redis.call('ZSCORE', KEYS[7], session.principal .. ':' .. digest)
+    or not redis.call('ZSCORE', KEYS[8], session.principal_type .. ':' .. digest) then return nil end
+  return session
+end
+local function valid_replay(value, score)
+  if not value or not score then return false end
+  local schema, fingerprint, digest, status, reason, issued, absolute_expiry, expiry =
+    string.match(value, '^([^|]+)|([^|]+)|([^|]*)|([^|]+)|([^|]*)|([^|]+)|([^|]+)|([^|]+)$')
+  return schema == '1' and fingerprint and digest and status and reason ~= nil
+    and valid_integer(issued) and valid_integer(absolute_expiry) and valid_integer(expiry)
+    and expiry == score
+end
+local function plan_cleanup(now_ms)
+  local session_count = redis.call('HLEN', KEYS[3])
+  if session_count ~= redis.call('ZCARD', KEYS[4])
+    or session_count ~= redis.call('HLEN', KEYS[5])
+    or session_count ~= redis.call('ZCARD', KEYS[6])
+    or session_count ~= redis.call('ZCARD', KEYS[7])
+    or session_count ~= redis.call('ZCARD', KEYS[8])
+    or redis.call('HLEN', KEYS[9]) ~= redis.call('ZCARD', KEYS[10]) then return nil end
+  local due = redis.call('ZRANGEBYSCORE', KEYS[4], '-inf', now_ms, 'LIMIT', 0, 257)
+  local replay_due = redis.call('ZRANGEBYSCORE', KEYS[10], '-inf', now_ms, 'LIMIT', 0, 257)
+  if #due > 256 or #replay_due > 256 or #due + #replay_due > 256 then return false end
+  for _, digest in ipairs(due) do
+    if not validate_session(digest, redis.call('HGET', KEYS[3], digest)) then return nil end
+  end
+  for _, operation_id in ipairs(replay_due) do
+    if not valid_replay(redis.call('HGET', KEYS[9], operation_id),
+      redis.call('ZSCORE', KEYS[10], operation_id)) then return nil end
+  end
+  return {due=due, replay_due=replay_due}
+end
+local function delete_session(digest, session)
+  redis.call('HDEL', KEYS[3], digest)
+  redis.call('ZREM', KEYS[4], digest)
+  redis.call('HDEL', KEYS[5], session.reference)
+  redis.call('ZREM', KEYS[6], session.reference)
+  redis.call('ZREM', KEYS[7], session.principal .. ':' .. digest)
+  redis.call('ZREM', KEYS[8], session.principal_type .. ':' .. digest)
+end
+local function apply_cleanup(plan)
+  for _, digest in ipairs(plan.due) do
+    local session = parse_session(redis.call('HGET', KEYS[3], digest))
+    delete_session(digest, session)
+  end
+  if #plan.replay_due > 0 then
+    redis.call('HDEL', KEYS[9], unpack(plan.replay_due))
+    redis.call('ZREM', KEYS[10], unpack(plan.replay_due))
+  end
+end
+local function session_reply(status, reason, idempotent, digest, session)
+  if not session then
+    return {'1', status, reason, idempotent and '1' or '0', '', '', '', '', '', '', '', '', ''}
+  end
+  return {'1', status, reason, idempotent and '1' or '0', digest, session.reference,
+    session.principal, session.principal_type, session.payload, session.issued, session.last_seen,
+    session.idle_expiry, session.absolute_expiry}
+end
+local function store_replay(operation_id, fingerprint, digest, status, reason, issued,
+    absolute_expiry, expiry)
+  redis.call('HSET', KEYS[9], operation_id, table.concat({'1', fingerprint, digest, status, reason,
+    issued, absolute_expiry, expiry}, '|'))
+  redis.call('ZADD', KEYS[10], tonumber(expiry), operation_id)
+end
+local function parse_replay(value)
+  local _, fingerprint, digest, status, reason, issued, absolute_expiry, expiry =
+    string.match(value, '^([^|]+)|([^|]+)|([^|]*)|([^|]+)|([^|]*)|([^|]+)|([^|]+)|([^|]+)$')
+  return {fingerprint=fingerprint, digest=digest, status=status, reason=reason, issued=issued,
+    absolute_expiry=absolute_expiry, expiry=expiry}
+end
+"""
+
+
+_SECURITY_SESSION_ISSUE_SCRIPT = (
+    "-- omni:security_session_issue:v1\n"
+    + _SECURITY_SESSION_COMMON
+    + r"""
+local fenced, epoch_state = ready_epoch(ARGV[1])
+if fenced == nil then return redis.error_reply('COORDINATION_CORRUPT') end
+if not fenced then return session_reply('denied', epoch_state == 'reconciling'
+  and 'reconciling' or 'stale_epoch', false, '', nil) end
+local now_ms = now_milliseconds()
+local plan = plan_cleanup(now_ms)
+if plan == nil then return redis.error_reply('COORDINATION_CORRUPT') end
+if plan == false then return session_reply('denied', 'reconciliation_required', false, '', nil) end
+local replay_value, replay_score = redis.call('HGET', KEYS[9], ARGV[9]),
+  redis.call('ZSCORE', KEYS[10], ARGV[9])
+if (replay_value or replay_score) and not valid_replay(replay_value, replay_score) then
+  return redis.error_reply('COORDINATION_CORRUPT')
+end
+local digest_value = redis.call('HGET', KEYS[3], ARGV[2])
+local reference_digest = redis.call('HGET', KEYS[5], ARGV[3])
+if digest_value and not validate_session(ARGV[2], digest_value) then
+  return redis.error_reply('COORDINATION_CORRUPT')
+end
+if reference_digest and not validate_session(reference_digest,
+  redis.call('HGET', KEYS[3], reference_digest)) then
+  return redis.error_reply('COORDINATION_CORRUPT')
+end
+-- apply validated mutation
+apply_cleanup(plan)
+if replay_score and tonumber(replay_score) <= now_ms then replay_value = nil end
+if replay_value then
+  local replay = parse_replay(replay_value)
+  if replay.fingerprint ~= ARGV[10] then return session_reply('denied', 'conflict', false, '', nil) end
+  if replay.status ~= 'applied' then return session_reply('denied', replay.reason, true, '', nil) end
+  local value = redis.call('HGET', KEYS[3], replay.digest)
+  local session = validate_session(replay.digest, value)
+  if not session or session.issued ~= replay.issued or session.absolute_expiry ~= replay.absolute_expiry
+    or replay.digest ~= ARGV[2] or session.reference ~= ARGV[3] or session.principal ~= ARGV[4]
+    or session.principal_type ~= ARGV[5] or session.payload ~= ARGV[6] then
+    return session_reply('denied', 'conflict', false, '', nil)
+  end
+  return session_reply('applied', '', true, replay.digest, session)
+end
+digest_value = redis.call('HGET', KEYS[3], ARGV[2])
+reference_digest = redis.call('HGET', KEYS[5], ARGV[3])
+local reason = ''
+if digest_value or reference_digest then reason = 'conflict'
+elseif redis.call('HLEN', KEYS[3]) >= tonumber(ARGV[11]) then reason = 'capacity'
+elseif redis.call('HLEN', KEYS[9]) >= tonumber(ARGV[12]) then reason = 'reconciliation_required' end
+local absolute_expiry = string.format('%.0f', now_ms + tonumber(ARGV[8]))
+if reason ~= '' then
+  if redis.call('HLEN', KEYS[9]) >= tonumber(ARGV[12]) then
+    return session_reply('denied', 'reconciliation_required', false, '', nil)
+  end
+  store_replay(ARGV[9], ARGV[10], '', 'denied', reason, '0', '0', absolute_expiry)
+  return session_reply('denied', reason, false, '', nil)
+end
+local issued, idle_expiry = string.format('%.0f', now_ms),
+  string.format('%.0f', now_ms + tonumber(ARGV[7]))
+local session = {reference=ARGV[3], principal=ARGV[4], principal_type=ARGV[5], payload=ARGV[6],
+  issued=issued, last_seen=issued, idle_expiry=idle_expiry, absolute_expiry=absolute_expiry}
+store_replay(ARGV[9], ARGV[10], ARGV[2], 'applied', '', issued, absolute_expiry, absolute_expiry)
+redis.call('HSET', KEYS[3], ARGV[2], table.concat({'1', ARGV[3], ARGV[4], ARGV[5], ARGV[6],
+  issued, issued, idle_expiry, absolute_expiry}, '|'))
+redis.call('ZADD', KEYS[4], tonumber(idle_expiry), ARGV[2])
+redis.call('HSET', KEYS[5], ARGV[3], ARGV[2])
+redis.call('ZADD', KEYS[6], 0, ARGV[3])
+redis.call('ZADD', KEYS[7], 0, ARGV[4] .. ':' .. ARGV[2])
+redis.call('ZADD', KEYS[8], 0, ARGV[5] .. ':' .. ARGV[2])
+return session_reply('applied', '', false, ARGV[2], session)
+"""
+)
+
+
+_SECURITY_SESSION_RESOLVE_SCRIPT = (
+    "-- omni:security_session_resolve:v1\n"
+    + _SECURITY_SESSION_COMMON
+    + r"""
+local fenced, epoch_state = ready_epoch(ARGV[1])
+if fenced == nil then return redis.error_reply('COORDINATION_CORRUPT') end
+if not fenced then return session_reply('denied', epoch_state == 'reconciling'
+  and 'reconciling' or 'stale_epoch', false, '', nil) end
+local now_ms = now_milliseconds()
+local original = redis.call('HGET', KEYS[3], ARGV[2])
+local original_session = original and validate_session(ARGV[2], original) or nil
+if original and not original_session then return redis.error_reply('COORDINATION_CORRUPT') end
+local was_expired = original_session and math.min(tonumber(original_session.idle_expiry),
+  tonumber(original_session.absolute_expiry)) <= now_ms
+local plan = plan_cleanup(now_ms)
+if plan == nil then return redis.error_reply('COORDINATION_CORRUPT') end
+if plan == false then return session_reply('denied', 'reconciliation_required', false, '', nil) end
+local replay_value, replay_score = redis.call('HGET', KEYS[9], ARGV[4]),
+  redis.call('ZSCORE', KEYS[10], ARGV[4])
+if (replay_value or replay_score) and not valid_replay(replay_value, replay_score) then
+  return redis.error_reply('COORDINATION_CORRUPT')
+end
+-- apply validated mutation
+apply_cleanup(plan)
+if replay_score and tonumber(replay_score) <= now_ms then replay_value = nil end
+if replay_value then
+  local replay = parse_replay(replay_value)
+  if replay.fingerprint ~= ARGV[5] then
+    return session_reply('denied', 'reconciliation_required', false, '', nil)
+  end
+  if replay.status ~= 'resolved' then return session_reply('denied', replay.reason, true, '', nil) end
+  local session = validate_session(ARGV[2], redis.call('HGET', KEYS[3], ARGV[2]))
+  if not session or session.issued ~= replay.issued then
+    return session_reply('denied', 'not_found', true, '', nil)
+  end
+  return session_reply('resolved', '', true, ARGV[2], session)
+end
+if redis.call('HLEN', KEYS[9]) >= tonumber(ARGV[6]) then
+  return session_reply('denied', 'reconciliation_required', false, '', nil)
+end
+local session = validate_session(ARGV[2], redis.call('HGET', KEYS[3], ARGV[2]))
+if not session then
+  local reason = was_expired and 'expired' or 'not_found'
+  local expiry = string.format('%.0f', now_ms + tonumber(ARGV[3]))
+  store_replay(ARGV[4], ARGV[5], ARGV[2], 'denied', reason, '0', '0', expiry)
+  return session_reply('denied', reason, false, '', nil)
+end
+local idle_expiry = string.format('%.0f',
+  math.min(now_ms + tonumber(ARGV[3]), tonumber(session.absolute_expiry)))
+if tonumber(idle_expiry) <= now_ms then return redis.error_reply('COORDINATION_CORRUPT') end
+session.last_seen, session.idle_expiry = string.format('%.0f', now_ms), idle_expiry
+store_replay(ARGV[4], ARGV[5], ARGV[2], 'resolved', '', session.issued,
+  session.absolute_expiry, idle_expiry)
+redis.call('HSET', KEYS[3], ARGV[2], table.concat({'1', session.reference, session.principal,
+  session.principal_type, session.payload, session.issued, session.last_seen, session.idle_expiry,
+  session.absolute_expiry}, '|'))
+redis.call('ZADD', KEYS[4], tonumber(idle_expiry), ARGV[2])
+return session_reply('resolved', '', false, ARGV[2], session)
+"""
+)
+
+
+_SECURITY_SESSION_ROTATE_SCRIPT = (
+    "-- omni:security_session_rotate:v1\n"
+    + _SECURITY_SESSION_COMMON
+    + r"""
+local fenced, epoch_state = ready_epoch(ARGV[1])
+if fenced == nil then return redis.error_reply('COORDINATION_CORRUPT') end
+if not fenced then return session_reply('denied', epoch_state == 'reconciling'
+  and 'reconciling' or 'stale_epoch', false, '', nil) end
+local now_ms = now_milliseconds()
+local plan = plan_cleanup(now_ms)
+if plan == nil then return redis.error_reply('COORDINATION_CORRUPT') end
+if plan == false then return session_reply('denied', 'reconciliation_required', false, '', nil) end
+local replay_value, replay_score = redis.call('HGET', KEYS[9], ARGV[10]),
+  redis.call('ZSCORE', KEYS[10], ARGV[10])
+if (replay_value or replay_score) and not valid_replay(replay_value, replay_score) then
+  return redis.error_reply('COORDINATION_CORRUPT')
+end
+local current_value = redis.call('HGET', KEYS[3], ARGV[2])
+local current = current_value and validate_session(ARGV[2], current_value) or nil
+if current_value and not current then return redis.error_reply('COORDINATION_CORRUPT') end
+local collision = redis.call('HGET', KEYS[3], ARGV[3])
+local reference_digest = redis.call('HGET', KEYS[5], ARGV[4])
+if collision and not validate_session(ARGV[3], collision) then
+  return redis.error_reply('COORDINATION_CORRUPT')
+end
+if reference_digest and not validate_session(reference_digest,
+  redis.call('HGET', KEYS[3], reference_digest)) then return redis.error_reply('COORDINATION_CORRUPT') end
+-- apply validated mutation
+apply_cleanup(plan)
+if replay_score and tonumber(replay_score) <= now_ms then replay_value = nil end
+if replay_value then
+  local replay = parse_replay(replay_value)
+  if replay.fingerprint ~= ARGV[11] then return session_reply('denied', 'conflict', false, '', nil) end
+  if replay.status ~= 'applied' then return session_reply('denied', replay.reason, true, '', nil) end
+  local session = validate_session(ARGV[3], redis.call('HGET', KEYS[3], ARGV[3]))
+  if not session or session.issued ~= replay.issued or session.absolute_expiry ~= replay.absolute_expiry
+    or session.reference ~= ARGV[4] or session.principal ~= ARGV[5]
+    or session.principal_type ~= ARGV[6] or session.payload ~= ARGV[7] then
+    return session_reply('denied', 'not_found', false, '', nil)
+  end
+  return session_reply('applied', '', true, ARGV[3], session)
+end
+current = validate_session(ARGV[2], redis.call('HGET', KEYS[3], ARGV[2]))
+collision = redis.call('HGET', KEYS[3], ARGV[3])
+reference_digest = redis.call('HGET', KEYS[5], ARGV[4])
+local reason = ''
+if not current then reason = 'not_found'
+elseif collision or (reference_digest and reference_digest ~= ARGV[2]) then reason = 'conflict'
+elseif redis.call('HLEN', KEYS[9]) >= tonumber(ARGV[12]) then reason = 'reconciliation_required' end
+local absolute_expiry = string.format('%.0f', now_ms + tonumber(ARGV[9]))
+if reason ~= '' then
+  if redis.call('HLEN', KEYS[9]) >= tonumber(ARGV[12]) then
+    return session_reply('denied', 'reconciliation_required', false, '', nil)
+  end
+  store_replay(ARGV[10], ARGV[11], '', 'denied', reason, '0', '0', absolute_expiry)
+  return session_reply('denied', reason, false, '', nil)
+end
+local issued, idle_expiry = string.format('%.0f', now_ms),
+  string.format('%.0f', now_ms + tonumber(ARGV[8]))
+local replacement = {reference=ARGV[4], principal=ARGV[5], principal_type=ARGV[6], payload=ARGV[7],
+  issued=issued, last_seen=issued, idle_expiry=idle_expiry, absolute_expiry=absolute_expiry}
+store_replay(ARGV[10], ARGV[11], ARGV[3], 'applied', '', issued, absolute_expiry,
+  absolute_expiry)
+delete_session(ARGV[2], current)
+redis.call('HSET', KEYS[3], ARGV[3], table.concat({'1', ARGV[4], ARGV[5], ARGV[6], ARGV[7],
+  issued, issued, idle_expiry, absolute_expiry}, '|'))
+redis.call('ZADD', KEYS[4], tonumber(idle_expiry), ARGV[3])
+redis.call('HSET', KEYS[5], ARGV[4], ARGV[3])
+redis.call('ZADD', KEYS[6], 0, ARGV[4])
+redis.call('ZADD', KEYS[7], 0, ARGV[5] .. ':' .. ARGV[3])
+redis.call('ZADD', KEYS[8], 0, ARGV[6] .. ':' .. ARGV[3])
+return session_reply('applied', '', false, ARGV[3], replacement)
+"""
+)
+
+
+_SECURITY_SESSION_REVOKE_SCRIPT = (
+    "-- omni:security_session_revoke:v1\n"
+    + _SECURITY_SESSION_COMMON
+    + r"""
+local fenced = ready_epoch(ARGV[1])
+if fenced == nil then return redis.error_reply('COORDINATION_CORRUPT') end
+if not fenced then return redis.error_reply('COORDINATION_UNAVAILABLE') end
+local now_ms = now_milliseconds()
+local plan = plan_cleanup(now_ms)
+if plan == nil then return redis.error_reply('COORDINATION_CORRUPT') end
+if plan == false then return {'1', 'reconciliation_required', '0', '0'} end
+local replay_value, replay_score = redis.call('HGET', KEYS[9], ARGV[5]),
+  redis.call('ZSCORE', KEYS[10], ARGV[5])
+if (replay_value or replay_score) and not valid_replay(replay_value, replay_score) then
+  return redis.error_reply('COORDINATION_CORRUPT')
+end
+-- apply validated mutation
+apply_cleanup(plan)
+if replay_score and tonumber(replay_score) <= now_ms then replay_value = nil end
+if replay_value then
+  local replay = parse_replay(replay_value)
+  if replay.fingerprint ~= ARGV[6] then return redis.error_reply('COORDINATION_UNAVAILABLE') end
+  return {'1', 'ok', replay.digest, '1'}
+end
+if redis.call('HLEN', KEYS[9]) >= tonumber(ARGV[7]) then
+  return {'1', 'reconciliation_required', '0', '0'}
+end
+local digests = {}
+if ARGV[2] == 'digest' then
+  if redis.call('HGET', KEYS[3], ARGV[3]) then table.insert(digests, ARGV[3]) end
+elseif ARGV[2] == 'reference' then
+  local digest = redis.call('HGET', KEYS[5], ARGV[3])
+  if digest then table.insert(digests, digest) end
+elseif ARGV[2] == 'principal' then
+  local members = redis.call('ZRANGEBYLEX', KEYS[7], '[' .. ARGV[3] .. ':',
+    '[' .. ARGV[3] .. ':\255', 'LIMIT', 0, 257)
+  if #members > 256 then return {'1', 'reconciliation_required', '0', '0'} end
+  for _, member in ipairs(members) do table.insert(digests, string.sub(member, 66)) end
+else
+  local members = redis.call('ZRANGEBYLEX', KEYS[8], '[' .. ARGV[3] .. ':',
+    '[' .. ARGV[3] .. ':\255', 'LIMIT', 0, 257)
+  if #members > 256 then return {'1', 'reconciliation_required', '0', '0'} end
+  for _, member in ipairs(members) do table.insert(digests, string.sub(member, #ARGV[3] + 2)) end
+end
+local sessions = {}
+for index, digest in ipairs(digests) do
+  local session = validate_session(digest, redis.call('HGET', KEYS[3], digest))
+  if not session then return redis.error_reply('COORDINATION_CORRUPT') end
+  sessions[index] = session
+end
+local expiry = string.format('%.0f', now_ms + tonumber(ARGV[4]))
+store_replay(ARGV[5], ARGV[6], tostring(#digests), 'revoked', '', '0', '0', expiry)
+for index, digest in ipairs(digests) do delete_session(digest, sessions[index]) end
+return {'1', 'ok', tostring(#digests), '0'}
+"""
+)
+
+
+_SECURITY_SESSION_LIST_SCRIPT = (
+    "-- omni:security_session_list:v1\n"
+    + _SECURITY_SESSION_COMMON
+    + r"""
+local fenced = ready_epoch(ARGV[1])
+if fenced == nil then return redis.error_reply('COORDINATION_CORRUPT') end
+if not fenced then return redis.error_reply('COORDINATION_UNAVAILABLE') end
+local now_ms = now_milliseconds()
+local plan = plan_cleanup(now_ms)
+if plan == nil then return redis.error_reply('COORDINATION_CORRUPT') end
+if plan == false then return redis.error_reply('COORDINATION_RECONCILIATION_REQUIRED') end
+-- apply validated mutation
+apply_cleanup(plan)
+local minimum = ARGV[3] == '' and '-' or '[' .. ARGV[3]
+local references = redis.call('ZRANGEBYLEX', KEYS[6], minimum, '+', 'LIMIT', 0,
+  tonumber(ARGV[2]) + 1)
+local next_reference = ''
+if #references > tonumber(ARGV[2]) then
+  next_reference = references[#references]
+  table.remove(references, #references)
+end
+local reply = {'1', 'ok', next_reference, tostring(#references)}
+for _, reference in ipairs(references) do
+  local digest = redis.call('HGET', KEYS[5], reference)
+  local session = digest and validate_session(digest, redis.call('HGET', KEYS[3], digest)) or nil
+  if not session or session.reference ~= reference then return redis.error_reply('COORDINATION_CORRUPT') end
+  table.insert(reply, digest); table.insert(reply, session.reference)
+  table.insert(reply, session.principal); table.insert(reply, session.principal_type)
+  table.insert(reply, session.payload); table.insert(reply, session.issued)
+  table.insert(reply, session.last_seen); table.insert(reply, session.idle_expiry)
+  table.insert(reply, session.absolute_expiry)
+end
+return reply
+"""
+)
+
 SCRIPT_SOURCES = {
     "epoch_read": _EPOCH_READ_SCRIPT,
     "epoch_advance": _EPOCH_ADVANCE_SCRIPT,
@@ -1143,6 +1581,11 @@ SCRIPT_SOURCES = {
     "quota_reserve": _QUOTA_RESERVE_SCRIPT,
     "quota_commit": _QUOTA_COMMIT_SCRIPT,
     "quota_release": _QUOTA_RELEASE_SCRIPT,
+    "security_session_issue": _SECURITY_SESSION_ISSUE_SCRIPT,
+    "security_session_resolve": _SECURITY_SESSION_RESOLVE_SCRIPT,
+    "security_session_rotate": _SECURITY_SESSION_ROTATE_SCRIPT,
+    "security_session_revoke": _SECURITY_SESSION_REVOKE_SCRIPT,
+    "security_session_list": _SECURITY_SESSION_LIST_SCRIPT,
 }
 
 
@@ -1240,6 +1683,15 @@ def _strict_positive_int(value: bytes) -> int:
         raise CoordinationCorruptError("Coordination reply is invalid.")
     result = int(value)
     if not 1 <= result <= MAX_COORDINATION_INTEGER:
+        raise CoordinationCorruptError("Coordination reply is invalid.")
+    return result
+
+
+def _strict_nonnegative_int(value: bytes) -> int:
+    if not value or (len(value) > 1 and value.startswith(b"0")) or not value.isdigit():
+        raise CoordinationCorruptError("Coordination reply is invalid.")
+    result = int(value)
+    if not 0 <= result <= MAX_COORDINATION_INTEGER:
         raise CoordinationCorruptError("Coordination reply is invalid.")
     return result
 
@@ -1372,6 +1824,103 @@ def _decode_quota_release_reply(reply: object) -> bool:
     return values[2] == b"1"
 
 
+def _decode_security_session(values: list[bytes], offset: int = 4) -> SecuritySessionState:
+    fields = values[offset : offset + 9]
+    if len(fields) != 9:
+        raise CoordinationCorruptError("Coordination reply is invalid.")
+    digest, reference, principal, principal_type, encoded_payload, *timestamps = fields
+    try:
+        payload = base64.b64decode(encoded_payload, validate=True)
+        session = SecuritySessionState(
+            digest.decode("ascii"),
+            reference.decode("ascii"),
+            principal.decode("ascii"),
+            SecurityPrincipalType(principal_type.decode("ascii")),
+            payload,
+            *(_strict_positive_int(value) / 1000.0 for value in timestamps),
+        )
+    except (UnicodeDecodeError, ValueError) as exc:
+        raise CoordinationCorruptError("Coordination reply is invalid.") from exc
+    return session
+
+
+def _decode_session_mutation_reply(reply: object) -> SessionMutationResult:
+    values = _strict_array(reply, 13)
+    if values[1] not in {b"applied", b"denied"} or values[3] not in {b"0", b"1"}:
+        raise CoordinationCorruptError("Coordination reply is invalid.")
+    try:
+        reason = values[2].decode("ascii")
+        if values[1] == b"applied":
+            if reason:
+                raise ValueError
+            return SessionMutationResult(
+                True,
+                _decode_security_session(values),
+                idempotent=values[3] == b"1",
+            )
+        if any(values[4:]):
+            raise ValueError
+        return SessionMutationResult(False, None, reason, values[3] == b"1")
+    except (UnicodeDecodeError, ValueError) as exc:
+        raise CoordinationCorruptError("Coordination reply is invalid.") from exc
+
+
+def _decode_session_resolve_reply(reply: object) -> SessionResolveResult:
+    values = _strict_array(reply, 13)
+    if values[1] not in {b"resolved", b"denied"} or values[3] not in {b"0", b"1"}:
+        raise CoordinationCorruptError("Coordination reply is invalid.")
+    try:
+        reason = values[2].decode("ascii")
+        if values[1] == b"resolved":
+            if reason:
+                raise ValueError
+            return SessionResolveResult(
+                True,
+                _decode_security_session(values),
+                idempotent=values[3] == b"1",
+            )
+        if any(values[4:]):
+            raise ValueError
+        return SessionResolveResult(False, None, reason, values[3] == b"1")
+    except (UnicodeDecodeError, ValueError) as exc:
+        raise CoordinationCorruptError("Coordination reply is invalid.") from exc
+
+
+def _decode_session_revoke_reply(reply: object) -> SessionRevokeResult:
+    values = _strict_array(reply, 4)
+    if values[1] == b"reconciliation_required":
+        if values[2:] != [b"0", b"0"]:
+            raise CoordinationCorruptError("Coordination reply is invalid.")
+        raise CoordinationReconciliationRequiredError("Reconciliation is required.")
+    if values[1] != b"ok" or values[3] not in {b"0", b"1"}:
+        raise CoordinationCorruptError("Coordination reply is invalid.")
+    try:
+        return SessionRevokeResult(_strict_nonnegative_int(values[2]), values[3] == b"1")
+    except ValueError as exc:
+        raise CoordinationCorruptError("Coordination reply is invalid.") from exc
+
+
+def _decode_session_page_reply(reply: object, *, requested_limit: int) -> SessionPage:
+    if (
+        not isinstance(reply, list)
+        or len(reply) < 4
+        or any(not isinstance(value, bytes) for value in reply)
+    ):
+        raise CoordinationCorruptError("Coordination reply is invalid.")
+    values = list(reply)
+    if values[0:2] != [b"1", b"ok"]:
+        raise CoordinationCorruptError("Coordination reply is invalid.")
+    count = _strict_nonnegative_int(values[3])
+    if count > requested_limit or len(values) != 4 + count * 9:
+        raise CoordinationCorruptError("Coordination reply is invalid.")
+    try:
+        next_reference = values[2].decode("ascii") or None
+        sessions = tuple(_decode_security_session(values, 4 + index * 9) for index in range(count))
+        return SessionPage(sessions, next_reference)
+    except (UnicodeDecodeError, ValueError) as exc:
+        raise CoordinationCorruptError("Coordination reply is invalid.") from exc
+
+
 class RedisStateStore:
     """Lazy, secret-safe Redis implementation of the coordination surface."""
 
@@ -1382,6 +1931,10 @@ class RedisStateStore:
         *,
         _coordination_replay_limit_for_testing: int | None = None,
         _quota_record_limit_for_testing: int | None = None,
+        _security_session_limit_for_testing: int | None = None,
+        _security_attempt_limit_for_testing: int | None = None,
+        _oidc_transaction_limit_for_testing: int | None = None,
+        _security_replay_limit_for_testing: int | None = None,
         _redis_module_for_testing: Any = None,
     ) -> None:
         redis_url = _validate_redis_url(redis_url)
@@ -1408,12 +1961,44 @@ class RedisStateStore:
             or not 1 <= quota_record_limit <= _DEFAULT_REPLAY_LIMIT
         ):
             raise ValueError("Quota record limit is invalid.")
+        security_session_limit = (
+            _DEFAULT_SECURITY_SESSION_LIMIT
+            if _security_session_limit_for_testing is None
+            else _security_session_limit_for_testing
+        )
+        security_attempt_limit = (
+            _DEFAULT_SECURITY_ATTEMPT_LIMIT
+            if _security_attempt_limit_for_testing is None
+            else _security_attempt_limit_for_testing
+        )
+        oidc_transaction_limit = (
+            _DEFAULT_OIDC_TRANSACTION_LIMIT
+            if _oidc_transaction_limit_for_testing is None
+            else _oidc_transaction_limit_for_testing
+        )
+        security_replay_limit = (
+            _DEFAULT_SECURITY_REPLAY_LIMIT
+            if _security_replay_limit_for_testing is None
+            else _security_replay_limit_for_testing
+        )
+        for value, maximum, label in (
+            (security_session_limit, 100_000, "Security session limit"),
+            (security_attempt_limit, 100_000, "Security attempt limit"),
+            (oidc_transaction_limit, 10_000, "OIDC transaction limit"),
+            (security_replay_limit, 100_000, "Security replay limit"),
+        ):
+            if isinstance(value, bool) or not isinstance(value, int) or not 1 <= value <= maximum:
+                raise ValueError(f"{label} is invalid.")
         self._redis_url = redis_url
         self._redis_module = _redis_module_for_testing
         self._tag = hashlib.sha256(namespace.encode("ascii")).hexdigest()
         self._prefix = f"omni:{{{self._tag}}}:v1"
         self._replay_limit = replay_limit
         self._quota_record_limit = quota_record_limit
+        self._security_session_limit = security_session_limit
+        self._security_attempt_limit = security_attempt_limit
+        self._oidc_transaction_limit = oidc_transaction_limit
+        self._security_replay_limit = security_replay_limit
         self._client: Any = None
         self._scripts: dict[str, Any] = {}
         self._lock_tokens: weakref.WeakKeyDictionary[asyncio.Task[Any], dict[str, bytes]] = (
@@ -1454,6 +2039,21 @@ class RedisStateStore:
             self._key("quota:locator", reservation_id),
             self._key("quota:operation", operation_id),
             self._key("initialization"),
+        ]
+
+    def _security_session_keys(self) -> list[str]:
+        """Return the complete fixed key bundle for every session script."""
+        return [
+            self._key("epoch"),
+            self._key("initialization"),
+            self._key("security:sessions"),
+            self._key("security:session-expiry"),
+            self._key("security:session-references"),
+            self._key("security:session-reference-order"),
+            self._key("security:session-principals"),
+            self._key("security:session-principal-types"),
+            self._key("security:session-replay"),
+            self._key("security:session-replay-expiry"),
         ]
 
     async def _quota_locator(
@@ -1864,6 +2464,148 @@ class RedisStateStore:
             ],
         )
         return _decode_quota_release_reply(reply)
+
+    async def issue_security_session(self, request: SessionIssueRequest) -> SessionMutationResult:
+        if not isinstance(request, SessionIssueRequest):
+            raise ValueError("Session issue request is invalid.")
+        idle_ttl = _ttl_ms(request.idle_ttl_seconds)
+        absolute_ttl = _ttl_ms(request.absolute_ttl_seconds)
+        assert idle_ttl is not None and absolute_ttl is not None
+        fingerprint = _fingerprint(
+            request.session_digest,
+            request.session_reference,
+            request.principal_index,
+            request.principal_type.value,
+            request.payload,
+            float(request.idle_ttl_seconds),
+            float(request.absolute_ttl_seconds),
+            request.fencing_epoch,
+        )
+        reply = await self._run_script(
+            "security_session_issue",
+            keys=self._security_session_keys(),
+            args=[
+                _integer_bytes(request.fencing_epoch),
+                request.session_digest.encode("ascii"),
+                request.session_reference.encode("ascii"),
+                request.principal_index.encode("ascii"),
+                request.principal_type.value.encode("ascii"),
+                base64.b64encode(request.payload),
+                _integer_bytes(idle_ttl),
+                _integer_bytes(absolute_ttl),
+                request.operation_id.encode("ascii"),
+                fingerprint,
+                _integer_bytes(self._security_session_limit),
+                _integer_bytes(self._security_replay_limit),
+            ],
+        )
+        return _decode_session_mutation_reply(reply)
+
+    async def resolve_security_session(
+        self, request: SessionResolveRequest
+    ) -> SessionResolveResult:
+        if not isinstance(request, SessionResolveRequest):
+            raise ValueError("Session resolve request is invalid.")
+        idle_ttl = _ttl_ms(request.idle_ttl_seconds)
+        assert idle_ttl is not None
+        fingerprint = _fingerprint(
+            request.session_digest,
+            float(request.idle_ttl_seconds),
+            request.fencing_epoch,
+        )
+        reply = await self._run_script(
+            "security_session_resolve",
+            keys=self._security_session_keys(),
+            args=[
+                _integer_bytes(request.fencing_epoch),
+                request.session_digest.encode("ascii"),
+                _integer_bytes(idle_ttl),
+                request.operation_id.encode("ascii"),
+                fingerprint,
+                _integer_bytes(self._security_replay_limit),
+            ],
+        )
+        return _decode_session_resolve_reply(reply)
+
+    async def rotate_security_session(self, request: SessionRotateRequest) -> SessionMutationResult:
+        if not isinstance(request, SessionRotateRequest):
+            raise ValueError("Session rotation request is invalid.")
+        replacement = request.replacement
+        idle_ttl = _ttl_ms(replacement.idle_ttl_seconds)
+        absolute_ttl = _ttl_ms(replacement.absolute_ttl_seconds)
+        assert idle_ttl is not None and absolute_ttl is not None
+        fingerprint = _fingerprint(
+            request.current_session_digest,
+            replacement.session_digest,
+            replacement.session_reference,
+            replacement.principal_index,
+            replacement.principal_type.value,
+            replacement.payload,
+            float(replacement.idle_ttl_seconds),
+            float(replacement.absolute_ttl_seconds),
+            request.fencing_epoch,
+        )
+        reply = await self._run_script(
+            "security_session_rotate",
+            keys=self._security_session_keys(),
+            args=[
+                _integer_bytes(request.fencing_epoch),
+                request.current_session_digest.encode("ascii"),
+                replacement.session_digest.encode("ascii"),
+                replacement.session_reference.encode("ascii"),
+                replacement.principal_index.encode("ascii"),
+                replacement.principal_type.value.encode("ascii"),
+                base64.b64encode(replacement.payload),
+                _integer_bytes(idle_ttl),
+                _integer_bytes(absolute_ttl),
+                request.operation_id.encode("ascii"),
+                fingerprint,
+                _integer_bytes(self._security_replay_limit),
+            ],
+        )
+        return _decode_session_mutation_reply(reply)
+
+    async def revoke_security_sessions(self, request: SessionRevokeRequest) -> SessionRevokeResult:
+        if not isinstance(request, SessionRevokeRequest):
+            raise ValueError("Session revocation request is invalid.")
+        replay_ttl = _ttl_ms(request.replay_ttl_seconds)
+        assert replay_ttl is not None
+        fingerprint = _fingerprint(
+            request.target.value,
+            request.target_value,
+            request.fencing_epoch,
+            float(request.replay_ttl_seconds),
+        )
+        reply = await self._run_script(
+            "security_session_revoke",
+            keys=self._security_session_keys(),
+            args=[
+                _integer_bytes(request.fencing_epoch),
+                request.target.value.encode("ascii"),
+                request.target_value.encode("ascii"),
+                _integer_bytes(replay_ttl),
+                request.operation_id.encode("ascii"),
+                fingerprint,
+                _integer_bytes(self._security_replay_limit),
+            ],
+        )
+        return _decode_session_revoke_reply(reply)
+
+    async def list_security_sessions(self, request: SessionListRequest) -> SessionPage:
+        if not isinstance(request, SessionListRequest):
+            raise ValueError("Session list request is invalid.")
+        if request.limit > MAX_SECURITY_PAGE_SIZE:
+            raise ValueError("Session page size is invalid.")
+        reply = await self._run_script(
+            "security_session_list",
+            keys=self._security_session_keys(),
+            args=[
+                _integer_bytes(request.fencing_epoch),
+                _integer_bytes(request.limit),
+                b"" if request.after_reference is None else request.after_reference.encode("ascii"),
+            ],
+        )
+        return _decode_session_page_reply(reply, requested_limit=request.limit)
 
     async def close(self) -> None:
         async with self._lifecycle_lock:

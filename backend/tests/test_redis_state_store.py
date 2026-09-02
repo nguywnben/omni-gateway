@@ -2046,6 +2046,11 @@ class RedisStateStoreTests(unittest.IsolatedAsyncioTestCase):
                 "quota_reserve",
                 "quota_commit",
                 "quota_release",
+                "security_session_issue",
+                "security_session_resolve",
+                "security_session_rotate",
+                "security_session_revoke",
+                "security_session_list",
             },
         )
         for name, source in SCRIPT_SOURCES.items():
@@ -2066,12 +2071,34 @@ class RedisStateStoreTests(unittest.IsolatedAsyncioTestCase):
                             source.index("for _, operation_id in ipairs(replay_due) do"),
                             source.index("redis.call('HDEL'"),
                         )
-                    else:
+                    elif not name.startswith("security_session_"):
                         self.assertIn("#due > 256", source)
                         self.assertLess(
                             source.index("local due = redis.call('ZRANGEBYSCORE'"),
                             source.index("redis.call('HDEL'"),
                         )
+
+        for name in (
+            "security_session_issue",
+            "security_session_resolve",
+            "security_session_rotate",
+            "security_session_revoke",
+            "security_session_list",
+        ):
+            with self.subTest(name=name):
+                source = SCRIPT_SOURCES[name]
+                self.assertIn("local plan = plan_cleanup(now_ms)", source)
+                self.assertIn("#due + #replay_due > 256", source)
+                self.assertLess(
+                    source.index("local plan = plan_cleanup(now_ms)"),
+                    source.index("-- apply validated mutation"),
+                )
+                self.assertLess(
+                    source.index("-- apply validated mutation"),
+                    source.index(
+                        "apply_cleanup(plan)", source.index("-- apply validated mutation")
+                    ),
+                )
 
         cas_source = SCRIPT_SOURCES["cas"]
         self.assertIn("redis.call('PTTL', KEYS[2])", cas_source)
