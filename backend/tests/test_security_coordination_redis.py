@@ -13,6 +13,11 @@ if str(BACKEND_DIR) not in sys.path:
 from core.coordination import CoordinationCorruptError
 from core.redis_state_store import SCRIPT_SOURCES, RedisStateStore
 from core.security_coordination import (
+    AttemptClearRequest,
+    AttemptReservationRequest,
+    OidcTransactionConsumeRequest,
+    OidcTransactionCreateRequest,
+    SecurityAttemptCategory,
     SecurityPrincipalType,
     SessionIssueRequest,
     SessionListRequest,
@@ -58,6 +63,10 @@ class StatefulSecurityRedisClient(StatefulRedisClient):
         "security_session_rotate": (10, 12),
         "security_session_revoke": (10, 7),
         "security_session_list": (10, 3),
+        "security_attempt_reserve": (6, 8),
+        "security_attempt_clear": (6, 6),
+        "oidc_transaction_create": (6, 9),
+        "oidc_transaction_consume": (6, 7),
     }
 
     def __init__(self) -> None:
@@ -67,6 +76,12 @@ class StatefulSecurityRedisClient(StatefulRedisClient):
         self.security_replays: dict[
             bytes, tuple[bytes, bytes, bytes, bytes, bytes, bytes, int]
         ] = {}
+        self.security_attempts: dict[str, dict[bytes, tuple[int, int]]] = {}
+        self.security_attempt_replays: dict[
+            str, dict[bytes, tuple[bytes, bytes, bytes, bytes, bytes, int]]
+        ] = {}
+        self.oidc_transactions: dict[bytes, tuple[bytes, bytes, int]] = {}
+        self.oidc_replays: dict[bytes, tuple[bytes, bytes, bytes, bytes, bytes, int]] = {}
 
     @staticmethod
     def _session_reply(
@@ -160,14 +175,182 @@ class StatefulSecurityRedisClient(StatefulRedisClient):
         )
         return True
 
+    @staticmethod
+    def _cleanup_mapping(mapping: dict[bytes, tuple], now_ms: int) -> list[bytes]:
+        return [key for key, value in mapping.items() if int(value[-1]) <= now_ms]
+
+    def _run_attempt_script(self, name: str, keys: list[str], values: list[bytes]) -> list[bytes]:
+        reason = self._security_epoch_reason(values[0])
+        if reason is not None:
+            if name == "security_attempt_clear":
+                raise RuntimeError("COORDINATION_UNAVAILABLE")
+            return [b"1", b"denied", reason, b"0", b"0", b"0"]
+        scope = keys[2]
+        records = self.security_attempts.setdefault(scope, {})
+        replays = self.security_attempt_replays.setdefault(scope, {})
+        due = self._cleanup_mapping(records, self.now_ms)
+        replay_due = self._cleanup_mapping(replays, self.now_ms)
+        if len(due) + len(replay_due) > 256:
+            if name == "security_attempt_clear":
+                return [b"1", b"reconciliation_required", b"0", b"0"]
+            return [b"1", b"denied", b"reconciliation_required", b"0", b"0", b"0"]
+        for key in due:
+            del records[key]
+        for key in replay_due:
+            del replays[key]
+
+        if name == "security_attempt_reserve":
+            _epoch, client, limit, window, operation, fingerprint, record_limit, replay_limit = (
+                values
+            )
+            replay = replays.get(operation)
+            if replay is not None:
+                saved_fingerprint, status, replay_reason, remaining, retry_after, _expiry = replay
+                if saved_fingerprint != fingerprint:
+                    return [
+                        b"1",
+                        b"denied",
+                        b"reconciliation_required",
+                        b"0",
+                        b"0",
+                        b"0",
+                    ]
+                return [b"1", status, replay_reason, b"1", remaining, retry_after]
+            if len(replays) >= int(replay_limit):
+                return [b"1", b"denied", b"reconciliation_required", b"0", b"0", b"0"]
+            record = records.get(client)
+            expiry = self.now_ms + int(window) if record is None else record[1]
+            if record is None and len(records) >= int(record_limit):
+                status, denial, remaining, retry_after = b"denied", b"capacity", b"0", b"0"
+            elif record is not None and record[0] >= int(limit):
+                status, denial, remaining = b"denied", b"limited", b"0"
+                retry_after = str(max(1, (expiry - self.now_ms + 999) // 1000)).encode()
+            else:
+                count = 1 if record is None else record[0] + 1
+                status, denial = b"allowed", b""
+                remaining = str(max(0, int(limit) - count)).encode()
+                retry_after = b"0"
+                records[client] = (count, expiry)
+            replays[operation] = (
+                fingerprint,
+                status,
+                denial,
+                remaining,
+                retry_after,
+                expiry,
+            )
+            return [b"1", status, denial, b"0", remaining, retry_after]
+
+        _epoch, client, replay_ttl, operation, fingerprint, replay_limit = values
+        replay = replays.get(operation)
+        if replay is not None:
+            saved_fingerprint, _status, _reason, cleared, _retry, _expiry = replay
+            if saved_fingerprint != fingerprint:
+                raise RuntimeError("COORDINATION_UNAVAILABLE")
+            return [b"1", b"ok", cleared, b"1"]
+        if len(replays) >= int(replay_limit):
+            return [b"1", b"reconciliation_required", b"0", b"0"]
+        record = records.get(client)
+        cleared = b"1" if record is not None else b"0"
+        expiry = record[1] if record is not None else self.now_ms + int(replay_ttl)
+        replays[operation] = (fingerprint, b"cleared", b"", cleared, b"0", expiry)
+        records.pop(client, None)
+        return [b"1", b"ok", cleared, b"0"]
+
+    def _run_oidc_script(self, name: str, values: list[bytes]) -> list[bytes]:
+        reason = self._security_epoch_reason(values[0])
+        if reason is not None:
+            return [b"1", b"denied", reason, b"0"] + (
+                [b""] if name == "oidc_transaction_consume" else []
+            )
+        original = self.oidc_transactions.get(values[1])
+        was_expired = original is not None and original[2] <= self.now_ms
+        due = self._cleanup_mapping(self.oidc_transactions, self.now_ms)
+        replay_due = self._cleanup_mapping(self.oidc_replays, self.now_ms)
+        if len(due) + len(replay_due) > 256:
+            return [b"1", b"denied", b"reconciliation_required", b"0"] + (
+                [b""] if name == "oidc_transaction_consume" else []
+            )
+        for key in due:
+            del self.oidc_transactions[key]
+        for key in replay_due:
+            del self.oidc_replays[key]
+
+        if name == "oidc_transaction_create":
+            _epoch, state, browser, payload, ttl, operation, fingerprint, limit, replay_limit = (
+                values
+            )
+            replay = self.oidc_replays.get(operation)
+            if replay is not None:
+                saved_fingerprint, status, replay_reason, replay_state, replay_browser, expiry = (
+                    replay
+                )
+                if saved_fingerprint != fingerprint:
+                    return [b"1", b"denied", b"conflict", b"0"]
+                transaction = self.oidc_transactions.get(state)
+                if status == b"applied" and transaction != (browser, payload, expiry):
+                    return [b"1", b"denied", b"conflict", b"0"]
+                return [b"1", status, replay_reason, b"1"]
+            if len(self.oidc_replays) >= int(replay_limit):
+                return [b"1", b"denied", b"reconciliation_required", b"0"]
+            expiry = self.now_ms + int(ttl)
+            denial = (
+                b"conflict"
+                if state in self.oidc_transactions
+                else b"capacity"
+                if len(self.oidc_transactions) >= int(limit)
+                else b""
+            )
+            status = b"denied" if denial else b"applied"
+            self.oidc_replays[operation] = (
+                fingerprint,
+                status,
+                denial,
+                state if not denial else b"",
+                browser if not denial else b"",
+                expiry,
+            )
+            if not denial:
+                self.oidc_transactions[state] = (browser, payload, expiry)
+            return [b"1", status, denial, b"0"]
+
+        _epoch, state, browser, fallback_ttl, operation, fingerprint, replay_limit = values
+        replay = self.oidc_replays.get(operation)
+        if replay is not None:
+            saved_fingerprint, status, replay_reason, _state, _browser, _expiry = replay
+            if saved_fingerprint != fingerprint:
+                return [b"1", b"denied", b"reconciliation_required", b"0", b""]
+            if status == b"consumed":
+                return [b"1", b"denied", b"not_found", b"1", b""]
+            return [b"1", b"denied", replay_reason, b"1", b""]
+        if len(self.oidc_replays) >= int(replay_limit):
+            return [b"1", b"denied", b"reconciliation_required", b"0", b""]
+        transaction = self.oidc_transactions.get(state)
+        if transaction is None:
+            status, denial, payload = b"denied", b"expired" if was_expired else b"not_found", b""
+            expiry = self.now_ms + int(fallback_ttl)
+        elif transaction[0] != browser:
+            status, denial, payload, expiry = b"denied", b"browser_mismatch", b"", transaction[2]
+        else:
+            status, denial, payload, expiry = b"consumed", b"", transaction[1], transaction[2]
+        self.oidc_replays[operation] = (fingerprint, status, denial, state, browser, expiry)
+        if status == b"consumed":
+            del self.oidc_transactions[state]
+        return [b"1", status, denial, b"0", payload]
+
     def run_script(self, name: str, keys: list[str], args: list[object]) -> list[bytes]:
-        if not name.startswith("security_session_"):
+        if not name.startswith(("security_session_", "security_attempt_", "oidc_transaction_")):
             return super().run_script(name, keys, args)
         key_count, arg_count = self._KEY_COUNTS[name]
         assert len(keys) == key_count and len(args) == arg_count
         assert len({key[key.index("{") + 1 : key.index("}")] for key in keys}) == 1
         assert all(isinstance(arg, bytes) for arg in args)
         values = [arg for arg in args if isinstance(arg, bytes)]
+
+        if name.startswith("security_attempt_"):
+            return self._run_attempt_script(name, keys, values)
+        if name.startswith("oidc_transaction_"):
+            return self._run_oidc_script(name, values)
 
         reason = self._security_epoch_reason(values[0])
         if reason is not None:
@@ -565,6 +748,116 @@ class RedisSecurityCoordinationDriverTests(unittest.IsolatedAsyncioTestCase):
             with self.assertRaises(CoordinationCorruptError):
                 await store.issue_security_session(self._issue())
 
+    async def test_attempt_and_oidc_methods_use_fixed_explicit_scripts(self) -> None:
+        self.client.script_replies["security_attempt_reserve"].append(
+            [b"1", b"allowed", b"", b"0", b"1", b"0"]
+        )
+        decision = await self.store.reserve_security_attempt(
+            AttemptReservationRequest(
+                SecurityAttemptCategory.LOGIN,
+                "a" * 64,
+                2,
+                300,
+                1,
+                "reserve-login",
+            )
+        )
+        self.assertTrue(decision.allowed)
+        self.assertEqual(self.client.script_calls[-1][0], "security_attempt_reserve")
+        self.assertEqual(
+            (len(self.client.script_calls[-1][1]), len(self.client.script_calls[-1][2])),
+            (6, 8),
+        )
+
+        self.client.script_replies["security_attempt_clear"].append([b"1", b"ok", b"1", b"0"])
+        cleared = await self.store.clear_security_attempts(
+            AttemptClearRequest(
+                SecurityAttemptCategory.LOGIN,
+                "a" * 64,
+                1,
+                "clear-login",
+            )
+        )
+        self.assertTrue(cleared.cleared)
+
+        self.client.script_replies["oidc_transaction_create"].append([b"1", b"applied", b"", b"0"])
+        created = await self.store.create_oidc_transaction(
+            OidcTransactionCreateRequest(
+                "b" * 64,
+                "c" * 64,
+                b"opaque-proof",
+                300,
+                1,
+                "create-proof",
+            )
+        )
+        self.assertTrue(created.applied)
+
+        self.client.script_replies["oidc_transaction_consume"].append(
+            [b"1", b"consumed", b"", b"0", b"b3BhcXVlLXByb29m"]
+        )
+        consumed = await self.store.consume_oidc_transaction(
+            OidcTransactionConsumeRequest(
+                "b" * 64,
+                "c" * 64,
+                1,
+                "consume-proof",
+            )
+        )
+        self.assertEqual(consumed.payload, b"opaque-proof")
+
+        for name, key_count, arg_count in (
+            ("security_attempt_clear", 6, 6),
+            ("oidc_transaction_create", 6, 9),
+            ("oidc_transaction_consume", 6, 7),
+        ):
+            call = next(call for call in self.client.script_calls if call[0] == name)
+            self.assertEqual((len(call[1]), len(call[2])), (key_count, arg_count))
+            self.assertEqual(
+                len({key[key.index("{") + 1 : key.index("}")] for key in call[1]}),
+                1,
+            )
+
+    async def test_attempt_and_oidc_reply_decoders_fail_closed(self) -> None:
+        cases = (
+            (
+                "security_attempt_reserve",
+                [b"1", b"allowed", b"limited", b"0", b"0", b"0"],
+                lambda store: store.reserve_security_attempt(
+                    AttemptReservationRequest(
+                        SecurityAttemptCategory.LOGIN,
+                        "a" * 64,
+                        2,
+                        300,
+                        1,
+                        "bad-reserve",
+                    )
+                ),
+            ),
+            (
+                "oidc_transaction_consume",
+                [b"1", b"consumed", b"", b"0", b"%%%"],
+                lambda store: store.consume_oidc_transaction(
+                    OidcTransactionConsumeRequest(
+                        "b" * 64,
+                        "c" * 64,
+                        1,
+                        "bad-consume",
+                    )
+                ),
+            ),
+        )
+        for name, reply, operation in cases:
+            with self.subTest(name=name):
+                client = FakeRedisClient()
+                client.script_replies[name].append(reply)
+                store = RedisStateStore(
+                    "redis://example.invalid/0",
+                    _redis_module_for_testing=FakeRedisModule(client),
+                )
+                with self.assertRaises(CoordinationCorruptError):
+                    await operation(store)
+
     def test_session_lua_is_fixed_bounded_and_cluster_safe(self) -> None:
         expected = {
             "security_session_issue",
@@ -572,6 +865,10 @@ class RedisSecurityCoordinationDriverTests(unittest.IsolatedAsyncioTestCase):
             "security_session_rotate",
             "security_session_revoke",
             "security_session_list",
+            "security_attempt_reserve",
+            "security_attempt_clear",
+            "oidc_transaction_create",
+            "oidc_transaction_consume",
         }
         self.assertTrue(expected.issubset(SCRIPT_SOURCES))
         for name in expected:
@@ -604,6 +901,30 @@ class RedisSecurityCoordinationStatefulTests(
 
     async def test_shared_session_lifecycle_contract(self) -> None:
         await self.assert_session_lifecycle_contract()
+
+    async def test_shared_attempt_and_oidc_transaction_contract(self) -> None:
+        await self.assert_attempt_and_oidc_transaction_contract()
+
+    async def test_atomic_attempt_and_consume_contract(self) -> None:
+        await self.assert_atomic_attempt_and_consume_contract()
+
+    async def test_exact_ready_epoch_contract(self) -> None:
+        await self.assert_exact_ready_epoch_contract()
+
+    async def test_capacity_preserves_live_evidence_contract(self) -> None:
+        client = StatefulSecurityRedisClient()
+        limited_store = RedisStateStore(
+            "redis://example.invalid/0",
+            deployment_namespace="security-capacity",
+            _security_session_limit_for_testing=1,
+            _security_attempt_limit_for_testing=1,
+            _oidc_transaction_limit_for_testing=1,
+            _redis_module_for_testing=FakeRedisModule(client),
+        )
+        await self.assert_capacity_preserves_live_evidence_contract(limited_store)
+
+    async def test_security_operations_fail_after_close(self) -> None:
+        await self.assert_security_operations_fail_after_close()
 
 
 if __name__ == "__main__":

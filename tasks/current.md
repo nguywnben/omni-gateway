@@ -4,21 +4,21 @@
 
 - Updated: 2026-09-02 (Asia/Saigon).
 - Branch: `codex/enterprise-overhaul`.
-- Implementation baseline: W4.16 Task 3 (`feat(identity): coordinate Redis session lifecycle`).
+- Implementation baseline: W4.16 Task 4 (`feat(identity): coordinate Redis security admissions`).
 - Completed scope: Waves 1–3 / Phases 0–5 plus Wave 4 slices W4.1–W4.15 and checkpoints W4-A/W4-B.
 - Original program progress: 21/28 approved checklist items complete (including specification and
   Phase 6 ADR approval), exactly 75.0%; wave execution-slice checkboxes are refinements and are not
   added to that denominator.
 - Active scope: Wave 4 W4.16, identity/session/security state coordination.
-- Control state: **IN PROGRESS — W4.16 TASK 4 NEXT**.
+- Control state: **IN PROGRESS — W4.16 TASK 5 NEXT**.
 - Execution mode: continuous through the remaining W4.16–W4.19 queue under
   `docs/superpowers/plans/2026-09-02-wave-4-continuous-completion.md`; do not pause at internal task
   boundaries.
-- Expected worktree state at this checkpoint: clean after the W4.16 Task 3 implementation commit.
+- Expected worktree state at this checkpoint: clean after the W4.16 Task 4 implementation commit.
 - Expected runtime: one Omni Gateway listener on `http://127.0.0.1:4283`; `/health` and `/ready`
   return HTTP 200.
-- Last verified full suite: 1,173 tests passed on Python 3.14.6 with 25 opt-in live backend tests
-  skipped because no test URI was configured. The W4.16 Task 3 focused matrix passes 70 tests;
+- Last verified full suite: 1,180 tests passed on Python 3.14.6 with 25 opt-in live backend tests
+  skipped because no test URI was configured. The W4.16 Task 4 focused matrix passes 77 tests;
   repository-wide Ruff lint/format, compileall, pip consistency, diff, and all 45 frontend
   JavaScript syntax checks pass. No dependency, YAML, or shell file changed in this slice. The
   dependency audit remains the clean W4.15 result because the current sandbox proxy denied a fresh
@@ -474,9 +474,9 @@ checkboxes to be marked complete.
 
 ## Immediate Next Action
 
-Execute W4.16 Task 4 from
-`docs/superpowers/plans/2026-09-02-w4.16-identity-security-coordination.md`: add Redis throttle and
-OIDC transaction parity through fixed, two-phase-validated, bounded Lua using Redis server time.
+Execute W4.16 Task 5 from
+`docs/superpowers/plans/2026-09-02-w4.16-identity-security-coordination.md`: move the management
+session service behind the typed coordination boundary while standalone remains in-memory.
 Continue without a task-boundary pause under the accepted Wave 4 completion plan. Keep the
 transport inactive and preserve `WORKERS=1`, one replica, disabled-by-default OIDC, source
 authority, and every HA activation gate.

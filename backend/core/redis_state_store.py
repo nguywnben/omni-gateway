@@ -40,7 +40,17 @@ from core.coordination import (
     validate_operation_id,
 )
 from core.security_coordination import (
+    MAX_OIDC_TRANSACTION_TTL_SECONDS,
     MAX_SECURITY_PAGE_SIZE,
+    MIN_SECURITY_ATTEMPT_WINDOW_SECONDS,
+    AttemptClearRequest,
+    AttemptClearResult,
+    AttemptReservationDecision,
+    AttemptReservationRequest,
+    OidcTransactionConsumeRequest,
+    OidcTransactionConsumeResult,
+    OidcTransactionCreateRequest,
+    SecurityAttemptCategory,
     SecurityPrincipalType,
     SecuritySessionState,
     SessionIssueRequest,
@@ -52,6 +62,7 @@ from core.security_coordination import (
     SessionRevokeRequest,
     SessionRevokeResult,
     SessionRotateRequest,
+    TransactionCreateResult,
 )
 
 _SCHEMA = b"1"
@@ -1569,6 +1580,383 @@ return reply
 """
 )
 
+
+_SECURITY_ATTEMPT_COMMON = r"""
+local function valid_integer(value)
+  return value and (value == '0' or string.match(value, '^[1-9][0-9]*$'))
+    and (#value < 16 or (#value == 16 and value <= '9007199254740991'))
+end
+local function ready_epoch(expected)
+  local marker, encoded = redis.call('GET', KEYS[2]), redis.call('GET', KEYS[1])
+  if marker ~= '1|initialized' or not encoded or redis.call('PTTL', KEYS[2]) ~= -1
+    or redis.call('PTTL', KEYS[1]) ~= -1 then return nil, nil end
+  local schema, epoch, state = string.match(encoded, '^([^|]+)|([^|]+)|([^|]+)$')
+  if schema ~= '1' or not valid_integer(epoch)
+    or (state ~= 'ready' and state ~= 'reconciling') then return nil, nil end
+  return epoch == expected and state == 'ready', state
+end
+local function now_milliseconds()
+  local clock = redis.call('TIME')
+  return (clock[1] * 1000) + math.floor(clock[2] / 1000)
+end
+local function valid_record(value, score)
+  if not value or not score then return false end
+  local schema, count, expiry = string.match(value, '^([^|]+)|([^|]+)|([^|]+)$')
+  return schema == '1' and valid_integer(count) and count ~= '0' and valid_integer(expiry)
+    and expiry == score
+end
+local function parse_record(value)
+  local _, count, expiry = string.match(value, '^([^|]+)|([^|]+)|([^|]+)$')
+  return {count=tonumber(count), expiry=expiry}
+end
+local function valid_replay(value, score)
+  if not value or not score then return false end
+  local schema, fingerprint, status, reason, remaining, retry_after, expiry =
+    string.match(value, '^([^|]+)|([^|]+)|([^|]+)|([^|]*)|([^|]+)|([^|]+)|([^|]+)$')
+  if schema ~= '1' or not string.match(fingerprint, '^[0-9a-f][0-9a-f]+$')
+    or #fingerprint ~= 64 or not valid_integer(remaining) or not valid_integer(retry_after)
+    or not valid_integer(expiry) or expiry ~= score then return false end
+  if status == 'allowed' then return reason == '' and retry_after == '0' end
+  if status == 'denied' then
+    return remaining == '0' and ((reason == 'limited' and retry_after ~= '0')
+      or ((reason == 'capacity' or reason == 'reconciliation_required') and retry_after == '0'))
+  end
+  return status == 'cleared' and reason == '' and (remaining == '0' or remaining == '1')
+    and retry_after == '0'
+end
+local function parse_replay(value)
+  local _, fingerprint, status, reason, remaining, retry_after, expiry =
+    string.match(value, '^([^|]+)|([^|]+)|([^|]+)|([^|]*)|([^|]+)|([^|]+)|([^|]+)$')
+  return {fingerprint=fingerprint, status=status, reason=reason, remaining=remaining,
+    retry_after=retry_after, expiry=expiry}
+end
+local function plan_cleanup(now_ms)
+  if redis.call('HLEN', KEYS[3]) ~= redis.call('ZCARD', KEYS[4])
+    or redis.call('HLEN', KEYS[5]) ~= redis.call('ZCARD', KEYS[6]) then return nil end
+  local due = redis.call('ZRANGEBYSCORE', KEYS[4], '-inf', now_ms, 'LIMIT', 0, 257)
+  local replay_due = redis.call('ZRANGEBYSCORE', KEYS[6], '-inf', now_ms, 'LIMIT', 0, 257)
+  if #due > 256 or #replay_due > 256 or #due + #replay_due > 256 then return false end
+  for _, identifier in ipairs(due) do
+    if not valid_record(redis.call('HGET', KEYS[3], identifier),
+      redis.call('ZSCORE', KEYS[4], identifier)) then return nil end
+  end
+  for _, operation_id in ipairs(replay_due) do
+    if not valid_replay(redis.call('HGET', KEYS[5], operation_id),
+      redis.call('ZSCORE', KEYS[6], operation_id)) then return nil end
+  end
+  return {due=due, replay_due=replay_due}
+end
+local function apply_cleanup(plan)
+  if #plan.due > 0 then
+    redis.call('HDEL', KEYS[3], unpack(plan.due)); redis.call('ZREM', KEYS[4], unpack(plan.due))
+  end
+  if #plan.replay_due > 0 then
+    redis.call('HDEL', KEYS[5], unpack(plan.replay_due)); redis.call('ZREM', KEYS[6], unpack(plan.replay_due))
+  end
+end
+local function store_replay(operation_id, fingerprint, status, reason, remaining, retry_after,
+    expiry)
+  redis.call('HSET', KEYS[5], operation_id, table.concat({'1', fingerprint, status, reason,
+    remaining, retry_after, expiry}, '|'))
+  redis.call('ZADD', KEYS[6], tonumber(expiry), operation_id)
+end
+"""
+
+
+_SECURITY_ATTEMPT_RESERVE_SCRIPT = (
+    "-- omni:security_attempt_reserve:v1\n"
+    + _SECURITY_ATTEMPT_COMMON
+    + r"""
+local fenced, epoch_state = ready_epoch(ARGV[1])
+if fenced == nil then return redis.error_reply('COORDINATION_CORRUPT') end
+if not fenced then return {'1', 'denied', epoch_state == 'reconciling'
+  and 'reconciling' or 'stale_epoch', '0', '0', '0'} end
+local now_ms = now_milliseconds()
+local plan = plan_cleanup(now_ms)
+if plan == nil then return redis.error_reply('COORDINATION_CORRUPT') end
+if plan == false then return {'1', 'denied', 'reconciliation_required', '0', '0', '0'} end
+local replay_value, replay_score = redis.call('HGET', KEYS[5], ARGV[5]),
+  redis.call('ZSCORE', KEYS[6], ARGV[5])
+if (replay_value or replay_score) and not valid_replay(replay_value, replay_score) then
+  return redis.error_reply('COORDINATION_CORRUPT')
+end
+local record_value, record_score = redis.call('HGET', KEYS[3], ARGV[2]),
+  redis.call('ZSCORE', KEYS[4], ARGV[2])
+if (record_value or record_score) and not valid_record(record_value, record_score) then
+  return redis.error_reply('COORDINATION_CORRUPT')
+end
+-- apply validated mutation
+apply_cleanup(plan)
+if replay_score and tonumber(replay_score) <= now_ms then replay_value = nil end
+if replay_value then
+  local replay = parse_replay(replay_value)
+  if replay.fingerprint ~= ARGV[6] then
+    return {'1', 'denied', 'reconciliation_required', '0', '0', '0'}
+  end
+  return {'1', replay.status, replay.reason, '1', replay.remaining, replay.retry_after}
+end
+if redis.call('HLEN', KEYS[5]) >= tonumber(ARGV[8]) then
+  return {'1', 'denied', 'reconciliation_required', '0', '0', '0'}
+end
+record_value = redis.call('HGET', KEYS[3], ARGV[2])
+local record = record_value and parse_record(record_value) or nil
+local status, reason, remaining, retry_after, expiry = 'allowed', '', '0', '0',
+  string.format('%.0f', now_ms + tonumber(ARGV[4]))
+if not record and redis.call('HLEN', KEYS[3]) >= tonumber(ARGV[7]) then
+  status, reason = 'denied', 'capacity'
+elseif record and record.count >= tonumber(ARGV[3]) then
+  status, reason, retry_after, expiry = 'denied', 'limited',
+    tostring(math.max(1, math.ceil((tonumber(record.expiry) - now_ms) / 1000))), record.expiry
+else
+  local count = record and record.count + 1 or 1
+  remaining, expiry = tostring(math.max(0, tonumber(ARGV[3]) - count)),
+    record and record.expiry or expiry
+end
+store_replay(ARGV[5], ARGV[6], status, reason, remaining, retry_after, expiry)
+if status == 'allowed' then
+  local count = record and record.count + 1 or 1
+  redis.call('HSET', KEYS[3], ARGV[2], table.concat({'1', tostring(count), expiry}, '|'))
+  redis.call('ZADD', KEYS[4], tonumber(expiry), ARGV[2])
+end
+return {'1', status, reason, '0', remaining, retry_after}
+"""
+)
+
+
+_SECURITY_ATTEMPT_CLEAR_SCRIPT = (
+    "-- omni:security_attempt_clear:v1\n"
+    + _SECURITY_ATTEMPT_COMMON
+    + r"""
+local fenced = ready_epoch(ARGV[1])
+if fenced == nil then return redis.error_reply('COORDINATION_CORRUPT') end
+if not fenced then return redis.error_reply('COORDINATION_UNAVAILABLE') end
+local now_ms = now_milliseconds()
+local plan = plan_cleanup(now_ms)
+if plan == nil then return redis.error_reply('COORDINATION_CORRUPT') end
+if plan == false then return {'1', 'reconciliation_required', '0', '0'} end
+local replay_value, replay_score = redis.call('HGET', KEYS[5], ARGV[4]),
+  redis.call('ZSCORE', KEYS[6], ARGV[4])
+if (replay_value or replay_score) and not valid_replay(replay_value, replay_score) then
+  return redis.error_reply('COORDINATION_CORRUPT')
+end
+local record_value, record_score = redis.call('HGET', KEYS[3], ARGV[2]),
+  redis.call('ZSCORE', KEYS[4], ARGV[2])
+if (record_value or record_score) and not valid_record(record_value, record_score) then
+  return redis.error_reply('COORDINATION_CORRUPT')
+end
+-- apply validated mutation
+apply_cleanup(plan)
+if replay_score and tonumber(replay_score) <= now_ms then replay_value = nil end
+if replay_value then
+  local replay = parse_replay(replay_value)
+  if replay.fingerprint ~= ARGV[5] then return redis.error_reply('COORDINATION_UNAVAILABLE') end
+  return {'1', 'ok', replay.remaining, '1'}
+end
+if redis.call('HLEN', KEYS[5]) >= tonumber(ARGV[6]) then
+  return {'1', 'reconciliation_required', '0', '0'}
+end
+record_value = redis.call('HGET', KEYS[3], ARGV[2])
+local cleared = record_value and '1' or '0'
+local expiry = record_value and select(3, string.match(record_value, '^([^|]+)|([^|]+)|([^|]+)$'))
+  or string.format('%.0f', now_ms + tonumber(ARGV[3]))
+store_replay(ARGV[4], ARGV[5], 'cleared', '', cleared, '0', expiry)
+if record_value then redis.call('HDEL', KEYS[3], ARGV[2]); redis.call('ZREM', KEYS[4], ARGV[2]) end
+return {'1', 'ok', cleared, '0'}
+"""
+)
+
+
+_OIDC_TRANSACTION_COMMON = r"""
+local function valid_integer(value)
+  return value and (value == '0' or string.match(value, '^[1-9][0-9]*$'))
+    and (#value < 16 or (#value == 16 and value <= '9007199254740991'))
+end
+local function valid_digest(value)
+  return value and #value == 64 and string.match(value, '^[0-9a-f]+$')
+end
+local function ready_epoch(expected)
+  local marker, encoded = redis.call('GET', KEYS[2]), redis.call('GET', KEYS[1])
+  if marker ~= '1|initialized' or not encoded or redis.call('PTTL', KEYS[2]) ~= -1
+    or redis.call('PTTL', KEYS[1]) ~= -1 then return nil, nil end
+  local schema, epoch, state = string.match(encoded, '^([^|]+)|([^|]+)|([^|]+)$')
+  if schema ~= '1' or not valid_integer(epoch)
+    or (state ~= 'ready' and state ~= 'reconciling') then return nil, nil end
+  return epoch == expected and state == 'ready', state
+end
+local function now_milliseconds()
+  local clock = redis.call('TIME')
+  return (clock[1] * 1000) + math.floor(clock[2] / 1000)
+end
+local function valid_transaction(value, score)
+  if not value or not score then return false end
+  local schema, browser, payload, expiry =
+    string.match(value, '^([^|]+)|([^|]+)|([^|]+)|([^|]+)$')
+  return schema == '1' and valid_digest(browser) and payload and payload ~= ''
+    and valid_integer(expiry) and expiry == score
+end
+local function parse_transaction(value)
+  local _, browser, payload, expiry = string.match(value, '^([^|]+)|([^|]+)|([^|]+)|([^|]+)$')
+  return {browser=browser, payload=payload, expiry=expiry}
+end
+local function valid_replay(value, score)
+  if not value or not score then return false end
+  local schema, fingerprint, status, reason, state, browser, expiry =
+    string.match(value, '^([^|]+)|([^|]+)|([^|]+)|([^|]*)|([^|]*)|([^|]*)|([^|]+)$')
+  if schema ~= '1' or not valid_digest(fingerprint) or not valid_integer(expiry)
+    or expiry ~= score then return false end
+  if status == 'applied' or status == 'consumed' then
+    return reason == '' and valid_digest(state) and valid_digest(browser)
+  end
+  return status == 'denied' and state == '' and browser == ''
+    and (reason == 'conflict' or reason == 'capacity'
+      or reason == 'reconciliation_required' or reason == 'not_found'
+      or reason == 'expired' or reason == 'browser_mismatch')
+end
+local function parse_replay(value)
+  local _, fingerprint, status, reason, state, browser, expiry =
+    string.match(value, '^([^|]+)|([^|]+)|([^|]+)|([^|]*)|([^|]*)|([^|]*)|([^|]+)$')
+  return {fingerprint=fingerprint, status=status, reason=reason, state=state, browser=browser,
+    expiry=expiry}
+end
+local function plan_cleanup(now_ms)
+  if redis.call('HLEN', KEYS[3]) ~= redis.call('ZCARD', KEYS[4])
+    or redis.call('HLEN', KEYS[5]) ~= redis.call('ZCARD', KEYS[6]) then return nil end
+  local due = redis.call('ZRANGEBYSCORE', KEYS[4], '-inf', now_ms, 'LIMIT', 0, 257)
+  local replay_due = redis.call('ZRANGEBYSCORE', KEYS[6], '-inf', now_ms, 'LIMIT', 0, 257)
+  if #due > 256 or #replay_due > 256 or #due + #replay_due > 256 then return false end
+  for _, state in ipairs(due) do
+    if not valid_transaction(redis.call('HGET', KEYS[3], state),
+      redis.call('ZSCORE', KEYS[4], state)) then return nil end
+  end
+  for _, operation_id in ipairs(replay_due) do
+    if not valid_replay(redis.call('HGET', KEYS[5], operation_id),
+      redis.call('ZSCORE', KEYS[6], operation_id)) then return nil end
+  end
+  return {due=due, replay_due=replay_due}
+end
+local function apply_cleanup(plan)
+  if #plan.due > 0 then
+    redis.call('HDEL', KEYS[3], unpack(plan.due)); redis.call('ZREM', KEYS[4], unpack(plan.due))
+  end
+  if #plan.replay_due > 0 then
+    redis.call('HDEL', KEYS[5], unpack(plan.replay_due)); redis.call('ZREM', KEYS[6], unpack(plan.replay_due))
+  end
+end
+local function store_replay(operation_id, fingerprint, status, reason, state, browser, expiry)
+  redis.call('HSET', KEYS[5], operation_id, table.concat({'1', fingerprint, status, reason, state,
+    browser, expiry}, '|'))
+  redis.call('ZADD', KEYS[6], tonumber(expiry), operation_id)
+end
+"""
+
+
+_OIDC_TRANSACTION_CREATE_SCRIPT = (
+    "-- omni:oidc_transaction_create:v1\n"
+    + _OIDC_TRANSACTION_COMMON
+    + r"""
+local fenced, epoch_state = ready_epoch(ARGV[1])
+if fenced == nil then return redis.error_reply('COORDINATION_CORRUPT') end
+if not fenced then return {'1', 'denied', epoch_state == 'reconciling'
+  and 'reconciling' or 'stale_epoch', '0'} end
+local now_ms = now_milliseconds()
+local plan = plan_cleanup(now_ms)
+if plan == nil then return redis.error_reply('COORDINATION_CORRUPT') end
+if plan == false then return {'1', 'denied', 'reconciliation_required', '0'} end
+local replay_value, replay_score = redis.call('HGET', KEYS[5], ARGV[6]),
+  redis.call('ZSCORE', KEYS[6], ARGV[6])
+if (replay_value or replay_score) and not valid_replay(replay_value, replay_score) then
+  return redis.error_reply('COORDINATION_CORRUPT')
+end
+local transaction_value, transaction_score = redis.call('HGET', KEYS[3], ARGV[2]),
+  redis.call('ZSCORE', KEYS[4], ARGV[2])
+if (transaction_value or transaction_score) and not valid_transaction(transaction_value,
+  transaction_score) then return redis.error_reply('COORDINATION_CORRUPT') end
+-- apply validated mutation
+apply_cleanup(plan)
+if replay_score and tonumber(replay_score) <= now_ms then replay_value = nil end
+if replay_value then
+  local replay = parse_replay(replay_value)
+  if replay.fingerprint ~= ARGV[7] then return {'1', 'denied', 'conflict', '0'} end
+  if replay.status ~= 'applied' then return {'1', 'denied', replay.reason, '1'} end
+  local transaction = redis.call('HGET', KEYS[3], ARGV[2])
+  local parsed = transaction and parse_transaction(transaction) or nil
+  if not parsed or replay.state ~= ARGV[2] or replay.browser ~= ARGV[3]
+    or parsed.browser ~= ARGV[3] or parsed.payload ~= ARGV[4] or parsed.expiry ~= replay.expiry then
+    return {'1', 'denied', 'conflict', '0'}
+  end
+  return {'1', 'applied', '', '1'}
+end
+if redis.call('HLEN', KEYS[5]) >= tonumber(ARGV[9]) then
+  return {'1', 'denied', 'reconciliation_required', '0'}
+end
+transaction_value = redis.call('HGET', KEYS[3], ARGV[2])
+local reason = transaction_value and 'conflict' or
+  (redis.call('HLEN', KEYS[3]) >= tonumber(ARGV[8]) and 'capacity' or '')
+local expiry = string.format('%.0f', now_ms + tonumber(ARGV[5]))
+store_replay(ARGV[6], ARGV[7], reason == '' and 'applied' or 'denied', reason,
+  reason == '' and ARGV[2] or '', reason == '' and ARGV[3] or '', expiry)
+if reason ~= '' then return {'1', 'denied', reason, '0'} end
+redis.call('HSET', KEYS[3], ARGV[2], table.concat({'1', ARGV[3], ARGV[4], expiry}, '|'))
+redis.call('ZADD', KEYS[4], tonumber(expiry), ARGV[2])
+return {'1', 'applied', '', '0'}
+"""
+)
+
+
+_OIDC_TRANSACTION_CONSUME_SCRIPT = (
+    "-- omni:oidc_transaction_consume:v1\n"
+    + _OIDC_TRANSACTION_COMMON
+    + r"""
+local fenced, epoch_state = ready_epoch(ARGV[1])
+if fenced == nil then return redis.error_reply('COORDINATION_CORRUPT') end
+if not fenced then return {'1', 'denied', epoch_state == 'reconciling'
+  and 'reconciling' or 'stale_epoch', '0', ''} end
+local now_ms = now_milliseconds()
+local original_value, original_score = redis.call('HGET', KEYS[3], ARGV[2]),
+  redis.call('ZSCORE', KEYS[4], ARGV[2])
+if (original_value or original_score) and not valid_transaction(original_value, original_score) then
+  return redis.error_reply('COORDINATION_CORRUPT')
+end
+local was_expired = original_score and tonumber(original_score) <= now_ms
+local plan = plan_cleanup(now_ms)
+if plan == nil then return redis.error_reply('COORDINATION_CORRUPT') end
+if plan == false then return {'1', 'denied', 'reconciliation_required', '0', ''} end
+local replay_value, replay_score = redis.call('HGET', KEYS[5], ARGV[5]),
+  redis.call('ZSCORE', KEYS[6], ARGV[5])
+if (replay_value or replay_score) and not valid_replay(replay_value, replay_score) then
+  return redis.error_reply('COORDINATION_CORRUPT')
+end
+-- apply validated mutation
+apply_cleanup(plan)
+if replay_score and tonumber(replay_score) <= now_ms then replay_value = nil end
+if replay_value then
+  local replay = parse_replay(replay_value)
+  if replay.fingerprint ~= ARGV[6] then
+    return {'1', 'denied', 'reconciliation_required', '0', ''}
+  end
+  if replay.status == 'consumed' then return {'1', 'denied', 'not_found', '1', ''} end
+  return {'1', 'denied', replay.reason, '1', ''}
+end
+if redis.call('HLEN', KEYS[5]) >= tonumber(ARGV[7]) then
+  return {'1', 'denied', 'reconciliation_required', '0', ''}
+end
+local transaction_value = redis.call('HGET', KEYS[3], ARGV[2])
+local transaction = transaction_value and parse_transaction(transaction_value) or nil
+local status, reason, payload, expiry = 'denied', '', '',
+  string.format('%.0f', now_ms + tonumber(ARGV[4]))
+if not transaction then reason = was_expired and 'expired' or 'not_found'
+elseif transaction.browser ~= ARGV[3] then reason, expiry = 'browser_mismatch', transaction.expiry
+else status, payload, expiry = 'consumed', transaction.payload, transaction.expiry end
+store_replay(ARGV[5], ARGV[6], status, reason, status == 'consumed' and ARGV[2] or '',
+  status == 'consumed' and ARGV[3] or '', expiry)
+if status == 'consumed' then
+  redis.call('HDEL', KEYS[3], ARGV[2]); redis.call('ZREM', KEYS[4], ARGV[2])
+  return {'1', 'consumed', '', '0', payload}
+end
+return {'1', 'denied', reason, '0', ''}
+"""
+)
+
 SCRIPT_SOURCES = {
     "epoch_read": _EPOCH_READ_SCRIPT,
     "epoch_advance": _EPOCH_ADVANCE_SCRIPT,
@@ -1586,6 +1974,10 @@ SCRIPT_SOURCES = {
     "security_session_rotate": _SECURITY_SESSION_ROTATE_SCRIPT,
     "security_session_revoke": _SECURITY_SESSION_REVOKE_SCRIPT,
     "security_session_list": _SECURITY_SESSION_LIST_SCRIPT,
+    "security_attempt_reserve": _SECURITY_ATTEMPT_RESERVE_SCRIPT,
+    "security_attempt_clear": _SECURITY_ATTEMPT_CLEAR_SCRIPT,
+    "oidc_transaction_create": _OIDC_TRANSACTION_CREATE_SCRIPT,
+    "oidc_transaction_consume": _OIDC_TRANSACTION_CONSUME_SCRIPT,
 }
 
 
@@ -1921,6 +2313,82 @@ def _decode_session_page_reply(reply: object, *, requested_limit: int) -> Sessio
         raise CoordinationCorruptError("Coordination reply is invalid.") from exc
 
 
+def _decode_attempt_reservation_reply(reply: object) -> AttemptReservationDecision:
+    values = _strict_array(reply, 6)
+    if values[1] not in {b"allowed", b"denied"} or values[3] not in {b"0", b"1"}:
+        raise CoordinationCorruptError("Coordination reply is invalid.")
+    try:
+        return AttemptReservationDecision(
+            values[1] == b"allowed",
+            _strict_nonnegative_int(values[4]),
+            _strict_nonnegative_int(values[5]),
+            values[2].decode("ascii"),
+            values[3] == b"1",
+        )
+    except (UnicodeDecodeError, ValueError) as exc:
+        raise CoordinationCorruptError("Coordination reply is invalid.") from exc
+
+
+def _decode_attempt_clear_reply(reply: object) -> AttemptClearResult:
+    values = _strict_array(reply, 4)
+    if values[1] == b"reconciliation_required":
+        if values[2:] != [b"0", b"0"]:
+            raise CoordinationCorruptError("Coordination reply is invalid.")
+        raise CoordinationReconciliationRequiredError("Reconciliation is required.")
+    if (
+        values[1] != b"ok"
+        or values[2] not in {b"0", b"1"}
+        or values[3]
+        not in {
+            b"0",
+            b"1",
+        }
+    ):
+        raise CoordinationCorruptError("Coordination reply is invalid.")
+    return AttemptClearResult(values[2] == b"1", values[3] == b"1")
+
+
+def _decode_transaction_create_reply(reply: object) -> TransactionCreateResult:
+    values = _strict_array(reply, 4)
+    if values[1] not in {b"applied", b"denied"} or values[3] not in {b"0", b"1"}:
+        raise CoordinationCorruptError("Coordination reply is invalid.")
+    try:
+        return TransactionCreateResult(
+            values[1] == b"applied",
+            values[2].decode("ascii"),
+            values[3] == b"1",
+        )
+    except (UnicodeDecodeError, ValueError) as exc:
+        raise CoordinationCorruptError("Coordination reply is invalid.") from exc
+
+
+def _decode_transaction_consume_reply(reply: object) -> OidcTransactionConsumeResult:
+    values = _strict_array(reply, 5)
+    if values[1] not in {b"consumed", b"denied"} or values[3] not in {b"0", b"1"}:
+        raise CoordinationCorruptError("Coordination reply is invalid.")
+    try:
+        reason = values[2].decode("ascii")
+        if values[1] == b"consumed":
+            if reason or not values[4]:
+                raise ValueError
+            payload = base64.b64decode(values[4], validate=True)
+            return OidcTransactionConsumeResult(
+                True,
+                payload,
+                idempotent=values[3] == b"1",
+            )
+        if values[4]:
+            raise ValueError
+        return OidcTransactionConsumeResult(
+            False,
+            None,
+            reason,
+            values[3] == b"1",
+        )
+    except (UnicodeDecodeError, ValueError) as exc:
+        raise CoordinationCorruptError("Coordination reply is invalid.") from exc
+
+
 class RedisStateStore:
     """Lazy, secret-safe Redis implementation of the coordination surface."""
 
@@ -2056,6 +2524,29 @@ class RedisStateStore:
             self._key("security:session-replay-expiry"),
         ]
 
+    def _security_attempt_keys(self, category: SecurityAttemptCategory) -> list[str]:
+        """Return the fixed key bundle isolated to one throttle category."""
+        scope = f"security:attempt:{category.value}"
+        return [
+            self._key("epoch"),
+            self._key("initialization"),
+            self._key(f"{scope}:records"),
+            self._key(f"{scope}:expiry"),
+            self._key(f"{scope}:replay"),
+            self._key(f"{scope}:replay-expiry"),
+        ]
+
+    def _oidc_transaction_keys(self) -> list[str]:
+        """Return the fixed key bundle for pending OIDC proof state."""
+        return [
+            self._key("epoch"),
+            self._key("initialization"),
+            self._key("security:oidc-transactions"),
+            self._key("security:oidc-transaction-expiry"),
+            self._key("security:oidc-replay"),
+            self._key("security:oidc-replay-expiry"),
+        ]
+
     async def _quota_locator(
         self, category: str, identifier: str
     ) -> tuple[bytes, bytes | None] | None:
@@ -2118,6 +2609,10 @@ class RedisStateStore:
             raise CoordinationCorruptError("Coordination reply is invalid.") from None
         except Exception as exc:
             error_text = str(exc).upper()
+            if "COORDINATION_RECONCILIATION_REQUIRED" in error_text:
+                raise CoordinationReconciliationRequiredError(
+                    "Reconciliation is required."
+                ) from None
             if any(marker in error_text for marker in _CORRUPT_DRIVER_ERROR_MARKERS):
                 raise CoordinationCorruptError("Stored coordination state is invalid.") from None
             raise CoordinationUnavailableError("Redis coordination is unavailable.") from None
@@ -2606,6 +3101,118 @@ class RedisStateStore:
             ],
         )
         return _decode_session_page_reply(reply, requested_limit=request.limit)
+
+    async def reserve_security_attempt(
+        self, request: AttemptReservationRequest
+    ) -> AttemptReservationDecision:
+        if not isinstance(request, AttemptReservationRequest):
+            raise ValueError("Security attempt request is invalid.")
+        window = _ttl_ms(request.window_seconds)
+        assert window is not None
+        fingerprint = _fingerprint(
+            request.category.value,
+            request.client_index,
+            request.limit,
+            float(request.window_seconds),
+            request.fencing_epoch,
+        )
+        reply = await self._run_script(
+            "security_attempt_reserve",
+            keys=self._security_attempt_keys(request.category),
+            args=[
+                _integer_bytes(request.fencing_epoch),
+                request.client_index.encode("ascii"),
+                _integer_bytes(request.limit),
+                _integer_bytes(window),
+                request.operation_id.encode("ascii"),
+                fingerprint,
+                _integer_bytes(self._security_attempt_limit),
+                _integer_bytes(self._security_replay_limit),
+            ],
+        )
+        return _decode_attempt_reservation_reply(reply)
+
+    async def clear_security_attempts(self, request: AttemptClearRequest) -> AttemptClearResult:
+        if not isinstance(request, AttemptClearRequest):
+            raise ValueError("Security attempt clear request is invalid.")
+        replay_ttl = _ttl_ms(MIN_SECURITY_ATTEMPT_WINDOW_SECONDS)
+        assert replay_ttl is not None
+        fingerprint = _fingerprint(
+            request.category.value,
+            request.client_index,
+            request.fencing_epoch,
+        )
+        reply = await self._run_script(
+            "security_attempt_clear",
+            keys=self._security_attempt_keys(request.category),
+            args=[
+                _integer_bytes(request.fencing_epoch),
+                request.client_index.encode("ascii"),
+                _integer_bytes(replay_ttl),
+                request.operation_id.encode("ascii"),
+                fingerprint,
+                _integer_bytes(self._security_replay_limit),
+            ],
+        )
+        return _decode_attempt_clear_reply(reply)
+
+    async def create_oidc_transaction(
+        self, request: OidcTransactionCreateRequest
+    ) -> TransactionCreateResult:
+        if not isinstance(request, OidcTransactionCreateRequest):
+            raise ValueError("OIDC transaction create request is invalid.")
+        ttl = _ttl_ms(request.ttl_seconds)
+        assert ttl is not None
+        fingerprint = _fingerprint(
+            request.state_index,
+            request.browser_index,
+            request.payload,
+            float(request.ttl_seconds),
+            request.fencing_epoch,
+        )
+        reply = await self._run_script(
+            "oidc_transaction_create",
+            keys=self._oidc_transaction_keys(),
+            args=[
+                _integer_bytes(request.fencing_epoch),
+                request.state_index.encode("ascii"),
+                request.browser_index.encode("ascii"),
+                base64.b64encode(request.payload),
+                _integer_bytes(ttl),
+                request.operation_id.encode("ascii"),
+                fingerprint,
+                _integer_bytes(self._oidc_transaction_limit),
+                _integer_bytes(self._security_replay_limit),
+            ],
+        )
+        return _decode_transaction_create_reply(reply)
+
+    async def consume_oidc_transaction(
+        self, request: OidcTransactionConsumeRequest
+    ) -> OidcTransactionConsumeResult:
+        if not isinstance(request, OidcTransactionConsumeRequest):
+            raise ValueError("OIDC transaction consume request is invalid.")
+        replay_ttl = _ttl_ms(MAX_OIDC_TRANSACTION_TTL_SECONDS)
+        assert replay_ttl is not None
+        fingerprint = _fingerprint(
+            request.state_index,
+            request.browser_index,
+            request.fencing_epoch,
+        )
+        reply = await self._run_script(
+            "oidc_transaction_consume",
+            keys=self._oidc_transaction_keys(),
+            args=[
+                _integer_bytes(request.fencing_epoch),
+                request.state_index.encode("ascii"),
+                request.browser_index.encode("ascii"),
+                _integer_bytes(replay_ttl),
+                request.operation_id.encode("ascii"),
+                fingerprint,
+                _integer_bytes(self._security_replay_limit),
+            ],
+        )
+        return _decode_transaction_consume_reply(reply)
 
     async def close(self) -> None:
         async with self._lifecycle_lock:

@@ -2051,6 +2051,10 @@ class RedisStateStoreTests(unittest.IsolatedAsyncioTestCase):
                 "security_session_rotate",
                 "security_session_revoke",
                 "security_session_list",
+                "security_attempt_reserve",
+                "security_attempt_clear",
+                "oidc_transaction_create",
+                "oidc_transaction_consume",
             },
         )
         for name, source in SCRIPT_SOURCES.items():
