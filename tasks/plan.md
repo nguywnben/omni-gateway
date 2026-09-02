@@ -48,8 +48,9 @@ or Phase 5 request tracing.
   instruction to start the project and execute the next plan.
 - Active approved scope: Wave 4 under accepted ADR-007/ADR-008; W4.1–W4.15 and checkpoints W4-A/W4-B
   are complete and W4.16 is the next implementation slice.
-- State: **READY — W4.16 NEXT**. Versioned in-process/Redis coordination primitives now have shared
-  semantic evidence without runtime activation; identity and security state coordination is next.
+- State: **IN PROGRESS — W4.16 TASK 1 NEXT**. Versioned in-process/Redis coordination primitives
+  now have shared semantic evidence; the accepted W4.16 security-state spec and nine-task plan are
+  recorded without runtime activation.
 - Still gated by later slices and evidence: distributed-state activation, multiple workers/
   replicas, destructive migration, and production release activation.
 
@@ -733,6 +734,22 @@ to the W4.15 boundary.
 - Verification: cross-process login/revoke/replay, partition, expiry, and recovery tests.
 - Dependencies: W4.15.
 - Likely files: session/OIDC/throttle adapters, integration tests.
+- Maintained specification: `docs/specs/identity-security-coordination.md`.
+- Detailed execution plan:
+  `docs/superpowers/plans/2026-09-02-w4.16-identity-security-coordination.md`.
+
+Implementation slices:
+
+1. Define the strict opaque security-state domain and reusable behavioral fixture.
+2. Implement the in-process fenced reference for sessions, attempts, and one-time transactions.
+3. Add Redis session lifecycle/index parity through fixed bounded Lua.
+4. Add Redis throttle and OIDC transaction parity through fixed bounded Lua.
+5. Move the session service behind the typed boundary while standalone remains in-memory.
+6. Replace process-local login/recovery/OIDC-start throttles with atomic attempt coordination.
+7. Move OIDC transaction persistence behind the typed boundary.
+8. Add opt-in live parity and low-cardinality operability evidence.
+9. Reconcile adversarial review, run repository gates, and restart the committed standalone
+   checkpoint without activation.
 
 ### W4.17 — Coordinate routing, governance, and cache state
 
