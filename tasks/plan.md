@@ -378,6 +378,11 @@ Identity and authorization land before OIDC; OIDC and
 revocable sessions land before identity UI; durable parity and Redis semantics land before any
 scale-out configuration changes.
 
+The remaining work is governed by the continuous completion plan at
+`docs/superpowers/plans/2026-09-02-wave-4-continuous-completion.md`. The human authorized continuous
+execution across W4.16–W4.19 on 2026-09-02; internal slices remain atomic, but no task-boundary pause
+is required.
+
 ### W4.1 — Phase 6 specification and decision gate
 
 Record the current trust boundaries, explicit role/session/OIDC contract, coordinated-state

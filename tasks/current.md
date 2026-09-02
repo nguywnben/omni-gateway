@@ -11,6 +11,9 @@
   added to that denominator.
 - Active scope: Wave 4 W4.16, identity/session/security state coordination.
 - Control state: **IN PROGRESS — W4.16 TASK 3 NEXT**.
+- Execution mode: continuous through the remaining W4.16–W4.19 queue under
+  `docs/superpowers/plans/2026-09-02-wave-4-continuous-completion.md`; do not pause at internal task
+  boundaries.
 - Expected worktree state at this checkpoint: clean after the W4.16 Task 2 implementation commit.
 - Expected runtime: one Omni Gateway listener on `http://127.0.0.1:4283`; `/health` and `/ready`
   return HTTP 200.
