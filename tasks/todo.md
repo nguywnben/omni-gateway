@@ -224,7 +224,7 @@ These queue items refine Phases 4–5 and do not add to the 28-item program deno
     HTTP 200 health/readiness. Redis selection, caller migration, scale-out, and the O(n) quota
     performance boundary remain gated by W4.16-W4.19.
 - [ ] W4.16 Coordinate identity/session/security runtime state.
-  - [ ] W4.16.1 Define the strict security coordination domain and shared contract.
+  - [x] W4.16.1 Define the strict security coordination domain and shared contract.
   - [ ] W4.16.2 Implement the in-process security-state reference.
   - [ ] W4.16.3 Implement Redis session lifecycle parity.
   - [ ] W4.16.4 Implement Redis throttle and OIDC transaction parity.

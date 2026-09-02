@@ -48,9 +48,9 @@ or Phase 5 request tracing.
   instruction to start the project and execute the next plan.
 - Active approved scope: Wave 4 under accepted ADR-007/ADR-008; W4.1–W4.15 and checkpoints W4-A/W4-B
   are complete and W4.16 is the next implementation slice.
-- State: **IN PROGRESS — W4.16 TASK 1 NEXT**. Versioned in-process/Redis coordination primitives
-  now have shared semantic evidence; the accepted W4.16 security-state spec and nine-task plan are
-  recorded without runtime activation.
+- State: **IN PROGRESS — W4.16 TASK 2 NEXT**. The strict opaque security-state domain and shared
+  behavioral fixture are verified; the in-process fenced reference is next. Runtime activation
+  remains unchanged.
 - Still gated by later slices and evidence: distributed-state activation, multiple workers/
   replicas, destructive migration, and production release activation.
 

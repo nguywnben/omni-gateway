@@ -10,8 +10,8 @@
   Phase 6 ADR approval), exactly 75.0%; wave execution-slice checkboxes are refinements and are not
   added to that denominator.
 - Active scope: Wave 4 W4.16, identity/session/security state coordination.
-- Control state: **IN PROGRESS — W4.16 TASK 1 NEXT**.
-- Expected worktree state at this checkpoint: clean after the W4.16 design/plan commit.
+- Control state: **IN PROGRESS — W4.16 TASK 2 NEXT**.
+- Expected worktree state at this checkpoint: clean after the W4.16 Task 1 contract commit.
 - Expected runtime: one Omni Gateway listener on `http://127.0.0.1:4283`; `/health` and `/ready`
   return HTTP 200.
 - Last verified full suite: 1,147 tests passed on Python 3.14.6 with 25 opt-in live backend tests
@@ -460,9 +460,9 @@ checkboxes to be marked complete.
 
 ## Immediate Next Action
 
-Execute W4.16 Task 1 from
-`docs/superpowers/plans/2026-09-02-w4.16-identity-security-coordination.md`: define the strict
-security coordination domain and reusable behavioral contract with abuse-first RED evidence.
+Execute W4.16 Task 2 from
+`docs/superpowers/plans/2026-09-02-w4.16-identity-security-coordination.md`: implement the
+in-process security-state reference against the shared session/throttle/OIDC behavioral fixture.
 Preserve `WORKERS=1`, one replica, disabled-by-default OIDC, source authority, and every HA
 activation gate; routing, quota, cache, readiness, and deployment activation remain out of scope.
 
