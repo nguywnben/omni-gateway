@@ -43,7 +43,8 @@ def _reservation(reservation_id: str, **overrides) -> QuotaReservationRequest:
 
 class AtomicQuotaReservationTests(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self) -> None:
-        self.store = InMemoryStateStore()
+        self.coordination_now = 1_000.0
+        self.store = InMemoryStateStore(clock=lambda: self.coordination_now)
 
     async def test_concurrent_rpm_reservations_admit_only_one_request(self):
         first, second = await asyncio.gather(
@@ -85,6 +86,7 @@ class AtomicQuotaReservationTests(unittest.IsolatedAsyncioTestCase):
         rejected = await self.store.reserve_quota(
             _reservation("res_b", now=1_002.0, estimated_tokens=200, tpm_limit=1_000)
         )
+        self.coordination_now = 1_062.0
         after_window = await self.store.reserve_quota(
             _reservation("res_c", now=1_062.0, estimated_tokens=200, tpm_limit=1_000)
         )
@@ -166,6 +168,7 @@ class AtomicQuotaReservationTests(unittest.IsolatedAsyncioTestCase):
     async def test_expired_reservation_is_reconciled(self):
         await self.store.reserve_quota(_reservation("res_a", rpm_limit=1, ttl_seconds=5.0))
 
+        self.coordination_now = 1_006.0
         decision = await self.store.reserve_quota(_reservation("res_b", now=1_006.0, rpm_limit=1))
 
         self.assertTrue(decision.accepted)
@@ -222,6 +225,7 @@ class AtomicQuotaReservationTests(unittest.IsolatedAsyncioTestCase):
             )
         )
 
+        self.coordination_now = 1_062.0
         await self.store.reserve_quota(
             _reservation(
                 "other-key-request",

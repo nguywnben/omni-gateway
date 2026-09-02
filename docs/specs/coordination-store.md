@@ -74,10 +74,23 @@ Common bounds:
 
 ## Fencing lifecycle
 
-A new namespace bootstraps epoch `1` in `ready` state. Reading the epoch is side-effect free after
-bootstrap. `advance_epoch(expected_epoch, operation_id)` is one compare-and-set transition to the
-next epoch in `reconciling` state. Exact replay returns the same result; stale or conflicting replay
-does not advance it again.
+A new namespace has one persistent initialization marker and one persistent epoch record in the
+same deployment hash slot. `read_epoch()` is the sole provisioning transition: it may atomically
+create marker plus ready epoch `1` only when both are absent. Reading the epoch is side-effect free
+after provisioning. If exactly one member is absent, either member is malformed or expiring, or a
+normal mutation observes an absent member, the namespace is corrupt and the operation fails
+closed. CAS, invalidation, quota reserve, quota commit, quota release, epoch advance, and epoch
+ready never infer or repair initialization.
+
+The marker distinguishes a genuinely new namespace from partial marker/epoch loss. It cannot
+distinguish a deliberate or accidental deletion of every key in the namespace from first use.
+Preventing whole-namespace loss, restoring authoritative epoch state, and gating activation on
+that operational protection belong to the W4.18 activation/reconciliation work. Clearing the
+entire namespace is therefore not a supported recovery mechanism.
+
+`advance_epoch(expected_epoch, operation_id)` is one compare-and-set transition to the next epoch
+in `reconciling` state. Exact replay returns the same result; stale or conflicting replay does not
+advance it again.
 
 `mark_epoch_ready(epoch, operation_id)` changes only that exact reconciling epoch to `ready`.
 Normal CAS, invalidation, quota reserve, quota commit, and quota release operations require the
@@ -116,6 +129,13 @@ closed.
 The selected durable usage ledger remains authoritative for hard-budget recovery. W4.15 Redis
 quota state is a coordination primitive, not a replacement for the durable reservation journal.
 
+Coordination expiry, retention, and rate windows use the backend's clock captured once per
+mutation: the injected clock for the in-process reference and Redis `TIME` for Lua. Caller `now`
+values remain validated business/replay evidence and cannot expire or extend coordination state.
+TPM aggregation and comparison preserve the full signed-63-bit token domain with decimal-string
+integer arithmetic; an aggregate above that domain saturates fail closed instead of passing
+through a binary64 approximation. Both signed float zeros serialize canonically as `0`.
+
 ## Redis layout and atomicity
 
 All keys for one deployment contain the same hash tag derived from the deployment namespace. This
@@ -127,6 +147,16 @@ Scripts receive every accessed key through `KEYS` and all data through `ARGV`; t
 `KEYS`, perform `SCAN`, construct undisclosed key names, or execute unbounded loops. Redis server
 time governs expiry so replica clock drift cannot admit stale work. Script-cache loss is handled by
 reloading the fixed application-owned script and retrying `EVALSHA` once through redis-py.
+
+Cleanup preflights at most 257 current due members before mutation and applies at most 256. A
+backlog failure changes neither records nor expiry indexes and repeats until explicit
+reconciliation; replaced/stale in-process heap nodes do not consume the cleanup budget.
+
+Quota mutations currently scan up to the configured per-key record cap with `HGETALL` plus bounded
+`ZSCORE` lookups while Redis is executing Lua. This O(n), Redis-thread-blocking design is accepted
+only as a pre-activation semantic reference. W4.19 owns measured topology and a supported
+operational cap or redesign; W4.15 evidence is not a scalability claim, and Redis activation is
+prohibited until that work is complete.
 
 ## Failure and cancellation semantics
 

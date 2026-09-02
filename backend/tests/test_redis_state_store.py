@@ -90,6 +90,27 @@ class ScriptRegistrationFailureClient(FakeRedisClient):
         raise RuntimeError("registration failed with redis://user:secret@example.invalid/0")
 
 
+class ControlledCloseRedisClient(FakeRedisClient):
+    def __init__(self, *close_errors: BaseException) -> None:
+        super().__init__()
+        self.close_errors = deque(close_errors)
+        self.close_started = asyncio.Event()
+        self.close_release = asyncio.Event()
+        self.close_completed = False
+
+    def reset_close_barrier(self) -> None:
+        self.close_started = asyncio.Event()
+        self.close_release = asyncio.Event()
+
+    async def aclose(self) -> None:
+        self.aclose_calls += 1
+        self.close_started.set()
+        await self.close_release.wait()
+        if self.close_errors:
+            raise self.close_errors.popleft()
+        self.close_completed = True
+
+
 class FakeRedisModule:
     def __init__(self, client: FakeRedisClient | None = None) -> None:
         self.client = client or FakeRedisClient()
@@ -125,17 +146,17 @@ class StatefulRedisClient(FakeRedisClient):
     """Small deterministic driver model for Task 3's public transition sequence."""
 
     _KEY_COUNTS = {
-        "epoch_read": (1, 0),
-        "epoch_advance": (3, 4),
-        "epoch_ready": (3, 4),
-        "cas": (4, 7),
-        "invalidation": (4, 5),
-        "invalidation_read": (1, 0),
+        "epoch_read": (2, 0),
+        "epoch_advance": (4, 4),
+        "epoch_ready": (4, 4),
+        "cas": (5, 7),
+        "invalidation": (5, 5),
+        "invalidation_read": (3, 0),
         "increment": (1, 2),
         "lock_release": (1, 1),
-        "quota_reserve": (7, 20),
-        "quota_commit": (7, 12),
-        "quota_release": (7, 8),
+        "quota_reserve": (8, 20),
+        "quota_commit": (8, 12),
+        "quota_release": (8, 8),
     }
 
     def __init__(self) -> None:
@@ -143,6 +164,7 @@ class StatefulRedisClient(FakeRedisClient):
         self.now_ms = 1_000_000
         self.epoch = (1, b"ready")
         self.epoch_exists = True
+        self.initialization_exists = True
         self.cas: dict[str, tuple[int, bytes, int]] = {}
         self.generations: dict[str, int] = {}
         self.replays: defaultdict[str, dict[bytes, tuple[bytes, list[bytes], int]]] = defaultdict(
@@ -237,7 +259,24 @@ class StatefulRedisClient(FakeRedisClient):
         assert all(isinstance(arg, bytes) for arg in args)
         byte_args = [arg for arg in args if isinstance(arg, bytes)]
         if name == "epoch_read":
+            if self.epoch_exists != self.initialization_exists:
+                raise RuntimeError("COORDINATION_CORRUPT")
+            if not self.epoch_exists:
+                self.epoch = (1, b"ready")
+                self.epoch_exists = True
+                self.initialization_exists = True
             return [b"1", b"ok", str(self.epoch[0]).encode(), self.epoch[1]]
+        if name in {
+            "epoch_advance",
+            "epoch_ready",
+            "cas",
+            "invalidation",
+            "invalidation_read",
+            "quota_reserve",
+            "quota_commit",
+            "quota_release",
+        } and (not self.epoch_exists or not self.initialization_exists):
+            raise RuntimeError("COORDINATION_CORRUPT")
         if name in {"epoch_advance", "epoch_ready"}:
             expected, operation_id, ttl, limit = byte_args
             existing = self._replay(name, operation_id, expected)
@@ -438,18 +477,6 @@ class StatefulRedisClient(FakeRedisClient):
 
     def _run_quota_script(self, name: str, args: list[bytes], keys: list[str]) -> list[bytes]:
         epoch = int(args[0])
-        if not self.epoch_exists and epoch != 1:
-            return (
-                [b"1", b"denied", args[1], b"stale_epoch", b"0", b"0"]
-                if name == "quota_reserve"
-                else [b"1", b"not_committed", b"0", b"0"]
-                if name == "quota_commit"
-                else [b"1", b"ok", b"0", b"0"]
-            )
-        if not self.epoch_exists and self.corrupt_quota_pairs:
-            raise RuntimeError("COORDINATION_CORRUPT")
-        if not self.epoch_exists:
-            self.epoch_exists = True
         if self.epoch != (epoch, b"ready"):
             if name == "quota_reserve":
                 return [
@@ -800,6 +827,83 @@ class RedisStateStoreTests(unittest.IsolatedAsyncioTestCase):
         await second.close()
         self.assertEqual(self.client.aclose_calls, 1)
 
+    async def test_close_waiter_cancellation_does_not_cancel_the_shared_close(self) -> None:
+        client = ControlledCloseRedisClient()
+        client.script_replies["epoch_read"].append(EPOCH_READY)
+        store = RedisStateStore(
+            "redis://redis.example/0",
+            deployment_namespace="cancel-close",
+            _redis_module_for_testing=FakeRedisModule(client),
+        )
+        await store.read_epoch()
+
+        cancelled_waiter = asyncio.create_task(store.close())
+        await client.close_started.wait()
+        with self.assertRaises(CoordinationUnavailableError):
+            await store.read_epoch()
+        cancelled_waiter.cancel()
+        with self.assertRaises(asyncio.CancelledError):
+            await cancelled_waiter
+
+        surviving_waiter = asyncio.create_task(store.close())
+        client.close_release.set()
+        await surviving_waiter
+        self.assertEqual(client.aclose_calls, 1)
+        self.assertTrue(client.close_completed)
+        with self.assertRaises(CoordinationUnavailableError):
+            await store.read_epoch()
+
+    async def test_concurrent_close_waiters_share_one_underlying_close(self) -> None:
+        client = ControlledCloseRedisClient()
+        client.script_replies["epoch_read"].append(EPOCH_READY)
+        store = RedisStateStore(
+            "redis://redis.example/0",
+            deployment_namespace="concurrent-close",
+            _redis_module_for_testing=FakeRedisModule(client),
+        )
+        await store.read_epoch()
+
+        first = asyncio.create_task(store.close())
+        await client.close_started.wait()
+        second = asyncio.create_task(store.close())
+        await asyncio.sleep(0)
+        client.close_release.set()
+        await asyncio.gather(first, second)
+
+        self.assertEqual(client.aclose_calls, 1)
+
+    async def test_close_failure_is_shared_and_a_later_attempt_retries_the_same_client(
+        self,
+    ) -> None:
+        client = ControlledCloseRedisClient(RuntimeError("secret close failure"))
+        client.script_replies["epoch_read"].append(EPOCH_READY)
+        store = RedisStateStore(
+            "redis://alice:super-secret@redis.example/0",
+            deployment_namespace="retry-close",
+            _redis_module_for_testing=FakeRedisModule(client),
+        )
+        await store.read_epoch()
+
+        first = asyncio.create_task(store.close())
+        await client.close_started.wait()
+        second = asyncio.create_task(store.close())
+        await asyncio.sleep(0)
+        client.close_release.set()
+        failures = await asyncio.gather(first, second, return_exceptions=True)
+
+        self.assertEqual(client.aclose_calls, 1)
+        self.assertTrue(all(isinstance(item, CoordinationUnavailableError) for item in failures))
+        self.assertTrue(all("secret" not in str(item) for item in failures))
+
+        client.script_replies["epoch_read"].append(EPOCH_READY)
+        self.assertEqual((await store.read_epoch()).epoch, 1)
+        client.reset_close_barrier()
+        retry = asyncio.create_task(store.close())
+        await client.close_started.wait()
+        client.close_release.set()
+        await retry
+        self.assertEqual(client.aclose_calls, 2)
+
     async def test_all_keys_share_one_tag_and_hide_logical_names(self) -> None:
         self.queue("epoch_read", EPOCH_READY)
         self.queue("cas", [b"1", b"applied", b"1", b"0"])
@@ -859,7 +963,8 @@ class RedisStateStoreTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(len(self.client.script_calls), 1)
         name, keys, args = self.client.script_calls[0]
         self.assertEqual(name, "epoch_advance")
-        self.assertEqual(len(keys), 3)
+        self.assertEqual(len(keys), 4)
+        self.assertTrue(keys[-1].endswith(":initialization"))
         self.assertEqual(args[:3], [b"1", b"advance-1", b"2592000000"])
         self.assertEqual(args[-1], b"100000")
 
@@ -869,7 +974,8 @@ class RedisStateStoreTests(unittest.IsolatedAsyncioTestCase):
         result = await self.store.compare_and_set(request)
         self.assertEqual((result.applied, result.revision, result.idempotent), (True, 7, True))
         name, keys, args = self.client.script_calls[0]
-        self.assertEqual((name, len(keys)), ("cas", 4))
+        self.assertEqual((name, len(keys)), ("cas", 5))
+        self.assertTrue(keys[-1].endswith(":initialization"))
         self.assertEqual(args[:5], [b"6", b"\x00value\xff", b"2500", b"3", b"cas-op"])
         self.assertEqual(len(args[5]), 64)
         self.assertEqual(args[6], b"100000")
@@ -894,6 +1000,31 @@ class RedisStateStoreTests(unittest.IsolatedAsyncioTestCase):
         invalidation_fingerprints = [call[2][3] for call in self.client.script_calls]
         self.assertEqual(invalidation_fingerprints[0], invalidation_fingerprints[1])
 
+    async def test_signed_zero_is_canonicalized_at_the_redis_boundary(self) -> None:
+        self.queue("quota_reserve", [b"1", b"accepted", b"zero", b"", b"0", b"0"])
+        decision = await self.store.reserve_quota(
+            QuotaReservationRequest(
+                "zero",
+                "key",
+                -0.0,
+                1.0,
+                0,
+                -0.0,
+                None,
+                None,
+                None,
+                None,
+                -0.0,
+                -0.0,
+                -0.0,
+                -0.0,
+            )
+        )
+
+        self.assertTrue(decision.accepted)
+        args = self.client.script_calls[-1][2]
+        self.assertEqual([args[index] for index in (9, 11, 16, 17, 18, 19)], [b"0"] * 6)
+
     async def test_invalidation_args_and_stale_reconciling_outcomes(self) -> None:
         self.queue(
             "invalidation",
@@ -905,7 +1036,8 @@ class RedisStateStoreTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual((stale.applied, stale.generation), (False, None))
         self.assertEqual((replay.applied, replay.generation, replay.idempotent), (True, 4, True))
         _name, keys, args = self.client.script_calls[1]
-        self.assertEqual(len(keys), 4)
+        self.assertEqual(len(keys), 5)
+        self.assertTrue(keys[-1].endswith(":initialization"))
         self.assertEqual(args[:3], [b"2", b"op-2", b"3000"])
         self.assertEqual(len(args[3]), 64)
         self.assertEqual(args[4], b"100000")
@@ -958,6 +1090,10 @@ class RedisStateStoreTests(unittest.IsolatedAsyncioTestCase):
             with self.subTest(request=request.operation_id):
                 with self.assertRaises(CoordinationCorruptError):
                     await self.store.invalidate(request)
+
+        self.queue("quota_release", [b"1", b"ok", b"1", b"1"])
+        with self.assertRaises(CoordinationCorruptError):
+            await self.store.release_quota("reservation", now=1.0)
 
     async def test_connection_and_protocol_failures_are_secret_free(self) -> None:
         self.redis.error = ConnectionError(
@@ -1143,6 +1279,48 @@ class RedisStateStoreTests(unittest.IsolatedAsyncioTestCase):
             await store.mark_epoch_ready(99, "ready")
         self.assertEqual((await store.read_epoch()).epoch, 2)
 
+    async def test_namespace_bootstrap_is_read_only_and_partial_epoch_loss_fails_closed(
+        self,
+    ) -> None:
+        fresh_client = StatefulRedisClient()
+        fresh_client.epoch_exists = False
+        fresh_client.initialization_exists = False
+        fresh_store = RedisStateStore(
+            "redis://redis.example/0",
+            deployment_namespace="fresh-namespace",
+            _redis_module_for_testing=FakeRedisModule(fresh_client),
+        )
+
+        with self.assertRaises(CoordinationCorruptError):
+            await fresh_store.compare_and_set(CasRequest("key", 0, b"value", 5, 1, "cas"))
+        self.assertFalse(fresh_client.epoch_exists)
+        self.assertFalse(fresh_client.initialization_exists)
+
+        self.assertEqual((await fresh_store.read_epoch()).epoch, 1)
+        self.assertTrue(fresh_client.epoch_exists)
+        self.assertTrue(fresh_client.initialization_exists)
+        self.assertTrue(
+            (await fresh_store.compare_and_set(CasRequest("key", 0, b"value", 5, 1, "cas"))).applied
+        )
+
+        for epoch_exists, initialization_exists in ((False, True), (True, False)):
+            with self.subTest(
+                epoch_exists=epoch_exists,
+                initialization_exists=initialization_exists,
+            ):
+                client = StatefulRedisClient()
+                client.epoch_exists = epoch_exists
+                client.initialization_exists = initialization_exists
+                store = RedisStateStore(
+                    "redis://redis.example/0",
+                    deployment_namespace=f"partial-{int(epoch_exists)}",
+                    _redis_module_for_testing=FakeRedisModule(client),
+                )
+                with self.assertRaises(CoordinationCorruptError):
+                    await store.read_epoch()
+                with self.assertRaises(CoordinationCorruptError):
+                    await store.invalidate(InvalidationRequest("scope", 1, "invalidate"))
+
     async def test_cancelled_cas_response_replays_without_a_second_mutation(self) -> None:
         client = StatefulRedisClient()
         client.cancel_after_response_boundary = {"cas"}
@@ -1308,7 +1486,8 @@ class RedisStateStoreTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(
             [call[0] for call in quota_calls], ["quota_reserve", "quota_commit", "quota_release"]
         )
-        self.assertEqual([len(call[1]) for call in quota_calls], [7, 7, 7])
+        self.assertEqual([len(call[1]) for call in quota_calls], [8, 8, 8])
+        self.assertTrue(all(call[1][-1].endswith(":initialization") for call in quota_calls))
         self.assertEqual([len(call[2]) for call in quota_calls], [20, 12, 8])
         self.assertEqual(quota_calls[0][2][2], key_digest)
         self.assertEqual(quota_calls[1][2][4], key_digest)
@@ -1536,6 +1715,164 @@ class RedisStateStoreTests(unittest.IsolatedAsyncioTestCase):
         monthly = await store.commit_quota(QuotaCommitRequest("monthly", 1_000.0, 1, 0.6, False))
         self.assertTrue(monthly.overspent)
 
+    async def test_stateful_quota_preserves_signed_63_bit_token_decisions(self) -> None:
+        client = StatefulRedisClient()
+        store = RedisStateStore(
+            "redis://redis.example/0",
+            deployment_namespace="quota-large-tokens",
+            _redis_module_for_testing=FakeRedisModule(client),
+        )
+
+        def reservation(
+            identifier: str,
+            key_id: str,
+            estimated_tokens: int,
+            tpm_limit: int,
+        ) -> QuotaReservationRequest:
+            return QuotaReservationRequest(
+                identifier,
+                key_id,
+                1_000.0,
+                60.0,
+                estimated_tokens,
+                0.0,
+                None,
+                tpm_limit,
+                None,
+                None,
+                0.0,
+                0.0,
+                1_000.0,
+                1_000.0,
+            )
+
+        for boundary in (2**53 - 1, 2**53, 2**53 + 1, 2**63 - 1):
+            with self.subTest(path="reserve", boundary=boundary):
+                key_id = f"reserve-{boundary}"
+                self.assertTrue(
+                    (
+                        await store.reserve_quota(
+                            reservation(f"first-{boundary}", key_id, boundary, boundary)
+                        )
+                    ).accepted
+                )
+                denied = await store.reserve_quota(
+                    reservation(f"second-{boundary}", key_id, 1, boundary)
+                )
+                self.assertEqual(denied.reason, "tpm")
+
+        for limit, actual in (
+            (2**53, 2**53 + 1),
+            (2**53 + 1, 2**53 + 2),
+            (2**63 - 2, 2**63 - 1),
+        ):
+            with self.subTest(path="commit", limit=limit, actual=actual):
+                identifier = f"commit-{limit}"
+                self.assertTrue(
+                    (
+                        await store.reserve_quota(reservation(identifier, identifier, 0, limit))
+                    ).accepted
+                )
+                result = await store.commit_quota(
+                    QuotaCommitRequest(identifier, 1_000.0, actual, 0.0, False)
+                )
+                self.assertTrue(result.committed)
+                self.assertTrue(result.overspent)
+
+    async def test_stateful_quota_re_evaluates_identical_and_changed_operations_after_retention(
+        self,
+    ) -> None:
+        client = StatefulRedisClient()
+        store = RedisStateStore(
+            "redis://redis.example/0",
+            deployment_namespace="quota-expired-replay",
+            _redis_module_for_testing=FakeRedisModule(client),
+        )
+
+        def reservation(
+            identifier: str, *, operation_id: str, tokens: int = 1
+        ) -> QuotaReservationRequest:
+            return QuotaReservationRequest(
+                identifier,
+                identifier,
+                1_000.0,
+                1.0,
+                tokens,
+                0.0,
+                None,
+                None,
+                None,
+                None,
+                0.0,
+                0.0,
+                1_000.0,
+                1_000.0,
+                operation_id=operation_id,
+            )
+
+        original = reservation("reserve", operation_id="reserve-operation")
+        self.assertTrue((await store.reserve_quota(original)).accepted)
+        client.advance(60_000)
+        identical = await store.reserve_quota(original)
+        self.assertTrue(identical.accepted)
+        self.assertFalse(identical.idempotent)
+
+        client.advance(60_000)
+        changed = await store.reserve_quota(
+            reservation("reserve", operation_id="reserve-operation", tokens=2)
+        )
+        self.assertTrue(changed.accepted)
+        self.assertFalse(changed.idempotent)
+
+        commit_request = QuotaCommitRequest(
+            "commit", 1_000.0, 1, 0.0, False, operation_id="commit-operation"
+        )
+        self.assertTrue(
+            (
+                await store.reserve_quota(
+                    reservation("commit", operation_id="commit-reservation-1")
+                )
+            ).accepted
+        )
+        self.assertTrue((await store.commit_quota(commit_request)).committed)
+        client.advance(60_000)
+        self.assertTrue(
+            (
+                await store.reserve_quota(
+                    reservation("commit", operation_id="commit-reservation-2")
+                )
+            ).accepted
+        )
+        committed = await store.commit_quota(commit_request)
+        self.assertTrue(committed.committed)
+        self.assertFalse(committed.idempotent)
+
+        self.assertTrue(
+            (
+                await store.reserve_quota(
+                    reservation("release", operation_id="release-reservation-1")
+                )
+            ).accepted
+        )
+        self.assertTrue(
+            await store.release_quota("release", now=1_000.0, operation_id="release-operation")
+        )
+        client.advance(60_000)
+        self.assertTrue(
+            (
+                await store.reserve_quota(
+                    reservation("release", operation_id="release-reservation-2")
+                )
+            ).accepted
+        )
+        self.assertTrue(
+            await store.release_quota(
+                "release",
+                now=1_000.0,
+                operation_id="release-operation",
+            )
+        )
+
     async def test_stateful_quota_locator_races_and_target_backlog_fail_closed(self) -> None:
         client = StatefulRedisClient()
         store = RedisStateStore(
@@ -1633,7 +1970,7 @@ class RedisStateStoreTests(unittest.IsolatedAsyncioTestCase):
         )
         self.assertTrue(await store.release_quota("release-long", now=1_100.0))
 
-    async def test_stateful_quota_epoch_bootstrap_is_applied_only_after_validation(self) -> None:
+    async def test_stateful_quota_requires_explicit_namespace_initialization(self) -> None:
         def reservation(identifier: str, epoch: int = 1) -> QuotaReservationRequest:
             return QuotaReservationRequest(
                 identifier,
@@ -1655,28 +1992,36 @@ class RedisStateStoreTests(unittest.IsolatedAsyncioTestCase):
 
         client = StatefulRedisClient()
         client.epoch_exists = False
+        client.initialization_exists = False
         store = RedisStateStore(
             "redis://redis.example/0",
             deployment_namespace="quota-bootstrap",
             _redis_module_for_testing=FakeRedisModule(client),
         )
+        with self.assertRaises(CoordinationCorruptError):
+            await store.reserve_quota(reservation("bootstrap"))
+        self.assertFalse(client.epoch_exists)
+        self.assertFalse(client.initialization_exists)
+
+        self.assertEqual((await store.read_epoch()).epoch, 1)
         self.assertTrue((await store.reserve_quota(reservation("bootstrap"))).accepted)
         self.assertTrue(client.epoch_exists)
+        self.assertTrue(client.initialization_exists)
 
         stale_client = StatefulRedisClient()
         stale_client.epoch_exists = False
+        stale_client.initialization_exists = True
         stale_store = RedisStateStore(
             "redis://redis.example/0",
             deployment_namespace="quota-bootstrap-stale",
             _redis_module_for_testing=FakeRedisModule(stale_client),
         )
-        stale = await stale_store.reserve_quota(reservation("stale", epoch=2))
-        self.assertEqual(stale.reason, "stale_epoch")
+        with self.assertRaises(CoordinationCorruptError):
+            await stale_store.reserve_quota(reservation("stale", epoch=2))
         self.assertFalse(stale_client.epoch_exists)
 
         corrupt_client = StatefulRedisClient()
-        corrupt_client.epoch_exists = False
-        corrupt_client.corrupt_quota_pairs = True
+        corrupt_client.initialization_exists = False
         corrupt_store = RedisStateStore(
             "redis://redis.example/0",
             deployment_namespace="quota-bootstrap-corrupt",
@@ -1684,7 +2029,7 @@ class RedisStateStoreTests(unittest.IsolatedAsyncioTestCase):
         )
         with self.assertRaises(CoordinationCorruptError):
             await corrupt_store.reserve_quota(reservation("corrupt"))
-        self.assertFalse(corrupt_client.epoch_exists)
+        self.assertTrue(corrupt_client.epoch_exists)
 
     def test_scripts_are_fixed_cluster_safe_and_bounded(self) -> None:
         self.assertEqual(
@@ -1791,17 +2136,28 @@ class RedisStateStoreTests(unittest.IsolatedAsyncioTestCase):
             marker = source.index("-- apply validated mutation")
             for operation in ("HDEL", "ZREM", "HSET", "ZADD", "SET", "PEXPIREAT", "DEL", "HINCRBY"):
                 self.assertNotIn(f"redis.call('{operation}'", source[:marker])
-            self.assertIn("bootstrap_epoch", source[marker:])
-            self.assertIn(
-                "redis.call('HSET', KEYS[1], 'schema_version', '1', 'epoch', '1', 'state', 'ready')",
-                source[marker:],
-            )
+            self.assertNotIn("bootstrap_epoch", source)
+            self.assertNotIn("MSETNX", source)
+            self.assertIn("ready_epoch", source[:marker])
+
+        self.assertIn("redis.call('MSETNX'", SCRIPT_SOURCES["epoch_read"])
+        for name in (
+            "epoch_advance",
+            "epoch_ready",
+            "cas",
+            "invalidation",
+            "invalidation_read",
+            "quota_reserve",
+            "quota_commit",
+            "quota_release",
+        ):
+            self.assertNotIn("MSETNX", SCRIPT_SOURCES[name])
 
         self.assertIn(
-            "tonumber(r.retained_until) ~= tonumber(r.accepted_at) + tonumber(r.retention_ms)",
+            "r.retained_until_number ~= r.accepted_at_number + r.retention_ms_number",
             quota_reserve,
         )
-        self.assertIn("tonumber(r.retention_ms) > 2592000000", quota_reserve)
+        self.assertIn("r.retention_ms_number > 2592000000", quota_reserve)
 
         quota_commit = SCRIPT_SOURCES["quota_commit"]
         self.assertIn("aggregate_target_records", quota_commit)
@@ -1809,8 +2165,57 @@ class RedisStateStoreTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("record.daily_spend", quota_commit)
         self.assertIn("record.monthly_spend", quota_commit)
         self.assertIn("local overspent_value =", quota_commit)
-        self.assertIn("aggregate.rate_tokens > tonumber(record.tpm_limit)", quota_commit)
+        self.assertIn("uint_greater_than(aggregate.rate_tokens, record.tpm_limit)", quota_commit)
         self.assertNotIn("'|committed|0|'", quota_commit)
+
+    def test_quota_lua_uses_exact_saturating_token_arithmetic(self) -> None:
+        quota_reserve = SCRIPT_SOURCES["quota_reserve"]
+        quota_commit = SCRIPT_SOURCES["quota_commit"]
+
+        self.assertIn("local function add_uint_saturating", quota_reserve)
+        self.assertIn("local function uint_greater_than", quota_reserve)
+        self.assertIn("rate_tokens_saturated", quota_reserve)
+        self.assertNotIn("result.rate_tokens + tonumber(record.estimated_tokens)", quota_reserve)
+        self.assertNotIn("result.rate_tokens + tonumber(record.actual_tokens)", quota_reserve)
+        self.assertNotIn("aggregate.rate_tokens + tonumber(ARGV[11])", quota_reserve)
+        self.assertNotIn("aggregate.rate_tokens > tonumber(record.tpm_limit)", quota_commit)
+
+    def test_quota_lua_excludes_due_state_before_replay_decisions(self) -> None:
+        for name in ("quota_reserve", "quota_commit", "quota_release"):
+            with self.subTest(name=name):
+                source = SCRIPT_SOURCES[name]
+                exclusion = source.index("if replay and tonumber(replay_expiry) <= now_ms then")
+                replay_decision = source.index("if operation_key and not replay then")
+                self.assertLess(exclusion, replay_decision)
+                self.assertIn("record_after_planned_prune", source)
+
+    def test_quota_lua_parses_bounded_finite_decimals_and_exact_safe_timestamps(self) -> None:
+        source = SCRIPT_SOURCES["quota_reserve"]
+
+        self.assertIn("local function parse_decimal", source)
+        self.assertIn("number ~= number", source)
+        self.assertIn("number == math.huge", source)
+        self.assertIn("number > 9223372036854775807", source)
+        self.assertIn("local function valid_safe_uint", source)
+        self.assertIn("r.accepted_at_number > r.committed_at_number", source)
+        self.assertIn("monthly_snapshot > daily_snapshot", source)
+        self.assertIn("daily_snapshot > request_time", source)
+        self.assertIn("removed_record_count", source)
+        self.assertIn("score ~= record.next_expiry", source)
+        self.assertIn("terminal_source and r.active_until_number > r.retained_until_number", source)
+        self.assertNotIn(
+            "or r.active_until_number > r.retained_until_number\n"
+            "    or r.next_expiry_number > r.retained_until_number",
+            source,
+        )
+        for unsafe in (
+            "tonumber(r.accepted_at)",
+            "tonumber(r.active_until)",
+            "tonumber(r.retained_until)",
+            "tonumber(r.next_expiry)",
+            "tonumber(score) ~= tonumber(record.next_expiry)",
+        ):
+            self.assertNotIn(unsafe, source)
 
     def test_compatibility_reexport_and_virtual_subclass(self) -> None:
         self.assertIs(CompatibilityRedisStateStore, RedisStateStore)

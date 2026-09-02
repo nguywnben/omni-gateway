@@ -10,6 +10,8 @@ from core.coordination import (
     CoordinationUnavailableError,
     EpochState,
     InvalidationRequest,
+    QuotaCommitRequest,
+    QuotaReservationRequest,
 )
 
 if TYPE_CHECKING:
@@ -20,6 +22,167 @@ class CoordinationStoreContract:
     """Mixin for async tests; implementations provide ``self.store``."""
 
     store: CoordinationStore
+
+    @staticmethod
+    def _quota_request(
+        reservation_id: str, *, key_id: str, operation_id: str, **changes: object
+    ) -> QuotaReservationRequest:
+        values: dict[str, object] = {
+            "reservation_id": reservation_id,
+            "key_id": key_id,
+            "now": 1_000.0,
+            "ttl_seconds": 1.0,
+            "estimated_tokens": 1,
+            "estimated_cost_usd": 0.0,
+            "rpm_limit": None,
+            "tpm_limit": None,
+            "daily_budget_usd": None,
+            "monthly_budget_usd": None,
+            "daily_spend_usd": 0.0,
+            "monthly_spend_usd": 0.0,
+            "daily_snapshot_started_at": 1_000.0,
+            "monthly_snapshot_started_at": 1_000.0,
+            "operation_id": operation_id,
+        }
+        values.update(changes)
+        return QuotaReservationRequest(**values)  # type: ignore[arg-type]
+
+    async def assert_quota_lifecycle_replay_expiry_and_capacity_contract(
+        self, *, advance_quota_clock: Callable[[float], Awaitable[None]]
+    ) -> None:
+        """Assert the quota semantics shared by the reference and registered Lua."""
+
+        replay_request = self._quota_request(
+            "quota-replay", key_id="quota-replay-key", operation_id="quota-replay-operation"
+        )
+        first = await self.store.reserve_quota(replay_request)
+        replay = await self.store.reserve_quota(replay_request)
+        conflict = await self.store.reserve_quota(
+            self._quota_request(
+                "quota-replay",
+                key_id="quota-replay-key",
+                operation_id="quota-replay-operation",
+                estimated_tokens=2,
+            )
+        )
+        self.assertTrue(first.accepted)
+        self.assertTrue(replay.idempotent)
+        self.assertEqual(conflict.reason, "conflict")
+
+        for suffix in ("a", "b"):
+            self.assertTrue(
+                (
+                    await self.store.reserve_quota(
+                        self._quota_request(
+                            f"capacity-{suffix}",
+                            key_id="quota-capacity-key",
+                            operation_id=f"capacity-{suffix}",
+                        )
+                    )
+                ).accepted
+            )
+        capacity = await self.store.reserve_quota(
+            self._quota_request(
+                "capacity-c", key_id="quota-capacity-key", operation_id="capacity-c"
+            )
+        )
+        self.assertEqual(capacity.reason, "capacity")
+
+        self.assertTrue(
+            (
+                await self.store.reserve_quota(
+                    self._quota_request(
+                        "large-token-a",
+                        key_id="quota-large-token-key",
+                        operation_id="large-token-a",
+                        estimated_tokens=2**53 + 1,
+                        tpm_limit=2**53 + 1,
+                    )
+                )
+            ).accepted
+        )
+        exact_token_denial = await self.store.reserve_quota(
+            self._quota_request(
+                "large-token-b",
+                key_id="quota-large-token-key",
+                operation_id="large-token-b",
+                estimated_tokens=1,
+                tpm_limit=2**53 + 1,
+            )
+        )
+        self.assertEqual(exact_token_denial.reason, "tpm")
+
+        self.assertTrue(
+            (
+                await self.store.reserve_quota(
+                    self._quota_request(
+                        "quota-commit",
+                        key_id="quota-commit-key",
+                        operation_id="quota-commit-reserve",
+                        ttl_seconds=60.0,
+                    )
+                )
+            ).accepted
+        )
+        commit_request = QuotaCommitRequest(
+            "quota-commit", 1_001.0, 2, 0.0, False, operation_id="quota-commit-operation"
+        )
+        committed = await self.store.commit_quota(commit_request)
+        committed_replay = await self.store.commit_quota(commit_request)
+        self.assertTrue(committed.committed)
+        self.assertTrue(committed_replay.idempotent)
+        self.assertFalse(await self.store.release_quota("quota-commit", now=1_002.0))
+
+        self.assertTrue(
+            (
+                await self.store.reserve_quota(
+                    self._quota_request(
+                        "quota-release",
+                        key_id="quota-release-key",
+                        operation_id="quota-release-reserve",
+                        ttl_seconds=60.0,
+                    )
+                )
+            ).accepted
+        )
+        self.assertTrue(
+            await self.store.release_quota(
+                "quota-release", now=1_001.0, operation_id="quota-release-operation"
+            )
+        )
+        self.assertFalse(
+            await self.store.release_quota(
+                "quota-release", now=1_001.0, operation_id="quota-release-operation"
+            )
+        )
+
+        identical_expiry = self._quota_request(
+            "quota-expiry-identical",
+            key_id="quota-expiry-identical-key",
+            operation_id="quota-expiry-identical-operation",
+        )
+        changed_expiry = self._quota_request(
+            "quota-expiry-changed",
+            key_id="quota-expiry-changed-key",
+            operation_id="quota-expiry-changed-operation",
+        )
+        self.assertTrue((await self.store.reserve_quota(identical_expiry)).accepted)
+        self.assertTrue((await self.store.reserve_quota(changed_expiry)).accepted)
+        await advance_quota_clock(60.1)
+
+        identical_after_retention = await self.store.reserve_quota(identical_expiry)
+        changed_after_retention = await self.store.reserve_quota(
+            self._quota_request(
+                "quota-expiry-changed",
+                key_id="quota-expiry-changed-key",
+                operation_id="quota-expiry-changed-operation",
+                estimated_tokens=2,
+            )
+        )
+        self.assertTrue(identical_after_retention.accepted)
+        self.assertFalse(identical_after_retention.idempotent)
+        self.assertTrue(changed_after_retention.accepted)
+        self.assertFalse(changed_after_retention.idempotent)
 
     async def assert_epoch_cas_and_invalidation_contract(
         self, *, advance_cas_clock: Callable[[float], Awaitable[None]]

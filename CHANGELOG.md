@@ -33,6 +33,9 @@ All notable user-facing changes are documented in this file. Omni Gateway follow
 - Hardened OIDC outage handling with bounded shared discovery backoff, removed implicit owner
   fallback from verified-session authorization, and invalidated older sessions after a failed
   claim-role re-evaluation.
+- Hardened inactive Redis coordination primitives against partial epoch loss, large-token
+  precision loss, expired replay reuse, partial cleanup, malformed quota chronology, and
+  cancellation during client shutdown. Coordinated runtime activation remains gated.
 
 ## [1.4.0] - 2026-08-21
 

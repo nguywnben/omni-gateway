@@ -420,4 +420,17 @@ class CoordinationStore(Protocol):
 
     async def read_invalidation_generation(self, scope: str) -> InvalidationGeneration: ...
 
+    async def reserve_quota(self, request: QuotaReservationRequest) -> QuotaReservationDecision: ...
+
+    async def commit_quota(self, request: QuotaCommitRequest) -> QuotaCommitResult: ...
+
+    async def release_quota(
+        self,
+        reservation_id: str,
+        *,
+        now: float,
+        fencing_epoch: int = 1,
+        operation_id: str | None = None,
+    ) -> bool: ...
+
     async def close(self) -> None: ...

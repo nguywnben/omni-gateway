@@ -60,18 +60,26 @@ local function valid_integer(value)
   return value and string.match(value, '^[1-9][0-9]*$')
     and (#value < 19 or (#value == 19 and value <= '9223372036854775807'))
 end
-local count = redis.call('HLEN', KEYS[1])
-if count == 0 then
-  redis.call('HSET', KEYS[1], 'schema_version', '1', 'epoch', '1', 'state', 'ready')
-elseif count ~= 3 then
+local marker = redis.call('GET', KEYS[2])
+local encoded_epoch = redis.call('GET', KEYS[1])
+if not marker and not encoded_epoch then
+  if redis.call('MSETNX', KEYS[1], '1|1|ready', KEYS[2], '1|initialized') ~= 1 then
+    return redis.error_reply('COORDINATION_CORRUPT')
+  end
+  marker, encoded_epoch = '1|initialized', '1|1|ready'
+elseif not marker or not encoded_epoch then
   return redis.error_reply('COORDINATION_CORRUPT')
 end
-local values = redis.call('HMGET', KEYS[1], 'schema_version', 'epoch', 'state')
-if values[1] ~= '1' or not valid_integer(values[2])
-  or (values[3] ~= 'ready' and values[3] ~= 'reconciling') then
+if marker ~= '1|initialized' or redis.call('PTTL', KEYS[1]) ~= -1
+  or redis.call('PTTL', KEYS[2]) ~= -1 then
   return redis.error_reply('COORDINATION_CORRUPT')
 end
-return {'1', 'ok', values[2], values[3]}
+local schema, epoch, state = string.match(encoded_epoch, '^([^|]+)|([^|]+)|([^|]+)$')
+if schema ~= '1' or not valid_integer(epoch)
+  or (state ~= 'ready' and state ~= 'reconciling') then
+  return redis.error_reply('COORDINATION_CORRUPT')
+end
+return {'1', 'ok', epoch, state}
 """
 
 _EPOCH_ADVANCE_SCRIPT = """-- omni:epoch_advance:v1
@@ -99,15 +107,15 @@ local function valid_replay(value, score)
     and saved_state == 'reconciling'
     and valid_integer(saved_expiry) and saved_expiry == score
 end
-local count = redis.call('HLEN', KEYS[1])
-if count == 0 then
-  redis.call('HSET', KEYS[1], 'schema_version', '1', 'epoch', '1', 'state', 'ready')
-elseif count ~= 3 then
+local marker, encoded_epoch = redis.call('GET', KEYS[4]), redis.call('GET', KEYS[1])
+if marker ~= '1|initialized' or not encoded_epoch or redis.call('PTTL', KEYS[4]) ~= -1
+  or redis.call('PTTL', KEYS[1]) ~= -1 then
   return redis.error_reply('COORDINATION_CORRUPT')
 end
-local epoch = redis.call('HMGET', KEYS[1], 'schema_version', 'epoch', 'state')
-if epoch[1] ~= '1' or not valid_integer(epoch[2])
-  or (epoch[3] ~= 'ready' and epoch[3] ~= 'reconciling') then
+local schema, current_epoch, current_state =
+  string.match(encoded_epoch, '^([^|]+)|([^|]+)|([^|]+)$')
+if schema ~= '1' or not valid_integer(current_epoch)
+  or (current_state ~= 'ready' and current_state ~= 'reconciling') then
   return redis.error_reply('COORDINATION_CORRUPT')
 end
 if not valid_integer(ARGV[1]) then
@@ -129,7 +137,7 @@ if replay and tonumber(replay_expiry) > now_ms then
   if fingerprint == ARGV[1] then
     return {'1', 'ok', saved_epoch, saved_state}
   end
-  return {'1', 'ok', epoch[2], epoch[3]}
+  return {'1', 'ok', current_epoch, current_state}
 end
 local due = redis.call('ZRANGEBYSCORE', KEYS[3], '-inf', now_ms, 'LIMIT', 0, 257)
 if #due > 256 then
@@ -145,18 +153,17 @@ if #due > 0 then
   redis.call('HDEL', KEYS[2], unpack(due))
   redis.call('ZREM', KEYS[3], unpack(due))
 end
-if epoch[2] ~= ARGV[1] or epoch[3] ~= 'ready' then
-  return {'1', 'ok', epoch[2], epoch[3]}
+if current_epoch ~= ARGV[1] or current_state ~= 'ready' then
+  return {'1', 'ok', current_epoch, current_state}
 end
 if redis.call('HLEN', KEYS[2]) >= tonumber(ARGV[4]) then
   return {'1', 'reconciliation_required', '', ''}
 end
-if epoch[2] == '9223372036854775807' then
+if current_epoch == '9223372036854775807' then
   return redis.error_reply('COORDINATION_CORRUPT')
 end
-redis.call('HINCRBY', KEYS[1], 'epoch', 1)
-redis.call('HSET', KEYS[1], 'state', 'reconciling')
-local new_epoch = redis.call('HGET', KEYS[1], 'epoch')
+local new_epoch = next_integer(current_epoch)
+redis.call('SET', KEYS[1], '1|' .. new_epoch .. '|reconciling')
 local expires_at = now_ms + tonumber(ARGV[3])
 local expires_text = string.format('%.0f', expires_at)
 redis.call('HSET', KEYS[2], ARGV[2],
@@ -178,15 +185,15 @@ local function valid_replay(value, score)
     and valid_integer(saved_epoch) and saved_epoch == fingerprint and saved_state == 'ready'
     and valid_integer(saved_expiry) and saved_expiry == score
 end
-local count = redis.call('HLEN', KEYS[1])
-if count == 0 then
-  redis.call('HSET', KEYS[1], 'schema_version', '1', 'epoch', '1', 'state', 'ready')
-elseif count ~= 3 then
+local marker, encoded_epoch = redis.call('GET', KEYS[4]), redis.call('GET', KEYS[1])
+if marker ~= '1|initialized' or not encoded_epoch or redis.call('PTTL', KEYS[4]) ~= -1
+  or redis.call('PTTL', KEYS[1]) ~= -1 then
   return redis.error_reply('COORDINATION_CORRUPT')
 end
-local epoch = redis.call('HMGET', KEYS[1], 'schema_version', 'epoch', 'state')
-if epoch[1] ~= '1' or not valid_integer(epoch[2])
-  or (epoch[3] ~= 'ready' and epoch[3] ~= 'reconciling') then
+local schema, current_epoch, current_state =
+  string.match(encoded_epoch, '^([^|]+)|([^|]+)|([^|]+)$')
+if schema ~= '1' or not valid_integer(current_epoch)
+  or (current_state ~= 'ready' and current_state ~= 'reconciling') then
   return redis.error_reply('COORDINATION_CORRUPT')
 end
 local clock = redis.call('TIME')
@@ -205,7 +212,7 @@ if replay and tonumber(replay_expiry) > now_ms then
   if fingerprint == ARGV[1] then
     return {'1', 'ok', saved_epoch, saved_state}
   end
-  return {'1', 'ok', epoch[2], epoch[3]}
+  return {'1', 'ok', current_epoch, current_state}
 end
 local due = redis.call('ZRANGEBYSCORE', KEYS[3], '-inf', now_ms, 'LIMIT', 0, 257)
 if #due > 256 then
@@ -221,19 +228,19 @@ if #due > 0 then
   redis.call('HDEL', KEYS[2], unpack(due))
   redis.call('ZREM', KEYS[3], unpack(due))
 end
-if epoch[2] ~= ARGV[1] or epoch[3] ~= 'reconciling' then
-  return {'1', 'ok', epoch[2], epoch[3]}
+if current_epoch ~= ARGV[1] or current_state ~= 'reconciling' then
+  return {'1', 'ok', current_epoch, current_state}
 end
 if redis.call('HLEN', KEYS[2]) >= tonumber(ARGV[4]) then
   return {'1', 'reconciliation_required', '', ''}
 end
-redis.call('HSET', KEYS[1], 'state', 'ready')
+redis.call('SET', KEYS[1], '1|' .. current_epoch .. '|ready')
 local expires_at = now_ms + tonumber(ARGV[3])
 local expires_text = string.format('%.0f', expires_at)
 redis.call('HSET', KEYS[2], ARGV[2],
-  '1|' .. ARGV[1] .. '|' .. epoch[2] .. '|ready|' .. expires_text)
+  '1|' .. ARGV[1] .. '|' .. current_epoch .. '|ready|' .. expires_text)
 redis.call('ZADD', KEYS[3], expires_at, ARGV[2])
-return {'1', 'ok', epoch[2], 'ready'}
+return {'1', 'ok', current_epoch, 'ready'}
 """
 
 _CAS_SCRIPT = """-- omni:cas:v1
@@ -251,18 +258,18 @@ local function valid_replay(value, score)
   return (status == 'applied' and valid_integer(revision, false))
     or (status == 'not_applied' and revision == '')
 end
-local epoch_count = redis.call('HLEN', KEYS[1])
-if epoch_count == 0 then
-  redis.call('HSET', KEYS[1], 'schema_version', '1', 'epoch', '1', 'state', 'ready')
-elseif epoch_count ~= 3 then
+local marker, encoded_epoch = redis.call('GET', KEYS[5]), redis.call('GET', KEYS[1])
+if marker ~= '1|initialized' or not encoded_epoch or redis.call('PTTL', KEYS[5]) ~= -1
+  or redis.call('PTTL', KEYS[1]) ~= -1 then
   return redis.error_reply('COORDINATION_CORRUPT')
 end
-local epoch = redis.call('HMGET', KEYS[1], 'schema_version', 'epoch', 'state')
-if epoch[1] ~= '1' or not valid_integer(epoch[2], false)
-  or (epoch[3] ~= 'ready' and epoch[3] ~= 'reconciling') then
+local schema, current_epoch, current_state =
+  string.match(encoded_epoch, '^([^|]+)|([^|]+)|([^|]+)$')
+if schema ~= '1' or not valid_integer(current_epoch, false)
+  or (current_state ~= 'ready' and current_state ~= 'reconciling') then
   return redis.error_reply('COORDINATION_CORRUPT')
 end
-if epoch[2] ~= ARGV[4] or epoch[3] ~= 'ready' then
+if current_epoch ~= ARGV[4] or current_state ~= 'ready' then
   return {'1', 'not_applied', '', '0'}
 end
 local clock = redis.call('TIME')
@@ -350,18 +357,18 @@ local function valid_replay(value, score)
   return schema == '1' and fingerprint and valid_integer(generation)
     and valid_integer(saved_expiry) and saved_expiry == score
 end
-local epoch_count = redis.call('HLEN', KEYS[1])
-if epoch_count == 0 then
-  redis.call('HSET', KEYS[1], 'schema_version', '1', 'epoch', '1', 'state', 'ready')
-elseif epoch_count ~= 3 then
+local marker, encoded_epoch = redis.call('GET', KEYS[5]), redis.call('GET', KEYS[1])
+if marker ~= '1|initialized' or not encoded_epoch or redis.call('PTTL', KEYS[5]) ~= -1
+  or redis.call('PTTL', KEYS[1]) ~= -1 then
   return redis.error_reply('COORDINATION_CORRUPT')
 end
-local epoch = redis.call('HMGET', KEYS[1], 'schema_version', 'epoch', 'state')
-if epoch[1] ~= '1' or not valid_integer(epoch[2])
-  or (epoch[3] ~= 'ready' and epoch[3] ~= 'reconciling') then
+local schema, current_epoch, current_state =
+  string.match(encoded_epoch, '^([^|]+)|([^|]+)|([^|]+)$')
+if schema ~= '1' or not valid_integer(current_epoch)
+  or (current_state ~= 'ready' and current_state ~= 'reconciling') then
   return redis.error_reply('COORDINATION_CORRUPT')
 end
-if epoch[2] ~= ARGV[1] or epoch[3] ~= 'ready' then
+if current_epoch ~= ARGV[1] or current_state ~= 'ready' then
   return {'1', 'not_applied', '', '0'}
 end
 local clock = redis.call('TIME')
@@ -426,6 +433,16 @@ local function valid_integer(value)
   return value and string.match(value, '^[1-9][0-9]*$')
     and (#value < 19 or (#value == 19 and value <= '9223372036854775807'))
 end
+local marker, encoded_epoch = redis.call('GET', KEYS[3]), redis.call('GET', KEYS[2])
+if marker ~= '1|initialized' or not encoded_epoch or redis.call('PTTL', KEYS[3]) ~= -1
+  or redis.call('PTTL', KEYS[2]) ~= -1 then
+  return redis.error_reply('COORDINATION_CORRUPT')
+end
+local schema, epoch, state = string.match(encoded_epoch, '^([^|]+)|([^|]+)|([^|]+)$')
+if schema ~= '1' or not valid_integer(epoch)
+  or (state ~= 'ready' and state ~= 'reconciling') then
+  return redis.error_reply('COORDINATION_CORRUPT')
+end
 local count = redis.call('HLEN', KEYS[1])
 if count == 0 then return {'1', 'ok', ''} end
 if count ~= 2 then return redis.error_reply('COORDINATION_CORRUPT') end
@@ -460,11 +477,43 @@ local function valid_uint(value)
   return value and (value == '0' or string.match(value, '^[1-9][0-9]*$'))
     and (#value < 19 or (#value == 19 and value <= '9223372036854775807'))
 end
+local function uint_greater_than(left, right)
+  if #left ~= #right then return #left > #right end
+  return left > right
+end
+local function add_uint_saturating(left, right)
+  local width = math.max(#left, #right)
+  local left_padding, right_padding = width - #left, width - #right
+  local digits, carry = {}, 0
+  for position = width, 1, -1 do
+    local left_digit = position > left_padding
+      and string.byte(left, position - left_padding) - 48 or 0
+    local right_digit = position > right_padding
+      and string.byte(right, position - right_padding) - 48 or 0
+    local sum = left_digit + right_digit + carry
+    table.insert(digits, 1, string.char((sum % 10) + 48))
+    carry = math.floor(sum / 10)
+  end
+  if carry > 0 then table.insert(digits, 1, string.char(carry + 48)) end
+  local result = table.concat(digits)
+  if uint_greater_than(result, '9223372036854775807') then
+    return '9223372036854775807', true
+  end
+  return result, false
+end
 local function valid_positive(value) return valid_uint(value) and value ~= '0' end
+local function valid_safe_uint(value)
+  return valid_uint(value)
+    and (#value < 16 or (#value == 16 and value <= '9007199254740991'))
+end
+local function parse_safe_uint(value)
+  if not valid_safe_uint(value) then return nil end
+  return tonumber(value)
+end
 local function valid_hex(value)
   return value and #value == 64 and string.match(value, '^[0-9a-f]+$')
 end
-local function valid_decimal(value)
+local function decimal_syntax(value)
   if not value or #value > 64 then return false end
   if value == '0' then return true end
   if string.match(value, '^[1-9][0-9]*$') or string.match(value, '^0%.[0-9]*[1-9]$')
@@ -473,6 +522,13 @@ local function valid_decimal(value)
   if not mantissa or not exponent or not (string.match(mantissa, '^[1-9]$')
     or string.match(mantissa, '^[1-9]%.[0-9]*[1-9]$')) then return false end
   return string.match(exponent, '^[+-]?0[1-9]$') or string.match(exponent, '^[+-]?[1-9][0-9]*$')
+end
+local function parse_decimal(value)
+  if not decimal_syntax(value) then return nil end
+  local number = tonumber(value)
+  if not number or number ~= number or number == math.huge or number == -math.huge
+    or number < 0 or number > 9223372036854775807 then return nil end
+  return number
 end
 local function split_record(value)
   if not value or #value > 2048 then return nil end
@@ -495,43 +551,60 @@ local function parse_record(value)
   if r.schema ~= '1' or not valid_hex(r.fingerprint) or not valid_hex(r.key)
     or (r.state ~= 'active' and r.state ~= 'committed' and r.state ~= 'released'
       and r.state ~= 'expired')
-    or not valid_positive(r.active_until) or not valid_positive(r.retained_until)
-    or not valid_positive(r.accepted_at) or not valid_uint(r.estimated_tokens)
-    or not valid_decimal(r.estimated_cost) or not valid_uint(r.committed_at)
-    or not valid_uint(r.actual_tokens) or not valid_decimal(r.actual_cost)
+    or not valid_safe_uint(r.active_until) or r.active_until == '0'
+    or not valid_safe_uint(r.retained_until) or r.retained_until == '0'
+    or not valid_safe_uint(r.accepted_at) or r.accepted_at == '0'
+    or not valid_uint(r.estimated_tokens) or not valid_safe_uint(r.committed_at)
+    or not valid_uint(r.actual_tokens)
     or (r.durable ~= '0' and r.durable ~= '1')
     or (r.daily_reconciled ~= '0' and r.daily_reconciled ~= '1')
     or (r.monthly_reconciled ~= '0' and r.monthly_reconciled ~= '1')
-    or not valid_decimal(r.business_commit)
     or (r.rpm_limit ~= 'n' and not valid_positive(r.rpm_limit))
     or (r.tpm_limit ~= 'n' and not valid_positive(r.tpm_limit))
-    or (r.daily_budget ~= 'n' and not valid_decimal(r.daily_budget))
-    or (r.monthly_budget ~= 'n' and not valid_decimal(r.monthly_budget))
-    or not valid_decimal(r.daily_spend) or not valid_decimal(r.monthly_spend)
-    or not valid_positive(r.retention_ms) or tonumber(r.retention_ms) > 2592000000
-    or not valid_positive(r.next_expiry)
-  or tonumber(r.accepted_at) > tonumber(r.active_until)
-  or tonumber(r.active_until) > tonumber(r.retained_until)
-    or tonumber(r.next_expiry) > tonumber(r.retained_until) then return nil end
+    or not valid_safe_uint(r.retention_ms) or r.retention_ms == '0'
+    or not valid_safe_uint(r.next_expiry) or r.next_expiry == '0' then return nil end
+  r.active_until_number, r.retained_until_number =
+    parse_safe_uint(r.active_until), parse_safe_uint(r.retained_until)
+  r.accepted_at_number, r.committed_at_number =
+    parse_safe_uint(r.accepted_at), parse_safe_uint(r.committed_at)
+  r.retention_ms_number, r.next_expiry_number =
+    parse_safe_uint(r.retention_ms), parse_safe_uint(r.next_expiry)
+  r.estimated_cost_number, r.actual_cost_number =
+    parse_decimal(r.estimated_cost), parse_decimal(r.actual_cost)
+  r.business_commit_number = parse_decimal(r.business_commit)
+  r.daily_spend_number, r.monthly_spend_number =
+    parse_decimal(r.daily_spend), parse_decimal(r.monthly_spend)
+  r.daily_budget_number = r.daily_budget == 'n' and nil or parse_decimal(r.daily_budget)
+  r.monthly_budget_number = r.monthly_budget == 'n' and nil or parse_decimal(r.monthly_budget)
   local terminal_source = r.state == 'active' or r.state == 'released' or r.state == 'expired'
+  if r.retention_ms_number > 2592000000
+    or r.estimated_cost_number == nil or r.actual_cost_number == nil
+    or r.business_commit_number == nil or r.daily_spend_number == nil
+    or r.monthly_spend_number == nil
+    or (r.daily_budget ~= 'n' and r.daily_budget_number == nil)
+    or (r.monthly_budget ~= 'n' and r.monthly_budget_number == nil)
+    or r.accepted_at_number > r.active_until_number
+    or (terminal_source and r.active_until_number > r.retained_until_number)
+    or r.next_expiry_number > r.retained_until_number then return nil end
   if terminal_source and (r.committed_at ~= '0' or r.actual_tokens ~= '0'
     or r.actual_cost ~= '0' or r.durable ~= '0' or r.business_commit ~= '0') then return nil end
   if terminal_source and ((r.daily_budget == 'n' and r.daily_reconciled ~= '1')
     or (r.daily_budget ~= 'n' and r.daily_reconciled ~= '0')
     or (r.monthly_budget == 'n' and r.monthly_reconciled ~= '1')
     or (r.monthly_budget ~= 'n' and r.monthly_reconciled ~= '0')) then return nil end
-  if terminal_source and (tonumber(r.accepted_at) > 9223372036854775807 - tonumber(r.retention_ms)
-    or tonumber(r.retained_until) ~= tonumber(r.accepted_at) + tonumber(r.retention_ms)) then return nil end
+  if terminal_source and (r.accepted_at_number > 9007199254740991 - r.retention_ms_number
+    or r.retained_until_number ~= r.accepted_at_number + r.retention_ms_number) then return nil end
   if r.state == 'active' and r.next_expiry ~= r.active_until then return nil end
   if (r.state == 'released' or r.state == 'expired')
     and r.next_expiry ~= r.retained_until then return nil end
   if r.state == 'committed' then
-    if r.committed_at == '0' or tonumber(r.committed_at) > tonumber(r.active_until)
+    if r.committed_at == '0' or r.accepted_at_number > r.committed_at_number
+      or r.committed_at_number > r.active_until_number
       or r.next_expiry ~= r.retained_until then return nil end
-    local expected_expiry = tonumber(r.committed_at) + 60000
-    if r.daily_reconciled == '0' then expected_expiry = math.max(expected_expiry, tonumber(r.committed_at) + 86400000) end
-    if r.monthly_reconciled == '0' then expected_expiry = math.max(expected_expiry, tonumber(r.committed_at) + 2592000000) end
-    if tonumber(r.retained_until) ~= expected_expiry then return nil end
+    local expected_expiry = r.committed_at_number + 60000
+    if r.daily_reconciled == '0' then expected_expiry = math.max(expected_expiry, r.committed_at_number + 86400000) end
+    if r.monthly_reconciled == '0' then expected_expiry = math.max(expected_expiry, r.committed_at_number + 2592000000) end
+    if r.retained_until_number ~= expected_expiry then return nil end
     if (r.daily_budget == 'n' and r.daily_reconciled ~= '1')
       or (r.daily_budget ~= 'n' and r.durable == '0' and r.daily_reconciled ~= '0')
       or (r.monthly_budget == 'n' and r.monthly_reconciled ~= '1')
@@ -573,8 +646,8 @@ local function read_operation_locator(key)
 end
 local function validate_record_pair(value, score, expected_key)
   local record = parse_record(value)
-  if not record or record.key ~= expected_key or not valid_positive(score)
-    or tonumber(score) ~= tonumber(record.next_expiry) then return nil end
+  if not record or record.key ~= expected_key or not valid_safe_uint(score)
+    or score == '0' or score ~= record.next_expiry then return nil end
   return record
 end
 local function plan_prune_target(now_ms, expected_key, record_limit, replay_limit, replay_validator)
@@ -590,14 +663,29 @@ local function plan_prune_target(now_ms, expected_key, record_limit, replay_limi
     if not replay_validator(redis.call('HGET', KEYS[4], operation_id),
       redis.call('ZSCORE', KEYS[5], operation_id)) then return nil end
   end
-  local due_records = {}
+  local due_records, removed_record_count = {}, 0
   for index, reservation_id in ipairs(lifecycle_due) do
     local record = validate_record_pair(redis.call('HGET', KEYS[2], reservation_id),
       redis.call('ZSCORE', KEYS[3], reservation_id), expected_key)
-    if not record or tonumber(record.next_expiry) > now_ms then return nil end
+    if not record or record.next_expiry_number > now_ms then return nil end
     due_records[index] = {reservation_id, record}
+    if not (record.state == 'active' and record.active_until_number <= now_ms
+      and record.retained_until_number > now_ms) then
+      removed_record_count = removed_record_count + 1
+    end
   end
-  return {replay_due=replay_due, due_records=due_records}
+  return {replay_due=replay_due, due_records=due_records,
+    removed_record_count=removed_record_count}
+end
+local function record_after_planned_prune(record, now_ms)
+  if not record or record.next_expiry_number > now_ms then return record end
+  if record.state == 'active' and record.active_until_number <= now_ms
+    and record.retained_until_number > now_ms then
+    record.state, record.next_expiry = 'expired', record.retained_until
+    record.next_expiry_number = record.retained_until_number
+    return record
+  end
+  return nil
 end
 local function aggregate_target_records(now_ms, expected_key, record_limit,
   daily_snapshot, monthly_snapshot, reconcile, override_id, override_record)
@@ -613,69 +701,74 @@ local function aggregate_target_records(now_ms, expected_key, record_limit,
     local record = validate_record_pair(value, redis.call('ZSCORE', KEYS[3], reservation_id), expected_key)
     if not record then return nil end
     if override_id and reservation_id == override_id then record = override_record end
-    parsed[#parsed + 1] = {reservation_id, record}
+    record = record_after_planned_prune(record, now_ms)
+    if record then parsed[#parsed + 1] = {reservation_id, record} end
   end
-  local result = {rate_count=0, rate_tokens=0, active_cost=0,
+  local result = {rate_count=0, rate_tokens='0', rate_tokens_saturated=false, active_cost=0,
     daily_unreconciled=0, monthly_unreconciled=0, oldest=nil}
   local cutoff = now_ms - 60000
   for _, pair in ipairs(parsed) do
     local reservation_id, record = pair[1], pair[2]
     if reconcile and record.state == 'committed' and record.durable == '1' then
       local changed = false
-      if record.daily_reconciled == '0' and daily_snapshot >= tonumber(record.business_commit) then
+      if record.daily_reconciled == '0' and daily_snapshot >= record.business_commit_number then
         record.daily_reconciled, changed = '1', true
       end
       if record.monthly_reconciled == '0'
-        and monthly_snapshot >= tonumber(record.business_commit) then
+        and monthly_snapshot >= record.business_commit_number then
         record.monthly_reconciled, changed = '1', true
       end
       if changed then
-        local evidence_expiry = tonumber(record.committed_at) + 60000
+        local evidence_expiry = record.committed_at_number + 60000
         if record.daily_reconciled == '0' then
-          evidence_expiry = math.max(evidence_expiry, tonumber(record.committed_at) + 86400000)
+          evidence_expiry = math.max(evidence_expiry, record.committed_at_number + 86400000)
         end
         if record.monthly_reconciled == '0' then
-          evidence_expiry = math.max(evidence_expiry, tonumber(record.committed_at) + 2592000000)
+          evidence_expiry = math.max(evidence_expiry, record.committed_at_number + 2592000000)
         end
         record.retained_until = string.format('%.0f', evidence_expiry)
         record.next_expiry = record.retained_until
+        record.retained_until_number, record.next_expiry_number = evidence_expiry, evidence_expiry
         updates[#updates + 1] = {reservation_id, record}
       end
     end
-    if record.state == 'active' and tonumber(record.active_until) > now_ms then
-      result.active_cost = result.active_cost + tonumber(record.estimated_cost)
-      if tonumber(record.accepted_at) > cutoff then
+    if record.state == 'active' and record.active_until_number > now_ms then
+      result.active_cost = result.active_cost + record.estimated_cost_number
+      if record.accepted_at_number > cutoff then
         result.rate_count = result.rate_count + 1
-        result.rate_tokens = result.rate_tokens + tonumber(record.estimated_tokens)
+        local tokens, saturated = add_uint_saturating(result.rate_tokens, record.estimated_tokens)
+        result.rate_tokens, result.rate_tokens_saturated = tokens,
+          result.rate_tokens_saturated or saturated
         result.oldest = result.oldest and math.min(result.oldest,
-          tonumber(record.accepted_at)) or tonumber(record.accepted_at)
+          record.accepted_at_number) or record.accepted_at_number
       end
     elseif record.state == 'committed' then
-      if tonumber(record.committed_at) > cutoff then
+      if record.committed_at_number > cutoff then
         result.rate_count = result.rate_count + 1
-        result.rate_tokens = result.rate_tokens + tonumber(record.actual_tokens)
+        local tokens, saturated = add_uint_saturating(result.rate_tokens, record.actual_tokens)
+        result.rate_tokens, result.rate_tokens_saturated = tokens,
+          result.rate_tokens_saturated or saturated
         result.oldest = result.oldest and math.min(result.oldest,
-          tonumber(record.committed_at)) or tonumber(record.committed_at)
+          record.committed_at_number) or record.committed_at_number
       end
       if record.daily_reconciled == '0' then
-        result.daily_unreconciled = result.daily_unreconciled + tonumber(record.actual_cost)
+        result.daily_unreconciled = result.daily_unreconciled + record.actual_cost_number
       end
       if record.monthly_reconciled == '0' then
-        result.monthly_unreconciled = result.monthly_unreconciled + tonumber(record.actual_cost)
+        result.monthly_unreconciled = result.monthly_unreconciled + record.actual_cost_number
       end
     end
   end
   return result, updates
 end
 local function ready_epoch(expected)
-  local count = redis.call('HLEN', KEYS[1])
-  if count == 0 then
-    return expected == '1', 'ready', expected == '1'
-  elseif count ~= 3 then return nil end
-  local epoch = redis.call('HMGET', KEYS[1], 'schema_version', 'epoch', 'state')
-  if #epoch ~= 3 or epoch[1] ~= '1' or not valid_positive(epoch[2])
-    or (epoch[3] ~= 'ready' and epoch[3] ~= 'reconciling') then return nil end
-  return epoch[2] == expected and epoch[3] == 'ready', epoch[3], false
+  local marker, encoded_epoch = redis.call('GET', KEYS[8]), redis.call('GET', KEYS[1])
+  if marker ~= '1|initialized' or not encoded_epoch or redis.call('PTTL', KEYS[8]) ~= -1
+    or redis.call('PTTL', KEYS[1]) ~= -1 then return nil end
+  local schema, epoch, state = string.match(encoded_epoch, '^([^|]+)|([^|]+)|([^|]+)$')
+  if schema ~= '1' or not valid_positive(epoch)
+    or (state ~= 'ready' and state ~= 'reconciling') then return nil end
+  return epoch == expected and state == 'ready', state
 end
 """
 
@@ -684,34 +777,43 @@ _QUOTA_RESERVE_SCRIPT = (
     + _QUOTA_LUA_COMMON
     + r"""
 local function valid_replay(value, score)
-  if not value or not score or not valid_positive(score) then return false end
+  if not value or not score or not valid_safe_uint(score) or score == '0' then return false end
   local schema, fingerprint, status, reason, retry_after, expiry =
     string.match(value, '^([^|]+)|([^|]+)|([^|]+)|([^|]*)|([^|]+)|([^|]+)$')
   return schema == '1' and valid_hex(fingerprint)
     and (status == 'accepted' or status == 'denied')
     and (reason == '' or reason == 'rpm' or reason == 'tpm' or reason == 'daily_budget'
       or reason == 'monthly_budget' or reason == 'capacity')
-    and valid_uint(retry_after) and valid_positive(expiry)
-    and tonumber(expiry) == tonumber(score)
+    and valid_uint(retry_after) and valid_safe_uint(expiry) and expiry ~= '0'
+    and expiry == score
     and ((status == 'accepted' and reason == '' and retry_after == '0')
       or (status == 'denied' and reason ~= ''))
 end
-local fenced, epoch_state, bootstrap_epoch = ready_epoch(ARGV[1])
+local fenced, epoch_state = ready_epoch(ARGV[1])
 if fenced == nil then return redis.error_reply('COORDINATION_CORRUPT') end
 if not fenced then
   return {'1', 'denied', ARGV[2], epoch_state == 'reconciling'
     and 'reconciling' or 'stale_epoch', '0', '0'}
 end
-if not valid_hex(ARGV[3]) or not valid_hex(ARGV[4]) or not valid_positive(ARGV[6])
-  or not valid_positive(ARGV[7]) or not valid_positive(ARGV[8])
-  or not valid_positive(ARGV[9]) or not valid_decimal(ARGV[10])
-  or not valid_uint(ARGV[11]) or not valid_decimal(ARGV[12])
+local request_time, estimated_cost = parse_decimal(ARGV[10]), parse_decimal(ARGV[12])
+local daily_budget = ARGV[15] == '' and nil or parse_decimal(ARGV[15])
+local monthly_budget = ARGV[16] == '' and nil or parse_decimal(ARGV[16])
+local daily_spend, monthly_spend = parse_decimal(ARGV[17]), parse_decimal(ARGV[18])
+local daily_snapshot, monthly_snapshot = parse_decimal(ARGV[19]), parse_decimal(ARGV[20])
+if not valid_hex(ARGV[3]) or not valid_hex(ARGV[4]) or not valid_safe_uint(ARGV[6])
+  or ARGV[6] == '0' or tonumber(ARGV[6]) > 2592000000
+  or not valid_safe_uint(ARGV[7]) or ARGV[7] == '0' or tonumber(ARGV[7]) > 2592000000
+  or tonumber(ARGV[7]) < tonumber(ARGV[6])
+  or not valid_safe_uint(ARGV[8]) or ARGV[8] == '0' or tonumber(ARGV[8]) > 100000
+  or not valid_safe_uint(ARGV[9]) or ARGV[9] == '0' or tonumber(ARGV[9]) > 100000
+  or request_time == nil or not valid_uint(ARGV[11]) or estimated_cost == nil
   or (ARGV[13] ~= '' and not valid_positive(ARGV[13]))
   or (ARGV[14] ~= '' and not valid_positive(ARGV[14]))
-  or (ARGV[15] ~= '' and not valid_decimal(ARGV[15]))
-  or (ARGV[16] ~= '' and not valid_decimal(ARGV[16]))
-  or not valid_decimal(ARGV[17]) or not valid_decimal(ARGV[18])
-  or not valid_decimal(ARGV[19]) or not valid_decimal(ARGV[20]) then
+  or (ARGV[15] ~= '' and daily_budget == nil)
+  or (ARGV[16] ~= '' and monthly_budget == nil)
+  or daily_spend == nil or monthly_spend == nil
+  or daily_snapshot == nil or monthly_snapshot == nil
+  or monthly_snapshot > daily_snapshot or daily_snapshot > request_time then
   return redis.error_reply('COORDINATION_CORRUPT')
 end
 local reservation_key = read_reservation_locator(KEYS[6])
@@ -739,14 +841,16 @@ local replay, replay_expiry = redis.call('HGET', KEYS[4], ARGV[5]),
 if (replay or replay_expiry) and not valid_replay(replay, replay_expiry) then
   return redis.error_reply('COORDINATION_CORRUPT')
 end
+if replay and tonumber(replay_expiry) <= now_ms then replay, replay_expiry = nil, nil end
 if operation_key and not replay then return redis.error_reply('COORDINATION_CORRUPT') end
 local aggregate, aggregate_updates = aggregate_target_records(now_ms, ARGV[3], tonumber(ARGV[8]),
-  tonumber(ARGV[19]), tonumber(ARGV[20]), true)
+  daily_snapshot, monthly_snapshot, true)
 if not aggregate then return redis.error_reply('COORDINATION_CORRUPT') end
 local existing = redis.call('HGET', KEYS[2], ARGV[2])
 local existing_record = existing and validate_record_pair(existing,
   redis.call('ZSCORE', KEYS[3], ARGV[2]), ARGV[3]) or nil
 if existing and not existing_record then return redis.error_reply('COORDINATION_CORRUPT') end
+existing_record = record_after_planned_prune(existing_record, now_ms)
 local replay_status, replay_reason, replay_retry = nil, nil, nil
 if replay then
   local _, fingerprint, status, reason, retry_after =
@@ -755,33 +859,38 @@ if replay then
   else replay_status, replay_reason, replay_retry = 'denied', 'conflict', '0' end
 end
 local reason, retry_after = '', '0'
+local projected_tokens, projected_tokens_saturated =
+  add_uint_saturating(aggregate.rate_tokens, ARGV[11])
 if not replay_status and existing_record then
   if existing_record.fingerprint == ARGV[4] then replay_status, replay_reason, replay_retry = 'accepted', '', '0'
   else replay_status, replay_reason, replay_retry = 'denied', 'conflict', '0' end
-elseif not replay_status and redis.call('HLEN', KEYS[4]) >= tonumber(ARGV[9]) then
+elseif not replay_status and redis.call('HLEN', KEYS[4]) - #plan.replay_due >= tonumber(ARGV[9]) then
   reason = 'reconciliation_required'
-elseif not replay_status and redis.call('HLEN', KEYS[2]) >= tonumber(ARGV[8]) then reason = 'capacity'
+elseif not replay_status and redis.call('HLEN', KEYS[2]) - plan.removed_record_count
+  >= tonumber(ARGV[8]) then reason = 'capacity'
 elseif ARGV[13] ~= '' and aggregate.rate_count >= tonumber(ARGV[13]) then reason = 'rpm'
-elseif ARGV[14] ~= '' and aggregate.rate_tokens + tonumber(ARGV[11]) > tonumber(ARGV[14]) then reason = 'tpm'
-elseif ARGV[15] ~= '' and tonumber(ARGV[17]) + aggregate.daily_unreconciled
-  + aggregate.active_cost + tonumber(ARGV[12]) > tonumber(ARGV[15]) then reason = 'daily_budget'
-elseif ARGV[16] ~= '' and tonumber(ARGV[18]) + aggregate.monthly_unreconciled
-  + aggregate.active_cost + tonumber(ARGV[12]) > tonumber(ARGV[16]) then reason = 'monthly_budget' end
+elseif ARGV[14] ~= '' and (aggregate.rate_tokens_saturated or projected_tokens_saturated
+  or uint_greater_than(projected_tokens, ARGV[14])) then reason = 'tpm'
+elseif daily_budget ~= nil and daily_spend + aggregate.daily_unreconciled
+  + aggregate.active_cost + estimated_cost > daily_budget then reason = 'daily_budget'
+elseif monthly_budget ~= nil and monthly_spend + aggregate.monthly_unreconciled
+  + aggregate.active_cost + estimated_cost > monthly_budget then reason = 'monthly_budget' end
 if reason == 'rpm' or reason == 'tpm' then
   retry_after = aggregate.oldest and tostring(math.max(1,
     math.ceil((aggregate.oldest + 60000 - now_ms) / 1000))) or '1'
 end
 -- apply validated mutation
-if bootstrap_epoch then redis.call('HSET', KEYS[1], 'schema_version', '1', 'epoch', '1', 'state', 'ready') end
 if #plan.replay_due > 0 then redis.call('HDEL', KEYS[4], unpack(plan.replay_due)); redis.call('ZREM', KEYS[5], unpack(plan.replay_due)) end
 for _, pair in ipairs(plan.due_records) do
   local reservation_id, record = pair[1], pair[2]
-  if record.state == 'active' and tonumber(record.active_until) <= now_ms and tonumber(record.retained_until) > now_ms then
+  if record.state == 'active' and record.active_until_number <= now_ms
+    and record.retained_until_number > now_ms then
     record.state, record.next_expiry = 'expired', record.retained_until
-    redis.call('HSET', KEYS[2], reservation_id, encode_record(record)); redis.call('ZADD', KEYS[3], tonumber(record.next_expiry), reservation_id)
+    record.next_expiry_number = record.retained_until_number
+    redis.call('HSET', KEYS[2], reservation_id, encode_record(record)); redis.call('ZADD', KEYS[3], record.next_expiry_number, reservation_id)
   else redis.call('HDEL', KEYS[2], reservation_id); redis.call('ZREM', KEYS[3], reservation_id) end
 end
-for _, pair in ipairs(aggregate_updates) do redis.call('HSET', KEYS[2], pair[1], encode_record(pair[2])); redis.call('ZADD', KEYS[3], tonumber(pair[2].next_expiry), pair[1]) end
+for _, pair in ipairs(aggregate_updates) do redis.call('HSET', KEYS[2], pair[1], encode_record(pair[2])); redis.call('ZADD', KEYS[3], pair[2].next_expiry_number, pair[1]) end
 if replay_status then return {'1', replay_status, ARGV[2], replay_reason, replay_retry, '1'} end
 if reason == 'reconciliation_required' then return {'1', 'denied', ARGV[2], reason, '0', '0'} end
 if reason ~= '' then
@@ -821,23 +930,28 @@ _QUOTA_COMMIT_SCRIPT = (
     + _QUOTA_LUA_COMMON
     + r"""
 local function valid_replay(value, score)
-  if not value or not score or not valid_positive(score) then return false end
+  if not value or not score or not valid_safe_uint(score) or score == '0' then return false end
   local schema, fingerprint, status, overspent, expiry =
     string.match(value, '^([^|]+)|([^|]+)|([^|]+)|([^|]+)|([^|]+)$')
   return schema == '1' and valid_hex(fingerprint)
     and (status == 'committed' or status == 'not_committed')
-    and (overspent == '0' or overspent == '1') and valid_positive(expiry)
-    and tonumber(expiry) == tonumber(score)
+    and (overspent == '0' or overspent == '1') and valid_safe_uint(expiry) and expiry ~= '0'
+    and expiry == score
     and (status == 'committed' or overspent == '0')
 end
-local fenced, _, bootstrap_epoch = ready_epoch(ARGV[1])
+local fenced = ready_epoch(ARGV[1])
 if fenced == nil then return redis.error_reply('COORDINATION_CORRUPT') end
 if not fenced then return {'1', 'not_committed', '0', '0'} end
-if not valid_hex(ARGV[2]) or not valid_hex(ARGV[5]) or not valid_decimal(ARGV[6])
+local business_commit = parse_decimal(ARGV[6])
+local actual_cost = ARGV[8] == '' and nil or parse_decimal(ARGV[8])
+if not valid_hex(ARGV[2]) or not valid_hex(ARGV[5]) or business_commit == nil
   or (ARGV[7] ~= '' and not valid_uint(ARGV[7]))
-  or (ARGV[8] ~= '' and not valid_decimal(ARGV[8]))
-  or (ARGV[9] ~= '0' and ARGV[9] ~= '1') or not valid_positive(ARGV[10])
-  or not valid_positive(ARGV[11]) or not valid_positive(ARGV[12]) then
+  or (ARGV[8] ~= '' and actual_cost == nil)
+  or (ARGV[9] ~= '0' and ARGV[9] ~= '1')
+  or not valid_safe_uint(ARGV[10]) or ARGV[10] == '0' or tonumber(ARGV[10]) > 100000
+  or not valid_safe_uint(ARGV[11]) or ARGV[11] == '0' or tonumber(ARGV[11]) > 100000
+  or not valid_safe_uint(ARGV[12]) or ARGV[12] == '0'
+  or tonumber(ARGV[12]) > 2592000000 then
   return redis.error_reply('COORDINATION_CORRUPT')
 end
 local reservation_key = read_reservation_locator(KEYS[6])
@@ -861,6 +975,7 @@ local replay, replay_expiry = redis.call('HGET', KEYS[4], ARGV[3]),
 if (replay or replay_expiry) and not valid_replay(replay, replay_expiry) then
   return redis.error_reply('COORDINATION_CORRUPT')
 end
+if replay and tonumber(replay_expiry) <= now_ms then replay, replay_expiry = nil, nil end
 if operation_key and not replay then return redis.error_reply('COORDINATION_CORRUPT') end
 local replay_status, replay_overspent = nil, nil
 if replay then
@@ -869,17 +984,19 @@ if replay then
   if fingerprint == ARGV[2] then replay_status, replay_overspent = status, overspent
   else replay_status, replay_overspent = 'not_committed', '0' end
 end
-if not replay_status and redis.call('HLEN', KEYS[4]) >= tonumber(ARGV[11]) then
+if not replay_status and redis.call('HLEN', KEYS[4]) - #plan.replay_due >= tonumber(ARGV[11]) then
   return {'1', 'reconciliation_required', '0', '0'}
 end
 local encoded = redis.call('HGET', KEYS[2], ARGV[4])
 local record = encoded and validate_record_pair(encoded,
   redis.call('ZSCORE', KEYS[3], ARGV[4]), ARGV[5]) or nil
 if encoded and not record then return redis.error_reply('COORDINATION_CORRUPT') end
+record = record_after_planned_prune(record, now_ms)
 local expiry = string.format('%.0f', now_ms + tonumber(ARGV[12]))
 local status, overspent = 'not_committed', '0'
 if record then expiry = record.retained_until end
-if not replay_status and record and record.state == 'active' and tonumber(record.active_until) > now_ms then
+if not replay_status and record and record.state == 'active'
+  and record.active_until_number > now_ms then
   record.state = 'committed'
   record.committed_at = string.format('%.0f', now_ms)
   record.actual_tokens = ARGV[7] == '' and record.estimated_tokens or ARGV[7]
@@ -893,31 +1010,34 @@ if not replay_status and record and record.state == 'active' and tonumber(record
   if record.monthly_reconciled == '0' then evidence_expiry = math.max(evidence_expiry, now_ms + 2592000000) end
   record.retained_until = string.format('%.0f', evidence_expiry)
   record.next_expiry = record.retained_until
-  if not parse_record(encode_record(record)) then return redis.error_reply('COORDINATION_CORRUPT') end
+  record = parse_record(encode_record(record))
+  if not record then return redis.error_reply('COORDINATION_CORRUPT') end
   local aggregate = aggregate_target_records(now_ms, ARGV[5], tonumber(ARGV[10]), 0, 0, false,
     ARGV[4], record)
   if not aggregate then return redis.error_reply('COORDINATION_CORRUPT') end
   local overspent_value =
-    (record.tpm_limit ~= 'n' and aggregate.rate_tokens > tonumber(record.tpm_limit))
-    or (record.daily_budget ~= 'n' and tonumber(record.daily_spend)
-      + aggregate.active_cost + aggregate.daily_unreconciled > tonumber(record.daily_budget))
-    or (record.monthly_budget ~= 'n' and tonumber(record.monthly_spend)
-      + aggregate.active_cost + aggregate.monthly_unreconciled > tonumber(record.monthly_budget))
+    (record.tpm_limit ~= 'n' and (aggregate.rate_tokens_saturated
+      or uint_greater_than(aggregate.rate_tokens, record.tpm_limit)))
+    or (record.daily_budget ~= 'n' and record.daily_spend_number
+      + aggregate.active_cost + aggregate.daily_unreconciled > record.daily_budget_number)
+    or (record.monthly_budget ~= 'n' and record.monthly_spend_number
+      + aggregate.active_cost + aggregate.monthly_unreconciled > record.monthly_budget_number)
   overspent = overspent_value and '1' or '0'
   status, expiry = 'committed', record.retained_until
 end
 -- apply validated mutation
-if bootstrap_epoch then redis.call('HSET', KEYS[1], 'schema_version', '1', 'epoch', '1', 'state', 'ready') end
 if #plan.replay_due > 0 then redis.call('HDEL', KEYS[4], unpack(plan.replay_due)); redis.call('ZREM', KEYS[5], unpack(plan.replay_due)) end
 for _, pair in ipairs(plan.due_records) do
   local reservation_id, due = pair[1], pair[2]
-  if due.state == 'active' and tonumber(due.active_until) <= now_ms and tonumber(due.retained_until) > now_ms then
+  if due.state == 'active' and due.active_until_number <= now_ms
+    and due.retained_until_number > now_ms then
     due.state, due.next_expiry = 'expired', due.retained_until
-    redis.call('HSET', KEYS[2], reservation_id, encode_record(due)); redis.call('ZADD', KEYS[3], tonumber(due.next_expiry), reservation_id)
+    due.next_expiry_number = due.retained_until_number
+    redis.call('HSET', KEYS[2], reservation_id, encode_record(due)); redis.call('ZADD', KEYS[3], due.next_expiry_number, reservation_id)
   else redis.call('HDEL', KEYS[2], reservation_id); redis.call('ZREM', KEYS[3], reservation_id) end
 end
 if replay_status then return {'1', replay_status, replay_overspent, '1'} end
-if record and status == 'committed' then redis.call('HSET', KEYS[2], ARGV[4], encode_record(record)); redis.call('ZADD', KEYS[3], tonumber(record.next_expiry), ARGV[4]); redis.call('SET', KEYS[6], '1|' .. ARGV[5], 'PXAT', expiry) end
+if record and status == 'committed' then redis.call('HSET', KEYS[2], ARGV[4], encode_record(record)); redis.call('ZADD', KEYS[3], record.next_expiry_number, ARGV[4]); redis.call('SET', KEYS[6], '1|' .. ARGV[5], 'PXAT', expiry) end
 redis.call('HSET', KEYS[4], ARGV[3], table.concat(
   {'1', ARGV[2], status, overspent, expiry}, '|'))
 redis.call('ZADD', KEYS[5], tonumber(expiry), ARGV[3])
@@ -931,17 +1051,19 @@ _QUOTA_RELEASE_SCRIPT = (
     + _QUOTA_LUA_COMMON
     + r"""
 local function valid_replay(value, score)
-  if not value or not score or not valid_positive(score) then return false end
+  if not value or not score or not valid_safe_uint(score) or score == '0' then return false end
   local schema, fingerprint, released, expiry =
     string.match(value, '^([^|]+)|([^|]+)|([^|]+)|([^|]+)$')
   return schema == '1' and valid_hex(fingerprint) and (released == '0' or released == '1')
-    and valid_positive(expiry) and tonumber(expiry) == tonumber(score)
+    and valid_safe_uint(expiry) and expiry ~= '0' and expiry == score
 end
-local fenced, _, bootstrap_epoch = ready_epoch(ARGV[1])
+local fenced = ready_epoch(ARGV[1])
 if fenced == nil then return redis.error_reply('COORDINATION_CORRUPT') end
 if not fenced then return {'1', 'ok', '0', '0'} end
-if not valid_hex(ARGV[2]) or not valid_hex(ARGV[5]) or not valid_positive(ARGV[6])
-  or not valid_positive(ARGV[7]) or not valid_positive(ARGV[8]) then
+if not valid_hex(ARGV[2]) or not valid_hex(ARGV[5])
+  or not valid_safe_uint(ARGV[6]) or ARGV[6] == '0' or tonumber(ARGV[6]) > 2592000000
+  or not valid_safe_uint(ARGV[7]) or ARGV[7] == '0' or tonumber(ARGV[7]) > 100000
+  or not valid_safe_uint(ARGV[8]) or ARGV[8] == '0' or tonumber(ARGV[8]) > 100000 then
   return redis.error_reply('COORDINATION_CORRUPT')
 end
 local reservation_key = read_reservation_locator(KEYS[6])
@@ -965,39 +1087,43 @@ local replay, replay_expiry = redis.call('HGET', KEYS[4], ARGV[3]),
 if (replay or replay_expiry) and not valid_replay(replay, replay_expiry) then
   return redis.error_reply('COORDINATION_CORRUPT')
 end
+if replay and tonumber(replay_expiry) <= now_ms then replay, replay_expiry = nil, nil end
 if operation_key and not replay then return redis.error_reply('COORDINATION_CORRUPT') end
 local replayed = false
 if replay then
   local _, fingerprint = string.match(replay, '^([^|]+)|([^|]+)|([^|]+)|([^|]+)$')
   replayed = fingerprint == ARGV[2]
 end
-if not replay and redis.call('HLEN', KEYS[4]) >= tonumber(ARGV[8]) then
+if not replay and redis.call('HLEN', KEYS[4]) - #plan.replay_due >= tonumber(ARGV[8]) then
   return {'1', 'reconciliation_required', '0', '0'}
 end
 local encoded = redis.call('HGET', KEYS[2], ARGV[4])
 local record = encoded and validate_record_pair(encoded,
   redis.call('ZSCORE', KEYS[3], ARGV[4]), ARGV[5]) or nil
 if encoded and not record then return redis.error_reply('COORDINATION_CORRUPT') end
+record = record_after_planned_prune(record, now_ms)
 local released, expiry = '0', string.format('%.0f', now_ms + tonumber(ARGV[6]))
 if not replay and record then
   expiry = record.retained_until
-  if record.state == 'active' and tonumber(record.active_until) > now_ms then
+  if record.state == 'active' and record.active_until_number > now_ms then
     released, record.state, record.next_expiry = '1', 'released', record.retained_until
-    if not parse_record(encode_record(record)) then return redis.error_reply('COORDINATION_CORRUPT') end
+    record = parse_record(encode_record(record))
+    if not record then return redis.error_reply('COORDINATION_CORRUPT') end
   end
 end
 -- apply validated mutation
-if bootstrap_epoch then redis.call('HSET', KEYS[1], 'schema_version', '1', 'epoch', '1', 'state', 'ready') end
 if #plan.replay_due > 0 then redis.call('HDEL', KEYS[4], unpack(plan.replay_due)); redis.call('ZREM', KEYS[5], unpack(plan.replay_due)) end
 for _, pair in ipairs(plan.due_records) do
   local reservation_id, due = pair[1], pair[2]
-  if due.state == 'active' and tonumber(due.active_until) <= now_ms and tonumber(due.retained_until) > now_ms then
+  if due.state == 'active' and due.active_until_number <= now_ms
+    and due.retained_until_number > now_ms then
     due.state, due.next_expiry = 'expired', due.retained_until
-    redis.call('HSET', KEYS[2], reservation_id, encode_record(due)); redis.call('ZADD', KEYS[3], tonumber(due.next_expiry), reservation_id)
+    due.next_expiry_number = due.retained_until_number
+    redis.call('HSET', KEYS[2], reservation_id, encode_record(due)); redis.call('ZADD', KEYS[3], due.next_expiry_number, reservation_id)
   else redis.call('HDEL', KEYS[2], reservation_id); redis.call('ZREM', KEYS[3], reservation_id) end
 end
 if replay then return {'1', 'ok', '0', replayed and '1' or '0'} end
-if released == '1' then redis.call('HSET', KEYS[2], ARGV[4], encode_record(record)); redis.call('ZADD', KEYS[3], tonumber(record.next_expiry), ARGV[4]) end
+if released == '1' then redis.call('HSET', KEYS[2], ARGV[4], encode_record(record)); redis.call('ZADD', KEYS[3], record.next_expiry_number, ARGV[4]) end
 redis.call('HSET', KEYS[4], ARGV[3], table.concat({'1', ARGV[2], released, expiry}, '|'))
 redis.call('ZADD', KEYS[5], tonumber(expiry), ARGV[3])
 redis.call('SET', KEYS[7], '1|' .. ARGV[5] .. '|' .. ARGV[2], 'PXAT', expiry)
@@ -1063,7 +1189,10 @@ def _integer_bytes(value: int) -> bytes:
 
 
 def _float_bytes(value: float) -> bytes:
-    return format(float(value), ".17g").encode("ascii")
+    number = float(value)
+    if number == 0.0:
+        return b"0"
+    return format(number, ".17g").encode("ascii")
 
 
 def _quota_operation_bytes(kind: str, operation_id: str) -> bytes:
@@ -1234,7 +1363,11 @@ def _decode_quota_release_reply(reply: object) -> bool:
         if values[2:] != [b"0", b"0"]:
             raise CoordinationCorruptError("Coordination reply is invalid.")
         raise CoordinationReconciliationRequiredError("Reconciliation is required.")
-    if values[1] != b"ok" or values[2] not in {b"0", b"1"} or values[3] not in {b"0", b"1"}:
+    if values[1] != b"ok" or (values[2], values[3]) not in {
+        (b"0", b"0"),
+        (b"1", b"0"),
+        (b"0", b"1"),
+    }:
         raise CoordinationCorruptError("Coordination reply is invalid.")
     return values[2] == b"1"
 
@@ -1287,14 +1420,16 @@ class RedisStateStore:
             weakref.WeakKeyDictionary()
         )
         self._closed = False
+        self._closing = False
         self._lifecycle_lock = asyncio.Lock()
+        self._close_task: asyncio.Task[None] | None = None
 
     def __repr__(self) -> str:
-        state = "closed" if self._closed else "open"
+        state = "closed" if self._closed else "closing" if self._closing else "open"
         return f"RedisStateStore(deployment={self._tag!r}, state={state!r})"
 
     def _ensure_open(self) -> None:
-        if self._closed:
+        if self._closed or self._closing:
             raise CoordinationUnavailableError("Coordination store is closed.")
 
     def _key(self, category: str, logical_name: str | None = None) -> str:
@@ -1318,6 +1453,7 @@ class RedisStateStore:
             self._quota_bucket_key("quota:replay-expiry", key_digest),
             self._key("quota:locator", reservation_id),
             self._key("quota:operation", operation_id),
+            self._key("initialization"),
         ]
 
     async def _quota_locator(
@@ -1483,7 +1619,9 @@ class RedisStateStore:
                 self._lock_tokens.pop(task, None)
 
     async def read_epoch(self) -> Epoch:
-        reply = await self._run_script("epoch_read", keys=[self._key("epoch")], args=[])
+        reply = await self._run_script(
+            "epoch_read", keys=[self._key("epoch"), self._key("initialization")], args=[]
+        )
         return _decode_epoch_reply(reply)
 
     async def advance_epoch(self, expected_epoch: int, operation_id: str) -> Epoch:
@@ -1495,6 +1633,7 @@ class RedisStateStore:
                 self._key("epoch"),
                 self._key("replay:epoch-advance"),
                 self._key("expiry:epoch-advance"),
+                self._key("initialization"),
             ],
             args=[
                 _integer_bytes(expected),
@@ -1514,6 +1653,7 @@ class RedisStateStore:
                 self._key("epoch"),
                 self._key("replay:epoch-ready"),
                 self._key("expiry:epoch-ready"),
+                self._key("initialization"),
             ],
             args=[
                 _integer_bytes(requested_epoch),
@@ -1543,6 +1683,7 @@ class RedisStateStore:
                 self._key("cas", request.key),
                 self._key("replay:cas"),
                 self._key("expiry:cas"),
+                self._key("initialization"),
             ],
             args=[
                 _integer_bytes(request.expected_revision),
@@ -1569,6 +1710,7 @@ class RedisStateStore:
                 self._key("invalidation", request.scope),
                 self._key("replay:invalidation"),
                 self._key("expiry:invalidation"),
+                self._key("initialization"),
             ],
             args=[
                 _integer_bytes(request.epoch),
@@ -1583,7 +1725,13 @@ class RedisStateStore:
     async def read_invalidation_generation(self, scope: str) -> InvalidationGeneration:
         logical_scope = _validate_identifier(scope, "Invalidation scope")
         reply = await self._run_script(
-            "invalidation_read", keys=[self._key("invalidation", logical_scope)], args=[]
+            "invalidation_read",
+            keys=[
+                self._key("invalidation", logical_scope),
+                self._key("epoch"),
+                self._key("initialization"),
+            ],
+            args=[],
         )
         return _decode_generation_reply(reply)
 
@@ -1721,13 +1869,29 @@ class RedisStateStore:
         async with self._lifecycle_lock:
             if self._closed:
                 return
-            self._closed = True
-            client = self._client
+            if self._close_task is None:
+                self._closing = True
+                self._close_task = asyncio.create_task(self._close_client())
+            close_task = self._close_task
+        await asyncio.shield(close_task)
+
+    async def _close_client(self) -> None:
+        client = self._client
+        try:
+            if client is not None:
+                await client.aclose()
+        except BaseException as exc:
+            async with self._lifecycle_lock:
+                self._closing = False
+                self._close_task = None
+            if isinstance(exc, Exception):
+                raise CoordinationUnavailableError("Redis coordination is unavailable.") from None
+            raise
+
+        async with self._lifecycle_lock:
             self._client = None
             self._scripts = {}
             self._lock_tokens.clear()
-        if client is not None:
-            try:
-                await client.aclose()
-            except Exception:
-                raise CoordinationUnavailableError("Redis coordination is unavailable.") from None
+            self._closed = True
+            self._closing = False
+            self._close_task = None

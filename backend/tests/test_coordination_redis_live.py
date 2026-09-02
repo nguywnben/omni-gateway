@@ -177,7 +177,11 @@ class LiveRedisCoordinationTests(CoordinationStoreContract, unittest.IsolatedAsy
         self.cleanup_client: Any | None = None
         try:
             self.namespace = _namespace()
-            self.store = RedisStateStore(REDIS_URI, deployment_namespace=self.namespace)
+            self.store = RedisStateStore(
+                REDIS_URI,
+                deployment_namespace=self.namespace,
+                _quota_record_limit_for_testing=2,
+            )
             self.cleanup_client = redis_asyncio.from_url(REDIS_URI, decode_responses=False)
             await asyncio.wait_for(self.store.read_epoch(), timeout=_CONNECT_TIMEOUT_SECONDS)
         except BaseException as exc:
@@ -202,6 +206,14 @@ class LiveRedisCoordinationTests(CoordinationStoreContract, unittest.IsolatedAsy
 
         await self.assert_epoch_cas_and_invalidation_contract(
             advance_cas_clock=advance_server_clock
+        )
+
+    async def test_shared_quota_contract_against_registered_lua(self) -> None:
+        async def advance_server_clock(seconds: float) -> None:
+            await asyncio.wait_for(asyncio.sleep(seconds), timeout=seconds + 1.0)
+
+        await self.assert_quota_lifecycle_replay_expiry_and_capacity_contract(
+            advance_quota_clock=advance_server_clock
         )
 
     async def test_quota_reserve_rate_and_budget_limits_are_atomic_under_concurrency(self) -> None:
@@ -268,6 +280,120 @@ class LiveRedisCoordinationTests(CoordinationStoreContract, unittest.IsolatedAsy
             )
         )
         self.assertEqual(monthly.reason, "monthly_budget")
+
+    async def test_quota_signed_63_bit_token_boundaries_execute_in_lua(self) -> None:
+        now = time.time()
+        for boundary in (2**53 - 1, 2**53, 2**53 + 1, 2**63 - 1):
+            with self.subTest(boundary=boundary):
+                key_id = f"token-{boundary}"
+                self.assertTrue(
+                    (
+                        await self.store.reserve_quota(
+                            _reservation(
+                                f"token-first-{boundary}",
+                                now=now,
+                                key_id=key_id,
+                                estimated_tokens=boundary,
+                                tpm_limit=boundary,
+                            )
+                        )
+                    ).accepted
+                )
+                denied = await self.store.reserve_quota(
+                    _reservation(
+                        f"token-second-{boundary}",
+                        now=now,
+                        key_id=key_id,
+                        estimated_tokens=1,
+                        tpm_limit=boundary,
+                    )
+                )
+                self.assertEqual(denied.reason, "tpm")
+
+    async def test_quota_stored_decimal_and_chronology_corruption_fails_closed(self) -> None:
+        assert self.cleanup_client is not None
+        now = time.time()
+
+        async def stored_record(reservation_id: str) -> tuple[str, list[bytes]]:
+            locator = await self.cleanup_client.get(
+                self.store._key("quota:locator", reservation_id)
+            )
+            assert isinstance(locator, bytes)
+            key_digest = locator.split(b"|")[1]
+            records_key = self.store._quota_bucket_key("quota:records", key_digest)
+            encoded = await self.cleanup_client.hget(records_key, reservation_id)
+            assert isinstance(encoded, bytes)
+            return records_key, encoded.split(b"|")
+
+        for suffix, corrupt_cost in (
+            ("infinite", b"1e999"),
+            ("negative", b"-1"),
+            ("above-range", b"9.2233720368547779e+18"),
+        ):
+            with self.subTest(corruption=suffix):
+                reservation_id = f"corrupt-{suffix}"
+                key_id = f"corrupt-key-{suffix}"
+                self.assertTrue(
+                    (
+                        await self.store.reserve_quota(
+                            _reservation(reservation_id, now=now, key_id=key_id)
+                        )
+                    ).accepted
+                )
+                records_key, fields = await stored_record(reservation_id)
+                fields[8] = corrupt_cost
+                await self.cleanup_client.hset(records_key, reservation_id, b"|".join(fields))
+                with self.assertRaises(CoordinationCorruptError):
+                    await self.store.commit_quota(
+                        QuotaCommitRequest(reservation_id, now, 1, 0.0, False)
+                    )
+
+        boundary_id = "decimal-boundary"
+        boundary_key = "decimal-boundary-key"
+        self.assertTrue(
+            (
+                await self.store.reserve_quota(
+                    _reservation(boundary_id, now=now, key_id=boundary_key)
+                )
+            ).accepted
+        )
+        records_key, fields = await stored_record(boundary_id)
+        fields[8] = b"9.2233720368547758e+18"
+        await self.cleanup_client.hset(records_key, boundary_id, b"|".join(fields))
+        self.assertTrue(
+            (
+                await self.store.reserve_quota(
+                    _reservation("decimal-boundary-next", now=now, key_id=boundary_key)
+                )
+            ).accepted
+        )
+
+        chronology_id = "corrupt-chronology"
+        chronology_key = "corrupt-chronology-key"
+        self.assertTrue(
+            (
+                await self.store.reserve_quota(
+                    _reservation(
+                        chronology_id,
+                        now=now,
+                        key_id=chronology_key,
+                        ttl_seconds=60.0,
+                    )
+                )
+            ).accepted
+        )
+        self.assertTrue(
+            (
+                await self.store.commit_quota(QuotaCommitRequest(chronology_id, now, 1, 0.0, False))
+            ).committed
+        )
+        records_key, fields = await stored_record(chronology_id)
+        fields[6] = str(int(fields[9]) + 1).encode("ascii")
+        await self.cleanup_client.hset(records_key, chronology_id, b"|".join(fields))
+        with self.assertRaises(CoordinationCorruptError):
+            await self.store.reserve_quota(
+                _reservation("chronology-next", now=now, key_id=chronology_key)
+            )
 
     async def test_quota_replay_terminal_retention_commit_fallback_and_overspend(self) -> None:
         now = time.time()
