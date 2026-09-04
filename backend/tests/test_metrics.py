@@ -28,6 +28,11 @@ from core.credential_operation_evidence import (
     record_credential_mutation,
 )
 from core.metrics import metrics, render_prometheus_metrics
+from core.security_coordination import (
+    AttemptReservationRequest,
+    SecurityAttemptCategory,
+)
+from core.state_store import InMemoryStateStore
 from core.storage.usage_ledger_sqlite import SQLiteUsageLedgerRepository
 from core.usage_ledger_service import UsageLedgerService
 from support import workspace_temp_directory
@@ -157,6 +162,30 @@ class RenderPrometheusMetricsTests(unittest.TestCase):
         self.assertNotIn("untrusted", output)
         self.assertNotIn("tenant/key", output)
         self.assertNotIn("top-secret", output)
+
+    def test_security_coordination_metrics_are_exposed_without_client_identity(self):
+        client_index = "b" * 64
+        service = CoordinationService(InMemoryStateStore())
+        decision = _run(
+            service.reserve_security_attempt(
+                AttemptReservationRequest(
+                    SecurityAttemptCategory.LOGIN,
+                    client_index,
+                    1,
+                    300,
+                    1,
+                    "metrics-security-attempt",
+                )
+            )
+        )
+
+        self.assertTrue(decision.allowed)
+        output = render_prometheus_metrics([])
+        self.assertIn(
+            'omni_coordination_operations_total{backend="in_memory",operation="reserve_security_attempt",result="success"} 1',
+            output,
+        )
+        self.assertNotIn(client_index, output)
 
     def test_stale_quota_commit_renders_as_rejected_not_success(self):
         service = CoordinationService(_RejectedQuotaCommitStore())

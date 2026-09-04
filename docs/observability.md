@@ -36,10 +36,13 @@ sample so idle or new installations do not page.
 
 `omni_coordination_operations_total{backend,operation,result}` is a process-local counter for the
 currently supplied coordination store. `backend` is fixed to `in_memory`, `redis`, or `unknown`.
-`operation` is one of the fixed coordination and quota lifecycle calls (for example
-`reserve_quota`, `commit_quota`, `compare_and_set`, or `close`). `result` is fixed to `success`,
+`operation` is one of the fixed coordination, quota, and identity-security lifecycle calls (for
+example `reserve_quota`, `commit_quota`, `reserve_security_attempt`, `consume_oidc_transaction`,
+`resolve_security_session`, `compare_and_set`, or `close`). `result` is fixed to `success`,
 `rejected`, `idempotent`, `unavailable`, `corrupt`, `reconciliation_required`, or `unexpected`.
-The renderer always emits its HELP and TYPE metadata, including before any operation occurs.
+No session digest, principal index, client index, throttle bucket, OIDC state/browser digest, or
+operation ID is a label. The renderer always emits its HELP and TYPE metadata, including before
+any operation occurs.
 
 Use the counter to ask: is Redis becoming unavailable, are corruption or reconciliation-required
 outcomes increasing, are quota admissions being rejected unexpectedly, and is a process closing
@@ -48,9 +51,12 @@ only backend class, availability/closed state, failure count, fixed error catego
 It never places a logical key, scope, reservation, operation ID, provider, Redis URI, or exception
 message in metric labels or health evidence.
 
-The semantic Redis execution suite is opt-in: set `OMNI_TEST_REDIS_URI` and run
-`backend.tests.test_coordination_redis_live`. With the variable absent, unittest reports each live
-test as an explicit skip; with it present, a connection failure is a real failure. Each run derives
+The semantic Redis execution suites are opt-in: set `OMNI_TEST_REDIS_URI` and run
+`backend.tests.test_coordination_redis_live` plus
+`backend.tests.test_security_coordination_redis_live`. With the variable absent, unittest reports
+each live test as an explicit skip; with it present, a connection failure is a real failure. The
+security suite proves shared session visibility and revocation, atomic authentication-attempt
+admission, one-winner OIDC transaction consumption, and exact ready-epoch fencing. Each run derives
 a unique validated lowercase/hyphen namespace and teardown scans and deletes only keys under that
 run's derived deployment prefix/hash tag. It never uses `FLUSHDB`, broad deletion, or `SCRIPT
 FLUSH`; the latter is server-global and therefore not safe for a shared endpoint.

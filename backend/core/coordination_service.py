@@ -28,6 +28,25 @@ from core.coordination import (
     QuotaReservationDecision,
     QuotaReservationRequest,
 )
+from core.security_coordination import (
+    AttemptClearRequest,
+    AttemptClearResult,
+    AttemptReservationDecision,
+    AttemptReservationRequest,
+    OidcTransactionConsumeRequest,
+    OidcTransactionConsumeResult,
+    OidcTransactionCreateRequest,
+    SessionIssueRequest,
+    SessionListRequest,
+    SessionMutationResult,
+    SessionPage,
+    SessionResolveRequest,
+    SessionResolveResult,
+    SessionRevokeRequest,
+    SessionRevokeResult,
+    SessionRotateRequest,
+    TransactionCreateResult,
+)
 
 _Result = TypeVar("_Result")
 
@@ -49,6 +68,15 @@ _OPERATIONS = frozenset(
         "reserve_quota",
         "commit_quota",
         "release_quota",
+        "issue_security_session",
+        "resolve_security_session",
+        "rotate_security_session",
+        "revoke_security_sessions",
+        "list_security_sessions",
+        "reserve_security_attempt",
+        "clear_security_attempts",
+        "create_oidc_transaction",
+        "consume_oidc_transaction",
         "close",
     }
 )
@@ -142,6 +170,12 @@ def _result_category(result: object) -> str:
     if hasattr(result, "accepted") and not bool(getattr(result, "accepted")):
         return "rejected"
     if hasattr(result, "applied") and not bool(getattr(result, "applied")):
+        return "rejected"
+    if hasattr(result, "resolved") and not bool(getattr(result, "resolved")):
+        return "rejected"
+    if hasattr(result, "allowed") and not bool(getattr(result, "allowed")):
+        return "rejected"
+    if hasattr(result, "consumed") and not bool(getattr(result, "consumed")):
         return "rejected"
     if isinstance(result, bool) and not result:
         return "rejected"
@@ -257,6 +291,59 @@ class CoordinationService:
 
     async def release_quota(self, reservation_id: str, **kwargs: object) -> bool:
         return await self._run("release_quota", self._store.release_quota, reservation_id, **kwargs)
+
+    async def issue_security_session(self, request: SessionIssueRequest) -> SessionMutationResult:
+        return await self._run(
+            "issue_security_session", self._store.issue_security_session, request
+        )
+
+    async def resolve_security_session(
+        self, request: SessionResolveRequest
+    ) -> SessionResolveResult:
+        return await self._run(
+            "resolve_security_session", self._store.resolve_security_session, request
+        )
+
+    async def rotate_security_session(self, request: SessionRotateRequest) -> SessionMutationResult:
+        return await self._run(
+            "rotate_security_session", self._store.rotate_security_session, request
+        )
+
+    async def revoke_security_sessions(self, request: SessionRevokeRequest) -> SessionRevokeResult:
+        return await self._run(
+            "revoke_security_sessions", self._store.revoke_security_sessions, request
+        )
+
+    async def list_security_sessions(self, request: SessionListRequest) -> SessionPage:
+        return await self._run(
+            "list_security_sessions", self._store.list_security_sessions, request
+        )
+
+    async def reserve_security_attempt(
+        self, request: AttemptReservationRequest
+    ) -> AttemptReservationDecision:
+        return await self._run(
+            "reserve_security_attempt", self._store.reserve_security_attempt, request
+        )
+
+    async def clear_security_attempts(self, request: AttemptClearRequest) -> AttemptClearResult:
+        return await self._run(
+            "clear_security_attempts", self._store.clear_security_attempts, request
+        )
+
+    async def create_oidc_transaction(
+        self, request: OidcTransactionCreateRequest
+    ) -> TransactionCreateResult:
+        return await self._run(
+            "create_oidc_transaction", self._store.create_oidc_transaction, request
+        )
+
+    async def consume_oidc_transaction(
+        self, request: OidcTransactionConsumeRequest
+    ) -> OidcTransactionConsumeResult:
+        return await self._run(
+            "consume_oidc_transaction", self._store.consume_oidc_transaction, request
+        )
 
     async def close(self) -> None:
         """Close the supplied backend once, without letting waiter cancellation abort it."""

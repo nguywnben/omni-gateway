@@ -27,6 +27,10 @@ from core.coordination_service import (
     render_coordination_operation_metrics,
 )
 from core.redis_state_store import RedisStateStore
+from core.security_coordination import (
+    AttemptReservationRequest,
+    SecurityAttemptCategory,
+)
 from core.state_store import InMemoryStateStore
 
 
@@ -130,6 +134,37 @@ class CoordinationServiceTests(unittest.IsolatedAsyncioTestCase):
         output = render_coordination_operation_metrics()
         self.assertIn('operation="commit_quota",result="rejected"', output)
         self.assertNotIn('operation="commit_quota",result="success"', output)
+
+    async def test_security_operation_metrics_are_bounded_and_secret_free(self) -> None:
+        service = CoordinationService(InMemoryStateStore())
+        client_index = "a" * 64
+        allowed = await service.reserve_security_attempt(
+            AttemptReservationRequest(
+                SecurityAttemptCategory.LOGIN,
+                client_index,
+                1,
+                300,
+                1,
+                "security-metric-allowed",
+            )
+        )
+        denied = await service.reserve_security_attempt(
+            AttemptReservationRequest(
+                SecurityAttemptCategory.LOGIN,
+                client_index,
+                1,
+                300,
+                1,
+                "security-metric-denied",
+            )
+        )
+
+        self.assertTrue(allowed.allowed)
+        self.assertFalse(denied.allowed)
+        output = render_coordination_operation_metrics()
+        self.assertIn('operation="reserve_security_attempt",result="success"', output)
+        self.assertIn('operation="reserve_security_attempt",result="rejected"', output)
+        self.assertNotIn(client_index, output)
 
     async def test_failure_categories_are_fixed_and_recovery_is_recorded(self) -> None:
         service = CoordinationService(_RecoveringStore())
