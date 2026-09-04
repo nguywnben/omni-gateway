@@ -4,16 +4,18 @@
 
 - Updated: 2026-09-04 (Asia/Saigon).
 - Branch: `codex/enterprise-overhaul`.
-- Last committed checkpoint: `568cc01` (W4.18.3).
+- Last committed implementation checkpoint: `1ff148e` (W4.18-W4.19.1).
 - Workspace scope complete: W4.18 lifecycle, W4.19 HA evidence/disposition, and the first W4-C
   process-local-state blocker closure.
 - Original program progress: 23/28 approved checklist items complete (82.1%). Wave execution-slice
   checkboxes refine those items and are not added to the denominator.
 - Control state: **W4-C BLOCKER CLOSURE IN PROGRESS; HA ACTIVATION DENIED**.
 - Supported runtime: standalone, one worker, one replica. OIDC remains disabled by default.
-- Current runtime: worktree code on `http://127.0.0.1:4283`; health/readiness returned HTTP 200 and
-  the authenticated Vietnamese dashboard loaded without console errors or horizontal overflow.
-- Worktree is intentionally not clean pending the combined W4.18/W4.19/blocker-closure checkpoint.
+- Current runtime: committed `1ff148e` on `http://127.0.0.1:4283`; health/readiness returned HTTP
+  200, including storage, usage-ledger, and coordination checks. The authenticated Vietnamese
+  dashboard, audit, and request-trace pages loaded without console errors or horizontal overflow at
+  a 451-pixel viewport.
+- Worktree is clean at the recorded checkpoint after this progress-ledger commit.
 
 ## What W4.18 Delivered
 
@@ -65,7 +67,8 @@ Activation was correctly denied. `SUPPORTED_HA_ACTIVATION_RECORDS` is empty, `WO
   ownership is checked before every mutation; an unknown post-mutation failure cannot release the
   reservation and permit unsafe replay.
 - Full backend suite: 1,270 passed, 30 opt-in live-backend skips. Ruff lint/format, compileall, diff
-  checks, and a 94-test affected matrix pass.
+  checks, `pip check`, PyPI vulnerability audit, strict YAML lint, Compose validation, JavaScript
+  syntax, four i18n audits, and a 94-test affected matrix pass.
 
 The implementation review is `docs/reviews/w4c-coordination-blocker-review.md`.
 
@@ -86,13 +89,12 @@ did not fail the supported test suite.
 
 ## Immediate Next Action
 
-1. Commit the verified W4.18/W4.19/blocker-closure workspace checkpoint without pushing.
-2. Restart from that committed checkpoint and repeat health/readiness plus authenticated browser
-   smoke.
-3. Specify and implement storage-bound credential-pool fencing and the batch domain capacity gate.
-4. Redesign or measure the worst-case Redis quota transition, then run the required external
+1. Specify and implement storage-bound credential-pool fencing without introducing lease-expiry
+   split-brain writes.
+2. Add and prove the dedicated 256-entry credential-batch domain capacity gate.
+3. Redesign or measure the worst-case Redis quota transition, then run the required external
    two-replica topology and rollback matrix when infrastructure is available.
-5. Do not enter Wave 5, raise worker/replica limits, populate an activation record, enable OIDC, or
+4. Do not enter Wave 5, raise worker/replica limits, populate an activation record, enable OIDC, or
    mutate production data without a separate accepted plan and required evidence.
 
 ## Authoritative Reading Order
