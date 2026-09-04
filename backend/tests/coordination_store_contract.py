@@ -31,7 +31,7 @@ class CoordinationStoreContract:
             "reservation_id": reservation_id,
             "key_id": key_id,
             "now": 1_000.0,
-            "ttl_seconds": 1.0,
+            "ttl_seconds": 61.0,
             "estimated_tokens": 1,
             "estimated_cost_usd": 0.0,
             "rpm_limit": None,
@@ -119,7 +119,7 @@ class CoordinationStoreContract:
                         "quota-commit",
                         key_id="quota-commit-key",
                         operation_id="quota-commit-reserve",
-                        ttl_seconds=60.0,
+                        ttl_seconds=61.0,
                     )
                 )
             ).accepted
@@ -140,7 +140,7 @@ class CoordinationStoreContract:
                         "quota-release",
                         key_id="quota-release-key",
                         operation_id="quota-release-reserve",
-                        ttl_seconds=60.0,
+                        ttl_seconds=61.0,
                     )
                 )
             ).accepted
@@ -168,7 +168,7 @@ class CoordinationStoreContract:
         )
         self.assertTrue((await self.store.reserve_quota(identical_expiry)).accepted)
         self.assertTrue((await self.store.reserve_quota(changed_expiry)).accepted)
-        await advance_quota_clock(60.1)
+        await advance_quota_clock(61.1)
 
         identical_after_retention = await self.store.reserve_quota(identical_expiry)
         changed_after_retention = await self.store.reserve_quota(

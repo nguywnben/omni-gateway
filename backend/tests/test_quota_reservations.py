@@ -166,10 +166,10 @@ class AtomicQuotaReservationTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(decision.reason, "daily_budget")
 
     async def test_expired_reservation_is_reconciled(self):
-        await self.store.reserve_quota(_reservation("res_a", rpm_limit=1, ttl_seconds=5.0))
+        await self.store.reserve_quota(_reservation("res_a", rpm_limit=1, ttl_seconds=61.0))
 
-        self.coordination_now = 1_006.0
-        decision = await self.store.reserve_quota(_reservation("res_b", now=1_006.0, rpm_limit=1))
+        self.coordination_now = 1_062.0
+        decision = await self.store.reserve_quota(_reservation("res_b", now=1_062.0, rpm_limit=1))
 
         self.assertTrue(decision.accepted)
 

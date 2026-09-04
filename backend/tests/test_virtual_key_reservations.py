@@ -154,6 +154,24 @@ class VirtualKeyReservationTests(unittest.IsolatedAsyncioTestCase):
         self.assertIsNone(state_request.monthly_budget_usd)
         self.assertEqual(state_request.estimated_cost_usd, 0.0)
 
+    async def test_rate_coordination_never_receives_cost_authority(self):
+        record = self._key(rpm_limit=100)
+        reservation_id = await self.manager.enforce(
+            record,
+            requested_model="gpt-4o-mini",
+            request_body=self._body(),
+            reservation_id="rate-only",
+            now=1000.0,
+        )
+
+        state_request = self.manager._state_store._quota_records[reservation_id].request
+        self.assertEqual(state_request.estimated_cost_usd, 0.0)
+        self.assertIsNone(state_request.daily_budget_usd)
+        self.assertIsNone(state_request.monthly_budget_usd)
+        self.assertEqual(
+            (state_request.daily_spend_usd, state_request.monthly_spend_usd), (0.0, 0.0)
+        )
+
     async def test_fallback_pricing_reserves_cost_for_unknown_model(self):
         record = self._key(
             budget_daily_usd=0.000001,

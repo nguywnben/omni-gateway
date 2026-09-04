@@ -41,7 +41,7 @@ def _reservation(reservation_id: str, **overrides: object) -> QuotaReservationRe
         "reservation_id": reservation_id,
         "key_id": "virtual-key",
         "now": 1_000.0,
-        "ttl_seconds": 1.0,
+        "ttl_seconds": 61.0,
         "estimated_tokens": 1,
         "estimated_cost_usd": 0.0,
         "rpm_limit": None,
@@ -105,7 +105,7 @@ class InMemoryCoordinationTests(CoordinationStoreContract, unittest.IsolatedAsyn
             denied = await store.reserve_quota(_reservation("second", now=2_000_000.0, rpm_limit=1))
             self.assertEqual(denied.reason, "rpm")
             holder = store._quota_records["holder"]
-            self.assertEqual((holder.accepted_at, holder.active_expires_at), (1_000.0, 1_001.0))
+            self.assertEqual((holder.accepted_at, holder.active_expires_at), (1_000.0, 1_061.0))
 
         with self.subTest(path="backdated-reserve"):
             clock = _Clock()
@@ -115,7 +115,7 @@ class InMemoryCoordinationTests(CoordinationStoreContract, unittest.IsolatedAsyn
                     await store.reserve_quota(_reservation("holder", now=1_000_000.0, rpm_limit=1))
                 ).accepted
             )
-            clock.advance(2.0)
+            clock.advance(62.0)
             accepted = await store.reserve_quota(
                 _reservation(
                     "second",
@@ -134,7 +134,7 @@ class InMemoryCoordinationTests(CoordinationStoreContract, unittest.IsolatedAsyn
                 self.assertTrue(
                     (await store.reserve_quota(_reservation("expired", now=1_000_000.0))).accepted
                 )
-                clock.advance(2.0)
+                clock.advance(62.0)
                 if operation == "commit":
                     result = await store.commit_quota(
                         QuotaCommitRequest("expired", 0.0, 1, 0.0, False)
@@ -145,7 +145,7 @@ class InMemoryCoordinationTests(CoordinationStoreContract, unittest.IsolatedAsyn
 
     async def test_stale_reserve_does_not_reconcile_committed_evidence(self) -> None:
         accepted = await self.store.reserve_quota(
-            _reservation("committed", daily_budget_usd=1.0, ttl_seconds=10.0)
+            _reservation("committed", daily_budget_usd=1.0, ttl_seconds=61.0)
         )
         self.assertTrue(accepted.accepted)
         self.assertTrue(
@@ -190,7 +190,7 @@ class InMemoryCoordinationTests(CoordinationStoreContract, unittest.IsolatedAsyn
         self.assertTrue(
             (
                 await self.store.reserve_quota(
-                    _reservation("reservation", fencing_epoch=2, ttl_seconds=10.0)
+                    _reservation("reservation", fencing_epoch=2, ttl_seconds=61.0)
                 )
             ).accepted
         )
@@ -206,7 +206,7 @@ class InMemoryCoordinationTests(CoordinationStoreContract, unittest.IsolatedAsyn
         self.assertTrue(
             (
                 await self.store.reserve_quota(
-                    _reservation("active-release", fencing_epoch=2, ttl_seconds=10.0)
+                    _reservation("active-release", fencing_epoch=2, ttl_seconds=61.0)
                 )
             ).accepted
         )
@@ -227,7 +227,7 @@ class InMemoryCoordinationTests(CoordinationStoreContract, unittest.IsolatedAsyn
 
     async def test_commit_changed_time_is_a_conflict_but_exact_time_replays(self) -> None:
         self.assertTrue(
-            (await self.store.reserve_quota(_reservation("commit-time", ttl_seconds=10.0))).accepted
+            (await self.store.reserve_quota(_reservation("commit-time", ttl_seconds=61.0))).accepted
         )
         request = QuotaCommitRequest("commit-time", 1_001.0, 2, 0.0, True, 1, "commit-time-op")
         committed = await self.store.commit_quota(request)
@@ -254,7 +254,7 @@ class InMemoryCoordinationTests(CoordinationStoreContract, unittest.IsolatedAsyn
                 await self.store.reserve_quota(
                     _reservation(
                         "snapshot-evidence",
-                        ttl_seconds=10.0,
+                        ttl_seconds=61.0,
                         daily_budget_usd=1.0,
                         monthly_budget_usd=1.0,
                     )
@@ -316,14 +316,14 @@ class InMemoryCoordinationTests(CoordinationStoreContract, unittest.IsolatedAsyn
         self.assertTrue(
             (await self.store.reserve_quota(_reservation("holder", rpm_limit=1))).accepted
         )
-        denied_request = _reservation("denied", ttl_seconds=10.0, rpm_limit=1)
+        denied_request = _reservation("denied", ttl_seconds=61.0, rpm_limit=1)
         denied = await self.store.reserve_quota(denied_request)
         self.assertEqual(denied.reason, "rpm")
         self.assertTrue(await self.store.release_quota("holder", now=1_000.5))
 
         replay = await self.store.reserve_quota(denied_request)
         conflict = await self.store.reserve_quota(
-            _reservation("denied", ttl_seconds=10.0, rpm_limit=1, estimated_tokens=2)
+            _reservation("denied", ttl_seconds=61.0, rpm_limit=1, estimated_tokens=2)
         )
 
         self.assertEqual(replay.reason, "rpm")
@@ -331,12 +331,12 @@ class InMemoryCoordinationTests(CoordinationStoreContract, unittest.IsolatedAsyn
         self.assertEqual(conflict.reason, "conflict")
 
     async def test_accepted_id_cannot_reactivate_until_expired_tombstone_is_pruned(self) -> None:
-        original = _reservation("expires", ttl_seconds=1.0)
+        original = _reservation("expires", ttl_seconds=61.0)
         self.assertTrue((await self.store.reserve_quota(original)).accepted)
 
         exact_replay = await self.store.reserve_quota(original)
         changed_during_retention = await self.store.reserve_quota(
-            _reservation("expires", now=1_002.0, ttl_seconds=1.0)
+            _reservation("expires", now=1_002.0, ttl_seconds=61.0)
         )
 
         self.assertTrue(exact_replay.accepted)
@@ -345,19 +345,19 @@ class InMemoryCoordinationTests(CoordinationStoreContract, unittest.IsolatedAsyn
 
         self.clock.advance(62.0)
         after_retention = await self.store.reserve_quota(
-            _reservation("expires", now=1_062.0, ttl_seconds=1.0)
+            _reservation("expires", now=1_062.0, ttl_seconds=61.0)
         )
         self.assertTrue(after_retention.accepted)
 
     async def test_released_and_committed_ids_remain_tombstoned_until_retention(self) -> None:
         self.assertTrue(
-            (await self.store.reserve_quota(_reservation("released", ttl_seconds=10.0))).accepted
+            (await self.store.reserve_quota(_reservation("released", ttl_seconds=61.0))).accepted
         )
         self.assertTrue(await self.store.release_quota("released", now=1_001.0))
         self.assertEqual(
             (
                 await self.store.reserve_quota(
-                    _reservation("released", now=1_002.0, ttl_seconds=10.0)
+                    _reservation("released", now=1_002.0, ttl_seconds=61.0)
                 )
             ).reason,
             "conflict",
@@ -365,7 +365,7 @@ class InMemoryCoordinationTests(CoordinationStoreContract, unittest.IsolatedAsyn
 
         self.clock.advance(62.0)
         self.assertTrue(
-            (await self.store.reserve_quota(_reservation("committed", ttl_seconds=10.0))).accepted
+            (await self.store.reserve_quota(_reservation("committed", ttl_seconds=61.0))).accepted
         )
         self.assertTrue(
             (
@@ -377,7 +377,7 @@ class InMemoryCoordinationTests(CoordinationStoreContract, unittest.IsolatedAsyn
         self.assertEqual(
             (
                 await self.store.reserve_quota(
-                    _reservation("committed", now=1_002.0, ttl_seconds=10.0)
+                    _reservation("committed", now=1_002.0, ttl_seconds=61.0)
                 )
             ).reason,
             "conflict",
@@ -387,14 +387,14 @@ class InMemoryCoordinationTests(CoordinationStoreContract, unittest.IsolatedAsyn
         self.assertTrue(
             (
                 await self.store.reserve_quota(
-                    _reservation("released", now=1_062.0, ttl_seconds=10.0)
+                    _reservation("released", now=1_062.0, ttl_seconds=61.0)
                 )
             ).accepted
         )
         self.assertTrue(
             (
                 await self.store.reserve_quota(
-                    _reservation("committed", now=1_062.0, ttl_seconds=10.0)
+                    _reservation("committed", now=1_062.0, ttl_seconds=61.0)
                 )
             ).accepted
         )
@@ -426,7 +426,7 @@ class InMemoryCoordinationTests(CoordinationStoreContract, unittest.IsolatedAsyn
         )
         self.assertTrue(
             (
-                await store.reserve_quota(_reservation("holder", rpm_limit=1, ttl_seconds=20.0))
+                await store.reserve_quota(_reservation("holder", rpm_limit=1, ttl_seconds=120.0))
             ).accepted
         )
         first_denial = await store.reserve_quota(_reservation("denied-1", rpm_limit=1))
@@ -436,8 +436,8 @@ class InMemoryCoordinationTests(CoordinationStoreContract, unittest.IsolatedAsyn
         self.assertEqual(second_denial.reason, "reconciliation_required")
         with self.assertRaises(CoordinationReconciliationRequiredError):
             await store.release_quota("holder", now=1_000.5, operation_id="release")
-        self.clock.advance(2.0)
-        self.assertTrue(await store.release_quota("holder", now=1_002.0, operation_id="release"))
+        self.clock.advance(62.0)
+        self.assertTrue(await store.release_quota("holder", now=1_062.0, operation_id="release"))
 
     async def test_explicit_success_replay_uses_the_accepted_retention_window(self) -> None:
         store = InMemoryStateStore(
@@ -463,7 +463,7 @@ class InMemoryCoordinationTests(CoordinationStoreContract, unittest.IsolatedAsyn
         for index in range(257):
             reservation_id = f"stale-node-{index}"
             self.assertTrue(
-                (await store.reserve_quota(_reservation(reservation_id, ttl_seconds=1.0))).accepted
+                (await store.reserve_quota(_reservation(reservation_id, ttl_seconds=61.0))).accepted
             )
             self.assertTrue(
                 await store.release_quota(
@@ -479,7 +479,7 @@ class InMemoryCoordinationTests(CoordinationStoreContract, unittest.IsolatedAsyn
         for reservation_id in ("commit-a", "commit-b", "release-a", "release-b"):
             self.assertTrue(
                 (
-                    await self.store.reserve_quota(_reservation(reservation_id, ttl_seconds=10.0))
+                    await self.store.reserve_quota(_reservation(reservation_id, ttl_seconds=61.0))
                 ).accepted
             )
 
@@ -634,8 +634,8 @@ class InMemoryCoordinationTests(CoordinationStoreContract, unittest.IsolatedAsyn
             decision = await store.reserve_quota(_reservation(f"expired-{index}"))
             self.assertTrue(decision.accepted)
 
-        self.clock.advance(2.0)
-        backlog = await store.reserve_quota(_reservation("after-expiry", now=1_002.0))
+        self.clock.advance(62.0)
+        backlog = await store.reserve_quota(_reservation("after-expiry", now=1_062.0))
 
         self.assertFalse(backlog.accepted)
         self.assertEqual(backlog.reason, "reconciliation_required")
@@ -644,7 +644,7 @@ class InMemoryCoordinationTests(CoordinationStoreContract, unittest.IsolatedAsyn
         store = InMemoryStateStore(clock=self.clock, _quota_record_limit_for_testing=300)
         for index in range(257):
             self.assertTrue((await store.reserve_quota(_reservation(f"expired-{index}"))).accepted)
-        self.clock.advance(2.0)
+        self.clock.advance(62.0)
 
         def snapshot() -> object:
             return copy.deepcopy(

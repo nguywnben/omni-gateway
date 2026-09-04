@@ -38,7 +38,7 @@ def _quota_request(**overrides: object) -> QuotaReservationRequest:
         "reservation_id": "reservation",
         "key_id": "key",
         "now": 1_000.0,
-        "ttl_seconds": 10.0,
+        "ttl_seconds": 61.0,
         "estimated_tokens": 1,
         "estimated_cost_usd": 0.0,
         "rpm_limit": None,
@@ -55,6 +55,11 @@ def _quota_request(**overrides: object) -> QuotaReservationRequest:
 
 
 class CoordinationDomainTests(unittest.TestCase):
+    def test_quota_reservation_ttl_covers_the_conservative_window(self) -> None:
+        with self.assertRaisesRegex(ValueError, "Quota TTL"):
+            _quota_request(ttl_seconds=60.999)
+        self.assertEqual(_quota_request(ttl_seconds=61.0).ttl_seconds, 61.0)
+
     def test_reconciliation_required_is_a_typed_unavailable_error(self) -> None:
         from core.coordination import CoordinationUnavailableError
 
@@ -84,7 +89,7 @@ class CoordinationDomainTests(unittest.TestCase):
                 "reservation",
                 "key",
                 1.0,
-                1.0,
+                61.0,
                 1,
                 0.0,
                 None,

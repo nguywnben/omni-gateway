@@ -11,12 +11,13 @@ import math
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Protocol
+from typing import Final, Protocol
 
 COORDINATION_SCHEMA_VERSION = 1
 MAX_IDENTIFIER_LENGTH = 128
 MAX_PAYLOAD_BYTES = 16 * 1024
 MIN_TTL_SECONDS = 1.0
+MIN_QUOTA_RESERVATION_TTL_SECONDS: Final[float] = 61.0
 MAX_TTL_SECONDS = 30.0 * 86_400.0
 MAX_COORDINATION_INTEGER = 2**63 - 1
 
@@ -265,7 +266,10 @@ class QuotaReservationRequest:
         _require_identifier(self.key_id, "Quota key ID")
         _require_finite_float(self.now, "Quota time", minimum=0.0, maximum=MAX_COORDINATION_INTEGER)
         _require_finite_float(
-            self.ttl_seconds, "Quota TTL", minimum=MIN_TTL_SECONDS, maximum=MAX_TTL_SECONDS
+            self.ttl_seconds,
+            "Quota TTL",
+            minimum=MIN_QUOTA_RESERVATION_TTL_SECONDS,
+            maximum=MAX_TTL_SECONDS,
         )
         _require_int(
             self.estimated_tokens, "Estimated tokens", minimum=0, maximum=MAX_COORDINATION_INTEGER

@@ -51,7 +51,7 @@ def _reservation(
         "reservation_id": reservation_id,
         "key_id": "live-key",
         "now": current,
-        "ttl_seconds": 60.0,
+        "ttl_seconds": 61.0,
         "estimated_tokens": 10,
         "estimated_cost_usd": 0.1,
         "rpm_limit": None,
@@ -377,7 +377,7 @@ class LiveRedisCoordinationTests(CoordinationStoreContract, unittest.IsolatedAsy
                         chronology_id,
                         now=now,
                         key_id=chronology_key,
-                        ttl_seconds=60.0,
+                        ttl_seconds=61.0,
                     )
                 )
             ).accepted

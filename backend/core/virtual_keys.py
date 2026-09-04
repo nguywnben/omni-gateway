@@ -759,7 +759,7 @@ class VirtualKeyManager:
                     now=current,
                     ttl_seconds=RESERVATION_TTL_SECONDS,
                     estimated_tokens=estimated_tokens,
-                    estimated_cost_usd=0.0 if hard_budget else estimated_cost,
+                    estimated_cost_usd=0.0,
                     rpm_limit=record.rpm_limit,
                     tpm_limit=record.tpm_limit,
                     daily_budget_usd=None,

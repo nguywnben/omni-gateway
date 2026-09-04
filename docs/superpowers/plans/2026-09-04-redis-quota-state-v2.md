@@ -44,7 +44,7 @@
 - Preserves: `QuotaReservationRequest`, `QuotaCommitRequest`, `QuotaReservationDecision`, and `QuotaCommitResult` field shapes.
 - Contract: budget/cost fields remain validated and replay-addressable, but coordination stores do not use them for admission; `VirtualKeyManager` sends neutral reserve values and continues durable budget reserve/settle/release first.
 
-- [ ] **Step 1: Write failing contract tests for the 61-second floor and neutral coordination input**
+- [x] **Step 1: Write failing contract tests for the 61-second floor and neutral coordination input**
 
 ```python
 def test_quota_reservation_ttl_covers_the_conservative_window(self) -> None:
@@ -61,13 +61,13 @@ async def test_virtual_key_coordination_receives_no_budget_authority(self) -> No
     self.assertEqual((request.daily_spend_usd, request.monthly_spend_usd), (0.0, 0.0))
 ```
 
-- [ ] **Step 2: Run focused tests and verify the legacy 1-second TTL and non-budget estimated cost fail**
+- [x] **Step 2: Run focused tests and verify the legacy 1-second TTL and non-budget estimated cost fail**
 
 Run: `.venv\Scripts\python.exe -m unittest backend.tests.test_coordination_contract backend.tests.test_virtual_key_reservations backend.tests.test_virtual_keys -v`
 
 Expected: FAIL because `QuotaReservationRequest` accepts TTL below 61 seconds and non-budget calls forward `estimated_cost_usd`.
 
-- [ ] **Step 3: Add the quota-specific TTL constant and neutralize the runtime reservation payload**
+- [x] **Step 3: Add the quota-specific TTL constant and neutralize the runtime reservation payload**
 
 ```python
 MIN_QUOTA_RESERVATION_TTL_SECONDS: Final[float] = 61.0
@@ -94,7 +94,7 @@ monthly_snapshot_started_at=current,
 
 Retain actual cost and durability fields on commit for replay compatibility and tracing, but do not make Redis an accounting authority.
 
-- [ ] **Step 4: Migrate synthetic quota fixtures from sub-61-second TTLs and rerun focused tests**
+- [x] **Step 4: Migrate synthetic quota fixtures from sub-61-second TTLs and rerun focused tests**
 
 Replace quota fixture defaults such as `1.0`, `10.0`, `20.0`, and `60.0` with `61.0` or a larger value. Advance fake clocks past `active_expires_at` rather than relying on the old short TTL.
 
@@ -102,7 +102,7 @@ Run: `.venv\Scripts\python.exe -m unittest backend.tests.test_coordination_contr
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit the contract boundary**
+- [x] **Step 5: Commit the contract boundary**
 
 ```powershell
 git add backend/core/coordination.py backend/core/virtual_keys.py `

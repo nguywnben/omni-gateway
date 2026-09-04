@@ -1050,7 +1050,7 @@ class RedisStateStoreTests(unittest.IsolatedAsyncioTestCase):
                 "zero",
                 "key",
                 -0.0,
-                1.0,
+                61.0,
                 0,
                 -0.0,
                 None,
@@ -1405,7 +1405,7 @@ class RedisStateStoreTests(unittest.IsolatedAsyncioTestCase):
                 "reservation_id": "cancelled-quota",
                 "key_id": "key-a",
                 "now": 1_000.0,
-                "ttl_seconds": 5.0,
+                "ttl_seconds": 61.0,
                 "estimated_tokens": 1,
                 "estimated_cost_usd": 0.1,
                 "rpm_limit": None,
@@ -1496,7 +1496,7 @@ class RedisStateStoreTests(unittest.IsolatedAsyncioTestCase):
             "reservation",
             "key",
             1.0,
-            1.0,
+            61.0,
             1,
             0.1,
             1,
@@ -1554,7 +1554,7 @@ class RedisStateStoreTests(unittest.IsolatedAsyncioTestCase):
                 "reservation_id": identifier,
                 "key_id": "key-a",
                 "now": 1_000.0,
-                "ttl_seconds": 1.0,
+                "ttl_seconds": 61.0,
                 "estimated_tokens": 1,
                 "estimated_cost_usd": 0.1,
                 "rpm_limit": None,
@@ -1590,7 +1590,7 @@ class RedisStateStoreTests(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(release_retry)
         self.assertEqual(terminal.reason, "conflict")
 
-        client.advance(60_000)
+        client.advance(61_001)
         after_retention = await store.reserve_quota(reservation("first", now=1_061.0))
         self.assertTrue(after_retention.accepted)
 
@@ -1607,7 +1607,7 @@ class RedisStateStoreTests(unittest.IsolatedAsyncioTestCase):
                 "reservation_id": identifier,
                 "key_id": "key-a",
                 "now": 1_000.0,
-                "ttl_seconds": 1.0,
+                "ttl_seconds": 61.0,
                 "estimated_tokens": 1,
                 "estimated_cost_usd": 0.1,
                 "rpm_limit": 1,
@@ -1653,7 +1653,7 @@ class RedisStateStoreTests(unittest.IsolatedAsyncioTestCase):
                 "reservation_id": identifier,
                 "key_id": "key-a",
                 "now": 1_000.0,
-                "ttl_seconds": 20.0,
+                "ttl_seconds": 61.0,
                 "estimated_tokens": 100,
                 "estimated_cost_usd": 0.4,
                 "rpm_limit": None,
@@ -1707,7 +1707,7 @@ class RedisStateStoreTests(unittest.IsolatedAsyncioTestCase):
                 "reservation_id": identifier,
                 "key_id": key_id,
                 "now": 1_000.0,
-                "ttl_seconds": 20.0,
+                "ttl_seconds": 61.0,
                 "estimated_tokens": 1,
                 "estimated_cost_usd": 0.1,
                 "rpm_limit": None,
@@ -1778,7 +1778,7 @@ class RedisStateStoreTests(unittest.IsolatedAsyncioTestCase):
                 identifier,
                 key_id,
                 1_000.0,
-                60.0,
+                61.0,
                 estimated_tokens,
                 0.0,
                 None,
@@ -1841,7 +1841,7 @@ class RedisStateStoreTests(unittest.IsolatedAsyncioTestCase):
                 identifier,
                 identifier,
                 1_000.0,
-                1.0,
+                61.0,
                 tokens,
                 0.0,
                 None,
@@ -1857,12 +1857,12 @@ class RedisStateStoreTests(unittest.IsolatedAsyncioTestCase):
 
         original = reservation("reserve", operation_id="reserve-operation")
         self.assertTrue((await store.reserve_quota(original)).accepted)
-        client.advance(60_000)
+        client.advance(61_001)
         identical = await store.reserve_quota(original)
         self.assertTrue(identical.accepted)
         self.assertFalse(identical.idempotent)
 
-        client.advance(60_000)
+        client.advance(61_001)
         changed = await store.reserve_quota(
             reservation("reserve", operation_id="reserve-operation", tokens=2)
         )
@@ -1880,7 +1880,7 @@ class RedisStateStoreTests(unittest.IsolatedAsyncioTestCase):
             ).accepted
         )
         self.assertTrue((await store.commit_quota(commit_request)).committed)
-        client.advance(60_000)
+        client.advance(61_001)
         self.assertTrue(
             (
                 await store.reserve_quota(
@@ -1902,7 +1902,7 @@ class RedisStateStoreTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(
             await store.release_quota("release", now=1_000.0, operation_id="release-operation")
         )
-        client.advance(60_000)
+        client.advance(61_001)
         self.assertTrue(
             (
                 await store.reserve_quota(
@@ -1931,7 +1931,7 @@ class RedisStateStoreTests(unittest.IsolatedAsyncioTestCase):
                 identifier,
                 key_id,
                 1_000.0,
-                20.0,
+                61.0,
                 1,
                 0.1,
                 None,
@@ -2021,7 +2021,7 @@ class RedisStateStoreTests(unittest.IsolatedAsyncioTestCase):
                 identifier,
                 "key-a",
                 1_000.0,
-                1.0,
+                61.0,
                 1,
                 0.1,
                 None,
