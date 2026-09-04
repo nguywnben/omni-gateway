@@ -237,7 +237,7 @@ These queue items refine Phases 4–5 and do not add to the 28-item program deno
   - [x] W4.17.1 Inventory state ownership and accept the strict coordination contract.
   - [x] W4.17.2 Add readable fenced-record parity.
   - [x] W4.17.3 Implement the semantic routing/cache coordination adapter.
-  - [ ] W4.17.4 Move credential routing behind the injected adapter.
+  - [x] W4.17.4 Move credential routing behind the injected adapter.
   - [ ] W4.17.5 Preserve quota fencing through every virtual-key transition.
   - [ ] W4.17.6 Coordinate exact-cache metadata and invalidation.
   - [ ] W4.17.7 Coordinate governance cache invalidation.

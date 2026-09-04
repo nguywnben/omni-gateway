@@ -268,7 +268,7 @@ class RoutingCoordinationAdapter:
                     key,
                     snapshot.revision or 0,
                     self._lease_payload(active, now_ms),
-                    max(1.0, (max(expires for _lease, expires in active) - now_ms) / 1000),
+                    ROUTE_RECORD_TTL_SECONDS,
                     self._fencing_epoch,
                     self._operation_id("lease-acquire"),
                 )
@@ -288,17 +288,12 @@ class RoutingCoordinationAdapter:
             retained = [item for item in active if item[0] != lease.lease_id]
             if len(retained) == len(active):
                 return False
-            ttl = (
-                max(1.0, (max(expires for _lease, expires in retained) - now_ms) / 1000)
-                if retained
-                else 1.0
-            )
             result = await self._store.compare_and_set(
                 CasRequest(
                     lease.record_key,
                     snapshot.revision or 0,
                     self._lease_payload(retained, last_selected),
-                    ttl,
+                    ROUTE_RECORD_TTL_SECONDS,
                     self._fencing_epoch,
                     self._operation_id("lease-release"),
                 )

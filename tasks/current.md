@@ -10,7 +10,7 @@
   Phase 6 ADR approval), exactly 75.0%; wave execution-slice checkboxes are refinements and are not
   added to that denominator.
 - Active scope: Wave 4 W4.17, routing/governance/cache state coordination.
-- Control state: **IN PROGRESS — W4.17 SLICE 3/9 COMPLETE**.
+- Control state: **IN PROGRESS — W4.17 SLICE 4/9 COMPLETE**.
 - Execution mode: continuous through the remaining W4.16–W4.19 queue under
   `docs/superpowers/plans/2026-09-02-wave-4-continuous-completion.md`; do not pause at internal task
   boundaries.
@@ -41,8 +41,14 @@
   semantic cache metadata types, and fixed-scope monotonic invalidation. The expanded focused
   matrix passes 99 tests without exposing credential, model, or cache identifiers to store keys or
   payloads.
-- Immediate next action: migrate `SmartCredentialRouter` and `CredentialManager` to injected
-  adapter snapshots, lease handles, and route outcomes with no selected-path fallback.
+- `SmartCredentialRouter` and `CredentialManager` now accept the exact supplied adapter (including
+  false-valued test doubles), rank against shared in-flight/last-selection/cooldown/latency state,
+  acquire bounded lease handles before returning credentials, and release/publish outcomes through
+  the same fenced backend. Standalone defaults use a private in-memory adapter. Two independent
+  routers sharing a store cannot double-acquire an exclusive credential or bypass a published
+  cooldown. All 48 routing-focused and 37 adjacent gateway/manager tests pass.
+- Immediate next action: preserve the selected quota store and fencing epoch across every
+  `VirtualKeyManager` reserve/commit/release transition and prove shared-manager concurrency.
 - Coordinated activation remains closed; standalone runtime and the one-worker/one-replica ceiling
   are unchanged.
 

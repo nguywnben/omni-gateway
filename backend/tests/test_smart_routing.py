@@ -12,7 +12,9 @@ if str(BACKEND_DIR) not in sys.path:
     sys.path.insert(0, str(BACKEND_DIR))
 
 from core.request_context import request_scope
+from core.routing_coordination import RoutingCoordinationAdapter
 from core.smart_routing import SmartCredentialRouter
+from core.state_store import InMemoryStateStore
 
 
 class FakeStorageAdapter:
@@ -48,6 +50,59 @@ def credential_state(**overrides: Any) -> Dict[str, Any]:
 
 
 class SmartCredentialRouterTests(unittest.IsolatedAsyncioTestCase):
+    async def test_shared_adapter_prevents_duplicate_exclusive_selection(self):
+        now = [100.0]
+        storage = FakeStorageAdapter({"exclusive.json": credential_state(max_concurrency=1)})
+        store = InMemoryStateStore(clock=lambda: now[0])
+        first = SmartCredentialRouter(
+            clock=lambda: now[0],
+            coordination=RoutingCoordinationAdapter(
+                store, identifier_key=b"r" * 32, fencing_epoch=1
+            ),
+        )
+        second = SmartCredentialRouter(
+            clock=lambda: now[0],
+            coordination=RoutingCoordinationAdapter(
+                store, identifier_key=b"r" * 32, fencing_epoch=1
+            ),
+        )
+
+        selected = await first.acquire(storage, mode="primary", model_name="model-a")
+        duplicate = await second.acquire(storage, mode="primary", model_name="model-a")
+
+        self.assertEqual(selected[0], "exclusive.json")
+        self.assertIsNone(duplicate)
+
+    async def test_shared_adapter_propagates_route_cooldown_between_routers(self):
+        now = [100.0]
+        storage = FakeStorageAdapter({"shared.json": credential_state()})
+        store = InMemoryStateStore(clock=lambda: now[0])
+        first = SmartCredentialRouter(
+            clock=lambda: now[0],
+            coordination=RoutingCoordinationAdapter(
+                store, identifier_key=b"r" * 32, fencing_epoch=1
+            ),
+            base_backoff_seconds=5,
+        )
+        second = SmartCredentialRouter(
+            clock=lambda: now[0],
+            coordination=RoutingCoordinationAdapter(
+                store, identifier_key=b"r" * 32, fencing_epoch=1
+            ),
+            base_backoff_seconds=5,
+        )
+
+        selected = await first.acquire(storage, mode="primary", model_name="model-a")
+        await first.complete(
+            selected[0],
+            mode="primary",
+            model_name="model-a",
+            success=False,
+            error_code=429,
+        )
+
+        self.assertIsNone(await second.acquire(storage, mode="primary", model_name="model-a"))
+
     async def test_decision_explains_selected_and_rejected_candidates(self):
         storage = FakeStorageAdapter(
             {

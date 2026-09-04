@@ -20,6 +20,7 @@ from core.provider_registry import (
     get_credential_provider_variant,
     is_api_key_credential,
 )
+from core.routing_coordination import RoutingCoordinationAdapter
 from core.routing_decision import RouteDecision
 from core.smart_routing import SmartCredentialRouter
 from core.storage_adapter import get_storage_adapter
@@ -28,11 +29,11 @@ from log import log
 
 
 class CredentialManager:
-    def __init__(self):
+    def __init__(self, *, routing_coordination: Optional[RoutingCoordinationAdapter] = None):
 
         self._initialized = False
         self._storage_adapter = None
-        self._routing = SmartCredentialRouter()
+        self._routing = SmartCredentialRouter(coordination=routing_coordination)
 
     async def _ensure_initialized(self):
         if not self._initialized or self._storage_adapter is None:

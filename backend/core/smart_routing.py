@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 import asyncio
+import secrets
 import time
 from collections import deque
-from dataclasses import dataclass
 from typing import Any, Callable, Deque, Dict, Optional, Set, Tuple
 
 from core.advanced_routing import provider_cost_rank, weighted_order
@@ -17,25 +17,25 @@ from core.provider_registry import (
 )
 from core.request_context import get_request_elapsed_ms, get_request_id
 from core.request_trace_service import trace_decision
+from core.routing_coordination import (
+    MAX_CREDENTIAL_LEASES,
+    CredentialCoordinationSnapshot,
+    CredentialLease,
+    RouteOutcomeSnapshot,
+    RoutingCoordinationAdapter,
+)
 from core.routing_decision import RouteCandidate, RouteDecision
+from core.state_store import InMemoryStateStore
 from log import log
 
 CredentialResult = Tuple[str, Dict[str, Any]]
 CredentialKey = Tuple[str, str]
-FailureKey = Tuple[str, str, str]
 
 VALID_ROUTING_STRATEGIES = frozenset(
     {"balanced", "priority", "weighted", "least_latency", "lowest_cost"}
 )
-LATENCY_WINDOW_SIZE = 10
 LATENCY_BUCKET_MS = 100.0
-
-
-@dataclass(frozen=True)
-class FailurePenalty:
-    consecutive_failures: int
-    retry_after: float
-    kind: str
+_PROCESS_ROUTING_IDENTIFIER_KEY = secrets.token_bytes(32)
 
 
 class SmartCredentialRouter:
@@ -51,6 +51,7 @@ class SmartCredentialRouter:
         max_backoff_seconds: float = 30.0,
         auth_backoff_seconds: float = 300.0,
         model_backoff_seconds: float = 60.0,
+        coordination: Optional[RoutingCoordinationAdapter] = None,
     ) -> None:
         self._clock = clock
         self._lease_ttl_seconds = max(1.0, float(lease_ttl_seconds))
@@ -60,36 +61,20 @@ class SmartCredentialRouter:
         self._auth_backoff_seconds = max(self._max_backoff_seconds, float(auth_backoff_seconds))
         self._model_backoff_seconds = max(self._base_backoff_seconds, float(model_backoff_seconds))
         self._lock = asyncio.Lock()
-        self._leases: Dict[CredentialKey, Deque[float]] = {}
-        self._failures: Dict[FailureKey, FailurePenalty] = {}
-        self._last_selected: Dict[CredentialKey, float] = {}
+        self._coordination = (
+            coordination
+            if coordination is not None
+            else RoutingCoordinationAdapter(
+                InMemoryStateStore(clock=clock),
+                identifier_key=_PROCESS_ROUTING_IDENTIFIER_KEY,
+                fencing_epoch=1,
+            )
+        )
+        self._active_leases: Dict[CredentialKey, Deque[CredentialLease]] = {}
         self._providers: Dict[CredentialKey, str] = {}
         self._state_cache: Dict[str, Tuple[float, Dict[str, Dict[str, Any]]]] = {}
         self._recent_decisions: Deque[RouteDecision] = deque(maxlen=100)
-        self._latencies: Dict[CredentialKey, Deque[float]] = {}
         self._provider_variants: Dict[CredentialKey, str] = {}
-
-    def _prune_expired_leases(self, now: float) -> None:
-        expires_before = now - self._lease_ttl_seconds
-        empty_keys = []
-        for key, leases in self._leases.items():
-            while leases and leases[0] <= expires_before:
-                leases.popleft()
-            if not leases:
-                empty_keys.append(key)
-        for key in empty_keys:
-            self._leases.pop(key, None)
-
-    @staticmethod
-    def _failure_key(mode: str, filename: str, model_name: Optional[str] = None) -> FailureKey:
-        return mode, filename, str(model_name or "")
-
-    def _active_failure(
-        self, mode: str, filename: str, model_name: Optional[str]
-    ) -> Optional[FailurePenalty]:
-        return self._failures.get(
-            self._failure_key(mode, filename, model_name)
-        ) or self._failures.get(self._failure_key(mode, filename))
 
     @staticmethod
     def _failure_kind(error_code: Optional[int]) -> str:
@@ -123,26 +108,17 @@ class SmartCredentialRouter:
         )
         return now + backoff
 
-    def _latency_rank(self, key: CredentialKey) -> int:
+    @staticmethod
+    def _latency_rank(samples: tuple[float, ...]) -> int:
         """Bucketed average latency; unknown credentials rank first (0).
 
         Bucketing (100ms) keeps the sort stable against noise, mirroring the
         buffer approach in LiteLLM's lowest-latency strategy so traffic does
         not permanently pin to one credential.
         """
-        samples = self._latencies.get(key)
         if not samples:
             return 0
         return int((sum(samples) / len(samples)) // LATENCY_BUCKET_MS)
-
-    def _record_latency(self, key: CredentialKey, latency_ms: float) -> None:
-        if latency_ms <= 0:
-            return
-        window = self._latencies.get(key)
-        if window is None:
-            window = deque(maxlen=LATENCY_WINDOW_SIZE)
-            self._latencies[key] = window
-        window.append(float(latency_ms))
 
     @staticmethod
     def _is_model_available(state: Dict[str, Any], model_name: Optional[str], now: float) -> bool:
@@ -174,6 +150,8 @@ class SmartCredentialRouter:
         preferred_provider: Optional[str],
         excluded_provider_models: Set[Tuple[str, str]],
         excluded_credential_models: Set[Tuple[str, str]],
+        coordinated_credentials: Dict[str, CredentialCoordinationSnapshot],
+        coordinated_outcomes: Dict[str, RouteOutcomeSnapshot],
         now: float,
     ) -> tuple[list[tuple[tuple[Any, ...], str]], Dict[str, RouteCandidate]]:
         candidates = []
@@ -182,9 +160,10 @@ class SmartCredentialRouter:
         for filename, state in states.items():
             key = (mode, filename)
             provider_id = self._providers.get(key, "")
-            in_flight = len(self._leases.get(key, ()))
-            failure = self._active_failure(mode, filename, model_name)
-            consecutive_failures = failure.consecutive_failures if failure else 0
+            coordinated = coordinated_credentials[filename]
+            outcome = coordinated_outcomes[filename]
+            in_flight = coordinated.in_flight
+            consecutive_failures = outcome.failure_count
 
             if state.get("disabled", False):
                 decisions[filename] = RouteCandidate(
@@ -245,15 +224,15 @@ class SmartCredentialRouter:
 
             strategy_rank = 0
             if routing_strategy == "least_latency":
-                strategy_rank = self._latency_rank(key)
+                strategy_rank = self._latency_rank(outcome.latency_samples_ms)
             elif routing_strategy == "lowest_cost":
                 strategy_rank = provider_cost_rank(self._provider_variants.get(key) or provider_id)
 
-            retry_after = failure.retry_after if failure else 0.0
+            retry_after = now + outcome.retry_after_seconds
             error_count = len(state.get("error_codes") or [])
             last_selected = max(
                 float(state.get("last_success") or 0.0),
-                self._last_selected.get(key, 0.0),
+                coordinated.last_selected_ms / 1000,
             )
 
             score = (
@@ -271,7 +250,9 @@ class SmartCredentialRouter:
             candidates.append((score, filename, retry_after))
             failure_reason = ""
             if retry_after > now:
-                failure_reason = f"backoff_{failure.kind}" if failure else "backoff"
+                failure_reason = (
+                    f"backoff_{outcome.failure_kind}" if outcome.failure_kind else "backoff"
+                )
             decisions[filename] = RouteCandidate(
                 filename,
                 provider_id,
@@ -316,7 +297,6 @@ class SmartCredentialRouter:
         """Reserve the best credential and return its diagnostic decision."""
         async with self._lock:
             now = self._clock()
-            self._prune_expired_leases(now)
             cached = self._state_cache.get(mode)
             if cached and cached[0] > now:
                 states = cached[1]
@@ -346,6 +326,25 @@ class SmartCredentialRouter:
                 for excluded_filename, excluded_model in (excluded_credential_models or set())
                 if str(excluded_filename or "").strip() and str(excluded_model or "").strip()
             }
+            coordinated_credentials: Dict[str, CredentialCoordinationSnapshot] = {}
+            coordinated_outcomes: Dict[str, RouteOutcomeSnapshot] = {}
+            for filename in states:
+                coordinated_credentials[filename] = await self._coordination.read_credential(
+                    mode, filename
+                )
+                outcome = await self._coordination.read_route_outcome(
+                    mode, filename, str(model_name or "")
+                )
+                if model_name and outcome.retry_after_seconds <= 0:
+                    general = await self._coordination.read_route_outcome(mode, filename)
+                    if general.retry_after_seconds > 0:
+                        outcome = RouteOutcomeSnapshot(
+                            general.failure_count,
+                            general.failure_kind,
+                            general.retry_after_seconds,
+                            outcome.latency_samples_ms or general.latency_samples_ms,
+                        )
+                coordinated_outcomes[filename] = outcome
             ranked, decisions = self._rank_candidates(
                 states,
                 mode=mode,
@@ -354,6 +353,8 @@ class SmartCredentialRouter:
                 preferred_provider=normalized_preferred_provider,
                 excluded_provider_models=normalized_exclusions,
                 excluded_credential_models=normalized_credential_exclusions,
+                coordinated_credentials=coordinated_credentials,
+                coordinated_outcomes=coordinated_outcomes,
                 now=now,
             )
 
@@ -371,7 +372,7 @@ class SmartCredentialRouter:
                     for position, filename in enumerate(weighted_order(weighted_items))
                 ]
 
-            selected = None
+            supported_candidates = []
             for score, filename in ranked:
                 credential_data = await storage_adapter.get_credential(filename, mode=mode)
                 if not credential_data:
@@ -413,10 +414,44 @@ class SmartCredentialRouter:
                 )
 
                 candidate = ((-support_level, *score), score, filename, credential_data)
-                if selected is None or candidate[0] < selected[0]:
+                supported_candidates.append(candidate)
+
+            selected = None
+            selected_lease = None
+            for candidate in sorted(supported_candidates, key=lambda item: item[0]):
+                _, _score, filename, _credential_data = candidate
+                raw_limit = states.get(filename, {}).get("max_concurrency", MAX_CREDENTIAL_LEASES)
+                try:
+                    max_concurrency = int(raw_limit)
+                except (TypeError, ValueError):
+                    max_concurrency = MAX_CREDENTIAL_LEASES
+                max_concurrency = min(
+                    MAX_CREDENTIAL_LEASES,
+                    max(1, max_concurrency),
+                )
+                lease = await self._coordination.acquire_credential(
+                    mode,
+                    filename,
+                    ttl_seconds=self._lease_ttl_seconds,
+                    max_concurrency=max_concurrency,
+                )
+                if lease is not None:
                     selected = candidate
+                    selected_lease = lease
+                    break
+                prior = decisions[filename]
+                decisions[filename] = RouteCandidate(
+                    filename,
+                    prior.provider_id,
+                    "rejected",
+                    "coordination_capacity",
+                    support_level=prior.support_level,
+                    in_flight=max_concurrency,
+                    consecutive_failures=prior.consecutive_failures,
+                )
 
             if selected is not None:
+                assert selected_lease is not None
                 _, score, filename, credential_data = selected
 
                 if mode == "primary":
@@ -425,8 +460,7 @@ class SmartCredentialRouter:
                     )
 
                 key = (mode, filename)
-                self._leases.setdefault(key, deque()).append(now)
-                self._last_selected[key] = now
+                self._active_leases.setdefault(key, deque()).append(selected_lease)
                 candidate = decisions[filename]
                 selected_provider = get_credential_provider(credential_data)
                 decisions[filename] = RouteCandidate(
@@ -434,7 +468,7 @@ class SmartCredentialRouter:
                     selected_provider,
                     "selected",
                     support_level=candidate.support_level,
-                    in_flight=candidate.in_flight + 1,
+                    in_flight=selected_lease.in_flight,
                     consecutive_failures=candidate.consecutive_failures,
                 )
                 decision = RouteDecision(
@@ -534,62 +568,73 @@ class SmartCredentialRouter:
         """Release one reservation and update the short-lived health penalty."""
         async with self._lock:
             now = self._clock()
-            self._prune_expired_leases(now)
             self._state_cache.pop(mode, None)
             key = (mode, filename)
-            self._release_lease(key)
-
-            failure_key = self._failure_key(mode, filename, model_name)
+            lease = self._take_active_lease(key)
+            if lease is not None:
+                await self._coordination.release_credential(lease)
 
             if success:
-                self._failures.pop(failure_key, None)
-                if model_name is None:
-                    self._failures.pop(self._failure_key(mode, filename), None)
-                # Feed the least-latency strategy with the observed duration.
-                self._record_latency(key, float(get_request_elapsed_ms()))
+                latency = float(get_request_elapsed_ms())
+                await self._coordination.record_route_outcome(
+                    mode,
+                    filename,
+                    str(model_name or ""),
+                    success=True,
+                    failure_kind="",
+                    retry_after_seconds=0,
+                    latency_ms=latency if latency > 0 else None,
+                )
                 return
 
             failure_kind = self._failure_kind(error_code)
             if failure_kind == "client_request":
                 return
 
-            previous = self._failures.get(failure_key)
-            failure_count = (previous.consecutive_failures if previous else 0) + 1
+            previous = await self._coordination.read_route_outcome(
+                mode, filename, str(model_name or "")
+            )
+            failure_count = previous.failure_count + 1
             retry_after = self._retry_after(
                 failure_count=failure_count,
                 failure_kind=failure_kind,
                 now=now,
                 cooldown_until=cooldown_until,
             )
-            self._failures[failure_key] = FailurePenalty(
-                failure_count,
-                retry_after,
-                failure_kind,
+            await self._coordination.record_route_outcome(
+                mode,
+                filename,
+                str(model_name or ""),
+                success=False,
+                failure_kind=failure_kind,
+                retry_after_seconds=max(0.0, retry_after - now),
+                latency_ms=None,
             )
 
-    def _release_lease(self, key: CredentialKey) -> None:
-        leases = self._leases.get(key)
+    def _take_active_lease(self, key: CredentialKey) -> CredentialLease | None:
+        leases = self._active_leases.get(key)
         if not leases:
-            return
-        leases.popleft()
+            return None
+        lease = leases.popleft()
         if not leases:
-            self._leases.pop(key, None)
+            self._active_leases.pop(key, None)
+        return lease
 
     async def release(self, filename: str, *, mode: str = "primary") -> None:
         """Release one reservation without changing credential health."""
         async with self._lock:
-            now = self._clock()
-            self._prune_expired_leases(now)
             self._state_cache.pop(mode, None)
-            self._release_lease((mode, filename))
+            lease = self._take_active_lease((mode, filename))
+            if lease is not None:
+                await self._coordination.release_credential(lease)
 
     async def reset(self) -> None:
         async with self._lock:
-            self._leases.clear()
-            self._failures.clear()
-            self._last_selected.clear()
+            leases = [lease for queue in self._active_leases.values() for lease in queue]
+            self._active_leases.clear()
+            for lease in leases:
+                await self._coordination.release_credential(lease)
             self._providers.clear()
             self._state_cache.clear()
             self._recent_decisions.clear()
-            self._latencies.clear()
             self._provider_variants.clear()
