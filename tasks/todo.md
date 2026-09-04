@@ -244,6 +244,14 @@ These queue items refine Phases 4–5 and do not add to the 28-item program deno
   - [x] W4.17.8 Add operability, live parity, and bounded performance evidence.
   - [x] W4.17.9 Reconcile review and close the committed runtime checkpoint.
 - [ ] W4.18 Add the HA deployment gate, readiness, alerts, runbooks, and rollback.
+  - [x] W4.18.1 Specify policy, binding, lifecycle, commands, and activation boundary.
+  - [ ] W4.18.2 Implement and verify the closed runtime policy parser.
+  - [ ] W4.18.3 Implement persistent binding and namespace-loss defense.
+  - [ ] W4.18.4 Inject one lifecycle-owned coordination service into all consumers.
+  - [ ] W4.18.5 Add dependency-aware readiness and low-cardinality evidence.
+  - [ ] W4.18.6 Add dry-run-first lifecycle and rollback commands.
+  - [ ] W4.18.7 Harden Compose, Helm, container, alerts, and runbooks.
+  - [ ] W4.18.8 Reconcile review and close the runtime checkpoint.
 - [ ] W4.19 Pass failure/load gates and record the exact activation topology.
 - [ ] Checkpoint W4-C: Phase 6 acceptance and all repository/rollback gates pass.
 - [ ] Report Wave 4 evidence and obtain human acceptance before Wave 5.

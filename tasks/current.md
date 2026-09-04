@@ -539,7 +539,7 @@ checkboxes to be marked complete.
 
 ## Immediate Next Action
 
-Execute W4.18 under `docs/superpowers/plans/2026-09-02-wave-4-continuous-completion.md`: add closed
+Execute W4.18 from `docs/superpowers/plans/2026-09-04-w4.18-ha-lifecycle.md`: add closed
 standalone/coordinated policy validation, one lifecycle owner, dependency-aware readiness,
 drain/reconcile/rollback commands, safe deployment defaults, metrics, alerts, and runbooks. Keep
 Redis runtime selection inactive and preserve `WORKERS=1`, one replica, disabled-by-default OIDC,
