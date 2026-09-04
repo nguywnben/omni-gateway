@@ -234,6 +234,15 @@ These queue items refine Phases 4–5 and do not add to the 28-item program deno
   - [x] W4.16.8 Add live parity and operability evidence.
   - [x] W4.16.9 Reconcile review and close the committed runtime checkpoint.
 - [ ] W4.17 Coordinate routing/governance/cache runtime state.
+  - [x] W4.17.1 Inventory state ownership and accept the strict coordination contract.
+  - [ ] W4.17.2 Add readable fenced-record parity.
+  - [ ] W4.17.3 Implement the semantic routing/cache coordination adapter.
+  - [ ] W4.17.4 Move credential routing behind the injected adapter.
+  - [ ] W4.17.5 Preserve quota fencing through every virtual-key transition.
+  - [ ] W4.17.6 Coordinate exact-cache metadata and invalidation.
+  - [ ] W4.17.7 Coordinate governance cache invalidation.
+  - [ ] W4.17.8 Add operability, live parity, and bounded performance evidence.
+  - [ ] W4.17.9 Reconcile review and close the committed runtime checkpoint.
 - [ ] W4.18 Add the HA deployment gate, readiness, alerts, runbooks, and rollback.
 - [ ] W4.19 Pass failure/load gates and record the exact activation topology.
 - [ ] Checkpoint W4-C: Phase 6 acceptance and all repository/rollback gates pass.

@@ -10,7 +10,7 @@
   Phase 6 ADR approval), exactly 75.0%; wave execution-slice checkboxes are refinements and are not
   added to that denominator.
 - Active scope: Wave 4 W4.17, routing/governance/cache state coordination.
-- Control state: **IN PROGRESS — W4.17 NEXT**.
+- Control state: **IN PROGRESS — W4.17 SLICE 1/9**.
 - Execution mode: continuous through the remaining W4.16–W4.19 queue under
   `docs/superpowers/plans/2026-09-02-wave-4-continuous-completion.md`; do not pause at internal task
   boundaries.
@@ -25,6 +25,17 @@
   dependency audit reports no known vulnerabilities. YAML and all six shell syntax gates pass.
   Runtime `f0c66bd` is the sole listener on port 4283 (PID 17952); health/readiness return HTTP 200,
   and no Redis test URI or coordination runtime mode is selected.
+
+### W4.17 live handoff
+
+- The accepted state inventory and semantic boundary are recorded in
+  `docs/specs/routing-governance-cache-coordination.md`.
+- The resumable nine-slice execution plan is
+  `docs/superpowers/plans/2026-09-04-w4.17-routing-governance-cache-coordination.md`.
+- Immediate next action: RED/GREEN the readable fenced-record primitive, including in-memory,
+  Redis, service metrics, shared contract, and explicit live-test skip behavior.
+- Coordinated activation remains closed; standalone runtime and the one-worker/one-replica ceiling
+  are unchanged.
 
 Wave 2 was accepted and pushed by the human on 2026-08-24. Wave 3 / Phases 4–5 was accepted on
 2026-08-26. ADR-007/ADR-008 and the Wave 4 queue were accepted later that day when the human again
