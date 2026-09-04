@@ -25,8 +25,10 @@ from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 from core.coordination import validate_epoch
+from core.governance_coordination import GovernanceGenerationObserver
 from core.pricing import ZERO_COST_PROVIDERS, calculate_cost_usd, find_model_pricing
 from core.request_trace_service import trace_decision
+from core.routing_coordination import GOVERNANCE_SCOPE_VIRTUAL_KEYS
 from core.state_store import (
     BaseStateStore,
     InMemoryStateStore,
@@ -320,12 +322,14 @@ class VirtualKeyManager:
         self._pending_durable_settlement_ids: set[str] = set()
         self._durable_reservation_expiries: dict[str, float] = {}
         self._durable_tracking_lock = threading.Lock()
+        self._generation = GovernanceGenerationObserver(GOVERNANCE_SCOPE_VIRTUAL_KEYS)
 
     # ------------------------------------------------------------------
     # Persistence
     # ------------------------------------------------------------------
 
     async def _ensure_loaded(self) -> None:
+        await self._generation.synchronize(self._invalidate_cached_keys)
         if self._loaded:
             return
         async with self._lock:
@@ -355,6 +359,10 @@ class VirtualKeyManager:
                 )
             if keys:
                 log.info(f"[virtual-keys] loaded {len(keys)} virtual API keys")
+
+    async def _invalidate_cached_keys(self) -> None:
+        self._keys_by_hash = {}
+        self._loaded = False
 
     async def _persist(self) -> None:
         from core.storage_adapter import get_storage_adapter

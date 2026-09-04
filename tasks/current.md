@@ -10,7 +10,7 @@
   Phase 6 ADR approval), exactly 75.0%; wave execution-slice checkboxes are refinements and are not
   added to that denominator.
 - Active scope: Wave 4 W4.17, routing/governance/cache state coordination.
-- Control state: **IN PROGRESS — W4.17 SLICE 6/9 COMPLETE**.
+- Control state: **IN PROGRESS — W4.17 SLICE 7/9 COMPLETE**.
 - Execution mode: continuous through the remaining W4.16–W4.19 queue under
   `docs/superpowers/plans/2026-09-02-wave-4-continuous-completion.md`; do not pause at internal task
   boundaries.
@@ -60,8 +60,16 @@
   safely miss; upstream success is never failed by a cache publication outage. The async gateway
   call site and focused 22-test cache/pipeline matrix pass. Semantic prompt/embedding/body storage
   remains inactive and local-only.
-- Immediate next action: add coordinated generation observation/publication around mutable config,
-  virtual-key, credential, blacklist, and model-catalog caches.
+- Durable configuration and credential mutations now publish fixed-scope generations only after a
+  successful write. Configuration, each virtual-key manager, each router, and each model-catalog
+  service own independent generation cursors, so one consumer cannot consume another's
+  invalidation. Initial binding and same-generation backend rebinding force a reload; a configured
+  coordination outage is surfaced instead of silently accepting stale governance. Credential
+  changes also invalidate model discovery. Blacklist and virtual-model pool reads remain direct
+  durable reads rather than process-local authority. The 110 real affected tests plus the
+  three-test storage selection suite pass.
+- Immediate next action: add fixed-cardinality telemetry, cancellation/restart/live parity,
+  bounded performance evidence, and operator documentation for the completed W4.17 path.
 - Coordinated activation remains closed; standalone runtime and the one-worker/one-replica ceiling
   are unchanged.
 

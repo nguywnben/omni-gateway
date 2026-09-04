@@ -8,6 +8,8 @@ import time
 from dataclasses import dataclass
 from typing import Any, Awaitable, Callable, Iterable, Mapping, Optional, Sequence
 
+from core.governance_coordination import GovernanceGenerationObserver
+from core.routing_coordination import GOVERNANCE_SCOPE_MODEL_CATALOG
 from core.storage_adapter import get_storage_adapter
 from log import log
 
@@ -97,8 +99,10 @@ class ModelCatalogService:
         self._expires_at = 0.0
         self._loaded = False
         self._last_refresh_error = ""
+        self._generation = GovernanceGenerationObserver(GOVERNANCE_SCOPE_MODEL_CATALOG)
 
     async def get_catalog(self, *, force_refresh: bool = False) -> list[ModelCatalogEntry]:
+        await self._generation.synchronize(self.invalidate)
         now = self._clock()
         if not force_refresh and self._loaded and self._expires_at > now:
             return list(self._entries)

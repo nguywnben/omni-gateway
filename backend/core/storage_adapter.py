@@ -166,7 +166,10 @@ class StorageAdapter:
         self, filename: str, credential_data: Dict[str, Any], mode: str = "code_assist"
     ) -> bool:
         self._ensure_initialized()
-        return await self._backend.store_credential(filename, credential_data, mode)
+        stored = await self._backend.store_credential(filename, credential_data, mode)
+        if stored:
+            await self._publish_credential_invalidations()
+        return stored
 
     async def get_credential(
         self, filename: str, mode: str = "code_assist"
@@ -184,13 +187,19 @@ class StorageAdapter:
 
     async def delete_credential(self, filename: str, mode: str = "code_assist") -> bool:
         self._ensure_initialized()
-        return await self._backend.delete_credential(filename, mode)
+        deleted = await self._backend.delete_credential(filename, mode)
+        if deleted:
+            await self._publish_credential_invalidations()
+        return deleted
 
     async def update_credential_state(
         self, filename: str, state_updates: Dict[str, Any], mode: str = "code_assist"
     ) -> bool:
         self._ensure_initialized()
-        return await self._backend.update_credential_state(filename, state_updates, mode)
+        updated = await self._backend.update_credential_state(filename, state_updates, mode)
+        if updated:
+            await self._publish_credential_invalidations()
+        return updated
 
     async def get_credential_state(
         self, filename: str, mode: str = "code_assist"
@@ -206,7 +215,15 @@ class StorageAdapter:
 
     async def set_config(self, key: str, value: Any) -> bool:
         self._ensure_initialized()
-        return await self._backend.set_config(key, value)
+        stored = await self._backend.set_config(key, value)
+        if stored:
+            from core.governance_coordination import (
+                config_invalidation_scope,
+                publish_governance_invalidation,
+            )
+
+            await publish_governance_invalidation(config_invalidation_scope(key))
+        return stored
 
     async def get_config(self, key: str, default: Any = None) -> Any:
         self._ensure_initialized()
@@ -218,7 +235,25 @@ class StorageAdapter:
 
     async def delete_config(self, key: str) -> bool:
         self._ensure_initialized()
-        return await self._backend.delete_config(key)
+        deleted = await self._backend.delete_config(key)
+        if deleted:
+            from core.governance_coordination import (
+                config_invalidation_scope,
+                publish_governance_invalidation,
+            )
+
+            await publish_governance_invalidation(config_invalidation_scope(key))
+        return deleted
+
+    @staticmethod
+    async def _publish_credential_invalidations() -> None:
+        from core.governance_coordination import (
+            credential_invalidation_scopes,
+            publish_governance_invalidation,
+        )
+
+        for scope in credential_invalidation_scopes():
+            await publish_governance_invalidation(scope)
 
     async def create_audit_repository(self, *, cursor_signing_key: bytes) -> "AuditRepository":
         """Create the audit repository owned by the selected storage backend."""

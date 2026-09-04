@@ -2,6 +2,8 @@ import asyncio
 import os
 from typing import Any, Optional
 
+from core.governance_coordination import GovernanceGenerationObserver
+from core.routing_coordination import GOVERNANCE_SCOPE_CONFIG
 from dotenv import load_dotenv
 from log import log
 from paths import DEFAULT_CREDENTIALS_DIR, PROJECT_ROOT
@@ -12,6 +14,7 @@ load_dotenv(PROJECT_ROOT / ".env", override=False)
 _config_cache: dict[str, Any] = {}
 _config_initialized = False
 _config_lock = asyncio.Lock()
+_config_generation = GovernanceGenerationObserver(GOVERNANCE_SCOPE_CONFIG)
 
 LEGACY_ENV_RENAMES = {
     "API_URL": "ANTIGRAVITY_API_URL",
@@ -240,6 +243,7 @@ def trust_proxy_headers_enabled() -> bool:
 async def get_config_value(key: str, default: Any = None, env_var: Optional[str] = None) -> Any:
     """Get configuration value with priority: ENV > Storage > default."""
 
+    await _config_generation.synchronize(reload_config)
     if not _config_initialized:
         await init_config()
 

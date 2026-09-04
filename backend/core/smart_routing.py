@@ -9,6 +9,7 @@ from collections import deque
 from typing import Any, Callable, Deque, Dict, Optional, Set, Tuple
 
 from core.advanced_routing import provider_cost_rank, weighted_order
+from core.governance_coordination import GovernanceGenerationObserver
 from core.provider_registry import (
     credential_model_support_level,
     get_credential_provider,
@@ -18,6 +19,7 @@ from core.provider_registry import (
 from core.request_context import get_request_elapsed_ms, get_request_id
 from core.request_trace_service import trace_decision
 from core.routing_coordination import (
+    GOVERNANCE_SCOPE_CREDENTIALS,
     MAX_CREDENTIAL_LEASES,
     CredentialCoordinationSnapshot,
     CredentialLease,
@@ -75,6 +77,12 @@ class SmartCredentialRouter:
         self._state_cache: Dict[str, Tuple[float, Dict[str, Dict[str, Any]]]] = {}
         self._recent_decisions: Deque[RouteDecision] = deque(maxlen=100)
         self._provider_variants: Dict[CredentialKey, str] = {}
+        self._credential_generation = GovernanceGenerationObserver(GOVERNANCE_SCOPE_CREDENTIALS)
+
+    async def _invalidate_credential_views(self) -> None:
+        self._providers.clear()
+        self._provider_variants.clear()
+        self._state_cache.clear()
 
     @staticmethod
     def _failure_kind(error_code: Optional[int]) -> str:
@@ -296,6 +304,7 @@ class SmartCredentialRouter:
     ) -> tuple[Optional[CredentialResult], RouteDecision]:
         """Reserve the best credential and return its diagnostic decision."""
         async with self._lock:
+            await self._credential_generation.synchronize(self._invalidate_credential_views)
             now = self._clock()
             cached = self._state_cache.get(mode)
             if cached and cached[0] > now:
