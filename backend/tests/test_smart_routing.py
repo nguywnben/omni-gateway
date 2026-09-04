@@ -50,6 +50,23 @@ def credential_state(**overrides: Any) -> Dict[str, Any]:
 
 
 class SmartCredentialRouterTests(unittest.IsolatedAsyncioTestCase):
+    async def test_candidate_capacity_exhaustion_fails_closed_before_provider_reads(self):
+        storage = FakeStorageAdapter(
+            {f"credential-{index:03d}.json": credential_state() for index in range(101)}
+        )
+        router = SmartCredentialRouter(clock=lambda: 100.0)
+
+        result, decision = await router.acquire_with_decision(
+            storage,
+            mode="primary",
+            model_name="model-a",
+        )
+
+        self.assertIsNone(result)
+        self.assertIsNone(decision.selected_filename)
+        self.assertEqual(decision.candidates, ())
+        self.assertEqual(storage.state_reads, 1)
+
     async def test_shared_adapter_prevents_duplicate_exclusive_selection(self):
         now = [100.0]
         storage = FakeStorageAdapter({"exclusive.json": credential_state(max_concurrency=1)})

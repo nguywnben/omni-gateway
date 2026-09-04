@@ -7,6 +7,7 @@ import hmac
 import json
 import math
 import secrets
+import threading
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Final
@@ -49,6 +50,56 @@ VALID_FAILURE_KINDS: Final = frozenset(
     {"", "authentication", "model_unavailable", "rate_limited", "transient"}
 )
 VALID_MEDIA_KINDS: Final = frozenset({"binary", "json", "text"})
+_METRIC_OPERATIONS: Final = frozenset(
+    {
+        "credential_read",
+        "lease_acquire",
+        "lease_release",
+        "route_read",
+        "route_record",
+        "generation_read",
+        "invalidation",
+        "cache_publish",
+        "cache_resolve",
+    }
+)
+_METRIC_RESULTS: Final = frozenset({"success", "rejected", "hit", "miss", "conflict"})
+_METRIC_LOCK = threading.Lock()
+_METRICS: dict[tuple[str, str], int] = {}
+
+
+def _increment_metric(operation: object, result: object) -> None:
+    normalized_operation = operation if operation in _METRIC_OPERATIONS else "generation_read"
+    normalized_result = result if result in _METRIC_RESULTS else "conflict"
+    key = (str(normalized_operation), str(normalized_result))
+    with _METRIC_LOCK:
+        _METRICS[key] = _METRICS.get(key, 0) + 1
+
+
+def render_routing_coordination_metrics() -> str:
+    """Render fixed-cardinality semantic routing/cache coordination counters."""
+
+    with _METRIC_LOCK:
+        snapshot = dict(_METRICS)
+    lines = [
+        "# HELP omni_routing_coordination_events_total Routing and cache coordination decisions.",
+        "# TYPE omni_routing_coordination_events_total counter",
+    ]
+    for (operation, result), count in sorted(snapshot.items()):
+        lines.append(
+            "omni_routing_coordination_events_total"
+            f'{{operation="{operation}",result="{result}"}} {count}'
+        )
+    return "\n".join(lines) + "\n"
+
+
+def clear_routing_coordination_metrics_for_testing() -> None:
+    with _METRIC_LOCK:
+        _METRICS.clear()
+
+
+def record_routing_coordination_metric_for_testing(operation: object, result: object) -> None:
+    _increment_metric(operation, result)
 
 
 class CacheKind(str, Enum):
@@ -233,6 +284,7 @@ class RoutingCoordinationAdapter:
         snapshot = await self._store.read_cas(key, epoch=self._fencing_epoch)
         leases, last_selected = self._decode_lease(snapshot)
         active = [lease for lease in leases if lease[1] > now_ms]
+        _increment_metric("credential_read", "success")
         return CredentialCoordinationSnapshot(len(active), last_selected)
 
     async def acquire_credential(
@@ -260,6 +312,7 @@ class RoutingCoordinationAdapter:
             leases, _last_selected = self._decode_lease(snapshot)
             active = [lease for lease in leases if lease[1] > now_ms]
             if len(active) >= max_concurrency:
+                _increment_metric("lease_acquire", "rejected")
                 return None
             expires_ms = now_ms + math.ceil(ttl * 1000)
             active.append((lease_id, expires_ms))
@@ -274,7 +327,9 @@ class RoutingCoordinationAdapter:
                 )
             )
             if result.applied:
+                _increment_metric("lease_acquire", "success")
                 return CredentialLease(key, lease_id, len(active))
+        _increment_metric("lease_acquire", "conflict")
         raise CoordinationUnavailableError("Credential lease coordination conflicted.")
 
     async def release_credential(self, lease: CredentialLease) -> bool:
@@ -287,6 +342,7 @@ class RoutingCoordinationAdapter:
             active = [item for item in leases if item[1] > now_ms]
             retained = [item for item in active if item[0] != lease.lease_id]
             if len(retained) == len(active):
+                _increment_metric("lease_release", "miss")
                 return False
             result = await self._store.compare_and_set(
                 CasRequest(
@@ -299,7 +355,9 @@ class RoutingCoordinationAdapter:
                 )
             )
             if result.applied:
+                _increment_metric("lease_release", "success")
                 return True
+        _increment_metric("lease_release", "conflict")
         raise CoordinationUnavailableError("Credential lease coordination conflicted.")
 
     @staticmethod
@@ -366,12 +424,14 @@ class RoutingCoordinationAdapter:
         count, kind, retry_ms, latencies = self._decode_route(snapshot)
         if retry_ms <= now_ms:
             count, kind, retry_ms = 0, "", 0
-        return RouteOutcomeSnapshot(
+        result = RouteOutcomeSnapshot(
             count,
             kind,
             max(0.0, (retry_ms - now_ms) / 1000),
             tuple(float(value) for value in latencies),
         )
+        _increment_metric("route_read", "success")
+        return result
 
     async def record_route_outcome(
         self,
@@ -422,7 +482,9 @@ class RoutingCoordinationAdapter:
                 )
             )
             if result.applied:
+                _increment_metric("route_record", "success")
                 return
+        _increment_metric("route_record", "conflict")
         raise CoordinationUnavailableError("Route outcome coordination conflicted.")
 
     @staticmethod
@@ -438,6 +500,7 @@ class RoutingCoordinationAdapter:
             raise ValueError("Invalidation scope is invalid.")
         await self._now_ms()
         snapshot = await self._store.read_invalidation_generation(scope)
+        _increment_metric("generation_read", "success")
         return snapshot.generation or 0
 
     async def invalidate(self, scope: str) -> int:
@@ -452,7 +515,9 @@ class RoutingCoordinationAdapter:
             )
         )
         if not result.applied or result.generation is None:
+            _increment_metric("invalidation", "rejected")
             raise CoordinationUnavailableError("Invalidation was not applied.")
+        _increment_metric("invalidation", "success")
         return result.generation
 
     async def publish_cache_metadata(
@@ -500,7 +565,9 @@ class RoutingCoordinationAdapter:
                 )
             )
             if result.applied:
+                _increment_metric("cache_publish", "success")
                 return True
+        _increment_metric("cache_publish", "conflict")
         raise CoordinationUnavailableError("Cache metadata coordination conflicted.")
 
     async def resolve_cache_metadata(
@@ -513,6 +580,7 @@ class RoutingCoordinationAdapter:
         key = self._cache_key(kind, cache_key)
         snapshot = await self._store.read_cas(key, epoch=self._fencing_epoch)
         if snapshot.payload is None:
+            _increment_metric("cache_resolve", "miss")
             return None
         value = _decode(
             snapshot.payload,
@@ -543,5 +611,7 @@ class RoutingCoordinationAdapter:
         ):
             raise CoordinationCorruptError("Cache metadata payload is invalid.")
         if stored_generation != generation:
+            _increment_metric("cache_resolve", "miss")
             return None
+        _increment_metric("cache_resolve", "hit")
         return CacheMetadata(digest, media_kind, stored_generation)

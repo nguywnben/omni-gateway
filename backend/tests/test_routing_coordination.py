@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import sys
+import time
 import unittest
 from pathlib import Path
 
@@ -165,6 +166,30 @@ class RoutingCoordinationAdapterTests(unittest.IsolatedAsyncioTestCase):
             await self.first.acquire_credential(
                 "primary", "bob.json", ttl_seconds=10, max_concurrency=1
             )
+
+    async def test_lease_capacity_payload_and_reference_latency_are_bounded(self) -> None:
+        started = time.perf_counter()
+        leases = []
+        for _index in range(128):
+            lease = await self.first.acquire_credential(
+                "primary", "capacity.json", ttl_seconds=10, max_concurrency=128
+            )
+            self.assertIsNotNone(lease)
+            leases.append(lease)
+        self.assertIsNone(
+            await self.second.acquire_credential(
+                "primary", "capacity.json", ttl_seconds=10, max_concurrency=128
+            )
+        )
+        snapshot = await self.store.read_cas(
+            self.first._lease_key("primary", "capacity.json"), epoch=1
+        )
+        self.assertLess(len(snapshot.payload or b""), 16 * 1024)
+        self.assertLess(time.perf_counter() - started, 2.0)
+
+        for lease in leases:
+            assert lease is not None
+            self.assertTrue(await self.first.release_credential(lease))
 
     def test_invalid_keys_epochs_kinds_and_bounds_are_rejected(self) -> None:
         for invalid_key in (b"short", b"a" * 31, b"a" * 65):

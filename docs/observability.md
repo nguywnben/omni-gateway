@@ -44,6 +44,13 @@ No session digest, principal index, client index, throttle bucket, OIDC state/br
 operation ID is a label. The renderer always emits its HELP and TYPE metadata, including before
 any operation occurs.
 
+`omni_routing_coordination_events_total{operation,result}` records semantic credential-routing,
+route-outcome, governance-generation, invalidation, and exact-cache metadata decisions. Operation
+and result are closed vocabularies; arbitrary test or caller input collapses to safe fallback
+labels. The counter has no backend label because the lower-level coordination counter already owns
+backend health. See the [routing coordination runbook](runbooks/routing-coordination.md) for
+evidence and failure posture.
+
 Use the counter to ask: is Redis becoming unavailable, are corruption or reconciliation-required
 outcomes increasing, are quota admissions being rejected unexpectedly, and is a process closing
 repeatedly? The lifecycle boundary also retains an in-process, content-free health snapshot with
@@ -60,6 +67,12 @@ admission, one-winner OIDC transaction consumption, and exact ready-epoch fencin
 a unique validated lowercase/hyphen namespace and teardown scans and deletes only keys under that
 run's derived deployment prefix/hash tag. It never uses `FLUSHDB`, broad deletion, or `SCRIPT
 FLUSH`; the latter is server-global and therefore not safe for a shared endpoint.
+
+`backend.tests.test_routing_coordination_redis_live` adds routing/cache parity: exclusive lease
+admission, shared cooldown visibility, exact-cache invalidation, opaque identifiers, and bounded
+post-cancellation lease recovery. Its fake-driver counterpart injects cancellation after a
+successful server mutation so the unknown-outcome boundary stays deterministic without timing
+races.
 
 The normal opt-in suite verifies registered Lua execution against a real endpoint. Separate,
 deterministic driver-boundary tests inject cancellation only after the stateful script has applied

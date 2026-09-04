@@ -241,7 +241,7 @@ These queue items refine Phases 4–5 and do not add to the 28-item program deno
   - [x] W4.17.5 Preserve quota fencing through every virtual-key transition.
   - [x] W4.17.6 Coordinate exact-cache metadata and invalidation.
   - [x] W4.17.7 Coordinate governance cache invalidation.
-  - [ ] W4.17.8 Add operability, live parity, and bounded performance evidence.
+  - [x] W4.17.8 Add operability, live parity, and bounded performance evidence.
   - [ ] W4.17.9 Reconcile review and close the committed runtime checkpoint.
 - [ ] W4.18 Add the HA deployment gate, readiness, alerts, runbooks, and rollback.
 - [ ] W4.19 Pass failure/load gates and record the exact activation topology.

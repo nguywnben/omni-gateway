@@ -37,6 +37,7 @@ VALID_ROUTING_STRATEGIES = frozenset(
     {"balanced", "priority", "weighted", "least_latency", "lowest_cost"}
 )
 LATENCY_BUCKET_MS = 100.0
+MAX_ROUTING_CANDIDATES = 100
 _PROCESS_ROUTING_IDENTIFIER_KEY = secrets.token_bytes(32)
 
 
@@ -315,10 +316,35 @@ class SmartCredentialRouter:
                     now + self._state_cache_ttl_seconds,
                     states,
                 )
-            await self._load_candidate_providers(storage_adapter, states, mode=mode)
             normalized_strategy = str(routing_strategy or "balanced").strip().lower()
             if normalized_strategy not in VALID_ROUTING_STRATEGIES:
                 normalized_strategy = "balanced"
+            if len(states) > MAX_ROUTING_CANDIDATES:
+                decision = RouteDecision(
+                    mode=mode,
+                    requested_model=str(model_name or ""),
+                    required_provider=str(provider_id or ""),
+                    routing_strategy=normalized_strategy,
+                    selected_filename=None,
+                    selected_provider=None,
+                    candidates=(),
+                    created_at=now,
+                    request_id=get_request_id(),
+                )
+                self._recent_decisions.append(decision)
+                trace_decision(
+                    category="routing",
+                    action="unavailable",
+                    result="failed",
+                    reason="candidate_capacity",
+                    model=str(model_name or ""),
+                    candidate_count=len(states),
+                )
+                log.error(
+                    "Credential routing refused a candidate set above the supported capacity."
+                )
+                return None, decision
+            await self._load_candidate_providers(storage_adapter, states, mode=mode)
             normalized_preferred_provider = (
                 normalize_provider_id(preferred_provider) if preferred_provider else None
             )

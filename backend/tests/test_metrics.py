@@ -28,6 +28,10 @@ from core.credential_operation_evidence import (
     record_credential_mutation,
 )
 from core.metrics import metrics, render_prometheus_metrics
+from core.routing_coordination import (
+    clear_routing_coordination_metrics_for_testing,
+    record_routing_coordination_metric_for_testing,
+)
 from core.security_coordination import (
     AttemptReservationRequest,
     SecurityAttemptCategory,
@@ -76,6 +80,7 @@ class RenderPrometheusMetricsTests(unittest.TestCase):
     def setUp(self):
         clear_credential_operation_evidence_for_testing()
         clear_coordination_operation_metrics_for_testing()
+        clear_routing_coordination_metrics_for_testing()
 
     def test_renders_per_provider_counters(self):
         output = render_prometheus_metrics(SAMPLE_ROWS)
@@ -186,6 +191,21 @@ class RenderPrometheusMetricsTests(unittest.TestCase):
             output,
         )
         self.assertNotIn(client_index, output)
+
+    def test_routing_coordination_metrics_are_fixed_cardinality(self):
+        record_routing_coordination_metric_for_testing("lease_acquire", "success")
+        record_routing_coordination_metric_for_testing("tenant/cache-key", "top-secret")
+        output = render_prometheus_metrics([])
+        self.assertIn(
+            'omni_routing_coordination_events_total{operation="lease_acquire",result="success"} 1',
+            output,
+        )
+        self.assertIn(
+            'omni_routing_coordination_events_total{operation="generation_read",result="conflict"} 1',
+            output,
+        )
+        self.assertNotIn("tenant/cache-key", output)
+        self.assertNotIn("top-secret", output)
 
     def test_stale_quota_commit_renders_as_rejected_not_success(self):
         service = CoordinationService(_RejectedQuotaCommitStore())

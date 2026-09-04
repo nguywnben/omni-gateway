@@ -244,6 +244,15 @@ backend/core/converter/{openai,anthropic}_to_gemini.py
 
 The storage drivers interpolate only table and column identifiers selected from internal allowlists; all credential values remain parameterized. Future storage work should consolidate those safe identifier builders, replace repeated broad exception handling with typed boundary errors, and add live integration suites for PostgreSQL and MongoDB.
 
+Routing, quota, governance invalidation, and exact-cache metadata now share a fenced semantic
+coordination boundary. Store keys use domain-separated HMAC identifiers; exact response bytes stay
+inside the bounded local cache, while Redis-compatible metadata carries only a digest, media
+category, generation, and expiry. Admission closes on coordination uncertainty, while exact-cache
+uncertainty degrades to a miss. W4.17 supplies in-memory/Redis parity and injection points only;
+runtime selection, readiness, drain/reconciliation, multi-replica deployment, and activation remain
+closed until W4.18-W4.19. Operational evidence is maintained in the
+[routing coordination runbook](runbooks/routing-coordination.md).
+
 Production dependencies are compiled into `requirements.lock` with hashes. `requirements.txt` remains the human-maintained input, and CI rejects stale lock output.
 
 ## Change Policy

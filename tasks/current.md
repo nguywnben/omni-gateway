@@ -531,13 +531,11 @@ checkboxes to be marked complete.
 
 ## Immediate Next Action
 
-Execute W4.17 from
-`docs/superpowers/plans/2026-09-02-wave-4-continuous-completion.md`: inventory and coordinate every
-routing-, governance-, quota-, cooldown-, and cache-affecting process-local state behind strict
-bounded in-memory/Redis semantics without selecting Redis at runtime.
-Continue without a task-boundary pause under the accepted Wave 4 completion plan. Keep the
-transport inactive and preserve `WORKERS=1`, one replica, disabled-by-default OIDC, source
-authority, and every HA activation gate.
+Close W4.17.9 through fresh-context adversarial review and the full repository/runtime checkpoint.
+Then continue directly into W4.18 under
+`docs/superpowers/plans/2026-09-02-wave-4-continuous-completion.md`. Keep Redis runtime selection
+inactive and preserve `WORKERS=1`, one replica, disabled-by-default OIDC, source authority, and
+every HA activation gate until lifecycle/readiness and forced-failure/load evidence are complete.
 
 ## Update Rule
 
