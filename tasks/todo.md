@@ -246,7 +246,7 @@ These queue items refine Phases 4–5 and do not add to the 28-item program deno
 - [ ] W4.18 Add the HA deployment gate, readiness, alerts, runbooks, and rollback.
   - [x] W4.18.1 Specify policy, binding, lifecycle, commands, and activation boundary.
   - [x] W4.18.2 Implement and verify the closed runtime policy parser.
-  - [ ] W4.18.3 Implement persistent binding and namespace-loss defense.
+  - [x] W4.18.3 Implement persistent binding and namespace-loss defense.
   - [ ] W4.18.4 Inject one lifecycle-owned coordination service into all consumers.
   - [ ] W4.18.5 Add dependency-aware readiness and low-cardinality evidence.
   - [ ] W4.18.6 Add dry-run-first lifecycle and rollback commands.
