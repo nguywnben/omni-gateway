@@ -1,6 +1,6 @@
 # Redis Quota State v2 Design
 
-**Status:** Approved in principle; awaiting written-spec review
+**Status:** Approved for implementation by the user on 2026-09-04
 
 **Date:** 2026-09-04
 
