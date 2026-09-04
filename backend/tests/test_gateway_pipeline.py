@@ -137,7 +137,7 @@ class ResponseCachePipelineTests(unittest.TestCase):
             self.assertIsNotNone(cache_key)
             self.assertIsNone(cached)
 
-            gateway_pipeline.store_response_cache(cache_key, upstream)
+            _run(gateway_pipeline.store_response_cache(cache_key, upstream))
 
             cache_key2, cached2 = _run(gateway_pipeline.lookup_response_cache(body))
         self.assertEqual(cache_key, cache_key2)
@@ -151,7 +151,7 @@ class ResponseCachePipelineTests(unittest.TestCase):
         error_response = Response(content=b"{}", status_code=503, media_type="application/json")
         with patch("config.get_response_cache_config", new=AsyncMock(return_value=CACHE_ON)):
             cache_key, _ = _run(gateway_pipeline.lookup_response_cache(body))
-            gateway_pipeline.store_response_cache(cache_key, error_response)
+            _run(gateway_pipeline.store_response_cache(cache_key, error_response))
             _, cached = _run(gateway_pipeline.lookup_response_cache(body))
         self.assertIsNone(cached)
 
@@ -164,7 +164,7 @@ class ResponseCachePipelineTests(unittest.TestCase):
         )
         with patch("config.get_response_cache_config", new=AsyncMock(return_value=CACHE_ON)):
             cache_key, _ = _run(gateway_pipeline.lookup_response_cache(body))
-            gateway_pipeline.store_response_cache(cache_key, huge)
+            _run(gateway_pipeline.store_response_cache(cache_key, huge))
             _, cached = _run(gateway_pipeline.lookup_response_cache(body))
         self.assertIsNone(cached)
 

@@ -1101,7 +1101,7 @@ async def non_stream_request(
 
     if cache_key:
         try:
-            store_response_cache(cache_key, response)
+            await store_response_cache(cache_key, response)
         except Exception as exc:
             log.debug(f"[response-cache] failed to store response: {exc}")
     return response

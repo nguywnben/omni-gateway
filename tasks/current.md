@@ -10,7 +10,7 @@
   Phase 6 ADR approval), exactly 75.0%; wave execution-slice checkboxes are refinements and are not
   added to that denominator.
 - Active scope: Wave 4 W4.17, routing/governance/cache state coordination.
-- Control state: **IN PROGRESS — W4.17 SLICE 5/9 COMPLETE**.
+- Control state: **IN PROGRESS — W4.17 SLICE 6/9 COMPLETE**.
 - Execution mode: continuous through the remaining W4.16–W4.19 queue under
   `docs/superpowers/plans/2026-09-02-wave-4-continuous-completion.md`; do not pause at internal task
   boundaries.
@@ -53,8 +53,15 @@
   mislabeled as customer budget exhaustion. Runtime reset no longer silently replaces a selected
   coordinated backend. Two managers sharing one store pass atomic RPM admission; the 99-test
   virtual-key/quota/coordination matrix is green.
-- Immediate next action: coordinate exact response-cache metadata and invalidation while keeping
-  all response bytes process-local and treating coordination failure as a cache miss.
+- Exact response caching now stores only bounded body bytes locally and requires matching fenced
+  HMAC metadata, media category, content digest, TTL, and the current invalidation generation before
+  every hit. A second generation read closes the lookup/invalidation race. Missing bodies,
+  mismatches, stale generations, reconciling epochs, and backend failure evict the local copy and
+  safely miss; upstream success is never failed by a cache publication outage. The async gateway
+  call site and focused 22-test cache/pipeline matrix pass. Semantic prompt/embedding/body storage
+  remains inactive and local-only.
+- Immediate next action: add coordinated generation observation/publication around mutable config,
+  virtual-key, credential, blacklist, and model-catalog caches.
 - Coordinated activation remains closed; standalone runtime and the one-worker/one-replica ceiling
   are unchanged.
 

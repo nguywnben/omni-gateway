@@ -19,7 +19,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from core.guardrails import GuardrailsEngine
 from core.request_trace_service import trace_decision
-from core.response_cache import generate_cache_key, response_cache
+from core.response_cache import generate_cache_key, response_cache, response_cache_coordinator
 from fastapi import Response
 from log import log
 
@@ -209,7 +209,7 @@ async def lookup_response_cache(
     response_cache.max_entries = settings["max_entries"]
 
     cache_key = generate_cache_key(str(body.get("model") or ""), body, stream=False)
-    entry = response_cache.get(cache_key)
+    entry = await response_cache_coordinator.get(cache_key)
     if entry is None:
         trace_decision(
             category="cache",
@@ -236,14 +236,26 @@ async def lookup_response_cache(
     )
 
 
-def store_response_cache(cache_key: Optional[str], response: Response) -> None:
+async def store_response_cache(cache_key: Optional[str], response: Response) -> None:
     """Persist a successful upstream response for future exact-match hits."""
     if not cache_key or response is None or response.status_code != 200:
         return
     body_bytes = response.body
     if not body_bytes or len(body_bytes) > MAX_CACHEABLE_RESPONSE_BYTES:
         return
-    response_cache.set(cache_key, (bytes(body_bytes), response.media_type))
+    stored = await response_cache_coordinator.set(
+        cache_key,
+        (bytes(body_bytes), response.media_type or "application/octet-stream"),
+        response_cache.default_ttl_seconds,
+    )
+    if not stored:
+        trace_decision(
+            category="cache",
+            action="skipped",
+            result="failed",
+            reason="coordination_unavailable",
+        )
+        return
     trace_decision(
         category="cache",
         action="stored",
