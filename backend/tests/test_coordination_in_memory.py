@@ -94,6 +94,32 @@ class InMemoryCoordinationTests(CoordinationStoreContract, unittest.IsolatedAsyn
         accepted = await self.store.reserve_quota(_reservation("ready", fencing_epoch=2))
         self.assertTrue(accepted.accepted)
 
+    async def test_quota_window_includes_the_complete_boundary_second(self) -> None:
+        self.clock.value = 1_000.9
+        first = await self.store.reserve_quota(
+            _reservation("boundary-first", now=1_000.9, rpm_limit=1)
+        )
+        self.clock.advance(60.0)
+
+        denied = await self.store.reserve_quota(
+            _reservation("boundary-second", now=1_060.9, rpm_limit=1)
+        )
+
+        self.assertTrue(first.accepted)
+        self.assertEqual(denied.reason, "rpm")
+
+    async def test_quota_coordination_ignores_legacy_budget_inputs(self) -> None:
+        decision = await self.store.reserve_quota(
+            _reservation(
+                "rate-only",
+                estimated_cost_usd=10.0,
+                daily_budget_usd=0.0,
+                monthly_budget_usd=0.0,
+            )
+        )
+
+        self.assertTrue(decision.accepted)
+
     async def test_quota_coordination_time_comes_only_from_the_store_clock(self) -> None:
         with self.subTest(path="forward-dated-reserve"):
             store = InMemoryStateStore(clock=self.clock)
@@ -143,10 +169,8 @@ class InMemoryCoordinationTests(CoordinationStoreContract, unittest.IsolatedAsyn
                 else:
                     self.assertFalse(await store.release_quota("expired", now=0.0))
 
-    async def test_stale_reserve_does_not_reconcile_committed_evidence(self) -> None:
-        accepted = await self.store.reserve_quota(
-            _reservation("committed", daily_budget_usd=1.0, ttl_seconds=61.0)
-        )
+    async def test_stale_reserve_does_not_mutate_rate_state(self) -> None:
+        accepted = await self.store.reserve_quota(_reservation("committed", ttl_seconds=61.0))
         self.assertTrue(accepted.accepted)
         self.assertTrue(
             (
@@ -155,9 +179,7 @@ class InMemoryCoordinationTests(CoordinationStoreContract, unittest.IsolatedAsyn
                 )
             ).committed
         )
-        committed = self.store._quota_records["committed"].committed
-        assert committed is not None
-        self.assertFalse(committed.daily_reconciled)
+        before = self.store._quota_rate_windows["virtual-key"].totals(self.clock.value)
         await self.store.advance_epoch(1, "advance-for-stale")
 
         denied = await self.store.reserve_quota(
@@ -170,7 +192,9 @@ class InMemoryCoordinationTests(CoordinationStoreContract, unittest.IsolatedAsyn
         )
 
         self.assertFalse(denied.accepted)
-        self.assertFalse(committed.daily_reconciled)
+        self.assertEqual(
+            self.store._quota_rate_windows["virtual-key"].totals(self.clock.value), before
+        )
 
     async def test_quota_replay_with_changed_payload_conflicts(self) -> None:
         first = await self.store.reserve_quota(_reservation("same", fencing_epoch=1))
@@ -248,7 +272,7 @@ class InMemoryCoordinationTests(CoordinationStoreContract, unittest.IsolatedAsyn
             (1_000.0, 1_001.0),
         )
 
-    async def test_future_snapshot_cannot_reconcile_committed_evidence(self) -> None:
+    async def test_future_snapshot_is_rejected_before_rate_state_changes(self) -> None:
         self.assertTrue(
             (
                 await self.store.reserve_quota(
@@ -270,8 +294,7 @@ class InMemoryCoordinationTests(CoordinationStoreContract, unittest.IsolatedAsyn
                 )
             ).committed
         )
-        committed = self.store._quota_records["snapshot-evidence"].committed
-        assert committed is not None
+        before = self.store._quota_rate_windows["virtual-key"].totals(self.clock.value)
 
         with self.assertRaises(ValueError):
             await self.store.reserve_quota(
@@ -283,8 +306,9 @@ class InMemoryCoordinationTests(CoordinationStoreContract, unittest.IsolatedAsyn
                 )
             )
 
-        self.assertFalse(committed.daily_reconciled)
-        self.assertFalse(committed.monthly_reconciled)
+        self.assertEqual(
+            self.store._quota_rate_windows["virtual-key"].totals(self.clock.value), before
+        )
 
     async def test_ready_denied_cas_replays_until_its_ttl_without_flipping(self) -> None:
         self.assertTrue(
@@ -617,6 +641,7 @@ class InMemoryCoordinationTests(CoordinationStoreContract, unittest.IsolatedAsyn
 
         self.assertNotIn("one-shot-key", store._quota_lifecycle_expiries)
         self.assertNotIn("one-shot-key", store._quota_replay_expiries)
+        self.assertNotIn("one-shot-key", store._quota_rate_windows)
 
     async def test_capacity_exhaustion_is_a_closed_admission_decision(self) -> None:
         store = InMemoryStateStore(clock=self.clock, _quota_record_limit_for_testing=2)

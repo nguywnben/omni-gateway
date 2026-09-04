@@ -112,6 +112,44 @@ class CoordinationStoreContract:
         )
         self.assertEqual(exact_token_denial.reason, "tpm")
 
+        budget_neutral = await self.store.reserve_quota(
+            self._quota_request(
+                "quota-budget-neutral",
+                key_id="quota-budget-neutral-key",
+                operation_id="quota-budget-neutral-operation",
+                estimated_cost_usd=99.0,
+                daily_budget_usd=0.0,
+                monthly_budget_usd=0.0,
+            )
+        )
+        self.assertTrue(budget_neutral.accepted)
+
+        self.assertTrue(
+            (
+                await self.store.reserve_quota(
+                    self._quota_request(
+                        "quota-tpm-overspend",
+                        key_id="quota-tpm-overspend-key",
+                        operation_id="quota-tpm-overspend-reserve",
+                        estimated_tokens=1,
+                        tpm_limit=5,
+                    )
+                )
+            ).accepted
+        )
+        tpm_overspend = await self.store.commit_quota(
+            QuotaCommitRequest(
+                "quota-tpm-overspend",
+                1_001.0,
+                6,
+                999.0,
+                False,
+                operation_id="quota-tpm-overspend-commit",
+            )
+        )
+        self.assertTrue(tpm_overspend.committed)
+        self.assertTrue(tpm_overspend.overspent)
+
         self.assertTrue(
             (
                 await self.store.reserve_quota(

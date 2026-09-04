@@ -96,7 +96,7 @@ class AtomicQuotaReservationTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(rejected.reason, "tpm")
         self.assertTrue(after_window.accepted)
 
-    async def test_concurrent_budget_reservations_cannot_knowingly_overspend(self):
+    async def test_coordination_does_not_own_budget_admission(self):
         first, second = await asyncio.gather(
             self.store.reserve_quota(
                 _reservation("res_a", estimated_cost_usd=0.6, daily_budget_usd=1.0)
@@ -106,11 +106,10 @@ class AtomicQuotaReservationTests(unittest.IsolatedAsyncioTestCase):
             ),
         )
 
-        self.assertEqual(sum(decision.accepted for decision in (first, second)), 1)
-        rejected = first if not first.accepted else second
-        self.assertEqual(rejected.reason, "daily_budget")
+        self.assertTrue(first.accepted)
+        self.assertTrue(second.accepted)
 
-    async def test_ledger_reconciliation_does_not_double_count_committed_cost(self):
+    async def test_legacy_budget_snapshots_do_not_affect_rate_admission(self):
         await self.store.reserve_quota(
             _reservation("res_a", estimated_cost_usd=0.4, daily_budget_usd=1.0)
         )
@@ -137,7 +136,7 @@ class AtomicQuotaReservationTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertTrue(decision.accepted)
 
-    async def test_snapshot_started_before_commit_cannot_hide_committed_cost(self):
+    async def test_snapshot_age_does_not_affect_rate_admission(self):
         await self.store.reserve_quota(
             _reservation("res_a", estimated_cost_usd=0.7, daily_budget_usd=1.0)
         )
@@ -162,8 +161,7 @@ class AtomicQuotaReservationTests(unittest.IsolatedAsyncioTestCase):
             )
         )
 
-        self.assertFalse(decision.accepted)
-        self.assertEqual(decision.reason, "daily_budget")
+        self.assertTrue(decision.accepted)
 
     async def test_expired_reservation_is_reconciled(self):
         await self.store.reserve_quota(_reservation("res_a", rpm_limit=1, ttl_seconds=61.0))
@@ -193,16 +191,22 @@ class AtomicQuotaReservationTests(unittest.IsolatedAsyncioTestCase):
         self.assertIs(QuotaReservationRequest, CanonicalQuotaReservationRequest)
         self.assertIs(QuotaCommitRequest, CanonicalQuotaCommitRequest)
 
-    async def test_actual_usage_above_reservation_reports_overspend(self):
+    async def test_commit_reports_only_tpm_overspend(self):
         await self.store.reserve_quota(
-            _reservation("res_a", estimated_cost_usd=0.4, daily_budget_usd=1.0)
+            _reservation(
+                "res_a",
+                estimated_tokens=1,
+                estimated_cost_usd=0.4,
+                tpm_limit=5,
+                daily_budget_usd=1.0,
+            )
         )
 
         result = await self.store.commit_quota(
             QuotaCommitRequest(
                 reservation_id="res_a",
                 now=1_001.0,
-                actual_tokens=100,
+                actual_tokens=6,
                 actual_cost_usd=1.1,
                 durable_cost_recorded=True,
             )
@@ -211,38 +215,23 @@ class AtomicQuotaReservationTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(result.committed)
         self.assertTrue(result.overspent)
 
-    async def test_reconciliation_is_isolated_to_the_target_key(self):
+    async def test_rate_windows_are_isolated_to_the_target_key(self):
         await self.store.reserve_quota(
-            _reservation("inactive-key-commit", key_id="vk_inactive", rpm_limit=1)
+            _reservation("first-key-request", key_id="vk_first", rpm_limit=1)
         )
-        await self.store.commit_quota(
-            QuotaCommitRequest(
-                reservation_id="inactive-key-commit",
-                now=1_001.0,
-                actual_tokens=1,
-                actual_cost_usd=0.0,
-                durable_cost_recorded=True,
-            )
-        )
-
-        self.coordination_now = 1_062.0
-        await self.store.reserve_quota(
+        other_key = await self.store.reserve_quota(
             _reservation(
                 "other-key-request",
                 key_id="vk_other",
-                now=1_062.0,
+                rpm_limit=1,
             )
+        )
+        same_key = await self.store.reserve_quota(
+            _reservation("same-key-request", key_id="vk_first", rpm_limit=1)
         )
 
-        self.assertIn("inactive-key-commit", self.store._quota_records)
-        await self.store.reserve_quota(
-            _reservation(
-                "same-key-request",
-                key_id="vk_inactive",
-                now=1_062.0,
-            )
-        )
-        self.assertNotIn("inactive-key-commit", self.store._quota_records)
+        self.assertTrue(other_key.accepted)
+        self.assertEqual(same_key.reason, "rpm")
 
 
 if __name__ == "__main__":

@@ -131,7 +131,7 @@ git commit -m "refactor(quota): separate rate and budget authority"
 - `QuotaRateWindow.release(accepted_at: float, estimated_tokens: int, now: float) -> None` reverses a live estimate.
 - `QuotaRateWindow.totals(now: float) -> RateTotals` and `retry_after_seconds(now: float) -> int` inspect at most 61 slots.
 
-- [ ] **Step 1: Write failing unit tests for bucket boundaries, replacement, reversal, overflow, and fixed capacity**
+- [x] **Step 1: Write failing unit tests for bucket boundaries, replacement, reversal, overflow, and fixed capacity**
 
 ```python
 def test_boundary_second_is_conservatively_included(self) -> None:
@@ -155,13 +155,13 @@ def test_storage_never_exceeds_61_slots(self) -> None:
 
 Also assert release underflow, a future-dated slot, invalid counters, and sums above `2**63 - 1` raise `CoordinationCorruptError` rather than wrapping.
 
-- [ ] **Step 2: Run the new unit module and verify imports fail**
+- [x] **Step 2: Run the new unit module and verify imports fail**
 
 Run: `.venv\Scripts\python.exe -m unittest backend.tests.test_quota_rate_window -v`
 
 Expected: FAIL with `ModuleNotFoundError: No module named 'core.quota_rate_window'`.
 
-- [ ] **Step 3: Implement the 61-slot reference type**
+- [x] **Step 3: Implement the 61-slot reference type**
 
 ```python
 @dataclass(frozen=True, slots=True)
@@ -191,13 +191,13 @@ class QuotaRateWindow:
 
 Use `math.floor(now) % 61` for writes, reject future or position-mismatched buckets, clear only stale slots, and calculate retry-after as `max(1, math.ceil(earliest_second + 61 - now))`.
 
-- [ ] **Step 4: Replace in-memory list aggregation and budget reconciliation with one window per key**
+- [x] **Step 4: Replace in-memory list aggregation and budget reconciliation with one window per key**
 
 Initialize `self._quota_rate_windows: dict[str, QuotaRateWindow] = {}`. On accepted reserve call `window.reserve(coordination_now, request.estimated_tokens)`. Commit calls `window.commit(record.accepted_at, record.request.estimated_tokens, coordination_now, actual_tokens)`. Release calls `window.release(...)` before changing lifecycle state.
 
 Delete `_active_for_key_locked`, `_committed_for_key_locked`, `_reconcile_committed_for_key_locked`, daily/monthly unreconciled aggregation, and budget denial/overspend branches. Retain replay, record capacity, cleanup, and direct lifecycle behavior. Retention becomes `max(request.ttl_seconds, 61.0)` and committed retention becomes 61 seconds from commit unless the active reservation expires later.
 
-- [ ] **Step 5: Rewrite shared/in-memory assertions around rate-only ownership and run them**
+- [x] **Step 5: Rewrite shared/in-memory assertions around rate-only ownership and run them**
 
 ```python
 async def test_coordination_ignores_legacy_budget_inputs(self) -> None:
@@ -218,7 +218,7 @@ Run: `.venv\Scripts\python.exe -m unittest backend.tests.test_quota_rate_window 
 
 Expected: PASS.
 
-- [ ] **Step 6: Commit the bounded reference implementation**
+- [x] **Step 6: Commit the bounded reference implementation**
 
 ```powershell
 git add backend/core/quota_rate_window.py backend/core/state_store.py `

@@ -37,6 +37,7 @@ from core.coordination import (
     validate_epoch,
     validate_operation_id,
 )
+from core.quota_rate_window import RATE_BUCKET_COUNT, QuotaRateWindow
 from core.security_coordination import (
     MAX_OIDC_TRANSACTION_TTL_SECONDS,
     MAX_SECURITY_SESSION_TTL_SECONDS,
@@ -65,7 +66,6 @@ from core.security_coordination import (
     TransactionCreateResult,
 )
 
-QUOTA_RATE_WINDOW_SECONDS = 60.0
 QUOTA_DAILY_WINDOW_SECONDS = 86_400.0
 QUOTA_MONTHLY_WINDOW_SECONDS = 30 * QUOTA_DAILY_WINDOW_SECONDS
 
@@ -79,8 +79,6 @@ class _CommittedQuotaReservation:
     actual_tokens: int
     actual_cost_usd: float
     durable_cost_recorded: bool
-    daily_reconciled: bool
-    monthly_reconciled: bool
     expires_at: float
 
 
@@ -341,6 +339,7 @@ class InMemoryStateStore(BaseStateStore):
         self._invalidation_replay_expiries: list[tuple[float, str]] = []
         self._quota_records: Dict[str, _QuotaLifecycleRecord] = {}
         self._quota_ids_by_key: Dict[str, set[str]] = {}
+        self._quota_rate_windows: Dict[str, QuotaRateWindow] = {}
         self._quota_lifecycle_expiries: Dict[str, list[tuple[float, str]]] = {}
         self._quota_replays: Dict[str, _QuotaReplay] = {}
         self._quota_replay_expiries: Dict[object, list[tuple[float, str]]] = {}
@@ -944,13 +943,8 @@ class InMemoryStateStore(BaseStateStore):
             return InvalidationGeneration(self._invalidation_generations.get(scope))
 
     @staticmethod
-    def _quota_evidence_retention_seconds(request: QuotaReservationRequest) -> float:
-        windows = [QUOTA_RATE_WINDOW_SECONDS]
-        if request.daily_budget_usd is not None:
-            windows.append(QUOTA_DAILY_WINDOW_SECONDS)
-        if request.monthly_budget_usd is not None:
-            windows.append(QUOTA_MONTHLY_WINDOW_SECONDS)
-        return min(max(windows), QUOTA_MONTHLY_WINDOW_SECONDS)
+    def _quota_evidence_retention_seconds(_request: QuotaReservationRequest) -> float:
+        return float(RATE_BUCKET_COUNT)
 
     @staticmethod
     def _validate_quota_release(
@@ -997,6 +991,7 @@ class InMemoryStateStore(BaseStateStore):
             identifiers.discard(reservation_id)
             if not identifiers:
                 self._quota_ids_by_key.pop(record.request.key_id, None)
+                self._quota_rate_windows.pop(record.request.key_id, None)
 
     def _apply_quota_lifecycle_expiry_locked(
         self, key_id: str, reservation_id: str, expires_at: float, now: float
@@ -1163,72 +1158,6 @@ class InMemoryStateStore(BaseStateStore):
         )
         return True
 
-    @staticmethod
-    def _committed_expiry(committed: _CommittedQuotaReservation) -> float:
-        return max(
-            committed.committed_at + QUOTA_RATE_WINDOW_SECONDS,
-            committed.committed_at
-            if committed.daily_reconciled
-            else committed.committed_at + QUOTA_DAILY_WINDOW_SECONDS,
-            committed.committed_at
-            if committed.monthly_reconciled
-            else committed.committed_at + QUOTA_MONTHLY_WINDOW_SECONDS,
-        )
-
-    def _reconcile_committed_for_key_locked(
-        self, key_id: str, daily_snapshot_started_at: float, monthly_snapshot_started_at: float
-    ) -> None:
-        for reservation_id in self._quota_ids_by_key.get(key_id, ()):
-            record = self._quota_records[reservation_id]
-            committed = record.committed
-            if (
-                record.state != "committed"
-                or committed is None
-                or not committed.durable_cost_recorded
-            ):
-                continue
-            if daily_snapshot_started_at >= committed.business_committed_at:
-                committed.daily_reconciled = True
-            if monthly_snapshot_started_at >= committed.business_committed_at:
-                committed.monthly_reconciled = True
-            expires_at = self._committed_expiry(committed)
-            if expires_at < committed.expires_at:
-                committed.expires_at = expires_at
-                record.next_expiry_at = min(expires_at, record.retained_until)
-                self._replace_heap_member_locked(
-                    self._quota_lifecycle_expiries.setdefault(key_id, []),
-                    committed.reservation_id,
-                    record.next_expiry_at,
-                )
-
-    def _active_for_key_locked(self, key_id: str) -> list[_QuotaLifecycleRecord]:
-        return [
-            record
-            for reservation_id in self._quota_ids_by_key.get(key_id, ())
-            if (record := self._quota_records[reservation_id]).state == "active"
-        ]
-
-    def _committed_for_key_locked(self, key_id: str) -> list[_CommittedQuotaReservation]:
-        return [
-            committed
-            for reservation_id in self._quota_ids_by_key.get(key_id, ())
-            if (record := self._quota_records[reservation_id]).state == "committed"
-            and (committed := record.committed) is not None
-        ]
-
-    @staticmethod
-    def _retry_after(now: float, timestamps: list[float]) -> int:
-        return (
-            max(
-                1,
-                math.ceil(
-                    min(timestamp + QUOTA_RATE_WINDOW_SECONDS for timestamp in timestamps) - now
-                ),
-            )
-            if timestamps
-            else 1
-        )
-
     async def reserve_quota(self, request: QuotaReservationRequest) -> QuotaReservationDecision:
         async with self._async_lock:
             self._ensure_open_locked()
@@ -1280,74 +1209,35 @@ class InMemoryStateStore(BaseStateStore):
                 return QuotaReservationDecision(
                     False, request.reservation_id, "reconciliation_required"
                 )
-            self._reconcile_committed_for_key_locked(
-                request.key_id,
-                request.daily_snapshot_started_at,
-                request.monthly_snapshot_started_at,
-            )
-            active = self._active_for_key_locked(request.key_id)
-            committed = self._committed_for_key_locked(request.key_id)
             result: QuotaReservationDecision | None = None
             if len(self._quota_ids_by_key.get(request.key_id, ())) >= self._quota_record_limit:
                 result = QuotaReservationDecision(False, request.reservation_id, "capacity")
-            rate_cutoff = coordination_now - QUOTA_RATE_WINDOW_SECONDS
-            active_rate = [item for item in active if item.accepted_at > rate_cutoff]
-            committed_rate = [item for item in committed if item.committed_at > rate_cutoff]
-            timestamps = [item.accepted_at for item in active_rate] + [
-                item.committed_at for item in committed_rate
-            ]
+            window = self._quota_rate_windows.get(request.key_id)
+            if window is None:
+                window = QuotaRateWindow()
+            totals = window.totals(coordination_now)
             if (
                 result is None
                 and request.rpm_limit is not None
-                and len(timestamps) >= request.rpm_limit
+                and totals.requests >= request.rpm_limit
             ):
                 result = QuotaReservationDecision(
                     False,
                     request.reservation_id,
                     "rpm",
-                    self._retry_after(coordination_now, timestamps),
+                    window.retry_after_seconds(coordination_now),
                 )
-            reserved_tokens = sum(item.request.estimated_tokens for item in active_rate)
-            committed_tokens = sum(item.actual_tokens for item in committed_rate)
             if (
                 result is None
                 and request.tpm_limit is not None
-                and reserved_tokens + committed_tokens + request.estimated_tokens
-                > request.tpm_limit
+                and totals.tokens + request.estimated_tokens > request.tpm_limit
             ):
                 result = QuotaReservationDecision(
                     False,
                     request.reservation_id,
                     "tpm",
-                    self._retry_after(coordination_now, timestamps),
+                    window.retry_after_seconds(coordination_now),
                 )
-            active_cost = sum(item.request.estimated_cost_usd for item in active)
-            daily_unreconciled = sum(
-                item.actual_cost_usd for item in committed if not item.daily_reconciled
-            )
-            monthly_unreconciled = sum(
-                item.actual_cost_usd for item in committed if not item.monthly_reconciled
-            )
-            if (
-                result is None
-                and request.daily_budget_usd is not None
-                and request.daily_spend_usd
-                + daily_unreconciled
-                + active_cost
-                + request.estimated_cost_usd
-                > request.daily_budget_usd
-            ):
-                result = QuotaReservationDecision(False, request.reservation_id, "daily_budget")
-            if (
-                result is None
-                and request.monthly_budget_usd is not None
-                and request.monthly_spend_usd
-                + monthly_unreconciled
-                + active_cost
-                + request.estimated_cost_usd
-                > request.monthly_budget_usd
-            ):
-                result = QuotaReservationDecision(False, request.reservation_id, "monthly_budget")
             if result is not None:
                 if not self._store_quota_replay_locked(
                     replay_key,
@@ -1361,6 +1251,8 @@ class InMemoryStateStore(BaseStateStore):
                     )
                 return result
 
+            candidate_window = window.copy()
+            candidate_window.reserve(coordination_now, request.estimated_tokens)
             result = QuotaReservationDecision(True, request.reservation_id)
             active_expires_at = coordination_now + request.ttl_seconds
             retained_until = max(
@@ -1389,6 +1281,7 @@ class InMemoryStateStore(BaseStateStore):
             )
             self._quota_records[request.reservation_id] = lifecycle
             self._quota_ids_by_key.setdefault(request.key_id, set()).add(request.reservation_id)
+            self._quota_rate_windows[request.key_id] = candidate_window
             self._replace_heap_member_locked(
                 self._quota_lifecycle_expiries.setdefault(request.key_id, []),
                 request.reservation_id,
@@ -1432,7 +1325,7 @@ class InMemoryStateStore(BaseStateStore):
                     result,
                     record.retained_until
                     if record is not None
-                    else coordination_now + QUOTA_MONTHLY_WINDOW_SECONDS,
+                    else coordination_now + RATE_BUCKET_COUNT,
                 )
                 return result
             source = record.request
@@ -1446,6 +1339,21 @@ class InMemoryStateStore(BaseStateStore):
                 if request.actual_cost_usd is None
                 else max(0.0, float(request.actual_cost_usd))
             )
+            window = self._quota_rate_windows.get(source.key_id)
+            if window is None:
+                raise CoordinationCorruptError("Quota rate state is invalid.")
+            candidate_window = window.copy()
+            candidate_window.commit(
+                record.accepted_at,
+                source.estimated_tokens,
+                coordination_now,
+                tokens,
+            )
+            totals = candidate_window.totals(coordination_now)
+            retained_until = max(
+                record.active_expires_at,
+                coordination_now + self._quota_evidence_retention_seconds(source),
+            )
             committed = _CommittedQuotaReservation(
                 request.reservation_id,
                 source.key_id,
@@ -1454,63 +1362,19 @@ class InMemoryStateStore(BaseStateStore):
                 tokens,
                 cost,
                 bool(request.durable_cost_recorded),
-                source.daily_budget_usd is None,
-                source.monthly_budget_usd is None,
-                coordination_now + QUOTA_MONTHLY_WINDOW_SECONDS,
+                retained_until,
             )
-            committed.expires_at = self._committed_expiry(committed)
             record.state = "committed"
             record.committed = committed
-            record.retained_until = coordination_now + self._quota_evidence_retention_seconds(
-                source
-            )
-            record.next_expiry_at = min(committed.expires_at, record.retained_until)
+            record.retained_until = retained_until
+            record.next_expiry_at = retained_until
+            self._quota_rate_windows[source.key_id] = candidate_window
             self._replace_heap_member_locked(
                 self._quota_lifecycle_expiries.setdefault(source.key_id, []),
                 request.reservation_id,
                 record.next_expiry_at,
             )
-            active_for_key = self._active_for_key_locked(source.key_id)
-            committed_for_key = self._committed_for_key_locked(source.key_id)
-            cutoff = coordination_now - QUOTA_RATE_WINDOW_SECONDS
-            overspent = bool(
-                (
-                    source.tpm_limit is not None
-                    and sum(
-                        item.request.estimated_tokens
-                        for item in active_for_key
-                        if item.accepted_at > cutoff
-                    )
-                    + sum(
-                        item.actual_tokens
-                        for item in committed_for_key
-                        if item.committed_at > cutoff
-                    )
-                    > source.tpm_limit
-                )
-                or (
-                    source.daily_budget_usd is not None
-                    and source.daily_spend_usd
-                    + sum(item.request.estimated_cost_usd for item in active_for_key)
-                    + sum(
-                        item.actual_cost_usd
-                        for item in committed_for_key
-                        if not item.daily_reconciled
-                    )
-                    > source.daily_budget_usd
-                )
-                or (
-                    source.monthly_budget_usd is not None
-                    and source.monthly_spend_usd
-                    + sum(item.request.estimated_cost_usd for item in active_for_key)
-                    + sum(
-                        item.actual_cost_usd
-                        for item in committed_for_key
-                        if not item.monthly_reconciled
-                    )
-                    > source.monthly_budget_usd
-                )
-            )
+            overspent = bool(source.tpm_limit is not None and totals.tokens > source.tpm_limit)
             result = QuotaCommitResult(True, overspent)
             self._store_quota_replay_locked(
                 replay_key,
@@ -1558,12 +1422,22 @@ class InMemoryStateStore(BaseStateStore):
             expires_at = (
                 record.retained_until
                 if record is not None
-                else coordination_now + QUOTA_MONTHLY_WINDOW_SECONDS
+                else coordination_now + RATE_BUCKET_COUNT
             )
             if result:
+                window = self._quota_rate_windows.get(record.request.key_id)
+                if window is None:
+                    raise CoordinationCorruptError("Quota rate state is invalid.")
+                candidate_window = window.copy()
+                candidate_window.release(
+                    record.accepted_at,
+                    record.request.estimated_tokens,
+                    coordination_now,
+                )
                 record.state = "released"
                 record.next_expiry_at = record.retained_until
                 expires_at = record.retained_until
+                self._quota_rate_windows[record.request.key_id] = candidate_window
                 self._replace_heap_member_locked(
                     self._quota_lifecycle_expiries.setdefault(record.request.key_id, []),
                     identifier,
