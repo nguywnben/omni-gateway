@@ -477,6 +477,14 @@ silently choosing a new design.
   inactive. Fresh-context review fixed false-valued-backend fallback and non-default fencing-epoch
   propagation. All 1,195 tests pass with 29 explicit live skips; repository and committed-runtime
   gates pass. The maintained reconciliation is `docs/reviews/w4.16-adversarial-review.md`.
+- W4.17 routing/governance/cache coordination: readable fenced CAS records now support bounded
+  HMAC-addressed credential leases, shared route outcomes, quota fencing, governance generations,
+  and exact-cache metadata while response bytes remain local. Review fixed oversized candidate
+  iteration and unknown mutation replay. All 1,224 tests pass with 30 explicit live-backend skips;
+  repository lint/format, Python 3.12/3.14 compile, dependency, JavaScript, YAML, shell, route,
+  artifact, secret, and whitespace gates pass. Code checkpoint `2b3495c` runs as one listener
+  (PID 19176) with HTTP 200 health/readiness. Redis is still not selected and HA remains gated by
+  W4.18-W4.19. The reconciliation is `docs/reviews/w4.17-adversarial-review.md`.
 
 ## Approved vs. Proposed Scope
 
@@ -503,7 +511,7 @@ silently choosing a new design.
 ### Approved and in progress
 
 - The Phase 6 specification, ADR-007, ADR-008, and Wave 4 execution queue.
-- W4.1–W4.16 and checkpoints W4-A/W4-B are complete; W4.17 is the active next slice.
+- W4.1-W4.17 and checkpoints W4-A/W4-B are complete; W4.18 is the active next slice.
 
 ### Approved for staged implementation, not active yet
 
@@ -531,11 +539,11 @@ checkboxes to be marked complete.
 
 ## Immediate Next Action
 
-Close W4.17.9 through fresh-context adversarial review and the full repository/runtime checkpoint.
-Then continue directly into W4.18 under
-`docs/superpowers/plans/2026-09-02-wave-4-continuous-completion.md`. Keep Redis runtime selection
-inactive and preserve `WORKERS=1`, one replica, disabled-by-default OIDC, source authority, and
-every HA activation gate until lifecycle/readiness and forced-failure/load evidence are complete.
+Execute W4.18 under `docs/superpowers/plans/2026-09-02-wave-4-continuous-completion.md`: add closed
+standalone/coordinated policy validation, one lifecycle owner, dependency-aware readiness,
+drain/reconcile/rollback commands, safe deployment defaults, metrics, alerts, and runbooks. Keep
+Redis runtime selection inactive and preserve `WORKERS=1`, one replica, disabled-by-default OIDC,
+source authority, and every HA activation gate until W4.19 forced-failure/load evidence completes.
 
 ## Update Rule
 

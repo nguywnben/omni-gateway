@@ -21,6 +21,9 @@ All notable user-facing changes are documented in this file. Omni Gateway follow
 - Added fenced, bounded coordination semantics for opaque management sessions, authentication
   attempt admission, and one-time OIDC transactions across the in-memory and Redis state stores.
   Session and OIDC payloads remain authenticated and encrypted; live Redis parity is opt-in.
+- Added inactive, fenced coordination for credential leases and cooldowns, quota transitions,
+  governance invalidation, and exact-cache metadata, with opaque HMAC identifiers, fixed-cardinality
+  telemetry, bounded reference evidence, and opt-in Redis parity. Response content stays local.
 
 ### Changed
 
@@ -33,6 +36,9 @@ All notable user-facing changes are documented in this file. Omni Gateway follow
 - Local-owner login, recovery, and OIDC-start throttles now reserve attempts atomically before
   protected work, while session issue/resolve/rotate/revoke and OIDC proof consumption use one
   typed coordination boundary without changing the standalone default.
+- Credential selection now enforces a 100-candidate ceiling and shared lease/cooldown evidence;
+  exact-cache hits require matching coordinated generation and digest evidence. Runtime Redis
+  selection and multi-replica operation remain gated.
 
 ### Fixed
 
@@ -44,6 +50,8 @@ All notable user-facing changes are documented in this file. Omni Gateway follow
   cancellation during client shutdown. Coordinated runtime activation remains gated.
 - Prevented false-valued injected coordination backends from triggering local OIDC fallback and
   made session/OIDC adapters preserve the exact validated fencing epoch for later HA activation.
+- Prevented unknown routing CAS/invalidation outcomes from being replayed with a new operation ID,
+  avoiding duplicate leases or duplicate generation increments after a committed transport timeout.
 
 ## [1.4.0] - 2026-08-21
 
