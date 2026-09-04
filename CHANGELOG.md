@@ -18,6 +18,9 @@ All notable user-facing changes are documented in this file. Omni Gateway follow
 - Added Redis coordination semantic primitives, opt-in isolated live parity evidence, and bounded
   coordination operation metrics. The standalone in-memory default and runtime selection remain
   unchanged; this release does not activate HA Redis operation.
+- Added fenced, bounded coordination semantics for opaque management sessions, authentication
+  attempt admission, and one-time OIDC transactions across the in-memory and Redis state stores.
+  Session and OIDC payloads remain authenticated and encrypted; live Redis parity is opt-in.
 
 ### Changed
 
@@ -27,6 +30,9 @@ All notable user-facing changes are documented in this file. Omni Gateway follow
 - Successful provider responses with uncertain ledger settlement retain a conservative durable
   estimate instead of being released as zero spend. Readiness now actively probes the selected
   usage ledger, and compatibility reports fail closed at a bounded row ceiling.
+- Local-owner login, recovery, and OIDC-start throttles now reserve attempts atomically before
+  protected work, while session issue/resolve/rotate/revoke and OIDC proof consumption use one
+  typed coordination boundary without changing the standalone default.
 
 ### Fixed
 
@@ -36,6 +42,8 @@ All notable user-facing changes are documented in this file. Omni Gateway follow
 - Hardened inactive Redis coordination primitives against partial epoch loss, large-token
   precision loss, expired replay reuse, partial cleanup, malformed quota chronology, and
   cancellation during client shutdown. Coordinated runtime activation remains gated.
+- Prevented false-valued injected coordination backends from triggering local OIDC fallback and
+  made session/OIDC adapters preserve the exact validated fencing epoch for later HA activation.
 
 ## [1.4.0] - 2026-08-21
 

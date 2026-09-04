@@ -46,11 +46,10 @@ or Phase 5 request tracing.
 - Wave 3 completion checkpoint: `76315e7` (`docs: close wave 3 operational evidence`).
 - Completed product scope: Phases 0–5; Wave 3 was accepted by the human on 2026-08-26 through the
   instruction to start the project and execute the next plan.
-- Active approved scope: Wave 4 under accepted ADR-007/ADR-008; W4.1–W4.15 and checkpoints W4-A/W4-B
-  are complete and W4.16 is the active implementation slice.
-- State: **IN PROGRESS — W4.16 TASK 9 NEXT**. The strict opaque security-state domain, shared
-  behavioral fixture, in-process fenced reference, and Redis session lifecycle parity
-  is next. Runtime activation remains unchanged.
+- Active approved scope: Wave 4 under accepted ADR-007/ADR-008; W4.1–W4.16 and checkpoints W4-A/W4-B
+  are complete and W4.17 is the active implementation slice.
+- State: **IN PROGRESS — W4.17 NEXT**. Identity/session/security coordination is complete; routing,
+  governance, and cache coordination is next. Runtime activation remains unchanged.
 - Still gated by later slices and evidence: distributed-state activation, multiple workers/
   replicas, destructive migration, and production release activation.
 
@@ -745,7 +744,10 @@ to the W4.15 boundary.
 
 Implementation slices:
 
-Progress: Tasks 1–8 complete; Task 9 is next. Runtime selection and HA activation remain unchanged.
+Progress: complete in `f0c66bd` plus the W4.16 closure record. The shared domain, in-memory/Redis
+parity, session/authentication/OIDC adapters, live harness, metrics, adversarial reconciliation,
+1,195-test full suite, repository gates, and committed standalone runtime smoke pass. Twenty-nine
+live-backend cases skip explicitly. Runtime selection and HA activation remain unchanged.
 
 1. Define the strict opaque security-state domain and reusable behavioral fixture.
 2. Implement the in-process fenced reference for sessions, attempts, and one-time transactions.

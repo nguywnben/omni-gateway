@@ -223,7 +223,7 @@ These queue items refine Phases 4–5 and do not add to the 28-item program deno
     gates and dependency audit are clean. The committed standalone runtime has one listener and
     HTTP 200 health/readiness. Redis selection, caller migration, scale-out, and the O(n) quota
     performance boundary remain gated by W4.16-W4.19.
-- [ ] W4.16 Coordinate identity/session/security runtime state.
+- [x] W4.16 Coordinate identity/session/security runtime state.
   - [x] W4.16.1 Define the strict security coordination domain and shared contract.
   - [x] W4.16.2 Implement the in-process security-state reference.
   - [x] W4.16.3 Implement Redis session lifecycle parity.
@@ -232,7 +232,7 @@ These queue items refine Phases 4–5 and do not add to the 28-item program deno
   - [x] W4.16.6 Coordinate login, recovery, and OIDC-start attempts.
   - [x] W4.16.7 Coordinate one-time OIDC transaction proofs.
   - [x] W4.16.8 Add live parity and operability evidence.
-  - [ ] W4.16.9 Reconcile review and close the committed runtime checkpoint.
+  - [x] W4.16.9 Reconcile review and close the committed runtime checkpoint.
 - [ ] W4.17 Coordinate routing/governance/cache runtime state.
 - [ ] W4.18 Add the HA deployment gate, readiness, alerts, runbooks, and rollback.
 - [ ] W4.19 Pass failure/load gates and record the exact activation topology.

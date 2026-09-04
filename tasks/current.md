@@ -4,28 +4,27 @@
 
 - Updated: 2026-09-04 (Asia/Saigon).
 - Branch: `codex/enterprise-overhaul`.
-- Implementation baseline: W4.16 Task 8 (security coordination operability evidence).
-- Completed scope: Waves 1–3 / Phases 0–5 plus Wave 4 slices W4.1–W4.15 and checkpoints W4-A/W4-B.
+- Implementation baseline: W4.16 code checkpoint `f0c66bd` plus closure evidence.
+- Completed scope: Waves 1–3 / Phases 0–5 plus Wave 4 slices W4.1–W4.16 and checkpoints W4-A/W4-B.
 - Original program progress: 21/28 approved checklist items complete (including specification and
   Phase 6 ADR approval), exactly 75.0%; wave execution-slice checkboxes are refinements and are not
   added to that denominator.
-- Active scope: Wave 4 W4.16, identity/session/security state coordination.
-- Control state: **IN PROGRESS — W4.16 TASK 9 NEXT**.
+- Active scope: Wave 4 W4.17, routing/governance/cache state coordination.
+- Control state: **IN PROGRESS — W4.17 NEXT**.
 - Execution mode: continuous through the remaining W4.16–W4.19 queue under
   `docs/superpowers/plans/2026-09-02-wave-4-continuous-completion.md`; do not pause at internal task
   boundaries.
-- Expected worktree state at this checkpoint: Task 8 changes ready for its atomic commit.
+- Expected worktree state at this checkpoint: clean after the W4.16 closure commit.
 - Expected runtime: one Omni Gateway listener on `http://127.0.0.1:4283`; `/health` and `/ready`
   return HTTP 200.
-- Last verified full suite: 1,180 tests passed on Python 3.14.6 with 25 opt-in live backend tests
-  skipped because no test URI was configured. The W4.15–W4.16 Task 8 focused matrix passes 249
-  tests with 11 explicit live Redis skips;
+- Last verified full suite: 1,195 tests passed on Python 3.14.6 with 29 opt-in live backend tests
+  skipped because no test URI was configured. The W4.15–W4.16 closure matrix passes 253 tests with
+  11 explicit live Redis skips;
   repository-wide Ruff lint/format, compileall, pip consistency, diff, and all 45 frontend
   JavaScript syntax checks pass. No dependency, YAML, or shell file changed in this slice. The
-  dependency audit remains the clean W4.15 result because the current sandbox proxy denied a fresh
-  PyPI query; broad YAML/shell reruns were non-authoritative because Helm templates are not plain
-  YAML and the Windows host denied both WSL registration and Git Bash signal-pipe creation. Runtime
-  `be5e3b7` remains the sole listener on port 4283 and health/readiness return HTTP 200.
+  dependency audit reports no known vulnerabilities. YAML and all six shell syntax gates pass.
+  Runtime `f0c66bd` is the sole listener on port 4283 (PID 17952); health/readiness return HTTP 200,
+  and no Redis test URI or coordination runtime mode is selected.
 
 Wave 2 was accepted and pushed by the human on 2026-08-24. Wave 3 / Phases 4–5 was accepted on
 2026-08-26. ADR-007/ADR-008 and the Wave 4 queue were accepted later that day when the human again
@@ -421,14 +420,16 @@ silently choosing a new design.
   Reviewer findings were first reproduced as failing tests and reconciled. The 101-test focused
   matrix and 1,169-test full suite pass. This reference is not wired into runtime yet; Redis and HA
   activation remain gated.
-- W4.16 Tasks 3–8 security coordination: Redis now has fixed server-time Lua parity for session,
+- W4.16 security coordination: Redis now has fixed server-time Lua parity for session,
   attempt-admission, and OIDC transaction state; the standalone session, login/recovery/OIDC-start,
   and OIDC transaction services use the typed boundary. Operation evidence uses only bounded
   backend/operation/result labels. The opt-in live suite uses a unique namespace and proves
   cross-client visibility, atomic admission, one-winner consumption, and fencing; it explicitly
-  skips without `OMNI_TEST_REDIS_URI`. The 249-test focused W4.15–W4.16 matrix passes with 11 live
+  skips without `OMNI_TEST_REDIS_URI`. The 253-test focused W4.15–W4.16 matrix passes with 11 live
   skips, and Ruff, format, compileall, and diff checks are clean. Runtime Redis selection remains
-  inactive and the last full-suite evidence remains the Task 4 checkpoint until Task 9 closure.
+  inactive. Fresh-context review fixed false-valued-backend fallback and non-default fencing-epoch
+  propagation. All 1,195 tests pass with 29 explicit live skips; repository and committed-runtime
+  gates pass. The maintained reconciliation is `docs/reviews/w4.16-adversarial-review.md`.
 
 ## Approved vs. Proposed Scope
 
@@ -455,7 +456,7 @@ silently choosing a new design.
 ### Approved and in progress
 
 - The Phase 6 specification, ADR-007, ADR-008, and Wave 4 execution queue.
-- W4.1–W4.15 and checkpoints W4-A/W4-B are complete; W4.16 is the active next slice.
+- W4.1–W4.16 and checkpoints W4-A/W4-B are complete; W4.17 is the active next slice.
 
 ### Approved for staged implementation, not active yet
 
@@ -483,10 +484,10 @@ checkboxes to be marked complete.
 
 ## Immediate Next Action
 
-Execute W4.16 Task 9 from
-`docs/superpowers/plans/2026-09-02-w4.16-identity-security-coordination.md`: adversarially review
-the complete slice, reconcile findings, run the full repository gates, and close the committed
-standalone runtime checkpoint without activating Redis.
+Execute W4.17 from
+`docs/superpowers/plans/2026-09-02-wave-4-continuous-completion.md`: inventory and coordinate every
+routing-, governance-, quota-, cooldown-, and cache-affecting process-local state behind strict
+bounded in-memory/Redis semantics without selecting Redis at runtime.
 Continue without a task-boundary pause under the accepted Wave 4 completion plan. Keep the
 transport inactive and preserve `WORKERS=1`, one replica, disabled-by-default OIDC, source
 authority, and every HA activation gate.
