@@ -29,6 +29,9 @@ All notable user-facing changes are documented in this file. Omni Gateway follow
   low-cardinality alerts, and an operator runbook. No coordinated topology is activated.
 - Added a reproducible synthetic HA semantics harness and an explicit activation-disposition record
   that cannot be used as production or multi-replica evidence.
+- Added storage-owned atomic credential-pool mutation plans for SQLite, PostgreSQL, and MongoDB, and
+  separate encrypted 256-entry admission domains for credential batch previews and idempotent
+  results.
 
 ### Changed
 
@@ -47,6 +50,9 @@ All notable user-facing changes are documented in this file. Omni Gateway follow
 - Runtime coordination consumers now receive one lifecycle-owned service. Primary conversation
   steps use HMAC-addressed fenced CAS state, and coordinated MongoDB deployments cannot reuse the
   coordination Redis namespace for the legacy cache.
+- Credential identity admission and deduplication now use one coherent durable snapshot and commit;
+  batch capacity exhaustion returns HTTP 429 with retry guidance while coordination outage returns
+  a typed HTTP 503 response.
 
 ### Fixed
 
@@ -63,6 +69,9 @@ All notable user-facing changes are documented in this file. Omni Gateway follow
 - Closed lifecycle teardown leakage into later credential-routing work and corrected localization
   audits so supplemental catalogs, HTML void elements, protocol values, and backend management
   errors cannot escape coverage.
+- Prevented cross-replica duplicate credential identity admission, batch-domain capacity drift,
+  stale standalone MongoDB routing cache after a pool mutation, and ambiguous preview coordination
+  failures.
 
 ## [1.4.0] - 2026-08-21
 

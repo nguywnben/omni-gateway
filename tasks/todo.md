@@ -6,8 +6,8 @@
 
 ## Current Execution Gate
 
-- Program progress: 21/28 original checklist items complete (including specification and Phase 6
-  ADR approval), exactly 75.0%. Wave execution-slice checkboxes below refine existing phase items
+- Program progress: 24/28 original checklist items complete, exactly 85.7%. Wave execution-slice
+  checkboxes below refine existing phase items
   and do not change that denominator.
 - [x] Complete Wave 1 / Phases 0–2 at implementation commit `39fb9da`.
 - [x] Record wave governance, recovery order, and the Wave 2 execution slices in repository docs.
@@ -263,6 +263,12 @@ These queue items refine Phases 4–5 and do not add to the 28-item program deno
     single-owner device leases, fenced batch reservations, chunked response replay, and 1,270
     passing backend tests. Credential-pool fencing, batch domain capacity, Redis quota performance,
     and external two-replica evidence remain open, so activation is still denied.
+- [x] W4.19.2 Serialize pool identity mutations and bound credential-batch admission.
+  - Completed at `e02ff71`. Upsert/deduplication now executes as one storage-owned snapshot-plan-
+    write transaction across SQLite, PostgreSQL, and MongoDB; preview/idempotency domains each
+    enforce 256 live encrypted HMAC admissions with typed overload/outage responses. All 1,285
+    backend tests pass with 30 explicit live-backend skips. Redis quota worst-case measurement and
+    external two-replica failure/rollback evidence remain open, so activation is still denied.
 - [ ] Checkpoint W4-C: Phase 6 acceptance and all repository/rollback gates pass.
 - [ ] Report Wave 4 evidence and obtain human acceptance before Wave 5.
 
@@ -366,7 +372,7 @@ distributed activation, multiple workers/replicas, and release activation remain
 - [x] Approve RBAC/OIDC and HA activation ADRs before implementation.
 - [x] Implement viewer/operator/security-admin/owner and OIDC with recovery.
 - [x] Move usage, traces, and audit to the selected durable backend.
-- [ ] Move runtime coordination to Redis-capable state interfaces.
+- [x] Move runtime coordination to Redis-capable state interfaces.
 - [ ] Pass failure/load tests and only then enable multiple workers/replicas.
 
 ## Phase 7 — Ship

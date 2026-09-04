@@ -216,12 +216,12 @@ Run: `.venv\\Scripts\\python.exe -m unittest discover -s backend/tests`
 Review transaction ownership, rollback, cancellation, bounded retries, corruption handling,
 secret-free identifiers/logging, mutation invalidation ordering, and cross-backend parity.
 
-- [ ] **Step 4: Record exact evidence and retained external-topology blockers**
+- [x] **Step 4: Record exact evidence and retained external-topology blockers**
 
 Document observed counts and unavailable evidence. Keep HA activation denied until Redis quota and
 real two-replica tests pass.
 
-- [ ] **Step 5: Commit the verified checkpoint without pushing**
+- [x] **Step 5: Commit the verified checkpoint without pushing**
 
 ```powershell
 git add CHANGELOG.md docs/reviews/w4c-coordination-blocker-review.md tasks/current.md tasks/todo.md

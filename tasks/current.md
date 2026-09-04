@@ -4,17 +4,17 @@
 
 - Updated: 2026-09-04 (Asia/Saigon).
 - Branch: `codex/enterprise-overhaul`.
-- Last committed implementation checkpoint: `1ff148e` (W4.18-W4.19.1).
-- Workspace scope complete: W4.18 lifecycle, W4.19 HA evidence/disposition, and the first W4-C
-  process-local-state blocker closure.
-- Original program progress: 23/28 approved checklist items complete (82.1%). Wave execution-slice
+- Last committed implementation checkpoint: `e02ff71` (W4.18-W4.19.2).
+- Workspace scope complete: W4.18 lifecycle, W4.19 HA evidence/disposition, and the local W4-C
+  process-local-state and bounded-capacity blocker closure.
+- Original program progress: 24/28 approved checklist items complete (85.7%). Wave execution-slice
   checkboxes refine those items and are not added to the denominator.
 - Control state: **W4-C BLOCKER CLOSURE IN PROGRESS; HA ACTIVATION DENIED**.
 - Supported runtime: standalone, one worker, one replica. OIDC remains disabled by default.
-- Current runtime: committed `1ff148e` on `http://127.0.0.1:4283`; health/readiness returned HTTP
-  200, including storage, usage-ledger, and coordination checks. The authenticated Vietnamese
-  dashboard, audit, and request-trace pages loaded without console errors or horizontal overflow at
-  a 451-pixel viewport.
+- Current runtime: committed `e02ff71` is running on `http://127.0.0.1:4283`; health/readiness
+  returned HTTP 200, including storage, usage-ledger, and coordination checks. The authenticated
+  Vietnamese dashboard, audit, and request-trace pages loaded without console errors or horizontal
+  overflow at a 451-pixel viewport.
 - Worktree is clean at the recorded checkpoint after this progress-ledger commit.
 
 ## What W4.18 Delivered
@@ -66,22 +66,27 @@ Activation was correctly denied. `SUPPORTED_HA_ACTIVATION_RECORDS` is empty, `WO
   compressed into bounded chunks and published through one digest-bound root transition. Exact
   ownership is checked before every mutation; an unknown post-mutation failure cannot release the
   reservation and permit unsafe replay.
-- Full backend suite: 1,270 passed, 30 opt-in live-backend skips. Ruff lint/format, compileall, diff
-  checks, `pip check`, PyPI vulnerability audit, strict YAML lint, Compose validation, JavaScript
-  syntax, four i18n audits, and a 94-test affected matrix pass.
+- Credential upsert and deduplication now plan and commit against one storage-owned snapshot using
+  SQLite writer transactions, PostgreSQL table locking, or a MongoDB transaction-conflict gate.
+  The former process-local pool locks are gone.
+- Preview and idempotency each enforce an encrypted 256-live-entry HMAC admission registry using
+  coordination time. Completion retains replay capacity, release reclaims it, overload returns
+  HTTP 429 with retry guidance, and dependency loss returns a typed HTTP 503 envelope.
+- Full backend suite: 1,285 passed, 30 opt-in live-backend skips. Backend Ruff lint/format,
+  compileall, diff checks, `pip check`, and a 63-test affected matrix pass. No dependency,
+  deployment, frontend, or locale asset changed in W4.19.2, so their earlier clean gates remain the
+  latest evidence rather than being falsely reported as rerun.
 
 The implementation review is `docs/reviews/w4c-coordination-blocker-review.md`.
 
 ## Retained HA Blockers
 
-1. Credential-pool upsert/deduplication still uses process-local locks and lacks storage-bound
-   fencing; batch coordination also needs a dedicated 256-entry domain-capacity proof.
-2. Worst-case Redis quota transition cost at the 100,000-record ceiling has no live measurement.
-3. Redis plus shared database, two-replica partition/restart, durable audit/usage completeness, and
+1. Worst-case Redis quota transition cost at the 100,000-record ceiling has no live measurement.
+2. Redis plus shared database, two-replica partition/restart, durable audit/usage completeness, and
    rollback evidence did not run.
 
-These blockers prevent the remaining two Phase 6 checklist items and W4-C from being marked
-complete. They do not weaken the safe standalone release.
+These blockers prevent the remaining Phase 6 failure/load item and W4-C from being marked complete.
+They do not weaken the safe standalone release.
 
 Separately, Phase 7 should migrate seven remaining Pydantic v2 class-based `Config` declarations to
 `ConfigDict` before Pydantic v3. This pre-existing deprecation is not an HA activation blocker and
@@ -89,12 +94,10 @@ did not fail the supported test suite.
 
 ## Immediate Next Action
 
-1. Specify and implement storage-bound credential-pool fencing without introducing lease-expiry
-   split-brain writes.
-2. Add and prove the dedicated 256-entry credential-batch domain capacity gate.
-3. Redesign or measure the worst-case Redis quota transition, then run the required external
+1. Redesign or measure the worst-case Redis quota transition at the 100,000-record ceiling.
+2. Run the required external
    two-replica topology and rollback matrix when infrastructure is available.
-4. Do not enter Wave 5, raise worker/replica limits, populate an activation record, enable OIDC, or
+3. Do not enter Wave 5, raise worker/replica limits, populate an activation record, enable OIDC, or
    mutate production data without a separate accepted plan and required evidence.
 
 ## Authoritative Reading Order
@@ -109,9 +112,11 @@ did not fail the supported test suite.
 8. `docs/reviews/w4.19-adversarial-review.md`
 9. `docs/specs/provider-authorization-coordination.md`
 10. `docs/specs/credential-batch-coordination.md`
-11. `docs/reviews/w4c-coordination-blocker-review.md`
-12. `tasks/todo.md`
-13. `git status`, `git log`, and current verification output
+11. `docs/specs/credential-pool-atomic-mutation.md`
+12. `docs/reviews/w4c-coordination-blocker-review.md`
+13. `docs/superpowers/plans/2026-09-04-w4c-credential-mutation-capacity.md`
+14. `tasks/todo.md`
+15. `git status`, `git log`, and current verification output
 
 If records conflict, accepted ADRs constrain the implementation and current repository evidence
 constrains every completion claim. Skipped or unavailable evidence is never a pass.
