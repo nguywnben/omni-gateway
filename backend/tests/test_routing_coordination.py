@@ -45,6 +45,27 @@ class _RecordingStore(InMemoryStateStore):
         return await super().compare_and_set(request)
 
 
+class _UnknownOutcomeStore(_RecordingStore):
+    def __init__(self, *, clock) -> None:
+        super().__init__(clock=clock)
+        self.fail_next_cas = True
+        self.fail_next_invalidation = True
+
+    async def compare_and_set(self, request):
+        result = await super().compare_and_set(request)
+        if self.fail_next_cas:
+            self.fail_next_cas = False
+            raise CoordinationUnavailableError("unknown CAS outcome")
+        return result
+
+    async def invalidate(self, request):
+        result = await super().invalidate(request)
+        if self.fail_next_invalidation:
+            self.fail_next_invalidation = False
+            raise CoordinationUnavailableError("unknown invalidation outcome")
+        return result
+
+
 class RoutingCoordinationAdapterTests(unittest.IsolatedAsyncioTestCase):
     def setUp(self) -> None:
         self.clock = _Clock()
@@ -82,6 +103,24 @@ class RoutingCoordinationAdapterTests(unittest.IsolatedAsyncioTestCase):
             "primary", "alice@example.json", ttl_seconds=10, max_concurrency=1
         )
         self.assertIsNotNone(after_expiry)
+
+    async def test_unknown_mutation_outcomes_retry_the_same_operation(self) -> None:
+        store = _UnknownOutcomeStore(clock=self.clock)
+        adapter = RoutingCoordinationAdapter(
+            store,
+            identifier_key=b"u" * 32,
+            fencing_epoch=1,
+        )
+
+        lease = await adapter.acquire_credential(
+            "primary", "unknown.json", ttl_seconds=10, max_concurrency=2
+        )
+        self.assertIsNotNone(lease)
+        self.assertEqual((await adapter.read_credential("primary", "unknown.json")).in_flight, 1)
+
+        generation = await adapter.invalidate(CACHE_SCOPE_EXACT)
+        self.assertEqual(generation, 1)
+        self.assertEqual(await adapter.current_generation(CACHE_SCOPE_EXACT), 1)
 
     async def test_store_receives_only_domain_separated_hmac_identifiers(self) -> None:
         lease = await self.first.acquire_credential(

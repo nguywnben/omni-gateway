@@ -17,6 +17,7 @@ from core.coordination import (
     CasRequest,
     CasSnapshot,
     CoordinationCorruptError,
+    CoordinationReconciliationRequiredError,
     CoordinationUnavailableError,
     InvalidationRequest,
     validate_epoch,
@@ -228,6 +229,26 @@ class RoutingCoordinationAdapter:
     def _operation_id(prefix: str) -> str:
         return f"{prefix}-{secrets.token_hex(16)}"
 
+    async def _compare_and_set_with_replay(self, request: CasRequest):
+        """Retry one unknown transport outcome with the identical operation ID."""
+
+        try:
+            return await self._store.compare_and_set(request)
+        except CoordinationReconciliationRequiredError:
+            raise
+        except CoordinationUnavailableError:
+            return await self._store.compare_and_set(request)
+
+    async def _invalidate_with_replay(self, request: InvalidationRequest):
+        """Resolve one unknown invalidation outcome through backend replay evidence."""
+
+        try:
+            return await self._store.invalidate(request)
+        except CoordinationReconciliationRequiredError:
+            raise
+        except CoordinationUnavailableError:
+            return await self._store.invalidate(request)
+
     @staticmethod
     def _decode_lease(snapshot: CasSnapshot) -> tuple[list[tuple[str, int]], int]:
         if snapshot.payload is None:
@@ -316,7 +337,7 @@ class RoutingCoordinationAdapter:
                 return None
             expires_ms = now_ms + math.ceil(ttl * 1000)
             active.append((lease_id, expires_ms))
-            result = await self._store.compare_and_set(
+            result = await self._compare_and_set_with_replay(
                 CasRequest(
                     key,
                     snapshot.revision or 0,
@@ -344,7 +365,7 @@ class RoutingCoordinationAdapter:
             if len(retained) == len(active):
                 _increment_metric("lease_release", "miss")
                 return False
-            result = await self._store.compare_and_set(
+            result = await self._compare_and_set_with_replay(
                 CasRequest(
                     lease.record_key,
                     snapshot.revision or 0,
@@ -471,7 +492,7 @@ class RoutingCoordinationAdapter:
                 )
             if latency is not None:
                 latencies = [*latencies, latency][-MAX_LATENCY_SAMPLES:]
-            result = await self._store.compare_and_set(
+            result = await self._compare_and_set_with_replay(
                 CasRequest(
                     key,
                     snapshot.revision or 0,
@@ -506,7 +527,7 @@ class RoutingCoordinationAdapter:
     async def invalidate(self, scope: str) -> int:
         if scope not in VALID_INVALIDATION_SCOPES:
             raise ValueError("Invalidation scope is invalid.")
-        result = await self._store.invalidate(
+        result = await self._invalidate_with_replay(
             InvalidationRequest(
                 scope,
                 self._fencing_epoch,
@@ -554,7 +575,7 @@ class RoutingCoordinationAdapter:
         )
         for _attempt in range(MAX_COORDINATION_RETRIES):
             snapshot = await self._store.read_cas(key, epoch=self._fencing_epoch)
-            result = await self._store.compare_and_set(
+            result = await self._compare_and_set_with_replay(
                 CasRequest(
                     key,
                     snapshot.revision or 0,
