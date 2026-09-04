@@ -1,9 +1,7 @@
 # Default values for omni-gateway.
 #
-# IMPORTANT: Omni Gateway 1.x supports exactly ONE replica and ONE worker.
-# Credential reservations, cooldowns, and rate-limit windows are held in
-# process memory. Do not increase replicaCount until distributed state
-# coordination ships.
+# IMPORTANT: this release supports exactly ONE replica and ONE worker. W4.19
+# recorded no coordinated activation. The chart rejects other replica counts.
 
 image:
   repository: nguywnben/omni-gateway
@@ -52,6 +50,11 @@ env:
   HOST: 0.0.0.0
   PORT: "4283"
   WORKERS: "1"
+  OMNI_RUNTIME_MODE: standalone
+  OMNI_REPLICA_COUNT: "1"
+  OMNI_COORDINATION_NAMESPACE: ""
+  OMNI_DEPLOYMENT_ID: ""
+  OMNI_COORDINATION_EPOCH: ""
   LOG_LEVEL: info
   ROUTING_STRATEGY: balanced
   PREFERRED_PROVIDER: ""
@@ -73,7 +76,8 @@ env:
 # Secret values. When existingSecret is set, it is used as-is and the
 # inline values below are ignored. Keys: API_KEY, PANEL_PASSWORD,
 # SETUP_TOKEN, METRICS_TOKEN, OTEL_EXPORTER_OTLP_HEADERS,
-# LANGFUSE_PUBLIC_KEY, LANGFUSE_SECRET_KEY.
+# LANGFUSE_PUBLIC_KEY, LANGFUSE_SECRET_KEY, REDIS_URL,
+# OMNI_COORDINATION_KEY.
 secrets:
   existingSecret: ""
   apiKey: ""
@@ -83,6 +87,8 @@ secrets:
   otelExporterHeaders: ""
   langfusePublicKey: ""
   langfuseSecretKey: ""
+  redisUrl: ""
+  coordinationKey: ""
 
 # Prometheus Operator integration.
 serviceMonitor:

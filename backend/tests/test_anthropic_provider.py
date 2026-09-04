@@ -15,19 +15,36 @@ if str(BACKEND_DIR) not in sys.path:
 
 from core.anthropic import (
     ANTHROPIC_REDIRECT_URI,
-    _oauth_flows,
     anthropic_response_to_gemini,
     anthropic_stream_line_to_gemini,
     build_anthropic_headers,
+    complete_claude_oauth,
     create_claude_oauth_url,
     gemini_request_to_anthropic,
     parse_anthropic_model_ids,
 )
+from core.provider_authorization_coordination import (
+    ProviderAuthorizationService,
+    configure_provider_authorization_service,
+)
+from core.state_store import InMemoryStateStore
 
 
 class AnthropicProviderTests(unittest.IsolatedAsyncioTestCase):
-    def tearDown(self):
-        _oauth_flows.clear()
+    async def asyncSetUp(self) -> None:
+        self.store = InMemoryStateStore()
+        self.authorization_key = b"a" * 32
+        configure_provider_authorization_service(
+            ProviderAuthorizationService(
+                self.store,
+                key=self.authorization_key,
+                fencing_epoch=1,
+            )
+        )
+
+    async def asyncTearDown(self) -> None:
+        configure_provider_authorization_service(None)
+        await self.store.close()
 
     def test_model_parser_is_bounded_and_deduplicated(self):
         payload = {
@@ -71,6 +88,49 @@ class AnthropicProviderTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(query["code_challenge_method"], ["S256"])
         self.assertEqual(query["code"], ["true"])
         self.assertEqual(query["state"], [result["state"]])
+        self.assertTrue(result["state"].startswith("claude_"))
+
+    async def test_oauth_completion_can_move_to_another_replica(self):
+        with patch(
+            "core.anthropic.get_claude_client_id",
+            AsyncMock(return_value="public-client-id"),
+        ):
+            authorization = await create_claude_oauth_url()
+
+        configure_provider_authorization_service(
+            ProviderAuthorizationService(
+                self.store,
+                key=self.authorization_key,
+                fencing_epoch=1,
+            )
+        )
+        exchange = AsyncMock(
+            return_value={
+                "access_token": "access-secret",
+                "refresh_token": "refresh-secret",
+                "expires_in": 3600,
+            }
+        )
+        stored = AsyncMock(return_value={"action": "created", "filename": "claude-account.json"})
+        with (
+            patch("core.anthropic._exchange_claude_token", exchange),
+            patch(
+                "core.anthropic.get_claude_oauth_token_url",
+                AsyncMock(return_value="https://console.anthropic.com/v1/oauth/token"),
+            ),
+            patch(
+                "core.anthropic.fetch_anthropic_model_ids",
+                AsyncMock(return_value=["claude-sonnet-4-6"]),
+            ),
+            patch("core.anthropic.credential_manager.add_primary_credential", stored),
+        ):
+            result = await complete_claude_oauth("authorization-code", authorization["state"])
+
+        exchange_payload = exchange.await_args.args[0]
+        self.assertEqual(exchange_payload["client_id"], "public-client-id")
+        self.assertEqual(len(exchange_payload["code_verifier"]), 128)
+        self.assertEqual(result["model_count"], 1)
+        self.assertNotIn("access_token", result)
 
     def test_request_translation_preserves_system_tools_and_generation_options(self):
         payload = gemini_request_to_anthropic(

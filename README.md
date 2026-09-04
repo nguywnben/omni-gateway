@@ -245,7 +245,9 @@ Omni Gateway reads configuration from environment variables first, then stored c
 | `HOST` | `0.0.0.0` | Bind address. |
 | `PORT` | `4283` | HTTP port. |
 | `HOST_PORT` | `4283` | Host-side port used only by Docker Compose. |
-| `WORKERS` | `1` | Supported worker count for 1.x. Other values are rejected until reservations, cooldowns, sessions, and usage aggregation are coordinated across processes. |
+| `WORKERS` | `1` | Supported worker count. Values above one require an exact activation record compiled into the running release; the current allowlist is empty. |
+| `OMNI_RUNTIME_MODE` | `standalone` | Runtime coordination mode. `coordinated` is rejected unless every prerequisite and exact activation record is present. |
+| `OMNI_REPLICA_COUNT` | `1` | Declared application replica count. The current release accepts one only. |
 | `CORS_ORIGINS` | empty | Comma-separated browser origins allowed to call the API cross-origin. Leave empty for same-origin console usage. |
 | `CORS_ORIGIN_REGEX` | empty | Optional regex for managed dynamic browser origins. |
 | `API_KEY` | generated automatically | Preferred key for public client API requests. Must start with `sk-ogw-`. |
@@ -286,7 +288,7 @@ Omni Gateway reads configuration from environment variables first, then stored c
 | `RETURN_THOUGHTS_TO_FRONTEND` | `true` | Include model reasoning fields when available. |
 | `MONGODB_URI` | empty | Enables MongoDB storage when set. |
 | `POSTGRESQL_URI` | empty | Enables PostgreSQL storage when set. |
-| `REDIS_URL` | empty | Enables Redis-backed caches/session state when set. |
+| `REDIS_URL` | empty | Redis endpoint. It does not activate HA by itself; coordinated mode also requires a shared durable backend, namespace/key/epoch settings, and an accepted activation record. |
 | `CODE_ASSIST_CLIENT_ID` | bundled desktop client | Optional override for the Code Assist OAuth client ID. |
 | `CODE_ASSIST_CLIENT_SECRET` | bundled desktop client | Optional override for the Code Assist OAuth client secret. |
 | `ANTIGRAVITY_CLIENT_ID` | bundled desktop client | Optional override for the Google Antigravity OAuth client ID. It can also be managed from the Providers page. |

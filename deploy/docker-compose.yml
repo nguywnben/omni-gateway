@@ -19,6 +19,12 @@ services:
       - PORT=${PORT:-4283}
       - HOST=${HOST:-0.0.0.0}
       - WORKERS=${WORKERS:-1}
+      - OMNI_RUNTIME_MODE=${OMNI_RUNTIME_MODE:-standalone}
+      - OMNI_REPLICA_COUNT=${OMNI_REPLICA_COUNT:-1}
+      - OMNI_COORDINATION_NAMESPACE=${OMNI_COORDINATION_NAMESPACE:-}
+      - OMNI_DEPLOYMENT_ID=${OMNI_DEPLOYMENT_ID:-}
+      - OMNI_COORDINATION_KEY=${OMNI_COORDINATION_KEY:-}
+      - OMNI_COORDINATION_EPOCH=${OMNI_COORDINATION_EPOCH:-}
       - CORS_ORIGINS=${CORS_ORIGINS:-}
       - PANEL_SESSION_TTL_SECONDS=${PANEL_SESSION_TTL_SECONDS:-86400}
       - PANEL_COOKIE_SECURE=${PANEL_COOKIE_SECURE:-}
@@ -80,7 +86,7 @@ services:
       - /tmp:rw,noexec,nosuid,size=64m
     security_opt:
       - no-new-privileges:true
-    stop_grace_period: 30s
+    stop_grace_period: 45s
     logging:
       driver: json-file
       options:

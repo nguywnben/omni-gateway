@@ -5,7 +5,7 @@ from __future__ import annotations
 import sys
 import unittest
 from pathlib import Path
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, patch
 
 BACKEND_DIR = Path(__file__).resolve().parents[1]
 if str(BACKEND_DIR) not in sys.path:
@@ -31,6 +31,21 @@ class MongoDBDriverTests(unittest.IsolatedAsyncioTestCase):
         self.assertIsNone(manager._client)
         self.assertIsNone(manager._db)
         self.assertFalse(manager._initialized)
+
+    async def test_coordinated_runtime_never_reuses_coordination_redis_as_legacy_cache(self):
+        manager = MongoDBManager()
+        with patch.dict(
+            "os.environ",
+            {
+                "OMNI_RUNTIME_MODE": "coordinated",
+                "REDIS_URL": "redis://coordination-secret/0",
+            },
+            clear=False,
+        ):
+            await manager._init_redis()
+
+        self.assertIsNone(manager._redis)
+        self.assertFalse(manager._redis_enabled)
 
 
 if __name__ == "__main__":

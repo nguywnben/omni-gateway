@@ -80,10 +80,17 @@ its mutation and replay record, proving a retried operation is replayed rather t
 They are not timing-based live cancellation tests. Both paths keep Redis URIs, credentials, and
 driver exception text out of diagnostics and metric labels.
 
-This evidence does not activate HA Redis selection, `/ready` checks, deployment changes,
-multi-worker/replica operation, or caller migration. W4.18 activation still requires an explicit
-runtime-selection and lifecycle design, readiness and failure-policy review, safe deployment and
-rollback procedures, multi-worker/replica validation, and migrated callers.
+W4.18 adds three fixed-cardinality runtime series: `omni_ha_runtime_ready`,
+`omni_ha_coordination_available`, and `omni_ha_runtime_info{mode,state}`. `/ready` now fails closed
+when the selected lifecycle is starting, draining, reconciling, unavailable, or closed; `/health`
+remains a process-only liveness probe. Two alerts cover sustained runtime unavailability and a
+coordinated dependency failure. No URI, namespace, deployment ID, operation ID, or exception text
+is exported.
+
+This implementation does not activate multi-replica operation. Compose and Helm remain standalone
+and one-replica by default, Helm rejects a higher replica count, and coordinated startup requires an
+exact activation record that a future release may add only after forced-failure and measured load
+evidence. W4.19 deliberately added no record.
 
 ## Symptom runbooks
 
@@ -92,3 +99,4 @@ rollback procedures, multi-worker/replica validation, and migrated callers.
 - [Quota, budget, or capacity exhaustion](runbooks/capacity-exhaustion.md)
 - [Storage unavailable](runbooks/storage-unavailable.md)
 - [Unknown model pricing](runbooks/unknown-pricing.md)
+- [HA lifecycle and coordination](runbooks/ha-lifecycle.md)

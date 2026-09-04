@@ -55,6 +55,7 @@ from core.identity.oidc_login import (
     OidcLoginError,
     OidcLoginService,
     close_oidc_login_service,
+    configure_oidc_transaction_coordination,
     get_or_initialize_oidc_login_service,
 )
 from core.identity.oidc_policy import (
@@ -159,6 +160,7 @@ __all__ = [
     "OidcLoginError",
     "OidcLoginService",
     "close_oidc_login_service",
+    "configure_oidc_transaction_coordination",
     "get_or_initialize_oidc_login_service",
     "OIDC_POLICY_SCHEMA_VERSION",
     "OIDC_CALLBACK_PATH",

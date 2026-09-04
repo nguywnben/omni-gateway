@@ -24,6 +24,11 @@ All notable user-facing changes are documented in this file. Omni Gateway follow
 - Added inactive, fenced coordination for credential leases and cooldowns, quota transitions,
   governance invalidation, and exact-cache metadata, with opaque HMAC identifiers, fixed-cardinality
   telemetry, bounded reference evidence, and opt-in Redis parity. Response content stays local.
+- Added a fail-closed HA runtime lifecycle with durable/shared namespace binding, coordinated
+  dependency readiness, dry-run-first drain/epoch/reconcile/rollback operations, deployment guards,
+  low-cardinality alerts, and an operator runbook. No coordinated topology is activated.
+- Added a reproducible synthetic HA semantics harness and an explicit activation-disposition record
+  that cannot be used as production or multi-replica evidence.
 
 ### Changed
 
@@ -39,6 +44,9 @@ All notable user-facing changes are documented in this file. Omni Gateway follow
 - Credential selection now enforces a 100-candidate ceiling and shared lease/cooldown evidence;
   exact-cache hits require matching coordinated generation and digest evidence. Runtime Redis
   selection and multi-replica operation remain gated.
+- Runtime coordination consumers now receive one lifecycle-owned service. Primary conversation
+  steps use HMAC-addressed fenced CAS state, and coordinated MongoDB deployments cannot reuse the
+  coordination Redis namespace for the legacy cache.
 
 ### Fixed
 
@@ -52,6 +60,9 @@ All notable user-facing changes are documented in this file. Omni Gateway follow
   made session/OIDC adapters preserve the exact validated fencing epoch for later HA activation.
 - Prevented unknown routing CAS/invalidation outcomes from being replayed with a new operation ID,
   avoiding duplicate leases or duplicate generation increments after a committed transport timeout.
+- Closed lifecycle teardown leakage into later credential-routing work and corrected localization
+  audits so supplemental catalogs, HTML void elements, protocol values, and backend management
+  errors cannot escape coverage.
 
 ## [1.4.0] - 2026-08-21
 

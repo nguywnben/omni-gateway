@@ -16,7 +16,7 @@ class ObservabilityAssetTests(unittest.TestCase):
         path = ROOT / "deploy" / "observability" / "prometheus-alerts.yml"
         data = yaml.safe_load(path.read_text(encoding="utf-8"))
         rules = data["groups"][0]["rules"]
-        self.assertEqual(len(rules), 5)
+        self.assertEqual(len(rules), 7)
         for rule in rules:
             self.assertIn(rule["labels"]["severity"], {"warning", "critical"})
             self.assertRegex(rule["for"], r"^\d+[ms]$")

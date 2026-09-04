@@ -233,7 +233,7 @@ These queue items refine Phases 4–5 and do not add to the 28-item program deno
   - [x] W4.16.7 Coordinate one-time OIDC transaction proofs.
   - [x] W4.16.8 Add live parity and operability evidence.
   - [x] W4.16.9 Reconcile review and close the committed runtime checkpoint.
-- [ ] W4.17 Coordinate routing/governance/cache runtime state.
+- [x] W4.17 Coordinate routing/governance/cache runtime state.
   - [x] W4.17.1 Inventory state ownership and accept the strict coordination contract.
   - [x] W4.17.2 Add readable fenced-record parity.
   - [x] W4.17.3 Implement the semantic routing/cache coordination adapter.
@@ -243,16 +243,26 @@ These queue items refine Phases 4–5 and do not add to the 28-item program deno
   - [x] W4.17.7 Coordinate governance cache invalidation.
   - [x] W4.17.8 Add operability, live parity, and bounded performance evidence.
   - [x] W4.17.9 Reconcile review and close the committed runtime checkpoint.
-- [ ] W4.18 Add the HA deployment gate, readiness, alerts, runbooks, and rollback.
+- [x] W4.18 Add the HA deployment gate, readiness, alerts, runbooks, and rollback.
   - [x] W4.18.1 Specify policy, binding, lifecycle, commands, and activation boundary.
   - [x] W4.18.2 Implement and verify the closed runtime policy parser.
   - [x] W4.18.3 Implement persistent binding and namespace-loss defense.
-  - [ ] W4.18.4 Inject one lifecycle-owned coordination service into all consumers.
-  - [ ] W4.18.5 Add dependency-aware readiness and low-cardinality evidence.
-  - [ ] W4.18.6 Add dry-run-first lifecycle and rollback commands.
-  - [ ] W4.18.7 Harden Compose, Helm, container, alerts, and runbooks.
-  - [ ] W4.18.8 Reconcile review and close the runtime checkpoint.
-- [ ] W4.19 Pass failure/load gates and record the exact activation topology.
+  - [x] W4.18.4 Inject one lifecycle-owned coordination service into all consumers.
+  - [x] W4.18.5 Add dependency-aware readiness and low-cardinality evidence.
+  - [x] W4.18.6 Add dry-run-first lifecycle and rollback commands.
+  - [x] W4.18.7 Harden Compose, Helm, container, alerts, and runbooks.
+  - [x] W4.18.8 Reconcile review and close the runtime checkpoint.
+- [x] W4.19 Run the available failure/load gates and record the activation disposition.
+  - Completed on 2026-09-04 with a reproducible non-activation harness, explicit external-evidence
+    inventory, 1,254 passing backend tests, clean repository/i18n/dependency gates, and a denied HA
+    activation decision. No Redis test URI, container daemon, Helm renderer, or two-replica topology
+    was available. Process-local provider-flow/batch mutation state and unmeasured worst-case Redis
+    quota cost remain blockers; the activation allowlist is empty and one worker/replica is enforced.
+- [x] W4.19.1 Replace process-local provider authorization/device state and batch idempotency.
+  - Completed in the post-W4.19 blocker-closure checkpoint with encrypted OIDC/CAS state,
+    single-owner device leases, fenced batch reservations, chunked response replay, and 1,270
+    passing backend tests. Credential-pool fencing, batch domain capacity, Redis quota performance,
+    and external two-replica evidence remain open, so activation is still denied.
 - [ ] Checkpoint W4-C: Phase 6 acceptance and all repository/rollback gates pass.
 - [ ] Report Wave 4 evidence and obtain human acceptance before Wave 5.
 
@@ -354,8 +364,8 @@ distributed activation, multiple workers/replicas, and release activation remain
 ## Phase 6 — Identity and HA
 
 - [x] Approve RBAC/OIDC and HA activation ADRs before implementation.
-- [ ] Implement viewer/operator/security-admin/owner and OIDC with recovery.
-- [ ] Move usage, traces, and audit to the selected durable backend.
+- [x] Implement viewer/operator/security-admin/owner and OIDC with recovery.
+- [x] Move usage, traces, and audit to the selected durable backend.
 - [ ] Move runtime coordination to Redis-capable state interfaces.
 - [ ] Pass failure/load tests and only then enable multiple workers/replicas.
 

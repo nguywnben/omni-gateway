@@ -24,5 +24,5 @@ Omni Gateway has been deployed.
    Scrapes must send: Authorization: Bearer <METRICS_TOKEN>
    {{- end }}
 
-NOTE: Omni Gateway 1.x runs as a single replica by design. Do not scale the
-Deployment horizontally until distributed state coordination ships.
+NOTE: This release enforces one worker and one replica. W4.19 recorded no
+coordinated activation topology. See docs/runbooks/ha-lifecycle.md.

@@ -6,8 +6,6 @@ import base64
 import hashlib
 import json
 import os
-import secrets
-import time
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List
@@ -23,6 +21,11 @@ from config import (
 )
 from core.credential_manager import credential_manager
 from core.httpx_client import get_async, post_async
+from core.provider_authorization_coordination import (
+    ProviderAuthorizationError,
+    get_provider_authorization_service,
+    is_provider_authorization_state,
+)
 from core.provider_registry import (
     ANTHROPIC,
     MAX_DECLARED_MODELS,
@@ -35,8 +38,6 @@ CLAUDE_OAUTH_BETA = "claude-code-20250219,oauth-2025-04-20"
 CLAUDE_SCOPE = "org:create_api_key user:profile user:inference"
 ANTHROPIC_REDIRECT_URI = "http://localhost:4283/callback"
 CLAUDE_FLOW_TTL_SECONDS = 15 * 60
-MAX_CLAUDE_FLOWS = 256
-_oauth_flows: Dict[str, Dict[str, Any]] = {}
 _stream_tool_blocks: Dict[str, Dict[int, Dict[str, Any]]] = {}
 
 
@@ -175,30 +176,71 @@ def _base64url(value: bytes) -> str:
     return base64.urlsafe_b64encode(value).rstrip(b"=").decode("ascii")
 
 
-def _prune_oauth_flows() -> None:
-    cutoff = time.time() - CLAUDE_FLOW_TTL_SECONDS
-    for state in list(_oauth_flows):
-        if float(_oauth_flows[state].get("created_at", 0)) < cutoff:
-            _oauth_flows.pop(state, None)
-    while len(_oauth_flows) >= MAX_CLAUDE_FLOWS:
-        _oauth_flows.pop(next(iter(_oauth_flows)), None)
-
-
 def is_claude_oauth_state(state: str | None) -> bool:
-    """Return whether a callback state belongs to an active Claude Code flow."""
-    _prune_oauth_flows()
-    return bool(state and state in _oauth_flows)
+    """Return whether callback state is syntactically routed to Claude Code."""
+    return is_provider_authorization_state("claude", state)
+
+
+def _decode_claude_authorization(payload: bytes) -> Dict[str, str]:
+    try:
+        pairs = json.loads(payload, object_pairs_hook=lambda values: values)
+        if type(pairs) is not list or any(type(pair) is not tuple for pair in pairs):
+            raise ValueError
+        flow = dict(pairs)
+        if len(flow) != len(pairs) or set(flow) != {
+            "client_id",
+            "code_verifier",
+            "schema_version",
+        }:
+            raise ValueError
+        client_id = flow["client_id"]
+        verifier = flow["code_verifier"]
+        if (
+            flow["schema_version"] != 1
+            or type(client_id) is not str
+            or not 1 <= len(client_id) <= 1024
+            or not client_id.isprintable()
+            or type(verifier) is not str
+            or len(verifier) != 128
+            or any(
+                character not in "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_"
+                for character in verifier
+            )
+        ):
+            raise ValueError
+        return {"client_id": client_id, "code_verifier": verifier}
+    except Exception:
+        raise AnthropicError(
+            "The Claude Code authorization session was not found or has expired."
+        ) from None
 
 
 async def create_claude_oauth_url() -> Dict[str, str]:
-    _prune_oauth_flows()
-    state = secrets.token_urlsafe(32)
     verifier = _base64url(os.urandom(96))
     challenge = _base64url(hashlib.sha256(verifier.encode("ascii")).digest())
     client_id = await get_claude_client_id()
     authorize_url = normalize_claude_oauth_url(
         await get_claude_oauth_authorize_url(), "Claude authorization endpoint"
     )
+    try:
+        state = await get_provider_authorization_service().create(
+            "claude",
+            json.dumps(
+                {
+                    "client_id": client_id,
+                    "code_verifier": verifier,
+                    "schema_version": 1,
+                },
+                ensure_ascii=True,
+                separators=(",", ":"),
+                sort_keys=True,
+            ).encode("ascii"),
+            ttl_seconds=CLAUDE_FLOW_TTL_SECONDS,
+        )
+    except ProviderAuthorizationError:
+        raise AnthropicError(
+            "The Claude Code authorization session could not be started.", 503
+        ) from None
     params = {
         "code": "true",
         "client_id": client_id,
@@ -208,11 +250,6 @@ async def create_claude_oauth_url() -> Dict[str, str]:
         "code_challenge": challenge,
         "code_challenge_method": "S256",
         "state": state,
-    }
-    _oauth_flows[state] = {
-        "created_at": time.time(),
-        "code_verifier": verifier,
-        "client_id": client_id,
     }
     return {
         "auth_url": f"{authorize_url}?{urlencode(params)}",
@@ -244,7 +281,6 @@ async def _exchange_claude_token(payload: Dict[str, Any], token_url: str) -> Dic
 
 
 async def complete_claude_oauth(code: str, state: str) -> Dict[str, Any]:
-    _prune_oauth_flows()
     raw_code = str(code or "").strip()
     submitted_state = str(state or "").strip()
     if "#" in raw_code:
@@ -254,8 +290,11 @@ async def complete_claude_oauth(code: str, state: str) -> Dict[str, Any]:
         raise AnthropicError("Enter the authorization code shown by Claude.")
     if "://" in raw_code or "code=" in raw_code:
         raise AnthropicError("Enter the Claude authorization code, not a callback URL.")
-    flow = _oauth_flows.pop(submitted_state, None)
-    if not submitted_state or not flow:
+    try:
+        flow = _decode_claude_authorization(
+            await get_provider_authorization_service().consume("claude", submitted_state)
+        )
+    except ProviderAuthorizationError:
         raise AnthropicError("The Claude Code authorization session was not found or has expired.")
     token_url = await get_claude_oauth_token_url()
     tokens = await _exchange_claude_token(

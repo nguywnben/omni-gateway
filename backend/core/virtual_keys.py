@@ -328,6 +328,19 @@ class VirtualKeyManager:
     # Persistence
     # ------------------------------------------------------------------
 
+    def configure_coordination(self, state_store: BaseStateStore, *, fencing_epoch: int) -> None:
+        """Bind a lifecycle-owned store before request admission begins."""
+
+        if state_store is None:
+            raise ValueError("A coordination store is required.")
+        if self._durable_reservation_ids or self._pending_durable_settlement_ids:
+            raise RuntimeError("Virtual-key coordination cannot change with active reservations.")
+        self._state_store = state_store
+        self._fencing_epoch = validate_epoch(fencing_epoch)
+        self._generation = GovernanceGenerationObserver(GOVERNANCE_SCOPE_VIRTUAL_KEYS)
+        self._keys_by_hash = {}
+        self._loaded = False
+
     async def _ensure_loaded(self) -> None:
         await self._generation.synchronize(self._invalidate_cached_keys)
         if self._loaded:

@@ -17,6 +17,7 @@ from core.credential_batch_operations import (
     BATCH_ACTION_OPERATIONS,
     BATCH_ITEM_TIMEOUT_SECONDS,
     BATCH_PREVIEW_TTL_SECONDS,
+    assert_idempotency_reservation,
     batch_request_fingerprint,
     batch_requires_preview,
     build_batch_plan,
@@ -449,7 +450,8 @@ async def creds_batch_action(
     token: str = Depends(verify_panel_token),
     mode: str = "code_assist",
 ):
-    reservation_active = False
+    reservation = None
+    mutation_started = False
     target_fingerprint = ""
     idempotency_fingerprint = ""
     planning_complete = False
@@ -483,7 +485,7 @@ async def creds_batch_action(
             idempotency_targets,
         )
         try:
-            cached = get_idempotent_response(
+            cached = await get_idempotent_response(
                 request.idempotency_key,
                 idempotency_fingerprint,
             )
@@ -538,7 +540,7 @@ async def creds_batch_action(
         requires_preview = batch_requires_preview(action, len(filenames))
 
         if not request.preview and requires_preview:
-            if not preview_matches(request.preview_token, target_fingerprint):
+            if not await preview_matches(request.preview_token, target_fingerprint):
                 return JSONResponse(
                     status_code=428,
                     content={
@@ -562,17 +564,17 @@ async def creds_batch_action(
 
         if not request.preview and request.idempotency_key:
             try:
-                cached = get_idempotent_response(
+                cached = await get_idempotent_response(
                     request.idempotency_key,
                     idempotency_fingerprint,
                     reserve=True,
                 )
             except HTTPException as exc:
                 return _batch_idempotency_error(exc)
-            if cached:
+            if isinstance(cached, tuple):
                 status_code, body = cached
                 return JSONResponse(status_code=status_code, content=body)
-            reservation_active = True
+            reservation = cached
 
         log.info(
             f"Planning credential batch action '{action}' for {len(filenames)} targets "
@@ -584,7 +586,7 @@ async def creds_batch_action(
         planning_complete = True
 
         if request.preview:
-            preview_token = issue_batch_preview(target_fingerprint)
+            preview_token = await issue_batch_preview(target_fingerprint)
             body = _batch_response_body(
                 action,
                 results,
@@ -609,6 +611,8 @@ async def creds_batch_action(
                 )
                 continue
             try:
+                await assert_idempotency_reservation(reservation)
+                mutation_started = True
                 response = await _execute_credential_action(
                     storage_adapter,
                     item["filename"],
@@ -643,13 +647,12 @@ async def creds_batch_action(
             preview=False,
             requires_preview=requires_preview,
         )
-        store_idempotent_response(
-            request.idempotency_key,
-            idempotency_fingerprint,
+        await store_idempotent_response(
+            reservation,
             200,
             body,
         )
-        reservation_active = False
+        reservation = None
         return JSONResponse(content=body)
 
     except HTTPException:
@@ -670,11 +673,11 @@ async def creds_batch_action(
         log.error("Batch credential operation failed; internal detail was withheld.")
         raise internal_server_error() from e
     finally:
-        if reservation_active:
-            release_idempotency_reservation(
-                request.idempotency_key,
-                idempotency_fingerprint,
-            )
+        if reservation is not None and not mutation_started:
+            try:
+                await asyncio.shield(release_idempotency_reservation(reservation))
+            except Exception:
+                log.error("Credential batch reservation release failed.")
 
 
 def _batch_idempotency_error(exc: HTTPException) -> JSONResponse:

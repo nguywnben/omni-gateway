@@ -993,6 +993,112 @@ for _locale, _messages in _PANEL_FAMILY_ROWS.items():
     for _key, _message in zip(_PANEL_FAMILY_KEYS, _messages):
         MESSAGES.setdefault(_key, {})[_locale] = _message
 
+_SECURITY_BOUNDARY_KEYS = (
+    "security.authentication_required",
+    "security.setup_required_for_recovery",
+    "security.loopback_recovery_required",
+    "security.management_permission_denied",
+)
+
+_SECURITY_BOUNDARY_ROWS = {
+    "en": (
+        "Authentication required.",
+        "Initial setup is required before recovery.",
+        "Local-owner recovery is restricted to direct loopback access.",
+        "Management permission denied.",
+    ),
+    "zh-CN": (
+        "需要身份验证。",
+        "恢复前必须完成初始设置。",
+        "本地所有者恢复仅限直接回环访问。",
+        "管理权限不足。",
+    ),
+    "zh-TW": (
+        "需要驗證身分。",
+        "復原前必須完成初始設定。",
+        "本機擁有者復原僅限直接回送存取。",
+        "管理權限不足。",
+    ),
+    "de": (
+        "Authentifizierung erforderlich.",
+        "Vor der Wiederherstellung muss die Ersteinrichtung abgeschlossen sein.",
+        "Die Wiederherstellung des lokalen Besitzers ist auf direkten Loopback-Zugriff beschränkt.",
+        "Die Verwaltungsberechtigung wurde verweigert.",
+    ),
+    "es": (
+        "Se requiere autenticación.",
+        "Debes completar la configuración inicial antes de la recuperación.",
+        "La recuperación del propietario local se limita al acceso directo de bucle local.",
+        "Permiso de administración denegado.",
+    ),
+    "fr": (
+        "Authentification requise.",
+        "La configuration initiale est requise avant la récupération.",
+        "La récupération du propriétaire local est limitée à un accès direct en boucle locale.",
+        "Autorisation de gestion refusée.",
+    ),
+    "id": (
+        "Autentikasi diperlukan.",
+        "Penyiapan awal harus diselesaikan sebelum pemulihan.",
+        "Pemulihan pemilik lokal dibatasi untuk akses loopback langsung.",
+        "Izin pengelolaan ditolak.",
+    ),
+    "it": (
+        "Autenticazione richiesta.",
+        "Prima del ripristino è necessario completare la configurazione iniziale.",
+        "Il ripristino del proprietario locale è limitato all’accesso loopback diretto.",
+        "Autorizzazione di gestione negata.",
+    ),
+    "ja": (
+        "認証が必要です。",
+        "復旧の前に初期設定を完了する必要があります。",
+        "ローカル所有者の復旧は直接のループバックアクセスに限定されます。",
+        "管理権限がありません。",
+    ),
+    "ko": (
+        "인증이 필요합니다.",
+        "복구하기 전에 초기 설정을 완료해야 합니다.",
+        "로컬 소유자 복구는 직접 루프백 접근으로 제한됩니다.",
+        "관리 권한이 거부되었습니다.",
+    ),
+    "pt": (
+        "Autenticação obrigatória.",
+        "A configuração inicial deve ser concluída antes da recuperação.",
+        "A recuperação do proprietário local está restrita ao acesso loopback direto.",
+        "Permissão de gerenciamento negada.",
+    ),
+    "ru": (
+        "Требуется аутентификация.",
+        "Перед восстановлением необходимо завершить первоначальную настройку.",
+        "Восстановление локального владельца доступно только через прямое loopback-подключение.",
+        "Нет разрешения на управление.",
+    ),
+    "th": (
+        "ต้องยืนยันตัวตน",
+        "ต้องตั้งค่าเริ่มต้นให้เสร็จก่อนการกู้คืน",
+        "การกู้คืนเจ้าของภายในเครื่องจำกัดเฉพาะการเข้าถึงลูปแบ็กโดยตรง",
+        "ไม่ได้รับอนุญาตให้จัดการ",
+    ),
+    "tr": (
+        "Kimlik doğrulaması gerekli.",
+        "Kurtarma işleminden önce ilk kurulum tamamlanmalıdır.",
+        "Yerel sahip kurtarma işlemi yalnızca doğrudan geri döngü erişimiyle yapılabilir.",
+        "Yönetim izni reddedildi.",
+    ),
+    "vi": (
+        "Cần xác thực.",
+        "Bạn phải hoàn tất thiết lập ban đầu trước khi khôi phục.",
+        "Chỉ có thể khôi phục chủ sở hữu cục bộ qua kết nối loopback trực tiếp.",
+        "Bạn không có quyền quản trị để thực hiện thao tác này.",
+    ),
+}
+
+for _locale, _messages in _SECURITY_BOUNDARY_ROWS.items():
+    if len(_messages) != len(_SECURITY_BOUNDARY_KEYS):
+        raise RuntimeError(f"Invalid security boundary catalog for {_locale}.")
+    for _key, _message in zip(_SECURITY_BOUNDARY_KEYS, _messages):
+        MESSAGES.setdefault(_key, {})[_locale] = _message
+
 _PANEL_MESSAGE_PATTERNS = (
     (re.compile(r"too many .*attempts", re.IGNORECASE), "panel.rate_limited"),
     (re.compile(r"setup token", re.IGNORECASE), "panel.setup_token_required"),
@@ -1002,14 +1108,14 @@ _PANEL_MESSAGE_PATTERNS = (
     ),
     (
         re.compile(
-            r"(?:exceeds|up to \d+ files|between one and \d+ import files|limit must be)",
+            r"(?:exceeds|up to \d+ files|between one and \d+ import files|limit must be|fewer)",
             re.IGNORECASE,
         ),
         "panel.size_limit",
     ),
     (
         re.compile(
-            r"(?:must be|must identify|must be updated|cannot be empty|invalid |incorrect|must be a valid|must be an integer|must be between)",
+            r"(?:must be|must identify|must be updated|cannot be empty|invalid(?:\s|\.)|incorrect|must be a valid|must be an integer|must be between|conflict|already exists)",
             re.IGNORECASE,
         ),
         "panel.invalid_value",
@@ -1022,10 +1128,16 @@ _PANEL_MESSAGE_PATTERNS = (
         "panel.unsupported_operation",
     ),
     (re.compile(r"(?:duplicate|skipped because)", re.IGNORECASE), "panel.duplicate_skipped"),
-    (re.compile(r"^(?:select|enter|no files selected)", re.IGNORECASE), "panel.selection_required"),
     (
         re.compile(
-            r"(?:does not exist|not found|no .* (?:were found|are (?:currently )?available)|not available|does not contain|unavailable)",
+            r"^(?:select|enter|provide|refresh|run a fresh|an idempotency|no files selected)",
+            re.IGNORECASE,
+        ),
+        "panel.selection_required",
+    ),
+    (
+        re.compile(
+            r"(?:does not exist|not found|no .* (?:were found|are (?:currently )?available|currently match)|not available|does not contain|unavailable)",
             re.IGNORECASE,
         ),
         "panel.resource_unavailable",

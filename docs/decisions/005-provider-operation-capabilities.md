@@ -65,6 +65,16 @@ process-local by design while Omni Gateway remains single-worker. It is not perm
 multiple workers; Phase 6 must move preview and idempotency coordination behind the accepted
 distributed-state boundary first.
 
+### Wave 4 coordination addendum (2026-09-04)
+
+Preview and idempotency authority now use the lifecycle-selected fenced CAS backend. Completed
+responses are compressed into encrypted bounded chunks and published by an atomic root transition,
+so the 100-target contract does not silently exceed the generic 16 KiB CAS payload limit. The route
+checks reservation ownership before each mutation and retains an active marker after an unknown
+post-mutation failure. This closes the process-local batch-idempotency defect, but not the separate
+credential-pool upsert/deduplication lock or the pending per-domain capacity proof. Coordinated HA
+activation therefore remains prohibited.
+
 ### Wave 2 evidence foundation
 
 The initial evidence boundary answers four on-call questions: which credential operation is

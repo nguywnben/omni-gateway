@@ -16,10 +16,27 @@ TRANSLATED_ATTRIBUTES = {
     "title": "data-i18n-title",
 }
 SKIPPED_TAGS = {"code", "pre", "script", "style"}
+VOID_TAGS = {
+    "area",
+    "base",
+    "br",
+    "col",
+    "embed",
+    "hr",
+    "img",
+    "input",
+    "link",
+    "meta",
+    "source",
+    "track",
+    "wbr",
+}
 TECHNICAL_TEXT = re.compile(
     r"^(?:"
     r"[\d.,%/+:-]+|"
     r"https?://\S+|"
+    r"(?:[a-z][a-z0-9]*(?:[._-][a-z0-9]+)+)|"
+    r"(?:req-.+|Prometheus|OpenTelemetry|openai|gpt-\d+)|"
     r"(?:OAuth|JSON|ZIP|API Key|Endpoint)|"
     r"(?:Omni Gateway|Google Antigravity|Google AI Studio|Grok Build|SpaceXAI Console|"
     r"Codex|OpenAI Platform|Claude Code|Claude Platform|Ollama|Gemini CLI)|"
@@ -71,12 +88,15 @@ class FragmentAuditParser(HTMLParser):
                 and translation_attribute not in attributes
             ):
                 self.issues.append((self.getpos()[0], attribute, value))
+        if tag in VOID_TAGS:
+            self._pop_element(tag)
 
     def handle_startendtag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
         self.handle_starttag(tag, attrs)
-        self.handle_endtag(tag)
+        if tag not in VOID_TAGS:
+            self.handle_endtag(tag)
 
-    def handle_endtag(self, tag: str) -> None:
+    def _pop_element(self, tag: str) -> None:
         if tag in SKIPPED_TAGS and self.skipped_depth:
             self.skipped_depth -= 1
         if self.stack:
@@ -92,6 +112,9 @@ class FragmentAuditParser(HTMLParser):
                 self.technical_depth -= 1
         if self.stack:
             self.stack.pop()
+
+    def handle_endtag(self, tag: str) -> None:
+        self._pop_element(tag)
 
     def handle_data(self, data: str) -> None:
         if (

@@ -13,6 +13,10 @@ BACKEND_DIR = Path(__file__).resolve().parents[1]
 if str(BACKEND_DIR) not in sys.path:
     sys.path.insert(0, str(BACKEND_DIR))
 
+from core.credential_batch_coordination import (
+    CredentialBatchCoordinationService,
+    configure_credential_batch_coordination_service,
+)
 from core.credential_operation_evidence import (
     clear_credential_operation_evidence_for_testing,
     get_credential_audit_events,
@@ -23,6 +27,7 @@ from core.credential_operation_evidence import (
 from core.models import CredFileActionRequest, CredFileBatchActionRequest
 from core.panel.credentials import creds_action, creds_batch_action
 from core.request_context import request_scope
+from core.state_store import InMemoryStateStore
 
 
 class CredentialOperationEvidenceDomainTests(unittest.TestCase):
@@ -134,6 +139,20 @@ class CredentialOperationEvidenceDomainTests(unittest.TestCase):
 class CredentialOperationEvidenceIntegrationTests(unittest.IsolatedAsyncioTestCase):
     def setUp(self):
         clear_credential_operation_evidence_for_testing()
+
+    async def asyncSetUp(self) -> None:
+        self.coordination_store = InMemoryStateStore()
+        configure_credential_batch_coordination_service(
+            CredentialBatchCoordinationService(
+                self.coordination_store,
+                key=b"e" * 32,
+                fencing_epoch=1,
+            )
+        )
+
+    async def asyncTearDown(self) -> None:
+        configure_credential_batch_coordination_service(None)
+        await self.coordination_store.close()
 
     async def test_durable_bridge_is_awaited_once_without_changing_w2_telemetry(self):
         durable_append = AsyncMock()

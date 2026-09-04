@@ -123,6 +123,9 @@ class MongoDBManager:
             self._config_cache = {}
 
     async def _init_redis(self) -> None:
+        if os.getenv("OMNI_RUNTIME_MODE", "standalone").strip() == "coordinated":
+            log.info("Legacy MongoDB Redis cache disabled in coordinated runtime mode")
+            return
         redis_url = os.getenv("REDIS_URL")
         if not redis_url:
             return

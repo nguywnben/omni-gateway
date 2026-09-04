@@ -163,6 +163,17 @@ def set_authentication_attempt_service_for_testing(
     return previous
 
 
+def configure_authentication_attempt_service(
+    service: AuthenticationAttemptService,
+) -> None:
+    """Bind the lifecycle-owned authentication admission service."""
+
+    global _attempt_service
+    if type(service) is not AuthenticationAttemptService:
+        raise ValueError("Authentication-attempt service is invalid.")
+    _attempt_service = service
+
+
 def _client_identity(request: Request) -> str:
     if config.trust_proxy_headers_enabled():
         forwarded_for = request.headers.get("x-forwarded-for", "")

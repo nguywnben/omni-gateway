@@ -16,6 +16,11 @@ from config import get_server_host, get_server_port, trust_proxy_headers_enabled
 # Import managers and utilities
 from core.audit_service import close_audit_service, initialize_audit_service
 from core.credential_manager import credential_manager
+from core.ha_runtime import (
+    close_ha_runtime,
+    get_runtime_session_kwargs,
+    initialize_ha_runtime,
+)
 from core.health import router as health_router
 from core.httpx_client import http_client
 from core.i18n import LocalizedJSONResponse, locale_context, resolve_locale
@@ -122,10 +127,19 @@ async def lifespan(app: FastAPI):
         raise RuntimeError("Configuration initialization failed.") from e
 
     try:
+        await initialize_ha_runtime()
+        log.info("Runtime coordination lifecycle initialized.")
+    except Exception as e:
+        log.critical(f"Runtime coordination initialization failed: {type(e).__name__}")
+        await close_storage_adapter()
+        raise RuntimeError("Runtime coordination initialization failed.") from e
+
+    try:
         await credential_manager._get_or_create()
         log.info("Credential manager initialized.")
     except Exception as e:
         log.critical(f"Credential manager initialization failed: {e}")
+        await close_ha_runtime()
         await close_storage_adapter()
         raise RuntimeError("Credential storage initialization failed.") from e
 
@@ -135,16 +149,18 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         log.critical(f"Audit service initialization failed: {type(e).__name__}")
         await credential_manager.close()
+        await close_ha_runtime()
         await close_storage_adapter()
         raise RuntimeError("Audit service initialization failed.") from e
 
     try:
-        await initialize_session_service()
+        await initialize_session_service(**get_runtime_session_kwargs())
         log.info("Revocable management session service initialized.")
     except Exception as e:
         log.critical(f"Session service initialization failed: {type(e).__name__}")
         await close_audit_service()
         await credential_manager.close()
+        await close_ha_runtime()
         await close_storage_adapter()
         raise RuntimeError("Session service initialization failed.") from e
 
@@ -156,6 +172,7 @@ async def lifespan(app: FastAPI):
         await close_session_service()
         await close_audit_service()
         await credential_manager.close()
+        await close_ha_runtime()
         await close_storage_adapter()
         raise RuntimeError("Request trace service initialization failed.") from e
 
@@ -168,6 +185,7 @@ async def lifespan(app: FastAPI):
         await close_session_service()
         await close_audit_service()
         await credential_manager.close()
+        await close_ha_runtime()
         await close_storage_adapter()
         raise RuntimeError("Usage ledger service initialization failed.") from e
 
@@ -185,6 +203,7 @@ async def lifespan(app: FastAPI):
         await close_session_service()
         await close_audit_service()
         await credential_manager.close()
+        await close_ha_runtime()
         await close_storage_adapter()
         raise RuntimeError("External telemetry configuration failed.") from e
 
@@ -244,6 +263,12 @@ async def lifespan(app: FastAPI):
             log.info("Credential manager closed.")
         except Exception as e:
             log.error(f"Error while shutting down the credential manager: {e}")
+
+        try:
+            await close_ha_runtime()
+            log.info("Runtime coordination lifecycle closed.")
+        except Exception as e:
+            log.error(f"Error while closing runtime coordination: {e}")
 
         try:
             await http_client.close()

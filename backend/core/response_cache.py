@@ -121,6 +121,14 @@ class CoordinatedResponseCache:
         self._local = local_cache
         self._coordination = coordination
 
+    def configure_coordination(self, coordination: RoutingCoordinationAdapter) -> None:
+        """Replace coordination only at a lifecycle boundary and discard local bytes."""
+
+        if coordination is None:
+            raise ValueError("Cache coordination is required.")
+        self._local.clear()
+        self._coordination = coordination
+
     @staticmethod
     def content_digest(content: bytes, media_type: str) -> str:
         if not isinstance(content, bytes) or not isinstance(media_type, str):

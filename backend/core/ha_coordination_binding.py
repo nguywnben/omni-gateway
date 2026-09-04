@@ -153,15 +153,15 @@ class CoordinationBindingManager:
         if durable != expected:
             raise HaBindingError("binding_mismatch")
 
-        epoch = await self._store.read_epoch()
-        if epoch.epoch != policy.fencing_epoch or epoch.state is not EpochState.READY:
-            raise HaBindingError("epoch_not_ready")
         shared_value = await self._store.get(self.STORE_KEY)
         if shared_value is None:
             raise HaBindingError("namespace_missing")
         shared = self._decode(shared_value, "coordination_binding_corrupt")
         if shared != durable:
             raise HaBindingError("binding_mismatch")
+        epoch = await self._store.read_epoch()
+        if epoch.epoch != policy.fencing_epoch or epoch.state is not EpochState.READY:
+            raise HaBindingError("epoch_not_ready")
         return durable
 
     async def bootstrap(

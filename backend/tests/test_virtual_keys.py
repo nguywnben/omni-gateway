@@ -78,7 +78,12 @@ def _patched_manager(storage: _FakeStorage) -> VirtualKeyManager:
 
 
 def _run(coro):
-    return asyncio.get_event_loop_policy().new_event_loop().run_until_complete(coro)
+    loop = asyncio.new_event_loop()
+    try:
+        return loop.run_until_complete(coro)
+    finally:
+        loop.run_until_complete(loop.shutdown_asyncgens())
+        loop.close()
 
 
 class VirtualKeyCrudTests(unittest.TestCase):

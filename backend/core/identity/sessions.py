@@ -1535,7 +1535,12 @@ _session_service: SessionService | None = None
 _session_service_lock = asyncio.Lock()
 
 
-async def initialize_session_service(storage: Any | None = None) -> SessionService:
+async def initialize_session_service(
+    storage: Any | None = None,
+    *,
+    coordination: IdentitySecurityCoordinationStore | None = None,
+    fencing_epoch: int = 1,
+) -> SessionService:
     global _session_service
     async with _session_service_lock:
         if _session_service is None:
@@ -1543,7 +1548,11 @@ async def initialize_session_service(storage: Any | None = None) -> SessionServi
                 from core.storage_adapter import get_storage_adapter
 
                 storage = await get_storage_adapter()
-            _session_service = await SessionService.create(storage)
+            _session_service = await SessionService.create(
+                storage,
+                coordination=coordination,
+                fencing_epoch=fencing_epoch,
+            )
         return _session_service
 
 

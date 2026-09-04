@@ -1,9 +1,7 @@
 import asyncio
 import hashlib
 import json
-import os
 import time
-import uuid
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Tuple
@@ -84,6 +82,10 @@ from core.openai_platform import (
     openai_response_to_gemini,
     openai_stream_line_to_gemini,
 )
+from core.primary_session_coordination import (
+    PrimarySessionState,
+    get_primary_session_coordinator,
+)
 from core.provider_registry import (
     ANTHROPIC,
     CLAUDE_CODE,
@@ -123,24 +125,11 @@ from core.xai import (
 from fastapi import Response
 from log import log
 
-SESSION_TTL_SECONDS = 6 * 60 * 60
-MAX_SESSION_STATES = 1024
-_REDIS_KEY_PREFIX = "primary:session:"
 MAX_MODEL_ROUTE_ATTEMPTS = 128
 MAX_MODEL_DISCOVERY_CONCURRENCY = 8
 MAX_MODEL_DISCOVERY_COHORTS = 32
 MAX_MODEL_DISCOVERY_FAILOVER_ATTEMPTS = 3
 MODEL_DISCOVERY_ROTATION_SECONDS = 5 * 60
-
-
-@dataclass
-class PrimarySessionState:
-    conversation_id: str
-    trajectory_id: str
-    session_id: str
-    step_index: int
-    created_at: float
-    last_used_at: float
 
 
 @dataclass(frozen=True)
@@ -156,33 +145,6 @@ class ProviderRequestContext:
     headers: Dict[str, str]
     payload: Dict[str, Any]
     request_metrics: Dict[str, Any]
-
-
-_session_states: Dict[str, PrimarySessionState] = {}
-
-
-_redis_client = None
-_redis_checked = False
-
-
-async def _get_redis():
-    global _redis_client, _redis_checked
-    if _redis_checked:
-        return _redis_client
-    _redis_checked = True
-    redis_url = os.getenv("REDIS_URL")
-    if not redis_url:
-        return None
-    try:
-        import redis.asyncio as aioredis  # type: ignore
-
-        client = aioredis.from_url(redis_url, decode_responses=True)
-        await client.ping()
-        _redis_client = client
-        log.info("[SESSION] Redis session store enabled")
-    except Exception as e:
-        log.warning(f"[SESSION] Redis unavailable, falling back to in-memory: {e}")
-    return _redis_client
 
 
 def _extract_first_user_text(request_payload: Dict[str, Any]) -> str:
@@ -213,68 +175,12 @@ def _session_key(request_payload: Dict[str, Any], model: str = "") -> str:
     return f"{model_prefix}default"
 
 
-def _prune_session_states(now: float) -> None:
-    expired = [k for k, s in _session_states.items() if now - s.last_used_at > SESSION_TTL_SECONDS]
-    for k in expired:
-        _session_states.pop(k, None)
-    if len(_session_states) <= MAX_SESSION_STATES:
-        return
-    overflow = len(_session_states) - MAX_SESSION_STATES
-    oldest = sorted(_session_states.items(), key=lambda item: item[1].last_used_at)
-    for k, _ in oldest[:overflow]:
-        _session_states.pop(k, None)
-
-
-def _make_new_state(first_user_text: str, now: float) -> PrimarySessionState:
-    if first_user_text:
-        digest = hashlib.sha256(first_user_text.encode("utf-8")).digest()
-        session_id_val = int.from_bytes(digest[:8], "big") & 0x7FFFFFFFFFFFFFFF
-        session_id = f"-{session_id_val}"
-    else:
-        session_id = f"-{uuid.uuid4().int % 9_000_000_000_000_000_000}"
-    return PrimarySessionState(
-        conversation_id=str(uuid.uuid4()),
-        trajectory_id=str(uuid.uuid4()),
-        session_id=session_id,
-        step_index=1,
-        created_at=now,
-        last_used_at=now,
-    )
-
-
 async def _get_session_state(
     request_payload: Dict[str, Any], model: str = ""
 ) -> PrimarySessionState:
-    now = time.time()
     key = _session_key(request_payload, model)
     first_user_text = _extract_first_user_text(request_payload)
-
-    redis = await _get_redis()
-    if redis is not None:
-        redis_key = f"{_REDIS_KEY_PREFIX}{key}"
-        try:
-            raw = await redis.get(redis_key)
-            if raw:
-                data = json.loads(raw)
-                state = PrimarySessionState(**data)
-                state.step_index += 1
-                state.last_used_at = now
-            else:
-                state = _make_new_state(first_user_text, now)
-            await redis.set(redis_key, json.dumps(state.__dict__), ex=SESSION_TTL_SECONDS)
-            return state
-        except Exception as e:
-            log.warning(f"[SESSION] Redis error, falling back to memory: {e}")
-
-    _prune_session_states(now)
-    state = _session_states.get(key)
-    if state:
-        state.step_index += 1
-        state.last_used_at = now
-        return state
-    state = _make_new_state(first_user_text, now)
-    _session_states[key] = state
-    return state
+    return await get_primary_session_coordinator().next_state(key, first_user_text)
 
 
 def _generate_request_id(conversation_id: str, trajectory_id: str, step: int) -> str:

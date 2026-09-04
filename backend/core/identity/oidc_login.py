@@ -293,6 +293,22 @@ class OidcLoginService:
 
 _oidc_login_service: OidcLoginService | None = None
 _oidc_login_service_lock = asyncio.Lock()
+_oidc_transaction_coordination: IdentitySecurityCoordinationStore | None = None
+_oidc_transaction_fencing_epoch = 1
+
+
+def configure_oidc_transaction_coordination(
+    coordination: IdentitySecurityCoordinationStore | None,
+    *,
+    fencing_epoch: int = 1,
+) -> None:
+    """Bind the lifecycle-owned transaction store before lazy OIDC initialization."""
+
+    global _oidc_transaction_coordination, _oidc_transaction_fencing_epoch
+    if type(fencing_epoch) is not int or fencing_epoch < 1:
+        raise ValueError("OIDC transaction fencing epoch is invalid.")
+    _oidc_transaction_coordination = coordination
+    _oidc_transaction_fencing_epoch = fencing_epoch
 
 
 async def get_or_initialize_oidc_login_service() -> OidcLoginService:
@@ -306,6 +322,8 @@ async def get_or_initialize_oidc_login_service() -> OidcLoginService:
                 _oidc_login_service = await OidcLoginService.create(
                     storage,
                     session_service=get_session_service(),
+                    transaction_coordination=_oidc_transaction_coordination,
+                    transaction_fencing_epoch=_oidc_transaction_fencing_epoch,
                 )
             except asyncio.CancelledError:
                 raise

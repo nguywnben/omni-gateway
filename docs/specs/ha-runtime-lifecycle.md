@@ -12,26 +12,31 @@ reconciliation, and rollback without granting the W4.19 activation record or pro
 Standalone requires `WORKERS=1` and `OMNI_REPLICA_COUNT=1`. Redis coordination settings are
 rejected rather than ignored when the mode is standalone, except the legacy `REDIS_URL` cache
 setting while coordinated activation remains unavailable. The lifecycle creates one in-process
-state store and injects that same fenced store into authentication admission, sessions, OIDC
-transactions, credential routing, virtual-key quota, governance invalidation, and exact-cache
-metadata.
+state store and injects that same fenced store into authentication admission, sessions, OIDC,
+provider/device authorization, credential-batch coordination, credential routing, virtual-key
+quota, governance invalidation, and exact-cache
+metadata. Provider conversation metadata uses the same lifecycle service with HMAC-derived keys and
+fenced compare-and-set updates; it never creates a second Redis client or falls back after a
+coordination error.
 
 Coordinated configuration requires all of the following:
 
 - `WORKERS=1`; one worker per process is a permanent v1 semantic constraint.
-- `OMNI_REPLICA_COUNT=1` during W4.18. W4.19 alone may record a tested ceiling of two.
+- `OMNI_REPLICA_COUNT=1`. W4.19 recorded no tested multi-replica ceiling.
 - exactly one external durable backend: `POSTGRESQL_URI` or `MONGODB_URI`, never SQLite or both;
 - `REDIS_URL` using `redis`, `rediss`, or `unix` transport;
 - a validated lowercase/hyphen `OMNI_COORDINATION_NAMESPACE` and stable
   `OMNI_DEPLOYMENT_ID`;
 - a base64url `OMNI_COORDINATION_KEY` decoding to 32-64 bytes;
 - positive `OMNI_COORDINATION_EPOCH` matching the durable binding and Redis ready epoch;
-- an exact durable migration manifest/checkpoint and an activation record produced only after
-  W4.19 evidence passes.
+- an exact durable migration manifest/checkpoint and an activation record compiled into a future
+  release only after every required external failure/load gate passes. W4.19 produced no record.
 
 Unknown values, empty required fields, contradictory backends, unsafe counts, or a supplied but
 incomplete coordinated group reject startup. There is no local fallback after coordinated mode is
-selected.
+selected. MongoDB's legacy Redis acceleration is disabled in coordinated mode: the coordination
+URI is reserved for the versioned namespaced adapter and never receives unnamespaced credential or
+configuration cache keys.
 
 ## Persistent binding and namespace-loss defense
 

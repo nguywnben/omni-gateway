@@ -244,14 +244,20 @@ backend/core/converter/{openai,anthropic}_to_gemini.py
 
 The storage drivers interpolate only table and column identifiers selected from internal allowlists; all credential values remain parameterized. Future storage work should consolidate those safe identifier builders, replace repeated broad exception handling with typed boundary errors, and add live integration suites for PostgreSQL and MongoDB.
 
-Routing, quota, governance invalidation, and exact-cache metadata now share a fenced semantic
-coordination boundary. Store keys use domain-separated HMAC identifiers; exact response bytes stay
-inside the bounded local cache, while Redis-compatible metadata carries only a digest, media
-category, generation, and expiry. Admission closes on coordination uncertainty, while exact-cache
-uncertainty degrades to a miss. W4.17 supplies in-memory/Redis parity and injection points only;
-runtime selection, readiness, drain/reconciliation, multi-replica deployment, and activation remain
-closed until W4.18-W4.19. Operational evidence is maintained in the
-[routing coordination runbook](runbooks/routing-coordination.md).
+Routing, quota, governance invalidation, exact-cache metadata, management sessions, security
+attempts, OIDC/provider/device authorization, and credential-batch idempotency share a fenced
+semantic coordination boundary. Store keys use
+domain-separated HMAC identifiers; exact response bytes stay inside the bounded local cache, while
+Redis-compatible metadata carries only closed, bounded decision state. W4.18 adds one runtime-owned
+lifecycle, durable/shared namespace binding, dependency-aware readiness, dry-run-first epoch and
+rollback operations, deployment validation, and alerts. W4.19 deliberately records no activation
+topology: required external failure/load evidence was unavailable, credential-pool upsert and
+deduplication locks still contain a process-local correctness boundary, batch coordination still
+needs a dedicated per-domain capacity proof, and worst-case Redis quota cost is unmeasured. ADR-002
+therefore remains active and the compiled activation allowlist is empty.
+Operational evidence is maintained in the [routing coordination runbook](runbooks/routing-coordination.md),
+[HA lifecycle runbook](runbooks/ha-lifecycle.md), and
+[W4.19 activation disposition](evidence/w4.19-ha-activation-disposition.md).
 
 Production dependencies are compiled into `requirements.lock` with hashes. `requirements.txt` remains the human-maintained input, and CI rejects stale lock output.
 

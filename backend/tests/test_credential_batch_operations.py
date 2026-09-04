@@ -15,6 +15,10 @@ BACKEND_DIR = Path(__file__).resolve().parents[1]
 if str(BACKEND_DIR) not in sys.path:
     sys.path.insert(0, str(BACKEND_DIR))
 
+from core.credential_batch_coordination import (
+    CredentialBatchCoordinationService,
+    configure_credential_batch_coordination_service,
+)
 from core.credential_fleet_query import (  # noqa: E402
     CredentialFleetFilters,
     credential_selection_registry,
@@ -22,9 +26,24 @@ from core.credential_fleet_query import (  # noqa: E402
 from core.models import CredFileBatchActionRequest
 from core.panel.credentials import creds_batch_action
 from core.panel.credentials import router as credentials_router
+from core.state_store import InMemoryStateStore
 
 
 class CredentialBatchOperationTests(unittest.IsolatedAsyncioTestCase):
+    async def asyncSetUp(self) -> None:
+        self.coordination_store = InMemoryStateStore()
+        configure_credential_batch_coordination_service(
+            CredentialBatchCoordinationService(
+                self.coordination_store,
+                key=b"b" * 32,
+                fencing_epoch=1,
+            )
+        )
+
+    async def asyncTearDown(self) -> None:
+        configure_credential_batch_coordination_service(None)
+        await self.coordination_store.close()
+
     @staticmethod
     def _fleet_summary(*filenames: str) -> dict:
         return {

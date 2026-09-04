@@ -619,12 +619,28 @@ class _CredentialManagerSingleton:
     def __init__(self):
         self._instance: Optional[CredentialManager] = None
         self._lock = asyncio.Lock()
+        self._routing_coordination: Optional[RoutingCoordinationAdapter] = None
+
+    async def configure_routing_coordination(
+        self,
+        coordination: Optional[RoutingCoordinationAdapter],
+    ) -> None:
+        """Bind the lifecycle-owned adapter before the singleton initializes."""
+
+        async with self._lock:
+            if self._instance is not None:
+                raise RuntimeError("Credential manager is already initialized.")
+            self._routing_coordination = coordination
 
     async def _get_or_create(self) -> CredentialManager:
         if self._instance is None:
             async with self._lock:
                 if self._instance is None:
-                    manager = CredentialManager()
+                    manager = (
+                        CredentialManager(routing_coordination=self._routing_coordination)
+                        if self._routing_coordination is not None
+                        else CredentialManager()
+                    )
                     await manager.initialize()
                     self._instance = manager
                     log.debug("CredentialManager singleton initialized")
@@ -634,10 +650,10 @@ class _CredentialManagerSingleton:
     async def close(self) -> None:
         """Close and clear the process-local manager instance."""
         async with self._lock:
-            if self._instance is None:
-                return
-            await self._instance.close()
-            self._instance = None
+            if self._instance is not None:
+                await self._instance.close()
+                self._instance = None
+            self._routing_coordination = None
 
     def __getattr__(self, name):
         async def _async_wrapper(*args, **kwargs):
