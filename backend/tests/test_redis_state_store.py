@@ -150,6 +150,7 @@ class StatefulRedisClient(FakeRedisClient):
         "epoch_advance": (4, 4),
         "epoch_ready": (4, 4),
         "cas": (5, 7),
+        "cas_read": (3, 1),
         "invalidation": (5, 5),
         "invalidation_read": (3, 0),
         "increment": (1, 2),
@@ -270,6 +271,7 @@ class StatefulRedisClient(FakeRedisClient):
             "epoch_advance",
             "epoch_ready",
             "cas",
+            "cas_read",
             "invalidation",
             "invalidation_read",
             "quota_reserve",
@@ -328,6 +330,17 @@ class StatefulRedisClient(FakeRedisClient):
             if applied:
                 self.cas[keys[1]] = (revision, payload, self.now_ms + int(ttl))
             return result
+        if name == "cas_read":
+            epoch = int(byte_args[0])
+            if self.epoch != (epoch, b"ready"):
+                return [b"1", b"unavailable", b"", b""]
+            record = self.cas.get(keys[0])
+            if record is not None and record[2] <= self.now_ms:
+                del self.cas[keys[0]]
+                record = None
+            if record is None:
+                return [b"1", b"not_found", b"", b""]
+            return [b"1", b"found", str(record[0]).encode(), record[1]]
         if name == "invalidation":
             epoch, operation_id, ttl, fingerprint, limit = byte_args
             if self.epoch != (int(epoch), b"ready"):
@@ -980,6 +993,29 @@ class RedisStateStoreTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(len(args[5]), 64)
         self.assertEqual(args[6], b"100000")
 
+    async def test_cas_read_keys_args_and_reply_schema_are_exact(self) -> None:
+        self.queue(
+            "cas_read",
+            [b"1", b"found", b"7", b"\x00value\xff"],
+            [b"1", b"not_found", b"", b""],
+            [b"1", b"unavailable", b"", b""],
+            [b"1", b"found", b"0", b"value"],
+        )
+
+        snapshot = await self.store.read_cas("opaque-key", epoch=3)
+        missing = await self.store.read_cas("missing-key", epoch=3)
+        self.assertEqual((snapshot.revision, snapshot.payload), (7, b"\x00value\xff"))
+        self.assertEqual((missing.revision, missing.payload), (None, None))
+        name, keys, args = self.client.script_calls[0]
+        self.assertEqual((name, len(keys), args), ("cas_read", 3, [b"3"]))
+        self.assertTrue(keys[-1].endswith(":initialization"))
+        self.assertNotIn("opaque-key", keys[0])
+
+        with self.assertRaises(CoordinationUnavailableError):
+            await self.store.read_cas("opaque-key", epoch=3)
+        with self.assertRaises(CoordinationCorruptError):
+            await self.store.read_cas("opaque-key", epoch=3)
+
     async def test_numeric_ttl_forms_have_identical_replay_fingerprints(self) -> None:
         self.queue("cas", [b"1", b"applied", b"1", b"0"], [b"1", b"applied", b"1", b"1"])
         await self.store.compare_and_set(CasRequest("key", 0, b"value", 1, 1, "cas-op"))
@@ -1209,6 +1245,7 @@ class RedisStateStoreTests(unittest.IsolatedAsyncioTestCase):
         replay = await store.compare_and_set(CasRequest("key", 0, b"one", 1, 2, "create"))
         conflict = await store.compare_and_set(CasRequest("key", 0, b"changed", 1, 2, "create"))
         self.assertEqual((created.applied, created.revision), (True, 1))
+        self.assertEqual((await store.read_cas("key", epoch=2)).payload, b"one")
         self.assertTrue(replay.idempotent)
         self.assertFalse(conflict.applied)
         denied = await store.compare_and_set(CasRequest("denied", 1, b"one", 1, 2, "deny"))
@@ -1220,6 +1257,7 @@ class RedisStateStoreTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual((denial_replay.applied, denial_replay.idempotent), (False, True))
         self.assertEqual((denial_conflict.applied, denial_conflict.idempotent), (False, False))
         client.advance(1_000)
+        self.assertIsNone((await store.read_cas("key", epoch=2)).payload)
         self.assertTrue(
             (await store.compare_and_set(CasRequest("key", 0, b"two", 1, 2, "expired"))).applied
         )
@@ -2039,6 +2077,7 @@ class RedisStateStoreTests(unittest.IsolatedAsyncioTestCase):
                 "epoch_advance",
                 "epoch_ready",
                 "cas",
+                "cas_read",
                 "invalidation",
                 "invalidation_read",
                 "increment",

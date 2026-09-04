@@ -10,7 +10,7 @@
   Phase 6 ADR approval), exactly 75.0%; wave execution-slice checkboxes are refinements and are not
   added to that denominator.
 - Active scope: Wave 4 W4.17, routing/governance/cache state coordination.
-- Control state: **IN PROGRESS — W4.17 SLICE 1/9**.
+- Control state: **IN PROGRESS — W4.17 SLICE 2/9 COMPLETE**.
 - Execution mode: continuous through the remaining W4.16–W4.19 queue under
   `docs/superpowers/plans/2026-09-02-wave-4-continuous-completion.md`; do not pause at internal task
   boundaries.
@@ -32,8 +32,12 @@
   `docs/specs/routing-governance-cache-coordination.md`.
 - The resumable nine-slice execution plan is
   `docs/superpowers/plans/2026-09-04-w4.17-routing-governance-cache-coordination.md`.
-- Immediate next action: RED/GREEN the readable fenced-record primitive, including in-memory,
-  Redis, service metrics, shared contract, and explicit live-test skip behavior.
+- Readable fenced records now have a closed `CasSnapshot` schema, exact-epoch in-memory semantics,
+  a fixed cluster-slot-safe Redis Lua read, strict binary-safe decoding, service metrics, and the
+  shared live contract. The focused coordination matrix passes 93 tests; configured live Redis
+  execution remains opt-in.
+- Immediate next action: RED/GREEN the HMAC semantic adapter for bounded credential leases,
+  cooldown/outcome evidence, cache metadata, and monotonic invalidation.
 - Coordinated activation remains closed; standalone runtime and the one-worker/one-replica ceiling
   are unchanged.
 

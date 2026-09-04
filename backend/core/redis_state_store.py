@@ -23,6 +23,7 @@ from core.coordination import (
     MAX_TTL_SECONDS,
     CasRequest,
     CasResult,
+    CasSnapshot,
     CoordinationCorruptError,
     CoordinationReconciliationRequiredError,
     CoordinationUnavailableError,
@@ -373,6 +374,37 @@ redis.call('HSET', KEYS[3], ARGV[5],
   '1|' .. ARGV[6] .. '|' .. status .. '|' .. revision .. '|' .. expires_text)
 redis.call('ZADD', KEYS[4], expires_at, ARGV[5])
 return {'1', status, revision, '0'}
+"""
+
+_CAS_READ_SCRIPT = """-- omni:cas_read:v1
+local function valid_integer(value)
+  return value and string.match(value, '^[1-9][0-9]*$')
+    and (#value < 19 or (#value == 19 and value <= '9223372036854775807'))
+end
+local marker, encoded_epoch = redis.call('GET', KEYS[3]), redis.call('GET', KEYS[2])
+if marker ~= '1|initialized' or not encoded_epoch or redis.call('PTTL', KEYS[3]) ~= -1
+  or redis.call('PTTL', KEYS[2]) ~= -1 then
+  return redis.error_reply('COORDINATION_CORRUPT')
+end
+local schema, current_epoch, current_state =
+  string.match(encoded_epoch, '^([^|]+)|([^|]+)|([^|]+)$')
+if schema ~= '1' or not valid_integer(current_epoch)
+  or (current_state ~= 'ready' and current_state ~= 'reconciling') then
+  return redis.error_reply('COORDINATION_CORRUPT')
+end
+if current_epoch ~= ARGV[1] or current_state ~= 'ready' then
+  return {'1', 'unavailable', '', ''}
+end
+local record_count = redis.call('HLEN', KEYS[1])
+if record_count == 0 then return {'1', 'not_found', '', ''} end
+if record_count ~= 3 then return redis.error_reply('COORDINATION_CORRUPT') end
+local record = redis.call('HMGET', KEYS[1], 'schema_version', 'revision', 'payload')
+local record_ttl = redis.call('PTTL', KEYS[1])
+if record[1] ~= '1' or not valid_integer(record[2]) or record[3] == false
+  or #record[3] > 16384 or record_ttl <= 0 or record_ttl > 2592000000 then
+  return redis.error_reply('COORDINATION_CORRUPT')
+end
+return {'1', 'found', record[2], record[3]}
 """
 
 _INVALIDATION_SCRIPT = """-- omni:invalidation:v1
@@ -1962,6 +1994,7 @@ SCRIPT_SOURCES = {
     "epoch_advance": _EPOCH_ADVANCE_SCRIPT,
     "epoch_ready": _EPOCH_READY_SCRIPT,
     "cas": _CAS_SCRIPT,
+    "cas_read": _CAS_READ_SCRIPT,
     "invalidation": _INVALIDATION_SCRIPT,
     "invalidation_read": _INVALIDATION_READ_SCRIPT,
     "increment": _INCREMENT_SCRIPT,
@@ -2116,6 +2149,21 @@ def _decode_cas_reply(reply: object) -> CasResult:
         raise CoordinationCorruptError("Coordination reply is invalid.")
     revision = _strict_positive_int(values[2]) if applied else None
     return CasResult(applied, revision, values[3] == b"1")
+
+
+def _decode_cas_snapshot_reply(reply: object) -> CasSnapshot:
+    values = _strict_array(reply, 4)
+    if values[1] == b"unavailable":
+        if values[2:] != [b"", b""]:
+            raise CoordinationCorruptError("Coordination reply is invalid.")
+        raise CoordinationUnavailableError("Coordination epoch is not ready.")
+    if values[1] == b"not_found":
+        if values[2:] != [b"", b""]:
+            raise CoordinationCorruptError("Coordination reply is invalid.")
+        return CasSnapshot(None, None)
+    if values[1] != b"found" or len(values[3]) > MAX_PAYLOAD_BYTES:
+        raise CoordinationCorruptError("Coordination reply is invalid.")
+    return CasSnapshot(_strict_positive_int(values[2]), values[3])
 
 
 def _decode_invalidation_reply(reply: object) -> InvalidationResult:
@@ -2791,6 +2839,20 @@ class RedisStateStore:
             ],
         )
         return _decode_cas_reply(reply)
+
+    async def read_cas(self, key: str, *, epoch: int) -> CasSnapshot:
+        logical_key = _validate_identifier(key, "Coordination key")
+        requested_epoch = validate_epoch(epoch)
+        reply = await self._run_script(
+            "cas_read",
+            keys=[
+                self._key("cas", logical_key),
+                self._key("epoch"),
+                self._key("initialization"),
+            ],
+            args=[_integer_bytes(requested_epoch)],
+        )
+        return _decode_cas_snapshot_reply(reply)
 
     async def invalidate(self, request: InvalidationRequest) -> InvalidationResult:
         if not isinstance(request, InvalidationRequest):

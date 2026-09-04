@@ -16,6 +16,7 @@ from typing import Any, TypeVar
 from core.coordination import (
     CasRequest,
     CasResult,
+    CasSnapshot,
     CoordinationCorruptError,
     CoordinationReconciliationRequiredError,
     CoordinationUnavailableError,
@@ -63,6 +64,7 @@ _OPERATIONS = frozenset(
         "advance_epoch",
         "mark_epoch_ready",
         "compare_and_set",
+        "read_cas",
         "invalidate",
         "read_invalidation_generation",
         "reserve_quota",
@@ -274,6 +276,9 @@ class CoordinationService:
 
     async def compare_and_set(self, request: CasRequest) -> CasResult:
         return await self._run("compare_and_set", self._store.compare_and_set, request)
+
+    async def read_cas(self, key: str, *, epoch: int) -> CasSnapshot:
+        return await self._run("read_cas", self._store.read_cas, key, epoch=epoch)
 
     async def invalidate(self, request: InvalidationRequest) -> InvalidationResult:
         return await self._run("invalidate", self._store.invalidate, request)

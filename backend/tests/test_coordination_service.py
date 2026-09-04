@@ -113,14 +113,17 @@ class CoordinationServiceTests(unittest.IsolatedAsyncioTestCase):
         secret = "tenant/acme?token=top-secret"
         service = CoordinationService(InMemoryStateStore())
         applied = await service.compare_and_set(CasRequest(secret, 0, b"payload", 1.0, 1, secret))
+        snapshot = await service.read_cas(secret, epoch=1)
         rejected = await service.compare_and_set(
             CasRequest(secret, 0, b"other", 1.0, 1, "other-op")
         )
 
         self.assertTrue(applied.applied)
+        self.assertEqual(snapshot.payload, b"payload")
         self.assertFalse(rejected.applied)
         output = render_coordination_operation_metrics()
         self.assertIn('operation="compare_and_set",result="success"', output)
+        self.assertIn('operation="read_cas",result="success"', output)
         self.assertIn('operation="compare_and_set",result="rejected"', output)
         self.assertNotIn(secret, output)
         self.assertNotIn("payload", output)

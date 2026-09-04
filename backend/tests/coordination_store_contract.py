@@ -203,6 +203,8 @@ class CoordinationStoreContract:
             CasRequest("contract-key", 0, b"value", 1.0, 2, "cas-1")
         )
         self.assertFalse(stale_cas.applied)
+        with self.assertRaises(CoordinationUnavailableError):
+            await self.store.read_cas("contract-key", epoch=2)
         reconciling_invalidation = await self.store.invalidate(
             InvalidationRequest("reconciling-scope", 2, "reconciling-invalidate")
         )
@@ -219,6 +221,8 @@ class CoordinationStoreContract:
             CasRequest("stale-epoch-key", 0, b"value", 1.0, 1, "stale-epoch-cas")
         )
         self.assertFalse(stale_epoch_cas.applied)
+        with self.assertRaises(CoordinationUnavailableError):
+            await self.store.read_cas("stale-epoch-key", epoch=1)
         stale_epoch_invalidation = await self.store.invalidate(
             InvalidationRequest("stale-epoch-scope", 1, "stale-epoch-invalidate")
         )
@@ -229,6 +233,8 @@ class CoordinationStoreContract:
         )
         self.assertTrue(cas.applied)
         self.assertEqual(cas.revision, 1)
+        snapshot = await self.store.read_cas("contract-key", epoch=2)
+        self.assertEqual((snapshot.revision, snapshot.payload), (1, b"value"))
         wrong_revision = await self.store.compare_and_set(
             CasRequest("contract-key", 0, b"different", 1.0, 2, "wrong-revision")
         )
@@ -246,6 +252,8 @@ class CoordinationStoreContract:
             CasRequest("contract-key", 1, b"updated", 1.0, 2, "cas-2")
         )
         self.assertEqual(updated_cas.revision, 2)
+        updated_snapshot = await self.store.read_cas("contract-key", epoch=2)
+        self.assertEqual((updated_snapshot.revision, updated_snapshot.payload), (2, b"updated"))
 
         expiring_cas = await self.store.compare_and_set(
             CasRequest("expiry-key", 0, b"value", 2.0, 2, "expiry-1")
@@ -257,6 +265,8 @@ class CoordinationStoreContract:
         )
         self.assertTrue(replayed_expiring_cas.idempotent)
         await advance_cas_clock(1.1)
+        expired_snapshot = await self.store.read_cas("expiry-key", epoch=2)
+        self.assertEqual((expired_snapshot.revision, expired_snapshot.payload), (None, None))
         expired_cas = await self.store.compare_and_set(
             CasRequest("expiry-key", 0, b"replacement", 2.0, 2, "expiry-2")
         )
@@ -299,6 +309,8 @@ class CoordinationStoreContract:
             await self.store.compare_and_set(
                 CasRequest("after-close-key", 0, b"value", 1.0, 2, "after-close-cas")
             )
+        with self.assertRaises(CoordinationUnavailableError):
+            await self.store.read_cas("after-close-key", epoch=2)
         with self.assertRaises(CoordinationUnavailableError):
             await self.store.invalidate(
                 InvalidationRequest("after-close-scope", 2, "after-close-invalidate")

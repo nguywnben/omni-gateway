@@ -20,6 +20,7 @@ from core.coordination import (
     MAX_IDENTIFIER_LENGTH,
     CasRequest,
     CasResult,
+    CasSnapshot,
     CoordinationCorruptError,
     CoordinationReconciliationRequiredError,
     CoordinationUnavailableError,
@@ -873,6 +874,28 @@ class InMemoryStateStore(BaseStateStore):
                 self._cas_replay_expiries, request.operation_id, expires_at
             )
             return result
+
+    async def read_cas(self, key: str, *, epoch: int) -> CasSnapshot:
+        async with self._async_lock:
+            self._ensure_open_locked()
+            if (
+                not isinstance(key, str)
+                or not 1 <= len(key) <= MAX_IDENTIFIER_LENGTH
+                or any(ord(character) < 32 or ord(character) > 126 for character in key)
+            ):
+                raise ValueError("Coordination key is invalid.")
+            requested_epoch = validate_epoch(epoch)
+            if not self._is_ready_locked(requested_epoch):
+                raise CoordinationUnavailableError("Coordination epoch is not ready.")
+            now = self._clock()
+            existing = self._cas.get(key)
+            if existing is not None and existing.expires_at <= now:
+                self._cas.pop(key, None)
+                self._discard_heap_member_locked(self._cas_expiries, key)
+                existing = None
+            if existing is None:
+                return CasSnapshot(None, None)
+            return CasSnapshot(existing.revision, existing.payload)
 
     async def invalidate(self, request: InvalidationRequest) -> InvalidationResult:
         async with self._async_lock:

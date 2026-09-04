@@ -146,6 +146,29 @@ class CasResult:
 
 
 @dataclass(frozen=True, slots=True)
+class CasSnapshot:
+    """One fenced CAS record; both fields are ``None`` when the key is absent."""
+
+    revision: int | None
+    payload: bytes | None = field(repr=False)
+
+    def __post_init__(self) -> None:
+        if (self.revision is None) != (self.payload is None):
+            raise ValueError("CAS snapshot is invalid.")
+        if self.revision is not None:
+            _require_int(
+                self.revision,
+                "CAS revision",
+                minimum=1,
+                maximum=MAX_COORDINATION_INTEGER,
+            )
+        if self.payload is not None and (
+            not isinstance(self.payload, bytes) or len(self.payload) > MAX_PAYLOAD_BYTES
+        ):
+            raise ValueError("CAS snapshot is invalid.")
+
+
+@dataclass(frozen=True, slots=True)
 class InvalidationRequest:
     scope: str = field(repr=False)
     epoch: int
@@ -415,6 +438,8 @@ class CoordinationStore(Protocol):
     async def mark_epoch_ready(self, epoch: int, operation_id: str) -> Epoch: ...
 
     async def compare_and_set(self, request: CasRequest) -> CasResult: ...
+
+    async def read_cas(self, key: str, *, epoch: int) -> CasSnapshot: ...
 
     async def invalidate(self, request: InvalidationRequest) -> InvalidationResult: ...
 
