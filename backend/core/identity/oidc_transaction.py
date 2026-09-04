@@ -166,6 +166,7 @@ class OidcAuthorizationTransactionService:
     __slots__ = (
         "_coordination",
         "_discovery",
+        "_fencing_epoch",
         "_hmac_key",
         "_max_pending",
         "_payload_key",
@@ -181,6 +182,7 @@ class OidcAuthorizationTransactionService:
         *,
         hmac_key: bytes,
         coordination: IdentitySecurityCoordinationStore | None = None,
+        fencing_epoch: int = 1,
         clock: Callable[[], float] = time.monotonic,
         token_factory: Callable[[int], str] = secrets.token_urlsafe,
         ttl_seconds: int = 300,
@@ -209,6 +211,8 @@ class OidcAuthorizationTransactionService:
                 )
                 or type(hmac_key) is not bytes
                 or len(hmac_key) < 32
+                or type(fencing_epoch) is not int
+                or fencing_epoch < 1
                 or not callable(clock)
                 or not callable(token_factory)
                 or type(ttl_seconds) is not int
@@ -231,12 +235,17 @@ class OidcAuthorizationTransactionService:
         self._policy = policy
         self._discovery = discovery
         self._hmac_key = hmac_key
+        self._fencing_epoch = fencing_epoch
         self._token_factory = token_factory
         self._ttl_seconds = ttl_seconds
         self._max_pending = max_pending
-        self._coordination = coordination or InMemoryStateStore(
-            clock=clock,
-            _oidc_transaction_limit_for_testing=max_pending,
+        self._coordination = (
+            coordination
+            if coordination is not None
+            else InMemoryStateStore(
+                clock=clock,
+                _oidc_transaction_limit_for_testing=max_pending,
+            )
         )
         if any(
             not callable(getattr(self._coordination, method, None))
@@ -254,6 +263,7 @@ class OidcAuthorizationTransactionService:
             "OidcAuthorizationTransactionService("
             f"policy_revision={self._policy.revision!r}, "
             f"issuer={self._policy.issuer!r}, "
+            f"fencing_epoch={self._fencing_epoch!r}, "
             f"ttl_seconds={self._ttl_seconds!r}, max_pending={self._max_pending!r})"
         )
 
@@ -385,7 +395,7 @@ class OidcAuthorizationTransactionService:
                     browser_digest,
                     self._encode_payload(state_digest, browser_digest),
                     self._ttl_seconds,
-                    1,
+                    self._fencing_epoch,
                     self._operation_id("create"),
                 )
             )
@@ -430,7 +440,7 @@ class OidcAuthorizationTransactionService:
                 OidcTransactionConsumeRequest(
                     state_digest,
                     browser_digest,
-                    1,
+                    self._fencing_epoch,
                     self._operation_id("consume"),
                 )
             )

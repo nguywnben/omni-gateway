@@ -1291,8 +1291,11 @@ class SessionService:
         *,
         policy: SessionPolicy | None = None,
         coordination: IdentitySecurityCoordinationStore | None = None,
+        fencing_epoch: int = 1,
     ) -> SessionService:
         selected_policy = policy or get_session_policy()
+        if type(fencing_epoch) is not int or fencing_epoch < 1:
+            raise ValueError("Session fencing epoch is invalid.")
         encoded_master = await storage.get_config(_SESSION_MASTER_KEY_CONFIG, None)
         if encoded_master is None:
             generated = _encode_master_key(secrets.token_bytes(_SESSION_MASTER_KEY_BYTES))
@@ -1318,6 +1321,7 @@ class SessionService:
                 coordination,
                 hmac_key=session_key,
                 policy=selected_policy,
+                fencing_epoch=fencing_epoch,
             ),
             identity_repository=identity_repository,
         )

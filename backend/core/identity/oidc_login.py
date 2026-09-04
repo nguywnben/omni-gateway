@@ -92,6 +92,7 @@ class OidcLoginService:
         "_session_service",
         "_transactions",
         "_transaction_coordination",
+        "_transaction_fencing_epoch",
     )
 
     def __init__(
@@ -102,6 +103,7 @@ class OidcLoginService:
         *,
         hmac_key: bytes | None,
         transaction_coordination: IdentitySecurityCoordinationStore | None = None,
+        transaction_fencing_epoch: int = 1,
         max_component_waiters: int = 32,
         discovery_failure_backoff_seconds: float = 5.0,
     ) -> None:
@@ -115,6 +117,8 @@ class OidcLoginService:
         if (
             type(max_component_waiters) is not int
             or not 1 <= max_component_waiters <= 1024
+            or type(transaction_fencing_epoch) is not int
+            or transaction_fencing_epoch < 1
             or type(discovery_failure_backoff_seconds) not in {int, float}
             or not math.isfinite(discovery_failure_backoff_seconds)
             or not 0.1 <= discovery_failure_backoff_seconds <= 300.0
@@ -125,6 +129,7 @@ class OidcLoginService:
         self._session_service = session_service
         self._hmac_key = hmac_key
         self._transaction_coordination = transaction_coordination
+        self._transaction_fencing_epoch = transaction_fencing_epoch
         self._flow: OidcAuthorizationCodeFlow | None = None
         self._transactions: OidcAuthorizationTransactionService | None = None
         self._resolver: OidcIdentityResolver | None = None
@@ -142,7 +147,10 @@ class OidcLoginService:
         *,
         session_service: SessionService,
         transaction_coordination: IdentitySecurityCoordinationStore | None = None,
+        transaction_fencing_epoch: int = 1,
     ) -> OidcLoginService:
+        if type(transaction_fencing_epoch) is not int or transaction_fencing_epoch < 1:
+            raise OidcLoginError
         try:
             repository = await storage.create_identity_repository()
             revision = await repository.get_oidc_policy_revision()
@@ -154,6 +162,7 @@ class OidcLoginService:
                 session_service,
                 hmac_key=key,
                 transaction_coordination=transaction_coordination,
+                transaction_fencing_epoch=transaction_fencing_epoch,
             )
         except asyncio.CancelledError:
             raise
@@ -230,6 +239,7 @@ class OidcLoginService:
                     discovery,
                     hmac_key=self._hmac_key or b"",
                     coordination=self._transaction_coordination,
+                    fencing_epoch=self._transaction_fencing_epoch,
                 )
                 jwks = OidcJwksCache(policy, discovery, client)
                 verifier = OidcIdTokenVerifier(policy, discovery, jwks)

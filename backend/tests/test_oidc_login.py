@@ -83,6 +83,7 @@ class OidcLoginServiceTests(unittest.IsolatedAsyncioTestCase):
             session_service,
             hmac_key=b"h" * 32,
             transaction_coordination=coordination,
+            transaction_fencing_epoch=7,
         )
 
         with (
@@ -115,6 +116,7 @@ class OidcLoginServiceTests(unittest.IsolatedAsyncioTestCase):
             transaction_factory.call_args.kwargs["coordination"],
             coordination,
         )
+        self.assertEqual(transaction_factory.call_args.kwargs["fencing_epoch"], 7)
         flow.complete.assert_awaited_once_with(
             b"code=provider-code&state=opaque", browser_token="B" * 43
         )

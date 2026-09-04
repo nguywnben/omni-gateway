@@ -579,6 +579,33 @@ class SessionServiceTests(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn(issued.token, serialized_config)
         self.assertNotIn(issued.token, repr(service))
 
+    async def test_factory_preserves_selected_nondefault_coordination_epoch(self):
+        coordination = InMemoryStateStore(clock=lambda: 1_000.0)
+        await coordination.advance_epoch(1, "session-advance-epoch")
+        await coordination.mark_epoch_ready(2, "session-mark-ready")
+        service = await SessionService.create(
+            self.storage,
+            policy=SessionPolicy(idle_ttl_seconds=300, absolute_ttl_seconds=900),
+            coordination=coordination,
+            fencing_epoch=2,
+        )
+
+        issued = await service.issue_local_owner(now=1_000.0)
+        resolved = await service.resolve(issued.token, now=1_001.0)
+
+        self.assertEqual(resolved.principal, ManagementPrincipal.local_owner())
+        self.assertEqual(service._store._fencing_epoch, 2)
+
+    async def test_factory_rejects_invalid_coordination_epoch_before_persisting_key(self):
+        with self.assertRaises(ValueError):
+            await SessionService.create(
+                self.storage,
+                policy=SessionPolicy(idle_ttl_seconds=300, absolute_ttl_seconds=900),
+                fencing_epoch=True,
+            )
+
+        self.assertEqual(self.storage.config, {})
+
     async def test_password_rotation_revokes_every_owner_session_before_reissue(self):
         service = await SessionService.create(
             self.storage,

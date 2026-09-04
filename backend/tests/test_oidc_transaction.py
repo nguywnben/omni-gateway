@@ -96,7 +96,53 @@ class UnknownConsumeStore:
         return result
 
 
+class FalsyCoordinationStore:
+    """A valid selected backend whose truthiness must not trigger local fallback."""
+
+    def __init__(self, store):
+        self.store = store
+
+    def __bool__(self):
+        return False
+
+    async def create_oidc_transaction(self, request):
+        return await self.store.create_oidc_transaction(request)
+
+    async def consume_oidc_transaction(self, request):
+        return await self.store.consume_oidc_transaction(request)
+
+
 class OidcAuthorizationTransactionTests(unittest.IsolatedAsyncioTestCase):
+    async def test_selected_falsy_backend_and_exact_nondefault_epoch_are_preserved(self):
+        backend = InMemoryStateStore(clock=lambda: 2_000_000_000.0)
+        await backend.advance_epoch(1, "oidc-advance-epoch")
+        await backend.mark_epoch_ready(2, "oidc-mark-ready")
+        selected = FalsyCoordinationStore(backend)
+        service = OidcAuthorizationTransactionService(
+            _policy(),
+            _discovery(),
+            hmac_key=_HMAC_KEY,
+            coordination=selected,
+            fencing_epoch=2,
+            token_factory=_tokens(_STATE, _BROWSER),
+        )
+
+        await service.begin()
+        proof = await service.consume(state=_STATE, browser_token=_BROWSER)
+
+        self.assertEqual(proof.issuer, _ISSUER)
+        self.assertIs(service._coordination, selected)
+
+    def test_fencing_epoch_is_strictly_validated(self):
+        for epoch in (True, 0, -1, 1.0):
+            with self.subTest(epoch=epoch), self.assertRaises(OidcAuthorizationTransactionError):
+                OidcAuthorizationTransactionService(
+                    _policy(),
+                    _discovery(),
+                    hmac_key=_HMAC_KEY,
+                    fencing_epoch=epoch,
+                )
+
     async def test_unknown_consume_result_never_releases_proof_twice(self):
         backend = InMemoryStateStore(clock=lambda: 2_000_000_000.0)
         uncertain = UnknownConsumeStore(backend)
