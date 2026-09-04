@@ -24,6 +24,7 @@ import time
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
+from core.coordination import validate_epoch
 from core.pricing import ZERO_COST_PROVIDERS, calculate_cost_usd, find_model_pricing
 from core.request_trace_service import trace_decision
 from core.state_store import (
@@ -307,11 +308,13 @@ class VirtualKeyManager:
         *,
         state_store: Optional[BaseStateStore] = None,
         usage_ledger_service: Any = None,
+        fencing_epoch: int = 1,
     ) -> None:
         self._keys_by_hash: Dict[str, VirtualKey] = {}
         self._loaded = False
         self._lock = asyncio.Lock()
-        self._state_store = state_store or InMemoryStateStore()
+        self._state_store = state_store if state_store is not None else InMemoryStateStore()
+        self._fencing_epoch = validate_epoch(fencing_epoch)
         self._usage_ledger_service = usage_ledger_service
         self._durable_reservation_ids: set[str] = set()
         self._pending_durable_settlement_ids: set[str] = set()
@@ -744,6 +747,7 @@ class VirtualKeyManager:
                     monthly_spend_usd=0.0,
                     daily_snapshot_started_at=current,
                     monthly_snapshot_started_at=current,
+                    fencing_epoch=self._fencing_epoch,
                 )
             )
         except Exception as exc:
@@ -763,6 +767,24 @@ class VirtualKeyManager:
         if not decision.accepted:
             await self._release_durable_after_admission_failure(internal_id, current)
             _increment_quota_metric(f"rejected_{decision.reason or 'unknown'}")
+            if decision.reason in {
+                "reconciling",
+                "stale_epoch",
+                "capacity",
+                "reconciliation_required",
+                "conflict",
+            }:
+                trace_decision(
+                    category="quota",
+                    action="denied",
+                    result="failed",
+                    reason="policy_unavailable",
+                    model=requested_model,
+                )
+                raise HTTPException(
+                    status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                    detail="API key quota enforcement is temporarily unavailable.",
+                )
             trace_decision(
                 category="quota",
                 action="denied",
@@ -1025,6 +1047,7 @@ class VirtualKeyManager:
                     None if actual_cost_usd is None else max(0.0, float(actual_cost_usd))
                 ),
                 durable_cost_recorded=bool(durable_cost_recorded),
+                fencing_epoch=self._fencing_epoch,
             )
         )
         if result.committed:
@@ -1057,7 +1080,11 @@ class VirtualKeyManager:
         released = False
         state_error: Exception | None = None
         try:
-            released = await self._state_store.release_quota(internal_id, now=transitioned_at)
+            released = await self._state_store.release_quota(
+                internal_id,
+                now=transitioned_at,
+                fencing_epoch=self._fencing_epoch,
+            )
         except Exception as exc:
             state_error = exc
         durable_released = False
@@ -1130,8 +1157,7 @@ class VirtualKeyManager:
         return {"daily": daily, "monthly": monthly}
 
     def reset_runtime_state(self) -> None:
-        """Testing/maintenance hook: clear windows and caches, keep keys."""
-        self._state_store = InMemoryStateStore()
+        """Clear request-local tracking without replacing the selected coordination store."""
         with self._durable_tracking_lock:
             self._durable_reservation_ids.clear()
             self._pending_durable_settlement_ids.clear()

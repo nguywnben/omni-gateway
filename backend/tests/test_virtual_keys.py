@@ -18,6 +18,7 @@ if str(TESTS_DIR) not in sys.path:
 import asyncio
 
 from core import virtual_keys
+from core.state_store import InMemoryStateStore
 from core.usage_ledger import BudgetReleaseResult, BudgetReservationDecision
 from core.virtual_keys import (
     VirtualKey,
@@ -38,6 +39,29 @@ class _FakeStorage:
     async def set_config(self, key, value):
         self.config[key] = value
         return True
+
+
+class _FalseValuedQuotaStore(InMemoryStateStore):
+    def __init__(self) -> None:
+        super().__init__(clock=lambda: 1_000.0)
+        self.reserve_epochs: list[int] = []
+        self.commit_epochs: list[int] = []
+        self.release_epochs: list[int] = []
+
+    def __bool__(self) -> bool:
+        return False
+
+    async def reserve_quota(self, request):
+        self.reserve_epochs.append(request.fencing_epoch)
+        return await super().reserve_quota(request)
+
+    async def commit_quota(self, request):
+        self.commit_epochs.append(request.fencing_epoch)
+        return await super().commit_quota(request)
+
+    async def release_quota(self, reservation_id, **kwargs):
+        self.release_epochs.append(kwargs.get("fencing_epoch"))
+        return await super().release_quota(reservation_id, **kwargs)
 
 
 def _patched_manager(storage: _FakeStorage) -> VirtualKeyManager:
@@ -231,6 +255,76 @@ class VirtualKeyEnforcementTests(unittest.TestCase):
 
         _run(scenario())
         self.assertEqual(self.manager._test_usage_ledger.reserve_budget.await_count, 2)
+
+
+class VirtualKeyCoordinationTests(unittest.TestCase):
+    @staticmethod
+    def _record() -> VirtualKey:
+        return VirtualKey(
+            id="vk_shared",
+            name="shared",
+            key_hash="hash",
+            key_preview="preview",
+            enabled=True,
+            created_at=1_000.0,
+            rpm_limit=1,
+        )
+
+    def test_false_valued_store_and_epoch_are_preserved_for_every_transition(self):
+        store = _FalseValuedQuotaStore()
+        manager = VirtualKeyManager(state_store=store, fencing_epoch=1)
+        manager._loaded = True
+        record = self._record()
+
+        async def scenario():
+            reservation = await manager.enforce(record, now=1_000.0)
+            await manager.commit_reservation(
+                reservation,
+                actual_tokens=1,
+                actual_cost_usd=0.0,
+                durable_cost_recorded=False,
+                now=1_000.1,
+            )
+            second = VirtualKeyManager(state_store=store, fencing_epoch=1)
+            second._loaded = True
+            other = VirtualKey(**{**record.__dict__, "id": "vk_other", "rpm_limit": 2})
+            released = await second.enforce(other, now=1_000.2)
+            await second.release_reservation(released, now=1_000.3)
+
+        _run(scenario())
+        self.assertIs(manager._state_store, store)
+        self.assertEqual(store.reserve_epochs, [1, 1])
+        self.assertEqual(store.commit_epochs, [1])
+        self.assertEqual(store.release_epochs, [1])
+
+    def test_two_managers_share_atomic_rate_admission(self):
+        store = InMemoryStateStore(clock=lambda: 1_000.0)
+        first = VirtualKeyManager(state_store=store, fencing_epoch=1)
+        second = VirtualKeyManager(state_store=store, fencing_epoch=1)
+        record = self._record()
+
+        async def scenario():
+            return await asyncio.gather(
+                first.enforce(record, reservation_id="quota-first", now=1_000.0),
+                second.enforce(record, reservation_id="quota-second", now=1_000.0),
+                return_exceptions=True,
+            )
+
+        results = _run(scenario())
+        self.assertEqual(sum(isinstance(result, str) for result in results), 1)
+        rejection = next(result for result in results if isinstance(result, HTTPException))
+        self.assertEqual(rejection.status_code, 429)
+
+    def test_invalid_or_stale_epoch_fails_before_or_closes_admission(self):
+        with self.assertRaises(ValueError):
+            VirtualKeyManager(fencing_epoch=True)
+        manager = VirtualKeyManager(
+            state_store=InMemoryStateStore(clock=lambda: 1_000.0),
+            fencing_epoch=2,
+        )
+        with self.assertRaises(HTTPException) as caught:
+            _run(manager.enforce(self._record(), now=1_000.0))
+        self.assertEqual(caught.exception.status_code, 503)
 
 
 class ExtractRequestedModelTests(unittest.TestCase):

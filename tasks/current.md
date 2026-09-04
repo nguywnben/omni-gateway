@@ -10,7 +10,7 @@
   Phase 6 ADR approval), exactly 75.0%; wave execution-slice checkboxes are refinements and are not
   added to that denominator.
 - Active scope: Wave 4 W4.17, routing/governance/cache state coordination.
-- Control state: **IN PROGRESS — W4.17 SLICE 4/9 COMPLETE**.
+- Control state: **IN PROGRESS — W4.17 SLICE 5/9 COMPLETE**.
 - Execution mode: continuous through the remaining W4.16–W4.19 queue under
   `docs/superpowers/plans/2026-09-02-wave-4-continuous-completion.md`; do not pause at internal task
   boundaries.
@@ -47,8 +47,14 @@
   the same fenced backend. Standalone defaults use a private in-memory adapter. Two independent
   routers sharing a store cannot double-acquire an exclusive credential or bypass a published
   cooldown. All 48 routing-focused and 37 adjacent gateway/manager tests pass.
-- Immediate next action: preserve the selected quota store and fencing epoch across every
-  `VirtualKeyManager` reserve/commit/release transition and prove shared-manager concurrency.
+- `VirtualKeyManager` now preserves an explicitly supplied store even when it is false-valued,
+  validates one fencing epoch at construction, and forwards it through reserve, commit, and
+  release. Stale/reconciling/capacity/conflict decisions return a safe 503 instead of being
+  mislabeled as customer budget exhaustion. Runtime reset no longer silently replaces a selected
+  coordinated backend. Two managers sharing one store pass atomic RPM admission; the 99-test
+  virtual-key/quota/coordination matrix is green.
+- Immediate next action: coordinate exact response-cache metadata and invalidation while keeping
+  all response bytes process-local and treating coordination failure as a cache miss.
 - Coordinated activation remains closed; standalone runtime and the one-worker/one-replica ceiling
   are unchanged.
 
