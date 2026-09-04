@@ -1,0 +1,187 @@
+from __future__ import annotations
+
+import sys
+import unittest
+from pathlib import Path
+
+BACKEND_DIR = Path(__file__).resolve().parents[1]
+if str(BACKEND_DIR) not in sys.path:
+    sys.path.insert(0, str(BACKEND_DIR))
+
+from core.coordination import CasRequest, CoordinationCorruptError, CoordinationUnavailableError
+from core.routing_coordination import (
+    CACHE_SCOPE_EXACT,
+    CacheKind,
+    RoutingCoordinationAdapter,
+)
+from core.state_store import InMemoryStateStore
+
+
+class _Clock:
+    def __init__(self) -> None:
+        self.value = 1_000.0
+
+    def __call__(self) -> float:
+        return self.value
+
+    def advance(self, seconds: float) -> None:
+        self.value += seconds
+
+
+class _RecordingStore(InMemoryStateStore):
+    def __init__(self, *, clock) -> None:
+        super().__init__(clock=clock)
+        self.keys: list[str] = []
+        self.payloads: list[bytes] = []
+
+    async def read_cas(self, key: str, *, epoch: int):
+        self.keys.append(key)
+        return await super().read_cas(key, epoch=epoch)
+
+    async def compare_and_set(self, request):
+        self.keys.append(request.key)
+        self.payloads.append(request.payload)
+        return await super().compare_and_set(request)
+
+
+class RoutingCoordinationAdapterTests(unittest.IsolatedAsyncioTestCase):
+    def setUp(self) -> None:
+        self.clock = _Clock()
+        self.store = _RecordingStore(clock=self.clock)
+        self.first = RoutingCoordinationAdapter(
+            self.store,
+            identifier_key=b"a" * 32,
+            fencing_epoch=1,
+        )
+        self.second = RoutingCoordinationAdapter(
+            self.store,
+            identifier_key=b"a" * 32,
+            fencing_epoch=1,
+        )
+
+    async def test_exclusive_lease_is_shared_released_and_expired(self) -> None:
+        lease = await self.first.acquire_credential(
+            "primary", "alice@example.json", ttl_seconds=10, max_concurrency=1
+        )
+        denied = await self.second.acquire_credential(
+            "primary", "alice@example.json", ttl_seconds=10, max_concurrency=1
+        )
+        self.assertIsNotNone(lease)
+        self.assertIsNone(denied)
+
+        assert lease is not None
+        self.assertTrue(await self.first.release_credential(lease))
+        replacement = await self.second.acquire_credential(
+            "primary", "alice@example.json", ttl_seconds=10, max_concurrency=1
+        )
+        self.assertIsNotNone(replacement)
+
+        self.clock.advance(10.1)
+        after_expiry = await self.first.acquire_credential(
+            "primary", "alice@example.json", ttl_seconds=10, max_concurrency=1
+        )
+        self.assertIsNotNone(after_expiry)
+
+    async def test_store_receives_only_domain_separated_hmac_identifiers(self) -> None:
+        lease = await self.first.acquire_credential(
+            "primary", "secret-account.json", ttl_seconds=10, max_concurrency=2
+        )
+        self.assertIsNotNone(lease)
+        serialized = b"\n".join(self.store.payloads)
+        self.assertTrue(self.store.keys)
+        self.assertTrue(all(key.startswith("routing-lease:") for key in self.store.keys))
+        self.assertNotIn("secret-account", " ".join(self.store.keys))
+        self.assertNotIn(b"secret-account", serialized)
+        self.assertNotIn(b"primary", serialized)
+
+    async def test_route_cooldown_and_latency_are_shared_and_bounded(self) -> None:
+        await self.first.record_route_outcome(
+            "primary",
+            "alice.json",
+            "model-secret",
+            success=False,
+            failure_kind="rate_limited",
+            retry_after_seconds=30,
+            latency_ms=None,
+        )
+        outcome = await self.second.read_route_outcome("primary", "alice.json", "model-secret")
+        self.assertEqual(outcome.failure_count, 1)
+        self.assertEqual(outcome.failure_kind, "rate_limited")
+        self.assertAlmostEqual(outcome.retry_after_seconds, 30, delta=0.01)
+
+        for latency in range(25):
+            await self.first.record_route_outcome(
+                "primary",
+                "alice.json",
+                "model-secret",
+                success=True,
+                failure_kind="",
+                retry_after_seconds=0,
+                latency_ms=float(latency + 1),
+            )
+        outcome = await self.second.read_route_outcome("primary", "alice.json", "model-secret")
+        self.assertEqual(outcome.failure_count, 0)
+        self.assertEqual(outcome.latency_samples_ms, tuple(float(value) for value in range(16, 26)))
+
+    async def test_exact_cache_metadata_requires_current_generation_and_digest(self) -> None:
+        generation = await self.first.current_generation(CACHE_SCOPE_EXACT)
+        published = await self.first.publish_cache_metadata(
+            CacheKind.EXACT,
+            "raw-cache-key",
+            content_digest="b" * 64,
+            media_kind="json",
+            generation=generation,
+            ttl_seconds=30,
+        )
+        self.assertTrue(published)
+        metadata = await self.second.resolve_cache_metadata(
+            CacheKind.EXACT,
+            "raw-cache-key",
+            generation=generation,
+        )
+        self.assertEqual(metadata.content_digest, "b" * 64)
+        self.assertEqual(metadata.media_kind, "json")
+
+        invalidated = await self.second.invalidate(CACHE_SCOPE_EXACT)
+        self.assertEqual(invalidated, 1)
+        self.assertIsNone(
+            await self.first.resolve_cache_metadata(
+                CacheKind.EXACT,
+                "raw-cache-key",
+                generation=invalidated,
+            )
+        )
+        self.assertNotIn("raw-cache-key", " ".join(self.store.keys))
+
+    async def test_corrupt_payload_and_stale_epoch_fail_closed(self) -> None:
+        key = self.first._lease_key("primary", "alice.json")
+        await self.store.compare_and_set(CasRequest(key, 0, b"{}", 10, 1, "corrupt"))
+        with self.assertRaises(CoordinationCorruptError):
+            await self.first.read_credential("primary", "alice.json")
+
+        advanced = await self.store.advance_epoch(1, "advance")
+        self.assertEqual(advanced.epoch, 2)
+        with self.assertRaises(CoordinationUnavailableError):
+            await self.first.acquire_credential(
+                "primary", "bob.json", ttl_seconds=10, max_concurrency=1
+            )
+
+    def test_invalid_keys_epochs_kinds_and_bounds_are_rejected(self) -> None:
+        for invalid_key in (b"short", b"a" * 31, b"a" * 65):
+            with self.subTest(invalid_key=len(invalid_key)):
+                with self.assertRaises(ValueError):
+                    RoutingCoordinationAdapter(
+                        self.store,
+                        identifier_key=invalid_key,
+                        fencing_epoch=1,
+                    )
+        with self.assertRaises(ValueError):
+            RoutingCoordinationAdapter(
+                self.store,
+                identifier_key=b"a" * 32,
+                fencing_epoch=True,
+            )
+
+
+if __name__ == "__main__":
+    unittest.main()

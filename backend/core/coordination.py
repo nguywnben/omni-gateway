@@ -96,6 +96,21 @@ class Epoch:
 
 
 @dataclass(frozen=True, slots=True)
+class CoordinationTime:
+    """Backend-owned monotonic-enough coordination clock in whole milliseconds."""
+
+    milliseconds: int
+
+    def __post_init__(self) -> None:
+        _require_int(
+            self.milliseconds,
+            "Coordination time",
+            minimum=0,
+            maximum=MAX_COORDINATION_INTEGER,
+        )
+
+
+@dataclass(frozen=True, slots=True)
 class CasRequest:
     key: str = field(repr=False)
     expected_revision: int
@@ -432,6 +447,8 @@ class CoordinationStore(Protocol):
     """The fenced coordination operations shared by every backend implementation."""
 
     async def read_epoch(self) -> Epoch: ...
+
+    async def read_coordination_time(self, *, epoch: int) -> CoordinationTime: ...
 
     async def advance_epoch(self, expected_epoch: int, operation_id: str) -> Epoch: ...
 

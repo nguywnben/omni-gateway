@@ -23,6 +23,7 @@ from core.coordination import (
     CasSnapshot,
     CoordinationCorruptError,
     CoordinationReconciliationRequiredError,
+    CoordinationTime,
     CoordinationUnavailableError,
     Epoch,
     EpochState,
@@ -779,6 +780,15 @@ class InMemoryStateStore(BaseStateStore):
         async with self._async_lock:
             self._ensure_open_locked()
             return self._epoch
+
+    async def read_coordination_time(self, *, epoch: int) -> CoordinationTime:
+        async with self._async_lock:
+            self._ensure_open_locked()
+            requested_epoch = validate_epoch(epoch)
+            if not self._is_ready_locked(requested_epoch):
+                raise CoordinationUnavailableError("Coordination epoch is not ready.")
+            milliseconds = int(self._clock() * 1000)
+            return CoordinationTime(milliseconds)
 
     async def advance_epoch(self, expected_epoch: int, operation_id: str) -> Epoch:
         async with self._async_lock:

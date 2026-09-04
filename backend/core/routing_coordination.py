@@ -1,0 +1,552 @@
+"""Fenced semantic coordination for routing, governance, and cache metadata."""
+
+from __future__ import annotations
+
+import hashlib
+import hmac
+import json
+import math
+import secrets
+from dataclasses import dataclass, field
+from enum import Enum
+from typing import Any, Final
+
+from core.coordination import (
+    MAX_COORDINATION_INTEGER,
+    CasRequest,
+    CasSnapshot,
+    CoordinationCorruptError,
+    CoordinationUnavailableError,
+    InvalidationRequest,
+    validate_epoch,
+)
+
+MAX_COORDINATION_RETRIES: Final = 8
+MAX_CREDENTIAL_LEASES: Final = 128
+MAX_LATENCY_SAMPLES: Final = 10
+MAX_CREDENTIAL_TTL_SECONDS: Final = 15 * 60
+ROUTE_RECORD_TTL_SECONDS: Final = 30 * 86_400
+CACHE_SCOPE_EXACT: Final = "cache-exact"
+CACHE_SCOPE_SEMANTIC: Final = "cache-semantic"
+GOVERNANCE_SCOPE_CONFIG: Final = "governance-config"
+GOVERNANCE_SCOPE_CREDENTIALS: Final = "governance-credentials"
+GOVERNANCE_SCOPE_VIRTUAL_KEYS: Final = "governance-virtual-keys"
+GOVERNANCE_SCOPE_MODEL_BLACKLIST: Final = "governance-model-blacklist"
+GOVERNANCE_SCOPE_MODEL_CATALOG: Final = "governance-model-catalog"
+
+VALID_INVALIDATION_SCOPES: Final = frozenset(
+    {
+        CACHE_SCOPE_EXACT,
+        CACHE_SCOPE_SEMANTIC,
+        GOVERNANCE_SCOPE_CONFIG,
+        GOVERNANCE_SCOPE_CREDENTIALS,
+        GOVERNANCE_SCOPE_VIRTUAL_KEYS,
+        GOVERNANCE_SCOPE_MODEL_BLACKLIST,
+        GOVERNANCE_SCOPE_MODEL_CATALOG,
+    }
+)
+VALID_FAILURE_KINDS: Final = frozenset(
+    {"", "authentication", "model_unavailable", "rate_limited", "transient"}
+)
+VALID_MEDIA_KINDS: Final = frozenset({"binary", "json", "text"})
+
+
+class CacheKind(str, Enum):
+    EXACT = "exact"
+    SEMANTIC = "semantic"
+
+
+@dataclass(frozen=True, slots=True)
+class CredentialLease:
+    record_key: str = field(repr=False)
+    lease_id: str = field(repr=False)
+    in_flight: int
+
+
+@dataclass(frozen=True, slots=True)
+class CredentialCoordinationSnapshot:
+    in_flight: int = 0
+    last_selected_ms: int = 0
+
+
+@dataclass(frozen=True, slots=True)
+class RouteOutcomeSnapshot:
+    failure_count: int = 0
+    failure_kind: str = ""
+    retry_after_seconds: float = 0.0
+    latency_samples_ms: tuple[float, ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
+class CacheMetadata:
+    content_digest: str
+    media_kind: str
+    generation: int
+
+
+def _require_text(value: object, label: str, *, maximum: int = 255) -> str:
+    if not isinstance(value, str) or not 1 <= len(value) <= maximum:
+        raise ValueError(f"{label} is invalid.")
+    if any(ord(character) < 32 for character in value):
+        raise ValueError(f"{label} is invalid.")
+    return value
+
+
+def _require_positive_number(value: object, label: str, *, maximum: float) -> float:
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        raise ValueError(f"{label} is invalid.")
+    number = float(value)
+    if not math.isfinite(number) or not 0 < number <= maximum:
+        raise ValueError(f"{label} is invalid.")
+    return number
+
+
+def _encode(payload: dict[str, object]) -> bytes:
+    return json.dumps(payload, separators=(",", ":"), sort_keys=True).encode("ascii")
+
+
+def _decode(payload: bytes, expected_keys: frozenset[str], record_type: str) -> dict[str, Any]:
+    try:
+        value = json.loads(payload)
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise CoordinationCorruptError("Coordination payload is invalid.") from exc
+    if (
+        not isinstance(value, dict)
+        or set(value) != expected_keys
+        or value.get("schema_version") != 1
+        or value.get("type") != record_type
+    ):
+        raise CoordinationCorruptError("Coordination payload is invalid.")
+    return value
+
+
+class RoutingCoordinationAdapter:
+    """Domain-separated, bounded CAS composition over one selected state store."""
+
+    def __init__(self, store: Any, *, identifier_key: bytes, fencing_epoch: int) -> None:
+        if store is None:
+            raise ValueError("Coordination store is required.")
+        if not isinstance(identifier_key, bytes) or not 32 <= len(identifier_key) <= 64:
+            raise ValueError("Coordination identifier key is invalid.")
+        self._store = store
+        self._identifier_key = bytes(identifier_key)
+        self._fencing_epoch = validate_epoch(fencing_epoch)
+
+    @property
+    def fencing_epoch(self) -> int:
+        return self._fencing_epoch
+
+    def _digest(self, domain: str, *parts: str) -> str:
+        message = bytearray(domain.encode("ascii"))
+        for part in parts:
+            encoded = part.encode("utf-8")
+            message.extend(len(encoded).to_bytes(4, "big"))
+            message.extend(encoded)
+        return hmac.new(self._identifier_key, message, hashlib.sha256).hexdigest()
+
+    def _lease_key(self, mode: str, filename: str) -> str:
+        return "routing-lease:" + self._digest(
+            "routing-lease-v1",
+            _require_text(mode, "Routing mode", maximum=32),
+            _require_text(filename, "Credential name"),
+        )
+
+    def _route_key(self, mode: str, filename: str, model_name: str) -> str:
+        clean_model = str(model_name or "")
+        if len(clean_model) > 255 or any(ord(character) < 32 for character in clean_model):
+            raise ValueError("Model name is invalid.")
+        return "routing-outcome:" + self._digest(
+            "routing-outcome-v1",
+            _require_text(mode, "Routing mode", maximum=32),
+            _require_text(filename, "Credential name"),
+            clean_model,
+        )
+
+    def _cache_key(self, kind: CacheKind, cache_key: str) -> str:
+        if not isinstance(kind, CacheKind):
+            raise ValueError("Cache kind is invalid.")
+        return "cache-metadata:" + self._digest(
+            "cache-metadata-v1", kind.value, _require_text(cache_key, "Cache key")
+        )
+
+    async def _now_ms(self) -> int:
+        value = await self._store.read_coordination_time(epoch=self._fencing_epoch)
+        return value.milliseconds
+
+    @staticmethod
+    def _operation_id(prefix: str) -> str:
+        return f"{prefix}-{secrets.token_hex(16)}"
+
+    @staticmethod
+    def _decode_lease(snapshot: CasSnapshot) -> tuple[list[tuple[str, int]], int]:
+        if snapshot.payload is None:
+            return [], 0
+        value = _decode(
+            snapshot.payload,
+            frozenset({"schema_version", "type", "leases", "last_selected_ms"}),
+            "credential_lease",
+        )
+        leases = value["leases"]
+        last_selected = value["last_selected_ms"]
+        if (
+            not isinstance(leases, list)
+            or len(leases) > MAX_CREDENTIAL_LEASES
+            or isinstance(last_selected, bool)
+            or not isinstance(last_selected, int)
+            or not 0 <= last_selected <= MAX_COORDINATION_INTEGER
+        ):
+            raise CoordinationCorruptError("Credential lease payload is invalid.")
+        decoded: list[tuple[str, int]] = []
+        seen: set[str] = set()
+        for item in leases:
+            if not isinstance(item, list) or len(item) != 2:
+                raise CoordinationCorruptError("Credential lease payload is invalid.")
+            lease_id, expires_ms = item
+            if (
+                not isinstance(lease_id, str)
+                or len(lease_id) != 32
+                or any(character not in "0123456789abcdef" for character in lease_id)
+                or lease_id in seen
+                or isinstance(expires_ms, bool)
+                or not isinstance(expires_ms, int)
+                or not 0 <= expires_ms <= MAX_COORDINATION_INTEGER
+            ):
+                raise CoordinationCorruptError("Credential lease payload is invalid.")
+            seen.add(lease_id)
+            decoded.append((lease_id, expires_ms))
+        return decoded, last_selected
+
+    @staticmethod
+    def _lease_payload(leases: list[tuple[str, int]], last_selected_ms: int) -> bytes:
+        return _encode(
+            {
+                "schema_version": 1,
+                "type": "credential_lease",
+                "leases": [[lease_id, expires_ms] for lease_id, expires_ms in leases],
+                "last_selected_ms": last_selected_ms,
+            }
+        )
+
+    async def read_credential(self, mode: str, filename: str) -> CredentialCoordinationSnapshot:
+        key = self._lease_key(mode, filename)
+        now_ms = await self._now_ms()
+        snapshot = await self._store.read_cas(key, epoch=self._fencing_epoch)
+        leases, last_selected = self._decode_lease(snapshot)
+        active = [lease for lease in leases if lease[1] > now_ms]
+        return CredentialCoordinationSnapshot(len(active), last_selected)
+
+    async def acquire_credential(
+        self,
+        mode: str,
+        filename: str,
+        *,
+        ttl_seconds: float,
+        max_concurrency: int = MAX_CREDENTIAL_LEASES,
+    ) -> CredentialLease | None:
+        ttl = _require_positive_number(
+            ttl_seconds, "Credential lease TTL", maximum=MAX_CREDENTIAL_TTL_SECONDS
+        )
+        if (
+            isinstance(max_concurrency, bool)
+            or not isinstance(max_concurrency, int)
+            or not 1 <= max_concurrency <= MAX_CREDENTIAL_LEASES
+        ):
+            raise ValueError("Credential concurrency is invalid.")
+        key = self._lease_key(mode, filename)
+        lease_id = secrets.token_hex(16)
+        for _attempt in range(MAX_COORDINATION_RETRIES):
+            now_ms = await self._now_ms()
+            snapshot = await self._store.read_cas(key, epoch=self._fencing_epoch)
+            leases, _last_selected = self._decode_lease(snapshot)
+            active = [lease for lease in leases if lease[1] > now_ms]
+            if len(active) >= max_concurrency:
+                return None
+            expires_ms = now_ms + math.ceil(ttl * 1000)
+            active.append((lease_id, expires_ms))
+            result = await self._store.compare_and_set(
+                CasRequest(
+                    key,
+                    snapshot.revision or 0,
+                    self._lease_payload(active, now_ms),
+                    max(1.0, (max(expires for _lease, expires in active) - now_ms) / 1000),
+                    self._fencing_epoch,
+                    self._operation_id("lease-acquire"),
+                )
+            )
+            if result.applied:
+                return CredentialLease(key, lease_id, len(active))
+        raise CoordinationUnavailableError("Credential lease coordination conflicted.")
+
+    async def release_credential(self, lease: CredentialLease) -> bool:
+        if not isinstance(lease, CredentialLease):
+            raise ValueError("Credential lease is invalid.")
+        for _attempt in range(MAX_COORDINATION_RETRIES):
+            now_ms = await self._now_ms()
+            snapshot = await self._store.read_cas(lease.record_key, epoch=self._fencing_epoch)
+            leases, last_selected = self._decode_lease(snapshot)
+            active = [item for item in leases if item[1] > now_ms]
+            retained = [item for item in active if item[0] != lease.lease_id]
+            if len(retained) == len(active):
+                return False
+            ttl = (
+                max(1.0, (max(expires for _lease, expires in retained) - now_ms) / 1000)
+                if retained
+                else 1.0
+            )
+            result = await self._store.compare_and_set(
+                CasRequest(
+                    lease.record_key,
+                    snapshot.revision or 0,
+                    self._lease_payload(retained, last_selected),
+                    ttl,
+                    self._fencing_epoch,
+                    self._operation_id("lease-release"),
+                )
+            )
+            if result.applied:
+                return True
+        raise CoordinationUnavailableError("Credential lease coordination conflicted.")
+
+    @staticmethod
+    def _decode_route(snapshot: CasSnapshot) -> tuple[int, str, int, list[int]]:
+        if snapshot.payload is None:
+            return 0, "", 0, []
+        value = _decode(
+            snapshot.payload,
+            frozenset(
+                {
+                    "schema_version",
+                    "type",
+                    "failure_count",
+                    "failure_kind",
+                    "retry_after_ms",
+                    "latency_samples_ms",
+                }
+            ),
+            "route_outcome",
+        )
+        count = value["failure_count"]
+        kind = value["failure_kind"]
+        retry = value["retry_after_ms"]
+        latencies = value["latency_samples_ms"]
+        if (
+            isinstance(count, bool)
+            or not isinstance(count, int)
+            or not 0 <= count <= MAX_COORDINATION_INTEGER
+            or kind not in VALID_FAILURE_KINDS
+            or isinstance(retry, bool)
+            or not isinstance(retry, int)
+            or not 0 <= retry <= MAX_COORDINATION_INTEGER
+            or not isinstance(latencies, list)
+            or len(latencies) > MAX_LATENCY_SAMPLES
+            or any(
+                isinstance(item, bool)
+                or not isinstance(item, int)
+                or not 1 <= item <= MAX_COORDINATION_INTEGER
+                for item in latencies
+            )
+        ):
+            raise CoordinationCorruptError("Route outcome payload is invalid.")
+        return count, kind, retry, latencies
+
+    @staticmethod
+    def _route_payload(count: int, kind: str, retry_ms: int, latencies: list[int]) -> bytes:
+        return _encode(
+            {
+                "schema_version": 1,
+                "type": "route_outcome",
+                "failure_count": count,
+                "failure_kind": kind,
+                "retry_after_ms": retry_ms,
+                "latency_samples_ms": latencies,
+            }
+        )
+
+    async def read_route_outcome(
+        self, mode: str, filename: str, model_name: str = ""
+    ) -> RouteOutcomeSnapshot:
+        key = self._route_key(mode, filename, model_name)
+        now_ms = await self._now_ms()
+        snapshot = await self._store.read_cas(key, epoch=self._fencing_epoch)
+        count, kind, retry_ms, latencies = self._decode_route(snapshot)
+        if retry_ms <= now_ms:
+            count, kind, retry_ms = 0, "", 0
+        return RouteOutcomeSnapshot(
+            count,
+            kind,
+            max(0.0, (retry_ms - now_ms) / 1000),
+            tuple(float(value) for value in latencies),
+        )
+
+    async def record_route_outcome(
+        self,
+        mode: str,
+        filename: str,
+        model_name: str,
+        *,
+        success: bool,
+        failure_kind: str,
+        retry_after_seconds: float,
+        latency_ms: float | None,
+    ) -> None:
+        if not isinstance(success, bool) or failure_kind not in VALID_FAILURE_KINDS:
+            raise ValueError("Route outcome is invalid.")
+        retry_seconds = float(retry_after_seconds)
+        if not math.isfinite(retry_seconds) or retry_seconds < 0:
+            raise ValueError("Route retry delay is invalid.")
+        if not success and not failure_kind:
+            raise ValueError("Route failure kind is required.")
+        latency = None
+        if latency_ms is not None:
+            latency = round(
+                _require_positive_number(latency_ms, "Route latency", maximum=3_600_000)
+            )
+        key = self._route_key(mode, filename, model_name)
+        for _attempt in range(MAX_COORDINATION_RETRIES):
+            now_ms = await self._now_ms()
+            snapshot = await self._store.read_cas(key, epoch=self._fencing_epoch)
+            count, _kind, _retry, latencies = self._decode_route(snapshot)
+            if success:
+                count, failure_kind, retry_ms = 0, "", 0
+            else:
+                count = min(MAX_COORDINATION_INTEGER, count + 1)
+                retry_ms = min(
+                    MAX_COORDINATION_INTEGER,
+                    now_ms + math.ceil(retry_seconds * 1000),
+                )
+            if latency is not None:
+                latencies = [*latencies, latency][-MAX_LATENCY_SAMPLES:]
+            result = await self._store.compare_and_set(
+                CasRequest(
+                    key,
+                    snapshot.revision or 0,
+                    self._route_payload(count, failure_kind, retry_ms, latencies),
+                    ROUTE_RECORD_TTL_SECONDS,
+                    self._fencing_epoch,
+                    self._operation_id("route-outcome"),
+                )
+            )
+            if result.applied:
+                return
+        raise CoordinationUnavailableError("Route outcome coordination conflicted.")
+
+    @staticmethod
+    def _cache_scope(kind: CacheKind) -> str:
+        if kind is CacheKind.EXACT:
+            return CACHE_SCOPE_EXACT
+        if kind is CacheKind.SEMANTIC:
+            return CACHE_SCOPE_SEMANTIC
+        raise ValueError("Cache kind is invalid.")
+
+    async def current_generation(self, scope: str) -> int:
+        if scope not in VALID_INVALIDATION_SCOPES:
+            raise ValueError("Invalidation scope is invalid.")
+        await self._now_ms()
+        snapshot = await self._store.read_invalidation_generation(scope)
+        return snapshot.generation or 0
+
+    async def invalidate(self, scope: str) -> int:
+        if scope not in VALID_INVALIDATION_SCOPES:
+            raise ValueError("Invalidation scope is invalid.")
+        result = await self._store.invalidate(
+            InvalidationRequest(
+                scope,
+                self._fencing_epoch,
+                self._operation_id("invalidate"),
+                replay_ttl_seconds=300,
+            )
+        )
+        if not result.applied or result.generation is None:
+            raise CoordinationUnavailableError("Invalidation was not applied.")
+        return result.generation
+
+    async def publish_cache_metadata(
+        self,
+        kind: CacheKind,
+        cache_key: str,
+        *,
+        content_digest: str,
+        media_kind: str,
+        generation: int,
+        ttl_seconds: float,
+    ) -> bool:
+        key = self._cache_key(kind, cache_key)
+        if (
+            not isinstance(content_digest, str)
+            or len(content_digest) != 64
+            or any(character not in "0123456789abcdef" for character in content_digest)
+            or media_kind not in VALID_MEDIA_KINDS
+            or isinstance(generation, bool)
+            or not isinstance(generation, int)
+            or not 0 <= generation <= MAX_COORDINATION_INTEGER
+        ):
+            raise ValueError("Cache metadata is invalid.")
+        ttl = _require_positive_number(ttl_seconds, "Cache metadata TTL", maximum=30 * 86_400)
+        payload = _encode(
+            {
+                "schema_version": 1,
+                "type": "cache_metadata",
+                "kind": kind.value,
+                "content_digest": content_digest,
+                "media_kind": media_kind,
+                "generation": generation,
+            }
+        )
+        for _attempt in range(MAX_COORDINATION_RETRIES):
+            snapshot = await self._store.read_cas(key, epoch=self._fencing_epoch)
+            result = await self._store.compare_and_set(
+                CasRequest(
+                    key,
+                    snapshot.revision or 0,
+                    payload,
+                    ttl,
+                    self._fencing_epoch,
+                    self._operation_id("cache-publish"),
+                )
+            )
+            if result.applied:
+                return True
+        raise CoordinationUnavailableError("Cache metadata coordination conflicted.")
+
+    async def resolve_cache_metadata(
+        self,
+        kind: CacheKind,
+        cache_key: str,
+        *,
+        generation: int,
+    ) -> CacheMetadata | None:
+        key = self._cache_key(kind, cache_key)
+        snapshot = await self._store.read_cas(key, epoch=self._fencing_epoch)
+        if snapshot.payload is None:
+            return None
+        value = _decode(
+            snapshot.payload,
+            frozenset(
+                {
+                    "schema_version",
+                    "type",
+                    "kind",
+                    "content_digest",
+                    "media_kind",
+                    "generation",
+                }
+            ),
+            "cache_metadata",
+        )
+        digest = value["content_digest"]
+        media_kind = value["media_kind"]
+        stored_generation = value["generation"]
+        if (
+            value["kind"] != kind.value
+            or not isinstance(digest, str)
+            or len(digest) != 64
+            or any(character not in "0123456789abcdef" for character in digest)
+            or media_kind not in VALID_MEDIA_KINDS
+            or isinstance(stored_generation, bool)
+            or not isinstance(stored_generation, int)
+            or not 0 <= stored_generation <= MAX_COORDINATION_INTEGER
+        ):
+            raise CoordinationCorruptError("Cache metadata payload is invalid.")
+        if stored_generation != generation:
+            return None
+        return CacheMetadata(digest, media_kind, stored_generation)

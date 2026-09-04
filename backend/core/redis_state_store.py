@@ -26,6 +26,7 @@ from core.coordination import (
     CasSnapshot,
     CoordinationCorruptError,
     CoordinationReconciliationRequiredError,
+    CoordinationTime,
     CoordinationUnavailableError,
     Epoch,
     EpochState,
@@ -111,6 +112,30 @@ if schema ~= '1' or not valid_integer(epoch)
   return redis.error_reply('COORDINATION_CORRUPT')
 end
 return {'1', 'ok', epoch, state}
+"""
+
+_TIME_READ_SCRIPT = """-- omni:time_read:v1
+local function valid_integer(value)
+  return value and string.match(value, '^[1-9][0-9]*$')
+    and (#value < 19 or (#value == 19 and value <= '9223372036854775807'))
+end
+local marker, encoded_epoch = redis.call('GET', KEYS[2]), redis.call('GET', KEYS[1])
+if marker ~= '1|initialized' or not encoded_epoch or redis.call('PTTL', KEYS[2]) ~= -1
+  or redis.call('PTTL', KEYS[1]) ~= -1 then
+  return redis.error_reply('COORDINATION_CORRUPT')
+end
+local schema, current_epoch, current_state =
+  string.match(encoded_epoch, '^([^|]+)|([^|]+)|([^|]+)$')
+if schema ~= '1' or not valid_integer(current_epoch)
+  or (current_state ~= 'ready' and current_state ~= 'reconciling') then
+  return redis.error_reply('COORDINATION_CORRUPT')
+end
+if current_epoch ~= ARGV[1] or current_state ~= 'ready' then
+  return {'1', 'unavailable', ''}
+end
+local clock = redis.call('TIME')
+local now_ms = (clock[1] * 1000) + math.floor(clock[2] / 1000)
+return {'1', 'ok', string.format('%.0f', now_ms)}
 """
 
 _EPOCH_ADVANCE_SCRIPT = """-- omni:epoch_advance:v1
@@ -1991,6 +2016,7 @@ return {'1', 'denied', reason, '0', ''}
 
 SCRIPT_SOURCES = {
     "epoch_read": _EPOCH_READ_SCRIPT,
+    "time_read": _TIME_READ_SCRIPT,
     "epoch_advance": _EPOCH_ADVANCE_SCRIPT,
     "epoch_ready": _EPOCH_READY_SCRIPT,
     "cas": _CAS_SCRIPT,
@@ -2134,6 +2160,17 @@ def _decode_epoch_reply(reply: object) -> Epoch:
     except (UnicodeDecodeError, ValueError):
         raise CoordinationCorruptError("Coordination reply is invalid.") from None
     return Epoch(_strict_positive_int(values[2]), state)
+
+
+def _decode_time_reply(reply: object) -> CoordinationTime:
+    values = _strict_array(reply, 3)
+    if values[1] == b"unavailable":
+        if values[2] != b"":
+            raise CoordinationCorruptError("Coordination reply is invalid.")
+        raise CoordinationUnavailableError("Coordination epoch is not ready.")
+    if values[1] != b"ok":
+        raise CoordinationCorruptError("Coordination reply is invalid.")
+    return CoordinationTime(_strict_nonnegative_int(values[2]))
 
 
 def _decode_cas_reply(reply: object) -> CasResult:
@@ -2766,6 +2803,15 @@ class RedisStateStore:
             "epoch_read", keys=[self._key("epoch"), self._key("initialization")], args=[]
         )
         return _decode_epoch_reply(reply)
+
+    async def read_coordination_time(self, *, epoch: int) -> CoordinationTime:
+        requested_epoch = validate_epoch(epoch)
+        reply = await self._run_script(
+            "time_read",
+            keys=[self._key("epoch"), self._key("initialization")],
+            args=[_integer_bytes(requested_epoch)],
+        )
+        return _decode_time_reply(reply)
 
     async def advance_epoch(self, expected_epoch: int, operation_id: str) -> Epoch:
         expected = validate_epoch(expected_epoch)

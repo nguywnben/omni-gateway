@@ -191,6 +191,8 @@ class CoordinationStoreContract:
         epoch = await self.store.read_epoch()
         self.assertEqual(epoch.epoch, 1)
         self.assertEqual(epoch.state, EpochState.READY)
+        first_clock = await self.store.read_coordination_time(epoch=1)
+        self.assertGreaterEqual(first_clock.milliseconds, 0)
 
         advanced = await self.store.advance_epoch(1, "advance-1")
         self.assertEqual(advanced.epoch, 2)
@@ -205,6 +207,8 @@ class CoordinationStoreContract:
         self.assertFalse(stale_cas.applied)
         with self.assertRaises(CoordinationUnavailableError):
             await self.store.read_cas("contract-key", epoch=2)
+        with self.assertRaises(CoordinationUnavailableError):
+            await self.store.read_coordination_time(epoch=2)
         reconciling_invalidation = await self.store.invalidate(
             InvalidationRequest("reconciling-scope", 2, "reconciling-invalidate")
         )
@@ -213,6 +217,8 @@ class CoordinationStoreContract:
         self.assertEqual(await self.store.mark_epoch_ready(1, "ready-stale"), advanced)
         ready = await self.store.mark_epoch_ready(2, "ready-1")
         self.assertEqual(ready.state, EpochState.READY)
+        ready_clock = await self.store.read_coordination_time(epoch=2)
+        self.assertGreaterEqual(ready_clock.milliseconds, first_clock.milliseconds)
         self.assertEqual(await self.store.mark_epoch_ready(2, "ready-1"), ready)
         self.assertEqual(await self.store.mark_epoch_ready(1, "ready-1"), ready)
         self.assertEqual(await self.store.mark_epoch_ready(1, "ready-conflict"), ready)
@@ -311,6 +317,8 @@ class CoordinationStoreContract:
             )
         with self.assertRaises(CoordinationUnavailableError):
             await self.store.read_cas("after-close-key", epoch=2)
+        with self.assertRaises(CoordinationUnavailableError):
+            await self.store.read_coordination_time(epoch=2)
         with self.assertRaises(CoordinationUnavailableError):
             await self.store.invalidate(
                 InvalidationRequest("after-close-scope", 2, "after-close-invalidate")

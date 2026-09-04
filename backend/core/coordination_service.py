@@ -19,6 +19,7 @@ from core.coordination import (
     CasSnapshot,
     CoordinationCorruptError,
     CoordinationReconciliationRequiredError,
+    CoordinationTime,
     CoordinationUnavailableError,
     Epoch,
     InvalidationGeneration,
@@ -61,6 +62,7 @@ _OPERATIONS = frozenset(
         "acquire_lock",
         "release_lock",
         "read_epoch",
+        "read_coordination_time",
         "advance_epoch",
         "mark_epoch_ready",
         "compare_and_set",
@@ -263,6 +265,11 @@ class CoordinationService:
 
     async def read_epoch(self) -> Epoch:
         return await self._run("read_epoch", self._store.read_epoch)
+
+    async def read_coordination_time(self, *, epoch: int) -> CoordinationTime:
+        return await self._run(
+            "read_coordination_time", self._store.read_coordination_time, epoch=epoch
+        )
 
     async def advance_epoch(self, expected_epoch: int, operation_id: str) -> Epoch:
         return await self._run(

@@ -10,7 +10,7 @@
   Phase 6 ADR approval), exactly 75.0%; wave execution-slice checkboxes are refinements and are not
   added to that denominator.
 - Active scope: Wave 4 W4.17, routing/governance/cache state coordination.
-- Control state: **IN PROGRESS — W4.17 SLICE 2/9 COMPLETE**.
+- Control state: **IN PROGRESS — W4.17 SLICE 3/9 COMPLETE**.
 - Execution mode: continuous through the remaining W4.16–W4.19 queue under
   `docs/superpowers/plans/2026-09-02-wave-4-continuous-completion.md`; do not pause at internal task
   boundaries.
@@ -36,8 +36,13 @@
   a fixed cluster-slot-safe Redis Lua read, strict binary-safe decoding, service metrics, and the
   shared live contract. The focused coordination matrix passes 93 tests; configured live Redis
   execution remains opt-in.
-- Immediate next action: RED/GREEN the HMAC semantic adapter for bounded credential leases,
-  cooldown/outcome evidence, cache metadata, and monotonic invalidation.
+- The semantic adapter adds a backend-owned coordination clock, domain-separated HMAC identifiers,
+  bounded exclusive/shared credential leases, shared route cooldown/latency outcomes, exact and
+  semantic cache metadata types, and fixed-scope monotonic invalidation. The expanded focused
+  matrix passes 99 tests without exposing credential, model, or cache identifiers to store keys or
+  payloads.
+- Immediate next action: migrate `SmartCredentialRouter` and `CredentialManager` to injected
+  adapter snapshots, lease handles, and route outcomes with no selected-path fallback.
 - Coordinated activation remains closed; standalone runtime and the one-worker/one-replica ceiling
   are unchanged.
 

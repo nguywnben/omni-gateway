@@ -147,6 +147,7 @@ class StatefulRedisClient(FakeRedisClient):
 
     _KEY_COUNTS = {
         "epoch_read": (2, 0),
+        "time_read": (2, 1),
         "epoch_advance": (4, 4),
         "epoch_ready": (4, 4),
         "cas": (5, 7),
@@ -267,6 +268,12 @@ class StatefulRedisClient(FakeRedisClient):
                 self.epoch_exists = True
                 self.initialization_exists = True
             return [b"1", b"ok", str(self.epoch[0]).encode(), self.epoch[1]]
+        if name == "time_read":
+            if not self.epoch_exists or not self.initialization_exists:
+                raise RuntimeError("COORDINATION_CORRUPT")
+            if self.epoch != (int(byte_args[0]), b"ready"):
+                return [b"1", b"unavailable", b""]
+            return [b"1", b"ok", str(self.now_ms).encode()]
         if name in {
             "epoch_advance",
             "epoch_ready",
@@ -2074,6 +2081,7 @@ class RedisStateStoreTests(unittest.IsolatedAsyncioTestCase):
             set(SCRIPT_SOURCES),
             {
                 "epoch_read",
+                "time_read",
                 "epoch_advance",
                 "epoch_ready",
                 "cas",
