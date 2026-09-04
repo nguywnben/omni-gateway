@@ -8,6 +8,7 @@ import hmac
 import json
 import re
 import secrets
+import struct
 import zlib
 from collections.abc import Callable
 from dataclasses import dataclass, field
@@ -18,6 +19,7 @@ from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 _FINGERPRINT_PATTERN = re.compile(r"^[0-9a-f]{64}$")
 _PREVIEW_PATTERN = re.compile(r"^[A-Za-z0-9_-]{43}$")
 _OWNER_PATTERN = re.compile(r"^[A-Za-z0-9_-]{43}$")
+_IDEMPOTENCY_ROOT_PATTERN = re.compile(r"^credential-batch-idempotency-[0-9a-f]{64}$")
 _HMAC_DOMAIN = b"omni-gateway:credential-batch:v1\0"
 _PAYLOAD_KEY_DOMAIN = b"omni-gateway:credential-batch-payload-key:v1\0"
 _PAYLOAD_AAD = b"omni-gateway:credential-batch-payload:v1"
@@ -28,6 +30,11 @@ _MAX_RESPONSE_BYTES = 256 * 1024
 _CHUNK_BYTES = 12 * 1024
 _MAX_CHUNKS = 32
 _MAX_CAS_RETRIES = 4
+_MAX_REGISTRY_CAS_RETRIES = 16
+_DOMAIN_CAPACITY = 256
+_REGISTRY_TTL_SECONDS = 30.0 * 86_400.0
+_REGISTRY_HEADER = struct.Struct(">BH")
+_REGISTRY_ENTRY = struct.Struct(">32sQ")
 
 
 class CredentialBatchCoordinationError(RuntimeError):
@@ -35,6 +42,10 @@ class CredentialBatchCoordinationError(RuntimeError):
 
     def __init__(self) -> None:
         super().__init__("Credential batch coordination failed.")
+
+
+class CredentialBatchCapacityError(CredentialBatchCoordinationError):
+    """The bounded preview or idempotency domain has no free admission slot."""
 
 
 class BatchIdempotencyConflictError(CredentialBatchCoordinationError):
@@ -57,6 +68,22 @@ class BatchIdempotencyReservation:
     fingerprint: str = field(repr=False)
     owner_token: str = field(repr=False)
     revision: int
+    registry_digest: bytes = field(repr=False)
+
+    def __post_init__(self) -> None:
+        if (
+            type(self.root_key) is not str
+            or not _IDEMPOTENCY_ROOT_PATTERN.fullmatch(self.root_key)
+            or type(self.fingerprint) is not str
+            or not _FINGERPRINT_PATTERN.fullmatch(self.fingerprint)
+            or type(self.owner_token) is not str
+            or not _OWNER_PATTERN.fullmatch(self.owner_token)
+            or type(self.revision) is not int
+            or self.revision <= 0
+            or type(self.registry_digest) is not bytes
+            or len(self.registry_digest) != 32
+        ):
+            raise CredentialBatchCoordinationError
 
     def __repr__(self) -> str:
         return f"BatchIdempotencyReservation(revision={self.revision!r}, owner='<redacted>')"
@@ -103,7 +130,7 @@ class CredentialBatchCoordinationService:
             validate_epoch(fencing_epoch)
             if any(
                 not callable(getattr(coordination, method, None))
-                for method in ("compare_and_set", "read_cas")
+                for method in ("compare_and_set", "read_cas", "read_coordination_time")
             ):
                 raise CredentialBatchCoordinationError
         except CredentialBatchCoordinationError:
@@ -136,6 +163,16 @@ class CredentialBatchCoordinationService:
 
     def _chunk_key(self, root_key: str, owner_token: str, index: int) -> str:
         return self._key(b"chunk", f"{root_key}\0{owner_token}\0{index}")
+
+    def _registry_key(self, domain: str) -> str:
+        return self._key(b"capacity", domain)
+
+    def _registry_digest(self, domain: str, identifier: str) -> bytes:
+        return hmac.digest(
+            self._hmac_key,
+            _HMAC_DOMAIN + b"capacity\0" + domain.encode("ascii") + b"\0" + identifier.encode(),
+            hashlib.sha256,
+        )
 
     def _encrypt(self, key: str, payload: bytes) -> bytes:
         nonce = secrets.token_bytes(12)
@@ -225,6 +262,155 @@ class CredentialBatchCoordinationService:
             return record
         except CredentialBatchCoordinationError:
             raise CredentialBatchCoordinationError from None
+
+    def _encode_registry(self, key: str, entries: dict[bytes, int]) -> bytes:
+        if len(entries) > _DOMAIN_CAPACITY:
+            raise CredentialBatchCoordinationError
+        raw = bytearray(_REGISTRY_HEADER.pack(1, len(entries)))
+        for digest, expires_at_ms in sorted(entries.items()):
+            if type(digest) is not bytes or len(digest) != 32 or type(expires_at_ms) is not int:
+                raise CredentialBatchCoordinationError
+            raw.extend(_REGISTRY_ENTRY.pack(digest, expires_at_ms))
+        return self._encrypt(key, bytes(raw))
+
+    def _decode_registry(self, key: str, payload: bytes) -> dict[bytes, int]:
+        try:
+            raw = self._decrypt(key, payload)
+            if len(raw) < _REGISTRY_HEADER.size:
+                raise ValueError
+            version, count = _REGISTRY_HEADER.unpack_from(raw)
+            if (
+                version != 1
+                or count > _DOMAIN_CAPACITY
+                or len(raw) != _REGISTRY_HEADER.size + count * _REGISTRY_ENTRY.size
+            ):
+                raise ValueError
+            entries: dict[bytes, int] = {}
+            offset = _REGISTRY_HEADER.size
+            for _ in range(count):
+                digest, expires_at_ms = _REGISTRY_ENTRY.unpack_from(raw, offset)
+                offset += _REGISTRY_ENTRY.size
+                if digest in entries:
+                    raise ValueError
+                entries[digest] = expires_at_ms
+            return entries
+        except CredentialBatchCoordinationError:
+            raise CredentialBatchCoordinationError from None
+        except Exception:
+            raise CredentialBatchCoordinationError from None
+
+    async def _set_admission(
+        self,
+        domain: str,
+        digest: bytes,
+        ttl_seconds: float,
+        *,
+        require_existing: bool,
+    ) -> None:
+        registry_key = self._registry_key(domain)
+        try:
+            if type(digest) is not bytes or len(digest) != 32:
+                raise CredentialBatchCoordinationError
+            now_ms = (
+                await self._coordination.read_coordination_time(epoch=self._fencing_epoch)
+            ).milliseconds
+            expires_at_ms = now_ms + int(ttl_seconds * 1000)
+            for _attempt in range(_MAX_REGISTRY_CAS_RETRIES):
+                snapshot = await self._coordination.read_cas(
+                    registry_key, epoch=self._fencing_epoch
+                )
+                entries = (
+                    {}
+                    if snapshot.payload is None
+                    else self._decode_registry(registry_key, snapshot.payload)
+                )
+                entries = {
+                    entry_digest: expiry
+                    for entry_digest, expiry in entries.items()
+                    if expiry > now_ms
+                }
+                if digest not in entries:
+                    if require_existing:
+                        raise CredentialBatchCoordinationError
+                    if len(entries) >= _DOMAIN_CAPACITY:
+                        raise CredentialBatchCapacityError
+                entries[digest] = expires_at_ms
+                result = await self._coordination.compare_and_set(
+                    CasRequest(
+                        registry_key,
+                        snapshot.revision or 0,
+                        self._encode_registry(registry_key, entries),
+                        _REGISTRY_TTL_SECONDS,
+                        self._fencing_epoch,
+                        self._operation_id(f"{domain}-admit"),
+                    )
+                )
+                if result.applied:
+                    return
+            raise CredentialBatchCoordinationError
+        except asyncio.CancelledError:
+            raise
+        except CredentialBatchCapacityError:
+            raise CredentialBatchCapacityError from None
+        except CredentialBatchCoordinationError:
+            raise CredentialBatchCoordinationError from None
+        except Exception:
+            raise CredentialBatchCoordinationError from None
+
+    async def _admit(self, domain: str, identifier: str, ttl_seconds: float) -> bytes:
+        digest = self._registry_digest(domain, identifier)
+        await self._set_admission(
+            domain,
+            digest,
+            ttl_seconds,
+            require_existing=False,
+        )
+        return digest
+
+    async def _refresh_admission(self, domain: str, digest: bytes, ttl_seconds: float) -> None:
+        await self._set_admission(
+            domain,
+            digest,
+            ttl_seconds,
+            require_existing=True,
+        )
+
+    async def _remove_admission(self, domain: str, digest: bytes) -> None:
+        registry_key = self._registry_key(domain)
+        try:
+            now_ms = (
+                await self._coordination.read_coordination_time(epoch=self._fencing_epoch)
+            ).milliseconds
+            for _attempt in range(_MAX_REGISTRY_CAS_RETRIES):
+                snapshot = await self._coordination.read_cas(
+                    registry_key, epoch=self._fencing_epoch
+                )
+                if snapshot.payload is None:
+                    return
+                entries = {
+                    entry_digest: expiry
+                    for entry_digest, expiry in self._decode_registry(
+                        registry_key, snapshot.payload
+                    ).items()
+                    if expiry > now_ms and entry_digest != digest
+                }
+                result = await self._coordination.compare_and_set(
+                    CasRequest(
+                        registry_key,
+                        snapshot.revision or 0,
+                        self._encode_registry(registry_key, entries),
+                        _REGISTRY_TTL_SECONDS,
+                        self._fencing_epoch,
+                        self._operation_id(f"{domain}-remove"),
+                    )
+                )
+                if result.applied:
+                    return
+            raise CredentialBatchCoordinationError
+        except asyncio.CancelledError:
+            raise
+        except CredentialBatchCoordinationError:
+            raise CredentialBatchCoordinationError from None
         except Exception:
             raise CredentialBatchCoordinationError from None
 
@@ -247,6 +433,7 @@ class CredentialBatchCoordinationService:
             token = self._token_factory(32)
             if type(token) is not str or not _PREVIEW_PATTERN.fullmatch(token):
                 raise CredentialBatchCoordinationError
+            await self._admit("preview", token, _PREVIEW_TTL_SECONDS)
             key = self._key(b"preview", token)
             payload = self._encode_record(
                 key,
@@ -275,6 +462,8 @@ class CredentialBatchCoordinationService:
             return token
         except asyncio.CancelledError:
             raise
+        except CredentialBatchCapacityError:
+            raise CredentialBatchCapacityError from None
         except CredentialBatchCoordinationError:
             raise CredentialBatchCoordinationError from None
         except Exception:
@@ -384,6 +573,9 @@ class CredentialBatchCoordinationService:
                 owner_token = self._token_factory(32)
                 if type(owner_token) is not str or not _OWNER_PATTERN.fullmatch(owner_token):
                     raise CredentialBatchCoordinationError
+                registry_digest = await self._admit(
+                    "idempotency", idempotency_key, _IDEMPOTENCY_TTL_SECONDS
+                )
                 result = await self._coordination.compare_and_set(
                     CasRequest(
                         root_key,
@@ -403,6 +595,7 @@ class CredentialBatchCoordinationService:
                         fingerprint,
                         owner_token,
                         result.revision,
+                        registry_digest,
                     )
             raise CredentialBatchCoordinationError
         except asyncio.CancelledError:
@@ -411,6 +604,8 @@ class CredentialBatchCoordinationService:
             raise BatchIdempotencyConflictError from None
         except BatchIdempotencyInProgressError:
             raise BatchIdempotencyInProgressError from None
+        except CredentialBatchCapacityError:
+            raise CredentialBatchCapacityError from None
         except CredentialBatchCoordinationError:
             raise CredentialBatchCoordinationError from None
         except Exception:
@@ -456,6 +651,11 @@ class CredentialBatchCoordinationService:
             ):
                 raise CredentialBatchCoordinationError
             await self.assert_owner(reservation)
+            await self._refresh_admission(
+                "idempotency",
+                reservation.registry_digest,
+                _IDEMPOTENCY_TTL_SECONDS,
+            )
             raw = json.dumps(
                 body,
                 ensure_ascii=False,
@@ -537,6 +737,7 @@ class CredentialBatchCoordinationService:
             )
             if not result.applied:
                 raise CredentialBatchCoordinationError
+            await self._remove_admission("idempotency", reservation.registry_digest)
         except asyncio.CancelledError:
             raise
         except CredentialBatchCoordinationError:

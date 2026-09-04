@@ -3,8 +3,8 @@
 ## Status
 
 Accepted W4-C blocker-closure implementation. This contract moves preview and idempotency authority
-behind the lifecycle-selected coordination store. It does not make credential-pool upsert or
-deduplication safe for multiple replicas and does not activate coordinated mode.
+behind the lifecycle-selected coordination store and restores bounded per-domain admission. It does
+not activate coordinated mode.
 
 ## Security and correctness boundary
 
@@ -22,6 +22,12 @@ deduplication safe for multiple replicas and does not activate coordinated mode.
   atomic root transition.
 - Preview tokens expire after five minutes. Batch input remains capped at 100 targets and per-item
   execution remains bounded to five seconds.
+- Preview and idempotency admissions use separate AES-GCM-encrypted CAS registries. Each registry
+  holds at most 256 live full-length HMAC digests and backend-time expiries; its maximum plaintext
+  size is 10,243 bytes and remains below the generic 16 KiB coordination limit.
+- Expired entries are pruned during admission. Completed idempotency results retain their slot for
+  the replay lifetime, explicit pre-mutation release returns the slot, and capacity exhaustion is a
+  retryable HTTP 429 with `Retry-After` rather than an ambiguous availability failure.
 
 ## Failure semantics
 
@@ -29,12 +35,14 @@ Chunk writes that precede a failed root commit are invisible and expire. A missi
 digest mismatch, decompression overflow, duplicate JSON field in a control record, owner mismatch,
 or dependency failure never returns a cached success and never grants mutation authority.
 
-The generic coordination store remains globally bounded. A dedicated 256-entry per-domain
-admission counter has not yet been proven, so capacity-hardening remains part of the retained
-credential-mutation blocker before HA activation.
+Registry transitions use bounded CAS retries and authoritative coordination time. A failed token
+root publication conservatively retains its short-lived admission rather than removing a slot that
+could belong to an already-published colliding token. Unknown release outcomes may temporarily
+retain capacity but cannot undercount live work or grant duplicate mutation authority.
 
 ## Verification
 
 Focused tests cover cross-client preview and replay, concurrent single-owner reservation,
 conflicting key reuse, safe release, ownership fencing, large multi-chunk response reconstruction,
-stale epochs, dependency loss, cancellation, and existing route compatibility.
+exact 256-entry capacity, expiry pruning, concurrent cross-client admission, completion retention,
+HTTP 429/503 envelopes, stale epochs, dependency loss, cancellation, and route compatibility.

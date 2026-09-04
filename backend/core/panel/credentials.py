@@ -490,7 +490,7 @@ async def creds_batch_action(
                 idempotency_fingerprint,
             )
         except HTTPException as exc:
-            return _batch_idempotency_error(exc)
+            return _batch_coordination_error(exc)
         if cached and not request.preview:
             status_code, body = cached
             return JSONResponse(status_code=status_code, content=body)
@@ -540,7 +540,13 @@ async def creds_batch_action(
         requires_preview = batch_requires_preview(action, len(filenames))
 
         if not request.preview and requires_preview:
-            if not await preview_matches(request.preview_token, target_fingerprint):
+            try:
+                preview_is_current = await preview_matches(
+                    request.preview_token, target_fingerprint
+                )
+            except HTTPException as exc:
+                return _batch_coordination_error(exc)
+            if not preview_is_current:
                 return JSONResponse(
                     status_code=428,
                     content={
@@ -570,7 +576,7 @@ async def creds_batch_action(
                     reserve=True,
                 )
             except HTTPException as exc:
-                return _batch_idempotency_error(exc)
+                return _batch_coordination_error(exc)
             if isinstance(cached, tuple):
                 status_code, body = cached
                 return JSONResponse(status_code=status_code, content=body)
@@ -586,7 +592,10 @@ async def creds_batch_action(
         planning_complete = True
 
         if request.preview:
-            preview_token = await issue_batch_preview(target_fingerprint)
+            try:
+                preview_token = await issue_batch_preview(target_fingerprint)
+            except HTTPException as exc:
+                return _batch_coordination_error(exc)
             body = _batch_response_body(
                 action,
                 results,
@@ -680,9 +689,10 @@ async def creds_batch_action(
                 log.error("Credential batch reservation release failed.")
 
 
-def _batch_idempotency_error(exc: HTTPException) -> JSONResponse:
+def _batch_coordination_error(exc: HTTPException) -> JSONResponse:
     in_progress = "still in progress" in str(exc.detail)
     overloaded = exc.status_code == 429
+    unavailable = exc.status_code == 503
     return JSONResponse(
         status_code=exc.status_code,
         content={
@@ -691,22 +701,31 @@ def _batch_idempotency_error(exc: HTTPException) -> JSONResponse:
                     "credential_batch_overloaded"
                     if overloaded
                     else (
-                        "credential_batch_in_progress"
-                        if in_progress
-                        else "credential_batch_idempotency_conflict"
+                        "credential_batch_coordination_unavailable"
+                        if unavailable
+                        else (
+                            "credential_batch_in_progress"
+                            if in_progress
+                            else "credential_batch_idempotency_conflict"
+                        )
                     )
                 ),
                 "message": (
                     "Too many credential batches are currently in progress."
                     if overloaded
                     else (
-                        "A batch with this idempotency key is still in progress."
-                        if in_progress
-                        else "The idempotency key cannot be used for this batch request."
+                        "Credential batch coordination is temporarily unavailable."
+                        if unavailable
+                        else (
+                            "A batch with this idempotency key is still in progress."
+                            if in_progress
+                            else "The idempotency key cannot be used for this batch request."
+                        )
                     )
                 ),
             }
         },
+        headers=exc.headers,
     )
 
 

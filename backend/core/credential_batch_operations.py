@@ -11,6 +11,7 @@ from core.credential_batch_coordination import (
     BatchIdempotencyInProgressError,
     BatchIdempotencyReplay,
     BatchIdempotencyReservation,
+    CredentialBatchCapacityError,
     CredentialBatchCoordinationError,
     get_credential_batch_coordination_service,
 )
@@ -49,11 +50,29 @@ def batch_requires_preview(action: str, target_count: int) -> bool:
 
 
 async def issue_batch_preview(fingerprint: str) -> str:
-    return await get_credential_batch_coordination_service().issue_preview(fingerprint)
+    try:
+        return await get_credential_batch_coordination_service().issue_preview(fingerprint)
+    except CredentialBatchCapacityError:
+        raise HTTPException(
+            status_code=429,
+            detail="Credential batch capacity is temporarily exhausted.",
+            headers={"Retry-After": "60"},
+        ) from None
+    except CredentialBatchCoordinationError:
+        raise HTTPException(
+            status_code=503,
+            detail="Credential batch coordination is unavailable.",
+        ) from None
 
 
 async def preview_matches(token: str | None, fingerprint: str) -> bool:
-    return await get_credential_batch_coordination_service().preview_matches(token, fingerprint)
+    try:
+        return await get_credential_batch_coordination_service().preview_matches(token, fingerprint)
+    except CredentialBatchCoordinationError:
+        raise HTTPException(
+            status_code=503,
+            detail="Credential batch coordination is unavailable.",
+        ) from None
 
 
 async def get_idempotent_response(
@@ -83,6 +102,12 @@ async def get_idempotent_response(
         raise HTTPException(
             status_code=409,
             detail="The batch request for this idempotency key is still in progress.",
+        ) from None
+    except CredentialBatchCapacityError:
+        raise HTTPException(
+            status_code=429,
+            detail="Credential batch capacity is temporarily exhausted.",
+            headers={"Retry-After": "60"},
         ) from None
     except CredentialBatchCoordinationError:
         raise HTTPException(

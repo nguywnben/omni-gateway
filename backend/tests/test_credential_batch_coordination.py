@@ -16,6 +16,7 @@ from core.credential_batch_coordination import (
     BatchIdempotencyInProgressError,
     BatchIdempotencyReplay,
     BatchIdempotencyReservation,
+    CredentialBatchCapacityError,
     CredentialBatchCoordinationError,
     CredentialBatchCoordinationService,
 )
@@ -23,6 +24,83 @@ from core.state_store import InMemoryStateStore
 
 
 class CredentialBatchCoordinationTests(unittest.IsolatedAsyncioTestCase):
+    def test_reservation_rejects_invalid_internal_capability_fields(self) -> None:
+        with self.assertRaises(CredentialBatchCoordinationError):
+            BatchIdempotencyReservation(
+                "credential-batch-idempotency-" + "a" * 64,
+                "f" * 64,
+                "b" * 43,
+                0,
+                b"short",
+            )
+
+    async def test_preview_domain_is_capped_at_256_and_prunes_expiry(self) -> None:
+        now = [0.0]
+        counter = [0]
+
+        def token_factory(size: int) -> str:
+            counter[0] += 1
+            return f"{counter[0]:043d}"
+
+        store = InMemoryStateStore(clock=lambda: now[0])
+        service = CredentialBatchCoordinationService(
+            store, key=b"p" * 32, fencing_epoch=1, token_factory=token_factory
+        )
+        for index in range(256):
+            await service.issue_preview(f"{index:064x}")
+
+        with self.assertRaises(CredentialBatchCapacityError):
+            await service.issue_preview("f" * 64)
+
+        now[0] = 301.0
+        replacement = await service.issue_preview("e" * 64)
+        self.assertTrue(await service.preview_matches(replacement, "e" * 64))
+
+    async def test_idempotency_domain_has_an_independent_256_entry_cap(self) -> None:
+        store = InMemoryStateStore()
+        service = CredentialBatchCoordinationService(store, key=b"i" * 32, fencing_epoch=1)
+        for index in range(256):
+            reservation = await service.reserve(f"request-{index:04d}", f"{index:064x}")
+            self.assertIsInstance(reservation, BatchIdempotencyReservation)
+
+        with self.assertRaises(CredentialBatchCapacityError):
+            await service.reserve("request-overflow", "f" * 64)
+
+        preview = await service.issue_preview("e" * 64)
+        self.assertTrue(await service.preview_matches(preview, "e" * 64))
+
+    async def test_release_reclaims_capacity_but_completion_retains_it(self) -> None:
+        store = InMemoryStateStore()
+        service = CredentialBatchCoordinationService(store, key=b"q" * 32, fencing_epoch=1)
+        reservations = []
+        for index in range(256):
+            reservation = await service.reserve(f"capacity-{index:04d}", f"{index:064x}")
+            self.assertIsInstance(reservation, BatchIdempotencyReservation)
+            reservations.append(reservation)
+
+        await service.complete(reservations[0], 200, {"success": True})
+        with self.assertRaises(CredentialBatchCapacityError):
+            await service.reserve("capacity-still-full", "a" * 64)
+
+        await service.release(reservations[1])
+        replacement = await service.reserve("capacity-reclaimed", "b" * 64)
+        self.assertIsInstance(replacement, BatchIdempotencyReservation)
+
+    async def test_cross_client_concurrent_preview_admission_does_not_false_reject(self) -> None:
+        store = InMemoryStateStore()
+        services = [
+            CredentialBatchCoordinationService(store, key=b"r" * 32, fencing_epoch=1)
+            for _ in range(64)
+        ]
+
+        results = await asyncio.gather(
+            *(service.issue_preview(f"{index:064x}") for index, service in enumerate(services)),
+            return_exceptions=True,
+        )
+
+        self.assertFalse([item for item in results if isinstance(item, Exception)])
+        self.assertEqual(len(set(results)), 64)
+
     async def test_preview_and_completed_response_are_cross_client(self) -> None:
         store = InMemoryStateStore()
         first = CredentialBatchCoordinationService(store, key=b"a" * 32, fencing_epoch=1)

@@ -5,6 +5,14 @@ import time
 from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple
 
 import aiosqlite
+from core.credential_pool_mutation import (
+    CredentialPoolMutation,
+    CredentialPoolMutationError,
+    CredentialPoolPlanner,
+    CredentialPoolRecord,
+    normalize_pool_mode,
+    validate_credential_pool_mutation,
+)
 from log import log
 from paths import DEFAULT_CREDENTIALS_DIR
 
@@ -545,6 +553,82 @@ class SQLiteManager:
         except Exception as e:
             log.error(f"Error storing credential {filename}: {e}")
             return False
+
+    async def mutate_credential_pool(
+        self, mode: str, planner: CredentialPoolPlanner
+    ) -> CredentialPoolMutation:
+        """Apply one pool plan while holding SQLite's durable writer lock."""
+        self._ensure_initialized()
+        mode = normalize_pool_mode(mode)
+        table_name = self._get_table_name(mode)
+        if not callable(planner):
+            raise CredentialPoolMutationError("Credential pool planner is invalid.")
+        try:
+            async with aiosqlite.connect(self._db_path) as db:
+                await db.execute("BEGIN IMMEDIATE")
+                try:
+                    async with db.execute(
+                        f"""SELECT filename, credential_data, user_email, rotation_order
+                            FROM {table_name} ORDER BY rotation_order, filename"""
+                    ) as cursor:
+                        rows = await cursor.fetchall()
+                    records = []
+                    for filename, payload, user_email, rotation_order in rows:
+                        credential_data = json.loads(payload)
+                        if type(credential_data) is not dict:
+                            raise CredentialPoolMutationError(
+                                "Stored credential payload is invalid."
+                            )
+                        records.append(
+                            CredentialPoolRecord(
+                                filename=filename,
+                                credential_data=credential_data,
+                                user_email=user_email,
+                                rotation_order=rotation_order,
+                            )
+                        )
+                    mutation = validate_credential_pool_mutation(planner(tuple(records)))
+                    for filename in mutation.deletes:
+                        await db.execute(
+                            f"DELETE FROM {table_name} WHERE filename = ?", (filename,)
+                        )
+                    next_order = max((record.rotation_order for record in records), default=-1) + 1
+                    existing_names = {record.filename for record in records}
+                    for write in mutation.writes:
+                        if write.filename in existing_names:
+                            await db.execute(
+                                f"""UPDATE {table_name}
+                                    SET credential_data = ?, user_email = ?, updated_at = unixepoch()
+                                    WHERE filename = ?""",
+                                (
+                                    json.dumps(write.credential_data),
+                                    write.user_email,
+                                    write.filename,
+                                ),
+                            )
+                        else:
+                            await db.execute(
+                                f"""INSERT INTO {table_name}
+                                    (filename, credential_data, user_email, rotation_order, last_success)
+                                    VALUES (?, ?, ?, ?, ?)""",
+                                (
+                                    write.filename,
+                                    json.dumps(write.credential_data),
+                                    write.user_email,
+                                    next_order,
+                                    time.time(),
+                                ),
+                            )
+                            next_order += 1
+                    await db.commit()
+                    return mutation
+                except BaseException:
+                    await db.rollback()
+                    raise
+        except CredentialPoolMutationError:
+            raise
+        except Exception:
+            raise CredentialPoolMutationError("Credential pool mutation failed.") from None
 
     async def get_credential(
         self, filename: str, mode: str = "code_assist"

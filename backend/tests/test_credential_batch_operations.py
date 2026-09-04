@@ -9,6 +9,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import AsyncMock, patch
 
+from fastapi import HTTPException
 from pydantic import ValidationError
 
 BACKEND_DIR = Path(__file__).resolve().parents[1]
@@ -16,8 +17,15 @@ if str(BACKEND_DIR) not in sys.path:
     sys.path.insert(0, str(BACKEND_DIR))
 
 from core.credential_batch_coordination import (
+    CredentialBatchCapacityError,
+    CredentialBatchCoordinationError,
     CredentialBatchCoordinationService,
     configure_credential_batch_coordination_service,
+)
+from core.credential_batch_operations import (
+    get_idempotent_response,
+    issue_batch_preview,
+    preview_matches,
 )
 from core.credential_fleet_query import (  # noqa: E402
     CredentialFleetFilters,
@@ -43,6 +51,72 @@ class CredentialBatchOperationTests(unittest.IsolatedAsyncioTestCase):
     async def asyncTearDown(self) -> None:
         configure_credential_batch_coordination_service(None)
         await self.coordination_store.close()
+
+    async def test_capacity_exhaustion_maps_to_retryable_http_429(self) -> None:
+        service = AsyncMock()
+        service.issue_preview.side_effect = CredentialBatchCapacityError
+        service.reserve.side_effect = CredentialBatchCapacityError
+
+        with patch(
+            "core.credential_batch_operations.get_credential_batch_coordination_service",
+            return_value=service,
+        ):
+            with self.assertRaises(HTTPException) as preview_error:
+                await issue_batch_preview("f" * 64)
+            with self.assertRaises(HTTPException) as reservation_error:
+                await get_idempotent_response("capacity-key", "f" * 64, reserve=True)
+
+        self.assertEqual(preview_error.exception.status_code, 429)
+        self.assertEqual(reservation_error.exception.status_code, 429)
+        self.assertEqual(preview_error.exception.headers, {"Retry-After": "60"})
+        self.assertEqual(reservation_error.exception.headers, {"Retry-After": "60"})
+
+    async def test_preview_coordination_outage_maps_to_http_503(self) -> None:
+        service = AsyncMock()
+        service.issue_preview.side_effect = CredentialBatchCoordinationError
+        service.preview_matches.side_effect = CredentialBatchCoordinationError
+
+        with patch(
+            "core.credential_batch_operations.get_credential_batch_coordination_service",
+            return_value=service,
+        ):
+            with self.assertRaises(HTTPException) as issue_error:
+                await issue_batch_preview("f" * 64)
+            with self.assertRaises(HTTPException) as match_error:
+                await preview_matches("a" * 43, "f" * 64)
+
+        self.assertEqual(issue_error.exception.status_code, 503)
+        self.assertEqual(match_error.exception.status_code, 503)
+
+    async def test_preview_capacity_error_uses_typed_batch_envelope(self) -> None:
+        storage = AsyncMock()
+        storage.get_credential.return_value = {
+            "provider": "google_ai_studio",
+            "credential_type": "api_key",
+            "api_key": "must-not-leak",
+        }
+        overload = HTTPException(
+            status_code=429,
+            detail="Credential batch capacity is temporarily exhausted.",
+            headers={"Retry-After": "60"},
+        )
+
+        with (
+            patch("core.panel.credentials.get_storage_adapter", AsyncMock(return_value=storage)),
+            patch("core.panel.credentials.issue_batch_preview", AsyncMock(side_effect=overload)),
+        ):
+            response = await creds_batch_action(
+                CredFileBatchActionRequest(
+                    action="disable",
+                    filenames=["studio.json"],
+                    preview=True,
+                ),
+                token="session",
+                mode="provider",
+            )
+
+        self.assertEqual(response.status_code, 429)
+        self.assertEqual(json.loads(response.body)["error"]["code"], "credential_batch_overloaded")
 
     @staticmethod
     def _fleet_summary(*filenames: str) -> dict:

@@ -3,6 +3,7 @@ import json
 import os
 from typing import TYPE_CHECKING, Any, Dict, List, Optional, Protocol
 
+from core.credential_pool_mutation import CredentialPoolMutation, CredentialPoolPlanner
 from log import log
 
 if TYPE_CHECKING:
@@ -43,6 +44,10 @@ class StorageBackend(Protocol):
     async def get_all_credential_states(
         self, mode: str = "code_assist"
     ) -> Dict[str, Dict[str, Any]]: ...
+
+    async def mutate_credential_pool(
+        self, mode: str, planner: CredentialPoolPlanner
+    ) -> CredentialPoolMutation: ...
 
     async def record_success(
         self,
@@ -212,6 +217,15 @@ class StorageAdapter:
     ) -> Dict[str, Dict[str, Any]]:
         self._ensure_initialized()
         return await self._backend.get_all_credential_states(mode)
+
+    async def mutate_credential_pool(
+        self, mode: str, planner: CredentialPoolPlanner
+    ) -> Dict[str, Any]:
+        """Apply one validated pool plan under the durable backend's write gate."""
+        self._ensure_initialized()
+        mutation = await self._backend.mutate_credential_pool(mode, planner)
+        await self._publish_credential_invalidations()
+        return dict(mutation.result)
 
     async def set_config(self, key: str, value: Any) -> bool:
         self._ensure_initialized()

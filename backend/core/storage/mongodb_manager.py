@@ -1,8 +1,17 @@
+import asyncio
 import json
 import os
 import time
 from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
+from core.credential_pool_mutation import (
+    CredentialPoolMutation,
+    CredentialPoolMutationError,
+    CredentialPoolPlanner,
+    CredentialPoolRecord,
+    normalize_pool_mode,
+    validate_credential_pool_mutation,
+)
 from log import log
 from pymongo import AsyncMongoClient
 from pymongo.asynchronous.database import AsyncDatabase
@@ -40,6 +49,10 @@ class MongoDBManager:
 
         self._redis = None
         self._redis_enabled: bool = False
+        self._credential_pool_locks = {
+            "code_assist": asyncio.Lock(),
+            "primary": asyncio.Lock(),
+        }
 
     async def initialize(self) -> None:
         if self._initialized:
@@ -697,6 +710,105 @@ class MongoDBManager:
         except Exception as e:
             log.error(f"Error storing credential {filename}: {e}")
             return False
+
+    async def _mutate_credential_pool_in_session(
+        self,
+        mode: str,
+        planner: CredentialPoolPlanner,
+        *,
+        session=None,
+    ) -> CredentialPoolMutation:
+        collection = self._db[self._get_collection_name(mode)]
+        cursor = collection.find(
+            {},
+            {"filename": 1, "credential_data": 1, "user_email": 1, "rotation_order": 1, "_id": 0},
+            session=session,
+        ).sort([("rotation_order", 1), ("filename", 1)])
+        documents = await cursor.to_list(length=None)
+        records = []
+        for document in documents:
+            credential_data = document.get("credential_data")
+            if type(credential_data) is not dict:
+                raise CredentialPoolMutationError("Stored credential payload is invalid.")
+            records.append(
+                CredentialPoolRecord(
+                    filename=document.get("filename"),
+                    credential_data=credential_data,
+                    user_email=document.get("user_email"),
+                    rotation_order=document.get("rotation_order", 0),
+                )
+            )
+        mutation = validate_credential_pool_mutation(planner(tuple(records)))
+        if mutation.deletes:
+            await collection.delete_many(
+                {"filename": {"$in": list(mutation.deletes)}}, session=session
+            )
+        next_order = max((record.rotation_order for record in records), default=-1) + 1
+        existing_names = {record.filename for record in records}
+        current_time = time.time()
+        for write in mutation.writes:
+            update = {
+                "$set": {
+                    "credential_data": write.credential_data,
+                    "user_email": write.user_email,
+                    "updated_at": current_time,
+                }
+            }
+            if write.filename not in existing_names:
+                update["$setOnInsert"] = {
+                    "disabled": False,
+                    "error_codes": [],
+                    "error_messages": [],
+                    "last_success": current_time,
+                    "model_cooldowns": {},
+                    "preview": True,
+                    "tier": "pro",
+                    "rotation_order": next_order,
+                    "call_count": 0,
+                    "created_at": current_time,
+                }
+                if mode == "primary":
+                    update["$setOnInsert"]["enable_credit"] = False
+                next_order += 1
+            await collection.update_one(
+                {"filename": write.filename}, update, upsert=True, session=session
+            )
+        return mutation
+
+    async def mutate_credential_pool(
+        self, mode: str, planner: CredentialPoolPlanner
+    ) -> CredentialPoolMutation:
+        """Apply one pool plan under a durable MongoDB transaction in coordinated mode."""
+        self._ensure_initialized()
+        mode = normalize_pool_mode(mode)
+        if not callable(planner):
+            raise CredentialPoolMutationError("Credential pool planner is invalid.")
+        try:
+            if os.getenv("OMNI_RUNTIME_MODE", "standalone").strip().lower() == "coordinated":
+                async with self._client.start_session() as session:
+
+                    async def transaction(callback_session):
+                        await self._db["credential_pool_write_gates"].update_one(
+                            {"_id": mode},
+                            {"$inc": {"revision": 1}},
+                            upsert=True,
+                            session=callback_session,
+                        )
+                        return await self._mutate_credential_pool_in_session(
+                            mode, planner, session=callback_session
+                        )
+
+                    mutation = await session.with_transaction(transaction)
+            else:
+                async with self._credential_pool_locks[mode]:
+                    mutation = await self._mutate_credential_pool_in_session(mode, planner)
+            if self._redis_enabled:
+                await self._rebuild_redis_cache(mode)
+            return mutation
+        except CredentialPoolMutationError:
+            raise
+        except Exception:
+            raise CredentialPoolMutationError("Credential pool mutation failed.") from None
 
     async def get_credential(
         self, filename: str, mode: str = "code_assist"
