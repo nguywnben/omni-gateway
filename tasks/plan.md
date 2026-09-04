@@ -48,7 +48,7 @@ or Phase 5 request tracing.
   instruction to start the project and execute the next plan.
 - Active approved scope: Wave 4 under accepted ADR-007/ADR-008; W4.1–W4.15 and checkpoints W4-A/W4-B
   are complete and W4.16 is the active implementation slice.
-- State: **IN PROGRESS — W4.16 TASK 7 NEXT**. The strict opaque security-state domain, shared
+- State: **IN PROGRESS — W4.16 TASK 8 NEXT**. The strict opaque security-state domain, shared
   behavioral fixture, in-process fenced reference, and Redis session lifecycle parity
   is next. Runtime activation remains unchanged.
 - Still gated by later slices and evidence: distributed-state activation, multiple workers/
@@ -745,7 +745,7 @@ to the W4.15 boundary.
 
 Implementation slices:
 
-Progress: Tasks 1–6 complete; Task 7 is next. Runtime selection and HA activation remain unchanged.
+Progress: Tasks 1–7 complete; Task 8 is next. Runtime selection and HA activation remain unchanged.
 
 1. Define the strict opaque security-state domain and reusable behavioral fixture.
 2. Implement the in-process fenced reference for sessions, attempts, and one-time transactions.

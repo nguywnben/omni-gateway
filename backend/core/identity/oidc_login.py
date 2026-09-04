@@ -25,6 +25,7 @@ from core.identity.oidc_transaction import (
 )
 from core.identity.repository import IdentityRepository, OidcPolicyRevisionRecord
 from core.identity.sessions import IssuedSession, SessionService, get_session_service
+from core.security_coordination import IdentitySecurityCoordinationStore
 
 _OIDC_TRANSACTION_MASTER_KEY_CONFIG = "_internal_oidc_transaction_master_key_v1"
 _OIDC_TRANSACTION_MASTER_KEY_BYTES = 32
@@ -90,6 +91,7 @@ class OidcLoginService:
         "_resolver",
         "_session_service",
         "_transactions",
+        "_transaction_coordination",
     )
 
     def __init__(
@@ -99,6 +101,7 @@ class OidcLoginService:
         session_service: SessionService,
         *,
         hmac_key: bytes | None,
+        transaction_coordination: IdentitySecurityCoordinationStore | None = None,
         max_component_waiters: int = 32,
         discovery_failure_backoff_seconds: float = 5.0,
     ) -> None:
@@ -121,6 +124,7 @@ class OidcLoginService:
         self._repository = repository
         self._session_service = session_service
         self._hmac_key = hmac_key
+        self._transaction_coordination = transaction_coordination
         self._flow: OidcAuthorizationCodeFlow | None = None
         self._transactions: OidcAuthorizationTransactionService | None = None
         self._resolver: OidcIdentityResolver | None = None
@@ -137,6 +141,7 @@ class OidcLoginService:
         storage: Any,
         *,
         session_service: SessionService,
+        transaction_coordination: IdentitySecurityCoordinationStore | None = None,
     ) -> OidcLoginService:
         try:
             repository = await storage.create_identity_repository()
@@ -148,6 +153,7 @@ class OidcLoginService:
                 repository,
                 session_service,
                 hmac_key=key,
+                transaction_coordination=transaction_coordination,
             )
         except asyncio.CancelledError:
             raise
@@ -223,6 +229,7 @@ class OidcLoginService:
                     policy,
                     discovery,
                     hmac_key=self._hmac_key or b"",
+                    coordination=self._transaction_coordination,
                 )
                 jwks = OidcJwksCache(policy, discovery, client)
                 verifier = OidcIdTokenVerifier(policy, discovery, jwks)

@@ -13,6 +13,7 @@ BACKEND_DIR = Path(__file__).resolve().parents[1]
 if str(BACKEND_DIR) not in sys.path:
     sys.path.insert(0, str(BACKEND_DIR))
 
+from core.coordination import CoordinationUnavailableError  # noqa: E402
 from core.identity.oidc_discovery import OidcDiscoveryDocument  # noqa: E402
 from core.identity.oidc_policy import load_oidc_configuration  # noqa: E402
 from core.identity.oidc_transaction import (  # noqa: E402
@@ -20,12 +21,15 @@ from core.identity.oidc_transaction import (  # noqa: E402
     OidcAuthorizationTransactionService,
 )
 from core.identity.repository import OidcPolicyRevisionRecord  # noqa: E402
+from core.state_store import InMemoryStateStore  # noqa: E402
 
 _ISSUER = "https://identity.example.com/tenant"
 _STATE = "A" * 43
 _BROWSER = "B" * 43
 _SECOND_STATE = "C" * 43
 _SECOND_BROWSER = "D" * 43
+_THIRD_STATE = "E" * 43
+_THIRD_BROWSER = "F" * 43
 _HMAC_KEY = b"transaction-test-key-material-32b"
 
 
@@ -76,7 +80,90 @@ def _tokens(*values):
     return token_factory
 
 
+class UnknownConsumeStore:
+    def __init__(self, store):
+        self.store = store
+        self.fail_after_consume = True
+
+    async def create_oidc_transaction(self, request):
+        return await self.store.create_oidc_transaction(request)
+
+    async def consume_oidc_transaction(self, request):
+        result = await self.store.consume_oidc_transaction(request)
+        if self.fail_after_consume:
+            self.fail_after_consume = False
+            raise CoordinationUnavailableError("unknown result")
+        return result
+
+
 class OidcAuthorizationTransactionTests(unittest.IsolatedAsyncioTestCase):
+    async def test_unknown_consume_result_never_releases_proof_twice(self):
+        backend = InMemoryStateStore(clock=lambda: 2_000_000_000.0)
+        uncertain = UnknownConsumeStore(backend)
+        first = OidcAuthorizationTransactionService(
+            _policy(),
+            _discovery(),
+            hmac_key=_HMAC_KEY,
+            coordination=uncertain,
+            token_factory=_tokens(_STATE, _BROWSER),
+        )
+        await first.begin()
+
+        with self.assertRaises(OidcAuthorizationTransactionError):
+            await first.consume(state=_STATE, browser_token=_BROWSER)
+
+        verifier = OidcAuthorizationTransactionService(
+            _policy(),
+            _discovery(),
+            hmac_key=_HMAC_KEY,
+            coordination=backend,
+        )
+        with self.assertRaises(OidcAuthorizationTransactionError):
+            await verifier.consume(state=_STATE, browser_token=_BROWSER)
+
+    async def test_two_instances_share_one_time_proof_and_policy_drift_burns_it(self):
+        backend = InMemoryStateStore(clock=lambda: 2_000_000_000.0)
+        first = OidcAuthorizationTransactionService(
+            _policy(),
+            _discovery(),
+            hmac_key=_HMAC_KEY,
+            coordination=backend,
+            token_factory=_tokens(_STATE, _BROWSER),
+        )
+        second = OidcAuthorizationTransactionService(
+            _policy(),
+            _discovery(),
+            hmac_key=_HMAC_KEY,
+            coordination=backend,
+        )
+
+        await first.begin()
+        proof = await second.consume(state=_STATE, browser_token=_BROWSER)
+        self.assertEqual(proof.issuer, _ISSUER)
+        with self.assertRaises(OidcAuthorizationTransactionError):
+            await first.consume(state=_STATE, browser_token=_BROWSER)
+
+        drift_state, drift_browser = "G" * 43, "H" * 43
+        drift_source = OidcAuthorizationTransactionService(
+            _policy(),
+            _discovery(),
+            hmac_key=_HMAC_KEY,
+            coordination=backend,
+            token_factory=_tokens(drift_state, drift_browser),
+        )
+        await drift_source.begin()
+        drifted_policy = dataclasses.replace(_policy(), revision=_policy().revision + 1)
+        drifted = OidcAuthorizationTransactionService(
+            drifted_policy,
+            _discovery(),
+            hmac_key=_HMAC_KEY,
+            coordination=backend,
+        )
+        with self.assertRaises(OidcAuthorizationTransactionError):
+            await drifted.consume(state=drift_state, browser_token=drift_browser)
+        with self.assertRaises(OidcAuthorizationTransactionError):
+            await drift_source.consume(state=drift_state, browser_token=drift_browser)
+
     async def test_begin_builds_exact_pkce_request_without_storing_plaintext_secrets(self):
         service = OidcAuthorizationTransactionService(
             _policy(),
@@ -107,7 +194,7 @@ class OidcAuthorizationTransactionTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(request.expires_in_seconds, 300)
         self.assertNotIn(_STATE, repr(service))
         self.assertNotIn(_BROWSER, repr(service))
-        record = next(iter(service._transactions.values()))
+        record = next(iter(service._coordination._oidc_transactions.values()))
         self.assertNotIn(_STATE, repr(record))
         self.assertNotIn(_BROWSER, repr(record))
 
@@ -219,7 +306,14 @@ class OidcAuthorizationTransactionTests(unittest.IsolatedAsyncioTestCase):
             clock=lambda: now[0],
             ttl_seconds=60,
             max_pending=1,
-            token_factory=_tokens(_STATE, _BROWSER, _SECOND_STATE, _SECOND_BROWSER),
+            token_factory=_tokens(
+                _STATE,
+                _BROWSER,
+                _SECOND_STATE,
+                _SECOND_BROWSER,
+                _THIRD_STATE,
+                _THIRD_BROWSER,
+            ),
         )
         await service.begin()
         with self.assertRaises(OidcAuthorizationTransactionError):
@@ -230,7 +324,7 @@ class OidcAuthorizationTransactionTests(unittest.IsolatedAsyncioTestCase):
             await service.consume(state=_STATE, browser_token=_BROWSER)
         self._assert_content_free(expired.exception)
         replacement = await service.begin()
-        self.assertEqual(replacement.browser_token, _SECOND_BROWSER)
+        self.assertEqual(replacement.browser_token, _THIRD_BROWSER)
 
         with self.assertRaises(OidcAuthorizationTransactionError):
             OidcAuthorizationTransactionService(
@@ -385,13 +479,13 @@ class OidcAuthorizationTransactionTests(unittest.IsolatedAsyncioTestCase):
             token_factory=_tokens(_STATE, _BROWSER),
         )
         await service.begin()
-        await service._lock.acquire()
+        await service._coordination._async_lock.acquire()
         task = asyncio.create_task(service.consume(state=_STATE, browser_token=_BROWSER))
         await asyncio.sleep(0)
         task.cancel()
         with self.assertRaises(asyncio.CancelledError):
             await task
-        service._lock.release()
+        service._coordination._async_lock.release()
 
         proof = await service.consume(state=_STATE, browser_token=_BROWSER)
         self.assertEqual(proof.issuer, _ISSUER)

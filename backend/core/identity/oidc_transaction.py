@@ -6,7 +6,7 @@ import asyncio
 import base64
 import hashlib
 import hmac
-import math
+import json
 import re
 import secrets
 import time
@@ -17,8 +17,17 @@ from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 from core.identity.oidc_discovery import OidcDiscoveryDocument
 from core.identity.oidc_http import OidcHttpError, validate_oidc_endpoint_url
 from core.identity.oidc_policy import OidcPolicy
+from core.security_coordination import (
+    IdentitySecurityCoordinationStore,
+    OidcTransactionConsumeRequest,
+    OidcTransactionCreateRequest,
+)
+from core.state_store import InMemoryStateStore
+from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
 _HMAC_DOMAIN = b"omni-gateway:oidc-transaction:v1\0"
+_PAYLOAD_KEY_DOMAIN = b"omni-gateway:oidc-transaction-payload-key:v1\0"
+_PAYLOAD_AAD = b"omni-gateway:oidc-transaction-payload:v1"
 _MAX_AUTHORIZATION_URL_LENGTH = 8_192
 _TOKEN_PATTERN = re.compile(r"^[A-Za-z0-9_-]{43}$")
 _TOKEN_AUTH_METHODS = frozenset({"client_secret_basic", "client_secret_post"})
@@ -86,33 +95,8 @@ class OidcTransactionProof:
         )
 
 
-@dataclass(frozen=True, slots=True)
-class _TransactionRecord:
-    state_digest: str
-    browser_digest: str
-    issuer: str
-    client_id: str
-    redirect_uri: str
-    authorization_endpoint: str
-    token_endpoint: str
-    token_endpoint_auth_method: str
-    policy_revision: int
-    created_at: float
-    expires_at: float
-
-
 def _token(value: object) -> str:
     if type(value) is not str or not _TOKEN_PATTERN.fullmatch(value):
-        raise OidcAuthorizationTransactionError
-    return value
-
-
-def _clock_value(clock: Callable[[], float]) -> float:
-    try:
-        value = float(clock())
-    except (TypeError, ValueError) as exc:
-        raise OidcAuthorizationTransactionError from exc
-    if not math.isfinite(value) or value < 0:
         raise OidcAuthorizationTransactionError
     return value
 
@@ -177,17 +161,16 @@ def _authorization_url(
 
 
 class OidcAuthorizationTransactionService:
-    """Atomic in-process transaction store that retains only keyed digests."""
+    """One-time browser transaction adapter over fenced security coordination."""
 
     __slots__ = (
-        "_clock",
+        "_coordination",
         "_discovery",
         "_hmac_key",
-        "_lock",
         "_max_pending",
+        "_payload_key",
         "_policy",
         "_token_factory",
-        "_transactions",
         "_ttl_seconds",
     )
 
@@ -197,6 +180,7 @@ class OidcAuthorizationTransactionService:
         discovery: OidcDiscoveryDocument,
         *,
         hmac_key: bytes,
+        coordination: IdentitySecurityCoordinationStore | None = None,
         clock: Callable[[], float] = time.monotonic,
         token_factory: Callable[[int], str] = secrets.token_urlsafe,
         ttl_seconds: int = 300,
@@ -247,18 +231,29 @@ class OidcAuthorizationTransactionService:
         self._policy = policy
         self._discovery = discovery
         self._hmac_key = hmac_key
-        self._clock = clock
         self._token_factory = token_factory
         self._ttl_seconds = ttl_seconds
         self._max_pending = max_pending
-        self._transactions: dict[str, _TransactionRecord] = {}
-        self._lock = asyncio.Lock()
+        self._coordination = coordination or InMemoryStateStore(
+            clock=clock,
+            _oidc_transaction_limit_for_testing=max_pending,
+        )
+        if any(
+            not callable(getattr(self._coordination, method, None))
+            for method in ("create_oidc_transaction", "consume_oidc_transaction")
+        ):
+            raise OidcAuthorizationTransactionError
+        self._payload_key = hmac.digest(
+            hmac_key,
+            _PAYLOAD_KEY_DOMAIN,
+            hashlib.sha256,
+        )
 
     def __repr__(self) -> str:
         return (
             "OidcAuthorizationTransactionService("
             f"policy_revision={self._policy.revision!r}, "
-            f"issuer={self._policy.issuer!r}, pending={len(self._transactions)!r}, "
+            f"issuer={self._policy.issuer!r}, "
             f"ttl_seconds={self._ttl_seconds!r}, max_pending={self._max_pending!r})"
         )
 
@@ -274,59 +269,128 @@ class OidcAuthorizationTransactionService:
         """
         return self._policy == policy and self._discovery == discovery
 
-    def _prune(self, now: float) -> None:
-        expired = [
-            digest for digest, record in self._transactions.items() if now >= record.expires_at
-        ]
-        for digest in expired:
-            self._transactions.pop(digest, None)
+    @staticmethod
+    def _operation_id(action: str) -> str:
+        return f"oidc-{action}-{secrets.token_hex(16)}"
+
+    @staticmethod
+    def _payload_aad(state_digest: str, browser_digest: str) -> bytes:
+        return b"\0".join(
+            (
+                _PAYLOAD_AAD,
+                state_digest.encode("ascii"),
+                browser_digest.encode("ascii"),
+            )
+        )
+
+    def _encode_payload(self, state_digest: str, browser_digest: str) -> bytes:
+        body = json.dumps(
+            {
+                "authorization_endpoint": self._discovery.authorization_endpoint,
+                "client_id": self._policy.client_id,
+                "issuer": self._policy.issuer,
+                "policy_revision": self._policy.revision,
+                "redirect_uri": self._policy.redirect_uri,
+                "schema_version": 1,
+                "token_endpoint": self._discovery.token_endpoint,
+                "token_endpoint_auth_method": self._discovery.token_endpoint_auth_methods[0],
+            },
+            ensure_ascii=True,
+            separators=(",", ":"),
+            sort_keys=True,
+        ).encode("ascii")
+        nonce = secrets.token_bytes(12)
+        return (
+            b"\x01"
+            + nonce
+            + AESGCM(self._payload_key).encrypt(
+                nonce,
+                body,
+                self._payload_aad(state_digest, browser_digest),
+            )
+        )
+
+    def _decode_payload(
+        self,
+        payload: bytes,
+        *,
+        state_digest: str,
+        browser_digest: str,
+    ) -> dict[str, object]:
+        try:
+            if len(payload) < 30 or payload[0] != 1:
+                raise ValueError
+            plaintext = AESGCM(self._payload_key).decrypt(
+                payload[1:13],
+                payload[13:],
+                self._payload_aad(state_digest, browser_digest),
+            )
+            pairs = json.loads(plaintext, object_pairs_hook=lambda values: values)
+            if type(pairs) is not list or any(
+                type(pair) is not tuple or len(pair) != 2 for pair in pairs
+            ):
+                raise ValueError
+            data = dict(pairs)
+            if len(data) != len(pairs) or set(data) != {
+                "authorization_endpoint",
+                "client_id",
+                "issuer",
+                "policy_revision",
+                "redirect_uri",
+                "schema_version",
+                "token_endpoint",
+                "token_endpoint_auth_method",
+            }:
+                raise ValueError
+            expected = {
+                "authorization_endpoint": self._discovery.authorization_endpoint,
+                "client_id": self._policy.client_id,
+                "issuer": self._policy.issuer,
+                "policy_revision": self._policy.revision,
+                "redirect_uri": self._policy.redirect_uri,
+                "schema_version": 1,
+                "token_endpoint": self._discovery.token_endpoint,
+                "token_endpoint_auth_method": self._discovery.token_endpoint_auth_methods[0],
+            }
+            if data != expected:
+                raise ValueError
+            return data
+        except Exception:
+            raise OidcAuthorizationTransactionError from None
 
     async def begin(self) -> OidcAuthorizationRequest:
         """Create one transaction and return browser-only redirect material."""
         try:
-            now = _clock_value(self._clock)
-            async with self._lock:
-                self._prune(now)
-                if len(self._transactions) >= self._max_pending:
-                    raise OidcAuthorizationTransactionError
-                state = _token(self._token_factory(32))
-                browser_token = _token(self._token_factory(32))
-                state_digest = _digest(self._hmac_key, b"state", state)
-                if state_digest in self._transactions:
-                    raise OidcAuthorizationTransactionError
-                nonce = _derived_token(self._hmac_key, b"nonce", state)
-                verifier = _derived_token(self._hmac_key, b"verifier", state)
-                challenge = (
-                    base64.urlsafe_b64encode(hashlib.sha256(verifier.encode("ascii")).digest())
-                    .rstrip(b"=")
-                    .decode("ascii")
+            state = _token(self._token_factory(32))
+            browser_token = _token(self._token_factory(32))
+            state_digest = _digest(self._hmac_key, b"state", state)
+            browser_digest = _digest(self._hmac_key, b"browser", browser_token)
+            nonce = _derived_token(self._hmac_key, b"nonce", state)
+            verifier = _derived_token(self._hmac_key, b"verifier", state)
+            challenge = (
+                base64.urlsafe_b64encode(hashlib.sha256(verifier.encode("ascii")).digest())
+                .rstrip(b"=")
+                .decode("ascii")
+            )
+            authorization_url = _authorization_url(
+                self._policy,
+                self._discovery,
+                state=state,
+                nonce=nonce,
+                code_challenge=challenge,
+            )
+            result = await self._coordination.create_oidc_transaction(
+                OidcTransactionCreateRequest(
+                    state_digest,
+                    browser_digest,
+                    self._encode_payload(state_digest, browser_digest),
+                    self._ttl_seconds,
+                    1,
+                    self._operation_id("create"),
                 )
-                expires_at = now + self._ttl_seconds
-                authorization_url = _authorization_url(
-                    self._policy,
-                    self._discovery,
-                    state=state,
-                    nonce=nonce,
-                    code_challenge=challenge,
-                )
-                record = _TransactionRecord(
-                    state_digest=state_digest,
-                    browser_digest=_digest(
-                        self._hmac_key,
-                        b"browser",
-                        browser_token,
-                    ),
-                    issuer=self._policy.issuer,
-                    client_id=self._policy.client_id,
-                    redirect_uri=self._policy.redirect_uri,
-                    authorization_endpoint=self._discovery.authorization_endpoint,
-                    token_endpoint=self._discovery.token_endpoint,
-                    token_endpoint_auth_method=self._discovery.token_endpoint_auth_methods[0],
-                    policy_revision=self._policy.revision,
-                    created_at=now,
-                    expires_at=expires_at,
-                )
-                self._transactions[state_digest] = record
+            )
+            if not result.applied:
+                raise OidcAuthorizationTransactionError
             return OidcAuthorizationRequest(
                 authorization_url=authorization_url,
                 browser_token=browser_token,
@@ -360,33 +424,38 @@ class OidcAuthorizationTransactionService:
                 )
             ):
                 raise OidcAuthorizationTransactionError
-            now = _clock_value(self._clock)
             state_digest = _digest(self._hmac_key, b"state", state)
             browser_digest = _digest(self._hmac_key, b"browser", browser_token)
-            async with self._lock:
-                self._prune(now)
-                record = self._transactions.get(state_digest)
-                if record is None or not hmac.compare_digest(
-                    record.browser_digest,
+            result = await self._coordination.consume_oidc_transaction(
+                OidcTransactionConsumeRequest(
+                    state_digest,
                     browser_digest,
-                ):
-                    raise OidcAuthorizationTransactionError
-                self._transactions.pop(state_digest, None)
+                    1,
+                    self._operation_id("consume"),
+                )
+            )
+            if not result.consumed or result.payload is None:
+                raise OidcAuthorizationTransactionError
+            record = self._decode_payload(
+                result.payload,
+                state_digest=state_digest,
+                browser_digest=browser_digest,
+            )
             if response_issuer is not None and not hmac.compare_digest(
                 response_issuer.encode("ascii"),
-                record.issuer.encode("ascii"),
+                str(record["issuer"]).encode("ascii"),
             ):
                 raise OidcAuthorizationTransactionError
             return OidcTransactionProof(
-                issuer=record.issuer,
-                client_id=record.client_id,
-                redirect_uri=record.redirect_uri,
-                authorization_endpoint=record.authorization_endpoint,
-                token_endpoint=record.token_endpoint,
-                token_endpoint_auth_method=record.token_endpoint_auth_method,
+                issuer=str(record["issuer"]),
+                client_id=str(record["client_id"]),
+                redirect_uri=str(record["redirect_uri"]),
+                authorization_endpoint=str(record["authorization_endpoint"]),
+                token_endpoint=str(record["token_endpoint"]),
+                token_endpoint_auth_method=str(record["token_endpoint_auth_method"]),
                 code_verifier=_derived_token(self._hmac_key, b"verifier", state),
                 nonce=_derived_token(self._hmac_key, b"nonce", state),
-                policy_revision=record.policy_revision,
+                policy_revision=int(record["policy_revision"]),
             )
         except asyncio.CancelledError:
             raise

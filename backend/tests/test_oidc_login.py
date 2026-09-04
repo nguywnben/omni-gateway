@@ -20,6 +20,7 @@ from core.identity import (  # noqa: E402
     OidcLoginService,
     load_oidc_configuration,
 )
+from core.state_store import InMemoryStateStore  # noqa: E402
 from core.storage.identity_sqlite import SQLiteIdentityRepository  # noqa: E402
 from tests.support import workspace_temp_directory  # noqa: E402
 
@@ -75,11 +76,13 @@ class OidcLoginServiceTests(unittest.IsolatedAsyncioTestCase):
         resolver = SimpleNamespace(resolve=AsyncMock(return_value=resolved))
         issued = SimpleNamespace(token="ogs_" + "S" * 43)
         session_service = SimpleNamespace(issue_oidc=AsyncMock(return_value=issued))
+        coordination = InMemoryStateStore()
         service = OidcLoginService(
             self.enabled_configuration,
             self.repository,
             session_service,
             hmac_key=b"h" * 32,
+            transaction_coordination=coordination,
         )
 
         with (
@@ -91,7 +94,7 @@ class OidcLoginServiceTests(unittest.IsolatedAsyncioTestCase):
             patch(
                 "core.identity.oidc_login.OidcAuthorizationTransactionService",
                 return_value=transactions,
-            ),
+            ) as transaction_factory,
             patch("core.identity.oidc_login.OidcJwksCache", return_value=MagicMock()),
             patch("core.identity.oidc_login.OidcIdTokenVerifier", return_value=MagicMock()),
             patch("core.identity.oidc_login.OidcAuthorizationCodeFlow", return_value=flow),
@@ -108,6 +111,10 @@ class OidcLoginServiceTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertIs(result, issued)
         discovery.assert_awaited_once()
+        self.assertIs(
+            transaction_factory.call_args.kwargs["coordination"],
+            coordination,
+        )
         flow.complete.assert_awaited_once_with(
             b"code=provider-code&state=opaque", browser_token="B" * 43
         )
