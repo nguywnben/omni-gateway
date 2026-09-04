@@ -193,6 +193,23 @@ class StatefulRedisClient(FakeRedisClient):
     def advance(self, milliseconds: int) -> None:
         self.now_ms += milliseconds
 
+    def seed_retained_record(
+        self, *, key_id: bytes, reservation_id: bytes, retained_for_ms: int = 120_000
+    ) -> None:
+        self.quota_schema[key_id] = (2, self.epoch[0], "ready")
+        self.quota_records[reservation_id] = {
+            "key": key_id,
+            "fingerprint": b"a" * 64,
+            "state": "released",
+            "created_at": self.now_ms - 61_000,
+            "active_until": self.now_ms - 1,
+            "retained_until": self.now_ms + retained_for_ms,
+            "tokens": 0,
+            "rpm": None,
+            "tpm": None,
+            "retention": retained_for_ms,
+        }
+
     def _expired(self, expires_at: int | None) -> bool:
         return expires_at is not None and expires_at <= self.now_ms
 
@@ -1694,6 +1711,133 @@ class RedisStateStoreTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(len(client.quota_records), 1)
         self.assertNotIn("alice", repr(store))
         self.assertNotIn("top-secret", repr(store))
+
+    async def test_stateful_v2_reserve_work_is_constant_at_record_capacity(self) -> None:
+        def reservation(
+            identifier: str, *, rpm_limit: int | None = None
+        ) -> QuotaReservationRequest:
+            return QuotaReservationRequest(
+                identifier,
+                "key-a",
+                1_000.0,
+                61.0,
+                1,
+                0.0,
+                rpm_limit,
+                None,
+                None,
+                None,
+                0.0,
+                0.0,
+                1_000.0,
+                1_000.0,
+            )
+
+        small_client = StatefulRedisClient()
+        small_store = RedisStateStore(
+            "redis://redis.example/0",
+            deployment_namespace="quota-bounded-small",
+            _redis_module_for_testing=FakeRedisModule(small_client),
+        )
+        self.assertTrue((await small_store.reserve_quota(reservation("small"))).accepted)
+        small_work = (small_client.quota_record_inspections, small_client.rate_bucket_inspections)
+
+        key_text = b"key-a"
+        key_digest = sha256(len(key_text).to_bytes(8, "big") + key_text).hexdigest().encode("ascii")
+        full_client = StatefulRedisClient()
+        for index in range(100_000):
+            full_client.seed_retained_record(
+                key_id=key_digest,
+                reservation_id=f"old-{index}".encode("ascii"),
+            )
+        full_store = RedisStateStore(
+            "redis://redis.example/0",
+            deployment_namespace="quota-bounded-full",
+            _redis_module_for_testing=FakeRedisModule(full_client),
+        )
+
+        capacity = await full_store.reserve_quota(reservation("at-capacity", rpm_limit=100_001))
+
+        self.assertEqual(capacity.reason, "capacity")
+        self.assertEqual(
+            (full_client.quota_record_inspections, full_client.rate_bucket_inspections),
+            small_work,
+        )
+        self.assertEqual(small_work, (1, 61))
+
+    async def test_denied_or_replayed_reserve_never_double_counts(self) -> None:
+        client = StatefulRedisClient()
+        store = RedisStateStore(
+            "redis://redis.example/0",
+            deployment_namespace="quota-no-double-count",
+            _redis_module_for_testing=FakeRedisModule(client),
+        )
+
+        def reservation(identifier: str, operation_id: str) -> QuotaReservationRequest:
+            return QuotaReservationRequest(
+                identifier,
+                "key-a",
+                1_000.0,
+                61.0,
+                1,
+                0.0,
+                1,
+                None,
+                None,
+                None,
+                0.0,
+                0.0,
+                1_000.0,
+                1_000.0,
+                operation_id=operation_id,
+            )
+
+        first_request = reservation("first", "first-op")
+        first = await store.reserve_quota(first_request)
+        replay = await store.reserve_quota(first_request)
+        denied = await store.reserve_quota(reservation("second", "second-op"))
+        key_digest = client.script_calls[-1][2][2]
+
+        self.assertTrue(first.accepted)
+        self.assertTrue(replay.idempotent)
+        self.assertEqual(denied.reason, "rpm")
+        self.assertEqual(client.bucket_totals(key_digest), (1, 1))
+
+    async def test_stateful_v2_reserve_includes_the_full_boundary_second(self) -> None:
+        client = StatefulRedisClient()
+        client.now_ms = 1_000_999
+        store = RedisStateStore(
+            "redis://redis.example/0",
+            deployment_namespace="quota-boundary-second",
+            _redis_module_for_testing=FakeRedisModule(client),
+        )
+
+        def reservation(identifier: str) -> QuotaReservationRequest:
+            return QuotaReservationRequest(
+                identifier,
+                "key-a",
+                1_000.999,
+                61.0,
+                1,
+                0.0,
+                1,
+                None,
+                None,
+                None,
+                0.0,
+                0.0,
+                1_000.999,
+                1_000.999,
+            )
+
+        self.assertTrue((await store.reserve_quota(reservation("first"))).accepted)
+        client.advance(60_000)
+        boundary = await store.reserve_quota(reservation("boundary"))
+        client.advance(1)
+        after = await store.reserve_quota(reservation("after"))
+
+        self.assertEqual(boundary.reason, "rpm")
+        self.assertTrue(after.accepted)
 
     async def test_lock_release_is_bound_to_the_acquiring_task(self) -> None:
         client = StatefulRedisClient()

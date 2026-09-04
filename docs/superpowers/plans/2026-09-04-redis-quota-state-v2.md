@@ -332,7 +332,7 @@ git commit -m "refactor(redis): introduce quota state v2 buckets"
 - Produces: unchanged six-field reserve reply decoded by `_decode_quota_reserve_reply`.
 - Reserve counts one request and `estimated_tokens` in the Redis-clock second only after every denial, replay, capacity, and corruption check succeeds.
 
-- [ ] **Step 1: Write failing reserve tests for boundaries and no-mutation denials**
+- [x] **Step 1: Write failing reserve tests for boundaries and no-mutation denials**
 
 ```python
 async def test_stateful_v2_reserve_uses_buckets_not_record_population(self) -> None:
@@ -356,13 +356,13 @@ async def test_denied_or_replayed_reserve_never_double_counts(self) -> None:
 
 Also cover TPM equality/overflow, the full boundary second, retry-after, record/replay capacity, locator conflict, stale/reconciling epoch, cleanup backlog, and marker corruption.
 
-- [ ] **Step 2: Run reserve-focused tests and verify the v2 stub does not enforce them**
+- [x] **Step 2: Run reserve-focused tests and verify the v2 stub does not enforce them**
 
 Run: `.venv\Scripts\python.exe -m unittest backend.tests.test_redis_state_store.RedisStateStoreTests.test_stateful_v2_reserve_uses_buckets_not_record_population backend.tests.test_redis_state_store.RedisStateStoreTests.test_denied_or_replayed_reserve_never_double_counts -v`
 
 Expected: FAIL because reserve does not yet mutate/read the v2 rate hash.
 
-- [ ] **Step 3: Implement reserve ordering and the compact v2 lifecycle record**
+- [x] **Step 3: Implement reserve ordering and the compact v2 lifecycle record**
 
 Use this exact order inside one Lua script: validate epoch/schema/arguments and locators; acquire Redis time; plan bounded cleanup; resolve replay; directly read the target record; check record/replay capacity; aggregate 61 buckets; decide RPM then TPM; apply cleanup; persist denial replay or accepted bucket + lifecycle + replay + locators.
 
@@ -376,7 +376,7 @@ rpm_limit_or_n|tpm_limit_or_n|retention_ms|next_expiry_ms
 
 Do not store cost, daily/monthly budgets, spend snapshots, or reconciliation flags.
 
-- [ ] **Step 4: Prove accepted, denied, and replay outcomes preserve fixed work**
+- [x] **Step 4: Prove accepted, denied, and replay outcomes preserve fixed work**
 
 Run: `.venv\Scripts\python.exe -m unittest backend.tests.test_redis_state_store -v`
 
@@ -384,7 +384,7 @@ Run when configured: `.venv\Scripts\python.exe -m unittest backend.tests.test_co
 
 Expected: PASS, or explicit environment skip for the live case.
 
-- [ ] **Step 5: Commit reserve admission**
+- [x] **Step 5: Commit reserve admission**
 
 ```powershell
 git add backend/core/quota_redis_scripts.py backend/core/redis_state_store.py `
