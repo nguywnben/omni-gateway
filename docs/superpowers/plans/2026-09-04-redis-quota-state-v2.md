@@ -241,7 +241,7 @@ git commit -m "feat(quota): add bounded rate-window reference"
 - Schema marker encoding: `2|<epoch>|ready`; malformed, missing over non-empty state, v1, future, stale, or expiring markers fail closed.
 - Bucket encoding: `2|<absolute_second>|<requests>|<tokens>` in fields `0` through `60`.
 
-- [ ] **Step 1: Write failing static and key-contract tests**
+- [x] **Step 1: Write failing static and key-contract tests**
 
 ```python
 def test_quota_v2_scripts_are_constant_bounded(self) -> None:
@@ -260,13 +260,13 @@ def test_quota_keys_include_rate_and_schema_in_the_same_cluster_slot(self) -> No
 
 Add script tests proving a missing marker with non-empty lifecycle state and markers `1|...`, `2|future|...`, or an expiry return `COORDINATION_CORRUPT`/`reconciliation_required` without mutation. A missing marker may initialize to `2|<current_epoch>|ready` only when that target's records, indexes, replay state, and bucket hash are all empty.
 
-- [ ] **Step 2: Run Redis transport tests and verify v1 sources/eight-key bundles fail**
+- [x] **Step 2: Run Redis transport tests and verify v1 sources/eight-key bundles fail**
 
 Run: `.venv\Scripts\python.exe -m unittest backend.tests.test_redis_state_store -v`
 
 Expected: FAIL on v1 headers, forbidden `HGETALL`, and missing v2 keys.
 
-- [ ] **Step 3: Extract quota scripts and implement closed bucket helpers**
+- [x] **Step 3: Extract quota scripts and implement closed bucket helpers**
 
 In `quota_redis_scripts.py`, define the shared Lua constants and functions:
 
@@ -286,7 +286,7 @@ end
 
 Implement `read_rate_window(now_second)` with exactly 61 `HGET` operations, `adjust_bucket(second, request_delta, token_delta)` with checked add/subtract, and `retry_after(now_ms, earliest_second)` using the conservative expiry boundary. Keep `plan_prune_target` capped at 256 and direct-record validation, but remove `aggregate_target_records` entirely.
 
-- [ ] **Step 4: Wire the v2 scripts and ten-key bundle without changing decoded replies**
+- [x] **Step 4: Wire the v2 scripts and ten-key bundle without changing decoded replies**
 
 ```python
 from core.quota_redis_scripts import (
@@ -305,13 +305,13 @@ SCRIPT_SOURCES = {
 
 Append rate and schema keys to `_quota_keys`; retain the existing locator and operation locator categories. Update the fake Redis client to store `quota_buckets: dict[bytes, dict[int, tuple[int, int, int]]]` and `quota_schema: dict[bytes, tuple[int, int, str]]` rather than deriving totals from `quota_records`.
 
-- [ ] **Step 5: Run static, transport, and live-discovery tests**
+- [x] **Step 5: Run static, transport, and live-discovery tests**
 
 Run: `.venv\Scripts\python.exe -m unittest backend.tests.test_redis_state_store backend.tests.test_coordination_redis_live -v`
 
 Expected: dependency-free cases PASS; live Redis cases SKIP only when `OMNI_TEST_REDIS_URI` is absent.
 
-- [ ] **Step 6: Commit the Redis v2 foundation**
+- [x] **Step 6: Commit the Redis v2 foundation**
 
 ```powershell
 git add backend/core/quota_redis_scripts.py backend/core/redis_state_store.py `

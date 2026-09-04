@@ -41,6 +41,11 @@ from core.coordination import (
     validate_epoch,
     validate_operation_id,
 )
+from core.quota_redis_scripts import (
+    QUOTA_COMMIT_SCRIPT,
+    QUOTA_RELEASE_SCRIPT,
+    QUOTA_RESERVE_SCRIPT,
+)
 from core.security_coordination import (
     MAX_OIDC_TRANSACTION_TTL_SECONDS,
     MAX_SECURITY_PAGE_SIZE,
@@ -73,7 +78,6 @@ _DEFAULT_REPLAY_LIMIT = 100_000
 _MAX_CLEANUP = 256
 _MAX_INTEGER_TEXT = "9223372036854775807"
 _QUOTA_RATE_WINDOW_MS = 60_000
-_QUOTA_MONTHLY_WINDOW_MS = _THIRTY_DAYS_MS
 _DEFAULT_SECURITY_SESSION_LIMIT = 10_000
 _DEFAULT_SECURITY_ATTEMPT_LIMIT = 100_000
 _DEFAULT_OIDC_TRANSACTION_LIMIT = 1_000
@@ -2025,9 +2029,9 @@ SCRIPT_SOURCES = {
     "invalidation_read": _INVALIDATION_READ_SCRIPT,
     "increment": _INCREMENT_SCRIPT,
     "lock_release": _LOCK_RELEASE_SCRIPT,
-    "quota_reserve": _QUOTA_RESERVE_SCRIPT,
-    "quota_commit": _QUOTA_COMMIT_SCRIPT,
-    "quota_release": _QUOTA_RELEASE_SCRIPT,
+    "quota_reserve": QUOTA_RESERVE_SCRIPT,
+    "quota_commit": QUOTA_COMMIT_SCRIPT,
+    "quota_release": QUOTA_RELEASE_SCRIPT,
     "security_session_issue": _SECURITY_SESSION_ISSUE_SCRIPT,
     "security_session_resolve": _SECURITY_SESSION_RESOLVE_SCRIPT,
     "security_session_rotate": _SECURITY_SESSION_ROTATE_SCRIPT,
@@ -2109,14 +2113,9 @@ def _fingerprint(*parts: object) -> bytes:
 
 def _quota_retention_ms(request: QuotaReservationRequest) -> int:
     """Return the active-or-evidence retention window without trusting the caller clock."""
-    windows = [_QUOTA_RATE_WINDOW_MS]
-    if request.daily_budget_usd is not None:
-        windows.append(86_400_000)
-    if request.monthly_budget_usd is not None:
-        windows.append(_QUOTA_MONTHLY_WINDOW_MS)
     ttl = _ttl_ms(request.ttl_seconds)
     assert ttl is not None
-    return min(max(ttl, *windows), _QUOTA_MONTHLY_WINDOW_MS)
+    return max(ttl, _QUOTA_RATE_WINDOW_MS + 1_000)
 
 
 def _strict_array(reply: object, length: int) -> list[object]:
@@ -2592,6 +2591,8 @@ class RedisStateStore:
             self._key("quota:locator", reservation_id),
             self._key("quota:operation", operation_id),
             self._key("initialization"),
+            self._quota_bucket_key("quota:rate-buckets", key_digest),
+            self._quota_bucket_key("quota:state-schema", key_digest),
         ]
 
     def _security_session_keys(self) -> list[str]:
@@ -2642,7 +2643,7 @@ class RedisStateStore:
             raise CoordinationCorruptError("Stored coordination state is invalid.")
         fields = value.split(b"|")
         expected_fields = 3 if category == "quota:operation" else 2
-        if len(fields) != expected_fields or fields[0] != b"1":
+        if len(fields) != expected_fields or fields[0] != b"2":
             raise CoordinationCorruptError("Stored coordination state is invalid.")
         key_digest = fields[1]
         self._quota_bucket_key("quota:records", key_digest)
@@ -3028,7 +3029,7 @@ class RedisStateStore:
                 b"1" if request.durable_cost_recorded else b"0",
                 _integer_bytes(self._quota_record_limit),
                 _integer_bytes(self._replay_limit),
-                _integer_bytes(_QUOTA_MONTHLY_WINDOW_MS),
+                _integer_bytes(_QUOTA_RATE_WINDOW_MS + 1_000),
             ],
         )
         return _decode_quota_commit_reply(reply)
@@ -3061,7 +3062,7 @@ class RedisStateStore:
                 script_operation,
                 identifier.encode("ascii"),
                 key_digest,
-                _integer_bytes(_QUOTA_MONTHLY_WINDOW_MS),
+                _integer_bytes(_QUOTA_RATE_WINDOW_MS + 1_000),
                 _integer_bytes(self._quota_record_limit),
                 _integer_bytes(self._replay_limit),
             ],
