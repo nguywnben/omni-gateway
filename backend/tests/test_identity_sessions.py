@@ -22,6 +22,7 @@ from core.identity import (
     RoleBindingSource,
 )
 from core.identity.sessions import (
+    CoordinatedSessionStore,
     InProcessSessionStore,
     SessionAuthenticationMethod,
     SessionExpired,
@@ -31,6 +32,7 @@ from core.identity.sessions import (
     SessionStale,
     render_management_session_metrics,
 )
+from core.state_store import InMemoryStateStore
 from core.storage.identity_sqlite import SQLiteIdentityRepository
 from tests.support import workspace_temp_directory
 
@@ -409,6 +411,123 @@ class InProcessSessionStoreTests(unittest.IsolatedAsyncioTestCase):
             await store.resolve(second.token, current_authorization_epoch=7, now=1_012.0)
 
 
+class CoordinatedSessionStoreTests(unittest.IsolatedAsyncioTestCase):
+    def setUp(self):
+        self.clock = 1_000.0
+        self.backend = InMemoryStateStore(clock=lambda: self.clock)
+        self.policy = SessionPolicy(idle_ttl_seconds=300, absolute_ttl_seconds=900)
+        self.first = CoordinatedSessionStore(
+            self.backend,
+            hmac_key=b"c" * 32,
+            policy=self.policy,
+        )
+        self.second = CoordinatedSessionStore(
+            self.backend,
+            hmac_key=b"c" * 32,
+            policy=self.policy,
+        )
+        self.owner = ManagementPrincipal.local_owner()
+
+    async def test_two_instances_share_issue_resolve_rotation_and_revocation(self):
+        issued = await self.first.issue(
+            principal=self.owner,
+            authentication_method=SessionAuthenticationMethod.LOCAL_PASSWORD,
+            authorization_epoch=7,
+            now=self.clock,
+        )
+        resolved = await self.second.resolve(
+            issued.token,
+            current_authorization_epoch=7,
+            now=self.clock,
+        )
+        self.assertEqual(resolved.principal, self.owner)
+
+        rotated = await self.second.rotate(
+            issued.token,
+            principal=self.owner,
+            authentication_method=SessionAuthenticationMethod.LOCAL_PASSWORD,
+            authorization_epoch=8,
+            now=self.clock,
+        )
+        with self.assertRaises(SessionNotFound):
+            await self.first.resolve(
+                issued.token,
+                current_authorization_epoch=7,
+                now=self.clock,
+            )
+        self.assertTrue(await self.first.revoke(rotated.token))
+        with self.assertRaises(SessionNotFound):
+            await self.second.resolve(
+                rotated.token,
+                current_authorization_epoch=8,
+                now=self.clock,
+            )
+
+    async def test_authenticated_payload_and_principal_revocation_are_fail_closed(self):
+        issued = await self.first.issue(
+            principal=self.owner,
+            authentication_method=SessionAuthenticationMethod.LOCAL_PASSWORD,
+            authorization_epoch=7,
+            now=self.clock,
+        )
+        state = self.backend._security_sessions[issued.session.digest]
+        self.assertNotIn(b"local-owner", state.payload)
+        self.backend._security_sessions[issued.session.digest] = dataclasses.replace(
+            state,
+            payload=state.payload[:-1] + bytes([state.payload[-1] ^ 1]),
+        )
+        with self.assertRaises(SessionNotFound):
+            await self.second.resolve(
+                issued.token,
+                current_authorization_epoch=7,
+                now=self.clock,
+            )
+
+        source = await self.first.issue(
+            principal=self.owner,
+            authentication_method=SessionAuthenticationMethod.LOCAL_PASSWORD,
+            authorization_epoch=7,
+            now=self.clock,
+        )
+        target = await self.first.issue(
+            principal=self.owner,
+            authentication_method=SessionAuthenticationMethod.LOCAL_PASSWORD,
+            authorization_epoch=7,
+            now=self.clock,
+        )
+        source_state = self.backend._security_sessions[source.session.digest]
+        target_state = self.backend._security_sessions[target.session.digest]
+        self.backend._security_sessions[target.session.digest] = dataclasses.replace(
+            target_state,
+            payload=source_state.payload,
+        )
+        with self.assertRaises(SessionNotFound):
+            await self.second.resolve(
+                target.token,
+                current_authorization_epoch=7,
+                now=self.clock,
+            )
+        self.assertTrue(await self.first.revoke(source.token))
+
+        sessions = [
+            await self.first.issue(
+                principal=self.owner,
+                authentication_method=SessionAuthenticationMethod.LOCAL_PASSWORD,
+                authorization_epoch=7,
+                now=self.clock,
+            )
+            for _ in range(2)
+        ]
+        self.assertEqual(await self.second.revoke_principal(self.owner), 2)
+        for session in sessions:
+            with self.assertRaises(SessionNotFound):
+                await self.first.resolve(
+                    session.token,
+                    current_authorization_epoch=7,
+                    now=self.clock,
+                )
+
+
 class SessionPolicyTests(unittest.TestCase):
     def test_policy_is_bounded_and_absolute_ttl_must_exceed_idle_ttl(self):
         self.assertEqual(
@@ -454,6 +573,7 @@ class SessionServiceTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(resolved.principal, ManagementPrincipal.local_owner())
         self.assertEqual(resolved.authorization_epoch, 1)
+        self.assertIsInstance(service._store, CoordinatedSessionStore)
         self.assertEqual(len(self.storage.config), 1)
         serialized_config = repr(self.storage.config)
         self.assertNotIn(issued.token, serialized_config)

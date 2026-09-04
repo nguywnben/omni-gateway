@@ -7,23 +7,39 @@ import base64
 import binascii
 import hashlib
 import hmac
+import json
 import math
 import os
 import re
 import secrets
 import threading
+import time
 from collections import Counter
 from dataclasses import dataclass, replace
 from enum import StrEnum
 from typing import Any, Protocol
 
+from core.coordination import CoordinationError
 from core.identity.authorization import (
     ManagementPrincipal,
+    ManagementRole,
     OidcRoleSource,
     PrincipalType,
 )
 from core.identity.oidc_identity import ResolvedOidcIdentity
 from core.identity.repository import LOCAL_OWNER_ID, ManagedIdentity, RoleBindingSource
+from core.security_coordination import (
+    IdentitySecurityCoordinationStore,
+    SecurityPrincipalType,
+    SecuritySessionState,
+    SessionIssueRequest,
+    SessionListRequest,
+    SessionResolveRequest,
+    SessionRevokeRequest,
+    SessionRevokeTarget,
+    SessionRotateRequest,
+)
+from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
 SESSION_SCHEMA_VERSION = 2
 SESSION_TOKEN_PREFIX = "ogs_"
@@ -40,6 +56,9 @@ _SESSION_HMAC_DOMAIN = b"omni-gateway:management-session:v1\0"
 _SESSION_REFERENCE_DOMAIN = b"omni-gateway:management-session-reference:v1\0"
 _SESSION_MASTER_KEY_CONFIG = "_internal_session_master_key_v1"
 _SESSION_MASTER_KEY_BYTES = 32
+_SESSION_PAYLOAD_AAD = b"omni-gateway:management-session-payload:v1"
+_SESSION_PAYLOAD_KEY_DOMAIN = b"omni-gateway:management-session-payload-key:v1\0"
+_SESSION_PRINCIPAL_INDEX_DOMAIN = b"omni-gateway:management-session-principal:v1\0"
 _SESSION_METRIC_ACTIONS = frozenset({"issue", "resolve", "revoke", "revoke_principal"})
 _SESSION_METRIC_OUTCOMES = frozenset({"succeeded", "not_found", "expired", "stale", "failed"})
 _session_metric_lock = threading.Lock()
@@ -677,6 +696,532 @@ class InProcessSessionStore:
             return True
 
 
+class CoordinatedSessionStore:
+    """Authenticated session adapter over the fenced security coordination boundary."""
+
+    def __init__(
+        self,
+        coordination: IdentitySecurityCoordinationStore,
+        *,
+        hmac_key: bytes,
+        policy: SessionPolicy,
+        fencing_epoch: int = 1,
+    ) -> None:
+        if coordination is None or any(
+            not callable(getattr(coordination, method, None))
+            for method in (
+                "issue_security_session",
+                "resolve_security_session",
+                "rotate_security_session",
+                "revoke_security_sessions",
+                "list_security_sessions",
+            )
+        ):
+            raise ValueError("A security coordination store is required.")
+        if type(hmac_key) is not bytes or len(hmac_key) < 32:
+            raise ValueError("Session HMAC key must contain at least 32 bytes.")
+        if type(policy) is not SessionPolicy:
+            raise ValueError("A validated session policy is required.")
+        if type(fencing_epoch) is not int or fencing_epoch < 1:
+            raise ValueError("Session fencing epoch is invalid.")
+        self._coordination = coordination
+        self._hmac_key = hmac_key
+        self._policy = policy
+        self._fencing_epoch = fencing_epoch
+        self._payload_key = hmac.digest(
+            hmac_key,
+            _SESSION_PAYLOAD_KEY_DOMAIN,
+            hashlib.sha256,
+        )
+
+    def __repr__(self) -> str:
+        return (
+            "CoordinatedSessionStore("
+            f"policy={self._policy!r}, fencing_epoch={self._fencing_epoch!r})"
+        )
+
+    def _digest(self, token: str) -> str:
+        return hmac.digest(
+            self._hmac_key,
+            _SESSION_HMAC_DOMAIN + token.encode("ascii"),
+            hashlib.sha256,
+        ).hex()
+
+    def _reference(self, digest: str) -> str:
+        return (
+            "ssr_"
+            + hmac.digest(
+                self._hmac_key,
+                _SESSION_REFERENCE_DOMAIN + digest.encode("ascii"),
+                hashlib.sha256,
+            ).hex()[:32]
+        )
+
+    def _principal_index(self, principal: ManagementPrincipal) -> str:
+        if principal.principal_type is PrincipalType.LOCAL_OWNER:
+            identity = f"local_owner\0{principal.principal_id}"
+        elif principal.principal_type is PrincipalType.OIDC_USER:
+            identity = f"oidc_user\0{principal.issuer}\0{principal.subject}"
+        else:
+            raise ValueError("Session principal type is invalid.")
+        return hmac.digest(
+            self._hmac_key,
+            _SESSION_PRINCIPAL_INDEX_DOMAIN + identity.encode("utf-8"),
+            hashlib.sha256,
+        ).hex()
+
+    @staticmethod
+    def _security_principal_type(principal_type: PrincipalType) -> SecurityPrincipalType:
+        if principal_type is PrincipalType.LOCAL_OWNER:
+            return SecurityPrincipalType.LOCAL_OWNER
+        if principal_type is PrincipalType.OIDC_USER:
+            return SecurityPrincipalType.OIDC_USER
+        raise ValueError("Session principal type is invalid.")
+
+    @staticmethod
+    def _operation_id(action: str) -> str:
+        return f"session-{action}-{secrets.token_hex(16)}"
+
+    @staticmethod
+    def _validated_token(token: object) -> str:
+        return InProcessSessionStore._validated_token(token)
+
+    @staticmethod
+    def _validated_issue_inputs(
+        principal: object,
+        authentication_method: object,
+        authorization_epoch: object,
+        oidc_policy_authorization_epoch: object,
+        now: object,
+    ) -> tuple[ManagementPrincipal, SessionAuthenticationMethod, int, int | None, float]:
+        return InProcessSessionStore._validated_issue_inputs(
+            principal,
+            authentication_method,
+            authorization_epoch,
+            oidc_policy_authorization_epoch,
+            now,
+        )
+
+    def _encode_payload(
+        self,
+        *,
+        session_digest: str,
+        session_reference: str,
+        principal_index: str,
+        principal_type: SecurityPrincipalType,
+        principal: ManagementPrincipal,
+        authentication_method: SessionAuthenticationMethod,
+        authorization_epoch: int,
+        oidc_policy_authorization_epoch: int | None,
+    ) -> bytes:
+        body = json.dumps(
+            {
+                "authentication_method": authentication_method.value,
+                "authorization_epoch": authorization_epoch,
+                "issuer": principal.issuer,
+                "oidc_policy_authorization_epoch": oidc_policy_authorization_epoch,
+                "principal_id": principal.principal_id,
+                "principal_type": principal.principal_type.value,
+                "role": None if principal.role is None else principal.role.value,
+                "role_source": (
+                    None if principal.role_source is None else principal.role_source.value
+                ),
+                "schema_version": 1,
+                "subject": principal.subject,
+            },
+            ensure_ascii=False,
+            separators=(",", ":"),
+            sort_keys=True,
+        ).encode("utf-8")
+        nonce = secrets.token_bytes(12)
+        return (
+            b"\x01"
+            + nonce
+            + AESGCM(self._payload_key).encrypt(
+                nonce,
+                body,
+                self._payload_aad(
+                    session_digest,
+                    session_reference,
+                    principal_index,
+                    principal_type,
+                ),
+            )
+        )
+
+    @staticmethod
+    def _payload_aad(
+        session_digest: str,
+        session_reference: str,
+        principal_index: str,
+        principal_type: SecurityPrincipalType,
+    ) -> bytes:
+        return b"\0".join(
+            (
+                _SESSION_PAYLOAD_AAD,
+                session_digest.encode("ascii"),
+                session_reference.encode("ascii"),
+                principal_index.encode("ascii"),
+                principal_type.value.encode("ascii"),
+            )
+        )
+
+    def _decode_payload(
+        self, state: SecuritySessionState
+    ) -> tuple[ManagementPrincipal, SessionAuthenticationMethod, int, int | None]:
+        try:
+            if len(state.payload) < 30 or state.payload[0] != 1:
+                raise ValueError
+            nonce = state.payload[1:13]
+            plaintext = AESGCM(self._payload_key).decrypt(
+                nonce,
+                state.payload[13:],
+                self._payload_aad(
+                    state.session_digest,
+                    state.session_reference,
+                    state.principal_index,
+                    state.principal_type,
+                ),
+            )
+            data = json.loads(plaintext)
+            if type(data) is not dict or set(data) != {
+                "authentication_method",
+                "authorization_epoch",
+                "issuer",
+                "oidc_policy_authorization_epoch",
+                "principal_id",
+                "principal_type",
+                "role",
+                "role_source",
+                "schema_version",
+                "subject",
+            }:
+                raise ValueError
+            if data["schema_version"] != 1:
+                raise ValueError
+            principal_type = PrincipalType(data["principal_type"])
+            role = None if data["role"] is None else ManagementRole(data["role"])
+            role_source = (
+                None if data["role_source"] is None else OidcRoleSource(data["role_source"])
+            )
+            principal = ManagementPrincipal(
+                principal_type=principal_type,
+                principal_id=data["principal_id"],
+                role=role,
+                issuer=data["issuer"],
+                subject=data["subject"],
+                role_source=role_source,
+            )
+            authentication_method = SessionAuthenticationMethod(data["authentication_method"])
+            validated = self._validated_issue_inputs(
+                principal,
+                authentication_method,
+                data["authorization_epoch"],
+                data["oidc_policy_authorization_epoch"],
+                state.issued_at,
+            )
+            if self._principal_index(principal) != state.principal_index:
+                raise ValueError
+            if self._security_principal_type(principal_type) is not state.principal_type:
+                raise ValueError
+            return validated[:4]
+        except Exception as exc:
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            raise SessionNotFound("Session is unavailable.") from None
+
+    def _record(self, state: SecuritySessionState) -> SessionRecord:
+        principal, authentication_method, authorization_epoch, policy_epoch = self._decode_payload(
+            state
+        )
+        try:
+            return SessionRecord(
+                SESSION_SCHEMA_VERSION,
+                state.session_digest,
+                principal,
+                state.issued_at,
+                state.last_seen_at,
+                state.idle_expires_at,
+                state.absolute_expires_at,
+                authentication_method,
+                authorization_epoch,
+                policy_epoch,
+            )
+        except ValueError:
+            raise SessionNotFound("Session is unavailable.") from None
+
+    def _managed(self, state: SecuritySessionState) -> ManagedSession:
+        record = self._record(state)
+        return ManagedSession(
+            state.session_reference,
+            record.principal,
+            record.issued_at,
+            record.last_seen_at,
+            record.idle_expires_at,
+            record.absolute_expires_at,
+            record.authentication_method,
+        )
+
+    async def _issue(
+        self,
+        *,
+        principal: ManagementPrincipal,
+        authentication_method: SessionAuthenticationMethod,
+        authorization_epoch: int,
+        oidc_policy_authorization_epoch: int | None,
+        current_digest: str | None = None,
+    ) -> IssuedSession:
+        for _attempt in range(4):
+            token = SESSION_TOKEN_PREFIX + secrets.token_urlsafe(SESSION_TOKEN_BYTES)
+            digest = self._digest(token)
+            reference = self._reference(digest)
+            principal_index = self._principal_index(principal)
+            principal_type = self._security_principal_type(principal.principal_type)
+            payload = self._encode_payload(
+                session_digest=digest,
+                session_reference=reference,
+                principal_index=principal_index,
+                principal_type=principal_type,
+                principal=principal,
+                authentication_method=authentication_method,
+                authorization_epoch=authorization_epoch,
+                oidc_policy_authorization_epoch=oidc_policy_authorization_epoch,
+            )
+            issue = SessionIssueRequest(
+                digest,
+                reference,
+                principal_index,
+                principal_type,
+                payload,
+                self._policy.idle_ttl_seconds,
+                self._policy.absolute_ttl_seconds,
+                self._fencing_epoch,
+                self._operation_id("rotate" if current_digest is not None else "issue"),
+            )
+            if current_digest is None:
+                result = await self._coordination.issue_security_session(issue)
+            else:
+                result = await self._coordination.rotate_security_session(
+                    SessionRotateRequest(
+                        current_digest,
+                        issue,
+                        self._fencing_epoch,
+                        issue.operation_id,
+                    )
+                )
+            if result.applied and result.session is not None:
+                if (
+                    result.session.session_digest != digest
+                    or result.session.session_reference != reference
+                    or result.session.principal_index != principal_index
+                    or result.session.principal_type is not principal_type
+                    or result.session.payload != payload
+                ):
+                    raise SessionError("Session is unavailable.")
+                return IssuedSession(token, self._record(result.session))
+            if result.reason != "conflict" or current_digest is not None:
+                break
+        if current_digest is not None and result.reason == "not_found":
+            raise SessionNotFound("Session is unavailable.")
+        raise SessionError("Session is unavailable.")
+
+    async def issue(
+        self,
+        *,
+        principal: ManagementPrincipal,
+        authentication_method: SessionAuthenticationMethod,
+        authorization_epoch: int,
+        oidc_policy_authorization_epoch: int | None = None,
+        now: float,
+    ) -> IssuedSession:
+        principal, authentication_method, authorization_epoch, policy_epoch, _ = (
+            self._validated_issue_inputs(
+                principal,
+                authentication_method,
+                authorization_epoch,
+                oidc_policy_authorization_epoch,
+                now,
+            )
+        )
+        return await self._issue(
+            principal=principal,
+            authentication_method=authentication_method,
+            authorization_epoch=authorization_epoch,
+            oidc_policy_authorization_epoch=policy_epoch,
+        )
+
+    async def _resolve_state(self, token: str) -> SecuritySessionState:
+        digest = self._digest(token)
+        result = await self._coordination.resolve_security_session(
+            SessionResolveRequest(
+                digest,
+                self._policy.idle_ttl_seconds,
+                self._fencing_epoch,
+                self._operation_id("resolve"),
+            )
+        )
+        if result.resolved and result.session is not None:
+            if (
+                result.session.session_digest != digest
+                or result.session.session_reference != self._reference(digest)
+            ):
+                raise SessionNotFound("Session is unavailable.")
+            try:
+                self._decode_payload(result.session)
+            except SessionNotFound:
+                try:
+                    await self.revoke(token)
+                except CoordinationError:
+                    pass
+                raise
+            return result.session
+        if result.reason == "expired":
+            raise SessionExpired("Session expired.")
+        raise SessionNotFound("Session is unavailable.")
+
+    async def resolve(
+        self,
+        token: str,
+        *,
+        current_authorization_epoch: int,
+        current_oidc_policy_authorization_epoch: int | None = None,
+        now: float,
+    ) -> SessionRecord:
+        token = self._validated_token(token)
+        if type(current_authorization_epoch) is not int or current_authorization_epoch < 1:
+            raise ValueError("Session authorization epoch is invalid.")
+        if current_oidc_policy_authorization_epoch is not None and (
+            type(current_oidc_policy_authorization_epoch) is not int
+            or current_oidc_policy_authorization_epoch < 1
+        ):
+            raise ValueError("OIDC policy authorization epoch is invalid.")
+        _strict_timestamp(now, "Session timestamp")
+        state = await self._resolve_state(token)
+        record = self._record(state)
+        if record.authorization_epoch != current_authorization_epoch or (
+            record.authentication_method is SessionAuthenticationMethod.OIDC
+            and record.oidc_policy_authorization_epoch != current_oidc_policy_authorization_epoch
+        ):
+            await self.revoke(token)
+            raise SessionStale("Session authorization is stale.")
+        return record
+
+    async def inspect(self, token: str, *, now: float) -> SessionRecord:
+        token = self._validated_token(token)
+        _strict_timestamp(now, "Session timestamp")
+        return self._record(await self._resolve_state(token))
+
+    async def rotate(
+        self,
+        token: str,
+        *,
+        principal: ManagementPrincipal,
+        authentication_method: SessionAuthenticationMethod,
+        authorization_epoch: int,
+        oidc_policy_authorization_epoch: int | None = None,
+        now: float,
+    ) -> IssuedSession:
+        token = self._validated_token(token)
+        principal, authentication_method, authorization_epoch, policy_epoch, _ = (
+            self._validated_issue_inputs(
+                principal,
+                authentication_method,
+                authorization_epoch,
+                oidc_policy_authorization_epoch,
+                now,
+            )
+        )
+        return await self._issue(
+            principal=principal,
+            authentication_method=authentication_method,
+            authorization_epoch=authorization_epoch,
+            oidc_policy_authorization_epoch=policy_epoch,
+            current_digest=self._digest(token),
+        )
+
+    async def revoke(self, token: str) -> bool:
+        try:
+            token = self._validated_token(token)
+        except SessionNotFound:
+            return False
+        result = await self._coordination.revoke_security_sessions(
+            SessionRevokeRequest(
+                SessionRevokeTarget.DIGEST,
+                self._digest(token),
+                self._fencing_epoch,
+                self._operation_id("revoke"),
+            )
+        )
+        return result.revoked_count == 1
+
+    async def revoke_principal(self, principal: ManagementPrincipal) -> int:
+        if type(principal) is not ManagementPrincipal:
+            raise ValueError("A validated session principal is required.")
+        result = await self._coordination.revoke_security_sessions(
+            SessionRevokeRequest(
+                SessionRevokeTarget.PRINCIPAL,
+                self._principal_index(principal),
+                self._fencing_epoch,
+                self._operation_id("revoke-principal"),
+            )
+        )
+        return result.revoked_count
+
+    async def revoke_principal_type(self, principal_type: PrincipalType) -> int:
+        if type(principal_type) is not PrincipalType:
+            raise ValueError("A validated principal type is required.")
+        result = await self._coordination.revoke_security_sessions(
+            SessionRevokeRequest(
+                SessionRevokeTarget.PRINCIPAL_TYPE,
+                self._security_principal_type(principal_type).value,
+                self._fencing_epoch,
+                self._operation_id("revoke-type"),
+            )
+        )
+        return result.revoked_count
+
+    async def list_active(
+        self,
+        *,
+        limit: int,
+        now: float,
+        after_reference: str | None = None,
+    ) -> list[ManagedSession]:
+        if type(limit) is not int or not 1 <= limit <= 200:
+            raise ValueError("Session page size is invalid.")
+        _strict_timestamp(now, "Session timestamp")
+        try:
+            page = await self._coordination.list_security_sessions(
+                SessionListRequest(limit, self._fencing_epoch, after_reference)
+            )
+            return [self._managed(state) for state in page.sessions]
+        except SessionNotFound:
+            raise SessionError("Session inventory is unavailable.") from None
+
+    async def reference_for_token(self, token: str, *, now: float) -> str:
+        token = self._validated_token(token)
+        _strict_timestamp(now, "Session timestamp")
+        return (await self._resolve_state(token)).session_reference
+
+    async def managed_for_token(self, token: str, *, now: float) -> ManagedSession:
+        token = self._validated_token(token)
+        _strict_timestamp(now, "Session timestamp")
+        return self._managed(await self._resolve_state(token))
+
+    async def revoke_reference(self, reference: str) -> bool:
+        if type(reference) is not str or not _SESSION_REFERENCE_PATTERN.fullmatch(reference):
+            return False
+        result = await self._coordination.revoke_security_sessions(
+            SessionRevokeRequest(
+                SessionRevokeTarget.REFERENCE,
+                reference,
+                self._fencing_epoch,
+                self._operation_id("revoke-reference"),
+            )
+        )
+        return result.revoked_count == 1
+
+
 def _encode_master_key(value: bytes) -> str:
     return base64.urlsafe_b64encode(value).decode("ascii")
 
@@ -745,6 +1290,7 @@ class SessionService:
         storage: Any,
         *,
         policy: SessionPolicy | None = None,
+        coordination: IdentitySecurityCoordinationStore | None = None,
     ) -> SessionService:
         selected_policy = policy or get_session_policy()
         encoded_master = await storage.get_config(_SESSION_MASTER_KEY_CONFIG, None)
@@ -760,8 +1306,19 @@ class SessionService:
             hashlib.sha256,
         )
         identity_repository = await storage.create_identity_repository()
+        if coordination is None:
+            from core.state_store import InMemoryStateStore
+
+            coordination = InMemoryStateStore(
+                clock=time.time,
+                _security_session_limit_for_testing=selected_policy.max_active_sessions,
+            )
         return cls(
-            InProcessSessionStore(hmac_key=session_key, policy=selected_policy),
+            CoordinatedSessionStore(
+                coordination,
+                hmac_key=session_key,
+                policy=selected_policy,
+            ),
             identity_repository=identity_repository,
         )
 
