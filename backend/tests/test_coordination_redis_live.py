@@ -216,7 +216,7 @@ class LiveRedisCoordinationTests(CoordinationStoreContract, unittest.IsolatedAsy
             advance_quota_clock=advance_server_clock
         )
 
-    async def test_quota_reserve_rate_and_budget_limits_are_atomic_under_concurrency(self) -> None:
+    async def test_quota_rate_limits_are_atomic_and_budget_fields_are_neutral(self) -> None:
         now = time.time()
         first, second = await asyncio.gather(
             self.store.reserve_quota(_reservation("rpm-a", now=now, rpm_limit=1)),
@@ -255,7 +255,7 @@ class LiveRedisCoordinationTests(CoordinationStoreContract, unittest.IsolatedAsy
                 "daily-b", now=now, key_id="daily", estimated_cost_usd=0.6, daily_budget_usd=1.0
             )
         )
-        self.assertEqual(daily.reason, "daily_budget")
+        self.assertTrue(daily.accepted)
 
         self.assertTrue(
             (
@@ -279,7 +279,7 @@ class LiveRedisCoordinationTests(CoordinationStoreContract, unittest.IsolatedAsy
                 monthly_budget_usd=1.0,
             )
         )
-        self.assertEqual(monthly.reason, "monthly_budget")
+        self.assertTrue(monthly.accepted)
 
     async def test_quota_signed_63_bit_token_boundaries_execute_in_lua(self) -> None:
         now = time.time()
@@ -310,7 +310,7 @@ class LiveRedisCoordinationTests(CoordinationStoreContract, unittest.IsolatedAsy
                 )
                 self.assertEqual(denied.reason, "tpm")
 
-    async def test_quota_stored_decimal_and_chronology_corruption_fails_closed(self) -> None:
+    async def test_quota_touched_record_and_chronology_corruption_fails_closed(self) -> None:
         assert self.cleanup_client is not None
         now = time.time()
 
@@ -388,7 +388,7 @@ class LiveRedisCoordinationTests(CoordinationStoreContract, unittest.IsolatedAsy
             ).committed
         )
         records_key, fields = await stored_record(chronology_id)
-        fields[6] = str(int(fields[9]) + 1).encode("ascii")
+        fields[6] = str(int(fields[8]) + 1).encode("ascii")
         await self.cleanup_client.hset(records_key, chronology_id, b"|".join(fields))
         with self.assertRaises(CoordinationCorruptError):
             await self.store.reserve_quota(
@@ -416,7 +416,7 @@ class LiveRedisCoordinationTests(CoordinationStoreContract, unittest.IsolatedAsy
         self.assertTrue(replay.idempotent)
         self.assertEqual(conflict.reason, "conflict")
         self.assertTrue(committed.committed)
-        self.assertTrue(committed.overspent)
+        self.assertFalse(committed.overspent)
         self.assertTrue(committed_replay.idempotent)
 
         fallback = _reservation("fallback", now=now, key_id="fallback", ttl_seconds=300.0)

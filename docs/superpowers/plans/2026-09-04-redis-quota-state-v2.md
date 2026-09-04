@@ -406,7 +406,7 @@ git commit -m "feat(redis): bound quota reserve admission"
 - Produces: unchanged four-field commit/release replies and TPM-only `QuotaCommitResult.overspent`.
 - Commit/release subtract the original active contribution only when its second remains inside `[current_second-60, current_second]`; underflow or slot mismatch fails closed.
 
-- [ ] **Step 1: Write failing transition tests**
+- [x] **Step 1: Write failing transition tests**
 
 ```python
 async def test_commit_moves_estimate_to_the_commit_second(self) -> None:
@@ -426,13 +426,13 @@ async def test_release_reverses_only_a_live_bucket_contribution(self) -> None:
 
 Add cases for same-second commit, commit after the accepted bucket ages out, fallback to estimated tokens, TPM overspend, released/committed replay, changed-operation conflict, expired active record, large integers, and bucket underflow corruption.
 
-- [ ] **Step 2: Run transition-focused tests and verify bucket totals fail**
+- [x] **Step 2: Run transition-focused tests and verify bucket totals fail**
 
 Run: `.venv\Scripts\python.exe -m unittest backend.tests.test_redis_state_store.RedisStateStoreTests.test_commit_moves_estimate_to_the_commit_second backend.tests.test_redis_state_store.RedisStateStoreTests.test_release_reverses_only_a_live_bucket_contribution -v`
 
 Expected: FAIL because the scripts still mutate lifecycle state without v2 bucket replacement/reversal.
 
-- [ ] **Step 3: Implement commit replacement and TPM overspend**
+- [x] **Step 3: Implement commit replacement and TPM overspend**
 
 Before mutating the record, parse and validate the direct hash/ZSET pair. If active and unexpired, subtract `(1, estimated_tokens)` from `floor(accepted_at_ms / 1000)` when live, add `(1, actual_tokens_or_estimate)` to the Redis current second, and calculate:
 
@@ -443,17 +443,17 @@ overspent = record.tpm_limit ~= 'n'
 
 Set the compact record to committed, retain it for `max(active_until_ms, now_ms + 61000)`, and persist replay/locator changes only after every validation succeeds.
 
-- [ ] **Step 4: Implement release reversal with the same preflight-before-mutation rule**
+- [x] **Step 4: Implement release reversal with the same preflight-before-mutation rule**
 
 For an active, unexpired record, reverse its live bucket contribution and set state to `released`. Unknown, terminal, expired, stale-epoch, and conflicting operations return the existing safe false result. Exact replay sets `idempotent=true` without touching buckets.
 
-- [ ] **Step 5: Run shared, fake Redis, and live transition matrices**
+- [x] **Step 5: Run shared, fake Redis, and live transition matrices**
 
 Run: `.venv\Scripts\python.exe -m unittest backend.tests.coordination_store_contract backend.tests.test_redis_state_store backend.tests.test_coordination_redis_live -v`
 
 Expected: PASS with only explicitly configured live-backend skips.
 
-- [ ] **Step 6: Commit lifecycle transitions**
+- [x] **Step 6: Commit lifecycle transitions**
 
 ```powershell
 git add backend/core/quota_redis_scripts.py backend/core/redis_state_store.py `

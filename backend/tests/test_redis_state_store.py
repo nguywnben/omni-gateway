@@ -1839,6 +1839,145 @@ class RedisStateStoreTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(boundary.reason, "rpm")
         self.assertTrue(after.accepted)
 
+    async def test_commit_moves_estimate_to_the_commit_second(self) -> None:
+        client = StatefulRedisClient()
+        store = RedisStateStore(
+            "redis://redis.example/0",
+            deployment_namespace="quota-commit-buckets",
+            _redis_module_for_testing=FakeRedisModule(client),
+        )
+        request = QuotaReservationRequest(
+            "commit",
+            "key-a",
+            1_000.0,
+            61.0,
+            100,
+            0.0,
+            None,
+            500,
+            None,
+            None,
+            0.0,
+            0.0,
+            1_000.0,
+            1_000.0,
+        )
+        self.assertTrue((await store.reserve_quota(request)).accepted)
+        key_digest = client.script_calls[-1][2][2]
+        client.advance(1_000)
+
+        result = await store.commit_quota(
+            QuotaCommitRequest("commit", 1_001.0, 250, 9.0, True, operation_id="commit-op")
+        )
+
+        self.assertTrue(result.committed)
+        self.assertEqual(client.bucket_totals(key_digest), (1, 250))
+
+    async def test_release_reverses_only_a_live_bucket_contribution(self) -> None:
+        client = StatefulRedisClient()
+        store = RedisStateStore(
+            "redis://redis.example/0",
+            deployment_namespace="quota-release-buckets",
+            _redis_module_for_testing=FakeRedisModule(client),
+        )
+        request = QuotaReservationRequest(
+            "release",
+            "key-a",
+            1_000.0,
+            61.0,
+            50,
+            0.0,
+            None,
+            None,
+            None,
+            None,
+            0.0,
+            0.0,
+            1_000.0,
+            1_000.0,
+        )
+        self.assertTrue((await store.reserve_quota(request)).accepted)
+        key_digest = client.script_calls[-1][2][2]
+
+        self.assertTrue(await store.release_quota("release", now=1_000.0))
+
+        self.assertEqual(client.bucket_totals(key_digest), (0, 0))
+
+    async def test_commit_and_release_after_bucket_age_do_not_subtract_stale_slots(self) -> None:
+        client = StatefulRedisClient()
+        store = RedisStateStore(
+            "redis://redis.example/0",
+            deployment_namespace="quota-aged-transition",
+            _redis_module_for_testing=FakeRedisModule(client),
+        )
+
+        def reservation(identifier: str, tokens: int) -> QuotaReservationRequest:
+            return QuotaReservationRequest(
+                identifier,
+                identifier,
+                1_000.0,
+                300.0,
+                tokens,
+                0.0,
+                None,
+                500,
+                None,
+                None,
+                0.0,
+                0.0,
+                1_000.0,
+                1_000.0,
+            )
+
+        self.assertTrue((await store.reserve_quota(reservation("aged-commit", 100))).accepted)
+        commit_digest = client.script_calls[-1][2][2]
+        self.assertTrue((await store.reserve_quota(reservation("aged-release", 50))).accepted)
+        release_digest = client.script_calls[-1][2][2]
+        client.advance(61_000)
+
+        committed = await store.commit_quota(
+            QuotaCommitRequest("aged-commit", 1_061.0, 250, 0.0, False)
+        )
+        released = await store.release_quota("aged-release", now=1_061.0)
+
+        self.assertTrue(committed.committed)
+        self.assertTrue(released)
+        self.assertEqual(client.bucket_totals(commit_digest), (1, 250))
+        self.assertEqual(client.bucket_totals(release_digest), (0, 0))
+
+    async def test_bucket_underflow_fails_closed_before_lifecycle_mutation(self) -> None:
+        client = StatefulRedisClient()
+        store = RedisStateStore(
+            "redis://redis.example/0",
+            deployment_namespace="quota-underflow",
+            _redis_module_for_testing=FakeRedisModule(client),
+        )
+        request = QuotaReservationRequest(
+            "underflow",
+            "key-a",
+            1_000.0,
+            61.0,
+            10,
+            0.0,
+            None,
+            100,
+            None,
+            None,
+            0.0,
+            0.0,
+            1_000.0,
+            1_000.0,
+        )
+        self.assertTrue((await store.reserve_quota(request)).accepted)
+        key_digest = client.script_calls[-1][2][2]
+        slot = (client.now_ms // 1000) % 61
+        client.quota_buckets[key_digest][slot] = (client.now_ms // 1000, 0, 0)
+
+        with self.assertRaises(CoordinationCorruptError):
+            await store.commit_quota(QuotaCommitRequest("underflow", 1_000.0, 20, 0.0, False))
+
+        self.assertEqual(client.quota_records[b"underflow"]["state"], "active")
+
     async def test_lock_release_is_bound_to_the_acquiring_task(self) -> None:
         client = StatefulRedisClient()
         store = RedisStateStore(

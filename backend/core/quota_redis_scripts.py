@@ -103,6 +103,10 @@ local function parse_record(value)
       or record.next_expiry ~= record.active_until then return nil end
   elseif record.state == 'committed' then
     if record.committed_at == '0' or record.committed_at_number < record.accepted_at_number
+      or record.committed_at_number > record.active_until_number
+      or record.committed_at_number > 9007199254679991
+      or record.retained_until_number ~= math.max(record.active_until_number,
+        record.committed_at_number + 61000)
       or record.next_expiry ~= record.retained_until then return nil end
   elseif record.committed_at ~= '0' or record.actual_tokens ~= '0'
     or record.next_expiry ~= record.retained_until then return nil end
