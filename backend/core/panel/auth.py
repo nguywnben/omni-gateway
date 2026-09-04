@@ -41,8 +41,6 @@ from .auth_support import (
     _clear_login_failures,
     _clear_recovery_failures,
     _client_identity,
-    _record_login_failure,
-    _record_recovery_failure,
 )
 from .setup_security import get_setup_access_policy, verify_setup_access
 from .utils import internal_server_error, validate_mode
@@ -64,10 +62,10 @@ async def login(payload: LoginRequest, request: Request):
             raise HTTPException(status_code=428, detail="Initial setup is required before login.")
 
         client_id = _client_identity(request)
-        _assert_login_allowed(client_id)
+        await _assert_login_allowed(client_id)
 
         if await verify_password(payload.password):
-            _clear_login_failures(client_id)
+            await _clear_login_failures(client_id)
             response = JSONResponse(content={"message": "Signed in."})
             set_panel_session_cookie(
                 response,
@@ -76,7 +74,6 @@ async def login(payload: LoginRequest, request: Request):
             )
             return response
 
-        _record_login_failure(client_id)
         raise HTTPException(status_code=401, detail="Incorrect password.")
     except HTTPException:
         raise
@@ -98,10 +95,10 @@ async def recover_local_owner(payload: RecoveryRequest, request: Request):
             )
         _assert_recovery_ingress(request)
         client_id = _client_identity(request)
-        _assert_recovery_allowed(client_id)
+        await _assert_recovery_allowed(client_id)
         password = payload.password.get_secret_value()
         if await verify_password(password):
-            _clear_recovery_failures(client_id)
+            await _clear_recovery_failures(client_id)
             response = JSONResponse(content={"message": "Recovery sign-in completed."})
             set_panel_session_cookie(
                 response,
@@ -109,7 +106,6 @@ async def recover_local_owner(payload: RecoveryRequest, request: Request):
                 request,
             )
             return response
-        _record_recovery_failure(client_id)
         raise HTTPException(status_code=401, detail="Recovery authentication failed.")
     except HTTPException:
         raise

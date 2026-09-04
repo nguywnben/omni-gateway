@@ -60,7 +60,7 @@ def _clear_browser_binding(response: RedirectResponse, request: Request) -> None
 @router.get("/oidc/start")
 async def start_oidc_login(request: Request):
     """Begin one browser-bound Authorization Code + PKCE transaction."""
-    _assert_and_record_oidc_start(_client_identity(request))
+    await _assert_and_record_oidc_start(_client_identity(request))
     try:
         service = await get_or_initialize_oidc_login_service()
         authorization = await service.begin()

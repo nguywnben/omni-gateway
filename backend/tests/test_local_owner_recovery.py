@@ -18,6 +18,9 @@ from core.management_audit import classify_management_mutation, record_managemen
 from core.models import RecoveryRequest
 from core.panel import auth_support
 from core.panel.auth import recover_local_owner
+from core.panel.auth_support import AuthenticationAttemptService
+from core.security_coordination import SecurityAttemptCategory
+from core.state_store import InMemoryStateStore
 from fastapi import HTTPException
 from starlette.requests import Request
 
@@ -38,10 +41,17 @@ def recovery_request(*, client: str = "127.0.0.1", host: str = "localhost:4283")
 
 class LocalOwnerRecoveryTests(unittest.IsolatedAsyncioTestCase):
     def setUp(self):
-        auth_support._recovery_failures.clear()
+        self.backend = InMemoryStateStore()
+        self.attempt_service = AuthenticationAttemptService(
+            self.backend,
+            hmac_key=b"r" * 32,
+        )
+        self.previous_attempt_service = auth_support.set_authentication_attempt_service_for_testing(
+            self.attempt_service
+        )
 
     def tearDown(self):
-        auth_support._recovery_failures.clear()
+        auth_support.set_authentication_attempt_service_for_testing(self.previous_attempt_service)
 
     async def test_success_issues_opaque_cookie_without_reflecting_or_retaining_secret(self):
         secret = "break-glass-password"
@@ -64,17 +74,20 @@ class LocalOwnerRecoveryTests(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn(secret, response.body.decode())
         self.assertIn("panel_session=ogs_", response.headers["set-cookie"])
         self.assertIn("HttpOnly", response.headers["set-cookie"])
-        self.assertEqual(auth_support._recovery_failures, {})
+        self.assertEqual(
+            self.backend._security_attempts[SecurityAttemptCategory.RECOVERY],
+            {},
+        )
 
     async def test_recovery_has_an_independent_rate_window_from_normal_login(self):
         client = "127.0.0.1"
-        auth_support._login_failures[client] = [1_000.0] * auth_support.LOGIN_MAX_ATTEMPTS
+        for _attempt in range(auth_support.LOGIN_MAX_ATTEMPTS):
+            await auth_support._assert_login_allowed(client)
         with (
             patch(
                 "core.panel.auth.config.has_password_configured", new=AsyncMock(return_value=True)
             ),
             patch("core.panel.auth.verify_password", new=AsyncMock(return_value=False)),
-            patch("core.panel.auth_support.time.time", return_value=1_000.0),
             self.assertRaises(HTTPException) as first,
         ):
             await recover_local_owner(
@@ -82,14 +95,17 @@ class LocalOwnerRecoveryTests(unittest.IsolatedAsyncioTestCase):
                 recovery_request(),
             )
         self.assertEqual(first.exception.status_code, 401)
-        self.assertEqual(len(auth_support._recovery_failures[client]), 1)
+        self.assertEqual(
+            len(self.backend._security_attempts[SecurityAttemptCategory.RECOVERY]),
+            1,
+        )
 
-        auth_support._recovery_failures[client] = [1_000.0] * auth_support.RECOVERY_MAX_ATTEMPTS
+        for _attempt in range(auth_support.RECOVERY_MAX_ATTEMPTS - 1):
+            await auth_support._assert_recovery_allowed(client)
         with (
             patch(
                 "core.panel.auth.config.has_password_configured", new=AsyncMock(return_value=True)
             ),
-            patch("core.panel.auth_support.time.time", return_value=1_000.0),
             self.assertRaises(HTTPException) as blocked,
         ):
             await recover_local_owner(
