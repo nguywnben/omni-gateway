@@ -54,6 +54,12 @@ two-replica matrix: partition/restart, audit and usage completeness, load/latenc
 rollback. Docker Desktop is installed but its Linux daemon did not become available on this host;
 `OMNI_TEST_REDIS_URI` is also absent.
 
+The 2026-09-05 Docker preflight localized the host failure: Docker Desktop 4.81.0 exits while WSL
+commands time out and its `dockerInference` AF_UNIX socket cannot be removed. Windows reports no
+`vmcompute` or `hns` service, and non-elevated feature inspection cannot proceed. The stale socket
+was not deleted and Docker data was not reset. Microsoft requires an administrator to enable the
+WSL and Virtual Machine Platform optional features and restart Windows before WSL 2 can run.
+
 Consequently:
 
 - Checkpoint W4-C and the Phase 6 failure/load item remain unchecked;
@@ -67,10 +73,12 @@ Separately, Phase 7 should migrate seven remaining Pydantic v2 class-based `Conf
 
 ## Immediate Next Action
 
-Provision an approved Redis plus shared PostgreSQL or MongoDB environment with two application
-replicas, then run the ADR-008 partition/restart/load/completeness/rollback matrix. If every target
-passes, create and review one immutable activation record, raise only the documented topology
-ceiling, check W4-C, and obtain human acceptance. Otherwise keep standalone operation supported.
+From an Administrator PowerShell, enable `Microsoft-Windows-Subsystem-Linux` and
+`VirtualMachinePlatform`, then restart Windows. After restart, verify `wsl --status` and Docker
+daemon health. Provision Redis plus shared PostgreSQL or MongoDB with two application replicas and
+run the ADR-008 partition/restart/load/completeness/rollback matrix. If every target passes, create
+and review one immutable activation record, raise only the documented topology ceiling, check W4-C,
+and obtain human acceptance. Otherwise keep standalone operation supported.
 
 ## Authoritative Reading Order
 
