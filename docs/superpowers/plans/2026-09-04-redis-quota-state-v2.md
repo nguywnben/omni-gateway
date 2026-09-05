@@ -532,7 +532,11 @@ Do not use unbounded `KEYS`, `HGETALL`, or recursive deletion. Use Redis `SCAN`/
 
 - [x] **Step 5: Integrate reconciliation progress into the dry-run-first HA workflow**
 
-Extend the drain record with `quota_reconciliation_cursor` and `quota_reconciliation_complete`. `reconcile --apply` first reconciles durable bindings/ledger, then performs one quota page. Its response includes `quota_scanned`, `quota_complete`, and `quota_cursor_present` but never exposes the cursor value. `mark-ready` requires the complete flag and exact epoch before calling `mark_epoch_ready`.
+Extend the drain record with `quota_reconciliation_cursor` and `quota_reconciliation_complete`.
+`reconcile --apply` first reconciles durable bindings/ledger, then performs one quota page. Its
+response includes `quota_scanned`, `quota_complete`, and `quota_cursor_present` but never exposes
+the cursor value. `mark-ready` requires the complete flag and exact epoch, then performs a fresh
+authoritative reconciliation confirmation before calling `mark_epoch_ready`.
 
 - [x] **Step 6: Run operator, transport, corruption, and CLI tests**
 
@@ -555,11 +559,13 @@ git commit -m "feat(ha): gate quota state v2 reconciliation"
 
 **Files:**
 - Modify: `docs/specs/coordination-store.md`
+- Modify: `docs/architecture.md`
 - Modify: `docs/superpowers/specs/2026-09-04-redis-quota-state-v2-design.md`
 - Modify: `docs/reviews/w4.15-adversarial-review.md`
 - Modify: `docs/reviews/w4c-coordination-blocker-review.md`
 - Modify: `docs/evidence/w4.19-ha-activation-disposition.md`
 - Modify: `tasks/current.md`
+- Modify: `tasks/plan.md`
 - Modify: `tasks/todo.md`
 - Modify: `CHANGELOG.md`
 
@@ -567,13 +573,13 @@ git commit -m "feat(ha): gate quota state v2 reconciliation"
 - Produces: reproducible static/synthetic bounded-work evidence and an explicit retained external-topology blocker.
 - Preserves: empty `SUPPORTED_HA_ACTIVATION_RECORDS`, `WORKERS=1`, `OMNI_REPLICA_COUNT=1`, and Helm `replicaCount: 1`.
 
-- [ ] **Step 1: Run the focused quota and HA matrix**
+- [x] **Step 1: Run the focused quota and HA matrix**
 
 Run: `.venv\Scripts\python.exe -m unittest backend.tests.test_quota_rate_window backend.tests.test_coordination_contract backend.tests.test_coordination_in_memory backend.tests.test_redis_state_store backend.tests.test_coordination_redis_live backend.tests.test_quota_reservations backend.tests.test_virtual_key_reservations backend.tests.test_ha_operator backend.tests.test_ha_admin -v`
 
 Record the exact pass/skip counts; an absent live Redis URI is a skip, not a pass.
 
-- [ ] **Step 2: Run the complete backend and repository gates**
+- [x] **Step 2: Run the complete backend and repository gates**
 
 Run: `.venv\Scripts\python.exe -m unittest discover -s backend/tests`
 
@@ -589,25 +595,26 @@ Run: `git diff --check`
 
 Expected: every available gate PASS; all unavailable external gates remain explicitly identified.
 
-- [ ] **Step 3: Perform security, correctness, and performance review**
+- [x] **Step 3: Perform security, correctness, and performance review**
 
 Review exact-second boundary math, reserve/commit/release atomicity, replay-before-mutation ordering, bucket underflow/overflow, Redis cluster key tags, locator isolation, schema/epoch fencing, bounded cleanup, cursor secrecy, dry-run behavior, budget single-authority, and all exception-to-fail-closed mappings. Resolve every load-bearing finding and rerun affected tests.
 
-- [ ] **Step 4: Update specifications, reviews, evidence, and roadmap truthfully**
+- [x] **Step 4: Update specifications, reviews, evidence, and roadmap truthfully**
 
 Document the exact v2 record/bucket schema, 61-slot bound, 256 cleanup/reconciliation bound, budget ownership, migration sequence, observed test counts, and whether live Redis ran. Mark the O(n) algorithmic blocker closed only when the 100,000-record synthetic test proves constant record inspection. Keep Checkpoint W4-C and Phase 6 failure/load unchecked while the two-replica shared-database topology matrix is unavailable.
 
-- [ ] **Step 5: Commit the verified checkpoint without pushing**
+- [x] **Step 5: Commit the verified checkpoint without pushing**
 
 ```powershell
 git add backend docs tasks CHANGELOG.md
 git commit -m "docs(roadmap): record quota state v2 evidence"
 ```
 
-- [ ] **Step 6: Verify the final checkpoint**
+- [x] **Step 6: Verify the final checkpoint**
 
 Run: `git status --short`
 
 Run: `git log -8 --oneline`
 
-Expected: clean worktree and seven reviewable implementation/checkpoint commits after the approved design commit `68ee168`.
+Expected: clean worktree and nine reviewable plan, implementation, hardening, and evidence commits
+after the approved design commit `68ee168`.

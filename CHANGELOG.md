@@ -32,6 +32,8 @@ All notable user-facing changes are documented in this file. Omni Gateway follow
 - Added storage-owned atomic credential-pool mutation plans for SQLite, PostgreSQL, and MongoDB, and
   separate encrypted 256-entry admission domains for credential batch previews and idempotent
   results.
+- Added bounded, resumable quota-state reconciliation with dry-run/apply operation, opaque progress
+  cursors, v1 disposal checks, and authoritative readiness confirmation.
 
 ### Changed
 
@@ -53,6 +55,9 @@ All notable user-facing changes are documented in this file. Omni Gateway follow
 - Credential identity admission and deduplication now use one coherent durable snapshot and commit;
   batch capacity exhaustion returns HTTP 429 with retry guidance while coordination outage returns
   a typed HTTP 503 response.
+- Redis quota admission now uses 61 fixed second buckets and one directly addressed lifecycle
+  record instead of work proportional to as many as 100,000 retained records. Redis owns RPM/TPM
+  only; the durable usage ledger is the sole daily/monthly monetary-budget authority.
 
 ### Fixed
 
@@ -72,6 +77,8 @@ All notable user-facing changes are documented in this file. Omni Gateway follow
 - Prevented cross-replica duplicate credential identity admission, batch-domain capacity drift,
   stale standalone MongoDB routing cache after a pool mutation, and ambiguous preview coordination
   failures.
+- Prevented v1/corrupt/expiring or incompletely reconciled quota state from entering a ready epoch,
+  and made quota reconciliation cursors, page bounds, identifiers, and pipeline replies fail closed.
 
 ## [1.4.0] - 2026-08-21
 

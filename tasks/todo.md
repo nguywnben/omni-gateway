@@ -269,6 +269,13 @@ These queue items refine Phases 4–5 and do not add to the 28-item program deno
     enforce 256 live encrypted HMAC admissions with typed overload/outage responses. All 1,285
     backend tests pass with 30 explicit live-backend skips. Redis quota worst-case measurement and
     external two-replica failure/rollback evidence remain open, so activation is still denied.
+- [x] W4.19.3 Replace the O(n) Redis quota hot path with Quota State v2.
+  - Completed through `69616a2`. RPM/TPM use 61 fixed second buckets, monetary budgets remain solely
+    durable, each mutation directly reads one lifecycle record and caps cleanup at 256, and bounded
+    reconciliation gates readiness. The 100,000-record fixture preserves the same `(1 record, 61
+    buckets)` work as a small target. The focused matrix passes 164 tests with seven live Redis
+    skips; the full backend passes 1,320 with 30 opt-in live-backend skips. External Redis plus
+    shared-database two-replica failure/load/rollback evidence remains open.
 - [ ] Checkpoint W4-C: Phase 6 acceptance and all repository/rollback gates pass.
 - [ ] Report Wave 4 evidence and obtain human acceptance before Wave 5.
 

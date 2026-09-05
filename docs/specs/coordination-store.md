@@ -2,11 +2,11 @@
 
 ## Status and scope
 
-Wave 4 slice W4.15 defines version-one coordination semantics and proves parity between the
-in-process and Redis implementations. It does not select Redis for runtime callers, enable
-coordinated mode, relax `WORKERS=1`, or allow more than one application replica. W4.16 and W4.17
-move security and routing callers; W4.18 owns activation, reconciliation tooling, readiness gates,
-and rollback.
+Wave 4 slice W4.15 defined the original coordination semantics. W4.16-W4.19 moved runtime callers,
+added the closed HA lifecycle, and removed process-local coordination authorities. The 2026-09-05
+Quota State v2 checkpoint replaces the original record-population quota aggregation with fixed
+work and adds bounded reconciliation. It does not activate coordinated mode, relax `WORKERS=1`,
+or allow more than one application replica; external two-replica evidence remains mandatory.
 
 This contract refines ADR-006 and ADR-008. Callers depend on typed compare-and-set, fencing,
 reservation, expiry, replay, and invalidation behavior. They never depend on Redis commands,
@@ -118,16 +118,16 @@ The existing `QuotaReservationRequest`, `QuotaCommitRequest`, and result types r
 compatibility surface. W4.15 adds an exact fencing epoch without changing existing call sites;
 standalone requests default to epoch `1`.
 
-Reserve atomically expires bounded stale state, detects exact/conflicting replay, evaluates RPM,
-TPM, and unreconciled budget evidence, then either stores one active estimate or returns a typed
-denial. Commit atomically replaces an unexpired active estimate with actual values and retains the
-record for the longest applicable window. Release removes only an active unexpired estimate and is
-idempotent. Terminal or expired state never becomes active again. Unknown or malformed stored
-state, stale epoch, unavailable Redis, cleanup backlog, or capacity exhaustion fails admission
-closed.
+Reserve atomically expires bounded stale state, detects exact/conflicting replay, evaluates only
+RPM and TPM, then stores one active estimate or returns a typed denial. Commit atomically replaces
+an unexpired estimate with actual token usage; release reverses only an active estimate. Terminal
+or expired state never becomes active again. Unknown or malformed stored state, stale epoch,
+unavailable Redis, cleanup backlog, or capacity exhaustion fails admission closed.
 
-The selected durable usage ledger remains authoritative for hard-budget recovery. W4.15 Redis
-quota state is a coordination primitive, not a replacement for the durable reservation journal.
+The selected durable usage ledger is the sole authority for daily/monthly monetary-budget reserve,
+settlement, reconciliation, and crash recovery. Coordination request budget fields remain only for
+source/replay compatibility and runtime callers send neutral values. Redis quota state must never
+reconstruct durable spend.
 
 Coordination expiry, retention, and rate windows use the backend's clock captured once per
 mutation: the injected clock for the in-process reference and Redis `TIME` for Lua. Caller `now`
@@ -135,6 +135,15 @@ values remain validated business/replay evidence and cannot expire or extend coo
 TPM aggregation and comparison preserve the full signed-63-bit token domain with decimal-string
 integer arithmetic; an aggregate above that domain saturates fail closed instead of passing
 through a binary64 approximation. Both signed float zeros serialize canonically as `0`.
+
+Quota State v2 uses exactly 61 circular second slots. At Redis second `S`, admission includes
+absolute seconds `[S-60, S]`, so enforcement can be conservative by less than one second but never
+under-enforces. Each slot field `0..60` has the closed encoding
+`2|absolute_second|requests|tokens`. Each 14-field lifecycle record has the closed encoding
+`2|fingerprint|key_digest|state|active_until_ms|retained_until_ms|accepted_at_ms|estimated_tokens|committed_at_ms|actual_tokens|rpm_limit_or_n|tpm_limit_or_n|retention_ms|next_expiry_ms`;
+replay records retain their closed seven-field v2 encoding. A persistent, non-expiring
+`2|epoch|ready` per-key schema marker fences every mutation, and reservation TTL is at least 61
+seconds.
 
 ## Redis layout and atomicity
 
@@ -152,11 +161,18 @@ Cleanup preflights at most 257 current due members before mutation and applies a
 backlog failure changes neither records nor expiry indexes and repeats until explicit
 reconciliation; replaced/stale in-process heap nodes do not consume the cleanup budget.
 
-Quota mutations currently scan up to the configured per-key record cap with `HGETALL` plus bounded
-`ZSCORE` lookups while Redis is executing Lua. This O(n), Redis-thread-blocking design is accepted
-only as a pre-activation semantic reference. W4.19 owns measured topology and a supported
-operational cap or redesign; W4.15 evidence is not a scalability claim, and Redis activation is
-prohibited until that work is complete.
+Quota mutation work is independent of the retained-record population: one directly addressed
+lifecycle record, 61 bucket fields through a fixed `HMGET`, cardinality/index checks, and at most
+256 due lifecycle/replay entries after a 257-item preflight. Mutation scripts contain no
+lifecycle-hash `HGETALL` or per-record `ZSCORE` loop. A deterministic 100,000-record fixture proves
+the same `(1 record, 61 buckets)` inspection count as a small target. This closes the algorithmic
+O(n) blocker; it is not live Redis latency or topology evidence.
+
+During a drained epoch transition, operator reconciliation processes at most 256 lifecycle,
+replay, or marker entries per call behind an opaque authenticated cursor. Dry-run never mutates.
+Apply disposes terminal v1 ephemeral state, blocks on active/unexpired or corrupt state, initializes
+empty v2 buckets and `2|epoch|ready`, and must reach an independently revalidated complete result
+before `mark-ready` can succeed.
 
 ## Failure and cancellation semantics
 
@@ -187,6 +203,9 @@ selection remain unchanged until W4.18 establishes the full prerequisite and rec
   creation/update/expiry, invalidation generation, quota concurrency, commit/release/expiry,
   bounded cleanup, capacity, corrupt replies, cancellation retry, and script-cache reload.
 - Live Redis tests use a unique deployment namespace and remove only that namespace's known keys.
+- The 2026-09-05 focused quota/HA matrix passed 164 tests with seven live Redis skips. Full backend
+  discovery passed 1,320 tests with 30 opt-in live-backend skips. The live Redis and required
+  two-replica shared-database matrices did not run on this host and remain activation blockers.
 - Repository-wide tests, Ruff, format, compileall, dependency consistency/audit, JavaScript/YAML/
   shell syntax, diff/secret review, adversarial review, atomic commits, and committed-runtime smoke
   are closure gates.

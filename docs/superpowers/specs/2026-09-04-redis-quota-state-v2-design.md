@@ -1,6 +1,6 @@
 # Redis Quota State v2 Design
 
-**Status:** Approved for implementation by the user on 2026-09-04
+**Status:** Implemented and locally verified on 2026-09-05; HA activation remains denied
 
 **Date:** 2026-09-04
 
@@ -99,14 +99,15 @@ Bucket invariants are:
 
 There is no in-place online conversion of v1 lifecycle aggregates to v2 buckets. Coordinated HA has not been activated, so migration favors determinism over dual-write complexity.
 
-The activation workflow is:
+The implemented activation workflow is:
 
 1. keep coordinated mode denied and drain quota mutations;
 2. reconcile the durable usage ledger;
-3. validate or dispose of ephemeral v1 quota state through bounded administrative work;
-4. initialize empty v2 bucket state and its schema marker;
-5. advance the coordination epoch;
-6. run v2 reconciliation and readiness checks;
+3. advance exactly one coordination epoch into `reconciling` and update the configured epoch;
+4. run bounded durable binding and quota reconciliation repeatedly;
+5. dispose of terminal ephemeral v1 state, block on active/corrupt state, and initialize empty v2
+   bucket state plus its non-expiring `2|epoch|ready` marker;
+6. require a fresh complete reconciliation confirmation before marking that exact epoch ready;
 7. only then permit a later HA activation decision.
 
 Rollback to standalone mode may discard ephemeral Redis rate state. Durable budget reservations and settlements remain in the usage ledger and must not be deleted. Returning from standalone to coordinated mode requires a fresh drain and reconciliation; no rate state is inferred from the standalone process.
@@ -217,3 +218,28 @@ Quota State v2 is implementation-complete only when:
 7. documentation and evidence accurately preserve the separate remaining HA topology/live-environment blocker.
 
 Completion of these criteria closes the Redis O(n) design blocker only. It does not authorize HA activation by itself.
+
+## 11. Implementation and evidence
+
+Quota State v2 was implemented in reviewable checkpoints from `343762c` through `69616a2`.
+The production mutation scripts use a fixed 61-field `HMGET`, one direct lifecycle lookup, and a
+257-item due preflight capped to 256 mutations; the former v1 quota Lua bodies were removed from
+the runtime module. The operator exposes a closed `--quota-page-size 1..256` and persists only an
+opaque cursor. `mark-ready` re-runs a one-entry authoritative reconciliation check rather than
+trusting a stored completion flag.
+
+The final deterministic evidence on 2026-09-05 is:
+
+- 164 focused quota/HA tests passed; seven live Redis tests skipped because
+  `OMNI_TEST_REDIS_URI` was not configured;
+- 1,320 backend tests passed; 30 opt-in live-backend tests skipped;
+- the 100,000-retained-record synthetic case and the small case both inspected exactly one record
+  and 61 buckets;
+- Ruff lint/format, compileall, dependency consistency/audit, strict YAML, Compose configuration,
+  45 JavaScript syntax checks, four i18n audits, and whitespace checks passed;
+- Docker Desktop was installed but its Linux daemon remained unavailable, so live Redis latency
+  and the required Redis plus shared-database two-replica matrix were not run.
+
+Acceptance criteria 1-7 above are satisfied for the algorithmic checkpoint. The independent HA
+topology/rollback acceptance gate remains open, `SUPPORTED_HA_ACTIVATION_RECORDS` remains empty,
+and every deployment surface remains fixed to one worker and one replica.

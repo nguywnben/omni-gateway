@@ -728,6 +728,10 @@ shell, secret, and diff gates pass. The committed standalone runtime has exactly
 HTTP 200 health/readiness. Redis remains inactive: W4.18 owns namespace-loss protection and W4.19
 must measure or redesign the bounded O(n) quota scan before activation.
 
+Follow-up on 2026-09-05: Quota State v2 completed that redesign with a 61-slot fixed window and
+bounded reconciliation. The algorithmic blocker is closed; the external two-replica topology gate
+remains open.
+
 ### W4.16 — Coordinate identity and security state
 
 Move management sessions, login throttles, OIDC replay/nonce state, and authorization invalidation

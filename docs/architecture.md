@@ -251,10 +251,11 @@ domain-separated HMAC identifiers; exact response bytes stay inside the bounded 
 Redis-compatible metadata carries only closed, bounded decision state. W4.18 adds one runtime-owned
 lifecycle, durable/shared namespace binding, dependency-aware readiness, dry-run-first epoch and
 rollback operations, deployment validation, and alerts. W4.19 deliberately records no activation
-topology: required external failure/load evidence was unavailable, credential-pool upsert and
-deduplication locks still contain a process-local correctness boundary, batch coordination still
-needs a dedicated per-domain capacity proof, and worst-case Redis quota cost is unmeasured. ADR-002
-therefore remains active and the compiled activation allowlist is empty.
+topology. Post-W4.19 closure moved credential-pool mutation into storage-owned transactions,
+bounded the batch domains, and replaced the record-population quota scan with a 61-slot Quota State
+v2 window plus bounded reconciliation. The remaining activation blocker is the unavailable real
+Redis plus shared-database two-replica failure/load/completeness/rollback matrix. ADR-002 therefore
+remains active and the compiled activation allowlist is empty.
 Operational evidence is maintained in the [routing coordination runbook](runbooks/routing-coordination.md),
 [HA lifecycle runbook](runbooks/ha-lifecycle.md), and
 [W4.19 activation disposition](evidence/w4.19-ha-activation-disposition.md).
