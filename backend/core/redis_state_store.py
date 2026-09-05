@@ -562,670 +562,6 @@ end
 return {'1', 'ok', deleted}
 """
 
-# Quota records and replay entries are stored in separate per-target hash/ZSET pairs.  The
-# record hash contains lifecycle records only, so HLEN is both the per-target count and the
-# bound for every HGETALL traversal.  The common parser is intentionally strict because Redis
-# state is untrusted and cleanup must validate every due pair before deleting any evidence.
-_QUOTA_LUA_COMMON = r"""
-local function valid_uint(value)
-  return value and (value == '0' or string.match(value, '^[1-9][0-9]*$'))
-    and (#value < 19 or (#value == 19 and value <= '9223372036854775807'))
-end
-local function uint_greater_than(left, right)
-  if #left ~= #right then return #left > #right end
-  return left > right
-end
-local function add_uint_saturating(left, right)
-  local width = math.max(#left, #right)
-  local left_padding, right_padding = width - #left, width - #right
-  local digits, carry = {}, 0
-  for position = width, 1, -1 do
-    local left_digit = position > left_padding
-      and string.byte(left, position - left_padding) - 48 or 0
-    local right_digit = position > right_padding
-      and string.byte(right, position - right_padding) - 48 or 0
-    local sum = left_digit + right_digit + carry
-    table.insert(digits, 1, string.char((sum % 10) + 48))
-    carry = math.floor(sum / 10)
-  end
-  if carry > 0 then table.insert(digits, 1, string.char(carry + 48)) end
-  local result = table.concat(digits)
-  if uint_greater_than(result, '9223372036854775807') then
-    return '9223372036854775807', true
-  end
-  return result, false
-end
-local function valid_positive(value) return valid_uint(value) and value ~= '0' end
-local function valid_safe_uint(value)
-  return valid_uint(value)
-    and (#value < 16 or (#value == 16 and value <= '9007199254740991'))
-end
-local function parse_safe_uint(value)
-  if not valid_safe_uint(value) then return nil end
-  return tonumber(value)
-end
-local function valid_hex(value)
-  return value and #value == 64 and string.match(value, '^[0-9a-f]+$')
-end
-local function decimal_syntax(value)
-  if not value or #value > 64 then return false end
-  if value == '0' then return true end
-  if string.match(value, '^[1-9][0-9]*$') or string.match(value, '^0%.[0-9]*[1-9]$')
-    or string.match(value, '^[1-9][0-9]*%.[0-9]*[1-9]$') then return true end
-  local mantissa, exponent = string.match(value, '^([^e]+)e([+-]?[0-9]+)$')
-  if not mantissa or not exponent or not (string.match(mantissa, '^[1-9]$')
-    or string.match(mantissa, '^[1-9]%.[0-9]*[1-9]$')) then return false end
-  return string.match(exponent, '^[+-]?0[1-9]$') or string.match(exponent, '^[+-]?[1-9][0-9]*$')
-end
-local function parse_decimal(value)
-  if not decimal_syntax(value) then return nil end
-  local number = tonumber(value)
-  if not number or number ~= number or number == math.huge or number == -math.huge
-    or number < 0 or number > 9223372036854775807 then return nil end
-  return number
-end
-local function split_record(value)
-  if not value or #value > 2048 then return nil end
-  local fields = {}
-  for field in string.gmatch(value .. '|', '(.-)|') do fields[#fields + 1] = field end
-  if #fields ~= 24 then return nil end
-  return fields
-end
-local function parse_record(value)
-  local f = split_record(value)
-  if not f then return nil end
-  local r = {
-    schema=f[1], fingerprint=f[2], key=f[3], state=f[4], active_until=f[5],
-    retained_until=f[6], accepted_at=f[7], estimated_tokens=f[8], estimated_cost=f[9],
-    committed_at=f[10], actual_tokens=f[11], actual_cost=f[12], durable=f[13],
-    daily_reconciled=f[14], monthly_reconciled=f[15], business_commit=f[16],
-    rpm_limit=f[17], tpm_limit=f[18], daily_budget=f[19], monthly_budget=f[20],
-    daily_spend=f[21], monthly_spend=f[22], retention_ms=f[23], next_expiry=f[24]
-  }
-  if r.schema ~= '1' or not valid_hex(r.fingerprint) or not valid_hex(r.key)
-    or (r.state ~= 'active' and r.state ~= 'committed' and r.state ~= 'released'
-      and r.state ~= 'expired')
-    or not valid_safe_uint(r.active_until) or r.active_until == '0'
-    or not valid_safe_uint(r.retained_until) or r.retained_until == '0'
-    or not valid_safe_uint(r.accepted_at) or r.accepted_at == '0'
-    or not valid_uint(r.estimated_tokens) or not valid_safe_uint(r.committed_at)
-    or not valid_uint(r.actual_tokens)
-    or (r.durable ~= '0' and r.durable ~= '1')
-    or (r.daily_reconciled ~= '0' and r.daily_reconciled ~= '1')
-    or (r.monthly_reconciled ~= '0' and r.monthly_reconciled ~= '1')
-    or (r.rpm_limit ~= 'n' and not valid_positive(r.rpm_limit))
-    or (r.tpm_limit ~= 'n' and not valid_positive(r.tpm_limit))
-    or not valid_safe_uint(r.retention_ms) or r.retention_ms == '0'
-    or not valid_safe_uint(r.next_expiry) or r.next_expiry == '0' then return nil end
-  r.active_until_number, r.retained_until_number =
-    parse_safe_uint(r.active_until), parse_safe_uint(r.retained_until)
-  r.accepted_at_number, r.committed_at_number =
-    parse_safe_uint(r.accepted_at), parse_safe_uint(r.committed_at)
-  r.retention_ms_number, r.next_expiry_number =
-    parse_safe_uint(r.retention_ms), parse_safe_uint(r.next_expiry)
-  r.estimated_cost_number, r.actual_cost_number =
-    parse_decimal(r.estimated_cost), parse_decimal(r.actual_cost)
-  r.business_commit_number = parse_decimal(r.business_commit)
-  r.daily_spend_number, r.monthly_spend_number =
-    parse_decimal(r.daily_spend), parse_decimal(r.monthly_spend)
-  r.daily_budget_number = r.daily_budget == 'n' and nil or parse_decimal(r.daily_budget)
-  r.monthly_budget_number = r.monthly_budget == 'n' and nil or parse_decimal(r.monthly_budget)
-  local terminal_source = r.state == 'active' or r.state == 'released' or r.state == 'expired'
-  if r.retention_ms_number > 2592000000
-    or r.estimated_cost_number == nil or r.actual_cost_number == nil
-    or r.business_commit_number == nil or r.daily_spend_number == nil
-    or r.monthly_spend_number == nil
-    or (r.daily_budget ~= 'n' and r.daily_budget_number == nil)
-    or (r.monthly_budget ~= 'n' and r.monthly_budget_number == nil)
-    or r.accepted_at_number > r.active_until_number
-    or (terminal_source and r.active_until_number > r.retained_until_number)
-    or r.next_expiry_number > r.retained_until_number then return nil end
-  if terminal_source and (r.committed_at ~= '0' or r.actual_tokens ~= '0'
-    or r.actual_cost ~= '0' or r.durable ~= '0' or r.business_commit ~= '0') then return nil end
-  if terminal_source and ((r.daily_budget == 'n' and r.daily_reconciled ~= '1')
-    or (r.daily_budget ~= 'n' and r.daily_reconciled ~= '0')
-    or (r.monthly_budget == 'n' and r.monthly_reconciled ~= '1')
-    or (r.monthly_budget ~= 'n' and r.monthly_reconciled ~= '0')) then return nil end
-  if terminal_source and (r.accepted_at_number > 9007199254740991 - r.retention_ms_number
-    or r.retained_until_number ~= r.accepted_at_number + r.retention_ms_number) then return nil end
-  if r.state == 'active' and r.next_expiry ~= r.active_until then return nil end
-  if (r.state == 'released' or r.state == 'expired')
-    and r.next_expiry ~= r.retained_until then return nil end
-  if r.state == 'committed' then
-    if r.committed_at == '0' or r.accepted_at_number > r.committed_at_number
-      or r.committed_at_number > r.active_until_number
-      or r.next_expiry ~= r.retained_until then return nil end
-    local expected_expiry = r.committed_at_number + 60000
-    if r.daily_reconciled == '0' then expected_expiry = math.max(expected_expiry, r.committed_at_number + 86400000) end
-    if r.monthly_reconciled == '0' then expected_expiry = math.max(expected_expiry, r.committed_at_number + 2592000000) end
-    if r.retained_until_number ~= expected_expiry then return nil end
-    if (r.daily_budget == 'n' and r.daily_reconciled ~= '1')
-      or (r.daily_budget ~= 'n' and r.durable == '0' and r.daily_reconciled ~= '0')
-      or (r.monthly_budget == 'n' and r.monthly_reconciled ~= '1')
-      or (r.monthly_budget ~= 'n' and r.durable == '0' and r.monthly_reconciled ~= '0') then return nil end
-  end
-  return r
-end
-local function encode_record(r)
-  return table.concat({r.schema, r.fingerprint, r.key, r.state, r.active_until,
-    r.retained_until, r.accepted_at, r.estimated_tokens, r.estimated_cost,
-    r.committed_at, r.actual_tokens, r.actual_cost, r.durable, r.daily_reconciled,
-    r.monthly_reconciled, r.business_commit, r.rpm_limit, r.tpm_limit,
-    r.daily_budget, r.monthly_budget, r.daily_spend, r.monthly_spend,
-    r.retention_ms, r.next_expiry}, '|')
-end
-local function valid_reservation_locator(value)
-  if not value then return nil end
-  local schema, key = string.match(value, '^([^|]+)|([^|]+)$')
-  if schema ~= '1' or not valid_hex(key) then return false end
-  return key
-end
-local function valid_operation_locator(value)
-  if not value then return nil end
-  local schema, key, fingerprint = string.match(value, '^([^|]+)|([^|]+)|([^|]+)$')
-  if schema ~= '1' or not valid_hex(key) or not valid_hex(fingerprint) then return false end
-  return key, fingerprint
-end
-local function read_reservation_locator(key)
-  local value = redis.call('GET', key)
-  if not value then return nil end
-  if redis.call('PTTL', key) <= 0 then return false end
-  return valid_reservation_locator(value)
-end
-local function read_operation_locator(key)
-  local value = redis.call('GET', key)
-  if not value then return nil end
-  if redis.call('PTTL', key) <= 0 then return false end
-  return valid_operation_locator(value)
-end
-local function validate_record_pair(value, score, expected_key)
-  local record = parse_record(value)
-  if not record or record.key ~= expected_key or not valid_safe_uint(score)
-    or score == '0' or score ~= record.next_expiry then return nil end
-  return record
-end
-local function plan_prune_target(now_ms, expected_key, record_limit, replay_limit, replay_validator)
-  local record_count, lifecycle_count = redis.call('HLEN', KEYS[2]), redis.call('ZCARD', KEYS[3])
-  local replay_count, replay_expiry_count = redis.call('HLEN', KEYS[4]), redis.call('ZCARD', KEYS[5])
-  if record_count ~= lifecycle_count or replay_count ~= replay_expiry_count
-    or record_count > record_limit or replay_count > replay_limit then return nil end
-  local replay_due = redis.call('ZRANGEBYSCORE', KEYS[5], '-inf', now_ms, 'LIMIT', 0, 257)
-  local lifecycle_due = redis.call('ZRANGEBYSCORE', KEYS[3], '-inf', now_ms, 'LIMIT', 0, 257)
-  if #replay_due > 256 or #lifecycle_due > 256
-    or #replay_due + #lifecycle_due > 256 then return false end
-  for _, operation_id in ipairs(replay_due) do
-    if not replay_validator(redis.call('HGET', KEYS[4], operation_id),
-      redis.call('ZSCORE', KEYS[5], operation_id)) then return nil end
-  end
-  local due_records, removed_record_count = {}, 0
-  for index, reservation_id in ipairs(lifecycle_due) do
-    local record = validate_record_pair(redis.call('HGET', KEYS[2], reservation_id),
-      redis.call('ZSCORE', KEYS[3], reservation_id), expected_key)
-    if not record or record.next_expiry_number > now_ms then return nil end
-    due_records[index] = {reservation_id, record}
-    if not (record.state == 'active' and record.active_until_number <= now_ms
-      and record.retained_until_number > now_ms) then
-      removed_record_count = removed_record_count + 1
-    end
-  end
-  return {replay_due=replay_due, due_records=due_records,
-    removed_record_count=removed_record_count}
-end
-local function record_after_planned_prune(record, now_ms)
-  if not record or record.next_expiry_number > now_ms then return record end
-  if record.state == 'active' and record.active_until_number <= now_ms
-    and record.retained_until_number > now_ms then
-    record.state, record.next_expiry = 'expired', record.retained_until
-    record.next_expiry_number = record.retained_until_number
-    return record
-  end
-  return nil
-end
-local function aggregate_target_records(now_ms, expected_key, record_limit,
-  daily_snapshot, monthly_snapshot, reconcile, override_id, override_record)
-  local record_count = redis.call('HLEN', KEYS[2])
-  if record_count > record_limit or record_count ~= redis.call('ZCARD', KEYS[3]) then
-    return nil
-  end
-  local flattened = redis.call('HGETALL', KEYS[2])
-  if #flattened ~= record_count * 2 then return nil end
-  local parsed, updates = {}, {}
-  for index = 1, #flattened, 2 do
-    local reservation_id, value = flattened[index], flattened[index + 1]
-    local record = validate_record_pair(value, redis.call('ZSCORE', KEYS[3], reservation_id), expected_key)
-    if not record then return nil end
-    if override_id and reservation_id == override_id then record = override_record end
-    record = record_after_planned_prune(record, now_ms)
-    if record then parsed[#parsed + 1] = {reservation_id, record} end
-  end
-  local result = {rate_count=0, rate_tokens='0', rate_tokens_saturated=false, active_cost=0,
-    daily_unreconciled=0, monthly_unreconciled=0, oldest=nil}
-  local cutoff = now_ms - 60000
-  for _, pair in ipairs(parsed) do
-    local reservation_id, record = pair[1], pair[2]
-    if reconcile and record.state == 'committed' and record.durable == '1' then
-      local changed = false
-      if record.daily_reconciled == '0' and daily_snapshot >= record.business_commit_number then
-        record.daily_reconciled, changed = '1', true
-      end
-      if record.monthly_reconciled == '0'
-        and monthly_snapshot >= record.business_commit_number then
-        record.monthly_reconciled, changed = '1', true
-      end
-      if changed then
-        local evidence_expiry = record.committed_at_number + 60000
-        if record.daily_reconciled == '0' then
-          evidence_expiry = math.max(evidence_expiry, record.committed_at_number + 86400000)
-        end
-        if record.monthly_reconciled == '0' then
-          evidence_expiry = math.max(evidence_expiry, record.committed_at_number + 2592000000)
-        end
-        record.retained_until = string.format('%.0f', evidence_expiry)
-        record.next_expiry = record.retained_until
-        record.retained_until_number, record.next_expiry_number = evidence_expiry, evidence_expiry
-        updates[#updates + 1] = {reservation_id, record}
-      end
-    end
-    if record.state == 'active' and record.active_until_number > now_ms then
-      result.active_cost = result.active_cost + record.estimated_cost_number
-      if record.accepted_at_number > cutoff then
-        result.rate_count = result.rate_count + 1
-        local tokens, saturated = add_uint_saturating(result.rate_tokens, record.estimated_tokens)
-        result.rate_tokens, result.rate_tokens_saturated = tokens,
-          result.rate_tokens_saturated or saturated
-        result.oldest = result.oldest and math.min(result.oldest,
-          record.accepted_at_number) or record.accepted_at_number
-      end
-    elseif record.state == 'committed' then
-      if record.committed_at_number > cutoff then
-        result.rate_count = result.rate_count + 1
-        local tokens, saturated = add_uint_saturating(result.rate_tokens, record.actual_tokens)
-        result.rate_tokens, result.rate_tokens_saturated = tokens,
-          result.rate_tokens_saturated or saturated
-        result.oldest = result.oldest and math.min(result.oldest,
-          record.committed_at_number) or record.committed_at_number
-      end
-      if record.daily_reconciled == '0' then
-        result.daily_unreconciled = result.daily_unreconciled + record.actual_cost_number
-      end
-      if record.monthly_reconciled == '0' then
-        result.monthly_unreconciled = result.monthly_unreconciled + record.actual_cost_number
-      end
-    end
-  end
-  return result, updates
-end
-local function ready_epoch(expected)
-  local marker, encoded_epoch = redis.call('GET', KEYS[8]), redis.call('GET', KEYS[1])
-  if marker ~= '1|initialized' or not encoded_epoch or redis.call('PTTL', KEYS[8]) ~= -1
-    or redis.call('PTTL', KEYS[1]) ~= -1 then return nil end
-  local schema, epoch, state = string.match(encoded_epoch, '^([^|]+)|([^|]+)|([^|]+)$')
-  if schema ~= '1' or not valid_positive(epoch)
-    or (state ~= 'ready' and state ~= 'reconciling') then return nil end
-  return epoch == expected and state == 'ready', state
-end
-"""
-
-_QUOTA_RESERVE_SCRIPT = (
-    "-- omni:quota_reserve:v1\n"
-    + _QUOTA_LUA_COMMON
-    + r"""
-local function valid_replay(value, score)
-  if not value or not score or not valid_safe_uint(score) or score == '0' then return false end
-  local schema, fingerprint, status, reason, retry_after, expiry =
-    string.match(value, '^([^|]+)|([^|]+)|([^|]+)|([^|]*)|([^|]+)|([^|]+)$')
-  return schema == '1' and valid_hex(fingerprint)
-    and (status == 'accepted' or status == 'denied')
-    and (reason == '' or reason == 'rpm' or reason == 'tpm' or reason == 'daily_budget'
-      or reason == 'monthly_budget' or reason == 'capacity')
-    and valid_uint(retry_after) and valid_safe_uint(expiry) and expiry ~= '0'
-    and expiry == score
-    and ((status == 'accepted' and reason == '' and retry_after == '0')
-      or (status == 'denied' and reason ~= ''))
-end
-local fenced, epoch_state = ready_epoch(ARGV[1])
-if fenced == nil then return redis.error_reply('COORDINATION_CORRUPT') end
-if not fenced then
-  return {'1', 'denied', ARGV[2], epoch_state == 'reconciling'
-    and 'reconciling' or 'stale_epoch', '0', '0'}
-end
-local request_time, estimated_cost = parse_decimal(ARGV[10]), parse_decimal(ARGV[12])
-local daily_budget = ARGV[15] == '' and nil or parse_decimal(ARGV[15])
-local monthly_budget = ARGV[16] == '' and nil or parse_decimal(ARGV[16])
-local daily_spend, monthly_spend = parse_decimal(ARGV[17]), parse_decimal(ARGV[18])
-local daily_snapshot, monthly_snapshot = parse_decimal(ARGV[19]), parse_decimal(ARGV[20])
-if not valid_hex(ARGV[3]) or not valid_hex(ARGV[4]) or not valid_safe_uint(ARGV[6])
-  or ARGV[6] == '0' or tonumber(ARGV[6]) > 2592000000
-  or not valid_safe_uint(ARGV[7]) or ARGV[7] == '0' or tonumber(ARGV[7]) > 2592000000
-  or tonumber(ARGV[7]) < tonumber(ARGV[6])
-  or not valid_safe_uint(ARGV[8]) or ARGV[8] == '0' or tonumber(ARGV[8]) > 100000
-  or not valid_safe_uint(ARGV[9]) or ARGV[9] == '0' or tonumber(ARGV[9]) > 100000
-  or request_time == nil or not valid_uint(ARGV[11]) or estimated_cost == nil
-  or (ARGV[13] ~= '' and not valid_positive(ARGV[13]))
-  or (ARGV[14] ~= '' and not valid_positive(ARGV[14]))
-  or (ARGV[15] ~= '' and daily_budget == nil)
-  or (ARGV[16] ~= '' and monthly_budget == nil)
-  or daily_spend == nil or monthly_spend == nil
-  or daily_snapshot == nil or monthly_snapshot == nil
-  or monthly_snapshot > daily_snapshot or daily_snapshot > request_time then
-  return redis.error_reply('COORDINATION_CORRUPT')
-end
-local reservation_key = read_reservation_locator(KEYS[6])
-if reservation_key == false then return redis.error_reply('COORDINATION_CORRUPT') end
-if reservation_key and reservation_key ~= ARGV[3] then
-  return {'1', 'denied', ARGV[2], 'conflict', '0', '0'}
-end
-local operation_key, operation_fingerprint = read_operation_locator(KEYS[7])
-if operation_key == false then return redis.error_reply('COORDINATION_CORRUPT') end
-if operation_key and (operation_key ~= ARGV[3] or operation_fingerprint ~= ARGV[4]) then
-  return {'1', 'denied', ARGV[2], 'conflict', '0', '0'}
-end
-local clock = redis.call('TIME')
-local now_ms = (clock[1] * 1000) + math.floor(clock[2] / 1000)
-local plan = plan_prune_target(now_ms, ARGV[3], tonumber(ARGV[8]), tonumber(ARGV[9]), valid_replay)
-if plan == nil then return redis.error_reply('COORDINATION_CORRUPT') end
-if not plan then
-  return {'1', 'denied', ARGV[2], 'reconciliation_required', '0', '0'}
-end
-if reservation_key and not redis.call('HGET', KEYS[2], ARGV[2]) then
-  return redis.error_reply('COORDINATION_CORRUPT')
-end
-local replay, replay_expiry = redis.call('HGET', KEYS[4], ARGV[5]),
-  redis.call('ZSCORE', KEYS[5], ARGV[5])
-if (replay or replay_expiry) and not valid_replay(replay, replay_expiry) then
-  return redis.error_reply('COORDINATION_CORRUPT')
-end
-if replay and tonumber(replay_expiry) <= now_ms then replay, replay_expiry = nil, nil end
-if operation_key and not replay then return redis.error_reply('COORDINATION_CORRUPT') end
-local aggregate, aggregate_updates = aggregate_target_records(now_ms, ARGV[3], tonumber(ARGV[8]),
-  daily_snapshot, monthly_snapshot, true)
-if not aggregate then return redis.error_reply('COORDINATION_CORRUPT') end
-local existing = redis.call('HGET', KEYS[2], ARGV[2])
-local existing_record = existing and validate_record_pair(existing,
-  redis.call('ZSCORE', KEYS[3], ARGV[2]), ARGV[3]) or nil
-if existing and not existing_record then return redis.error_reply('COORDINATION_CORRUPT') end
-existing_record = record_after_planned_prune(existing_record, now_ms)
-local replay_status, replay_reason, replay_retry = nil, nil, nil
-if replay then
-  local _, fingerprint, status, reason, retry_after =
-    string.match(replay, '^([^|]+)|([^|]+)|([^|]+)|([^|]*)|([^|]+)|([^|]+)$')
-  if fingerprint == ARGV[4] then replay_status, replay_reason, replay_retry = status, reason, retry_after
-  else replay_status, replay_reason, replay_retry = 'denied', 'conflict', '0' end
-end
-local reason, retry_after = '', '0'
-local projected_tokens, projected_tokens_saturated =
-  add_uint_saturating(aggregate.rate_tokens, ARGV[11])
-if not replay_status and existing_record then
-  if existing_record.fingerprint == ARGV[4] then replay_status, replay_reason, replay_retry = 'accepted', '', '0'
-  else replay_status, replay_reason, replay_retry = 'denied', 'conflict', '0' end
-elseif not replay_status and redis.call('HLEN', KEYS[4]) - #plan.replay_due >= tonumber(ARGV[9]) then
-  reason = 'reconciliation_required'
-elseif not replay_status and redis.call('HLEN', KEYS[2]) - plan.removed_record_count
-  >= tonumber(ARGV[8]) then reason = 'capacity'
-elseif ARGV[13] ~= '' and aggregate.rate_count >= tonumber(ARGV[13]) then reason = 'rpm'
-elseif ARGV[14] ~= '' and (aggregate.rate_tokens_saturated or projected_tokens_saturated
-  or uint_greater_than(projected_tokens, ARGV[14])) then reason = 'tpm'
-elseif daily_budget ~= nil and daily_spend + aggregate.daily_unreconciled
-  + aggregate.active_cost + estimated_cost > daily_budget then reason = 'daily_budget'
-elseif monthly_budget ~= nil and monthly_spend + aggregate.monthly_unreconciled
-  + aggregate.active_cost + estimated_cost > monthly_budget then reason = 'monthly_budget' end
-if reason == 'rpm' or reason == 'tpm' then
-  retry_after = aggregate.oldest and tostring(math.max(1,
-    math.ceil((aggregate.oldest + 60000 - now_ms) / 1000))) or '1'
-end
--- apply validated mutation
-if #plan.replay_due > 0 then redis.call('HDEL', KEYS[4], unpack(plan.replay_due)); redis.call('ZREM', KEYS[5], unpack(plan.replay_due)) end
-for _, pair in ipairs(plan.due_records) do
-  local reservation_id, record = pair[1], pair[2]
-  if record.state == 'active' and record.active_until_number <= now_ms
-    and record.retained_until_number > now_ms then
-    record.state, record.next_expiry = 'expired', record.retained_until
-    record.next_expiry_number = record.retained_until_number
-    redis.call('HSET', KEYS[2], reservation_id, encode_record(record)); redis.call('ZADD', KEYS[3], record.next_expiry_number, reservation_id)
-  else redis.call('HDEL', KEYS[2], reservation_id); redis.call('ZREM', KEYS[3], reservation_id) end
-end
-for _, pair in ipairs(aggregate_updates) do redis.call('HSET', KEYS[2], pair[1], encode_record(pair[2])); redis.call('ZADD', KEYS[3], pair[2].next_expiry_number, pair[1]) end
-if replay_status then return {'1', replay_status, ARGV[2], replay_reason, replay_retry, '1'} end
-if reason == 'reconciliation_required' then return {'1', 'denied', ARGV[2], reason, '0', '0'} end
-if reason ~= '' then
-  local denial_expiry = string.format('%.0f', now_ms + tonumber(ARGV[6]))
-  redis.call('HSET', KEYS[4], ARGV[5], table.concat(
-    {'1', ARGV[4], 'denied', reason, retry_after, denial_expiry}, '|'))
-  redis.call('ZADD', KEYS[5], tonumber(denial_expiry), ARGV[5])
-  redis.call('SET', KEYS[7], '1|' .. ARGV[3] .. '|' .. ARGV[4], 'PXAT', denial_expiry)
-  return {'1', 'denied', ARGV[2], reason, retry_after, '0'}
-end
-local active_until = string.format('%.0f', now_ms + tonumber(ARGV[6]))
-local retained_until = string.format('%.0f', now_ms + tonumber(ARGV[7]))
-local record = {
-  schema='1', fingerprint=ARGV[4], key=ARGV[3], state='active', active_until=active_until,
-  retained_until=retained_until, accepted_at=string.format('%.0f', now_ms),
-  estimated_tokens=ARGV[11], estimated_cost=ARGV[12], committed_at='0', actual_tokens='0',
-  actual_cost='0', durable='0', daily_reconciled=ARGV[15] == '' and '1' or '0',
-  monthly_reconciled=ARGV[16] == '' and '1' or '0', business_commit='0',
-  rpm_limit=ARGV[13] == '' and 'n' or ARGV[13], tpm_limit=ARGV[14] == '' and 'n' or ARGV[14],
-  daily_budget=ARGV[15] == '' and 'n' or ARGV[15],
-  monthly_budget=ARGV[16] == '' and 'n' or ARGV[16], daily_spend=ARGV[17],
-  monthly_spend=ARGV[18], retention_ms=ARGV[7], next_expiry=active_until
-}
-redis.call('HSET', KEYS[2], ARGV[2], encode_record(record))
-redis.call('ZADD', KEYS[3], tonumber(active_until), ARGV[2])
-redis.call('HSET', KEYS[4], ARGV[5], table.concat(
-  {'1', ARGV[4], 'accepted', '', '0', retained_until}, '|'))
-redis.call('ZADD', KEYS[5], tonumber(retained_until), ARGV[5])
-redis.call('SET', KEYS[6], '1|' .. ARGV[3], 'PXAT', retained_until)
-redis.call('SET', KEYS[7], '1|' .. ARGV[3] .. '|' .. ARGV[4], 'PXAT', retained_until)
-return {'1', 'accepted', ARGV[2], '', '0', '0'}
-"""
-)
-
-_QUOTA_COMMIT_SCRIPT = (
-    "-- omni:quota_commit:v1\n"
-    + _QUOTA_LUA_COMMON
-    + r"""
-local function valid_replay(value, score)
-  if not value or not score or not valid_safe_uint(score) or score == '0' then return false end
-  local schema, fingerprint, status, overspent, expiry =
-    string.match(value, '^([^|]+)|([^|]+)|([^|]+)|([^|]+)|([^|]+)$')
-  return schema == '1' and valid_hex(fingerprint)
-    and (status == 'committed' or status == 'not_committed')
-    and (overspent == '0' or overspent == '1') and valid_safe_uint(expiry) and expiry ~= '0'
-    and expiry == score
-    and (status == 'committed' or overspent == '0')
-end
-local fenced = ready_epoch(ARGV[1])
-if fenced == nil then return redis.error_reply('COORDINATION_CORRUPT') end
-if not fenced then return {'1', 'not_committed', '0', '0'} end
-local business_commit = parse_decimal(ARGV[6])
-local actual_cost = ARGV[8] == '' and nil or parse_decimal(ARGV[8])
-if not valid_hex(ARGV[2]) or not valid_hex(ARGV[5]) or business_commit == nil
-  or (ARGV[7] ~= '' and not valid_uint(ARGV[7]))
-  or (ARGV[8] ~= '' and actual_cost == nil)
-  or (ARGV[9] ~= '0' and ARGV[9] ~= '1')
-  or not valid_safe_uint(ARGV[10]) or ARGV[10] == '0' or tonumber(ARGV[10]) > 100000
-  or not valid_safe_uint(ARGV[11]) or ARGV[11] == '0' or tonumber(ARGV[11]) > 100000
-  or not valid_safe_uint(ARGV[12]) or ARGV[12] == '0'
-  or tonumber(ARGV[12]) > 2592000000 then
-  return redis.error_reply('COORDINATION_CORRUPT')
-end
-local reservation_key = read_reservation_locator(KEYS[6])
-if reservation_key == false then return redis.error_reply('COORDINATION_CORRUPT') end
-if reservation_key and reservation_key ~= ARGV[5] then return {'1', 'not_committed', '0', '0'} end
-local operation_key, operation_fingerprint = read_operation_locator(KEYS[7])
-if operation_key == false then return redis.error_reply('COORDINATION_CORRUPT') end
-if operation_key and (operation_key ~= ARGV[5] or operation_fingerprint ~= ARGV[2]) then
-  return {'1', 'not_committed', '0', '0'}
-end
-local clock = redis.call('TIME')
-local now_ms = (clock[1] * 1000) + math.floor(clock[2] / 1000)
-local plan = plan_prune_target(now_ms, ARGV[5], tonumber(ARGV[10]), tonumber(ARGV[11]), valid_replay)
-if plan == nil then return redis.error_reply('COORDINATION_CORRUPT') end
-if not plan then return {'1', 'reconciliation_required', '0', '0'} end
-if reservation_key and not redis.call('HGET', KEYS[2], ARGV[4]) then
-  return redis.error_reply('COORDINATION_CORRUPT')
-end
-local replay, replay_expiry = redis.call('HGET', KEYS[4], ARGV[3]),
-  redis.call('ZSCORE', KEYS[5], ARGV[3])
-if (replay or replay_expiry) and not valid_replay(replay, replay_expiry) then
-  return redis.error_reply('COORDINATION_CORRUPT')
-end
-if replay and tonumber(replay_expiry) <= now_ms then replay, replay_expiry = nil, nil end
-if operation_key and not replay then return redis.error_reply('COORDINATION_CORRUPT') end
-local replay_status, replay_overspent = nil, nil
-if replay then
-  local _, fingerprint, status, overspent =
-    string.match(replay, '^([^|]+)|([^|]+)|([^|]+)|([^|]+)|([^|]+)$')
-  if fingerprint == ARGV[2] then replay_status, replay_overspent = status, overspent
-  else replay_status, replay_overspent = 'not_committed', '0' end
-end
-if not replay_status and redis.call('HLEN', KEYS[4]) - #plan.replay_due >= tonumber(ARGV[11]) then
-  return {'1', 'reconciliation_required', '0', '0'}
-end
-local encoded = redis.call('HGET', KEYS[2], ARGV[4])
-local record = encoded and validate_record_pair(encoded,
-  redis.call('ZSCORE', KEYS[3], ARGV[4]), ARGV[5]) or nil
-if encoded and not record then return redis.error_reply('COORDINATION_CORRUPT') end
-record = record_after_planned_prune(record, now_ms)
-local expiry = string.format('%.0f', now_ms + tonumber(ARGV[12]))
-local status, overspent = 'not_committed', '0'
-if record then expiry = record.retained_until end
-if not replay_status and record and record.state == 'active'
-  and record.active_until_number > now_ms then
-  record.state = 'committed'
-  record.committed_at = string.format('%.0f', now_ms)
-  record.actual_tokens = ARGV[7] == '' and record.estimated_tokens or ARGV[7]
-  record.actual_cost = ARGV[8] == '' and record.estimated_cost or ARGV[8]
-  record.durable = ARGV[9]
-  record.daily_reconciled = record.daily_budget == 'n' and '1' or '0'
-  record.monthly_reconciled = record.monthly_budget == 'n' and '1' or '0'
-  record.business_commit = ARGV[6]
-  local evidence_expiry = now_ms + 60000
-  if record.daily_reconciled == '0' then evidence_expiry = math.max(evidence_expiry, now_ms + 86400000) end
-  if record.monthly_reconciled == '0' then evidence_expiry = math.max(evidence_expiry, now_ms + 2592000000) end
-  record.retained_until = string.format('%.0f', evidence_expiry)
-  record.next_expiry = record.retained_until
-  record = parse_record(encode_record(record))
-  if not record then return redis.error_reply('COORDINATION_CORRUPT') end
-  local aggregate = aggregate_target_records(now_ms, ARGV[5], tonumber(ARGV[10]), 0, 0, false,
-    ARGV[4], record)
-  if not aggregate then return redis.error_reply('COORDINATION_CORRUPT') end
-  local overspent_value =
-    (record.tpm_limit ~= 'n' and (aggregate.rate_tokens_saturated
-      or uint_greater_than(aggregate.rate_tokens, record.tpm_limit)))
-    or (record.daily_budget ~= 'n' and record.daily_spend_number
-      + aggregate.active_cost + aggregate.daily_unreconciled > record.daily_budget_number)
-    or (record.monthly_budget ~= 'n' and record.monthly_spend_number
-      + aggregate.active_cost + aggregate.monthly_unreconciled > record.monthly_budget_number)
-  overspent = overspent_value and '1' or '0'
-  status, expiry = 'committed', record.retained_until
-end
--- apply validated mutation
-if #plan.replay_due > 0 then redis.call('HDEL', KEYS[4], unpack(plan.replay_due)); redis.call('ZREM', KEYS[5], unpack(plan.replay_due)) end
-for _, pair in ipairs(plan.due_records) do
-  local reservation_id, due = pair[1], pair[2]
-  if due.state == 'active' and due.active_until_number <= now_ms
-    and due.retained_until_number > now_ms then
-    due.state, due.next_expiry = 'expired', due.retained_until
-    due.next_expiry_number = due.retained_until_number
-    redis.call('HSET', KEYS[2], reservation_id, encode_record(due)); redis.call('ZADD', KEYS[3], due.next_expiry_number, reservation_id)
-  else redis.call('HDEL', KEYS[2], reservation_id); redis.call('ZREM', KEYS[3], reservation_id) end
-end
-if replay_status then return {'1', replay_status, replay_overspent, '1'} end
-if record and status == 'committed' then redis.call('HSET', KEYS[2], ARGV[4], encode_record(record)); redis.call('ZADD', KEYS[3], record.next_expiry_number, ARGV[4]); redis.call('SET', KEYS[6], '1|' .. ARGV[5], 'PXAT', expiry) end
-redis.call('HSET', KEYS[4], ARGV[3], table.concat(
-  {'1', ARGV[2], status, overspent, expiry}, '|'))
-redis.call('ZADD', KEYS[5], tonumber(expiry), ARGV[3])
-redis.call('SET', KEYS[7], '1|' .. ARGV[5] .. '|' .. ARGV[2], 'PXAT', expiry)
-return {'1', status, overspent, '0'}
-"""
-)
-
-_QUOTA_RELEASE_SCRIPT = (
-    "-- omni:quota_release:v1\n"
-    + _QUOTA_LUA_COMMON
-    + r"""
-local function valid_replay(value, score)
-  if not value or not score or not valid_safe_uint(score) or score == '0' then return false end
-  local schema, fingerprint, released, expiry =
-    string.match(value, '^([^|]+)|([^|]+)|([^|]+)|([^|]+)$')
-  return schema == '1' and valid_hex(fingerprint) and (released == '0' or released == '1')
-    and valid_safe_uint(expiry) and expiry ~= '0' and expiry == score
-end
-local fenced = ready_epoch(ARGV[1])
-if fenced == nil then return redis.error_reply('COORDINATION_CORRUPT') end
-if not fenced then return {'1', 'ok', '0', '0'} end
-if not valid_hex(ARGV[2]) or not valid_hex(ARGV[5])
-  or not valid_safe_uint(ARGV[6]) or ARGV[6] == '0' or tonumber(ARGV[6]) > 2592000000
-  or not valid_safe_uint(ARGV[7]) or ARGV[7] == '0' or tonumber(ARGV[7]) > 100000
-  or not valid_safe_uint(ARGV[8]) or ARGV[8] == '0' or tonumber(ARGV[8]) > 100000 then
-  return redis.error_reply('COORDINATION_CORRUPT')
-end
-local reservation_key = read_reservation_locator(KEYS[6])
-if reservation_key == false then return redis.error_reply('COORDINATION_CORRUPT') end
-if reservation_key and reservation_key ~= ARGV[5] then return {'1', 'ok', '0', '0'} end
-local operation_key, operation_fingerprint = read_operation_locator(KEYS[7])
-if operation_key == false then return redis.error_reply('COORDINATION_CORRUPT') end
-if operation_key and (operation_key ~= ARGV[5] or operation_fingerprint ~= ARGV[2]) then
-  return {'1', 'ok', '0', '0'}
-end
-local clock = redis.call('TIME')
-local now_ms = (clock[1] * 1000) + math.floor(clock[2] / 1000)
-local plan = plan_prune_target(now_ms, ARGV[5], tonumber(ARGV[7]), tonumber(ARGV[8]), valid_replay)
-if plan == nil then return redis.error_reply('COORDINATION_CORRUPT') end
-if not plan then return {'1', 'reconciliation_required', '0', '0'} end
-if reservation_key and not redis.call('HGET', KEYS[2], ARGV[4]) then
-  return redis.error_reply('COORDINATION_CORRUPT')
-end
-local replay, replay_expiry = redis.call('HGET', KEYS[4], ARGV[3]),
-  redis.call('ZSCORE', KEYS[5], ARGV[3])
-if (replay or replay_expiry) and not valid_replay(replay, replay_expiry) then
-  return redis.error_reply('COORDINATION_CORRUPT')
-end
-if replay and tonumber(replay_expiry) <= now_ms then replay, replay_expiry = nil, nil end
-if operation_key and not replay then return redis.error_reply('COORDINATION_CORRUPT') end
-local replayed = false
-if replay then
-  local _, fingerprint = string.match(replay, '^([^|]+)|([^|]+)|([^|]+)|([^|]+)$')
-  replayed = fingerprint == ARGV[2]
-end
-if not replay and redis.call('HLEN', KEYS[4]) - #plan.replay_due >= tonumber(ARGV[8]) then
-  return {'1', 'reconciliation_required', '0', '0'}
-end
-local encoded = redis.call('HGET', KEYS[2], ARGV[4])
-local record = encoded and validate_record_pair(encoded,
-  redis.call('ZSCORE', KEYS[3], ARGV[4]), ARGV[5]) or nil
-if encoded and not record then return redis.error_reply('COORDINATION_CORRUPT') end
-record = record_after_planned_prune(record, now_ms)
-local released, expiry = '0', string.format('%.0f', now_ms + tonumber(ARGV[6]))
-if not replay and record then
-  expiry = record.retained_until
-  if record.state == 'active' and record.active_until_number > now_ms then
-    released, record.state, record.next_expiry = '1', 'released', record.retained_until
-    record = parse_record(encode_record(record))
-    if not record then return redis.error_reply('COORDINATION_CORRUPT') end
-  end
-end
--- apply validated mutation
-if #plan.replay_due > 0 then redis.call('HDEL', KEYS[4], unpack(plan.replay_due)); redis.call('ZREM', KEYS[5], unpack(plan.replay_due)) end
-for _, pair in ipairs(plan.due_records) do
-  local reservation_id, due = pair[1], pair[2]
-  if due.state == 'active' and due.active_until_number <= now_ms
-    and due.retained_until_number > now_ms then
-    due.state, due.next_expiry = 'expired', due.retained_until
-    due.next_expiry_number = due.retained_until_number
-    redis.call('HSET', KEYS[2], reservation_id, encode_record(due)); redis.call('ZADD', KEYS[3], due.next_expiry_number, reservation_id)
-  else redis.call('HDEL', KEYS[2], reservation_id); redis.call('ZREM', KEYS[3], reservation_id) end
-end
-if replay then return {'1', 'ok', '0', replayed and '1' or '0'} end
-if released == '1' then redis.call('HSET', KEYS[2], ARGV[4], encode_record(record)); redis.call('ZADD', KEYS[3], record.next_expiry_number, ARGV[4]) end
-redis.call('HSET', KEYS[4], ARGV[3], table.concat({'1', ARGV[2], released, expiry}, '|'))
-redis.call('ZADD', KEYS[5], tonumber(expiry), ARGV[3])
-redis.call('SET', KEYS[7], '1|' .. ARGV[5] .. '|' .. ARGV[2], 'PXAT', expiry)
-return {'1', 'ok', released, '0'}
-"""
-)
-
-
 _SECURITY_SESSION_COMMON = r"""
 local function valid_integer(value)
   return value and (value == '0' or string.match(value, '^[1-9][0-9]*$'))
@@ -2158,7 +1494,10 @@ def _decode_quota_reconciliation_cursor(cursor: str | None) -> dict[str, object]
         raise ValueError("Quota reconciliation cursor is invalid.")
     try:
         padding = "=" * (-len(cursor) % 4)
-        payload = json.loads(base64.urlsafe_b64decode(cursor + padding))
+        decoded = base64.urlsafe_b64decode(cursor + padding)
+        if base64.urlsafe_b64encode(decoded).rstrip(b"=").decode("ascii") != cursor:
+            raise ValueError
+        payload = json.loads(decoded)
     except (ValueError, UnicodeError, json.JSONDecodeError):
         raise ValueError("Quota reconciliation cursor is invalid.") from None
     if (
@@ -2229,7 +1568,7 @@ def _quota_reconciliation_record(value: object, score: object, key_digest: bytes
         or retention == 0
         or next_expiry == 0
         or accepted_at > active_until
-        or active_until > retained_until
+        or ((expected == 14 or fields[3] != "committed") and active_until > retained_until)
         or next_expiry > retained_until
         or int(score) != next_expiry
     ):
@@ -3408,11 +2747,16 @@ class RedisStateStore:
         if current.epoch != requested_epoch or current.state is not EpochState.RECONCILING:
             raise CoordinationUnavailableError("Coordination epoch is not reconciling.")
         completion_key = self._key("quota:reconciliation", str(requested_epoch))
-        completed = await self._run_command("get", completion_key)
+        completed, completion_ttl = await asyncio.gather(
+            self._run_command("get", completion_key),
+            self._run_command("pttl", completion_key),
+        )
         if completed is not None:
-            if completed != b"1|complete":
+            if completed != b"1|complete" or completion_ttl != -1:
                 raise CoordinationCorruptError("Stored coordination state is invalid.")
             return QuotaReconciliationResult(0, True, None)
+        if completion_ttl != -2:
+            raise CoordinationCorruptError("Stored coordination state is invalid.")
 
         family = state["family"]
         assert isinstance(family, str)
@@ -3555,6 +2899,8 @@ class RedisStateStore:
                 raise CoordinationCorruptError("Coordination reply is invalid.")
             next_scan = scan_reply[0]
             candidates = sorted(scan_reply[1])
+            if len(candidates) != len(set(candidates)):
+                raise CoordinationCorruptError("Coordination reply is invalid.")
             if candidates:
                 try:
                     target = candidates[0].decode("ascii")
@@ -3610,19 +2956,29 @@ class RedisStateStore:
             raise ValueError("Quota reconciliation cursor is invalid.") from None
         self._quota_bucket_key("quota:records", key_digest)
         index_key = self._quota_bucket_key(f"quota:{index_category}", key_digest)
-        record_count, index_count = await asyncio.gather(
-            self._run_command("hlen", target), self._run_command("zcard", index_key)
+        marker_key = self._quota_bucket_key("quota:state-schema", key_digest)
+        record_count, index_count, existing_marker, existing_marker_ttl = await asyncio.gather(
+            self._run_command("hlen", target),
+            self._run_command("zcard", index_key),
+            self._run_command("get", marker_key),
+            self._run_command("pttl", marker_key),
         )
+        if existing_marker is not None:
+            _validate_quota_schema_marker(existing_marker)
+            if existing_marker_ttl != -1:
+                raise CoordinationCorruptError("Stored coordination state is invalid.")
+        elif existing_marker_ttl != -2:
+            raise CoordinationCorruptError("Stored coordination state is invalid.")
         if (
             isinstance(record_count, bool)
             or not isinstance(record_count, int)
             or isinstance(index_count, bool)
             or not isinstance(index_count, int)
+            or record_count < 0
+            or index_count < 0
             or record_count != index_count
-            or record_count > self._quota_record_limit
-            and family == "records"
-            or record_count > self._replay_limit
-            and family == "replays"
+            or (record_count > self._quota_record_limit and family == "records")
+            or (record_count > self._replay_limit and family == "replays")
         ):
             raise CoordinationCorruptError("Stored coordination state is invalid.")
         start = 0 if apply else member_cursor
@@ -3636,10 +2992,13 @@ class RedisStateStore:
             not isinstance(now_reply, (list, tuple))
             or len(now_reply) != 2
             or any(isinstance(value, bool) or not isinstance(value, int) for value in now_reply)
+            or not 0 <= now_reply[0] <= MAX_COORDINATION_INTEGER // 1000
+            or not 0 <= now_reply[1] <= 999_999
         ):
             raise CoordinationCorruptError("Coordination reply is invalid.")
         now_ms = now_reply[0] * 1000 + now_reply[1] // 1000
         validated: list[bytes] = []
+        locator_names: list[str] = []
         for item in page:
             if (
                 not isinstance(item, (list, tuple))
@@ -3648,6 +3007,17 @@ class RedisStateStore:
             ):
                 raise CoordinationCorruptError("Coordination reply is invalid.")
             member, score = item
+            try:
+                locator_name = member.decode("ascii")
+                if family == "records":
+                    _validate_identifier(locator_name, "Reservation ID")
+                else:
+                    operation_kind, separator, operation_id = locator_name.partition(":")
+                    if not separator or operation_kind not in {"reserve", "commit", "release"}:
+                        raise ValueError
+                    validate_operation_id(operation_id)
+            except (UnicodeDecodeError, ValueError):
+                raise CoordinationCorruptError("Stored coordination state is invalid.") from None
             value = await self._run_command("hget", target, member)
             if family == "records":
                 state_name = _quota_reconciliation_record(value, score, key_digest)
@@ -3661,6 +3031,7 @@ class RedisStateStore:
             else:
                 _quota_reconciliation_replay(value, score)
             validated.append(member)
+            locator_names.append(locator_name)
 
         if apply and validated:
             client = await self._get_client()
@@ -3669,13 +3040,7 @@ class RedisStateStore:
                     pipeline.hdel(target, *validated)
                     pipeline.zrem(index_key, *validated)
                     locator_category = "quota:locator" if family == "records" else "quota:operation"
-                    for member in validated:
-                        try:
-                            identifier = member.decode("ascii")
-                        except UnicodeDecodeError:
-                            raise CoordinationCorruptError(
-                                "Stored coordination state is invalid."
-                            ) from None
+                    for identifier in locator_names:
                         pipeline.delete(self._key(locator_category, identifier))
                     results = await pipeline.execute()
                     if (
@@ -3717,10 +3082,6 @@ class RedisStateStore:
                     or remaining_count != 0
                 ):
                     raise CoordinationCorruptError("Stored coordination state is invalid.")
-                marker_key = self._quota_bucket_key("quota:state-schema", key_digest)
-                existing_marker = await self._run_command("get", marker_key)
-                if existing_marker is not None:
-                    _validate_quota_schema_marker(existing_marker)
                 deleted = await self._run_command(
                     "delete", self._quota_bucket_key("quota:rate-buckets", key_digest)
                 )

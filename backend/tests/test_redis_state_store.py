@@ -1219,6 +1219,44 @@ class RedisStateStoreTests(unittest.IsolatedAsyncioTestCase):
             )
         ).encode("ascii")
 
+    @staticmethod
+    def _legacy_committed_record(key_digest: bytes, *, now_ms: int) -> tuple[bytes, int]:
+        accepted_at = now_ms - 100_000
+        active_until = accepted_at + 900_000
+        committed_at = accepted_at + 50_000
+        retained_until = committed_at + 60_000
+        return (
+            "|".join(
+                (
+                    "1",
+                    "a" * 64,
+                    key_digest.decode("ascii"),
+                    "committed",
+                    str(active_until),
+                    str(retained_until),
+                    str(accepted_at),
+                    "5",
+                    "0",
+                    str(committed_at),
+                    "5",
+                    "0",
+                    "1",
+                    "1",
+                    "1",
+                    "0",
+                    "10",
+                    "100",
+                    "n",
+                    "n",
+                    "0",
+                    "0",
+                    "900000",
+                    str(retained_until),
+                )
+            ).encode("ascii"),
+            retained_until,
+        )
+
     async def test_quota_reconciliation_disposes_v1_state_in_bounded_pages(self) -> None:
         client = StatefulRedisClient()
         client.epoch = (2, b"reconciling")
@@ -1326,6 +1364,26 @@ class RedisStateStoreTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(first, replay)
         self.assertEqual((client.redis_hashes, client.redis_zsets, client.values), before)
 
+    async def test_quota_reconciliation_accepts_valid_v1_committed_chronology(self) -> None:
+        client = StatefulRedisClient()
+        client.epoch = (2, b"reconciling")
+        store = RedisStateStore(
+            "redis://redis.example/0",
+            deployment_namespace="quota-v1-committed",
+            _redis_module_for_testing=FakeRedisModule(client),
+        )
+        key_digest = b"8" * 64
+        records_key = store._quota_bucket_key("quota:records", key_digest)
+        lifecycle_key = store._quota_bucket_key("quota:lifecycle", key_digest)
+        value, expiry = self._legacy_committed_record(key_digest, now_ms=client.now_ms)
+        client.redis_hashes[records_key] = {b"committed-reservation": value}
+        client.redis_zsets[lifecycle_key] = {b"committed-reservation": expiry}
+
+        page = await store.reconcile_quota_state(epoch=2, cursor=None, limit=1, apply=True)
+
+        self.assertEqual(page.scanned, 1)
+        self.assertEqual(client.redis_hashes.get(records_key, {}), {})
+
     async def test_quota_reconciliation_never_exceeds_256_records(self) -> None:
         client = StatefulRedisClient()
         client.epoch = (2, b"reconciling")
@@ -1407,6 +1465,32 @@ class RedisStateStoreTests(unittest.IsolatedAsyncioTestCase):
             await store.reconcile_quota_state(
                 epoch=2, cursor="not-a-closed-cursor", limit=256, apply=True
             )
+
+    async def test_quota_reconciliation_rejects_expiring_schema_before_mutation(self) -> None:
+        client = StatefulRedisClient()
+        client.epoch = (2, b"reconciling")
+        store = RedisStateStore(
+            "redis://redis.example/0",
+            deployment_namespace="quota-expiring-marker",
+            _redis_module_for_testing=FakeRedisModule(client),
+        )
+        key_digest = b"7" * 64
+        records_key = store._quota_bucket_key("quota:records", key_digest)
+        lifecycle_key = store._quota_bucket_key("quota:lifecycle", key_digest)
+        marker_key = store._quota_bucket_key("quota:state-schema", key_digest)
+        reservation = b"retained-reservation"
+        expiry = client.now_ms + 50_000
+        client.redis_hashes[records_key] = {
+            reservation: self._legacy_terminal_record(key_digest, retained_until=expiry)
+        }
+        client.redis_zsets[lifecycle_key] = {reservation: expiry}
+        client.values[marker_key] = (b"1|1|ready", client.now_ms + 30_000)
+
+        with self.assertRaises(CoordinationCorruptError):
+            await store.reconcile_quota_state(epoch=2, cursor=None, limit=256, apply=True)
+
+        self.assertIn(reservation, client.redis_hashes[records_key])
+        self.assertIn(reservation, client.redis_zsets[lifecycle_key])
 
     async def test_client_is_lazy_binary_safe_and_url_is_secret(self) -> None:
         self.assertEqual(self.redis.calls, [])

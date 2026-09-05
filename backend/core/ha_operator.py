@@ -242,6 +242,21 @@ class HaRuntimeOperator:
             raise RuntimeError("Complete quota reconciliation is required before marking ready.")
         if epoch.epoch != self.policy.fencing_epoch or epoch.state is not EpochState.RECONCILING:
             raise RuntimeError("The expected reconciling epoch is unavailable.")
+        confirmation = await self._store.reconcile_quota_state(
+            epoch=self.policy.fencing_epoch,
+            cursor=None,
+            limit=1,
+            apply=apply,
+        )
+        if apply:
+            drain = {
+                **drain,
+                "quota_reconciliation_cursor": confirmation.cursor,
+                "quota_reconciliation_complete": confirmation.complete,
+            }
+            await self._store.set(self.DRAIN_KEY, self._encode_record(drain))
+        if not confirmation.complete:
+            raise RuntimeError("Complete quota reconciliation is required before marking ready.")
         if apply:
             epoch = await self._store.mark_epoch_ready(self.policy.fencing_epoch, operation_id)
             if epoch.state is not EpochState.READY:

@@ -1493,7 +1493,10 @@ class InMemoryStateStore(BaseStateStore):
             raise ValueError("Quota reconciliation cursor is invalid.")
         try:
             padding = "=" * (-len(cursor) % 4)
-            payload = json.loads(base64.urlsafe_b64decode(cursor + padding))
+            decoded = base64.urlsafe_b64decode(cursor + padding)
+            if base64.urlsafe_b64encode(decoded).rstrip(b"=").decode("ascii") != cursor:
+                raise ValueError
+            payload = json.loads(decoded)
         except (ValueError, UnicodeError, json.JSONDecodeError):
             raise ValueError("Quota reconciliation cursor is invalid.") from None
         if (

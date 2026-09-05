@@ -10,7 +10,12 @@ BACKEND_DIR = Path(__file__).resolve().parents[1]
 if str(BACKEND_DIR) not in sys.path:
     sys.path.insert(0, str(BACKEND_DIR))
 
-from core.coordination import EpochState, QuotaReconciliationResult
+from core.coordination import (
+    CoordinationReconciliationRequiredError,
+    EpochState,
+    QuotaReconciliationResult,
+    QuotaReservationRequest,
+)
 from core.ha_coordination_binding import CoordinationBindingManager
 from core.ha_operator import HaRuntimeOperator
 from core.ha_runtime_policy import HaRuntimePolicy
@@ -131,6 +136,52 @@ class HaRuntimeOperatorTests(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn("opaque-cursor", repr(page))
         with self.assertRaisesRegex(RuntimeError, "quota reconciliation"):
             await next_operator.mark_ready("ready-op-quota-gate", apply=True)
+
+    async def test_mark_ready_revalidates_a_tampered_complete_drain_record(self) -> None:
+        operator = HaRuntimeOperator(
+            policy(), self.storage, self.store, activation_verifier=lambda _record: True
+        )
+        decision = await self.store.reserve_quota(
+            QuotaReservationRequest(
+                reservation_id="active-before-drain",
+                key_id="virtual-key",
+                now=1.0,
+                ttl_seconds=61.0,
+                estimated_tokens=1,
+                estimated_cost_usd=0.0,
+                rpm_limit=None,
+                tpm_limit=None,
+                daily_budget_usd=None,
+                monthly_budget_usd=None,
+                daily_spend_usd=0.0,
+                monthly_spend_usd=0.0,
+                daily_snapshot_started_at=1.0,
+                monthly_snapshot_started_at=1.0,
+            )
+        )
+        self.assertTrue(decision.accepted)
+        await operator.drain(apply=True)
+        await operator.advance_epoch("epoch-op-tampered-drain", apply=True)
+        next_operator = HaRuntimeOperator(
+            policy(2), self.storage, self.store, activation_verifier=lambda _record: True
+        )
+        with self.assertRaises(CoordinationReconciliationRequiredError):
+            await next_operator.reconcile(apply=True)
+        drain = json.loads(await self.store.get(operator.DRAIN_KEY))
+        await self.store.set(
+            operator.DRAIN_KEY,
+            operator._encode_record(
+                {
+                    **drain,
+                    "quota_reconciliation_cursor": None,
+                    "quota_reconciliation_complete": True,
+                }
+            ),
+        )
+
+        with self.assertRaises(CoordinationReconciliationRequiredError):
+            await next_operator.mark_ready("ready-op-tampered-drain", apply=True)
+        self.assertIs((await self.store.read_epoch()).state, EpochState.RECONCILING)
 
     async def test_rollback_plan_is_content_free_and_never_mutates(self) -> None:
         operator = HaRuntimeOperator(
