@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from dataclasses import replace
 from typing import Any, Callable, Final
 
@@ -43,34 +44,51 @@ class HaRuntimeOperator:
         value = await self._storage.get_config(self._bindings.DURABLE_KEY, None)
         if value is None:
             raise HaBindingError("durable_binding_missing")
-        try:
-            return CoordinationBinding.from_dict(value)
-        except ValueError:
-            raise HaBindingError("durable_binding_corrupt") from None
+        return self._bindings.decode_record(value, "durable_binding_corrupt")
 
     async def _shared_binding(self) -> CoordinationBinding:
         value = await self._store.get(self._bindings.STORE_KEY)
         if value is None:
             raise HaBindingError("namespace_missing")
-        try:
-            return CoordinationBinding.from_dict(value)
-        except ValueError:
-            raise HaBindingError("coordination_binding_corrupt") from None
+        return self._bindings.decode_record(value, "coordination_binding_corrupt")
 
     async def _drain_record(self) -> dict[str, object] | None:
         value = await self._store.get(self.DRAIN_KEY)
         if value is None:
             return None
+        if isinstance(value, str):
+            try:
+                value = json.loads(value)
+            except (ValueError, json.JSONDecodeError):
+                raise RuntimeError("The drain record is corrupt.") from None
         if (
             not isinstance(value, dict)
-            or set(value) != {"schema_version", "namespace_digest", "epoch"}
-            or value.get("schema_version") != 1
+            or set(value)
+            != {
+                "schema_version",
+                "namespace_digest",
+                "epoch",
+                "quota_reconciliation_cursor",
+                "quota_reconciliation_complete",
+            }
+            or value.get("schema_version") != 2
             or not isinstance(value.get("namespace_digest"), str)
             or type(value.get("epoch")) is not int
             or value["epoch"] < 1
+            or (
+                value.get("quota_reconciliation_cursor") is not None
+                and not isinstance(value["quota_reconciliation_cursor"], str)
+            )
+            or not isinstance(value.get("quota_reconciliation_complete"), bool)
+            or value["quota_reconciliation_complete"]
+            != (value["quota_reconciliation_cursor"] is None)
         ):
             raise RuntimeError("The drain record is corrupt.")
         return value
+
+    @staticmethod
+    def _encode_record(value: dict[str, object]) -> str:
+        return json.dumps(value, separators=(",", ":"), sort_keys=True)
 
     async def status(self) -> dict[str, object]:
         durable = await self._durable_binding()
@@ -93,6 +111,12 @@ class HaRuntimeOperator:
             "state": state,
             "epoch": epoch.epoch,
             "drain": drain is not None,
+            "quota_reconciliation_complete": bool(
+                drain is not None and drain["quota_reconciliation_complete"]
+            ),
+            "quota_cursor_present": bool(
+                drain is not None and drain["quota_reconciliation_cursor"] is not None
+            ),
             "activation_accepted": self._activation_verifier(durable.activation_record),
         }
 
@@ -100,15 +124,17 @@ class HaRuntimeOperator:
         binding = await self._bindings.verify(self.policy)
         self._activation_required(binding.activation_record)
         record = {
-            "schema_version": 1,
+            "schema_version": 2,
             "namespace_digest": binding.namespace_digest,
             "epoch": binding.fencing_epoch,
+            "quota_reconciliation_cursor": "pending",
+            "quota_reconciliation_complete": False,
         }
         existing = await self._drain_record()
         if existing is not None and existing != record:
             raise RuntimeError("The drain record does not match the active binding.")
         if apply and existing is None:
-            await self._store.set(self.DRAIN_KEY, record)
+            await self._store.set(self.DRAIN_KEY, self._encode_record(record))
         return {"applied": bool(apply), "state": "draining", "epoch": binding.fencing_epoch}
 
     async def advance_epoch(self, operation_id: str, *, apply: bool = False) -> dict[str, object]:
@@ -141,7 +167,9 @@ class HaRuntimeOperator:
             raise RuntimeError("Epoch advance did not enter the expected reconciliation state.")
         return {"applied": True, "epoch": result.epoch, "state": result.state.value}
 
-    async def reconcile(self, *, apply: bool = False) -> dict[str, object]:
+    async def reconcile(
+        self, *, apply: bool = False, quota_page_size: int = 256
+    ) -> dict[str, object]:
         durable = await self._durable_binding()
         shared = await self._shared_binding()
         self._activation_required(durable.activation_record)
@@ -163,12 +191,37 @@ class HaRuntimeOperator:
             raise RuntimeError("The expected reconciling epoch is unavailable.")
         if apply:
             if shared == prior:
-                await self._store.set(self._bindings.STORE_KEY, expected.to_dict())
+                await self._store.set(
+                    self._bindings.STORE_KEY,
+                    self._bindings.encode_record(expected),
+                )
             if durable == prior and not await self._storage.set_config(
                 self._bindings.DURABLE_KEY, expected.to_dict()
             ):
                 raise RuntimeError("The durable binding update failed.")
-        return {"applied": bool(apply), "epoch": expected.fencing_epoch, "state": "reconciling"}
+        quota = await self._store.reconcile_quota_state(
+            epoch=expected.fencing_epoch,
+            cursor=None
+            if drain["quota_reconciliation_cursor"] == "pending"
+            else drain["quota_reconciliation_cursor"],
+            limit=quota_page_size,
+            apply=apply,
+        )
+        if apply:
+            updated_drain = {
+                **drain,
+                "quota_reconciliation_cursor": quota.cursor,
+                "quota_reconciliation_complete": quota.complete,
+            }
+            await self._store.set(self.DRAIN_KEY, self._encode_record(updated_drain))
+        return {
+            "applied": bool(apply),
+            "epoch": expected.fencing_epoch,
+            "state": "reconciling",
+            "quota_scanned": quota.scanned,
+            "quota_complete": quota.complete,
+            "quota_cursor_present": quota.cursor is not None,
+        }
 
     async def mark_ready(self, operation_id: str, *, apply: bool = False) -> dict[str, object]:
         epoch = await self._store.read_epoch()
@@ -185,6 +238,8 @@ class HaRuntimeOperator:
         drain = await self._drain_record()
         if drain is None or drain["epoch"] != self.policy.fencing_epoch - 1:
             raise RuntimeError("A matching drain is required before marking ready.")
+        if not drain["quota_reconciliation_complete"]:
+            raise RuntimeError("Complete quota reconciliation is required before marking ready.")
         if epoch.epoch != self.policy.fencing_epoch or epoch.state is not EpochState.RECONCILING:
             raise RuntimeError("The expected reconciling epoch is unavailable.")
         if apply:

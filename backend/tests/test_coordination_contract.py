@@ -23,6 +23,7 @@ from core.coordination import (
     InvalidationRequest,
     InvalidationResult,
     QuotaCommitResult,
+    QuotaReconciliationResult,
     QuotaReservationDecision,
     QuotaReservationRequest,
     decode_cas_result,
@@ -55,6 +56,13 @@ def _quota_request(**overrides: object) -> QuotaReservationRequest:
 
 
 class CoordinationDomainTests(unittest.TestCase):
+    def test_quota_reconciliation_result_is_closed_and_bounded(self) -> None:
+        self.assertEqual(QuotaReconciliationResult(0, True, None).scanned, 0)
+        self.assertEqual(QuotaReconciliationResult(256, False, "cursor").cursor, "cursor")
+        for values in ((257, False, "cursor"), (0, True, "cursor"), (0, False, None)):
+            with self.subTest(values=values), self.assertRaises(ValueError):
+                QuotaReconciliationResult(*values)
+
     def test_quota_reservation_ttl_covers_the_conservative_window(self) -> None:
         with self.assertRaisesRegex(ValueError, "Quota TTL"):
             _quota_request(ttl_seconds=60.999)

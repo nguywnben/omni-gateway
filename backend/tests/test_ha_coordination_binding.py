@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import base64
+import json
 import sys
 import unittest
 from pathlib import Path
@@ -66,6 +67,16 @@ class CoordinationBindingManagerTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(verified, expected)
         self.assertNotIn("production-east", repr(verified))
         self.assertNotIn("k" * 32, repr(verified))
+
+    async def test_shared_binding_accepts_canonical_json_transport(self) -> None:
+        expected = CoordinationBinding.for_policy(policy(), "act_" + ("a" * 32))
+        self.storage.config[self.manager.DURABLE_KEY] = expected.to_dict()
+        await self.store.set(
+            self.manager.STORE_KEY,
+            json.dumps(expected.to_dict(), separators=(",", ":"), sort_keys=True),
+        )
+
+        self.assertEqual(await self.manager.verify(policy()), expected)
 
     async def test_missing_or_mismatched_records_fail_with_safe_codes(self) -> None:
         expected = CoordinationBinding.for_policy(policy(), "act_" + ("a" * 32))

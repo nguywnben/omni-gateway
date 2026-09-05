@@ -643,6 +643,70 @@ class InMemoryCoordinationTests(CoordinationStoreContract, unittest.IsolatedAsyn
         self.assertNotIn("one-shot-key", store._quota_replay_expiries)
         self.assertNotIn("one-shot-key", store._quota_rate_windows)
 
+    async def test_quota_reconciliation_is_bounded_resumable_and_dry_run_safe(self) -> None:
+        for index in range(3):
+            identifier = f"reconcile-{index}"
+            self.assertTrue((await self.store.reserve_quota(_reservation(identifier))).accepted)
+            self.assertTrue(
+                await self.store.release_quota(
+                    identifier, now=self.clock.value, operation_id=f"release-{index}"
+                )
+            )
+        await self.store.advance_epoch(1, "advance-reconciliation")
+        before = copy.deepcopy(
+            (
+                self.store._quota_records,
+                self.store._quota_replays,
+            )
+        )
+        before_totals = self.store._quota_rate_windows["virtual-key"].totals(self.clock.value)
+
+        preview = await self.store.reconcile_quota_state(epoch=2, cursor=None, limit=2, apply=False)
+
+        self.assertEqual(preview.scanned, 2)
+        self.assertFalse(preview.complete)
+        self.assertEqual(
+            (
+                self.store._quota_records,
+                self.store._quota_replays,
+            ),
+            before,
+        )
+        self.assertEqual(
+            self.store._quota_rate_windows["virtual-key"].totals(self.clock.value), before_totals
+        )
+        cursor = None
+        pages = 0
+        while True:
+            page = await self.store.reconcile_quota_state(
+                epoch=2, cursor=cursor, limit=2, apply=True
+            )
+            self.assertLessEqual(page.scanned, 2)
+            pages += 1
+            if page.complete:
+                break
+            cursor = page.cursor
+        self.assertGreater(pages, 1)
+        self.assertEqual(self.store._quota_records, {})
+        self.assertEqual(self.store._quota_replays, {})
+        self.assertEqual(self.store._quota_rate_windows, {})
+        self.assertEqual(
+            await self.store.reconcile_quota_state(epoch=2, cursor=None, limit=2, apply=True),
+            type(page)(0, True, None),
+        )
+
+    async def test_quota_reconciliation_rejects_active_state_and_malformed_cursor(self) -> None:
+        self.assertTrue((await self.store.reserve_quota(_reservation("active"))).accepted)
+        await self.store.advance_epoch(1, "advance-active")
+
+        with self.assertRaises(CoordinationReconciliationRequiredError):
+            await self.store.reconcile_quota_state(epoch=2, cursor=None, limit=256, apply=True)
+        with self.assertRaises(ValueError):
+            await self.store.reconcile_quota_state(
+                epoch=2, cursor="not-a-valid-closed-cursor", limit=256, apply=True
+            )
+        self.assertIn("active", self.store._quota_records)
+
     async def test_capacity_exhaustion_is_a_closed_admission_decision(self) -> None:
         store = InMemoryStateStore(clock=self.clock, _quota_record_limit_for_testing=2)
 

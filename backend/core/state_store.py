@@ -8,8 +8,10 @@ from __future__ import annotations
 
 import abc
 import asyncio
+import base64
 import heapq
 import hmac
+import json
 import math
 import time
 from dataclasses import dataclass, field
@@ -32,6 +34,7 @@ from core.coordination import (
     InvalidationResult,
     QuotaCommitRequest,
     QuotaCommitResult,
+    QuotaReconciliationResult,
     QuotaReservationDecision,
     QuotaReservationRequest,
     validate_epoch,
@@ -296,6 +299,13 @@ class BaseStateStore(abc.ABC):
         """Idempotently release one active reservation."""
         pass
 
+    @abc.abstractmethod
+    async def reconcile_quota_state(
+        self, *, epoch: int, cursor: str | None, limit: int, apply: bool
+    ) -> QuotaReconciliationResult:
+        """Validate and migrate one bounded page of ephemeral quota state."""
+        pass
+
 
 class InMemoryStateStore(BaseStateStore):
     """Bounded, deterministic reference implementation of coordination semantics."""
@@ -344,6 +354,7 @@ class InMemoryStateStore(BaseStateStore):
         self._quota_replays: Dict[str, _QuotaReplay] = {}
         self._quota_replay_expiries: Dict[object, list[tuple[float, str]]] = {}
         self._quota_replay_counts: Dict[object, int] = {}
+        self._quota_reconciled_epochs: set[int] = set()
         self._security_sessions: Dict[str, SecuritySessionState] = {}
         self._security_digest_by_reference: Dict[str, str] = {}
         self._security_digests_by_principal: Dict[str, set[str]] = {}
@@ -1451,6 +1462,136 @@ class InMemoryStateStore(BaseStateStore):
                 expires_at,
             )
             return result
+
+    @staticmethod
+    def _quota_reconciliation_cursor(family: str) -> str:
+        payload = json.dumps(
+            {
+                "schema_version": 1,
+                "family": family,
+                "key_scan": 0,
+                "target": None,
+                "member_scan": 0,
+            },
+            separators=(",", ":"),
+            sort_keys=True,
+        ).encode("ascii")
+        return base64.urlsafe_b64encode(payload).rstrip(b"=").decode("ascii")
+
+    @staticmethod
+    def _decode_quota_reconciliation_cursor(cursor: str | None) -> str:
+        if cursor is None:
+            return "records"
+        if (
+            not isinstance(cursor, str)
+            or not 1 <= len(cursor) <= 2048
+            or any(
+                not (character.isascii() and (character.isalnum() or character in "-_"))
+                for character in cursor
+            )
+        ):
+            raise ValueError("Quota reconciliation cursor is invalid.")
+        try:
+            padding = "=" * (-len(cursor) % 4)
+            payload = json.loads(base64.urlsafe_b64decode(cursor + padding))
+        except (ValueError, UnicodeError, json.JSONDecodeError):
+            raise ValueError("Quota reconciliation cursor is invalid.") from None
+        if (
+            not isinstance(payload, dict)
+            or set(payload) != {"schema_version", "family", "key_scan", "target", "member_scan"}
+            or payload.get("schema_version") != 1
+            or payload.get("family") not in {"records", "replays"}
+            or type(payload.get("key_scan")) is not int
+            or payload["key_scan"] != 0
+            or payload.get("target") is not None
+            or type(payload.get("member_scan")) is not int
+            or payload["member_scan"] != 0
+        ):
+            raise ValueError("Quota reconciliation cursor is invalid.")
+        return payload["family"]
+
+    async def reconcile_quota_state(
+        self, *, epoch: int, cursor: str | None, limit: int, apply: bool
+    ) -> QuotaReconciliationResult:
+        requested_epoch = validate_epoch(epoch)
+        if isinstance(limit, bool) or not isinstance(limit, int) or not 1 <= limit <= 256:
+            raise ValueError("Quota reconciliation limit is invalid.")
+        if not isinstance(apply, bool):
+            raise ValueError("Quota reconciliation mode is invalid.")
+        family = self._decode_quota_reconciliation_cursor(cursor)
+        async with self._async_lock:
+            self._ensure_open_locked()
+            if (
+                self._epoch.epoch != requested_epoch
+                or self._epoch.state is not EpochState.RECONCILING
+            ):
+                raise CoordinationUnavailableError("Coordination epoch is not reconciling.")
+            if requested_epoch in self._quota_reconciled_epochs:
+                return QuotaReconciliationResult(0, True, None)
+
+            # A cursor is progress, not authority. A forged or stale replay-family
+            # cursor may never bypass lifecycle validation.
+            if family == "replays" and self._quota_records:
+                family = "records"
+
+            scanned = 0
+            if family == "records":
+                identifiers = sorted(
+                    self._quota_records,
+                    key=lambda identifier: (
+                        self._quota_records[identifier].request.key_id,
+                        identifier,
+                    ),
+                )[:limit]
+                now = self._clock()
+                for identifier in identifiers:
+                    record = self._quota_records[identifier]
+                    if record.state == "active" and record.active_expires_at > now:
+                        raise CoordinationReconciliationRequiredError(
+                            "Active quota reservations must drain before reconciliation."
+                        )
+                if apply:
+                    for identifier in identifiers:
+                        self._remove_quota_record_locked(identifier)
+                scanned = len(identifiers)
+                records_remain = (
+                    len(self._quota_records) > len(identifiers)
+                    if not apply
+                    else bool(self._quota_records)
+                )
+                if records_remain:
+                    return QuotaReconciliationResult(
+                        scanned, False, self._quota_reconciliation_cursor("records")
+                    )
+                family = "replays"
+
+            replay_keys = sorted(self._quota_replays)[: limit - scanned]
+            if apply:
+                for replay_key in replay_keys:
+                    replay = self._quota_replays.pop(replay_key)
+                    remaining = self._quota_replay_counts.get(replay.key_id, 0) - 1
+                    if remaining > 0:
+                        self._quota_replay_counts[replay.key_id] = remaining
+                    else:
+                        self._quota_replay_counts.pop(replay.key_id, None)
+            scanned += len(replay_keys)
+            replays_remain = (
+                len(self._quota_replays) > len(replay_keys)
+                if not apply
+                else bool(self._quota_replays)
+            )
+            if replays_remain:
+                return QuotaReconciliationResult(
+                    scanned, False, self._quota_reconciliation_cursor("replays")
+                )
+            if apply:
+                self._quota_ids_by_key.clear()
+                self._quota_rate_windows.clear()
+                self._quota_lifecycle_expiries.clear()
+                self._quota_replay_expiries.clear()
+                self._quota_replay_counts.clear()
+                self._quota_reconciled_epochs.add(requested_epoch)
+            return QuotaReconciliationResult(scanned, True, None)
 
     async def issue_security_session(self, request: SessionIssueRequest) -> SessionMutationResult:
         async with self._async_lock:

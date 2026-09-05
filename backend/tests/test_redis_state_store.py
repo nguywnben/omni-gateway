@@ -74,6 +74,27 @@ class FakeRedisClient:
     async def delete(self, *args: object, **kwargs: object) -> object:
         return await self._command("delete", *args, **kwargs)
 
+    async def scan(self, *args: object, **kwargs: object) -> object:
+        return await self._command("scan", *args, **kwargs)
+
+    async def hlen(self, *args: object, **kwargs: object) -> object:
+        return await self._command("hlen", *args, **kwargs)
+
+    async def zcard(self, *args: object, **kwargs: object) -> object:
+        return await self._command("zcard", *args, **kwargs)
+
+    async def zrange(self, *args: object, **kwargs: object) -> object:
+        return await self._command("zrange", *args, **kwargs)
+
+    async def hget(self, *args: object, **kwargs: object) -> object:
+        return await self._command("hget", *args, **kwargs)
+
+    async def time(self, *args: object, **kwargs: object) -> object:
+        return await self._command("time", *args, **kwargs)
+
+    async def pttl(self, *args: object, **kwargs: object) -> object:
+        return await self._command("pttl", *args, **kwargs)
+
     async def _command(self, name: str, *args: object, **kwargs: object) -> object:
         self.command_calls.append((name, args, kwargs))
         replies = self.command_replies[name]
@@ -143,6 +164,55 @@ class StatefulRegisteredScript:
         return reply
 
 
+class _StatefulPipeline:
+    def __init__(self, client: StatefulRedisClient) -> None:
+        self.client = client
+        self.operations: list[tuple[str, str, tuple[bytes, ...]]] = []
+
+    async def __aenter__(self) -> _StatefulPipeline:
+        return self
+
+    async def __aexit__(self, *_args: object) -> None:
+        return None
+
+    def hdel(self, key: str, *members: bytes) -> None:
+        self.operations.append(("hdel", key, members))
+
+    def zrem(self, key: str, *members: bytes) -> None:
+        self.operations.append(("zrem", key, members))
+
+    def delete(self, key: str) -> None:
+        self.operations.append(("delete", key, ()))
+
+    async def execute(self) -> list[int]:
+        results: list[int] = []
+        for operation, key, members in self.operations:
+            if operation == "hdel":
+                target = self.client.redis_hashes.setdefault(key, {})
+                removed = sum(member in target for member in members)
+                for member in members:
+                    target.pop(member, None)
+                if not target:
+                    self.client.redis_hashes.pop(key, None)
+                results.append(removed)
+            elif operation == "zrem":
+                target = self.client.redis_zsets.setdefault(key, {})
+                removed = sum(member in target for member in members)
+                for member in members:
+                    target.pop(member, None)
+                if not target:
+                    self.client.redis_zsets.pop(key, None)
+                results.append(removed)
+            else:
+                removed = int(
+                    self.client.values.pop(key, None) is not None
+                    or self.client.redis_hashes.pop(key, None) is not None
+                    or self.client.redis_zsets.pop(key, None) is not None
+                )
+                results.append(removed)
+        return results
+
+
 class StatefulRedisClient(FakeRedisClient):
     """Small deterministic driver model for Task 3's public transition sequence."""
 
@@ -182,6 +252,8 @@ class StatefulRedisClient(FakeRedisClient):
         self.quota_schema_expiring: set[bytes] = set()
         self.quota_record_inspections = 0
         self.rate_bucket_inspections = 0
+        self.redis_hashes: dict[str, dict[bytes, bytes]] = {}
+        self.redis_zsets: dict[str, dict[bytes, int]] = {}
         self.corrupt_quota_pairs = False
         self.cancel_after_response_boundary: set[str] = set()
 
@@ -189,6 +261,10 @@ class StatefulRedisClient(FakeRedisClient):
         script = StatefulRegisteredScript(self, source)
         self.registered[script.name] = script  # type: ignore[assignment]
         return script
+
+    def pipeline(self, *, transaction: bool) -> _StatefulPipeline:
+        assert transaction
+        return _StatefulPipeline(self)
 
     def advance(self, milliseconds: int) -> None:
         self.now_ms += milliseconds
@@ -253,6 +329,40 @@ class StatefulRedisClient(FakeRedisClient):
 
     async def _command(self, name: str, *args: object, **kwargs: object) -> object:
         self.command_calls.append((name, args, kwargs))
+        if name == "scan":
+            cursor = int(args[0])
+            pattern = kwargs.get("match")
+            assert isinstance(pattern, str) and pattern.endswith("*")
+            prefix = pattern[:-1]
+            keys = sorted(
+                key.encode("ascii")
+                for key in {*self.redis_hashes, *self.redis_zsets, *self.values}
+                if key.startswith(prefix)
+                and (
+                    bool(self.redis_hashes.get(key))
+                    or bool(self.redis_zsets.get(key))
+                    or key in self.values
+                )
+            )
+            count = int(kwargs.get("count", 10))
+            selected = keys[cursor : cursor + count]
+            next_cursor = 0 if cursor + count >= len(keys) else cursor + count
+            return next_cursor, selected
+        if name == "hlen":
+            return len(self.redis_hashes.get(str(args[0]), {}))
+        if name == "zcard":
+            return len(self.redis_zsets.get(str(args[0]), {}))
+        if name == "zrange":
+            key, start, end = str(args[0]), int(args[1]), int(args[2])
+            ordered = sorted(
+                self.redis_zsets.get(key, {}).items(), key=lambda item: (item[1], item[0])
+            )
+            selected = ordered[start : end + 1]
+            return [(member, float(score)) for member, score in selected]
+        if name == "hget":
+            return self.redis_hashes.get(str(args[0]), {}).get(args[1])
+        if name == "time":
+            return self.now_ms // 1000, self.now_ms % 1000 * 1000
         key = args[0]
         assert isinstance(key, str)
         stored = self.values.get(key)
@@ -261,11 +371,17 @@ class StatefulRedisClient(FakeRedisClient):
             stored = None
         if name == "get":
             return None if stored is None else stored[0]
-        if name == "delete":
+        if name == "pttl":
             if stored is None:
-                return 0
-            del self.values[key]
-            return 1
+                return -2
+            return -1 if stored[1] is None else stored[1] - self.now_ms
+        if name == "delete":
+            removed = int(
+                self.values.pop(key, None) is not None
+                or self.redis_hashes.pop(key, None) is not None
+                or self.redis_zsets.pop(key, None) is not None
+            )
+            return removed
         assert name == "set"
         value = args[1]
         assert isinstance(value, bytes)
@@ -1069,6 +1185,228 @@ class RedisStateStoreTests(unittest.IsolatedAsyncioTestCase):
 
     def queue(self, script: str, *replies: object) -> None:
         self.client.script_replies[script].extend(replies)
+
+    @staticmethod
+    def _legacy_terminal_record(key_digest: bytes, *, retained_until: int) -> bytes:
+        accepted_at = retained_until - 120_000
+        active_until = accepted_at + 61_000
+        return "|".join(
+            (
+                "1",
+                "a" * 64,
+                key_digest.decode("ascii"),
+                "released",
+                str(active_until),
+                str(retained_until),
+                str(accepted_at),
+                "5",
+                "0",
+                "0",
+                "0",
+                "0",
+                "0",
+                "1",
+                "1",
+                "0",
+                "10",
+                "100",
+                "n",
+                "n",
+                "0",
+                "0",
+                "120000",
+                str(retained_until),
+            )
+        ).encode("ascii")
+
+    async def test_quota_reconciliation_disposes_v1_state_in_bounded_pages(self) -> None:
+        client = StatefulRedisClient()
+        client.epoch = (2, b"reconciling")
+        store = RedisStateStore(
+            "redis://redis.example/0",
+            deployment_namespace="quota-migration",
+            _redis_module_for_testing=FakeRedisModule(client),
+        )
+        key_digest = b"d" * 64
+        records_key = store._quota_bucket_key("quota:records", key_digest)
+        lifecycle_key = store._quota_bucket_key("quota:lifecycle", key_digest)
+        replay_key = store._quota_bucket_key("quota:replay", key_digest)
+        replay_expiry_key = store._quota_bucket_key("quota:replay-expiry", key_digest)
+        marker_key = store._quota_bucket_key("quota:state-schema", key_digest)
+        bucket_key = store._quota_bucket_key("quota:rate-buckets", key_digest)
+        reservation = b"legacy-reservation"
+        operation = b"release:legacy-operation"
+        expiry = client.now_ms + 50_000
+        client.redis_hashes[records_key] = {
+            reservation: self._legacy_terminal_record(key_digest, retained_until=expiry)
+        }
+        client.redis_zsets[lifecycle_key] = {reservation: expiry}
+        client.redis_hashes[replay_key] = {
+            operation: b"1|" + (b"b" * 64) + b"|1|" + str(expiry).encode("ascii")
+        }
+        client.redis_zsets[replay_expiry_key] = {operation: expiry}
+        client.redis_hashes[bucket_key] = {b"0": b"old"}
+        client.values[marker_key] = (b"1|1|ready", None)
+        client.values[store._key("quota:locator", reservation.decode("ascii"))] = (
+            b"1|" + key_digest,
+            expiry,
+        )
+        client.values[store._key("quota:operation", operation.decode("ascii"))] = (
+            b"1|" + key_digest + b"|" + (b"b" * 64),
+            expiry,
+        )
+
+        cursor = None
+        pages = 0
+        while True:
+            page = await store.reconcile_quota_state(epoch=2, cursor=cursor, limit=1, apply=True)
+            self.assertLessEqual(page.scanned, 1)
+            pages += 1
+            if page.complete:
+                break
+            cursor = page.cursor
+            self.assertLess(pages, 20)
+
+        self.assertGreater(pages, 2)
+        self.assertEqual(client.redis_hashes.get(records_key, {}), {})
+        self.assertEqual(client.redis_hashes.get(replay_key, {}), {})
+        self.assertNotIn(bucket_key, client.redis_hashes)
+        self.assertEqual(client.values[marker_key][0], b"2|2|ready")
+        self.assertNotIn(store._key("quota:locator", reservation.decode("ascii")), client.values)
+        self.assertNotIn(store._key("quota:operation", operation.decode("ascii")), client.values)
+
+    async def test_quota_reconciliation_migrates_marker_only_state(self) -> None:
+        client = StatefulRedisClient()
+        client.epoch = (2, b"reconciling")
+        store = RedisStateStore(
+            "redis://redis.example/0",
+            deployment_namespace="marker-only",
+            _redis_module_for_testing=FakeRedisModule(client),
+        )
+        key_digest = b"e" * 64
+        marker_key = store._quota_bucket_key("quota:state-schema", key_digest)
+        bucket_key = store._quota_bucket_key("quota:rate-buckets", key_digest)
+        client.values[marker_key] = (b"2|1|ready", None)
+        client.redis_hashes[bucket_key] = {b"0": b"old"}
+
+        cursor = None
+        for _ in range(12):
+            page = await store.reconcile_quota_state(epoch=2, cursor=cursor, limit=1, apply=True)
+            if page.complete:
+                break
+            cursor = page.cursor
+        else:
+            self.fail("Quota schema reconciliation did not complete.")
+
+        self.assertEqual(client.values[marker_key][0], b"2|2|ready")
+        self.assertNotIn(bucket_key, client.redis_hashes)
+
+    async def test_quota_reconciliation_dry_run_is_exact_and_non_mutating(self) -> None:
+        client = StatefulRedisClient()
+        client.epoch = (2, b"reconciling")
+        store = RedisStateStore(
+            "redis://redis.example/0",
+            deployment_namespace="quota-preview",
+            _redis_module_for_testing=FakeRedisModule(client),
+        )
+        key_digest = b"c" * 64
+        records_key = store._quota_bucket_key("quota:records", key_digest)
+        lifecycle_key = store._quota_bucket_key("quota:lifecycle", key_digest)
+        reservation = b"preview-reservation"
+        expiry = client.now_ms + 50_000
+        client.redis_hashes[records_key] = {
+            reservation: self._legacy_terminal_record(key_digest, retained_until=expiry)
+        }
+        client.redis_zsets[lifecycle_key] = {reservation: expiry}
+        before = copy.deepcopy((client.redis_hashes, client.redis_zsets, client.values))
+
+        first = await store.reconcile_quota_state(epoch=2, cursor=None, limit=1, apply=False)
+        replay = await store.reconcile_quota_state(epoch=2, cursor=None, limit=1, apply=False)
+
+        self.assertEqual(first, replay)
+        self.assertEqual((client.redis_hashes, client.redis_zsets, client.values), before)
+
+    async def test_quota_reconciliation_never_exceeds_256_records(self) -> None:
+        client = StatefulRedisClient()
+        client.epoch = (2, b"reconciling")
+        store = RedisStateStore(
+            "redis://redis.example/0",
+            deployment_namespace="quota-page-bound",
+            _redis_module_for_testing=FakeRedisModule(client),
+        )
+        key_digest = b"9" * 64
+        records_key = store._quota_bucket_key("quota:records", key_digest)
+        lifecycle_key = store._quota_bucket_key("quota:lifecycle", key_digest)
+        expiry = client.now_ms + 50_000
+        value = self._legacy_terminal_record(key_digest, retained_until=expiry)
+        client.redis_hashes[records_key] = {
+            f"reservation-{index:04d}".encode("ascii"): value for index in range(257)
+        }
+        client.redis_zsets[lifecycle_key] = {
+            member: expiry for member in client.redis_hashes[records_key]
+        }
+
+        first = await store.reconcile_quota_state(epoch=2, cursor=None, limit=256, apply=True)
+        second = await store.reconcile_quota_state(
+            epoch=2, cursor=first.cursor, limit=256, apply=True
+        )
+
+        self.assertEqual(first.scanned, 256)
+        self.assertEqual(second.scanned, 1)
+        self.assertEqual(client.redis_hashes.get(records_key, {}), {})
+
+    async def test_quota_reconciliation_rejects_active_and_corrupt_state(self) -> None:
+        client = StatefulRedisClient()
+        client.epoch = (2, b"reconciling")
+        store = RedisStateStore(
+            "redis://redis.example/0",
+            deployment_namespace="quota-corrupt",
+            _redis_module_for_testing=FakeRedisModule(client),
+        )
+        key_digest = b"f" * 64
+        records_key = store._quota_bucket_key("quota:records", key_digest)
+        lifecycle_key = store._quota_bucket_key("quota:lifecycle", key_digest)
+        reservation = b"active-reservation"
+        active_until = client.now_ms + 1_000
+        retained_until = client.now_ms + 61_000
+        client.redis_hashes[records_key] = {
+            reservation: b"|".join(
+                (
+                    b"2",
+                    b"a" * 64,
+                    key_digest,
+                    b"active",
+                    str(active_until).encode("ascii"),
+                    str(retained_until).encode("ascii"),
+                    str(client.now_ms).encode("ascii"),
+                    b"1",
+                    b"0",
+                    b"0",
+                    b"n",
+                    b"n",
+                    b"61000",
+                    str(active_until).encode("ascii"),
+                )
+            )
+        }
+        client.redis_zsets[lifecycle_key] = {reservation: active_until}
+
+        with self.assertRaises(CoordinationReconciliationRequiredError):
+            await store.reconcile_quota_state(epoch=2, cursor=None, limit=256, apply=True)
+        self.assertIn(reservation, client.redis_hashes[records_key])
+
+        client.redis_zsets[lifecycle_key] = {}
+        with self.assertRaises(CoordinationCorruptError):
+            await store.reconcile_quota_state(epoch=2, cursor=None, limit=256, apply=True)
+
+        client.redis_hashes[records_key] = {reservation: b"malformed"}
+        client.redis_zsets[lifecycle_key] = {reservation: active_until}
+        with self.assertRaises(CoordinationCorruptError):
+            await store.reconcile_quota_state(epoch=2, cursor=None, limit=256, apply=True)
+        with self.assertRaises(ValueError):
+            await store.reconcile_quota_state(
+                epoch=2, cursor="not-a-closed-cursor", limit=256, apply=True
+            )
 
     async def test_client_is_lazy_binary_safe_and_url_is_secret(self) -> None:
         self.assertEqual(self.redis.calls, [])

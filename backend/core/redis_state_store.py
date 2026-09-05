@@ -10,7 +10,9 @@ import asyncio
 import base64
 import hashlib
 import importlib
+import json
 import math
+import re
 import secrets
 import weakref
 from typing import Any, Optional
@@ -35,6 +37,7 @@ from core.coordination import (
     InvalidationResult,
     QuotaCommitRequest,
     QuotaCommitResult,
+    QuotaReconciliationResult,
     QuotaReservationDecision,
     QuotaReservationRequest,
     validate_deployment_namespace,
@@ -2118,6 +2121,329 @@ def _quota_retention_ms(request: QuotaReservationRequest) -> int:
     return max(ttl, _QUOTA_RATE_WINDOW_MS + 1_000)
 
 
+def _encode_quota_reconciliation_cursor(
+    *, family: str, key_scan: int, target: str | None, member_scan: int
+) -> str:
+    payload = json.dumps(
+        {
+            "schema_version": 1,
+            "family": family,
+            "key_scan": key_scan,
+            "target": target,
+            "member_scan": member_scan,
+        },
+        separators=(",", ":"),
+        sort_keys=True,
+    ).encode("ascii")
+    return base64.urlsafe_b64encode(payload).rstrip(b"=").decode("ascii")
+
+
+def _decode_quota_reconciliation_cursor(cursor: str | None) -> dict[str, object]:
+    if cursor is None:
+        return {
+            "schema_version": 1,
+            "family": "records",
+            "key_scan": 0,
+            "target": None,
+            "member_scan": 0,
+        }
+    if (
+        not isinstance(cursor, str)
+        or not 1 <= len(cursor) <= 2048
+        or any(
+            not (character.isascii() and (character.isalnum() or character in "-_"))
+            for character in cursor
+        )
+    ):
+        raise ValueError("Quota reconciliation cursor is invalid.")
+    try:
+        padding = "=" * (-len(cursor) % 4)
+        payload = json.loads(base64.urlsafe_b64decode(cursor + padding))
+    except (ValueError, UnicodeError, json.JSONDecodeError):
+        raise ValueError("Quota reconciliation cursor is invalid.") from None
+    if (
+        not isinstance(payload, dict)
+        or set(payload) != {"schema_version", "family", "key_scan", "target", "member_scan"}
+        or payload.get("schema_version") != 1
+        or payload.get("family") not in {"records", "replays"}
+        or type(payload.get("key_scan")) is not int
+        or not 0 <= payload["key_scan"] <= MAX_COORDINATION_INTEGER
+        or (
+            payload.get("target") is not None
+            and (
+                not isinstance(payload["target"], str)
+                or not 1 <= len(payload["target"]) <= 512
+                or not payload["target"].isascii()
+            )
+        )
+        or type(payload.get("member_scan")) is not int
+        or not 0 <= payload["member_scan"] <= MAX_COORDINATION_INTEGER
+    ):
+        raise ValueError("Quota reconciliation cursor is invalid.")
+    return payload
+
+
+def _quota_reconciliation_record(value: object, score: object, key_digest: bytes) -> str:
+    if (
+        not isinstance(value, bytes)
+        or len(value) > 2048
+        or isinstance(score, bool)
+        or not isinstance(score, (int, float))
+        or not math.isfinite(float(score))
+        or not float(score).is_integer()
+    ):
+        raise CoordinationCorruptError("Stored coordination state is invalid.")
+    try:
+        fields = value.decode("ascii").split("|")
+    except UnicodeDecodeError:
+        raise CoordinationCorruptError("Stored coordination state is invalid.") from None
+    expected = 24 if fields and fields[0] == "1" else 14 if fields and fields[0] == "2" else 0
+    if (
+        len(fields) != expected
+        or len(fields[1]) != 64
+        or any(character not in "0123456789abcdef" for character in fields[1])
+        or fields[2] != key_digest.decode("ascii")
+        or fields[3] not in {"active", "committed", "released", "expired"}
+    ):
+        raise CoordinationCorruptError("Stored coordination state is invalid.")
+    safe_indexes = (4, 5, 6, 9, 22, 23) if expected == 24 else (4, 5, 6, 8, 12, 13)
+    uint_indexes = (7, 10) if expected == 24 else (7, 9)
+    for index in (*safe_indexes, *uint_indexes):
+        text = fields[index]
+        maximum = 9_007_199_254_740_991 if index in safe_indexes else MAX_COORDINATION_INTEGER
+        if (
+            not text
+            or (len(text) > 1 and text.startswith("0"))
+            or not text.isdigit()
+            or int(text) > maximum
+        ):
+            raise CoordinationCorruptError("Stored coordination state is invalid.")
+    active_until, retained_until, accepted_at = map(int, fields[4:7])
+    committed_at = int(fields[9] if expected == 24 else fields[8])
+    retention = int(fields[22] if expected == 24 else fields[12])
+    next_expiry = int(fields[23] if expected == 24 else fields[13])
+    if (
+        active_until == 0
+        or retained_until == 0
+        or accepted_at == 0
+        or retention == 0
+        or next_expiry == 0
+        or accepted_at > active_until
+        or active_until > retained_until
+        or next_expiry > retained_until
+        or int(score) != next_expiry
+    ):
+        raise CoordinationCorruptError("Stored coordination state is invalid.")
+    if expected == 14:
+        if (
+            (fields[10] != "n" and not _quota_positive_uint(fields[10]))
+            or (fields[11] != "n" and not _quota_positive_uint(fields[11]))
+            or retention < 61_000
+            or (
+                fields[3] == "active"
+                and (committed_at != 0 or fields[9] != "0" or next_expiry != active_until)
+            )
+            or (
+                fields[3] == "committed"
+                and (
+                    committed_at == 0
+                    or committed_at < accepted_at
+                    or committed_at > active_until
+                    or committed_at > 9_007_199_254_679_991
+                    or retained_until != max(active_until, committed_at + 61_000)
+                    or next_expiry != retained_until
+                )
+            )
+            or (
+                fields[3] in {"released", "expired"}
+                and (committed_at != 0 or fields[9] != "0" or next_expiry != retained_until)
+            )
+        ):
+            raise CoordinationCorruptError("Stored coordination state is invalid.")
+    elif not _valid_v1_quota_record(fields):
+        raise CoordinationCorruptError("Stored coordination state is invalid.")
+    return fields[3]
+
+
+def _quota_uint(value: str, *, maximum: int = MAX_COORDINATION_INTEGER) -> bool:
+    return bool(
+        value
+        and value.isdigit()
+        and (value == "0" or not value.startswith("0"))
+        and int(value) <= maximum
+    )
+
+
+def _quota_positive_uint(value: str, *, maximum: int = MAX_COORDINATION_INTEGER) -> bool:
+    return _quota_uint(value, maximum=maximum) and value != "0"
+
+
+_QUOTA_DECIMAL = re.compile(
+    r"(?:0|[1-9][0-9]*|0\.[0-9]*[1-9]|[1-9][0-9]*\.[0-9]*[1-9]|"
+    r"(?:[1-9]|[1-9]\.[0-9]*[1-9])e(?:[+-]?0[1-9]|[+-]?[1-9][0-9]*))\Z"
+)
+
+
+def _quota_decimal(value: str) -> float | None:
+    if len(value) > 64 or _QUOTA_DECIMAL.fullmatch(value) is None:
+        return None
+    try:
+        number = float(value)
+    except ValueError:
+        return None
+    return number if math.isfinite(number) and 0 <= number <= MAX_COORDINATION_INTEGER else None
+
+
+def _valid_v1_quota_record(fields: list[str]) -> bool:
+    if (
+        fields[12] not in {"0", "1"}
+        or fields[13] not in {"0", "1"}
+        or fields[14] not in {"0", "1"}
+        or (fields[16] != "n" and not _quota_positive_uint(fields[16]))
+        or (fields[17] != "n" and not _quota_positive_uint(fields[17]))
+        or any(_quota_decimal(fields[index]) is None for index in (8, 11, 15, 20, 21))
+        or any(fields[index] != "n" and _quota_decimal(fields[index]) is None for index in (18, 19))
+    ):
+        return False
+    active_until, retained_until, accepted_at = map(int, fields[4:7])
+    committed_at, retention, next_expiry = int(fields[9]), int(fields[22]), int(fields[23])
+    terminal_source = fields[3] in {"active", "released", "expired"}
+    if retention > 2_592_000_000:
+        return False
+    if terminal_source:
+        if (
+            committed_at != 0
+            or fields[10:13] != ["0", "0", "0"]
+            or fields[15] != "0"
+            or fields[13] != ("1" if fields[18] == "n" else "0")
+            or fields[14] != ("1" if fields[19] == "n" else "0")
+            or accepted_at > 9_007_199_254_740_991 - retention
+            or retained_until != accepted_at + retention
+        ):
+            return False
+        return next_expiry == (active_until if fields[3] == "active" else retained_until)
+    expected_expiry = committed_at + 60_000
+    if fields[13] == "0":
+        expected_expiry = max(expected_expiry, committed_at + 86_400_000)
+    if fields[14] == "0":
+        expected_expiry = max(expected_expiry, committed_at + 2_592_000_000)
+    return bool(
+        fields[3] == "committed"
+        and committed_at != 0
+        and accepted_at <= committed_at <= active_until
+        and next_expiry == retained_until == expected_expiry
+        and (fields[18] != "n" or fields[13] == "1")
+        and (fields[18] == "n" or fields[12] == "1" or fields[13] == "0")
+        and (fields[19] != "n" or fields[14] == "1")
+        and (fields[19] == "n" or fields[12] == "1" or fields[14] == "0")
+    )
+
+
+def _quota_reconciliation_replay(value: object, score: object) -> None:
+    if (
+        not isinstance(value, bytes)
+        or len(value) > 1024
+        or isinstance(score, bool)
+        or not isinstance(score, (int, float))
+        or not math.isfinite(float(score))
+        or not float(score).is_integer()
+    ):
+        raise CoordinationCorruptError("Stored coordination state is invalid.")
+    try:
+        fields = value.decode("ascii").split("|")
+    except UnicodeDecodeError:
+        raise CoordinationCorruptError("Stored coordination state is invalid.") from None
+    if (
+        not fields
+        or fields[0] not in {"1", "2"}
+        or len(fields) < 2
+        or len(fields[1]) != 64
+        or any(character not in "0123456789abcdef" for character in fields[1])
+    ):
+        raise CoordinationCorruptError("Stored coordination state is invalid.")
+    if fields[0] == "2" and len(fields) != 7:
+        raise CoordinationCorruptError("Stored coordination state is invalid.")
+    if fields[0] == "1" and len(fields) not in {4, 5, 6}:
+        raise CoordinationCorruptError("Stored coordination state is invalid.")
+    expiry = fields[-1]
+    if not _quota_positive_uint(expiry, maximum=9_007_199_254_740_991) or int(score) != int(expiry):
+        raise CoordinationCorruptError("Stored coordination state is invalid.")
+    if fields[0] == "2":
+        kind, status, result, retry = fields[2:6]
+        valid = _quota_uint(retry) and (
+            (
+                kind == "reserve"
+                and status in {"accepted", "denied"}
+                and (
+                    (status == "accepted" and result == "" and retry == "0")
+                    or (
+                        status == "denied"
+                        and result in {"rpm", "tpm", "capacity", "reconciliation_required"}
+                    )
+                )
+            )
+            or (
+                kind == "commit"
+                and status in {"committed", "not_committed"}
+                and result in {"0", "1"}
+                and retry == "0"
+                and (status == "committed" or result == "0")
+            )
+            or (
+                kind == "release"
+                and status in {"released", "not_released"}
+                and result == ""
+                and retry == "0"
+            )
+        )
+    elif len(fields) == 6:
+        valid = (
+            fields[2] in {"accepted", "denied"}
+            and _quota_uint(fields[4])
+            and (
+                (fields[2] == "accepted" and fields[3] == "" and fields[4] == "0")
+                or (
+                    fields[2] == "denied"
+                    and fields[3]
+                    in {
+                        "rpm",
+                        "tpm",
+                        "daily_budget",
+                        "monthly_budget",
+                        "capacity",
+                        "reconciliation_required",
+                    }
+                )
+            )
+        )
+    elif len(fields) == 5:
+        valid = (
+            fields[2] in {"committed", "not_committed"}
+            and fields[3] in {"0", "1"}
+            and (fields[2] == "committed" or fields[3] == "0")
+        )
+    else:
+        valid = fields[2] in {"0", "1"}
+    if not valid:
+        raise CoordinationCorruptError("Stored coordination state is invalid.")
+
+
+def _validate_quota_schema_marker(value: object) -> None:
+    if not isinstance(value, bytes):
+        raise CoordinationCorruptError("Stored coordination state is invalid.")
+    try:
+        fields = value.decode("ascii").split("|")
+    except UnicodeDecodeError:
+        raise CoordinationCorruptError("Stored coordination state is invalid.") from None
+    if (
+        len(fields) != 3
+        or fields[0] not in {"1", "2"}
+        or not _quota_positive_uint(fields[1])
+        or fields[2] != "ready"
+    ):
+        raise CoordinationCorruptError("Stored coordination state is invalid.")
+
+
 def _strict_array(reply: object, length: int) -> list[object]:
     if not isinstance(reply, list) or len(reply) != length:
         raise CoordinationCorruptError("Coordination reply is invalid.")
@@ -3068,6 +3394,370 @@ class RedisStateStore:
             ],
         )
         return _decode_quota_release_reply(reply)
+
+    async def reconcile_quota_state(
+        self, *, epoch: int, cursor: str | None, limit: int, apply: bool
+    ) -> QuotaReconciliationResult:
+        requested_epoch = validate_epoch(epoch)
+        if isinstance(limit, bool) or not isinstance(limit, int) or not 1 <= limit <= 256:
+            raise ValueError("Quota reconciliation limit is invalid.")
+        if not isinstance(apply, bool):
+            raise ValueError("Quota reconciliation mode is invalid.")
+        state = _decode_quota_reconciliation_cursor(cursor)
+        current = await self.read_epoch()
+        if current.epoch != requested_epoch or current.state is not EpochState.RECONCILING:
+            raise CoordinationUnavailableError("Coordination epoch is not reconciling.")
+        completion_key = self._key("quota:reconciliation", str(requested_epoch))
+        completed = await self._run_command("get", completion_key)
+        if completed is not None:
+            if completed != b"1|complete":
+                raise CoordinationCorruptError("Stored coordination state is invalid.")
+            return QuotaReconciliationResult(0, True, None)
+
+        family = state["family"]
+        assert isinstance(family, str)
+        target = state["target"]
+        scan_cursor = state["key_scan"]
+        member_cursor = state["member_scan"]
+        assert isinstance(scan_cursor, int) and isinstance(member_cursor, int)
+        if family == "replays" and target == "@schema":
+            schema_prefix = f"{self._prefix}:quota:state-schema:"
+            scan_reply = await self._run_command(
+                "scan", scan_cursor, match=schema_prefix + "*", count=limit
+            )
+            if (
+                not isinstance(scan_reply, (list, tuple))
+                or len(scan_reply) != 2
+                or isinstance(scan_reply[0], bool)
+                or not isinstance(scan_reply[0], int)
+                or not 0 <= scan_reply[0] <= MAX_COORDINATION_INTEGER
+                or not isinstance(scan_reply[1], (list, tuple))
+                or len(scan_reply[1]) > limit
+                or any(not isinstance(key, bytes) for key in scan_reply[1])
+            ):
+                raise CoordinationCorruptError("Coordination reply is invalid.")
+            markers = sorted(set(scan_reply[1]))
+            if len(markers) != len(scan_reply[1]):
+                raise CoordinationCorruptError("Coordination reply is invalid.")
+            for marker_key_bytes in markers:
+                try:
+                    marker_key = marker_key_bytes.decode("ascii")
+                except UnicodeDecodeError:
+                    raise CoordinationCorruptError(
+                        "Stored coordination state is invalid."
+                    ) from None
+                digest_text = marker_key.removeprefix(schema_prefix)
+                if marker_key != schema_prefix + digest_text:
+                    raise CoordinationCorruptError("Stored coordination state is invalid.")
+                key_digest = digest_text.encode("ascii")
+                self._quota_bucket_key("quota:records", key_digest)
+                marker, marker_ttl = await asyncio.gather(
+                    self._run_command("get", marker_key),
+                    self._run_command("pttl", marker_key),
+                )
+                _validate_quota_schema_marker(marker)
+                if marker_ttl != -1:
+                    raise CoordinationCorruptError("Stored coordination state is invalid.")
+                record_count, replay_count = await asyncio.gather(
+                    self._run_command("hlen", self._quota_bucket_key("quota:records", key_digest)),
+                    self._run_command("hlen", self._quota_bucket_key("quota:replay", key_digest)),
+                )
+                if (
+                    isinstance(record_count, bool)
+                    or not isinstance(record_count, int)
+                    or isinstance(replay_count, bool)
+                    or not isinstance(replay_count, int)
+                    or record_count != 0
+                    or replay_count != 0
+                ):
+                    raise CoordinationCorruptError("Stored coordination state is invalid.")
+                if apply:
+                    deleted = await self._run_command(
+                        "delete", self._quota_bucket_key("quota:rate-buckets", key_digest)
+                    )
+                    if (
+                        isinstance(deleted, bool)
+                        or not isinstance(deleted, int)
+                        or deleted
+                        not in {
+                            0,
+                            1,
+                        }
+                    ):
+                        raise CoordinationCorruptError("Coordination reply is invalid.")
+                    reply = await self._run_command(
+                        "set", marker_key, f"2|{requested_epoch}|ready".encode("ascii")
+                    )
+                    if reply is not True:
+                        raise CoordinationUnavailableError("Redis coordination is unavailable.")
+            next_schema_scan = scan_reply[0]
+            if next_schema_scan != 0:
+                return QuotaReconciliationResult(
+                    len(markers),
+                    False,
+                    _encode_quota_reconciliation_cursor(
+                        family="replays",
+                        key_scan=next_schema_scan,
+                        target="@schema",
+                        member_scan=0,
+                    ),
+                )
+            for pending_family, pending_prefix in (
+                ("records", f"{self._prefix}:quota:records:*"),
+                ("replays", f"{self._prefix}:quota:replay:*"),
+            ):
+                pending_reply = await self._run_command("scan", 0, match=pending_prefix, count=1)
+                if (
+                    not isinstance(pending_reply, (list, tuple))
+                    or len(pending_reply) != 2
+                    or isinstance(pending_reply[0], bool)
+                    or not isinstance(pending_reply[0], int)
+                    or not 0 <= pending_reply[0] <= MAX_COORDINATION_INTEGER
+                    or not isinstance(pending_reply[1], (list, tuple))
+                    or any(not isinstance(key, bytes) for key in pending_reply[1])
+                ):
+                    raise CoordinationCorruptError("Coordination reply is invalid.")
+                if pending_reply[0] != 0 or pending_reply[1]:
+                    return QuotaReconciliationResult(
+                        len(markers),
+                        False,
+                        _encode_quota_reconciliation_cursor(
+                            family=pending_family,
+                            key_scan=0,
+                            target=None,
+                            member_scan=0,
+                        ),
+                    )
+            if apply:
+                reply = await self._run_command("set", completion_key, b"1|complete")
+                if reply is not True:
+                    raise CoordinationUnavailableError("Redis coordination is unavailable.")
+            return QuotaReconciliationResult(len(markers), True, None)
+
+        category = "records" if family == "records" else "replay"
+        index_category = "lifecycle" if family == "records" else "replay-expiry"
+        target_prefix = f"{self._prefix}:quota:{category}:"
+        next_scan = scan_cursor
+        if target is None:
+            scan_reply = await self._run_command(
+                "scan", scan_cursor, match=target_prefix + "*", count=1
+            )
+            if (
+                not isinstance(scan_reply, (list, tuple))
+                or len(scan_reply) != 2
+                or isinstance(scan_reply[0], bool)
+                or not isinstance(scan_reply[0], int)
+                or not isinstance(scan_reply[1], (list, tuple))
+                or any(not isinstance(key, bytes) for key in scan_reply[1])
+            ):
+                raise CoordinationCorruptError("Coordination reply is invalid.")
+            if not 0 <= scan_reply[0] <= MAX_COORDINATION_INTEGER:
+                raise CoordinationCorruptError("Coordination reply is invalid.")
+            next_scan = scan_reply[0]
+            candidates = sorted(scan_reply[1])
+            if candidates:
+                try:
+                    target = candidates[0].decode("ascii")
+                except UnicodeDecodeError:
+                    raise CoordinationCorruptError(
+                        "Stored coordination state is invalid."
+                    ) from None
+            elif next_scan != 0:
+                return QuotaReconciliationResult(
+                    0,
+                    False,
+                    _encode_quota_reconciliation_cursor(
+                        family=family,
+                        key_scan=next_scan,
+                        target=None,
+                        member_scan=0,
+                    ),
+                )
+            elif scan_cursor != 0:
+                return QuotaReconciliationResult(
+                    0,
+                    False,
+                    _encode_quota_reconciliation_cursor(
+                        family=family,
+                        key_scan=0,
+                        target=None,
+                        member_scan=0,
+                    ),
+                )
+            elif family == "records":
+                return QuotaReconciliationResult(
+                    0,
+                    False,
+                    _encode_quota_reconciliation_cursor(
+                        family="replays", key_scan=0, target=None, member_scan=0
+                    ),
+                )
+            else:
+                return QuotaReconciliationResult(
+                    0,
+                    False,
+                    _encode_quota_reconciliation_cursor(
+                        family="replays", key_scan=0, target="@schema", member_scan=0
+                    ),
+                )
+
+        if not isinstance(target, str) or not target.startswith(target_prefix):
+            raise ValueError("Quota reconciliation cursor is invalid.")
+        digest_text = target.removeprefix(target_prefix)
+        try:
+            key_digest = digest_text.encode("ascii")
+        except UnicodeEncodeError:
+            raise ValueError("Quota reconciliation cursor is invalid.") from None
+        self._quota_bucket_key("quota:records", key_digest)
+        index_key = self._quota_bucket_key(f"quota:{index_category}", key_digest)
+        record_count, index_count = await asyncio.gather(
+            self._run_command("hlen", target), self._run_command("zcard", index_key)
+        )
+        if (
+            isinstance(record_count, bool)
+            or not isinstance(record_count, int)
+            or isinstance(index_count, bool)
+            or not isinstance(index_count, int)
+            or record_count != index_count
+            or record_count > self._quota_record_limit
+            and family == "records"
+            or record_count > self._replay_limit
+            and family == "replays"
+        ):
+            raise CoordinationCorruptError("Stored coordination state is invalid.")
+        start = 0 if apply else member_cursor
+        page = await self._run_command(
+            "zrange", index_key, start, start + limit - 1, withscores=True
+        )
+        if not isinstance(page, (list, tuple)) or len(page) > limit:
+            raise CoordinationCorruptError("Coordination reply is invalid.")
+        now_reply = await self._run_command("time")
+        if (
+            not isinstance(now_reply, (list, tuple))
+            or len(now_reply) != 2
+            or any(isinstance(value, bool) or not isinstance(value, int) for value in now_reply)
+        ):
+            raise CoordinationCorruptError("Coordination reply is invalid.")
+        now_ms = now_reply[0] * 1000 + now_reply[1] // 1000
+        validated: list[bytes] = []
+        for item in page:
+            if (
+                not isinstance(item, (list, tuple))
+                or len(item) != 2
+                or not isinstance(item[0], bytes)
+            ):
+                raise CoordinationCorruptError("Coordination reply is invalid.")
+            member, score = item
+            value = await self._run_command("hget", target, member)
+            if family == "records":
+                state_name = _quota_reconciliation_record(value, score, key_digest)
+                if state_name == "active":
+                    fields = value.split(b"|")
+                    active_until = int(fields[4])
+                    if active_until > now_ms:
+                        raise CoordinationReconciliationRequiredError(
+                            "Active quota reservations must drain before reconciliation."
+                        )
+            else:
+                _quota_reconciliation_replay(value, score)
+            validated.append(member)
+
+        if apply and validated:
+            client = await self._get_client()
+            try:
+                async with client.pipeline(transaction=True) as pipeline:
+                    pipeline.hdel(target, *validated)
+                    pipeline.zrem(index_key, *validated)
+                    locator_category = "quota:locator" if family == "records" else "quota:operation"
+                    for member in validated:
+                        try:
+                            identifier = member.decode("ascii")
+                        except UnicodeDecodeError:
+                            raise CoordinationCorruptError(
+                                "Stored coordination state is invalid."
+                            ) from None
+                        pipeline.delete(self._key(locator_category, identifier))
+                    results = await pipeline.execute()
+                    if (
+                        not isinstance(results, (list, tuple))
+                        or len(results) != 2 + len(validated)
+                        or results[0:2] != [len(validated), len(validated)]
+                        or any(
+                            isinstance(result, bool)
+                            or not isinstance(result, int)
+                            or result not in {0, 1}
+                            for result in results[2:]
+                        )
+                    ):
+                        raise CoordinationCorruptError("Coordination reply is invalid.")
+            except CoordinationCorruptError:
+                raise
+            except Exception as exc:
+                error_text = str(exc).upper()
+                if any(marker in error_text for marker in _CORRUPT_DRIVER_ERROR_MARKERS):
+                    raise CoordinationCorruptError(
+                        "Stored coordination state is invalid."
+                    ) from None
+                raise CoordinationUnavailableError("Redis coordination is unavailable.") from None
+
+        target_complete = start + len(validated) >= record_count
+        if apply and target_complete:
+            counterpart = self._quota_bucket_key(
+                "quota:replay" if family == "records" else "quota:records",
+                key_digest,
+            )
+            counterpart_count = await self._run_command("hlen", counterpart)
+            if isinstance(counterpart_count, bool) or not isinstance(counterpart_count, int):
+                raise CoordinationCorruptError("Coordination reply is invalid.")
+            if counterpart_count == 0:
+                remaining_count = await self._run_command("hlen", target)
+                if (
+                    isinstance(remaining_count, bool)
+                    or not isinstance(remaining_count, int)
+                    or remaining_count != 0
+                ):
+                    raise CoordinationCorruptError("Stored coordination state is invalid.")
+                marker_key = self._quota_bucket_key("quota:state-schema", key_digest)
+                existing_marker = await self._run_command("get", marker_key)
+                if existing_marker is not None:
+                    _validate_quota_schema_marker(existing_marker)
+                deleted = await self._run_command(
+                    "delete", self._quota_bucket_key("quota:rate-buckets", key_digest)
+                )
+                if (
+                    isinstance(deleted, bool)
+                    or not isinstance(deleted, int)
+                    or deleted
+                    not in {
+                        0,
+                        1,
+                    }
+                ):
+                    raise CoordinationCorruptError("Coordination reply is invalid.")
+                reply = await self._run_command(
+                    "set",
+                    marker_key,
+                    f"2|{requested_epoch}|ready".encode("ascii"),
+                )
+                if reply is not True:
+                    raise CoordinationUnavailableError("Redis coordination is unavailable.")
+            target = None
+            member_cursor = 0
+        elif target_complete:
+            target = None
+            member_cursor = 0
+        else:
+            member_cursor = start + len(validated)
+        return QuotaReconciliationResult(
+            len(validated),
+            False,
+            _encode_quota_reconciliation_cursor(
+                family=family,
+                key_scan=next_scan,
+                target=target,
+                member_scan=member_cursor,
+            ),
+        )
 
     async def issue_security_session(self, request: SessionIssueRequest) -> SessionMutationResult:
         if not isinstance(request, SessionIssueRequest):

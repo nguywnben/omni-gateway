@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import re
 from dataclasses import dataclass, field
 from typing import Any, Callable, Final
@@ -129,11 +130,17 @@ class CoordinationBindingManager:
         self._activation_verifier = activation_verifier or (lambda _record: False)
 
     @staticmethod
-    def _decode(value: object, code: str) -> CoordinationBinding:
+    def decode_record(value: object, code: str) -> CoordinationBinding:
         try:
+            if isinstance(value, str):
+                value = json.loads(value)
             return CoordinationBinding.from_dict(value)
-        except (TypeError, ValueError):
+        except (TypeError, ValueError, json.JSONDecodeError):
             raise HaBindingError(code) from None
+
+    @staticmethod
+    def encode_record(value: CoordinationBinding) -> str:
+        return json.dumps(value.to_dict(), separators=(",", ":"), sort_keys=True)
 
     @staticmethod
     def _expected(policy: HaRuntimePolicy, activation_record: str) -> CoordinationBinding:
@@ -148,7 +155,7 @@ class CoordinationBindingManager:
         durable_value = await self._storage.get_config(self.DURABLE_KEY, None)
         if durable_value is None:
             raise HaBindingError("durable_binding_missing")
-        durable = self._decode(durable_value, "durable_binding_corrupt")
+        durable = self.decode_record(durable_value, "durable_binding_corrupt")
         expected = self._expected(policy, durable.activation_record)
         if durable != expected:
             raise HaBindingError("binding_mismatch")
@@ -156,7 +163,7 @@ class CoordinationBindingManager:
         shared_value = await self._store.get(self.STORE_KEY)
         if shared_value is None:
             raise HaBindingError("namespace_missing")
-        shared = self._decode(shared_value, "coordination_binding_corrupt")
+        shared = self.decode_record(shared_value, "coordination_binding_corrupt")
         if shared != durable:
             raise HaBindingError("binding_mismatch")
         epoch = await self._store.read_epoch()
@@ -186,20 +193,20 @@ class CoordinationBindingManager:
             durable_value = await self._storage.get_config(self.DURABLE_KEY, None)
             shared_value = await self._store.get(self.STORE_KEY)
             if durable_value is not None:
-                durable = self._decode(durable_value, "durable_binding_corrupt")
+                durable = self.decode_record(durable_value, "durable_binding_corrupt")
                 if durable != expected:
                     raise HaBindingError("binding_mismatch")
                 if shared_value is None:
                     raise HaBindingError("namespace_missing")
-                shared = self._decode(shared_value, "coordination_binding_corrupt")
+                shared = self.decode_record(shared_value, "coordination_binding_corrupt")
                 if shared != expected:
                     raise HaBindingError("binding_mismatch")
                 return BindingBootstrapResult(True, expected)
 
             if shared_value is None:
-                await self._store.set(self.STORE_KEY, expected.to_dict())
+                await self._store.set(self.STORE_KEY, self.encode_record(expected))
             else:
-                shared = self._decode(shared_value, "coordination_binding_corrupt")
+                shared = self.decode_record(shared_value, "coordination_binding_corrupt")
                 if shared != expected:
                     raise HaBindingError("binding_mismatch")
             if not await self._storage.set_config(self.DURABLE_KEY, expected.to_dict()):

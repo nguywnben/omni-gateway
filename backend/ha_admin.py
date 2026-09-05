@@ -14,6 +14,16 @@ from core.redis_state_store import RedisStateStore
 from core.storage_adapter import close_storage_adapter, get_storage_adapter
 
 
+def _quota_page_size(value: str) -> int:
+    try:
+        result = int(value)
+    except ValueError:
+        raise argparse.ArgumentTypeError("must be an integer from 1 through 256") from None
+    if not 1 <= result <= 256:
+        raise argparse.ArgumentTypeError("must be an integer from 1 through 256")
+    return result
+
+
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Inspect or transition Omni Gateway HA state.")
     parser.add_argument(
@@ -24,6 +34,12 @@ def _parser() -> argparse.ArgumentParser:
         "--apply", action="store_true", help="Apply the transition; default is dry-run."
     )
     parser.add_argument("--operation-id", help="Stable idempotency ID for epoch mutations.")
+    parser.add_argument(
+        "--quota-page-size",
+        type=_quota_page_size,
+        default=256,
+        help="Maximum quota records inspected by one reconcile call (1-256).",
+    )
     return parser
 
 
@@ -50,7 +66,10 @@ async def _execute(arguments: argparse.Namespace) -> dict[str, object]:
         if arguments.command == "drain":
             return await operator.drain(apply=arguments.apply)
         if arguments.command == "reconcile":
-            return await operator.reconcile(apply=arguments.apply)
+            return await operator.reconcile(
+                apply=arguments.apply,
+                quota_page_size=arguments.quota_page_size,
+            )
         if not arguments.operation_id:
             raise RuntimeError("--operation-id is required for this command.")
         if arguments.command == "advance-epoch":

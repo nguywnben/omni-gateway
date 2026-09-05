@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import base64
+import json
 import sys
 import unittest
 from pathlib import Path
@@ -9,7 +10,7 @@ BACKEND_DIR = Path(__file__).resolve().parents[1]
 if str(BACKEND_DIR) not in sys.path:
     sys.path.insert(0, str(BACKEND_DIR))
 
-from core.coordination import EpochState
+from core.coordination import EpochState, QuotaReconciliationResult
 from core.ha_coordination_binding import CoordinationBindingManager
 from core.ha_operator import HaRuntimeOperator
 from core.ha_runtime_policy import HaRuntimePolicy
@@ -65,6 +66,11 @@ class HaRuntimeOperatorTests(unittest.IsolatedAsyncioTestCase):
 
         drained = await operator.drain(apply=True)
         self.assertTrue(drained["applied"])
+        self.assertIsInstance(await self.store.get(operator.DRAIN_KEY), str)
+        self.assertEqual(
+            json.loads(await self.store.get(operator.DRAIN_KEY))["schema_version"],
+            2,
+        )
         self.assertEqual((await operator.status())["state"], "draining")
 
         preview = await operator.advance_epoch("epoch-op-00000001", apply=False)
@@ -103,6 +109,28 @@ class HaRuntimeOperatorTests(unittest.IsolatedAsyncioTestCase):
         )
         with self.assertRaisesRegex(RuntimeError, "drain"):
             await operator.reconcile(apply=True)
+
+    async def test_mark_ready_requires_complete_quota_reconciliation(self) -> None:
+        operator = HaRuntimeOperator(
+            policy(), self.storage, self.store, activation_verifier=lambda _record: True
+        )
+        await operator.drain(apply=True)
+        await operator.advance_epoch("epoch-op-quota-gate", apply=True)
+
+        async def incomplete_reconciliation(**_kwargs: object) -> QuotaReconciliationResult:
+            return QuotaReconciliationResult(256, False, "opaque-cursor")
+
+        self.store.reconcile_quota_state = incomplete_reconciliation  # type: ignore[method-assign]
+        next_operator = HaRuntimeOperator(
+            policy(2), self.storage, self.store, activation_verifier=lambda _record: True
+        )
+        page = await next_operator.reconcile(apply=True)
+
+        self.assertFalse(page["quota_complete"])
+        self.assertTrue(page["quota_cursor_present"])
+        self.assertNotIn("opaque-cursor", repr(page))
+        with self.assertRaisesRegex(RuntimeError, "quota reconciliation"):
+            await next_operator.mark_ready("ready-op-quota-gate", apply=True)
 
     async def test_rollback_plan_is_content_free_and_never_mutates(self) -> None:
         operator = HaRuntimeOperator(

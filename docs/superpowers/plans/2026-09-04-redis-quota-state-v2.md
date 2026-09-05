@@ -481,7 +481,7 @@ git commit -m "feat(redis): make quota lifecycle bucket-atomic"
 - Redis cursor is an opaque, validated URL-safe base64 encoding of scan progress; its decoded payload is closed to `{"schema_version": 1, "family": "records" | "replays", "key_scan": int, "target": str | None, "member_scan": int}`.
 - `HaRuntimeOperator.reconcile` records the cursor in the drain record and refuses `mark_ready` until quota reconciliation is complete.
 
-- [ ] **Step 1: Write failing migration and operator-gate tests**
+- [x] **Step 1: Write failing migration and operator-gate tests**
 
 ```python
 async def test_v1_quota_state_requires_reconciliation(self) -> None:
@@ -501,13 +501,13 @@ async def test_mark_ready_requires_complete_quota_reconciliation(self) -> None:
 
 Add dry-run no-mutation, exact cursor replay, malformed cursor, 256-record page ceiling, hash/ZSET mismatch, malformed record, and complete/resumed reconciliation cases.
 
-- [ ] **Step 2: Run migration/operator tests and verify the interface and gate are absent**
+- [x] **Step 2: Run migration/operator tests and verify the interface and gate are absent**
 
 Run: `.venv\Scripts\python.exe -m unittest backend.tests.test_ha_operator backend.tests.test_ha_admin backend.tests.test_redis_state_store -v`
 
 Expected: FAIL because `reconcile_quota_state` and reconciliation progress do not exist.
 
-- [ ] **Step 3: Implement the transport-neutral reconciliation result and reference behavior**
+- [x] **Step 3: Implement the transport-neutral reconciliation result and reference behavior**
 
 ```python
 @dataclass(frozen=True, slots=True)
@@ -524,23 +524,23 @@ class QuotaReconciliationResult:
 
 The in-memory implementation validates at most `limit <= 256` lifecycle/replay records per call in sorted `(key_id, reservation_id)` order. Dry-run returns the next cursor without modifying state. Apply mode rejects any still-active reservation, removes validated terminal/expired v1 evidence, initializes empty v2 windows only while the epoch is reconciling, and records completion for that epoch.
 
-- [ ] **Step 4: Implement bounded Redis paging and v1 disposal**
+- [x] **Step 4: Implement bounded Redis paging and v1 disposal**
 
 Redis reconciliation runs only in the exact reconciling epoch and never in a mutation Lua script. It walks record-key and replay-key families separately; each call reads at most 256 hash entries plus their matching ZSET scores, validates the closed v1/v2 schema, and advances the opaque cursor. Because daily/monthly authority is durable, v1 cost evidence is not copied into Redis buckets. Apply mode rejects still-active reservations, removes each validated terminal/expired v1 hash/ZSET pair and its matching reservation/operation locator, initializes `2|<epoch>|ready` only after both families for that target are empty, and records the completed epoch. Any mismatch fails closed without advancing the persisted cursor.
 
 Do not use unbounded `KEYS`, `HGETALL`, or recursive deletion. Use Redis `SCAN`/`HSCAN` cursors with an explicit remaining-item budget and retain progress in the drain record so repeated CLI calls resume safely.
 
-- [ ] **Step 5: Integrate reconciliation progress into the dry-run-first HA workflow**
+- [x] **Step 5: Integrate reconciliation progress into the dry-run-first HA workflow**
 
 Extend the drain record with `quota_reconciliation_cursor` and `quota_reconciliation_complete`. `reconcile --apply` first reconciles durable bindings/ledger, then performs one quota page. Its response includes `quota_scanned`, `quota_complete`, and `quota_cursor_present` but never exposes the cursor value. `mark-ready` requires the complete flag and exact epoch before calling `mark_epoch_ready`.
 
-- [ ] **Step 6: Run operator, transport, corruption, and CLI tests**
+- [x] **Step 6: Run operator, transport, corruption, and CLI tests**
 
 Run: `.venv\Scripts\python.exe -m unittest backend.tests.test_ha_operator backend.tests.test_ha_admin backend.tests.test_coordination_in_memory backend.tests.test_redis_state_store -v`
 
 Expected: PASS.
 
-- [ ] **Step 7: Commit the upgrade gate**
+- [x] **Step 7: Commit the upgrade gate**
 
 ```powershell
 git add backend/core/coordination.py backend/core/state_store.py `

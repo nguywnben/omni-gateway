@@ -24,6 +24,12 @@ class HaAdminTests(unittest.TestCase):
         self.assertTrue(arguments.apply)
         self.assertEqual(arguments.operation_id, "epoch-op-00000001")
 
+    def test_reconciliation_page_size_is_closed_and_bounded(self) -> None:
+        arguments = _parser().parse_args(["reconcile", "--quota-page-size", "17"])
+        self.assertEqual(arguments.quota_page_size, 17)
+        with self.assertRaises(SystemExit):
+            _parser().parse_args(["reconcile", "--quota-page-size", "257"])
+
     def test_activation_allowlist_is_closed_before_w419(self) -> None:
         self.assertFalse(verify_ha_activation_record("act_" + ("a" * 32)))
 

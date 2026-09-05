@@ -303,6 +303,29 @@ class QuotaReservationRequest:
 
 
 @dataclass(frozen=True, slots=True)
+class QuotaReconciliationResult:
+    """One bounded page of quota-state migration evidence."""
+
+    scanned: int
+    complete: bool
+    cursor: str | None
+
+    def __post_init__(self) -> None:
+        _require_int(self.scanned, "Quota reconciliation count", minimum=0, maximum=256)
+        if not isinstance(self.complete, bool) or self.complete != (self.cursor is None):
+            raise ValueError("Quota reconciliation result is invalid.")
+        if self.cursor is not None and (
+            not isinstance(self.cursor, str)
+            or not 1 <= len(self.cursor) <= 2048
+            or any(
+                not (character.isascii() and (character.isalnum() or character in "-_"))
+                for character in self.cursor
+            )
+        ):
+            raise ValueError("Quota reconciliation result is invalid.")
+
+
+@dataclass(frozen=True, slots=True)
 class QuotaReservationDecision:
     accepted: bool
     reservation_id: str
@@ -478,5 +501,9 @@ class CoordinationStore(Protocol):
         fencing_epoch: int = 1,
         operation_id: str | None = None,
     ) -> bool: ...
+
+    async def reconcile_quota_state(
+        self, *, epoch: int, cursor: str | None, limit: int, apply: bool
+    ) -> QuotaReconciliationResult: ...
 
     async def close(self) -> None: ...

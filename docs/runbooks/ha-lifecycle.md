@@ -46,28 +46,46 @@ Commands are dry-run unless `--apply` is present. Capture each JSON result in th
    python backend/ha_admin.py advance-epoch --operation-id epoch-change-00000001 --apply
    ```
 
-4. Update only `OMNI_COORDINATION_EPOCH` to the returned epoch, then preview/apply bounded binding
-   reconciliation:
+4. Update only `OMNI_COORDINATION_EPOCH` to the returned epoch, then preview bounded binding and
+   quota reconciliation. The quota page size is closed to `1..256` and defaults to 256:
 
    ```text
    python backend/ha_admin.py reconcile
-   python backend/ha_admin.py reconcile --apply
+   python backend/ha_admin.py reconcile --quota-page-size 256
    ```
 
-5. After durable authority and backups are independently verified, mark the exact epoch ready with
-   another stable operation ID:
+5. Apply reconciliation repeatedly until the content-free result reports
+   `quota_complete: true`. Each successful apply stores an opaque cursor in the drain record; the
+   cursor is never printed. An interruption is resumed by running the same command again. Do not
+   proceed if the command reports corrupt state, an active reservation that has not drained, or a
+   Redis transport failure:
+
+   ```text
+   python backend/ha_admin.py reconcile --quota-page-size 256 --apply
+   ```
+
+   Every call validates at most 256 lifecycle records, replay records, or schema markers. Terminal
+   v1 evidence is disposed because monetary budget authority remains in the durable usage ledger;
+   active unexpired reservations stop the workflow. Empty per-key rate buckets are initialized as
+   schema `2|<epoch>|ready` only while the exact epoch is reconciling.
+
+6. Check `python backend/ha_admin.py status`. It must report
+   `quota_reconciliation_complete: true` and `quota_cursor_present: false`. After durable authority
+   and backups are independently verified, mark the exact epoch ready with another stable
+   operation ID:
 
    ```text
    python backend/ha_admin.py mark-ready --operation-id epoch-ready-00000001
    python backend/ha_admin.py mark-ready --operation-id epoch-ready-00000001 --apply
    ```
 
-6. Restart normally and verify `/ready`, metrics, management login/OIDC (if enabled), inference,
+7. Restart normally and verify `/ready`, metrics, management login/OIDC (if enabled), inference,
    quota, audit, and usage evidence.
 
 Re-running a command with the same operation ID is safe. Reconciliation only accepts one exact
 epoch step and writes the shared binding before the durable binding so an interrupted operation can
-resume without ambiguity.
+resume without ambiguity. Shared binding and drain records use closed canonical JSON so the same
+bytes round-trip through Redis and the in-memory reference store.
 
 ## Rollback to supported standalone mode
 
