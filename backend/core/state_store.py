@@ -902,16 +902,14 @@ class InMemoryStateStore(BaseStateStore):
             fingerprint = self._cas_fingerprint(request)
             now = self._clock()
             fence = self._admission_fence_locked()
-            if request.settlement is not None:
-                settled = self._cas_replays.get(request.operation_id)
-                if (
-                    settled is not None
-                    and settled.expires_at > now
-                    and settled.fingerprint == fingerprint
-                ):
-                    result = settled.result
+            replay = self._cas_replays.get(request.operation_id)
+            if replay is not None and replay.expires_at > now:
+                if replay.fingerprint == fingerprint:
+                    result = replay.result
                     assert isinstance(result, CasResult)
                     return CasResult(result.applied, result.revision, idempotent=True)
+                return CasResult(False, None)
+            if request.settlement is not None:
                 admission = request.settlement.admission
                 proof = self._cas_replays.get(admission.operation_id)
                 if (
@@ -927,13 +925,6 @@ class InMemoryStateStore(BaseStateStore):
                     )
             elif fence is not None:
                 raise CoordinationAdmissionFencedError("Coordination admission is drained.")
-            replay = self._cas_replays.get(request.operation_id)
-            if replay is not None and replay.expires_at > now:
-                if replay.fingerprint == fingerprint:
-                    result = replay.result
-                    assert isinstance(result, CasResult)
-                    return CasResult(result.applied, result.revision, idempotent=True)
-                return CasResult(False, None)
             self._prune_heap_locked(self._cas_replay_expiries, self._cas_replays, now)
             if len(self._cas_replays) >= self._coordination_replay_limit:
                 raise CoordinationReconciliationRequiredError("Reconciliation is required.")

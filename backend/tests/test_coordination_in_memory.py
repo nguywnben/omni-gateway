@@ -74,6 +74,12 @@ class InMemoryCoordinationTests(CoordinationStoreContract, unittest.IsolatedAsyn
     async def test_admission_fence_linearization_and_settlement(self) -> None:
         await self.assert_fence_linearization_and_settlement_contract()
 
+    async def test_device_authorization_settlement_during_drain(self) -> None:
+        async def advance(seconds: float) -> None:
+            self.clock.advance(seconds)
+
+        await self.assert_device_authorization_settlement_contract(advance_device_clock=advance)
+
     async def test_cas_settlement_requires_accepted_proof(self) -> None:
         await self.assert_cas_settlement_proof_contract()
 

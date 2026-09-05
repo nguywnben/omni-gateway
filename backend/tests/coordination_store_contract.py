@@ -6,6 +6,7 @@ import asyncio
 import hashlib
 import json
 from collections.abc import Awaitable, Callable
+from dataclasses import replace
 from typing import TYPE_CHECKING
 
 from core.coordination import (
@@ -180,6 +181,81 @@ class CoordinationStoreContract:
         replay = await self.store.consume_oidc_transaction(consume)
         self.assertFalse(replay.consumed)
         self.assertTrue(replay.idempotent)
+
+    async def assert_device_authorization_settlement_contract(
+        self, *, advance_device_clock: Callable[[float], Awaitable[None]]
+    ) -> None:
+        from core.coordination import CasSettlementTarget, CasSettlementTransition
+        from core.device_authorization_coordination import (
+            DeviceAuthorizationError,
+            DeviceAuthorizationService,
+        )
+
+        tokens = iter(("A" * 43, "C" * 22, "B" * 43, "D" * 22, "E" * 43, "F" * 22))
+        service = DeviceAuthorizationService(
+            self.store,
+            key=b"d" * 32,
+            fencing_epoch=1,
+            token_factory=lambda _size: next(tokens),
+        )
+        release_flow = await service.create(b"release-proof", ttl_seconds=300)
+        release_claim = await service.claim(release_flow, lease_seconds=5)
+        consume_flow = await service.create(b"consume-proof", ttl_seconds=300)
+        consume_claim = await service.claim(consume_flow, lease_seconds=5)
+        unsettled_flow = await service.create(b"unsettled-proof", ttl_seconds=300)
+        unsettled_claim = await service.claim(unsettled_flow, lease_seconds=5)
+
+        release_target = CasSettlementTarget(
+            service._key(release_flow), CasSettlementTransition.UPDATE
+        )
+        self.assertEqual(release_claim.admission.settlement_targets, (release_target,))
+        self.assertNotIn(release_claim.admission.operation_id, repr(release_claim))
+
+        await self.install_admission_fence()
+        with self.assertRaises(DeviceAuthorizationError):
+            await service.release(replace(release_claim, lease_id="Z" * 22))
+        with self.assertRaises(DeviceAuthorizationError):
+            await service.release(
+                replace(
+                    release_claim,
+                    admission=replace(
+                        release_claim.admission,
+                        operation_id="device-auth-claim-never-admitted",
+                    ),
+                )
+            )
+
+        await service.release(release_claim)
+        await service.release(release_claim)
+        with self.assertRaises(DeviceAuthorizationError):
+            await service.release(
+                replace(
+                    release_claim,
+                    admission=replace(
+                        release_claim.admission,
+                        operation_id="device-auth-claim-never-admitted",
+                    ),
+                )
+            )
+        await service.consume(consume_claim)
+        await service.consume(consume_claim)
+        await advance_device_clock(6)
+        await service.release(release_claim)
+        await service.consume(consume_claim)
+        with self.assertRaises(DeviceAuthorizationError):
+            await service.release(unsettled_claim)
+        released = await self.store.read_cas(
+            service._key(release_flow), epoch=service._fencing_epoch
+        )
+        consumed = await self.store.read_cas(
+            service._key(consume_flow), epoch=service._fencing_epoch
+        )
+        self.assertEqual(
+            service._decrypt(service._key(release_flow), released.payload)["status"], "ready"
+        )
+        self.assertEqual(
+            service._decrypt(service._key(consume_flow), consumed.payload)["status"], "consumed"
+        )
 
     async def assert_cas_settlement_proof_contract(self) -> None:
         from dataclasses import replace

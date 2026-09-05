@@ -24,7 +24,7 @@ from core.coordination import (
     QuotaCommitRequest,
     QuotaReservationRequest,
 )
-from core.redis_state_store import SCRIPT_SOURCES, RedisStateStore
+from core.redis_state_store import SCRIPT_SOURCES, RedisStateStore, _fingerprint
 from core.state_store import BaseStateStore
 from core.state_store import RedisStateStore as CompatibilityRedisStateStore
 from tests.coordination_store_contract import CoordinationStoreContract
@@ -218,20 +218,24 @@ class StatefulRegisteredScript:
                 self.client.values.pop(self.client.script_calls[-1][1][-2], None)
                 return [b"1", b"ok"]
             if self.name == "cas":
-                operation, fingerprint, proof_target, requested_target, capabilities = args[7:]
-                args = [*args[:7], capabilities]
-                if operation:
-                    settled = self.client.replays["cas"].get(args[4])
-                    if (
-                        settled is not None
-                        and settled[0] == args[5]
-                        and settled[2] > self.client.now_ms
-                    ):
+                operation, fingerprint, proof_target, requested_target, capabilities, legacy = args[
+                    7:
+                ]
+                settled = self.client.replays["cas"].get(args[4])
+                if settled is not None and settled[2] > self.client.now_ms:
+                    expected = (
+                        legacy if self.client.cas_replay_schemas.get(args[4], 2) == 1 else args[5]
+                    )
+                    if settled[0] == expected:
                         return [*settled[1][:-1], b"1"]
+                    return [b"1", b"not_applied", b"", b"0"]
+                args = [*args[:7], capabilities, legacy]
+                if operation:
                     proof = self.client.replays["cas"].get(operation)
                     admitted_capabilities = self.client.cas_capabilities.get(operation, b"")
                     if (
                         proof is None
+                        or self.client.cas_replay_schemas.get(operation, 2) != 2
                         or proof[0] != fingerprint
                         or proof[1][1] != b"applied"
                         or proof[2] <= self.client.now_ms
@@ -311,7 +315,7 @@ class StatefulRedisClient(FakeRedisClient):
         "time_read": (2, 1),
         "epoch_advance": (4, 4),
         "epoch_ready": (4, 4),
-        "cas": (5, 8),
+        "cas": (5, 9),
         "cas_read": (3, 1),
         "invalidation": (5, 5),
         "invalidation_read": (3, 0),
@@ -330,6 +334,7 @@ class StatefulRedisClient(FakeRedisClient):
         self.initialization_exists = True
         self.cas: dict[str, tuple[int, bytes, int]] = {}
         self.cas_capabilities: dict[bytes, bytes] = {}
+        self.cas_replay_schemas: dict[bytes, int] = {}
         self.generations: dict[str, int] = {}
         self.replays: defaultdict[str, dict[bytes, tuple[bytes, list[bytes], int]]] = defaultdict(
             dict
@@ -395,6 +400,7 @@ class StatefulRedisClient(FakeRedisClient):
             del entries[identifier]
             if name == "cas":
                 self.cas_capabilities.pop(identifier, None)
+                self.cas_replay_schemas.pop(identifier, None)
         saved = entries.get(operation_id)
         if saved is None:
             return None
@@ -418,6 +424,8 @@ class StatefulRedisClient(FakeRedisClient):
         if len(self.replays[name]) >= limit:
             return [b"1", b"reconciliation_required", b"", b"0"]
         self.replays[name][operation_id] = (fingerprint, result, self.now_ms + ttl_ms)
+        if name == "cas":
+            self.cas_replay_schemas[operation_id] = 2
         return None
 
     async def _command(self, name: str, *args: object, **kwargs: object) -> object:
@@ -544,9 +552,17 @@ class StatefulRedisClient(FakeRedisClient):
                 return result
             return [b"1", b"ok", str(self.epoch[0]).encode(), self.epoch[1]]
         if name == "cas":
-            expected, payload, ttl, epoch, operation_id, fingerprint, limit, capabilities = (
-                byte_args
-            )
+            (
+                expected,
+                payload,
+                ttl,
+                epoch,
+                operation_id,
+                fingerprint,
+                limit,
+                capabilities,
+                _legacy_fingerprint,
+            ) = byte_args
             if self.epoch != (int(epoch), b"ready"):
                 return [b"1", b"not_applied", b"", b"0"]
             existing = self._replay(name, operation_id, fingerprint)
@@ -1294,6 +1310,76 @@ class RedisAdmissionFenceTests(CoordinationStoreContract, unittest.IsolatedAsync
 
     async def test_admission_fence_linearization_and_settlement(self) -> None:
         await self.assert_fence_linearization_and_settlement_contract()
+
+    async def test_device_authorization_settlement_during_drain(self) -> None:
+        async def advance(seconds: float) -> None:
+            self.client.advance(int(seconds * 1_000))
+
+        await self.assert_device_authorization_settlement_contract(advance_device_clock=advance)
+
+    async def test_legacy_cas_replay_is_idempotent_before_and_during_drain(self) -> None:
+        from dataclasses import replace
+
+        from core.coordination import (
+            CasSettlementProof,
+            CasSettlementTarget,
+            CasSettlementTransition,
+        )
+
+        request = CasRequest("legacy-cas", 0, b"value", 300, 1, "legacy-cas-operation")
+        legacy_fingerprint = _fingerprint(
+            request.key,
+            request.expected_revision,
+            request.payload,
+            float(request.ttl_seconds),
+            request.epoch,
+        )
+        operation = request.operation_id.encode("ascii")
+        expires_at = self.client.now_ms + 300_000
+        replay_key = self.store._key("replay:cas")
+        expiry_key = self.store._key("expiry:cas")
+        encoded = b"|".join(
+            (
+                b"1",
+                legacy_fingerprint,
+                b"applied",
+                b"1",
+                str(expires_at).encode("ascii"),
+            )
+        )
+        self.client.redis_hashes[replay_key] = {operation: encoded}
+        self.client.redis_zsets[expiry_key] = {operation: expires_at}
+        self.client.replays["cas"][operation] = (
+            legacy_fingerprint,
+            [b"1", b"applied", b"1", b"0"],
+            expires_at,
+        )
+        self.client.cas_replay_schemas[operation] = 1
+        self.assertEqual(self.client.redis_hashes[replay_key][operation], encoded)
+        self.assertEqual(self.client.redis_zsets[expiry_key][operation], expires_at)
+
+        before = await self.store.compare_and_set(request)
+        self.assertTrue(before.applied)
+        self.assertTrue(before.idempotent)
+        await self.install_admission_fence()
+        during = await self.store.compare_and_set(request)
+        self.assertTrue(during.applied)
+        self.assertTrue(during.idempotent)
+
+        target = CasSettlementTarget(request.key, CasSettlementTransition.UPDATE)
+        proof_admission = replace(request, settlement_targets=(target,))
+        with self.assertRaises(CoordinationUnavailableError):
+            await self.store.compare_and_set(
+                CasRequest(
+                    request.key,
+                    1,
+                    b"settled",
+                    300,
+                    1,
+                    "legacy-cas-settlement",
+                    settlement=CasSettlementProof(proof_admission, target),
+                )
+            )
 
     async def test_cas_settlement_requires_accepted_proof(self) -> None:
         await self.assert_cas_settlement_proof_contract()

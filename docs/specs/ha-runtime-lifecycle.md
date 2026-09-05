@@ -78,10 +78,16 @@ The lifecycle exposes bounded commands for `status`, `drain`, `advance-epoch`, `
   exact target key and create/update transition before the drain; the store verifies that bounded
   typed capability atomically and never parses opaque payloads or accepts a boolean/callback
   bypass. Routing grants only its lease-record update. Credential batches grant only their exact
-  root/registry updates and finite owner-bound chunk creates. Quota settlement, OIDC consume, and
-  these verified CAS domain settlements remain available while the same epoch is ready.
+  root/registry updates and finite owner-bound chunk creates. Device authorization claims retain
+  their accepted request and grant only update of that exact encrypted flow record; release and
+  consume revalidate the current owner, lease, expiry, revision, and payload before selecting the
+  proof, and matching completed retries converge. Quota settlement, OIDC consume, and these
+  verified CAS domain settlements remain available while the same epoch is ready.
   Unknown settlement identities do not allocate new negative replay records while drained;
   expired admission evidence cannot authorize a fresh settlement operation.
+  Retained Redis CAS replay schema v1 remains readable with its legacy fingerprint before the
+  fence rejects new admission, including during a valid drain. It has no capability encoding and
+  therefore cannot authorize a new settlement; schema-v2 proof membership remains mandatory.
 - Epoch advance moves exactly `ready(N)` to `reconciling(N+1)`.
 - Reconciliation validates bindings and durable authority; it never copies, switches, or deletes
   durable data automatically.

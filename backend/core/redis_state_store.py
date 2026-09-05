@@ -386,7 +386,8 @@ if not valid_replay(replay, replay_expiry) and (replay or replay_expiry) then
 end
 if replay and tonumber(replay_expiry) > now_ms then
   local saved = parse_replay(replay)
-  if saved.fingerprint == ARGV[6] then
+  local expected_fingerprint = saved.schema == '1' and ARGV[13] or ARGV[6]
+  if saved.fingerprint == expected_fingerprint then
     return {'1', saved.status, saved.revision, '1'}
   end
   return {'1', 'not_applied', '', '0'}
@@ -1574,10 +1575,7 @@ def _with_admission_fence(name: str, source: str) -> str:
     if name == "cas":
         # An exact accepted settlement replay needs no new admission proof after proof expiry.
         body = body.replace("local due =", _CAS_SETTLEMENT_LUA + "local due =", 1)
-        return (
-            header + "\n" + _ADMISSION_FENCE_LUA + "if admission_fenced and ARGV[8] == '' then "
-            "return redis.error_reply('COORDINATION_ADMISSION_FENCED') end\n" + body
-        )
+        return header + "\n" + _ADMISSION_FENCE_LUA + body
     guard = (
         "if admission_fenced then return redis.error_reply('COORDINATION_ADMISSION_FENCED') end\n"
     )
@@ -2781,6 +2779,15 @@ class RedisStateStore:
         ttl = _ttl_ms(request.ttl_seconds)
         assert ttl is not None
 
+        def legacy_request_fingerprint(value: CasRequest) -> bytes:
+            return _fingerprint(
+                value.key,
+                value.expected_revision,
+                value.payload,
+                float(value.ttl_seconds),
+                value.epoch,
+            )
+
         def request_fingerprint(value: CasRequest) -> bytes:
             return _fingerprint(
                 value.key,
@@ -2792,6 +2799,7 @@ class RedisStateStore:
             )
 
         fingerprint = request_fingerprint(request)
+        legacy_fingerprint = legacy_request_fingerprint(request)
         proof_operation, proof_fingerprint = b"", b""
         proof_target, requested_target = b"", b""
         if request.settlement is not None:
@@ -2827,6 +2835,7 @@ class RedisStateStore:
                 proof_target,
                 requested_target,
                 _cas_settlement_capabilities(request),
+                legacy_fingerprint,
             ],
         )
         return _decode_cas_reply(reply)

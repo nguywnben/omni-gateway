@@ -138,8 +138,13 @@ only update of its exact lease record; a credential-batch reservation grants upd
 root and capacity registry plus creation of its exact 32 possible owner-bound chunk keys. Batch
 completion selects the matching target separately for registry refresh, each written chunk, and
 terminal root publication; release selects only root and registry updates. Repeated terminal
-settlement converges, and a partial chunk write can resume only with identical content. Other CAS
-domain flows without such retained capabilities remain closed during drain.
+settlement converges, and a partial chunk write can resume only with identical content. A device
+authorization claim grants only update of its exact encrypted flow record and retains the accepted
+claim request in its redacted claim object. Release or consume first revalidates that request, the
+current record revision, lease owner, lease deadline, absolute expiry, and payload, then selects the
+same-record update proof. An already-written matching release or consume is a successful retry;
+forged claims, crossed actions, and replaced admissions fail closed. Other CAS domain flows without
+such retained capabilities remain closed during drain.
 An exact retained settlement replay can outlive its original admission proof and remains
 idempotent; after proof expiry no new settlement operation may be admitted using that proof.
 The proof is an internal service contract, not an authorization token exposed to HTTP callers:
@@ -162,6 +167,11 @@ Create uses expected revision `0` and produces revision `1`; update requires the
 revision and produces `revision + 1`. Records may have a bounded TTL. Exact operation replay returns
 the original result without extending TTL or advancing revision. Same-ID/different-request replay
 is a conflict. Expired or absent records behave as absent, and corrupt stored records fail closed.
+Redis CAS replay schema v1 uses the legacy five-part request fingerprint; schema v2 includes the
+bounded settlement-capability encoding. Callers send both fingerprints, and the script selects the
+one required by the retained record's schema before applying the admission-fence rejection. This
+keeps an exact retained schema-v1 retry idempotent before and during drain, but schema v1 can never
+authorize a new settlement because it carries no target capabilities.
 
 ## Invalidation
 

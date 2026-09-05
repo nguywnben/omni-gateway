@@ -34,6 +34,7 @@ from core.coordination import (
     validate_deployment_namespace,
 )
 from core.redis_state_store import RedisStateStore
+from core.redis_state_store import _fingerprint as _redis_fingerprint
 
 REDIS_URI = os.getenv("OMNI_TEST_REDIS_URI", "").strip()
 _CONNECT_TIMEOUT_SECONDS = 5.0
@@ -215,6 +216,76 @@ class LiveRedisCoordinationTests(CoordinationStoreContract, unittest.IsolatedAsy
         self,
     ) -> None:
         await self.assert_fence_linearization_and_settlement_contract()
+
+    async def test_device_authorization_settlement_during_drain(self) -> None:
+        async def advance(seconds: float) -> None:
+            await asyncio.wait_for(asyncio.sleep(seconds), timeout=seconds + 1.0)
+
+        await self.assert_device_authorization_settlement_contract(advance_device_clock=advance)
+
+    async def test_legacy_cas_replay_is_idempotent_before_and_during_drain(self) -> None:
+        from dataclasses import replace
+
+        from core.coordination import (
+            CasRequest,
+            CasSettlementProof,
+            CasSettlementTarget,
+            CasSettlementTransition,
+            CoordinationUnavailableError,
+        )
+
+        request = CasRequest("legacy-cas", 0, b"value", 300, 1, "legacy-cas-operation")
+        fingerprint = _redis_fingerprint(
+            request.key,
+            request.expected_revision,
+            request.payload,
+            float(request.ttl_seconds),
+            request.epoch,
+        )
+        seconds, microseconds = await self.cleanup_client.time()
+        expires_at = seconds * 1_000 + microseconds // 1_000 + 300_000
+        operation = request.operation_id.encode("ascii")
+        await self.cleanup_client.hset(
+            self.store._key("replay:cas"),
+            operation,
+            b"|".join(
+                (
+                    b"1",
+                    fingerprint,
+                    b"applied",
+                    b"1",
+                    str(expires_at).encode("ascii"),
+                )
+            ),
+        )
+        await self.cleanup_client.zadd(self.store._key("expiry:cas"), {operation: expires_at})
+        self.assertEqual(
+            await self.cleanup_client.zscore(self.store._key("expiry:cas"), operation),
+            float(expires_at),
+        )
+
+        before = await self.store.compare_and_set(request)
+        self.assertTrue(before.applied)
+        self.assertTrue(before.idempotent)
+        await self.install_admission_fence()
+        during = await self.store.compare_and_set(request)
+        self.assertTrue(during.applied)
+        self.assertTrue(during.idempotent)
+
+        target = CasSettlementTarget(request.key, CasSettlementTransition.UPDATE)
+        proof_admission = replace(request, settlement_targets=(target,))
+        with self.assertRaises(CoordinationUnavailableError):
+            await self.store.compare_and_set(
+                CasRequest(
+                    request.key,
+                    1,
+                    b"settled",
+                    300,
+                    1,
+                    "legacy-cas-settlement",
+                    settlement=CasSettlementProof(proof_admission, target),
+                )
+            )
 
     async def test_cas_settlement_proof_against_registered_lua(self) -> None:
         await self.assert_cas_settlement_proof_contract()

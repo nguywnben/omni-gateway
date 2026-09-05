@@ -10,9 +10,16 @@ import json
 import re
 import secrets
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
-from core.coordination import CasRequest, CoordinationStore, validate_epoch
+from core.coordination import (
+    CasRequest,
+    CasSettlementProof,
+    CasSettlementTarget,
+    CasSettlementTransition,
+    CoordinationStore,
+    validate_epoch,
+)
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
 _FLOW_PATTERN = re.compile(r"^codex_[A-Za-z0-9_-]{43}$")
@@ -45,6 +52,7 @@ class DeviceAuthorizationClaim:
     lease_until_ms: int
     expires_at_ms: int
     payload: bytes
+    admission: CasRequest = field(repr=False)
 
     def __repr__(self) -> str:
         return (
@@ -295,16 +303,17 @@ class DeviceAuthorizationService:
                     "schema_version": 1,
                     "status": "leased",
                 }
-                result = await self._coordination.compare_and_set(
-                    CasRequest(
-                        key,
-                        snapshot.revision,
-                        self._encrypt(key, next_record),
-                        ttl_seconds,
-                        self._fencing_epoch,
-                        self._operation_id("claim"),
-                    )
+                target = CasSettlementTarget(key, CasSettlementTransition.UPDATE)
+                admission = CasRequest(
+                    key,
+                    snapshot.revision,
+                    self._encrypt(key, next_record),
+                    ttl_seconds,
+                    self._fencing_epoch,
+                    self._operation_id("claim"),
+                    settlement_targets=(target,),
                 )
+                result = await self._coordination.compare_and_set(admission)
                 if result.applied and result.revision is not None:
                     return DeviceAuthorizationClaim(
                         flow_id,
@@ -313,6 +322,7 @@ class DeviceAuthorizationService:
                         lease_until_ms,
                         expires_at_ms,
                         bytes(record["decoded_payload"]),
+                        admission,
                     )
             raise DeviceAuthorizationError
         except asyncio.CancelledError:
@@ -333,15 +343,66 @@ class DeviceAuthorizationService:
                 not _LEASE_PATTERN.fullmatch(claim.lease_id)
                 or type(claim.revision) is not int
                 or claim.revision < 1
+                or type(claim.lease_until_ms) is not int
+                or claim.lease_until_ms < 1
+                or type(claim.expires_at_ms) is not int
+                or claim.expires_at_ms < claim.lease_until_ms
                 or type(claim.payload) is not bytes
                 or not 1 <= len(claim.payload) <= _MAX_PAYLOAD_BYTES
             ):
                 raise DeviceAuthorizationError
+            key = self._key(flow_id)
+            target = CasSettlementTarget(key, CasSettlementTransition.UPDATE)
+            admission = claim.admission
+            if (
+                type(admission) is not CasRequest
+                or admission.key != key
+                or admission.epoch != self._fencing_epoch
+                or admission.expected_revision + 1 != claim.revision
+                or admission.settlement_targets != (target,)
+                or admission.settlement is not None
+            ):
+                raise DeviceAuthorizationError
+            admitted_record = self._decrypt(key, admission.payload)
+            if (
+                admitted_record["status"] != "leased"
+                or not hmac.compare_digest(str(admitted_record["lease_id"]), claim.lease_id)
+                or admitted_record["lease_until_ms"] != claim.lease_until_ms
+                or admitted_record["expires_at_ms"] != claim.expires_at_ms
+                or not hmac.compare_digest(bytes(admitted_record["decoded_payload"]), claim.payload)
+            ):
+                raise DeviceAuthorizationError
             now_ms = await self._now_ms()
+            snapshot = await self._coordination.read_cas(key, epoch=self._fencing_epoch)
+            if snapshot.revision is None or snapshot.payload is None:
+                raise DeviceAuthorizationError
+            current = self._decrypt(key, snapshot.payload)
+            if snapshot.revision == claim.revision + 1:
+                expected_status = "consumed" if consume else "ready"
+                expected_payload = b"" if consume else claim.payload
+                if (
+                    current["status"] == expected_status
+                    and current["lease_id"] == ""
+                    and current["lease_until_ms"] == 0
+                    and current["expires_at_ms"] == claim.expires_at_ms
+                    and hmac.compare_digest(bytes(current["decoded_payload"]), expected_payload)
+                ):
+                    replay = await self._coordination.compare_and_set(admission)
+                    if replay.applied and replay.idempotent and replay.revision == claim.revision:
+                        return
+                raise DeviceAuthorizationError
             if now_ms >= claim.lease_until_ms:
                 raise DeviceAuthorizationError
             ttl_seconds = self._ttl_seconds(claim.expires_at_ms, now_ms)
-            key = self._key(flow_id)
+            if (
+                snapshot.revision != claim.revision
+                or current["status"] != "leased"
+                or not hmac.compare_digest(str(current["lease_id"]), claim.lease_id)
+                or current["lease_until_ms"] != claim.lease_until_ms
+                or current["expires_at_ms"] != claim.expires_at_ms
+                or not hmac.compare_digest(bytes(current["decoded_payload"]), claim.payload)
+            ):
+                raise DeviceAuthorizationError
             next_record = {
                 "expires_at_ms": claim.expires_at_ms,
                 "lease_id": "",
@@ -358,6 +419,7 @@ class DeviceAuthorizationService:
                     ttl_seconds,
                     self._fencing_epoch,
                     self._operation_id("consume" if consume else "release"),
+                    settlement=CasSettlementProof(admission, target),
                 )
             )
             if not result.applied:
