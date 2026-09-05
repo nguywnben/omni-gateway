@@ -10,6 +10,7 @@ BACKEND_DIR = Path(__file__).resolve().parents[1]
 if str(BACKEND_DIR) not in sys.path:
     sys.path.insert(0, str(BACKEND_DIR))
 
+from core.coordination import CoordinationUninitializedError
 from core.ha_coordination_binding import (
     CoordinationBinding,
     CoordinationBindingManager,
@@ -33,6 +34,23 @@ class _Storage:
             return False
         self.config[key] = value
         return True
+
+
+class _ExplicitNamespaceStore(InMemoryStateStore):
+    def __init__(self, *, initialized: bool) -> None:
+        super().__init__()
+        self.initialized = initialized
+        self.initialize_calls = 0
+
+    async def read_epoch(self):
+        if not self.initialized:
+            raise CoordinationUninitializedError("Coordination namespace is uninitialized.")
+        return await super().read_epoch()
+
+    async def initialize_epoch(self):
+        self.initialize_calls += 1
+        self.initialized = True
+        return await super().read_epoch()
 
 
 def policy() -> HaRuntimePolicy:
@@ -147,6 +165,54 @@ class CoordinationBindingManagerTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(result.applied)
         self.assertEqual(await manager.verify(policy()), result.binding)
         self.assertEqual(await self.store.get(manager.STORE_KEY), marker)
+
+    async def test_bootstrap_alone_initializes_a_fresh_epoch_namespace(self) -> None:
+        store = _ExplicitNamespaceStore(initialized=False)
+        manager = CoordinationBindingManager(
+            self.storage,
+            store,
+            activation_verifier=lambda _record: True,
+        )
+
+        result = await manager.bootstrap(
+            policy(), activation_record="act_" + ("c" * 32), apply=True
+        )
+
+        self.assertTrue(result.applied)
+        self.assertEqual(store.initialize_calls, 1)
+        self.assertEqual(await manager.verify(policy()), result.binding)
+
+    async def test_existing_durable_binding_never_bootstraps_a_lost_epoch_namespace(self) -> None:
+        expected = CoordinationBinding.for_policy(policy(), "act_" + ("d" * 32))
+        self.storage.config[self.manager.DURABLE_KEY] = expected.to_dict()
+        store = _ExplicitNamespaceStore(initialized=False)
+        await store.set(self.manager.STORE_KEY, expected.to_dict())
+        manager = CoordinationBindingManager(
+            self.storage,
+            store,
+            activation_verifier=lambda _record: True,
+        )
+
+        with self.assertRaises(HaBindingError) as raised:
+            await manager.bootstrap(
+                policy(), activation_record=expected.activation_record, apply=True
+            )
+
+        self.assertEqual(raised.exception.code, "epoch_namespace_missing")
+        self.assertEqual(store.initialize_calls, 0)
+
+    async def test_verify_reports_lost_epoch_namespace_without_reinitializing(self) -> None:
+        expected = CoordinationBinding.for_policy(policy(), "act_" + ("e" * 32))
+        self.storage.config[self.manager.DURABLE_KEY] = expected.to_dict()
+        store = _ExplicitNamespaceStore(initialized=False)
+        await store.set(self.manager.STORE_KEY, expected.to_dict())
+        manager = CoordinationBindingManager(self.storage, store)
+
+        with self.assertRaises(HaBindingError) as raised:
+            await manager.verify(policy())
+
+        self.assertEqual(raised.exception.code, "epoch_namespace_missing")
+        self.assertEqual(store.initialize_calls, 0)
 
 
 if __name__ == "__main__":

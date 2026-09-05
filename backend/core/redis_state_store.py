@@ -35,6 +35,7 @@ from core.coordination import (
     CoordinationReconciliationRequiredError,
     CoordinationTime,
     CoordinationUnavailableError,
+    CoordinationUninitializedError,
     Epoch,
     EpochState,
     InvalidationGeneration,
@@ -99,6 +100,37 @@ _CORRUPT_DRIVER_ERROR_MARKERS = (
 )
 
 
+_EPOCH_INITIALIZE_SCRIPT = """-- omni:epoch_initialize:v1
+local function valid_integer(value)
+  return value and string.match(value, '^[1-9][0-9]*$')
+    and (#value < 19 or (#value == 19 and value <= '9223372036854775807'))
+end
+local marker = redis.call('GET', KEYS[2])
+local encoded_epoch = redis.call('GET', KEYS[1])
+if not marker and not encoded_epoch then
+  if redis.call('EXISTS', KEYS[3]) ~= 0 then
+    return redis.error_reply('COORDINATION_CORRUPT')
+  end
+  if redis.call('MSETNX', KEYS[1], '1|1|ready', KEYS[2], '1|initialized') ~= 1 then
+    return redis.error_reply('COORDINATION_CORRUPT')
+  end
+  marker, encoded_epoch = '1|initialized', '1|1|ready'
+elseif not marker or not encoded_epoch then
+  return redis.error_reply('COORDINATION_CORRUPT')
+end
+if marker ~= '1|initialized' or redis.call('PTTL', KEYS[1]) ~= -1
+  or redis.call('PTTL', KEYS[2]) ~= -1 then
+  return redis.error_reply('COORDINATION_CORRUPT')
+end
+local schema, epoch, state = string.match(encoded_epoch, '^([^|]+)|([^|]+)|([^|]+)$')
+if schema ~= '1' or not valid_integer(epoch)
+  or (state ~= 'ready' and state ~= 'reconciling') then
+  return redis.error_reply('COORDINATION_CORRUPT')
+end
+return {'1', 'ok', epoch, state}
+"""
+
+
 _EPOCH_READ_SCRIPT = """-- omni:epoch_read:v1
 local function valid_integer(value)
   return value and string.match(value, '^[1-9][0-9]*$')
@@ -107,10 +139,7 @@ end
 local marker = redis.call('GET', KEYS[2])
 local encoded_epoch = redis.call('GET', KEYS[1])
 if not marker and not encoded_epoch then
-  if redis.call('MSETNX', KEYS[1], '1|1|ready', KEYS[2], '1|initialized') ~= 1 then
-    return redis.error_reply('COORDINATION_CORRUPT')
-  end
-  marker, encoded_epoch = '1|initialized', '1|1|ready'
+  return {'1', 'uninitialized', '', ''}
 elseif not marker or not encoded_epoch then
   return redis.error_reply('COORDINATION_CORRUPT')
 end
@@ -1588,6 +1617,7 @@ SCRIPT_SOURCES = {
     name: _with_admission_fence(name, source)
     for name, source in {
         "drain_complete": _DRAIN_COMPLETE_SCRIPT,
+        "epoch_initialize": _EPOCH_INITIALIZE_SCRIPT,
         "epoch_read": _EPOCH_READ_SCRIPT,
         "time_read": _TIME_READ_SCRIPT,
         "epoch_advance": _EPOCH_ADVANCE_SCRIPT,
@@ -2052,6 +2082,10 @@ def _strict_nonnegative_int(value: bytes) -> int:
 
 def _decode_epoch_reply(reply: object) -> Epoch:
     values = _strict_array(reply, 4)
+    if values[1] == b"uninitialized":
+        if values[2:] != [b"", b""]:
+            raise CoordinationCorruptError("Coordination reply is invalid.")
+        raise CoordinationUninitializedError("Coordination namespace is uninitialized.")
     if values[1] == b"reconciliation_required":
         if values[2:] != [b"", b""]:
             raise CoordinationCorruptError("Coordination reply is invalid.")
@@ -2721,6 +2755,18 @@ class RedisStateStore:
     async def read_epoch(self) -> Epoch:
         reply = await self._run_script(
             "epoch_read", keys=[self._key("epoch"), self._key("initialization")], args=[]
+        )
+        return _decode_epoch_reply(reply)
+
+    async def initialize_epoch(self) -> Epoch:
+        reply = await self._run_script(
+            "epoch_initialize",
+            keys=[
+                self._key("epoch"),
+                self._key("initialization"),
+                self._key("generic", ADMISSION_BINDING_KEY),
+            ],
+            args=[],
         )
         return _decode_epoch_reply(reply)
 

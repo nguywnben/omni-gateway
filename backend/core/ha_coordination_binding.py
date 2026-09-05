@@ -8,7 +8,7 @@ import re
 from dataclasses import dataclass, field
 from typing import Any, Callable, Final
 
-from core.coordination import EpochState
+from core.coordination import CoordinationUninitializedError, EpochState
 from core.durable_migration import DURABLE_MANIFEST_CHECKSUM
 from core.ha_runtime_policy import HaRuntimePolicy, RuntimeMode
 
@@ -166,7 +166,10 @@ class CoordinationBindingManager:
         shared = self.decode_record(shared_value, "coordination_binding_corrupt")
         if shared != durable:
             raise HaBindingError("binding_mismatch")
-        epoch = await self._store.read_epoch()
+        try:
+            epoch = await self._store.read_epoch()
+        except CoordinationUninitializedError:
+            raise HaBindingError("epoch_namespace_missing") from None
         if epoch.epoch != policy.fencing_epoch or epoch.state is not EpochState.READY:
             raise HaBindingError("epoch_not_ready")
         return durable
@@ -184,9 +187,6 @@ class CoordinationBindingManager:
         if not self._activation_verifier(activation_record):
             raise HaBindingError("activation_gate_closed")
 
-        epoch = await self._store.read_epoch()
-        if epoch.epoch != policy.fencing_epoch or epoch.state is not EpochState.READY:
-            raise HaBindingError("epoch_not_ready")
         if not await self._store.acquire_lock(self.LOCK_KEY, ttl_seconds=30):
             raise HaBindingError("bootstrap_busy")
         try:
@@ -201,14 +201,30 @@ class CoordinationBindingManager:
                 shared = self.decode_record(shared_value, "coordination_binding_corrupt")
                 if shared != expected:
                     raise HaBindingError("binding_mismatch")
+                try:
+                    epoch = await self._store.read_epoch()
+                except CoordinationUninitializedError:
+                    raise HaBindingError("epoch_namespace_missing") from None
+                if epoch.epoch != policy.fencing_epoch or epoch.state is not EpochState.READY:
+                    raise HaBindingError("epoch_not_ready")
                 return BindingBootstrapResult(True, expected)
 
             if shared_value is None:
+                try:
+                    epoch = await self._store.read_epoch()
+                except CoordinationUninitializedError:
+                    epoch = await self._store.initialize_epoch()
                 await self._store.set(self.STORE_KEY, self.encode_record(expected))
             else:
                 shared = self.decode_record(shared_value, "coordination_binding_corrupt")
                 if shared != expected:
                     raise HaBindingError("binding_mismatch")
+                try:
+                    epoch = await self._store.read_epoch()
+                except CoordinationUninitializedError:
+                    raise HaBindingError("epoch_namespace_missing") from None
+            if epoch.epoch != policy.fencing_epoch or epoch.state is not EpochState.READY:
+                raise HaBindingError("epoch_not_ready")
             if not await self._storage.set_config(self.DURABLE_KEY, expected.to_dict()):
                 raise HaBindingError("durable_write_failed")
             return BindingBootstrapResult(True, expected)

@@ -8,6 +8,7 @@ under its derived deployment prefix.  This suite never flushes the server.
 from __future__ import annotations
 
 import asyncio
+import base64
 import os
 import sys
 import time
@@ -29,10 +30,17 @@ if str(TESTS_DIR) not in sys.path:
 from coordination_store_contract import CoordinationStoreContract
 from core.coordination import (
     CoordinationCorruptError,
+    CoordinationUninitializedError,
     QuotaCommitRequest,
     QuotaReservationRequest,
     validate_deployment_namespace,
 )
+from core.ha_coordination_binding import (
+    CoordinationBinding,
+    CoordinationBindingManager,
+    HaBindingError,
+)
+from core.ha_runtime_policy import HaRuntimePolicy
 from core.redis_state_store import RedisStateStore
 from core.redis_state_store import _fingerprint as _redis_fingerprint
 
@@ -184,7 +192,7 @@ class LiveRedisCoordinationTests(CoordinationStoreContract, unittest.IsolatedAsy
                 _quota_record_limit_for_testing=2,
             )
             self.cleanup_client = redis_asyncio.from_url(REDIS_URI, decode_responses=False)
-            await asyncio.wait_for(self.store.read_epoch(), timeout=_CONNECT_TIMEOUT_SECONDS)
+            await asyncio.wait_for(self.store.initialize_epoch(), timeout=_CONNECT_TIMEOUT_SECONDS)
         except BaseException as exc:
             await _close_setup_resources(self.store, self.cleanup_client)
             if isinstance(exc, asyncio.CancelledError):
@@ -208,6 +216,54 @@ class LiveRedisCoordinationTests(CoordinationStoreContract, unittest.IsolatedAsy
         await self.assert_epoch_cas_and_invalidation_contract(
             advance_cas_clock=advance_server_clock
         )
+
+    async def test_empty_epoch_namespace_never_self_initializes_on_read(self) -> None:
+        epoch_key = self.store._key("epoch")
+        initialization_key = self.store._key("initialization")
+        self.assertEqual(await self.cleanup_client.delete(epoch_key, initialization_key), 2)
+
+        with self.assertRaises(CoordinationUninitializedError):
+            await self.store.read_epoch()
+
+        self.assertEqual(await self.cleanup_client.exists(epoch_key, initialization_key), 0)
+
+    async def test_durable_binding_prevents_lost_epoch_namespace_rebootstrap(self) -> None:
+        class Storage:
+            async def get_config(self, key, default=None):
+                return self.values.get(key, default)
+
+        policy = HaRuntimePolicy.from_environment(
+            {
+                "OMNI_RUNTIME_MODE": "coordinated",
+                "WORKERS": "1",
+                "OMNI_REPLICA_COUNT": "1",
+                "POSTGRESQL_URI": "postgresql://database/omni",
+                "REDIS_URL": REDIS_URI,
+                "OMNI_COORDINATION_NAMESPACE": self.namespace,
+                "OMNI_DEPLOYMENT_ID": "gateway-live-01",
+                "OMNI_COORDINATION_KEY": base64.urlsafe_b64encode(b"k" * 32).decode("ascii"),
+                "OMNI_COORDINATION_EPOCH": "1",
+            }
+        )
+        expected = CoordinationBinding.for_policy(policy, "act_" + ("a" * 32))
+        storage = Storage()
+        storage.values = {CoordinationBindingManager.DURABLE_KEY: expected.to_dict()}
+        await self.store.set(
+            CoordinationBindingManager.STORE_KEY,
+            CoordinationBindingManager.encode_record(expected),
+        )
+        epoch_key = self.store._key("epoch")
+        initialization_key = self.store._key("initialization")
+        self.assertEqual(await self.cleanup_client.delete(epoch_key, initialization_key), 2)
+
+        with self.assertRaises(HaBindingError) as raised:
+            await CoordinationBindingManager(storage, self.store).verify(policy)
+
+        self.assertEqual(raised.exception.code, "epoch_namespace_missing")
+        self.assertEqual(await self.cleanup_client.exists(epoch_key, initialization_key), 0)
+        with self.assertRaises(CoordinationCorruptError):
+            await self.store.initialize_epoch()
+        self.assertEqual(await self.cleanup_client.exists(epoch_key, initialization_key), 0)
 
     async def test_admission_fence_all_families_against_registered_lua(self) -> None:
         await self.assert_admission_fence_contract()

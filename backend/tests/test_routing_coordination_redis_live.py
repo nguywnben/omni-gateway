@@ -37,7 +37,7 @@ class RoutingCoordinationRedisLiveTests(unittest.IsolatedAsyncioTestCase):
             self.namespace = f"w417-live-{uuid.uuid4().hex}"
             self.store = RedisStateStore(REDIS_URI, deployment_namespace=self.namespace)
             self.cleanup_client = redis_asyncio.from_url(REDIS_URI, decode_responses=False)
-            await asyncio.wait_for(self.store.read_epoch(), timeout=5)
+            await asyncio.wait_for(self.store.initialize_epoch(), timeout=5)
         except BaseException:
             await _close_setup_resources(self.store, self.cleanup_client)
             raise

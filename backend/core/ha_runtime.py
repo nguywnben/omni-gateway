@@ -81,6 +81,8 @@ class HaRuntimeLifecycle:
         self._credential_manager_owner: Any | None = None
         self._binding_manager: CoordinationBindingManager | None = None
         self._failure_code = ""
+        self._recovery_latched = False
+        self._recovery_reason = ""
 
     @staticmethod
     def _redis_store(policy: HaRuntimePolicy) -> RedisStateStore:
@@ -112,6 +114,8 @@ class HaRuntimeLifecycle:
             "ready": self.state
             in {HaRuntimeState.STANDALONE_READY, HaRuntimeState.COORDINATED_READY},
             "failure_code": self._failure_code,
+            "recovery_latched": self._recovery_latched,
+            "recovery_reason": self._recovery_reason,
             "coordination_available": bool(
                 service is not None and service.health_snapshot()["available"]
             ),
@@ -225,6 +229,9 @@ class HaRuntimeLifecycle:
                 else "initialization_failed"
             )
             self.state = HaRuntimeState.UNAVAILABLE
+            if self.policy.mode is RuntimeMode.COORDINATED:
+                self._recovery_latched = True
+                self._recovery_reason = "initialization_failed"
             if self._credential_manager_owner is not None:
                 await self._credential_manager_owner.configure_routing_coordination(None)
                 self._credential_manager_owner = None
@@ -247,6 +254,8 @@ class HaRuntimeLifecycle:
             HaRuntimeState.CLOSED,
         }:
             return False
+        if self.policy.mode is RuntimeMode.COORDINATED and self._recovery_latched:
+            return False
         service = self._coordination_service
         if service is None:
             return False
@@ -265,6 +274,9 @@ class HaRuntimeLifecycle:
         except Exception:
             self._failure_code = "dependency_unavailable"
             self.state = HaRuntimeState.UNAVAILABLE
+            if self.policy.mode is RuntimeMode.COORDINATED:
+                self._recovery_latched = True
+                self._recovery_reason = "dependency_unavailable"
             return False
         self._failure_code = ""
         self.state = (

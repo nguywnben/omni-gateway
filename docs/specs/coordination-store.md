@@ -75,18 +75,20 @@ Common bounds:
 ## Fencing lifecycle
 
 A new namespace has one persistent initialization marker and one persistent epoch record in the
-same deployment hash slot. `read_epoch()` is the sole provisioning transition: it may atomically
-create marker plus ready epoch `1` only when both are absent. Reading the epoch is side-effect free
-after provisioning. If exactly one member is absent, either member is malformed or expiring, or a
-normal mutation observes an absent member, the namespace is corrupt and the operation fails
-closed. CAS, invalidation, quota reserve, quota commit, quota release, epoch advance, and epoch
-ready never infer or repair initialization.
+same deployment hash slot. `read_epoch()` is always side-effect free. When both members are absent
+it raises the typed `CoordinationUninitializedError`; when exactly one is absent, either is
+malformed/expiring, or a normal mutation observes an absent member, the namespace is corrupt and
+the operation fails closed. Only the explicit `initialize_epoch()` bootstrap transition may
+atomically create marker plus ready epoch `1`, and it refuses to do so when the Redis binding marker
+already exists. CAS, invalidation, quota reserve, quota commit, quota release, epoch advance, and
+epoch ready never infer or repair initialization.
 
-The marker distinguishes a genuinely new namespace from partial marker/epoch loss. It cannot
-distinguish a deliberate or accidental deletion of every key in the namespace from first use.
-Preventing whole-namespace loss, restoring authoritative epoch state, and gating activation on
-that operational protection belong to the W4.18 activation/reconciliation work. Clearing the
-entire namespace is therefore not a supported recovery mechanism.
+The binding bootstrap calls `initialize_epoch()` only after activation verification and only when
+both durable and shared binding records are absent. A durable binding or shared Redis binding turns
+missing epoch state into namespace loss; neither ordinary reads nor bootstrap may recreate it.
+Whole-namespace deletion still leaves Redis indistinguishable from first use, but the durable
+binding remains authoritative and prevents bootstrap. Restore the matching namespace from backup;
+clearing or reconstructing it as epoch one is not a supported recovery mechanism.
 
 `advance_epoch(expected_epoch, operation_id)` is one compare-and-set transition to the next epoch
 in `reconciling` state. Exact replay returns the same result; stale or conflicting replay does not

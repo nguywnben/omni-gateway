@@ -62,6 +62,7 @@ _OPERATIONS = frozenset(
         "increment",
         "acquire_lock",
         "release_lock",
+        "initialize_epoch",
         "read_epoch",
         "read_coordination_time",
         "advance_epoch",
@@ -267,6 +268,9 @@ class CoordinationService:
 
     async def read_epoch(self) -> Epoch:
         return await self._run("read_epoch", self._store.read_epoch)
+
+    async def initialize_epoch(self) -> Epoch:
+        return await self._run("initialize_epoch", self._store.initialize_epoch)
 
     async def complete_admission_drain(
         self, fence: AdmissionFence, *, epoch: int, operation_id: str

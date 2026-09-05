@@ -833,6 +833,11 @@ class InMemoryStateStore(BaseStateStore):
             self._ensure_open_locked()
             return self._epoch
 
+    async def initialize_epoch(self) -> Epoch:
+        async with self._async_lock:
+            self._ensure_open_locked()
+            return self._epoch
+
     async def read_coordination_time(self, *, epoch: int) -> CoordinationTime:
         async with self._async_lock:
             self._ensure_open_locked()

@@ -32,6 +32,10 @@ class CoordinationUnavailableError(CoordinationError):
     """The backend was unavailable or returned an unusable response."""
 
 
+class CoordinationUninitializedError(CoordinationUnavailableError):
+    """The coordination namespace has never been explicitly initialized."""
+
+
 class CoordinationReconciliationRequiredError(CoordinationUnavailableError):
     """Bounded cleanup found more expired state than this mutation may reconcile."""
 
@@ -614,6 +618,8 @@ def decode_invalidation_generation(reply: object) -> InvalidationGeneration:
 
 class CoordinationStore(Protocol):
     """The fenced coordination operations shared by every backend implementation."""
+
+    async def initialize_epoch(self) -> Epoch: ...
 
     async def read_epoch(self) -> Epoch: ...
 

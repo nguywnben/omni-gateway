@@ -26,6 +26,12 @@ Restore the matching namespace from backup; do not bootstrap a new marker. If re
 stop and verify deployment identity, identifier-key fingerprint, manifest checksum, activation
 record, and epoch using the original secured configuration.
 
+An `unavailable` coordinated process is permanently latched for its configured epoch, even when
+Redis and PostgreSQL later answer probes. Do not reopen it after a transient green ping. Complete
+the operator recovery sequence on a new epoch and replace the process; only the restarted process
+may report coordinated readiness. Public diagnostics expose only fixed reason categories and never
+dependency exception text, DSNs, namespaces, or credentials.
+
 ## Planned epoch transition
 
 Commands are dry-run unless `--apply` is present. Capture each JSON result in the change record.
@@ -81,6 +87,11 @@ Commands are dry-run unless `--apply` is present. Capture each JSON result in th
 
 7. Restart normally and verify `/ready`, metrics, management login/OIDC (if enabled), inference,
    quota, audit, and usage evidence.
+
+`read_epoch` never provisions state. Initial epoch creation is an explicit binding-bootstrap
+operation for a deployment with no durable binding and no Redis binding marker. If either binding
+already exists while the epoch/initialization pair is missing or partial, stop: this is namespace
+loss, not a bootstrap opportunity.
 
 Re-running a command with the same operation ID is safe. Reconciliation only accepts one exact
 epoch step and writes the shared binding before the durable binding so an interrupted operation can

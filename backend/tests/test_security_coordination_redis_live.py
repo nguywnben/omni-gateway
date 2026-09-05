@@ -64,7 +64,7 @@ class LiveRedisSecurityCoordinationTests(
                 decode_responses=False,
             )
             await asyncio.wait_for(
-                self.store.read_epoch(),
+                self.store.initialize_epoch(),
                 timeout=_CONNECT_TIMEOUT_SECONDS,
             )
         except BaseException as exc:

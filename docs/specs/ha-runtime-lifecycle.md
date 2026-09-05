@@ -59,9 +59,13 @@ States are `starting`, `standalone_ready`, `coordinated_ready`, `draining`, `rec
 content-free process-liveness probe and never touches Redis or durable storage.
 
 Coordinated readiness verifies the durable backend, selected usage ledger, coordination service,
-exact epoch state, binding match, and not-draining state. Dependency failure immediately returns a
-content-free 503 projection. Recovery requires a successful probe; stale/reconciling epochs never
-become ready automatically.
+exact epoch state, binding match, and not-draining state. Dependency or authority failure
+immediately returns a content-free 503 projection and latches that process unavailable with one
+bounded non-secret reason category. A later successful ping or binding probe cannot clear the
+latch on the same process or epoch. Recovery requires drain, explicit epoch advance, complete
+reconciliation, mark-ready, and a process restart configured for the new epoch; stale or
+reconciling epochs never become ready automatically. Standalone retains ordinary successful-probe
+recovery because it has no distributed authority to fence.
 
 ## Operator transitions
 

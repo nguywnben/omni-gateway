@@ -19,6 +19,7 @@ from core.coordination import (
     CoordinationCorruptError,
     CoordinationReconciliationRequiredError,
     CoordinationUnavailableError,
+    CoordinationUninitializedError,
     EpochState,
     InvalidationRequest,
     QuotaCommitRequest,
@@ -311,6 +312,7 @@ class StatefulRedisClient(FakeRedisClient):
     """Small deterministic driver model for Task 3's public transition sequence."""
 
     _KEY_COUNTS = {
+        "epoch_initialize": (3, 0),
         "epoch_read": (2, 0),
         "time_read": (2, 1),
         "epoch_advance": (4, 4),
@@ -500,10 +502,14 @@ class StatefulRedisClient(FakeRedisClient):
         assert len({key[key.index("{") + 1 : key.index("}")] for key in keys}) == 1
         assert all(isinstance(arg, bytes) for arg in args)
         byte_args = [arg for arg in args if isinstance(arg, bytes)]
-        if name == "epoch_read":
+        if name in {"epoch_initialize", "epoch_read"}:
             if self.epoch_exists != self.initialization_exists:
                 raise RuntimeError("COORDINATION_CORRUPT")
             if not self.epoch_exists:
+                if name == "epoch_read":
+                    return [b"1", b"uninitialized", b"", b""]
+                if keys[2] in self.values:
+                    raise RuntimeError("COORDINATION_CORRUPT")
                 self.epoch = (1, b"ready")
                 self.epoch_exists = True
                 self.initialization_exists = True
@@ -2306,7 +2312,12 @@ class RedisStateStoreTests(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(fresh_client.epoch_exists)
         self.assertFalse(fresh_client.initialization_exists)
 
-        self.assertEqual((await fresh_store.read_epoch()).epoch, 1)
+        with self.assertRaises(CoordinationUninitializedError):
+            await fresh_store.read_epoch()
+        self.assertFalse(fresh_client.epoch_exists)
+        self.assertFalse(fresh_client.initialization_exists)
+
+        self.assertEqual((await fresh_store.initialize_epoch()).epoch, 1)
         self.assertTrue(fresh_client.epoch_exists)
         self.assertTrue(fresh_client.initialization_exists)
         self.assertTrue(
@@ -3346,7 +3357,12 @@ class RedisStateStoreTests(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(client.epoch_exists)
         self.assertFalse(client.initialization_exists)
 
-        self.assertEqual((await store.read_epoch()).epoch, 1)
+        with self.assertRaises(CoordinationUninitializedError):
+            await store.read_epoch()
+        self.assertFalse(client.epoch_exists)
+        self.assertFalse(client.initialization_exists)
+
+        self.assertEqual((await store.initialize_epoch()).epoch, 1)
         self.assertTrue((await store.reserve_quota(reservation("bootstrap"))).accepted)
         self.assertTrue(client.epoch_exists)
         self.assertTrue(client.initialization_exists)
@@ -3379,6 +3395,7 @@ class RedisStateStoreTests(unittest.IsolatedAsyncioTestCase):
             set(SCRIPT_SOURCES),
             {
                 "drain_complete",
+                "epoch_initialize",
                 "epoch_read",
                 "time_read",
                 "epoch_advance",

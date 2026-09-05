@@ -122,6 +122,64 @@ class HaRuntimeLifecycleTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(await lifecycle.check_ready())
         self.assertEqual(lifecycle.health_snapshot()["failure_code"], "")
 
+    async def test_coordinated_dependency_failure_latches_until_process_restart(self) -> None:
+        coordinated = HaRuntimePolicy.from_environment(
+            {
+                "OMNI_RUNTIME_MODE": "coordinated",
+                "WORKERS": "1",
+                "OMNI_REPLICA_COUNT": "1",
+                "POSTGRESQL_URI": "postgresql://database/omni",
+                "REDIS_URL": "redis://redis/0",
+                "OMNI_COORDINATION_NAMESPACE": "production-east",
+                "OMNI_DEPLOYMENT_ID": "gateway-east-01",
+                "OMNI_COORDINATION_KEY": "a2tra2tra2tra2tra2tra2tra2tra2tra2tra2tra2s=",
+                "OMNI_COORDINATION_EPOCH": "1",
+            }
+        )
+        store = InMemoryStateStore()
+        lifecycle = HaRuntimeLifecycle(
+            policy=coordinated,
+            coordinated_store_factory=lambda _policy: store,
+            activation_verifier=lambda _record: True,
+        )
+        binding = AsyncMock()
+        binding.activation_record = "act_" + ("a" * 32)
+        manager = AsyncMock()
+        manager.verify = AsyncMock(return_value=binding)
+
+        with (
+            patch("core.ha_runtime.CoordinationBindingManager", return_value=manager),
+            patch(
+                "core.ha_runtime.credential_manager.configure_routing_coordination",
+                new=AsyncMock(),
+            ),
+            patch("core.ha_runtime.configure_governance_coordination"),
+            patch("core.ha_runtime.configure_authentication_attempt_service"),
+            patch("core.ha_runtime.configure_oidc_transaction_coordination"),
+            patch("core.ha_runtime.configure_device_authorization_service"),
+            patch("core.ha_runtime.configure_credential_batch_coordination_service"),
+            patch("core.ha_runtime.configure_provider_authorization_service"),
+            patch("core.ha_runtime.virtual_key_manager.configure_coordination"),
+            patch("core.ha_runtime.response_cache_coordinator.configure_coordination"),
+            patch("core.ha_runtime.configure_primary_session_coordinator"),
+        ):
+            await lifecycle.start(storage=object())
+            self.assertTrue(await lifecycle.check_ready())
+            manager.verify.side_effect = RuntimeError("redis credential leaked-secret")
+            self.assertFalse(await lifecycle.check_ready())
+            failed_probe_count = manager.verify.await_count
+            manager.verify.side_effect = None
+            manager.verify.return_value = binding
+            self.assertFalse(await lifecycle.check_ready())
+
+        snapshot = lifecycle.health_snapshot()
+        self.assertEqual(manager.verify.await_count, failed_probe_count)
+        self.assertIs(lifecycle.state, HaRuntimeState.UNAVAILABLE)
+        self.assertTrue(snapshot["recovery_latched"])
+        self.assertEqual(snapshot["recovery_reason"], "dependency_unavailable")
+        self.assertNotIn("credential", repr(snapshot))
+        self.assertNotIn("leaked-secret", repr(snapshot))
+
 
 if __name__ == "__main__":
     unittest.main()
