@@ -74,8 +74,12 @@ The lifecycle exposes bounded commands for `status`, `drain`, `advance-epoch`, `
   under its mutation lock or Redis script, so nothing linearized after the drain write can acquire
   new capacity or admit a new security mutation. A valid fence raises a bounded admission-fenced
   error; corrupt or mismatched records fail closed. Existing CAS revisions alone are not settlement
-  proof. Quota settlement, OIDC consume, and CAS domain settlement with a verified prior admission
-  operation remain available while the same epoch is ready.
+  proof. CAS settlement remains available only when the retained successful admission declared the
+  exact target key and create/update transition before the drain; the store verifies that bounded
+  typed capability atomically and never parses opaque payloads or accepts a boolean/callback
+  bypass. Routing grants only its lease-record update. Credential batches grant only their exact
+  root/registry updates and finite owner-bound chunk creates. Quota settlement, OIDC consume, and
+  these verified CAS domain settlements remain available while the same epoch is ready.
   Unknown settlement identities do not allocate new negative replay records while drained;
   expired admission evidence cannot authorize a fresh settlement operation.
 - Epoch advance moves exactly `ready(N)` to `reconciling(N+1)`.

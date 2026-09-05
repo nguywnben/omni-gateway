@@ -219,6 +219,11 @@ class LiveRedisCoordinationTests(CoordinationStoreContract, unittest.IsolatedAsy
     async def test_cas_settlement_proof_against_registered_lua(self) -> None:
         await self.assert_cas_settlement_proof_contract()
 
+    async def test_cas_settlement_proof_rejects_cross_key_and_wrong_transition_reuse(
+        self,
+    ) -> None:
+        await self.assert_cas_settlement_proof_cannot_be_reused_for_other_work()
+
     async def test_unknown_settlement_does_not_admit_replays(self) -> None:
         async def retained_count() -> int:
             total = 0

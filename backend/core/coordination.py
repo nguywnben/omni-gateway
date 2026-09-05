@@ -21,6 +21,7 @@ MIN_TTL_SECONDS = 1.0
 MIN_QUOTA_RESERVATION_TTL_SECONDS: Final[float] = 61.0
 MAX_TTL_SECONDS = 30.0 * 86_400.0
 MAX_COORDINATION_INTEGER = 2**63 - 1
+MAX_CAS_SETTLEMENT_TARGETS: Final[int] = 64
 
 
 class CoordinationError(RuntimeError):
@@ -190,6 +191,33 @@ class AdmissionFence:
             raise ValueError("Coordination drain record is invalid.")
 
 
+class CasSettlementTransition(str, Enum):
+    CREATE = "create"
+    UPDATE = "update"
+
+
+@dataclass(frozen=True, slots=True)
+class CasSettlementTarget:
+    """One exact logical key and CAS transition an admission may later settle."""
+
+    key: str = field(repr=False)
+    transition: CasSettlementTransition
+
+    def __post_init__(self) -> None:
+        _require_identifier(self.key, "CAS settlement key")
+        if type(self.transition) is not CasSettlementTransition:
+            raise ValueError("CAS settlement transition is invalid.")
+
+    @classmethod
+    def from_request(cls, request: CasRequest) -> CasSettlementTarget:
+        return cls(
+            request.key,
+            CasSettlementTransition.CREATE
+            if request.expected_revision == 0
+            else CasSettlementTransition.UPDATE,
+        )
+
+
 @dataclass(frozen=True, slots=True)
 class CasRequest:
     key: str = field(repr=False)
@@ -198,6 +226,7 @@ class CasRequest:
     ttl_seconds: float
     epoch: int
     operation_id: str = field(repr=False)
+    settlement_targets: tuple[CasSettlementTarget, ...] = field(default=(), repr=False)
     settlement: CasSettlementProof | None = field(default=None, repr=False)
 
     def __post_init__(self) -> None:
@@ -218,9 +247,17 @@ class CasRequest:
         )
         validate_epoch(self.epoch)
         validate_operation_id(self.operation_id)
+        if (
+            type(self.settlement_targets) is not tuple
+            or len(self.settlement_targets) > MAX_CAS_SETTLEMENT_TARGETS
+            or any(type(target) is not CasSettlementTarget for target in self.settlement_targets)
+            or len(set(self.settlement_targets)) != len(self.settlement_targets)
+        ):
+            raise ValueError("CAS settlement targets are invalid.")
         if self.settlement is not None and (
             type(self.settlement) is not CasSettlementProof
             or self.settlement.admission.epoch != self.epoch
+            or self.settlement_targets
         ):
             raise ValueError("CAS settlement proof is invalid.")
 
@@ -233,9 +270,15 @@ class CasSettlementProof:
     """
 
     admission: CasRequest = field(repr=False)
+    target: CasSettlementTarget = field(repr=False)
 
     def __post_init__(self) -> None:
-        if type(self.admission) is not CasRequest or self.admission.settlement is not None:
+        if (
+            type(self.admission) is not CasRequest
+            or self.admission.settlement is not None
+            or type(self.target) is not CasSettlementTarget
+            or self.target not in self.admission.settlement_targets
+        ):
             raise ValueError("CAS settlement proof is invalid.")
 
 

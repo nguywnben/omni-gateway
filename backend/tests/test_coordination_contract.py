@@ -15,6 +15,9 @@ from core.coordination import (
     MAX_PAYLOAD_BYTES,
     CasRequest,
     CasResult,
+    CasSettlementProof,
+    CasSettlementTarget,
+    CasSettlementTransition,
     CoordinationCorruptError,
     CoordinationReconciliationRequiredError,
     Epoch,
@@ -186,6 +189,53 @@ class CoordinationDomainTests(unittest.TestCase):
             CasRequest("key", 0, b"x" * (MAX_PAYLOAD_BYTES + 1), 1.0, 1, "op")
         with self.assertRaises(ValueError):
             InvalidationRequest("scope", 1, "\tbad")
+
+    def test_cas_settlement_capabilities_are_typed_finite_and_admission_bound(self) -> None:
+        target = CasSettlementTarget("root", CasSettlementTransition.UPDATE)
+        admission = CasRequest(
+            "root",
+            0,
+            b"payload",
+            1.0,
+            1,
+            "admit",
+            settlement_targets=(target,),
+        )
+        self.assertEqual(CasSettlementProof(admission, target).target, target)
+        for invalid_targets in (
+            [target],
+            (target, target),
+            tuple(
+                CasSettlementTarget(f"target-{index}", CasSettlementTransition.CREATE)
+                for index in range(65)
+            ),
+        ):
+            with self.subTest(size=len(invalid_targets)), self.assertRaises(ValueError):
+                CasRequest(
+                    "root",
+                    0,
+                    b"payload",
+                    1.0,
+                    1,
+                    "bad-targets",
+                    settlement_targets=invalid_targets,  # type: ignore[arg-type]
+                )
+        with self.assertRaises(ValueError):
+            CasSettlementProof(
+                admission,
+                CasSettlementTarget("invented", CasSettlementTransition.CREATE),
+            )
+        with self.assertRaises(ValueError):
+            CasRequest(
+                "root",
+                1,
+                b"settled",
+                1.0,
+                1,
+                "settle",
+                settlement_targets=(target,),
+                settlement=CasSettlementProof(admission, target),
+            )
 
     def test_stored_reply_decoders_require_exact_schema_and_types(self) -> None:
         self.assertEqual(

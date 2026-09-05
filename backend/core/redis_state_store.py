@@ -28,6 +28,7 @@ from core.coordination import (
     AdmissionFence,
     CasRequest,
     CasResult,
+    CasSettlementTarget,
     CasSnapshot,
     CoordinationAdmissionFencedError,
     CoordinationCorruptError,
@@ -316,14 +317,48 @@ local function valid_integer(value, allow_zero)
   return value and string.match(value, '^[1-9][0-9]*$')
     and (#value < 19 or (#value == 19 and value <= '9223372036854775807'))
 end
+local function valid_capabilities(value)
+  if value == '' then return true end
+  if not value or #value > 4159 then return false end
+  local count, seen = 0, {}
+  for capability in string.gmatch(value, '[^,]+') do
+    if #capability ~= 64 or not string.match(capability, '^[0-9a-f]+$')
+      or seen[capability] then return false end
+    count, seen[capability] = count + 1, true
+  end
+  return count >= 1 and count <= 64 and #value == count * 64 + count - 1
+end
+local function has_capability(value, requested)
+  if not valid_capabilities(value) or #requested ~= 64
+    or not string.match(requested, '^[0-9a-f]+$') then return false end
+  for capability in string.gmatch(value, '[^,]+') do
+    if capability == requested then return true end
+  end
+  return false
+end
+local function parse_replay(value)
+  local schema, fingerprint, status, revision, capabilities, saved_expiry =
+    string.match(value or '', '^([^|]+)|([^|]+)|([^|]+)|([^|]*)|([^|]*)|([^|]+)$')
+  if schema == '2' then
+    return {schema=schema, fingerprint=fingerprint, status=status, revision=revision,
+      capabilities=capabilities, saved_expiry=saved_expiry}
+  end
+  schema, fingerprint, status, revision, saved_expiry =
+    string.match(value or '', '^([^|]+)|([^|]+)|([^|]+)|([^|]*)|([^|]+)$')
+  if schema == '1' then
+    return {schema=schema, fingerprint=fingerprint, status=status, revision=revision,
+      capabilities='', saved_expiry=saved_expiry}
+  end
+  return nil
+end
 local function valid_replay(value, score)
   if not value or not score or not valid_integer(score, false) then return false end
-  local schema, fingerprint, status, revision, saved_expiry =
-    string.match(value, '^([^|]+)|([^|]+)|([^|]+)|([^|]*)|([^|]+)$')
-  if schema ~= '1' or not fingerprint or not valid_integer(saved_expiry, false)
-    or saved_expiry ~= score then return false end
-  return (status == 'applied' and valid_integer(revision, false))
-    or (status == 'not_applied' and revision == '')
+  local replay = parse_replay(value)
+  if not replay or not replay.fingerprint or not valid_capabilities(replay.capabilities)
+    or not valid_integer(replay.saved_expiry, false)
+    or replay.saved_expiry ~= score then return false end
+  return (replay.status == 'applied' and valid_integer(replay.revision, false))
+    or (replay.status == 'not_applied' and replay.revision == '' and replay.capabilities == '')
 end
 local marker, encoded_epoch = redis.call('GET', KEYS[5]), redis.call('GET', KEYS[1])
 if marker ~= '1|initialized' or not encoded_epoch or redis.call('PTTL', KEYS[5]) ~= -1
@@ -350,10 +385,9 @@ if not valid_replay(replay, replay_expiry) and (replay or replay_expiry) then
   return redis.error_reply('COORDINATION_CORRUPT')
 end
 if replay and tonumber(replay_expiry) > now_ms then
-  local _, fingerprint, status, revision =
-    string.match(replay, '^([^|]+)|([^|]+)|([^|]+)|([^|]*)|([^|]+)$')
-  if fingerprint == ARGV[6] then
-    return {'1', status, revision, '1'}
+  local saved = parse_replay(replay)
+  if saved.fingerprint == ARGV[6] then
+    return {'1', saved.status, saved.revision, '1'}
   end
   return {'1', 'not_applied', '', '0'}
 end
@@ -406,8 +440,10 @@ if (not current_revision and ARGV[1] == '0')
 end
 local expires_at = now_ms + tonumber(ARGV[3])
 local expires_text = string.format('%.0f', expires_at)
+local capabilities = status == 'applied' and ARGV[12] or ''
+if not valid_capabilities(capabilities) then return redis.error_reply('COORDINATION_CORRUPT') end
 redis.call('HSET', KEYS[3], ARGV[5],
-  '1|' .. ARGV[6] .. '|' .. status .. '|' .. revision .. '|' .. expires_text)
+  '2|' .. ARGV[6] .. '|' .. status .. '|' .. revision .. '|' .. capabilities .. '|' .. expires_text)
 redis.call('ZADD', KEYS[4], expires_at, ARGV[5])
 return {'1', status, revision, '0'}
 """
@@ -1477,13 +1513,14 @@ _CAS_SETTLEMENT_LUA = r"""
 if ARGV[8] ~= '' then
   local proof = redis.call('HGET', KEYS[3], ARGV[8])
   local expiry = redis.call('ZSCORE', KEYS[4], ARGV[8])
-  local schema, fingerprint, status, revision, saved_expiry =
-    string.match(proof or '', '^([^|]+)|([^|]+)|([^|]+)|([^|]*)|([^|]+)$')
+  local saved = parse_replay(proof)
   local clock = redis.call('TIME')
   local now_ms = (clock[1] * 1000) + math.floor(clock[2] / 1000)
-  if not valid_replay(proof, expiry) or schema ~= '1' or fingerprint ~= ARGV[9] or status ~= 'applied'
-    or not revision or not string.match(revision, '^[1-9][0-9]*$')
-    or not expiry or saved_expiry ~= expiry or not tonumber(expiry)
+  if not valid_replay(proof, expiry) or saved.schema ~= '2' or saved.fingerprint ~= ARGV[9]
+    or saved.status ~= 'applied' or ARGV[10] ~= ARGV[11]
+    or not has_capability(saved.capabilities, ARGV[10])
+    or not saved.revision or not string.match(saved.revision, '^[1-9][0-9]*$')
+    or not expiry or saved.saved_expiry ~= expiry or not tonumber(expiry)
     or tonumber(expiry) <= now_ms then
     return redis.error_reply('COORDINATION_ADMISSION_FENCED')
   end
@@ -1644,6 +1681,14 @@ def _fingerprint(*parts: object) -> bytes:
         digest.update(len(encoded).to_bytes(8, "big"))
         digest.update(encoded)
     return digest.hexdigest().encode("ascii")
+
+
+def _cas_settlement_capability(target: CasSettlementTarget) -> bytes:
+    return _fingerprint(target.key, target.transition.value)
+
+
+def _cas_settlement_capabilities(request: CasRequest) -> bytes:
+    return b",".join(_cas_settlement_capability(target) for target in request.settlement_targets)
 
 
 def _quota_retention_ms(request: QuotaReservationRequest) -> int:
@@ -2743,14 +2788,23 @@ class RedisStateStore:
                 value.payload,
                 float(value.ttl_seconds),
                 value.epoch,
+                _cas_settlement_capabilities(value),
             )
 
         fingerprint = request_fingerprint(request)
         proof_operation, proof_fingerprint = b"", b""
+        proof_target, requested_target = b"", b""
         if request.settlement is not None:
             proof_operation = request.settlement.admission.operation_id.encode("ascii")
             proof_fingerprint = request_fingerprint(request.settlement.admission)
-            fingerprint = _fingerprint(fingerprint, proof_operation, proof_fingerprint)
+            proof_target = _cas_settlement_capability(request.settlement.target)
+            requested_target = _cas_settlement_capability(CasSettlementTarget.from_request(request))
+            fingerprint = _fingerprint(
+                fingerprint,
+                proof_operation,
+                proof_fingerprint,
+                proof_target,
+            )
         reply = await self._run_script(
             "cas",
             keys=[
@@ -2770,6 +2824,9 @@ class RedisStateStore:
                 _integer_bytes(self._replay_limit),
                 proof_operation,
                 proof_fingerprint,
+                proof_target,
+                requested_target,
+                _cas_settlement_capabilities(request),
             ],
         )
         return _decode_cas_reply(reply)

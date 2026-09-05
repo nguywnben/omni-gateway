@@ -218,8 +218,8 @@ class StatefulRegisteredScript:
                 self.client.values.pop(self.client.script_calls[-1][1][-2], None)
                 return [b"1", b"ok"]
             if self.name == "cas":
-                operation, fingerprint = args[-2:]
-                args = args[:-2]
+                operation, fingerprint, proof_target, requested_target, capabilities = args[7:]
+                args = [*args[:7], capabilities]
                 if operation:
                     settled = self.client.replays["cas"].get(args[4])
                     if (
@@ -229,11 +229,14 @@ class StatefulRegisteredScript:
                     ):
                         return [*settled[1][:-1], b"1"]
                     proof = self.client.replays["cas"].get(operation)
+                    admitted_capabilities = self.client.cas_capabilities.get(operation, b"")
                     if (
                         proof is None
                         or proof[0] != fingerprint
                         or proof[1][1] != b"applied"
                         or proof[2] <= self.client.now_ms
+                        or proof_target != requested_target
+                        or proof_target not in admitted_capabilities.split(b",")
                     ):
                         raise RuntimeError("COORDINATION_ADMISSION_FENCED")
                 elif entry is not None:
@@ -308,7 +311,7 @@ class StatefulRedisClient(FakeRedisClient):
         "time_read": (2, 1),
         "epoch_advance": (4, 4),
         "epoch_ready": (4, 4),
-        "cas": (5, 7),
+        "cas": (5, 8),
         "cas_read": (3, 1),
         "invalidation": (5, 5),
         "invalidation_read": (3, 0),
@@ -326,6 +329,7 @@ class StatefulRedisClient(FakeRedisClient):
         self.epoch_exists = True
         self.initialization_exists = True
         self.cas: dict[str, tuple[int, bytes, int]] = {}
+        self.cas_capabilities: dict[bytes, bytes] = {}
         self.generations: dict[str, int] = {}
         self.replays: defaultdict[str, dict[bytes, tuple[bytes, list[bytes], int]]] = defaultdict(
             dict
@@ -389,6 +393,8 @@ class StatefulRedisClient(FakeRedisClient):
             return [b"1", b"reconciliation_required", b"", b"0"]
         for identifier in due:
             del entries[identifier]
+            if name == "cas":
+                self.cas_capabilities.pop(identifier, None)
         saved = entries.get(operation_id)
         if saved is None:
             return None
@@ -538,7 +544,9 @@ class StatefulRedisClient(FakeRedisClient):
                 return result
             return [b"1", b"ok", str(self.epoch[0]).encode(), self.epoch[1]]
         if name == "cas":
-            expected, payload, ttl, epoch, operation_id, fingerprint, limit = byte_args
+            expected, payload, ttl, epoch, operation_id, fingerprint, limit, capabilities = (
+                byte_args
+            )
             if self.epoch != (int(epoch), b"ready"):
                 return [b"1", b"not_applied", b"", b"0"]
             existing = self._replay(name, operation_id, fingerprint)
@@ -562,6 +570,9 @@ class StatefulRedisClient(FakeRedisClient):
                 return capacity
             if applied:
                 self.cas[keys[1]] = (revision, payload, self.now_ms + int(ttl))
+                self.cas_capabilities[operation_id] = capabilities
+            else:
+                self.cas_capabilities[operation_id] = b""
             return result
         if name == "cas_read":
             epoch = int(byte_args[0])
@@ -1286,6 +1297,11 @@ class RedisAdmissionFenceTests(CoordinationStoreContract, unittest.IsolatedAsync
 
     async def test_cas_settlement_requires_accepted_proof(self) -> None:
         await self.assert_cas_settlement_proof_contract()
+
+    async def test_cas_settlement_proof_rejects_cross_key_and_wrong_transition_reuse(
+        self,
+    ) -> None:
+        await self.assert_cas_settlement_proof_cannot_be_reused_for_other_work()
 
     async def test_unknown_settlement_does_not_admit_replays(self) -> None:
         async def retained_count() -> int:
@@ -3351,6 +3367,11 @@ class RedisStateStoreTests(unittest.IsolatedAsyncioTestCase):
         cas_source = SCRIPT_SOURCES["cas"]
         self.assertIn("redis.call('PTTL', KEYS[2])", cas_source)
         self.assertIn("#record[3] > 16384", cas_source)
+        self.assertIn("count <= 64", cas_source)
+        self.assertIn("ARGV[10] ~= ARGV[11]", cas_source)
+        self.assertIn("has_capability(saved.capabilities, ARGV[10])", cas_source)
+        self.assertIn("schema == '1'", cas_source)
+        self.assertIn("saved.schema ~= '2'", cas_source)
 
         for name in ("epoch_advance", "epoch_ready", "cas", "invalidation"):
             with self.subTest(name=name):

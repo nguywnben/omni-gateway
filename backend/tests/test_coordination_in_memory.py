@@ -77,6 +77,11 @@ class InMemoryCoordinationTests(CoordinationStoreContract, unittest.IsolatedAsyn
     async def test_cas_settlement_requires_accepted_proof(self) -> None:
         await self.assert_cas_settlement_proof_contract()
 
+    async def test_cas_settlement_proof_rejects_cross_key_and_wrong_transition_reuse(
+        self,
+    ) -> None:
+        await self.assert_cas_settlement_proof_cannot_be_reused_for_other_work()
+
     async def test_unknown_settlement_does_not_admit_replays(self) -> None:
         async def retained_count() -> int:
             return len(self.store._quota_replays) + len(self.store._oidc_transaction_replays)
@@ -90,9 +95,23 @@ class InMemoryCoordinationTests(CoordinationStoreContract, unittest.IsolatedAsyn
         await self.assert_batch_partial_settlement_retry_contract()
 
     async def test_drain_allows_expiry_but_rejects_expired_cas_proof(self) -> None:
-        from core.coordination import CasSettlementProof, CoordinationUnavailableError
+        from core.coordination import (
+            CasSettlementProof,
+            CasSettlementTarget,
+            CasSettlementTransition,
+            CoordinationUnavailableError,
+        )
 
-        admission = CasRequest("expiring-proof", 0, b"value", 61, 1, "expiring-admit")
+        target = CasSettlementTarget("expiring-proof", CasSettlementTransition.UPDATE)
+        admission = CasRequest(
+            "expiring-proof",
+            0,
+            b"value",
+            61,
+            1,
+            "expiring-admit",
+            settlement_targets=(target,),
+        )
         await self.store.compare_and_set(admission)
         await self.store.reserve_quota(_reservation("expire-during-drain"))
         await self.install_admission_fence()
@@ -108,7 +127,7 @@ class InMemoryCoordinationTests(CoordinationStoreContract, unittest.IsolatedAsyn
                     61,
                     1,
                     "expired-settle",
-                    settlement=CasSettlementProof(admission),
+                    settlement=CasSettlementProof(admission, target),
                 )
             )
 

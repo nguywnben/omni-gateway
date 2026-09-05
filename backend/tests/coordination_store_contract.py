@@ -117,6 +117,7 @@ class CoordinationStoreContract:
                     await operation()
 
     async def assert_fence_linearization_and_settlement_contract(self) -> None:
+        from core.coordination import CasSettlementTarget, CasSettlementTransition
         from core.routing_coordination import RoutingCoordinationAdapter
         from core.security_coordination import (
             OidcTransactionConsumeRequest,
@@ -126,6 +127,10 @@ class CoordinationStoreContract:
         routing = RoutingCoordinationAdapter(self.store, identifier_key=b"k" * 32, fencing_epoch=1)
         lease = await routing.acquire_credential("gemini", "credential.json", ttl_seconds=60)
         self.assertIsNotNone(lease)
+        self.assertEqual(
+            lease.admission.settlement_targets,
+            (CasSettlementTarget(lease.record_key, CasSettlementTransition.UPDATE),),
+        )
         self.assertTrue(
             (
                 await self.store.create_oidc_transaction(
@@ -179,9 +184,22 @@ class CoordinationStoreContract:
     async def assert_cas_settlement_proof_contract(self) -> None:
         from dataclasses import replace
 
-        from core.coordination import CasSettlementProof
+        from core.coordination import (
+            CasSettlementProof,
+            CasSettlementTarget,
+            CasSettlementTransition,
+        )
 
-        admission = CasRequest("proof-root", 0, b"accepted", 300, 1, "proof-admission")
+        target = CasSettlementTarget("proof-root", CasSettlementTransition.UPDATE)
+        admission = CasRequest(
+            "proof-root",
+            0,
+            b"accepted",
+            300,
+            1,
+            "proof-admission",
+            settlement_targets=(target,),
+        )
         self.assertTrue((await self.store.compare_and_set(admission)).applied)
         await self.install_admission_fence()
         settlement = CasRequest(
@@ -191,7 +209,7 @@ class CoordinationStoreContract:
             300,
             1,
             "proof-settle",
-            settlement=CasSettlementProof(admission),
+            settlement=CasSettlementProof(admission, target),
         )
         self.assertTrue((await self.store.compare_and_set(settlement)).applied)
         self.assertTrue((await self.store.compare_and_set(settlement)).idempotent)
@@ -206,9 +224,57 @@ class CoordinationStoreContract:
                         replace(
                             settlement,
                             operation_id="invalid-proof",
-                            settlement=CasSettlementProof(proof),
+                            settlement=CasSettlementProof(proof, target),
                         )
                     )
+
+    async def assert_cas_settlement_proof_cannot_be_reused_for_other_work(self) -> None:
+        from core.coordination import (
+            CasSettlementProof,
+            CasSettlementTarget,
+            CasSettlementTransition,
+        )
+
+        other = CasRequest("other-existing", 0, b"other", 300, 1, "other-admission")
+        self.assertTrue((await self.store.compare_and_set(other)).applied)
+        update_target = CasSettlementTarget("existing-work", CasSettlementTransition.UPDATE)
+        create_target = CasSettlementTarget("other-existing", CasSettlementTransition.CREATE)
+        admission = CasRequest(
+            "existing-work",
+            0,
+            b"accepted",
+            300,
+            1,
+            "existing-admission",
+            settlement_targets=(update_target, create_target),
+        )
+        self.assertTrue((await self.store.compare_and_set(admission)).applied)
+        await self.install_admission_fence()
+
+        attempts = (
+            CasRequest(
+                "never-admitted-nonce",
+                0,
+                b"invented",
+                300,
+                1,
+                "cross-key-settlement",
+                settlement=CasSettlementProof(admission, update_target),
+            ),
+            CasRequest(
+                "other-existing",
+                1,
+                b"wrong-transition",
+                300,
+                1,
+                "wrong-transition-settlement",
+                settlement=CasSettlementProof(admission, create_target),
+            ),
+        )
+        for attempt in attempts:
+            with self.subTest(key=attempt.key, expected_revision=attempt.expected_revision):
+                with self.assertRaises(CoordinationUnavailableError):
+                    await self.store.compare_and_set(attempt)
 
     async def assert_unknown_settlement_does_not_admit_replays(
         self, retained_replay_count: Callable[[], Awaitable[int]]
@@ -259,9 +325,22 @@ class CoordinationStoreContract:
     ) -> None:
         from dataclasses import replace
 
-        from core.coordination import CasSettlementProof
+        from core.coordination import (
+            CasSettlementProof,
+            CasSettlementTarget,
+            CasSettlementTransition,
+        )
 
-        admission = CasRequest("short-proof", 0, b"admitted", 1, 1, "short-admit")
+        target = CasSettlementTarget("short-proof", CasSettlementTransition.UPDATE)
+        admission = CasRequest(
+            "short-proof",
+            0,
+            b"admitted",
+            1,
+            1,
+            "short-admit",
+            settlement_targets=(target,),
+        )
         await self.store.compare_and_set(admission)
         await self.install_admission_fence()
         settlement = CasRequest(
@@ -271,7 +350,7 @@ class CoordinationStoreContract:
             300,
             1,
             "long-settle",
-            settlement=CasSettlementProof(admission),
+            settlement=CasSettlementProof(admission, target),
         )
         self.assertTrue((await self.store.compare_and_set(settlement)).applied)
         await advance(2)
@@ -280,6 +359,7 @@ class CoordinationStoreContract:
             await self.store.compare_and_set(replace(settlement, operation_id="new-settlement"))
 
     async def assert_batch_settlement_during_drain_contract(self) -> None:
+        from core.coordination import CasSettlementTarget, CasSettlementTransition
         from core.credential_batch_coordination import (
             BatchIdempotencyReplay,
             CredentialBatchCoordinationError,
@@ -289,6 +369,18 @@ class CoordinationStoreContract:
         batch = CredentialBatchCoordinationService(self.store, key=b"k" * 32, fencing_epoch=1)
         complete = await batch.reserve("batch-complete", "a" * 64)
         release = await batch.reserve("batch-release", "b" * 64)
+        self.assertEqual(len(complete.admission.settlement_targets), 34)
+        self.assertIn(
+            CasSettlementTarget(complete.root_key, CasSettlementTransition.UPDATE),
+            complete.admission.settlement_targets,
+        )
+        self.assertEqual(
+            sum(
+                target.transition is CasSettlementTransition.CREATE
+                for target in complete.admission.settlement_targets
+            ),
+            32,
+        )
         await self.install_admission_fence()
         with self.assertRaises(CredentialBatchCoordinationError):
             await batch.reserve("batch-new-admission", "c" * 64)

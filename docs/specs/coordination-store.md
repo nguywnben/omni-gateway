@@ -121,24 +121,37 @@ While drained, unknown quota commit/release and unknown, expired, or browser-mis
 consume return their denial without allocating a new replay. An exact retained denial replay
 can still be read idempotently. Expiry cleanup can remove retained state without admitting work.
 
-Opaque CAS payloads are never parsed to infer settlement. `CasSettlementProof` carries the exact
-original admission request, including its operation identity. The store verifies a matching,
-successful, unexpired admission replay under the same lock/script before allowing settlement.
-Unknown, conflicting, expired, or different-epoch proof fails closed; settlement cannot serve as
-proof for another settlement. The proof is part of the settlement replay fingerprint. Domain
-settlement APIs retain this evidence: routing leases use it for release; credential batches use it
-for registry refresh/removal, bounded response chunks, and terminal root publication. Repeated
-terminal settlement converges, and a partial chunk write can resume only with identical content.
-Other CAS domain flows without such evidence remain closed during drain.
+Opaque CAS payloads are never parsed to infer settlement. Before it succeeds, an admission declares
+at most 64 typed settlement targets, each an exact logical key plus `create` or `update` CAS
+transition. Those capabilities are part of the admission fingerprint and are retained only with a
+successful admission replay. `CasSettlementProof` selects one declared target and carries the exact
+original admission request, including its operation identity. Under the same lock/script as the
+requested mutation, the store verifies the matching successful unexpired admission replay, the
+retained capability membership, and the requested key/transition. A valid proof for one key cannot
+create an invented nonce or update another record, and a create capability cannot be reused for an
+update (or vice versa). Unknown, conflicting, expired, different-epoch, cross-key, or
+wrong-transition proof fails closed; settlement cannot serve as proof for another settlement. The
+selected capability is part of the settlement replay fingerprint.
+
+Domain settlement APIs derive this finite capability set before admission: a routing lease grants
+only update of its exact lease record; a credential-batch reservation grants update of its exact
+root and capacity registry plus creation of its exact 32 possible owner-bound chunk keys. Batch
+completion selects the matching target separately for registry refresh, each written chunk, and
+terminal root publication; release selects only root and registry updates. Repeated terminal
+settlement converges, and a partial chunk write can resume only with identical content. Other CAS
+domain flows without such retained capabilities remain closed during drain.
 An exact retained settlement replay can outlive its original admission proof and remains
 idempotent; after proof expiry no new settlement operation may be admitted using that proof.
 The proof is an internal service contract, not an authorization token exposed to HTTP callers:
-domain services remain responsible for targeting only their admitted operation's settlement.
+domain services remain responsible for deriving the finite targets from their admitted operation;
+the store independently enforces the retained target and transition rather than accepting a
+caller-controlled boolean or arbitrary validation callback.
 
 Redis explicitly appends the drain and binding keys to every guarded script's `KEYS`, in the same
 deployment hash slot. The namespace digest is supplied as data. Fence parsing is bounded to 16 KiB
-and fixed fields; the admission proof uses one directly addressed replay lookup, without scanning
-the retained population. Operator drain completion atomically checks the exact drain, ready epoch,
+and fixed fields; the admission proof uses one directly addressed replay lookup and a bounded
+capability list, without scanning the retained population. Operator drain completion atomically
+checks the exact drain, ready epoch,
 and retained mark-ready operation replay before removing the fence.
 Crash completion therefore shares the existing bounded mark-ready replay retention window.
 

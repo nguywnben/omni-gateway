@@ -13,7 +13,14 @@ import zlib
 from collections.abc import Callable
 from dataclasses import dataclass, field
 
-from core.coordination import CasRequest, CasSettlementProof, CoordinationStore, validate_epoch
+from core.coordination import (
+    CasRequest,
+    CasSettlementProof,
+    CasSettlementTarget,
+    CasSettlementTransition,
+    CoordinationStore,
+    validate_epoch,
+)
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
 _FINGERPRINT_PATTERN = re.compile(r"^[0-9a-f]{64}$")
@@ -164,6 +171,19 @@ class CredentialBatchCoordinationService:
 
     def _chunk_key(self, root_key: str, owner_token: str, index: int) -> str:
         return self._key(b"chunk", f"{root_key}\0{owner_token}\0{index}")
+
+    @staticmethod
+    def _settlement_proof(
+        reservation: BatchIdempotencyReservation,
+        key: str,
+        transition: CasSettlementTransition,
+    ) -> CasSettlementProof | None:
+        if reservation.admission is None:
+            return None
+        return CasSettlementProof(
+            reservation.admission,
+            CasSettlementTarget(key, transition),
+        )
 
     def _registry_key(self, domain: str) -> str:
         return self._key(b"capacity", domain)
@@ -602,6 +622,20 @@ class CredentialBatchCoordinationService:
                     _IDEMPOTENCY_TTL_SECONDS,
                     self._fencing_epoch,
                     self._operation_id("reserve"),
+                    settlement_targets=(
+                        CasSettlementTarget(root_key, CasSettlementTransition.UPDATE),
+                        CasSettlementTarget(
+                            self._registry_key("idempotency"),
+                            CasSettlementTransition.UPDATE,
+                        ),
+                        *(
+                            CasSettlementTarget(
+                                self._chunk_key(root_key, owner_token, index),
+                                CasSettlementTransition.CREATE,
+                            )
+                            for index in range(_MAX_CHUNKS)
+                        ),
+                    ),
                 )
                 result = await self._coordination.compare_and_set(admission)
                 if result.applied and result.revision is not None:
@@ -681,12 +715,15 @@ class CredentialBatchCoordinationService:
                         raise CredentialBatchCoordinationError
                     return
             await self.assert_owner(reservation)
-            proof = CasSettlementProof(reservation.admission) if reservation.admission else None
             await self._refresh_admission(
                 "idempotency",
                 reservation.registry_digest,
                 _IDEMPOTENCY_TTL_SECONDS,
-                proof,
+                self._settlement_proof(
+                    reservation,
+                    self._registry_key("idempotency"),
+                    CasSettlementTransition.UPDATE,
+                ),
             )
             raw = json.dumps(
                 body,
@@ -719,7 +756,11 @@ class CredentialBatchCoordinationService:
                         _IDEMPOTENCY_TTL_SECONDS,
                         self._fencing_epoch,
                         self._operation_id("chunk"),
-                        settlement=proof,
+                        settlement=self._settlement_proof(
+                            reservation,
+                            chunk_key,
+                            CasSettlementTransition.CREATE,
+                        ),
                     )
                 )
                 if not result.applied:
@@ -741,7 +782,11 @@ class CredentialBatchCoordinationService:
                     _IDEMPOTENCY_TTL_SECONDS,
                     self._fencing_epoch,
                     self._operation_id("complete"),
-                    settlement=proof,
+                    settlement=self._settlement_proof(
+                        reservation,
+                        reservation.root_key,
+                        CasSettlementTransition.UPDATE,
+                    ),
                 )
             )
             if not result.applied:
@@ -758,7 +803,6 @@ class CredentialBatchCoordinationService:
         try:
             if type(reservation) is not BatchIdempotencyReservation:
                 raise CredentialBatchCoordinationError
-            proof = CasSettlementProof(reservation.admission) if reservation.admission else None
             snapshot = await self._coordination.read_cas(
                 reservation.root_key, epoch=self._fencing_epoch
             )
@@ -768,7 +812,15 @@ class CredentialBatchCoordinationService:
                     current["status"] == "released"
                     and current["fingerprint"] == reservation.fingerprint
                 ):
-                    await self._remove_admission("idempotency", reservation.registry_digest, proof)
+                    await self._remove_admission(
+                        "idempotency",
+                        reservation.registry_digest,
+                        self._settlement_proof(
+                            reservation,
+                            self._registry_key("idempotency"),
+                            CasSettlementTransition.UPDATE,
+                        ),
+                    )
                     return
             await self.assert_owner(reservation)
             released = {
@@ -788,12 +840,24 @@ class CredentialBatchCoordinationService:
                     _RELEASE_TTL_SECONDS,
                     self._fencing_epoch,
                     self._operation_id("release"),
-                    settlement=proof,
+                    settlement=self._settlement_proof(
+                        reservation,
+                        reservation.root_key,
+                        CasSettlementTransition.UPDATE,
+                    ),
                 )
             )
             if not result.applied:
                 raise CredentialBatchCoordinationError
-            await self._remove_admission("idempotency", reservation.registry_digest, proof)
+            await self._remove_admission(
+                "idempotency",
+                reservation.registry_digest,
+                self._settlement_proof(
+                    reservation,
+                    self._registry_key("idempotency"),
+                    CasSettlementTransition.UPDATE,
+                ),
+            )
         except asyncio.CancelledError:
             raise
         except CredentialBatchCoordinationError:

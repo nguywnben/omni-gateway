@@ -25,6 +25,7 @@ from core.coordination import (
     AdmissionFence,
     CasRequest,
     CasResult,
+    CasSettlementTarget,
     CasSnapshot,
     CoordinationAdmissionFencedError,
     CoordinationCorruptError,
@@ -503,6 +504,7 @@ class InMemoryStateStore(BaseStateStore):
             request.payload,
             request.ttl_seconds,
             request.epoch,
+            request.settlement_targets,
             request.settlement,
         )
 
@@ -918,6 +920,7 @@ class InMemoryStateStore(BaseStateStore):
                     or proof.fingerprint != self._cas_fingerprint(admission)
                     or not isinstance(proof.result, CasResult)
                     or not proof.result.applied
+                    or request.settlement.target != CasSettlementTarget.from_request(request)
                 ):
                     raise CoordinationAdmissionFencedError(
                         "CAS settlement admission is unavailable."

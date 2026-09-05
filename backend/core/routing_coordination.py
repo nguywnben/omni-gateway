@@ -16,6 +16,8 @@ from core.coordination import (
     MAX_COORDINATION_INTEGER,
     CasRequest,
     CasSettlementProof,
+    CasSettlementTarget,
+    CasSettlementTransition,
     CasSnapshot,
     CoordinationCorruptError,
     CoordinationReconciliationRequiredError,
@@ -346,6 +348,7 @@ class RoutingCoordinationAdapter:
                 ROUTE_RECORD_TTL_SECONDS,
                 self._fencing_epoch,
                 self._operation_id("lease-acquire"),
+                settlement_targets=(CasSettlementTarget(key, CasSettlementTransition.UPDATE),),
             )
             result = await self._compare_and_set_with_replay(admission)
             if result.applied:
@@ -374,7 +377,14 @@ class RoutingCoordinationAdapter:
                     ROUTE_RECORD_TTL_SECONDS,
                     self._fencing_epoch,
                     self._operation_id("lease-release"),
-                    settlement=CasSettlementProof(lease.admission) if lease.admission else None,
+                    settlement=(
+                        CasSettlementProof(
+                            lease.admission,
+                            CasSettlementTarget(lease.record_key, CasSettlementTransition.UPDATE),
+                        )
+                        if lease.admission
+                        else None
+                    ),
                 )
             )
             if result.applied:
