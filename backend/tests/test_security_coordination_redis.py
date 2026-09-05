@@ -333,6 +333,8 @@ class StatefulSecurityRedisClient(StatefulRedisClient):
             status, denial, payload, expiry = b"denied", b"browser_mismatch", b"", transaction[2]
         else:
             status, denial, payload, expiry = b"consumed", b"", transaction[1], transaction[2]
+        if getattr(self, "admission_fenced", False) and status != b"consumed":
+            return [b"1", status, denial, b"0", payload]
         self.oidc_replays[operation] = (fingerprint, status, denial, state, browser, expiry)
         if status == b"consumed":
             del self.oidc_transactions[state]
@@ -683,7 +685,7 @@ class RedisSecurityCoordinationDriverTests(unittest.IsolatedAsyncioTestCase):
 
         name, keys, args = self.client.script_calls[-1]
         self.assertEqual(name, "security_session_issue")
-        self.assertEqual((len(keys), len(args)), (10, 12))
+        self.assertEqual((len(keys), len(args)), (12, 13))
         self.assertEqual(args[0:5], [b"1", b"a" * 64, b"ssr_" + b"b" * 32, b"c" * 64, b"oidc_user"])
         tags = {key[key.index("{") + 1 : key.index("}")] for key in keys}
         self.assertEqual(len(tags), 1)
@@ -766,7 +768,7 @@ class RedisSecurityCoordinationDriverTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(self.client.script_calls[-1][0], "security_attempt_reserve")
         self.assertEqual(
             (len(self.client.script_calls[-1][1]), len(self.client.script_calls[-1][2])),
-            (6, 8),
+            (8, 9),
         )
 
         self.client.script_replies["security_attempt_clear"].append([b"1", b"ok", b"1", b"0"])
@@ -807,9 +809,9 @@ class RedisSecurityCoordinationDriverTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(consumed.payload, b"opaque-proof")
 
         for name, key_count, arg_count in (
-            ("security_attempt_clear", 6, 6),
-            ("oidc_transaction_create", 6, 9),
-            ("oidc_transaction_consume", 6, 7),
+            ("security_attempt_clear", 8, 7),
+            ("oidc_transaction_create", 8, 10),
+            ("oidc_transaction_consume", 8, 8),
         ):
             call = next(call for call in self.client.script_calls if call[0] == name)
             self.assertEqual((len(call[1]), len(call[2])), (key_count, arg_count))

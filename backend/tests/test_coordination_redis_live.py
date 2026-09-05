@@ -208,6 +208,64 @@ class LiveRedisCoordinationTests(CoordinationStoreContract, unittest.IsolatedAsy
             advance_cas_clock=advance_server_clock
         )
 
+    async def test_admission_fence_all_families_against_registered_lua(self) -> None:
+        await self.assert_admission_fence_contract()
+
+    async def test_admission_fence_linearization_and_settlement_against_registered_lua(
+        self,
+    ) -> None:
+        await self.assert_fence_linearization_and_settlement_contract()
+
+    async def test_cas_settlement_proof_against_registered_lua(self) -> None:
+        await self.assert_cas_settlement_proof_contract()
+
+    async def test_unknown_settlement_does_not_admit_replays(self) -> None:
+        async def retained_count() -> int:
+            total = 0
+            async for key in self.cleanup_client.scan_iter(match=f"{self.store._prefix}:*"):
+                if (
+                    b":quota:replay:" in key
+                    or key == self.store._key("security:oidc-replay").encode()
+                ):
+                    total += await self.cleanup_client.hlen(key)
+            return total
+
+        await self.assert_unknown_settlement_does_not_admit_replays(retained_count)
+
+    async def test_batch_settlement_during_drain_against_registered_lua(self) -> None:
+        await self.assert_batch_settlement_during_drain_contract()
+
+    async def test_batch_partial_settlement_retry_against_registered_lua(self) -> None:
+        await self.assert_batch_partial_settlement_retry_contract()
+
+    async def test_settlement_replay_outlives_its_admission_proof(self) -> None:
+        async def advance(seconds: float) -> None:
+            await asyncio.wait_for(asyncio.sleep(seconds), timeout=seconds + 1)
+
+        await self.assert_settlement_replay_after_proof_expiry(advance)
+
+    async def test_corrupt_fence_blocks_settlement_against_registered_lua(self) -> None:
+        await self.assert_corrupt_fence_blocks_settlement_contract()
+
+    async def test_ambiguous_fence_json_blocks_settlement(self) -> None:
+        await self.assert_ambiguous_fence_json_blocks_settlement()
+
+    async def test_drain_completion_identity_against_registered_lua(self) -> None:
+        await self.assert_drain_completion_identity_contract()
+
+    async def test_corrupt_admission_fence_against_registered_lua(self) -> None:
+        for changes in (
+            {"epoch": 2},
+            {"namespace_digest": "f" * 64},
+            {"epoch": True},
+            {"schema_version": 3},
+            {"unexpected": "value"},
+        ):
+            with self.subTest(changes=changes):
+                await self.install_admission_fence(**changes)
+                with self.assertRaises(CoordinationCorruptError):
+                    await self.store.reserve_quota(_reservation("corrupt-fence"))
+
     async def test_shared_quota_contract_against_registered_lua(self) -> None:
         async def advance_server_clock(seconds: float) -> None:
             await asyncio.wait_for(asyncio.sleep(seconds), timeout=seconds + 1.0)

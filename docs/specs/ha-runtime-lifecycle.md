@@ -70,11 +70,24 @@ The lifecycle exposes bounded commands for `status`, `drain`, `advance-epoch`, `
 
 - Mutating commands require explicit apply mode; dry-run is the default.
 - Operation IDs are caller supplied or persisted so retries are idempotent.
-- Drain closes new distributed admission before epoch change.
+- Drain writes the persistent typed admission fence. Each distributed admission checks that record
+  under its mutation lock or Redis script, so nothing linearized after the drain write can acquire
+  new capacity or admit a new security mutation. A valid fence raises a bounded admission-fenced
+  error; corrupt or mismatched records fail closed. Existing CAS revisions alone are not settlement
+  proof. Quota settlement, OIDC consume, and CAS domain settlement with a verified prior admission
+  operation remain available while the same epoch is ready.
+  Unknown settlement identities do not allocate new negative replay records while drained;
+  expired admission evidence cannot authorize a fresh settlement operation.
 - Epoch advance moves exactly `ready(N)` to `reconciling(N+1)`.
 - Reconciliation validates bindings and durable authority; it never copies, switches, or deletes
   durable data automatically.
-- Mark-ready accepts only the exact reconciling epoch after reconciliation evidence.
+- Mark-ready accepts only the exact reconciling epoch after reconciliation evidence. If a crash
+  occurs after marking the epoch ready but before removing the drain, retrying the identical
+  mark-ready operation completes removal without advancing/changing the epoch. Removal compares
+  the exact completed prior-epoch drain, binding, ready epoch, and successful retained operation
+  replay atomically. A different operation or mismatched/replaced drain remains an error. Dry-run
+  never removes the drain. A fully completed transition with no remaining drain remains retry-safe.
+  Crash completion requires the original mark-ready operation replay to remain retained.
 - Rollback emits and validates a plan to one standalone worker/replica. It never changes durable
   authority, clears Redis, or edits deployment configuration automatically.
 

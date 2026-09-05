@@ -3,10 +3,10 @@
 from __future__ import annotations
 
 import json
-from dataclasses import replace
+from dataclasses import asdict, replace
 from typing import Any, Callable, Final
 
-from core.coordination import EpochState
+from core.coordination import ADMISSION_FENCE_KEY, AdmissionFence, EpochState
 from core.ha_coordination_binding import (
     CoordinationBinding,
     CoordinationBindingManager,
@@ -18,7 +18,7 @@ from core.ha_runtime_policy import HaRuntimePolicy, RuntimeMode
 class HaRuntimeOperator:
     """Operate one coordinated epoch while preserving durable authority."""
 
-    DRAIN_KEY: Final = "ha-runtime-drain-v1"
+    DRAIN_KEY: Final = ADMISSION_FENCE_KEY
 
     def __init__(
         self,
@@ -56,35 +56,7 @@ class HaRuntimeOperator:
         value = await self._store.get(self.DRAIN_KEY)
         if value is None:
             return None
-        if isinstance(value, str):
-            try:
-                value = json.loads(value)
-            except (ValueError, json.JSONDecodeError):
-                raise RuntimeError("The drain record is corrupt.") from None
-        if (
-            not isinstance(value, dict)
-            or set(value)
-            != {
-                "schema_version",
-                "namespace_digest",
-                "epoch",
-                "quota_reconciliation_cursor",
-                "quota_reconciliation_complete",
-            }
-            or value.get("schema_version") != 2
-            or not isinstance(value.get("namespace_digest"), str)
-            or type(value.get("epoch")) is not int
-            or value["epoch"] < 1
-            or (
-                value.get("quota_reconciliation_cursor") is not None
-                and not isinstance(value["quota_reconciliation_cursor"], str)
-            )
-            or not isinstance(value.get("quota_reconciliation_complete"), bool)
-            or value["quota_reconciliation_complete"]
-            != (value["quota_reconciliation_cursor"] is None)
-        ):
-            raise RuntimeError("The drain record is corrupt.")
-        return value
+        return asdict(AdmissionFence.decode(value))
 
     @staticmethod
     def _encode_record(value: dict[str, object]) -> str:
@@ -228,6 +200,20 @@ class HaRuntimeOperator:
         if epoch.epoch == self.policy.fencing_epoch and epoch.state is EpochState.READY:
             binding = await self._bindings.verify(self.policy)
             self._activation_required(binding.activation_record)
+            drain = await self._drain_record()
+            if drain is not None:
+                if (
+                    drain["epoch"] != epoch.epoch - 1
+                    or drain["namespace_digest"] != binding.namespace_digest
+                    or not drain["quota_reconciliation_complete"]
+                ):
+                    raise RuntimeError(
+                        "A matching completed drain is required before marking ready."
+                    )
+                if apply:
+                    await self._store.complete_admission_drain(
+                        AdmissionFence.decode(drain), epoch=epoch.epoch, operation_id=operation_id
+                    )
             return {"applied": bool(apply), "epoch": epoch.epoch, "state": "ready"}
         durable = await self._durable_binding()
         shared = await self._shared_binding()
@@ -236,7 +222,11 @@ class HaRuntimeOperator:
         if durable != expected or shared != expected:
             raise RuntimeError("Reconciled bindings are required before marking ready.")
         drain = await self._drain_record()
-        if drain is None or drain["epoch"] != self.policy.fencing_epoch - 1:
+        if (
+            drain is None
+            or drain["epoch"] != self.policy.fencing_epoch - 1
+            or drain["namespace_digest"] != expected.namespace_digest
+        ):
             raise RuntimeError("A matching drain is required before marking ready.")
         if not drain["quota_reconciliation_complete"]:
             raise RuntimeError("Complete quota reconciliation is required before marking ready.")
@@ -261,7 +251,9 @@ class HaRuntimeOperator:
             epoch = await self._store.mark_epoch_ready(self.policy.fencing_epoch, operation_id)
             if epoch.state is not EpochState.READY:
                 raise RuntimeError("The coordination epoch did not become ready.")
-            await self._store.delete(self.DRAIN_KEY)
+            await self._store.complete_admission_drain(
+                AdmissionFence.decode(drain), epoch=epoch.epoch, operation_id=operation_id
+            )
         return {"applied": bool(apply), "epoch": self.policy.fencing_epoch, "state": "ready"}
 
     async def rollback_plan(self) -> dict[str, object]:

@@ -15,6 +15,7 @@ from typing import Any, Final
 from core.coordination import (
     MAX_COORDINATION_INTEGER,
     CasRequest,
+    CasSettlementProof,
     CasSnapshot,
     CoordinationCorruptError,
     CoordinationReconciliationRequiredError,
@@ -113,6 +114,7 @@ class CredentialLease:
     record_key: str = field(repr=False)
     lease_id: str = field(repr=False)
     in_flight: int
+    admission: CasRequest | None = field(default=None, repr=False)
 
 
 @dataclass(frozen=True, slots=True)
@@ -337,19 +339,18 @@ class RoutingCoordinationAdapter:
                 return None
             expires_ms = now_ms + math.ceil(ttl * 1000)
             active.append((lease_id, expires_ms))
-            result = await self._compare_and_set_with_replay(
-                CasRequest(
-                    key,
-                    snapshot.revision or 0,
-                    self._lease_payload(active, now_ms),
-                    ROUTE_RECORD_TTL_SECONDS,
-                    self._fencing_epoch,
-                    self._operation_id("lease-acquire"),
-                )
+            admission = CasRequest(
+                key,
+                snapshot.revision or 0,
+                self._lease_payload(active, now_ms),
+                ROUTE_RECORD_TTL_SECONDS,
+                self._fencing_epoch,
+                self._operation_id("lease-acquire"),
             )
+            result = await self._compare_and_set_with_replay(admission)
             if result.applied:
                 _increment_metric("lease_acquire", "success")
-                return CredentialLease(key, lease_id, len(active))
+                return CredentialLease(key, lease_id, len(active), admission)
         _increment_metric("lease_acquire", "conflict")
         raise CoordinationUnavailableError("Credential lease coordination conflicted.")
 
@@ -373,6 +374,7 @@ class RoutingCoordinationAdapter:
                     ROUTE_RECORD_TTL_SECONDS,
                     self._fencing_epoch,
                     self._operation_id("lease-release"),
+                    settlement=CasSettlementProof(lease.admission) if lease.admission else None,
                 )
             )
             if result.applied:

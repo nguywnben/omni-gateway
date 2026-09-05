@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import asyncio
+import hashlib
+import json
 from collections.abc import Awaitable, Callable
 from typing import TYPE_CHECKING
 
@@ -22,6 +25,362 @@ class CoordinationStoreContract:
     """Mixin for async tests; implementations provide ``self.store``."""
 
     store: CoordinationStore
+
+    async def install_admission_fence(self, **changes: object) -> None:
+        from core.ha_coordination_binding import CoordinationBinding, CoordinationBindingManager
+
+        namespace = getattr(self, "namespace", "production-east")
+        binding = CoordinationBinding(
+            "gateway-east-01",
+            hashlib.sha256(namespace.encode()).hexdigest(),
+            "a" * 64,
+            1,
+            "b" * 64,
+            "act_" + "c" * 32,
+        )
+        await self.store.set(
+            CoordinationBindingManager.STORE_KEY, CoordinationBindingManager.encode_record(binding)
+        )
+        record = {
+            "schema_version": 2,
+            "namespace_digest": binding.namespace_digest,
+            "epoch": 1,
+            "quota_reconciliation_cursor": "pending",
+            "quota_reconciliation_complete": False,
+            **changes,
+        }
+        await self.store.set("ha-runtime-drain-v1", json.dumps(record))
+
+    async def assert_admission_fence_contract(self) -> None:
+        from core.security_coordination import (
+            AttemptClearRequest,
+            AttemptReservationRequest,
+            OidcTransactionCreateRequest,
+            SecurityAttemptCategory,
+            SessionResolveRequest,
+            SessionRevokeRequest,
+            SessionRevokeTarget,
+            SessionRotateRequest,
+        )
+        from tests.security_coordination_store_contract import SecurityCoordinationStoreContract
+
+        issue = SecurityCoordinationStoreContract._issue("abc")
+        await self.store.issue_security_session(issue)
+        await self.install_admission_fence()
+        operations = {
+            "credential-reservation": lambda: self.store.compare_and_set(
+                CasRequest("credential", 0, b"admit", 300, 1, "credential-admit")
+            ),
+            "replay-nonce": lambda: self.store.compare_and_set(
+                CasRequest("nonce", 0, b"nonce", 300, 1, "nonce-admit")
+            ),
+            "rate-budget": lambda: self.store.reserve_quota(
+                self._quota_request("fenced", key_id="fenced-key", operation_id="fenced-reserve")
+            ),
+            "security-issue": lambda: self.store.issue_security_session(
+                SecurityCoordinationStoreContract._issue("def")
+            ),
+            "security-resolve": lambda: self.store.resolve_security_session(
+                SessionResolveRequest(issue.session_digest, 300, 1, "fenced-resolve")
+            ),
+            "security-rotate": lambda: self.store.rotate_security_session(
+                SessionRotateRequest(
+                    issue.session_digest,
+                    SecurityCoordinationStoreContract._issue("def", operation_id="fenced-rotate"),
+                    1,
+                    "fenced-rotate",
+                )
+            ),
+            "security-revoke": lambda: self.store.revoke_security_sessions(
+                SessionRevokeRequest(
+                    SessionRevokeTarget.REFERENCE, issue.session_reference, 1, "fenced-revoke"
+                )
+            ),
+            "security-attempt": lambda: self.store.reserve_security_attempt(
+                AttemptReservationRequest(
+                    SecurityAttemptCategory.LOGIN, "a" * 64, 10, 300, 1, "fenced-attempt"
+                )
+            ),
+            "security-clear": lambda: self.store.clear_security_attempts(
+                AttemptClearRequest(SecurityAttemptCategory.LOGIN, "a" * 64, 1, "fenced-clear")
+            ),
+            "oidc-create": lambda: self.store.create_oidc_transaction(
+                OidcTransactionCreateRequest("a" * 64, "b" * 64, b"proof", 300, 1, "fenced-oidc")
+            ),
+            "invalidation": lambda: self.store.invalidate(
+                InvalidationRequest("fenced-scope", 1, "fenced-invalidate")
+            ),
+        }
+        for family, operation in operations.items():
+            with self.subTest(family=family):
+                with self.assertRaises(CoordinationUnavailableError):
+                    await operation()
+
+    async def assert_fence_linearization_and_settlement_contract(self) -> None:
+        from core.routing_coordination import RoutingCoordinationAdapter
+        from core.security_coordination import (
+            OidcTransactionConsumeRequest,
+            OidcTransactionCreateRequest,
+        )
+
+        routing = RoutingCoordinationAdapter(self.store, identifier_key=b"k" * 32, fencing_epoch=1)
+        lease = await routing.acquire_credential("gemini", "credential.json", ttl_seconds=60)
+        self.assertIsNotNone(lease)
+        self.assertTrue(
+            (
+                await self.store.create_oidc_transaction(
+                    OidcTransactionCreateRequest(
+                        "e" * 64, "f" * 64, b"pre-drain-proof", 300, 1, "pre-drain-oidc"
+                    )
+                )
+            ).applied
+        )
+        for suffix in ("commit", "release"):
+            self.assertTrue(
+                (
+                    await self.store.reserve_quota(
+                        self._quota_request(suffix, key_id=suffix, operation_id=suffix)
+                    )
+                ).accepted
+            )
+        await self.install_admission_fence()
+        # Every queued operation starts strictly after the drain write has linearized.
+        outcomes = await asyncio.gather(
+            *(
+                self.store.reserve_quota(
+                    self._quota_request(f"late-{i}", key_id="late", operation_id=f"late-{i}")
+                )
+                for i in range(12)
+            ),
+            return_exceptions=True,
+        )
+        self.assertTrue(
+            all(isinstance(result, CoordinationUnavailableError) for result in outcomes)
+        )
+        with self.assertRaises(CoordinationUnavailableError):
+            await routing.acquire_credential("gemini", "credential.json", ttl_seconds=60)
+        self.assertTrue(await routing.release_credential(lease))
+        self.assertFalse(await routing.release_credential(lease))
+        commit = QuotaCommitRequest("commit", 1_001, 2, 0, False, operation_id="settle")
+        self.assertTrue((await self.store.commit_quota(commit)).committed)
+        self.assertTrue((await self.store.commit_quota(commit)).idempotent)
+        self.assertTrue(
+            await self.store.release_quota("release", now=1_001, operation_id="release-op")
+        )
+        self.assertFalse(
+            await self.store.release_quota("release", now=1_001, operation_id="release-op")
+        )
+        consume = OidcTransactionConsumeRequest("e" * 64, "f" * 64, 1, "settle-oidc")
+        self.assertTrue((await self.store.consume_oidc_transaction(consume)).consumed)
+        replay = await self.store.consume_oidc_transaction(consume)
+        self.assertFalse(replay.consumed)
+        self.assertTrue(replay.idempotent)
+
+    async def assert_cas_settlement_proof_contract(self) -> None:
+        from dataclasses import replace
+
+        from core.coordination import CasSettlementProof
+
+        admission = CasRequest("proof-root", 0, b"accepted", 300, 1, "proof-admission")
+        self.assertTrue((await self.store.compare_and_set(admission)).applied)
+        await self.install_admission_fence()
+        settlement = CasRequest(
+            "proof-root",
+            1,
+            b"settled",
+            300,
+            1,
+            "proof-settle",
+            settlement=CasSettlementProof(admission),
+        )
+        self.assertTrue((await self.store.compare_and_set(settlement)).applied)
+        self.assertTrue((await self.store.compare_and_set(settlement)).idempotent)
+        for proof in (
+            replace(admission, operation_id="never-admitted"),
+            replace(admission, payload=b"changed"),
+            replace(admission, key="wrong-resource"),
+        ):
+            with self.subTest(proof=proof):
+                with self.assertRaises(CoordinationUnavailableError):
+                    await self.store.compare_and_set(
+                        replace(
+                            settlement,
+                            operation_id="invalid-proof",
+                            settlement=CasSettlementProof(proof),
+                        )
+                    )
+
+    async def assert_unknown_settlement_does_not_admit_replays(
+        self, retained_replay_count: Callable[[], Awaitable[int]]
+    ) -> None:
+        from core.security_coordination import (
+            OidcTransactionConsumeRequest,
+            OidcTransactionCreateRequest,
+        )
+
+        await self.store.create_oidc_transaction(
+            OidcTransactionCreateRequest("a" * 64, "b" * 64, b"retained", 300, 1, "known-oidc")
+        )
+        prior_denial = OidcTransactionConsumeRequest("a" * 64, "c" * 64, 1, "prior-mismatch")
+        await self.store.consume_oidc_transaction(prior_denial)
+        await self.install_admission_fence()
+        before = await retained_replay_count()
+        for _ in range(2):
+            commit = await self.store.commit_quota(
+                QuotaCommitRequest("unknown", 1_001, 2, 0, False, operation_id="unknown-commit")
+            )
+            self.assertFalse(commit.committed)
+            self.assertFalse(commit.idempotent)
+            self.assertFalse(
+                await self.store.release_quota("unknown", now=1_001, operation_id="unknown-release")
+            )
+            for state, browser, reason in (
+                ("d" * 64, "b" * 64, "not_found"),
+                ("a" * 64, "c" * 64, "browser_mismatch"),
+            ):
+                result = await self.store.consume_oidc_transaction(
+                    OidcTransactionConsumeRequest(state, browser, 1, "new-" + reason)
+                )
+                self.assertFalse(result.consumed)
+                self.assertEqual(result.reason, reason)
+                self.assertFalse(result.idempotent)
+        self.assertEqual(await retained_replay_count(), before)
+        self.assertTrue((await self.store.consume_oidc_transaction(prior_denial)).idempotent)
+        self.assertTrue(
+            (
+                await self.store.consume_oidc_transaction(
+                    OidcTransactionConsumeRequest("a" * 64, "b" * 64, 1, "valid-consume")
+                )
+            ).consumed
+        )
+
+    async def assert_settlement_replay_after_proof_expiry(
+        self, advance: Callable[[float], Awaitable[None]]
+    ) -> None:
+        from dataclasses import replace
+
+        from core.coordination import CasSettlementProof
+
+        admission = CasRequest("short-proof", 0, b"admitted", 1, 1, "short-admit")
+        await self.store.compare_and_set(admission)
+        await self.install_admission_fence()
+        settlement = CasRequest(
+            "short-proof",
+            1,
+            b"settled",
+            300,
+            1,
+            "long-settle",
+            settlement=CasSettlementProof(admission),
+        )
+        self.assertTrue((await self.store.compare_and_set(settlement)).applied)
+        await advance(2)
+        self.assertTrue((await self.store.compare_and_set(settlement)).idempotent)
+        with self.assertRaises(CoordinationUnavailableError):
+            await self.store.compare_and_set(replace(settlement, operation_id="new-settlement"))
+
+    async def assert_batch_settlement_during_drain_contract(self) -> None:
+        from core.credential_batch_coordination import (
+            BatchIdempotencyReplay,
+            CredentialBatchCoordinationError,
+            CredentialBatchCoordinationService,
+        )
+
+        batch = CredentialBatchCoordinationService(self.store, key=b"k" * 32, fencing_epoch=1)
+        complete = await batch.reserve("batch-complete", "a" * 64)
+        release = await batch.reserve("batch-release", "b" * 64)
+        await self.install_admission_fence()
+        with self.assertRaises(CredentialBatchCoordinationError):
+            await batch.reserve("batch-new-admission", "c" * 64)
+        await batch.complete(complete, 200, {"done": True})
+        await batch.complete(complete, 200, {"done": True})
+        self.assertEqual(
+            await batch.lookup("batch-complete", "a" * 64),
+            BatchIdempotencyReplay(200, {"done": True}),
+        )
+        with self.assertRaises(CredentialBatchCoordinationError):
+            await batch.complete(complete, 200, {"changed": True})
+        await batch.release(release)
+        await batch.release(release)
+        self.assertIsNone(await batch.lookup("batch-release", "b" * 64))
+
+    async def assert_batch_partial_settlement_retry_contract(self) -> None:
+        from unittest.mock import patch
+
+        from core.credential_batch_coordination import (
+            CredentialBatchCoordinationError,
+            CredentialBatchCoordinationService,
+        )
+
+        batch = CredentialBatchCoordinationService(self.store, key=b"k" * 32, fencing_epoch=1)
+        reservation = await batch.reserve("batch-crash", "a" * 64)
+        await self.install_admission_fence()
+        original = self.store.compare_and_set
+
+        async def crash_after_chunk(request):
+            result = await original(request)
+            if "-chunk-" in request.operation_id:
+                raise RuntimeError("injected post-chunk crash")
+            return result
+
+        with patch.object(self.store, "compare_and_set", side_effect=crash_after_chunk):
+            with self.assertRaises(CredentialBatchCoordinationError):
+                await batch.complete(reservation, 200, {"done": True})
+        await batch.complete(reservation, 200, {"done": True})
+
+    async def assert_corrupt_fence_blocks_settlement_contract(self) -> None:
+        from core.coordination import CoordinationCorruptError
+
+        await self.store.reserve_quota(
+            self._quota_request(
+                "corrupt-settle", key_id="corrupt-settle", operation_id="corrupt-settle"
+            )
+        )
+        await self.install_admission_fence(epoch=True)
+        with self.assertRaises(CoordinationCorruptError):
+            await self.store.commit_quota(
+                QuotaCommitRequest(
+                    "corrupt-settle", 1_001, 2, 0, False, operation_id="corrupt-commit"
+                )
+            )
+        with self.assertRaises(CoordinationCorruptError):
+            await self.store.release_quota(
+                "corrupt-settle", now=1_001, operation_id="corrupt-release"
+            )
+
+    async def assert_ambiguous_fence_json_blocks_settlement(self) -> None:
+        from core.coordination import CoordinationCorruptError
+
+        await self.install_admission_fence()
+        encoded = await self.store.get("ha-runtime-drain-v1")
+        for raw in (
+            '{"epoch":1,' + encoded[1:],
+            r'{"\u0065poch":1,' + encoded[1:],
+        ):
+            with self.subTest(raw=raw):
+                await self.store.set("ha-runtime-drain-v1", raw)
+                with self.assertRaises(CoordinationCorruptError):
+                    await self.store.release_quota("unknown", now=1_001)
+
+    async def assert_drain_completion_identity_contract(self) -> None:
+        from core.coordination import AdmissionFence
+
+        await self.install_admission_fence()
+        await self.store.advance_epoch(1, "drain-advance")
+        binding = json.loads(await self.store.get("ha-runtime-binding-v1"))
+        binding["fencing_epoch"] = 2
+        await self.store.set("ha-runtime-binding-v1", json.dumps(binding))
+        value = json.loads(await self.store.get("ha-runtime-drain-v1"))
+        value.update(quota_reconciliation_cursor=None, quota_reconciliation_complete=True)
+        fence = AdmissionFence.decode(value)
+        await self.store.set("ha-runtime-drain-v1", fence.encode())
+        await self.store.mark_epoch_ready(2, "drain-ready")
+        with self.assertRaises(CoordinationUnavailableError):
+            await self.store.complete_admission_drain(fence, epoch=2, operation_id="wrong-ready")
+        self.assertIsNotNone(await self.store.get("ha-runtime-drain-v1"))
+        await self.store.complete_admission_drain(fence, epoch=2, operation_id="drain-ready")
+        await self.store.complete_admission_drain(fence, epoch=2, operation_id="drain-ready")
+        self.assertIsNone(await self.store.get("ha-runtime-drain-v1"))
 
     @staticmethod
     def _quota_request(

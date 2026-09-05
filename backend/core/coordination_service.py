@@ -14,6 +14,7 @@ from collections.abc import Awaitable, Callable
 from typing import Any, TypeVar
 
 from core.coordination import (
+    AdmissionFence,
     CasRequest,
     CasResult,
     CasSnapshot,
@@ -65,6 +66,7 @@ _OPERATIONS = frozenset(
         "read_coordination_time",
         "advance_epoch",
         "mark_epoch_ready",
+        "complete_admission_drain",
         "compare_and_set",
         "read_cas",
         "invalidate",
@@ -265,6 +267,17 @@ class CoordinationService:
 
     async def read_epoch(self) -> Epoch:
         return await self._run("read_epoch", self._store.read_epoch)
+
+    async def complete_admission_drain(
+        self, fence: AdmissionFence, *, epoch: int, operation_id: str
+    ) -> None:
+        await self._run(
+            "complete_admission_drain",
+            self._store.complete_admission_drain,
+            fence,
+            epoch=epoch,
+            operation_id=operation_id,
+        )
 
     async def read_coordination_time(self, *, epoch: int) -> CoordinationTime:
         return await self._run(

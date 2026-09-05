@@ -18,11 +18,15 @@ from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, Literal, Optional, Tuple
 
 from core.coordination import (
+    ADMISSION_BINDING_KEY,
+    ADMISSION_FENCE_KEY,
     MAX_COORDINATION_INTEGER,
     MAX_IDENTIFIER_LENGTH,
+    AdmissionFence,
     CasRequest,
     CasResult,
     CasSnapshot,
+    CoordinationAdmissionFencedError,
     CoordinationCorruptError,
     CoordinationReconciliationRequiredError,
     CoordinationTime,
@@ -37,6 +41,7 @@ from core.coordination import (
     QuotaReconciliationResult,
     QuotaReservationDecision,
     QuotaReservationRequest,
+    decode_admission_json,
     validate_epoch,
     validate_operation_id,
 )
@@ -456,6 +461,40 @@ class InMemoryStateStore(BaseStateStore):
     def _is_ready_locked(self, epoch: int) -> bool:
         return self._epoch.epoch == epoch and self._epoch.state is EpochState.READY
 
+    def _admission_fence_locked(self) -> AdmissionFence | None:
+        entry = self._store.get(ADMISSION_FENCE_KEY)
+        if entry is None:
+            return None
+        from core.ha_coordination_binding import CoordinationBindingManager
+
+        expiry, value = entry
+        fence = AdmissionFence.decode(value)
+        binding_expiry, binding_value = self._store.get(ADMISSION_BINDING_KEY, (None, None))
+        try:
+            binding_value = decode_admission_json(binding_value)
+            if type(binding_value.get("schema_version")) is not int:
+                raise ValueError
+            binding = CoordinationBindingManager.decode_record(binding_value, "binding_invalid")
+            validate_epoch(binding.fencing_epoch)
+        except (RuntimeError, ValueError, TypeError, RecursionError):
+            raise CoordinationCorruptError("Coordination drain binding is invalid.") from None
+        if (
+            expiry is not None
+            or binding_expiry is not None
+            or fence.namespace_digest != binding.namespace_digest
+            or binding.fencing_epoch != self._epoch.epoch
+            or not (
+                fence.epoch == self._epoch.epoch
+                or (fence.epoch == self._epoch.epoch - 1 and fence.quota_reconciliation_complete)
+            )
+        ):
+            raise CoordinationCorruptError("Coordination drain binding is invalid.")
+        return fence
+
+    def _require_admission_locked(self) -> None:
+        if self._admission_fence_locked() is not None:
+            raise CoordinationAdmissionFencedError("Coordination admission is drained.")
+
     @staticmethod
     def _cas_fingerprint(request: CasRequest) -> tuple[object, ...]:
         return (
@@ -464,6 +503,7 @@ class InMemoryStateStore(BaseStateStore):
             request.payload,
             request.ttl_seconds,
             request.epoch,
+            request.settlement,
         )
 
     @staticmethod
@@ -859,6 +899,31 @@ class InMemoryStateStore(BaseStateStore):
                 return CasResult(False, None)
             fingerprint = self._cas_fingerprint(request)
             now = self._clock()
+            fence = self._admission_fence_locked()
+            if request.settlement is not None:
+                settled = self._cas_replays.get(request.operation_id)
+                if (
+                    settled is not None
+                    and settled.expires_at > now
+                    and settled.fingerprint == fingerprint
+                ):
+                    result = settled.result
+                    assert isinstance(result, CasResult)
+                    return CasResult(result.applied, result.revision, idempotent=True)
+                admission = request.settlement.admission
+                proof = self._cas_replays.get(admission.operation_id)
+                if (
+                    proof is None
+                    or proof.expires_at <= now
+                    or proof.fingerprint != self._cas_fingerprint(admission)
+                    or not isinstance(proof.result, CasResult)
+                    or not proof.result.applied
+                ):
+                    raise CoordinationAdmissionFencedError(
+                        "CAS settlement admission is unavailable."
+                    )
+            elif fence is not None:
+                raise CoordinationAdmissionFencedError("Coordination admission is drained.")
             replay = self._cas_replays.get(request.operation_id)
             if replay is not None and replay.expires_at > now:
                 if replay.fingerprint == fingerprint:
@@ -895,6 +960,30 @@ class InMemoryStateStore(BaseStateStore):
             )
             return result
 
+    async def complete_admission_drain(
+        self, fence: AdmissionFence, *, epoch: int, operation_id: str
+    ) -> None:
+        validate_epoch(epoch)
+        validate_operation_id(operation_id)
+        if type(fence) is not AdmissionFence:
+            raise ValueError("Coordination drain is invalid.")
+        async with self._async_lock:
+            self._ensure_open_locked()
+            current = self._admission_fence_locked()
+            replay = self._epoch_ready.get(operation_id)
+            if (
+                not self._is_ready_locked(epoch)
+                or fence.epoch != epoch - 1
+                or not fence.quota_reconciliation_complete
+                or replay is None
+                or replay.expires_at <= self._clock()
+                or replay.fingerprint != (epoch,)
+                or replay.result != self._epoch
+                or (current is not None and current != fence)
+            ):
+                raise CoordinationUnavailableError("Coordination drain transition does not match.")
+            self._store.pop(ADMISSION_FENCE_KEY, None)
+
     async def read_cas(self, key: str, *, epoch: int) -> CasSnapshot:
         async with self._async_lock:
             self._ensure_open_locked()
@@ -920,6 +1009,7 @@ class InMemoryStateStore(BaseStateStore):
     async def invalidate(self, request: InvalidationRequest) -> InvalidationResult:
         async with self._async_lock:
             self._ensure_open_locked()
+            self._require_admission_locked()
             if not self._is_ready_locked(request.epoch):
                 return InvalidationResult(False, None)
             fingerprint = (request.scope, request.epoch, request.replay_ttl_seconds)
@@ -1172,6 +1262,7 @@ class InMemoryStateStore(BaseStateStore):
     async def reserve_quota(self, request: QuotaReservationRequest) -> QuotaReservationDecision:
         async with self._async_lock:
             self._ensure_open_locked()
+            self._require_admission_locked()
             coordination_now = self._clock()
             if not self._is_ready_locked(request.fencing_epoch):
                 reason = (
@@ -1303,6 +1394,7 @@ class InMemoryStateStore(BaseStateStore):
     async def commit_quota(self, request: QuotaCommitRequest) -> QuotaCommitResult:
         async with self._async_lock:
             self._ensure_open_locked()
+            fence = self._admission_fence_locked()
             coordination_now = self._clock()
             if not self._is_ready_locked(request.fencing_epoch):
                 return QuotaCommitResult(False)
@@ -1325,6 +1417,8 @@ class InMemoryStateStore(BaseStateStore):
                 return QuotaCommitResult(result.committed, result.overspent, True)
             record = self._quota_records.get(request.reservation_id)
             target_key = record.request.key_id if record is not None else self._UNKNOWN_QUOTA_KEY
+            if fence is not None and record is None:
+                return QuotaCommitResult(False)
             if self._quota_replay_counts.get(target_key, 0) >= self._quota_replay_limit:
                 raise CoordinationReconciliationRequiredError("Reconciliation is required.")
             if record is None or record.state != "active":
@@ -1409,6 +1503,7 @@ class InMemoryStateStore(BaseStateStore):
             identifier, now, fencing_epoch, operation_id = self._validate_quota_release(
                 reservation_id, now, fencing_epoch, operation_id
             )
+            fence = self._admission_fence_locked()
             coordination_now = self._clock()
             if not self._is_ready_locked(fencing_epoch):
                 return False
@@ -1427,6 +1522,8 @@ class InMemoryStateStore(BaseStateStore):
                 return False
             record = self._quota_records.get(identifier)
             target_key = record.request.key_id if record is not None else self._UNKNOWN_QUOTA_KEY
+            if fence is not None and record is None:
+                return False
             if self._quota_replay_counts.get(target_key, 0) >= self._quota_replay_limit:
                 raise CoordinationReconciliationRequiredError("Reconciliation is required.")
             result = record is not None and record.state == "active"
@@ -1599,6 +1696,7 @@ class InMemoryStateStore(BaseStateStore):
     async def issue_security_session(self, request: SessionIssueRequest) -> SessionMutationResult:
         async with self._async_lock:
             self._ensure_open_locked()
+            self._require_admission_locked()
             denial = self._security_epoch_denial_locked(request.fencing_epoch)
             if denial is not None:
                 return SessionMutationResult(False, None, denial)
@@ -1681,6 +1779,7 @@ class InMemoryStateStore(BaseStateStore):
     ) -> SessionResolveResult:
         async with self._async_lock:
             self._ensure_open_locked()
+            self._require_admission_locked()
             denial = self._security_epoch_denial_locked(request.fencing_epoch)
             if denial is not None:
                 return SessionResolveResult(False, None, denial)
@@ -1776,6 +1875,7 @@ class InMemoryStateStore(BaseStateStore):
     async def rotate_security_session(self, request: SessionRotateRequest) -> SessionMutationResult:
         async with self._async_lock:
             self._ensure_open_locked()
+            self._require_admission_locked()
             denial = self._security_epoch_denial_locked(request.fencing_epoch)
             if denial is not None:
                 return SessionMutationResult(False, None, denial)
@@ -1873,6 +1973,7 @@ class InMemoryStateStore(BaseStateStore):
     async def revoke_security_sessions(self, request: SessionRevokeRequest) -> SessionRevokeResult:
         async with self._async_lock:
             self._ensure_open_locked()
+            self._require_admission_locked()
             self._require_security_epoch_locked(request.fencing_epoch)
             now = self._security_now_locked()
             self._cleanup_security_sessions_locked(now)
@@ -1947,6 +2048,7 @@ class InMemoryStateStore(BaseStateStore):
     ) -> AttemptReservationDecision:
         async with self._async_lock:
             self._ensure_open_locked()
+            self._require_admission_locked()
             denial = self._security_epoch_denial_locked(request.fencing_epoch)
             if denial is not None:
                 return AttemptReservationDecision(False, 0, 0, denial)
@@ -2029,6 +2131,7 @@ class InMemoryStateStore(BaseStateStore):
     async def clear_security_attempts(self, request: AttemptClearRequest) -> AttemptClearResult:
         async with self._async_lock:
             self._ensure_open_locked()
+            self._require_admission_locked()
             self._require_security_epoch_locked(request.fencing_epoch)
             now = self._security_now_locked()
             self._cleanup_security_attempts_locked(request.category, now)
@@ -2079,6 +2182,7 @@ class InMemoryStateStore(BaseStateStore):
     ) -> TransactionCreateResult:
         async with self._async_lock:
             self._ensure_open_locked()
+            self._require_admission_locked()
             denial = self._security_epoch_denial_locked(request.fencing_epoch)
             if denial is not None:
                 return TransactionCreateResult(False, denial)
@@ -2151,6 +2255,7 @@ class InMemoryStateStore(BaseStateStore):
     ) -> OidcTransactionConsumeResult:
         async with self._async_lock:
             self._ensure_open_locked()
+            fence = self._admission_fence_locked()
             denial = self._security_epoch_denial_locked(request.fencing_epoch)
             if denial is not None:
                 return OidcTransactionConsumeResult(False, None, denial)
@@ -2207,6 +2312,8 @@ class InMemoryStateStore(BaseStateStore):
             else:
                 result = OidcTransactionConsumeResult(True, transaction.payload)
                 expires_at = transaction.expires_at
+            if fence is not None and not result.consumed:
+                return result
             if not self._store_security_replay_locked(
                 self._oidc_transaction_replays,
                 self._oidc_transaction_replay_expiries,

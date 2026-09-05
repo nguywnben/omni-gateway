@@ -115,6 +115,61 @@ class HaRuntimeOperatorTests(unittest.IsolatedAsyncioTestCase):
         with self.assertRaisesRegex(RuntimeError, "drain"):
             await operator.reconcile(apply=True)
 
+    async def test_mark_ready_retry_removes_drain_after_crash_boundary(self) -> None:
+        from unittest.mock import patch
+
+        operator = HaRuntimeOperator(
+            policy(), self.storage, self.store, activation_verifier=lambda _record: True
+        )
+        await operator.drain(apply=True)
+        await operator.advance_epoch("crash-advance", apply=True)
+        operator = HaRuntimeOperator(
+            policy(2), self.storage, self.store, activation_verifier=lambda _record: True
+        )
+        await operator.reconcile(apply=True)
+        with patch.object(
+            self.store, "complete_admission_drain", side_effect=RuntimeError("injected crash")
+        ):
+            with self.assertRaisesRegex(RuntimeError, "injected crash"):
+                await operator.mark_ready("crash-ready", apply=True)
+        before = await self.store.read_epoch()
+        self.assertIs(before.state, EpochState.READY)
+        self.assertIsNotNone(await self.store.get(operator.DRAIN_KEY))
+        await operator.mark_ready("crash-ready", apply=False)
+        self.assertIsNotNone(await self.store.get(operator.DRAIN_KEY))
+        await operator.mark_ready("crash-ready", apply=True)
+        self.assertEqual(await self.store.read_epoch(), before)
+        self.assertIsNone(await self.store.get(operator.DRAIN_KEY))
+
+    async def test_mark_ready_ready_epoch_rejects_mismatched_drain(self) -> None:
+        operator = HaRuntimeOperator(
+            policy(), self.storage, self.store, activation_verifier=lambda _record: True
+        )
+        await operator.drain(apply=True)
+        with self.assertRaisesRegex(RuntimeError, "drain"):
+            await operator.mark_ready("unrelated-ready", apply=True)
+
+    async def test_mark_ready_crash_retry_rejects_different_operation(self) -> None:
+        from unittest.mock import patch
+
+        operator = HaRuntimeOperator(
+            policy(), self.storage, self.store, activation_verifier=lambda _record: True
+        )
+        await operator.drain(apply=True)
+        await operator.advance_epoch("exact-advance", apply=True)
+        operator = HaRuntimeOperator(
+            policy(2), self.storage, self.store, activation_verifier=lambda _record: True
+        )
+        await operator.reconcile(apply=True)
+        with patch.object(
+            self.store, "complete_admission_drain", side_effect=RuntimeError("injected crash")
+        ):
+            with self.assertRaises(RuntimeError):
+                await operator.mark_ready("exact-ready", apply=True)
+        with self.assertRaisesRegex(RuntimeError, "drain"):
+            await operator.mark_ready("different-ready", apply=True)
+        self.assertIsNotNone(await self.store.get(operator.DRAIN_KEY))
+
     async def test_mark_ready_requires_complete_quota_reconciliation(self) -> None:
         operator = HaRuntimeOperator(
             policy(), self.storage, self.store, activation_verifier=lambda _record: True

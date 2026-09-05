@@ -68,6 +68,114 @@ class InMemoryCoordinationTests(CoordinationStoreContract, unittest.IsolatedAsyn
 
         await self.assert_epoch_cas_and_invalidation_contract(advance_cas_clock=advance)
 
+    async def test_admission_fence_all_families(self) -> None:
+        await self.assert_admission_fence_contract()
+
+    async def test_admission_fence_linearization_and_settlement(self) -> None:
+        await self.assert_fence_linearization_and_settlement_contract()
+
+    async def test_cas_settlement_requires_accepted_proof(self) -> None:
+        await self.assert_cas_settlement_proof_contract()
+
+    async def test_unknown_settlement_does_not_admit_replays(self) -> None:
+        async def retained_count() -> int:
+            return len(self.store._quota_replays) + len(self.store._oidc_transaction_replays)
+
+        await self.assert_unknown_settlement_does_not_admit_replays(retained_count)
+
+    async def test_batch_settlement_during_drain(self) -> None:
+        await self.assert_batch_settlement_during_drain_contract()
+
+    async def test_batch_partial_settlement_retry(self) -> None:
+        await self.assert_batch_partial_settlement_retry_contract()
+
+    async def test_drain_allows_expiry_but_rejects_expired_cas_proof(self) -> None:
+        from core.coordination import CasSettlementProof, CoordinationUnavailableError
+
+        admission = CasRequest("expiring-proof", 0, b"value", 61, 1, "expiring-admit")
+        await self.store.compare_and_set(admission)
+        await self.store.reserve_quota(_reservation("expire-during-drain"))
+        await self.install_admission_fence()
+        self.clock.advance(62)
+        self.assertFalse(await self.store.release_quota("expire-during-drain", now=1_062))
+        self.assertFalse(await self.store.release_quota("expire-during-drain", now=1_062))
+        with self.assertRaises(CoordinationUnavailableError):
+            await self.store.compare_and_set(
+                CasRequest(
+                    "expiring-proof",
+                    1,
+                    b"settled",
+                    61,
+                    1,
+                    "expired-settle",
+                    settlement=CasSettlementProof(admission),
+                )
+            )
+
+    async def test_settlement_replay_outlives_its_admission_proof(self) -> None:
+        async def advance(seconds: float) -> None:
+            self.clock.advance(seconds)
+
+        await self.assert_settlement_replay_after_proof_expiry(advance)
+
+    async def test_expired_oidc_consume_during_drain_does_not_create_replay(self) -> None:
+        from core.security_coordination import (
+            OidcTransactionConsumeRequest,
+            OidcTransactionCreateRequest,
+        )
+
+        await self.store.create_oidc_transaction(
+            OidcTransactionCreateRequest("a" * 64, "b" * 64, b"expired", 60, 1, "expiring-oidc")
+        )
+        await self.install_admission_fence()
+        self.clock.advance(61)
+        request = OidcTransactionConsumeRequest("a" * 64, "b" * 64, 1, "expired-consume")
+        self.assertEqual((await self.store.consume_oidc_transaction(request)).reason, "expired")
+        self.assertFalse((await self.store.consume_oidc_transaction(request)).idempotent)
+        self.assertEqual(self.store._oidc_transactions, {})
+        self.assertEqual(self.store._oidc_transaction_replays, {})
+
+    async def test_corrupt_fence_blocks_settlement(self) -> None:
+        await self.assert_corrupt_fence_blocks_settlement_contract()
+
+    async def test_ambiguous_fence_json_blocks_settlement(self) -> None:
+        await self.assert_ambiguous_fence_json_blocks_settlement()
+
+    async def test_drain_completion_identity(self) -> None:
+        await self.assert_drain_completion_identity_contract()
+
+    async def test_admission_fence_invalid_state_fails_closed(self) -> None:
+        from core.coordination import CoordinationCorruptError
+
+        for changes in (
+            {"epoch": 2},
+            {"namespace_digest": "f" * 64},
+            {"epoch": True},
+            {"schema_version": 3},
+            {"unexpected": "value"},
+        ):
+            with self.subTest(changes=changes):
+                await self.install_admission_fence(**changes)
+                with self.assertRaises(CoordinationCorruptError):
+                    await self.store.reserve_quota(_reservation("corrupt-fence"))
+
+    async def test_corrupt_binding_schema_and_duplicate_fields_fail_closed(self) -> None:
+        import json
+
+        from core.coordination import CoordinationCorruptError
+
+        await self.install_admission_fence()
+        binding = json.loads(await self.store.get("ha-runtime-binding-v1"))
+        for encoded in (
+            json.dumps({**binding, "schema_version": True}),
+            json.dumps({**binding, "schema_version": 1.0}),
+            '{"schema_version":0,' + json.dumps(binding)[1:],
+        ):
+            with self.subTest(encoded=encoded):
+                await self.store.set("ha-runtime-binding-v1", encoded)
+                with self.assertRaises(CoordinationCorruptError):
+                    await self.store.release_quota("unknown", now=1_001)
+
     async def test_shared_quota_contract(self) -> None:
         self.store = InMemoryStateStore(clock=self.clock, _quota_record_limit_for_testing=2)
 

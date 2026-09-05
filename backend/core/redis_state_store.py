@@ -19,13 +19,17 @@ from typing import Any, Optional
 from urllib.parse import urlsplit
 
 from core.coordination import (
+    ADMISSION_BINDING_KEY,
+    ADMISSION_FENCE_KEY,
     MAX_COORDINATION_INTEGER,
     MAX_IDENTIFIER_LENGTH,
     MAX_PAYLOAD_BYTES,
     MAX_TTL_SECONDS,
+    AdmissionFence,
     CasRequest,
     CasResult,
     CasSnapshot,
+    CoordinationAdmissionFencedError,
     CoordinationCorruptError,
     CoordinationReconciliationRequiredError,
     CoordinationTime,
@@ -1347,6 +1351,9 @@ local status, reason, payload, expiry = 'denied', '', '',
 if not transaction then reason = was_expired and 'expired' or 'not_found'
 elseif transaction.browser ~= ARGV[3] then reason, expiry = 'browser_mismatch', transaction.expiry
 else status, payload, expiry = 'consumed', transaction.payload, transaction.expiry end
+if admission_fenced and status ~= 'consumed' then
+  return {'1', 'denied', reason, '0', ''}
+end
 store_replay(ARGV[5], ARGV[6], status, reason, status == 'consumed' and ARGV[2] or '',
   status == 'consumed' and ARGV[3] or '', expiry)
 if status == 'consumed' then
@@ -1357,29 +1364,218 @@ return {'1', 'denied', reason, '0', ''}
 """
 )
 
+_ADMISSION_SCRIPTS = frozenset(
+    {
+        "cas",
+        "invalidation",
+        "quota_reserve",
+        "security_session_issue",
+        "security_session_resolve",
+        "security_session_rotate",
+        "security_session_revoke",
+        "security_attempt_reserve",
+        "security_attempt_clear",
+        "oidc_transaction_create",
+    }
+)
+_SETTLEMENT_SCRIPTS = frozenset({"quota_commit", "quota_release", "oidc_transaction_consume"})
+
+# Every accessed fence/binding key is appended explicitly to KEYS by _run_script.
+# This prelude runs inside the same Redis invocation as the admitted mutation.
+_ADMISSION_FENCE_LUA = r"""
+local drain = redis.call('GET', KEYS[#KEYS - 1])
+local admission_fenced = drain ~= false
+if admission_fenced then
+  local binding = redis.call('GET', KEYS[#KEYS])
+  local function decode_closed(raw, fields, count)
+    if not raw or #raw > 16384 then return nil end
+    local ok, value = pcall(cjson.decode, raw)
+    if not ok or type(value) ~= 'table' then return nil end
+    local found, positions = 0, {}
+    local start, escaped, closed = nil, false, nil
+    -- Tokenize quoted strings so escaped/duplicate field names cannot disagree
+    -- with cjson or make integer validation read text embedded in a value.
+    for i = 1, #raw do
+      local char = string.sub(raw, i, i)
+      if start then
+        if escaped then escaped = false
+        elseif char == '\\' then escaped = true
+        elseif char == '"' then
+          closed, start = {start, i}, nil
+        end
+      elseif char == '"' then start, closed = i, nil
+      elseif closed and char == ':' then
+        local key = cjson.decode(string.sub(raw, closed[1], closed[2]))
+        if not fields[key] or positions[key] then return nil end
+        positions[key], found, closed = i + 1, found + 1, nil
+      elseif not string.match(char, '%s') then closed = nil
+      end
+    end
+    for key, _ in pairs(value) do
+      if not fields[key] or not positions[key] then return nil end
+    end
+    if found ~= count then return nil end
+    return value, positions
+  end
+  local d, dp = decode_closed(drain, {schema_version=true, namespace_digest=true, epoch=true,
+    quota_reconciliation_cursor=true, quota_reconciliation_complete=true}, 5)
+  local b, bp = decode_closed(binding, {schema_version=true, deployment_id=true,
+    namespace_digest=true, identifier_key_fingerprint=true, fencing_epoch=true,
+    manifest_checksum=true, activation_record=true}, 7)
+  local function digest(value)
+    return type(value) == 'string' and #value == 64 and string.match(value, '^[0-9a-f]+$')
+  end
+  local function integer_field(raw, position)
+    local value = string.match(string.sub(raw, position), '^%s*([1-9][0-9]*)%s*[,}]')
+    if not value or #value > 19 or (#value == 19 and value > '9223372036854775807') then
+      return nil
+    end
+    return value
+  end
+  local encoded_epoch = redis.call('GET', KEYS[1])
+  if not encoded_epoch or #encoded_epoch > 34 then return redis.error_reply('COORDINATION_CORRUPT') end
+  local current_epoch, current_state = string.match(encoded_epoch or '', '^1|([1-9][0-9]*)|(%a+)$')
+  if not d or not b or not current_epoch or d.schema_version ~= 2 or b.schema_version ~= 1
+    or #current_epoch > 19 or (#current_epoch == 19 and current_epoch > '9223372036854775807')
+    or integer_field(drain, dp.schema_version) ~= '2'
+    or integer_field(binding, bp.schema_version) ~= '1'
+    or not digest(d.namespace_digest) or d.namespace_digest ~= ARGV[#ARGV]
+    or d.namespace_digest ~= b.namespace_digest or not digest(b.identifier_key_fingerprint)
+    or not digest(b.manifest_checksum) or type(b.deployment_id) ~= 'string'
+    or #b.deployment_id < 8 or #b.deployment_id > 64
+    or type(b.activation_record) ~= 'string' or #b.activation_record ~= 36
+    or not string.match(b.activation_record, '^act_[0-9a-f]+$')
+    or redis.call('PTTL', KEYS[#KEYS - 1]) ~= -1 or redis.call('PTTL', KEYS[#KEYS]) ~= -1
+    or type(d.quota_reconciliation_complete) ~= 'boolean'
+    or d.quota_reconciliation_complete ~= (d.quota_reconciliation_cursor == cjson.null)
+    or (d.quota_reconciliation_cursor ~= cjson.null and
+      (type(d.quota_reconciliation_cursor) ~= 'string' or #d.quota_reconciliation_cursor < 1
+      or #d.quota_reconciliation_cursor > 4096
+      or string.find(d.quota_reconciliation_cursor, '[^ -~]')))
+  then return redis.error_reply('COORDINATION_CORRUPT') end
+  local drain_epoch = integer_field(drain, dp.epoch)
+  local binding_epoch = integer_field(binding, bp.fencing_epoch)
+  -- Exact decimal string comparison avoids the binary64 epoch boundary.
+  local function prior(value)
+    local carry, out = 1, ''
+    for i = #value, 1, -1 do
+      local digit = tonumber(string.sub(value, i, i)) - carry
+      if digit < 0 then digit = 9 else carry = 0 end
+      out = tostring(digit) .. out
+    end
+    return string.gsub(out, '^0', '')
+  end
+  if not drain_epoch or not binding_epoch or binding_epoch ~= current_epoch
+    or not (drain_epoch == current_epoch or
+      (drain_epoch == prior(current_epoch) and d.quota_reconciliation_complete))
+    or (current_state ~= 'ready' and current_state ~= 'reconciling')
+  then return redis.error_reply('COORDINATION_CORRUPT') end
+end
+"""
+
+_CAS_SETTLEMENT_LUA = r"""
+if ARGV[8] ~= '' then
+  local proof = redis.call('HGET', KEYS[3], ARGV[8])
+  local expiry = redis.call('ZSCORE', KEYS[4], ARGV[8])
+  local schema, fingerprint, status, revision, saved_expiry =
+    string.match(proof or '', '^([^|]+)|([^|]+)|([^|]+)|([^|]*)|([^|]+)$')
+  local clock = redis.call('TIME')
+  local now_ms = (clock[1] * 1000) + math.floor(clock[2] / 1000)
+  if not valid_replay(proof, expiry) or schema ~= '1' or fingerprint ~= ARGV[9] or status ~= 'applied'
+    or not revision or not string.match(revision, '^[1-9][0-9]*$')
+    or not expiry or saved_expiry ~= expiry or not tonumber(expiry)
+    or tonumber(expiry) <= now_ms then
+    return redis.error_reply('COORDINATION_ADMISSION_FENCED')
+  end
+elseif admission_fenced then
+  return redis.error_reply('COORDINATION_ADMISSION_FENCED')
+end
+"""
+
+_DRAIN_COMPLETE_SCRIPT = (
+    "-- omni:drain_complete:v1\n"
+    + _ADMISSION_FENCE_LUA
+    + r"""
+if redis.call('GET', KEYS[4]) ~= '1|initialized' or redis.call('PTTL', KEYS[4]) ~= -1
+  or redis.call('GET', KEYS[1]) ~= '1|' .. ARGV[1] .. '|ready'
+  or redis.call('PTTL', KEYS[1]) ~= -1
+then return redis.error_reply('COORDINATION_CORRUPT') end
+local replay = redis.call('HGET', KEYS[2], ARGV[2])
+local expiry = redis.call('ZSCORE', KEYS[3], ARGV[2])
+local clock = redis.call('TIME')
+local now_ms = clock[1] * 1000 + math.floor(clock[2] / 1000)
+if not replay or not expiry or not tonumber(expiry) or tonumber(expiry) <= now_ms
+  or replay ~= '1|' .. ARGV[1] .. '|' .. ARGV[1] .. '|ready|' .. expiry
+  or (drain and drain ~= ARGV[3])
+then return redis.error_reply('COORDINATION_DRAIN_CONFLICT') end
+if drain then redis.call('DEL', KEYS[#KEYS - 1]) end
+return {'1', 'ok'}
+"""
+)
+
+
+def _with_admission_fence(name: str, source: str) -> str:
+    if name not in _ADMISSION_SCRIPTS | _SETTLEMENT_SCRIPTS:
+        return source
+    header, body = source.split("\n", 1)
+    if name in {"quota_commit", "quota_release"}:
+        marker, reply = (
+            ("local status, overspent =", "{'1', 'not_committed', '0', '0'}")
+            if name == "quota_commit"
+            else ("local released, expiry, window =", "{'1', 'ok', '0', '0'}")
+        )
+        # Only a retained reservation (or the earlier exact replay branch) authorizes
+        # settlement. Unknown IDs cannot allocate denied replays during a drain.
+        body = body.replace(
+            marker,
+            "if admission_fenced and not record then apply_cleanup(plan); return "
+            + reply
+            + " end\n"
+            + marker,
+            1,
+        )
+    if name == "cas":
+        # An exact accepted settlement replay needs no new admission proof after proof expiry.
+        body = body.replace("local due =", _CAS_SETTLEMENT_LUA + "local due =", 1)
+        return (
+            header + "\n" + _ADMISSION_FENCE_LUA + "if admission_fenced and ARGV[8] == '' then "
+            "return redis.error_reply('COORDINATION_ADMISSION_FENCED') end\n" + body
+        )
+    guard = (
+        "if admission_fenced then return redis.error_reply('COORDINATION_ADMISSION_FENCED') end\n"
+    )
+    if name in _SETTLEMENT_SCRIPTS:
+        guard = ""
+    return header + "\n" + _ADMISSION_FENCE_LUA + guard + body
+
+
 SCRIPT_SOURCES = {
-    "epoch_read": _EPOCH_READ_SCRIPT,
-    "time_read": _TIME_READ_SCRIPT,
-    "epoch_advance": _EPOCH_ADVANCE_SCRIPT,
-    "epoch_ready": _EPOCH_READY_SCRIPT,
-    "cas": _CAS_SCRIPT,
-    "cas_read": _CAS_READ_SCRIPT,
-    "invalidation": _INVALIDATION_SCRIPT,
-    "invalidation_read": _INVALIDATION_READ_SCRIPT,
-    "increment": _INCREMENT_SCRIPT,
-    "lock_release": _LOCK_RELEASE_SCRIPT,
-    "quota_reserve": QUOTA_RESERVE_SCRIPT,
-    "quota_commit": QUOTA_COMMIT_SCRIPT,
-    "quota_release": QUOTA_RELEASE_SCRIPT,
-    "security_session_issue": _SECURITY_SESSION_ISSUE_SCRIPT,
-    "security_session_resolve": _SECURITY_SESSION_RESOLVE_SCRIPT,
-    "security_session_rotate": _SECURITY_SESSION_ROTATE_SCRIPT,
-    "security_session_revoke": _SECURITY_SESSION_REVOKE_SCRIPT,
-    "security_session_list": _SECURITY_SESSION_LIST_SCRIPT,
-    "security_attempt_reserve": _SECURITY_ATTEMPT_RESERVE_SCRIPT,
-    "security_attempt_clear": _SECURITY_ATTEMPT_CLEAR_SCRIPT,
-    "oidc_transaction_create": _OIDC_TRANSACTION_CREATE_SCRIPT,
-    "oidc_transaction_consume": _OIDC_TRANSACTION_CONSUME_SCRIPT,
+    name: _with_admission_fence(name, source)
+    for name, source in {
+        "drain_complete": _DRAIN_COMPLETE_SCRIPT,
+        "epoch_read": _EPOCH_READ_SCRIPT,
+        "time_read": _TIME_READ_SCRIPT,
+        "epoch_advance": _EPOCH_ADVANCE_SCRIPT,
+        "epoch_ready": _EPOCH_READY_SCRIPT,
+        "cas": _CAS_SCRIPT,
+        "cas_read": _CAS_READ_SCRIPT,
+        "invalidation": _INVALIDATION_SCRIPT,
+        "invalidation_read": _INVALIDATION_READ_SCRIPT,
+        "increment": _INCREMENT_SCRIPT,
+        "lock_release": _LOCK_RELEASE_SCRIPT,
+        "quota_reserve": QUOTA_RESERVE_SCRIPT,
+        "quota_commit": QUOTA_COMMIT_SCRIPT,
+        "quota_release": QUOTA_RELEASE_SCRIPT,
+        "security_session_issue": _SECURITY_SESSION_ISSUE_SCRIPT,
+        "security_session_resolve": _SECURITY_SESSION_RESOLVE_SCRIPT,
+        "security_session_rotate": _SECURITY_SESSION_ROTATE_SCRIPT,
+        "security_session_revoke": _SECURITY_SESSION_REVOKE_SCRIPT,
+        "security_session_list": _SECURITY_SESSION_LIST_SCRIPT,
+        "security_attempt_reserve": _SECURITY_ATTEMPT_RESERVE_SCRIPT,
+        "security_attempt_clear": _SECURITY_ATTEMPT_CLEAR_SCRIPT,
+        "oidc_transaction_create": _OIDC_TRANSACTION_CREATE_SCRIPT,
+        "oidc_transaction_consume": _OIDC_TRANSACTION_CONSUME_SCRIPT,
+    }.items()
 }
 
 
@@ -2353,6 +2549,13 @@ class RedisStateStore:
             return client
 
     async def _run_script(self, name: str, *, keys: list[str], args: list[object]) -> object:
+        if name in _ADMISSION_SCRIPTS | _SETTLEMENT_SCRIPTS or name == "drain_complete":
+            keys = [
+                *keys,
+                self._key("generic", ADMISSION_FENCE_KEY),
+                self._key("generic", ADMISSION_BINDING_KEY),
+            ]
+            args = [*args, self._tag.encode("ascii")]
         await self._get_client()
         try:
             return await self._scripts[name](keys=keys, args=args)
@@ -2360,6 +2563,14 @@ class RedisStateStore:
             raise CoordinationCorruptError("Coordination reply is invalid.") from None
         except Exception as exc:
             error_text = str(exc).upper()
+            if "COORDINATION_ADMISSION_FENCED" in error_text:
+                raise CoordinationAdmissionFencedError(
+                    "Coordination admission is drained."
+                ) from None
+            if "COORDINATION_DRAIN_CONFLICT" in error_text:
+                raise CoordinationUnavailableError(
+                    "Coordination drain transition does not match."
+                ) from None
             if "COORDINATION_RECONCILIATION_REQUIRED" in error_text:
                 raise CoordinationReconciliationRequiredError(
                     "Reconciliation is required."
@@ -2524,13 +2735,22 @@ class RedisStateStore:
             raise ValueError("CAS request is invalid.")
         ttl = _ttl_ms(request.ttl_seconds)
         assert ttl is not None
-        fingerprint = _fingerprint(
-            request.key,
-            request.expected_revision,
-            request.payload,
-            float(request.ttl_seconds),
-            request.epoch,
-        )
+
+        def request_fingerprint(value: CasRequest) -> bytes:
+            return _fingerprint(
+                value.key,
+                value.expected_revision,
+                value.payload,
+                float(value.ttl_seconds),
+                value.epoch,
+            )
+
+        fingerprint = request_fingerprint(request)
+        proof_operation, proof_fingerprint = b"", b""
+        if request.settlement is not None:
+            proof_operation = request.settlement.admission.operation_id.encode("ascii")
+            proof_fingerprint = request_fingerprint(request.settlement.admission)
+            fingerprint = _fingerprint(fingerprint, proof_operation, proof_fingerprint)
         reply = await self._run_script(
             "cas",
             keys=[
@@ -2548,9 +2768,39 @@ class RedisStateStore:
                 request.operation_id.encode("ascii"),
                 fingerprint,
                 _integer_bytes(self._replay_limit),
+                proof_operation,
+                proof_fingerprint,
             ],
         )
         return _decode_cas_reply(reply)
+
+    async def complete_admission_drain(
+        self, fence: AdmissionFence, *, epoch: int, operation_id: str
+    ) -> None:
+        validate_epoch(epoch)
+        validate_operation_id(operation_id)
+        if (
+            type(fence) is not AdmissionFence
+            or fence.epoch != epoch - 1
+            or not fence.quota_reconciliation_complete
+        ):
+            raise ValueError("Coordination drain is invalid.")
+        reply = await self._run_script(
+            "drain_complete",
+            keys=[
+                self._key("epoch"),
+                self._key("replay:epoch-ready"),
+                self._key("expiry:epoch-ready"),
+                self._key("initialization"),
+            ],
+            args=[
+                _integer_bytes(epoch),
+                operation_id.encode("ascii"),
+                fence.encode().encode("ascii"),
+            ],
+        )
+        if reply != [b"1", b"ok"]:
+            raise CoordinationCorruptError("Coordination drain reply is invalid.")
 
     async def read_cas(self, key: str, *, epoch: int) -> CasSnapshot:
         logical_key = _validate_identifier(key, "Coordination key")

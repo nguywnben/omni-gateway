@@ -7,9 +7,10 @@ Redis implementations.
 
 from __future__ import annotations
 
+import json
 import math
 from collections.abc import Mapping
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field
 from enum import Enum
 from typing import Final, Protocol
 
@@ -32,6 +33,10 @@ class CoordinationUnavailableError(CoordinationError):
 
 class CoordinationReconciliationRequiredError(CoordinationUnavailableError):
     """Bounded cleanup found more expired state than this mutation may reconcile."""
+
+
+class CoordinationAdmissionFencedError(CoordinationUnavailableError):
+    """The deployment drain atomically closed new admission."""
 
 
 class CoordinationCorruptError(CoordinationError, ValueError):
@@ -111,6 +116,80 @@ class CoordinationTime:
         )
 
 
+ADMISSION_FENCE_KEY: Final = "ha-runtime-drain-v1"
+ADMISSION_BINDING_KEY: Final = "ha-runtime-binding-v1"
+
+
+def decode_admission_json(value: object) -> dict[str, object]:
+    """Bound and reject ambiguous JSON before validating either admission record."""
+    if isinstance(value, (str, bytes)):
+        if len(value) > MAX_PAYLOAD_BYTES:
+            raise ValueError("Coordination admission record is invalid.")
+
+        def unique_pairs(pairs):
+            result = {}
+            for key, item in pairs:
+                if key in result:
+                    raise ValueError("Coordination admission record is invalid.")
+                result[key] = item
+            return result
+
+        value = json.loads(value, object_pairs_hook=unique_pairs)
+    if not isinstance(value, dict):
+        raise ValueError("Coordination admission record is invalid.")
+    return value
+
+
+@dataclass(frozen=True, slots=True)
+class AdmissionFence:
+    namespace_digest: str = field(repr=False)
+    epoch: int
+    quota_reconciliation_cursor: str | None = field(repr=False)
+    quota_reconciliation_complete: bool
+    schema_version: int = 2
+
+    def encode(self) -> str:
+        return json.dumps(asdict(self), separators=(",", ":"), sort_keys=True)
+
+    @classmethod
+    def decode(cls, value: object) -> AdmissionFence:
+        try:
+            value = decode_admission_json(value)
+            if set(value) != {
+                "schema_version",
+                "namespace_digest",
+                "epoch",
+                "quota_reconciliation_cursor",
+                "quota_reconciliation_complete",
+            }:
+                raise ValueError
+            return cls(**value)
+        except (TypeError, ValueError, UnicodeError, RecursionError):
+            raise CoordinationCorruptError("Coordination drain record is invalid.") from None
+
+    def __post_init__(self) -> None:
+        validate_epoch(self.epoch)
+        cursor = self.quota_reconciliation_cursor
+        if (
+            type(self.schema_version) is not int
+            or self.schema_version != 2
+            or not isinstance(self.namespace_digest, str)
+            or len(self.namespace_digest) != 64
+            or any(char not in "0123456789abcdef" for char in self.namespace_digest)
+            or type(self.quota_reconciliation_complete) is not bool
+            or self.quota_reconciliation_complete != (cursor is None)
+            or (
+                cursor is not None
+                and (
+                    not isinstance(cursor, str)
+                    or not 1 <= len(cursor) <= 4096
+                    or any(ord(char) < 32 or ord(char) > 126 for char in cursor)
+                )
+            )
+        ):
+            raise ValueError("Coordination drain record is invalid.")
+
+
 @dataclass(frozen=True, slots=True)
 class CasRequest:
     key: str = field(repr=False)
@@ -119,6 +198,7 @@ class CasRequest:
     ttl_seconds: float
     epoch: int
     operation_id: str = field(repr=False)
+    settlement: CasSettlementProof | None = field(default=None, repr=False)
 
     def __post_init__(self) -> None:
         _require_identifier(self.key, "Coordination key")
@@ -138,6 +218,25 @@ class CasRequest:
         )
         validate_epoch(self.epoch)
         validate_operation_id(self.operation_id)
+        if self.settlement is not None and (
+            type(self.settlement) is not CasSettlementProof
+            or self.settlement.admission.epoch != self.epoch
+        ):
+            raise ValueError("CAS settlement proof is invalid.")
+
+
+@dataclass(frozen=True, slots=True)
+class CasSettlementProof:
+    """Exact accepted admission request; the store verifies its retained success atomically.
+
+    Domain settlement APIs own this evidence, never an HTTP caller-controlled bypass flag.
+    """
+
+    admission: CasRequest = field(repr=False)
+
+    def __post_init__(self) -> None:
+        if type(self.admission) is not CasRequest or self.admission.settlement is not None:
+            raise ValueError("CAS settlement proof is invalid.")
 
 
 @dataclass(frozen=True, slots=True)
@@ -480,6 +579,10 @@ class CoordinationStore(Protocol):
     async def advance_epoch(self, expected_epoch: int, operation_id: str) -> Epoch: ...
 
     async def mark_epoch_ready(self, epoch: int, operation_id: str) -> Epoch: ...
+
+    async def complete_admission_drain(
+        self, fence: AdmissionFence, *, epoch: int, operation_id: str
+    ) -> None: ...
 
     async def compare_and_set(self, request: CasRequest) -> CasResult: ...
 

@@ -96,7 +96,53 @@ advance it again.
 Normal CAS, invalidation, quota reserve, quota commit, and quota release operations require the
 exact ready epoch. A missing, corrupt, stale, or reconciling epoch fails closed.
 
-## Compare-and-set
+## Atomic admission drain (W4-C)
+
+`AdmissionFence` is the typed, closed schema-v2 representation of the persistent
+`ha-runtime-drain-v1` operator record. A present fence is validated against the persistent
+`ha-runtime-binding-v1` namespace and binding epoch. A completed prior-epoch drain may remain
+between marking the next epoch ready and completing the drain transition. Corrupt, expiring,
+unknown-field, or mismatched fence/binding state fails closed. No fence preserves standalone
+behavior; this does not activate coordinated mode or change the one-worker/one-replica defaults.
+
+The in-process lock and the Redis mutation script are the linearization boundaries for both the
+drain write and each admission. Every CAS admission (including credential reservations, routing
+exclusive capacity, provider/device flows and replay/nonce creation), quota reservation,
+invalidation, session issue/resolve/rotate/revoke, attempt reserve/clear, and OIDC creation checks
+the drain inside that boundary. A present valid drain raises `CoordinationAdmissionFencedError`;
+no preflight read or harness check substitutes for this atomic guard. CAS updates with an existing
+revision are still new mutations unless they carry verified settlement evidence.
+
+Quota commit/release/expiry and OIDC consume retain their accepted reservation/transaction identity
+checks and replay behavior while the exact epoch remains ready. They validate any present drain,
+but do not require admission to be open. During epoch reconciliation the existing ready-epoch gate
+still applies; operator reconciliation owns work from prior epochs.
+While drained, unknown quota commit/release and unknown, expired, or browser-mismatched OIDC
+consume return their denial without allocating a new replay. An exact retained denial replay
+can still be read idempotently. Expiry cleanup can remove retained state without admitting work.
+
+Opaque CAS payloads are never parsed to infer settlement. `CasSettlementProof` carries the exact
+original admission request, including its operation identity. The store verifies a matching,
+successful, unexpired admission replay under the same lock/script before allowing settlement.
+Unknown, conflicting, expired, or different-epoch proof fails closed; settlement cannot serve as
+proof for another settlement. The proof is part of the settlement replay fingerprint. Domain
+settlement APIs retain this evidence: routing leases use it for release; credential batches use it
+for registry refresh/removal, bounded response chunks, and terminal root publication. Repeated
+terminal settlement converges, and a partial chunk write can resume only with identical content.
+Other CAS domain flows without such evidence remain closed during drain.
+An exact retained settlement replay can outlive its original admission proof and remains
+idempotent; after proof expiry no new settlement operation may be admitted using that proof.
+The proof is an internal service contract, not an authorization token exposed to HTTP callers:
+domain services remain responsible for targeting only their admitted operation's settlement.
+
+Redis explicitly appends the drain and binding keys to every guarded script's `KEYS`, in the same
+deployment hash slot. The namespace digest is supplied as data. Fence parsing is bounded to 16 KiB
+and fixed fields; the admission proof uses one directly addressed replay lookup, without scanning
+the retained population. Operator drain completion atomically checks the exact drain, ready epoch,
+and retained mark-ready operation replay before removing the fence.
+Crash completion therefore shares the existing bounded mark-ready replay retention window.
+
+## Compare-and-set operations
 
 The store accepts an opaque bytes payload so domain codecs remain outside the coordination layer.
 Create uses expected revision `0` and produces revision `1`; update requires the exact positive

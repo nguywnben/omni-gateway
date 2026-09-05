@@ -27,6 +27,7 @@ from core.coordination import (
 from core.redis_state_store import SCRIPT_SOURCES, RedisStateStore
 from core.state_store import BaseStateStore
 from core.state_store import RedisStateStore as CompatibilityRedisStateStore
+from tests.coordination_store_contract import CoordinationStoreContract
 
 EPOCH_READY = [b"1", b"ok", b"1", b"ready"]
 NOSCRIPT_THEN_RELOAD = object()
@@ -157,6 +158,92 @@ class StatefulRegisteredScript:
 
     async def __call__(self, *, keys: list[str], args: list[object]) -> object:
         self.client.script_calls.append((self.name, keys, args))
+        if "local admission_fenced" in self.source:
+            assert keys[-2].endswith(sha256(b"ha-runtime-drain-v1").hexdigest())
+            assert keys[-1].endswith(sha256(b"ha-runtime-binding-v1").hexdigest())
+            assert len({key.split("{")[1].split("}")[0] for key in keys}) == 1
+            entry = self.client.values.get(keys[-2])
+            self.client.admission_fenced = entry is not None
+            if entry is not None:
+                binding_entry = self.client.values.get(keys[-1])
+                try:
+                    from core.coordination import AdmissionFence, decode_admission_json
+
+                    value = decode_admission_json(entry[0])
+                    AdmissionFence.decode(value)
+                    binding = decode_admission_json(binding_entry[0])
+                    valid = (
+                        entry[1] is None
+                        and binding_entry[1] is None
+                        and type(binding["schema_version"]) is int
+                        and binding["schema_version"] == 1
+                        and set(value)
+                        == {
+                            "schema_version",
+                            "namespace_digest",
+                            "epoch",
+                            "quota_reconciliation_cursor",
+                            "quota_reconciliation_complete",
+                        }
+                        and value["schema_version"] == 2
+                        and type(value["epoch"]) is int
+                        and value["namespace_digest"]
+                        == binding["namespace_digest"]
+                        == args[-1].decode()
+                        and binding["fencing_epoch"] == self.client.epoch[0]
+                        and (
+                            value["epoch"] == self.client.epoch[0]
+                            or (
+                                value["epoch"] == self.client.epoch[0] - 1
+                                and value["quota_reconciliation_complete"] is True
+                            )
+                        )
+                    )
+                except (TypeError, ValueError, KeyError):
+                    valid = False
+                if not valid:
+                    raise RuntimeError("COORDINATION_CORRUPT")
+            keys, args = keys[:-2], args[:-1]
+            if self.name == "drain_complete":
+                epoch, operation, expected = args
+                replay = self.client.replays["epoch_ready"].get(operation)
+                if (
+                    replay is None
+                    or replay[0] != epoch
+                    or replay[2] <= self.client.now_ms
+                    or self.client.epoch != (int(epoch), b"ready")
+                    or (entry is not None and entry[0] != expected)
+                ):
+                    raise RuntimeError("COORDINATION_DRAIN_CONFLICT")
+                self.client.values.pop(self.client.script_calls[-1][1][-2], None)
+                return [b"1", b"ok"]
+            if self.name == "cas":
+                operation, fingerprint = args[-2:]
+                args = args[:-2]
+                if operation:
+                    settled = self.client.replays["cas"].get(args[4])
+                    if (
+                        settled is not None
+                        and settled[0] == args[5]
+                        and settled[2] > self.client.now_ms
+                    ):
+                        return [*settled[1][:-1], b"1"]
+                    proof = self.client.replays["cas"].get(operation)
+                    if (
+                        proof is None
+                        or proof[0] != fingerprint
+                        or proof[1][1] != b"applied"
+                        or proof[2] <= self.client.now_ms
+                    ):
+                        raise RuntimeError("COORDINATION_ADMISSION_FENCED")
+                elif entry is not None:
+                    raise RuntimeError("COORDINATION_ADMISSION_FENCED")
+            elif entry is not None and self.name not in {
+                "quota_commit",
+                "quota_release",
+                "oidc_transaction_consume",
+            }:
+                raise RuntimeError("COORDINATION_ADMISSION_FENCED")
         reply = self.client.run_script(self.name, keys, args)
         if self.name in self.client.cancel_after_response_boundary:
             self.client.cancel_after_response_boundary.remove(self.name)
@@ -831,6 +918,12 @@ class StatefulRedisClient(FakeRedisClient):
             raise RuntimeError("COORDINATION_CORRUPT")
         if self._quota_locator(keys[5], 2) is not None and record is None:
             raise RuntimeError("COORDINATION_CORRUPT")
+        if getattr(self, "admission_fenced", False) and record is None:
+            return (
+                [b"1", b"not_committed", b"0", b"0"]
+                if name == "quota_commit"
+                else [b"1", b"ok", b"0", b"0"]
+            )
         candidate = dict(self.quota_buckets.get(key_id, {}))
         active = bool(
             record is not None
@@ -1171,6 +1264,78 @@ class StatefulRedisClient(FakeRedisClient):
         self._remember_quota(operation_id, fingerprint, result, expiry, key_id, int(replay_limit))
         self.values[keys[6]] = (b"2|" + key_id + b"|" + fingerprint, expiry)
         return result
+
+
+class RedisAdmissionFenceTests(CoordinationStoreContract, unittest.IsolatedAsyncioTestCase):
+    async def asyncSetUp(self) -> None:
+        from tests.test_security_coordination_redis import StatefulSecurityRedisClient
+
+        self.client = StatefulSecurityRedisClient()
+        self.namespace = "production-east"
+        self.store = RedisStateStore(
+            "redis://redis/0",
+            self.namespace,
+            _redis_module_for_testing=FakeRedisModule(self.client),
+        )
+
+    async def test_admission_fence_all_families(self) -> None:
+        await self.assert_admission_fence_contract()
+
+    async def test_admission_fence_linearization_and_settlement(self) -> None:
+        await self.assert_fence_linearization_and_settlement_contract()
+
+    async def test_cas_settlement_requires_accepted_proof(self) -> None:
+        await self.assert_cas_settlement_proof_contract()
+
+    async def test_unknown_settlement_does_not_admit_replays(self) -> None:
+        async def retained_count() -> int:
+            return len(self.client.quota_replays) + len(self.client.oidc_replays)
+
+        await self.assert_unknown_settlement_does_not_admit_replays(retained_count)
+
+    async def test_batch_settlement_during_drain(self) -> None:
+        await self.assert_batch_settlement_during_drain_contract()
+
+    async def test_batch_partial_settlement_retry(self) -> None:
+        await self.assert_batch_partial_settlement_retry_contract()
+
+    async def test_settlement_replay_outlives_its_admission_proof(self) -> None:
+        async def advance(seconds: float) -> None:
+            self.client.advance(int(seconds * 1_000))
+
+        await self.assert_settlement_replay_after_proof_expiry(advance)
+
+    async def test_corrupt_fence_blocks_settlement(self) -> None:
+        await self.assert_corrupt_fence_blocks_settlement_contract()
+
+    async def test_ambiguous_fence_json_blocks_settlement(self) -> None:
+        await self.assert_ambiguous_fence_json_blocks_settlement()
+
+    async def test_drain_completion_identity(self) -> None:
+        await self.assert_drain_completion_identity_contract()
+
+    async def test_admission_scripts_receive_fence_and_binding_in_same_slot(self) -> None:
+        await self.store.reserve_quota(
+            self._quota_request("fenced-script", key_id="fenced-key", operation_id="fenced-script")
+        )
+        _, keys, _ = self.client.script_calls[-1]
+        self.assertIn(self.store._key("generic", "ha-runtime-drain-v1"), keys)
+        self.assertIn(self.store._key("generic", "ha-runtime-binding-v1"), keys)
+        self.assertEqual(len({key.split("{")[1].split("}")[0] for key in keys}), 1)
+        for name in (
+            "cas",
+            "invalidation",
+            "quota_reserve",
+            "security_session_issue",
+            "security_session_resolve",
+            "security_session_rotate",
+            "security_session_revoke",
+            "security_attempt_reserve",
+            "security_attempt_clear",
+            "oidc_transaction_create",
+        ):
+            with self.subTest(script=name):
+                self.assertIn("COORDINATION_ADMISSION_FENCED", SCRIPT_SOURCES[name])
 
 
 class RedisStateStoreTests(unittest.IsolatedAsyncioTestCase):
@@ -1692,8 +1857,8 @@ class RedisStateStoreTests(unittest.IsolatedAsyncioTestCase):
         result = await self.store.compare_and_set(request)
         self.assertEqual((result.applied, result.revision, result.idempotent), (True, 7, True))
         name, keys, args = self.client.script_calls[0]
-        self.assertEqual((name, len(keys)), ("cas", 5))
-        self.assertTrue(keys[-1].endswith(":initialization"))
+        self.assertEqual((name, len(keys)), ("cas", 7))
+        self.assertTrue(keys[4].endswith(":initialization"))
         self.assertEqual(args[:5], [b"6", b"\x00value\xff", b"2500", b"3", b"cas-op"])
         self.assertEqual(len(args[5]), 64)
         self.assertEqual(args[6], b"100000")
@@ -1777,8 +1942,8 @@ class RedisStateStoreTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual((stale.applied, stale.generation), (False, None))
         self.assertEqual((replay.applied, replay.generation, replay.idempotent), (True, 4, True))
         _name, keys, args = self.client.script_calls[1]
-        self.assertEqual(len(keys), 5)
-        self.assertTrue(keys[-1].endswith(":initialization"))
+        self.assertEqual(len(keys), 7)
+        self.assertTrue(keys[4].endswith(":initialization"))
         self.assertEqual(args[:3], [b"2", b"op-2", b"3000"])
         self.assertEqual(len(args[3]), 64)
         self.assertEqual(args[4], b"100000")
@@ -2495,9 +2660,9 @@ class RedisStateStoreTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(
             [call[0] for call in quota_calls], ["quota_reserve", "quota_commit", "quota_release"]
         )
-        self.assertEqual([len(call[1]) for call in quota_calls], [10, 10, 10])
+        self.assertEqual([len(call[1]) for call in quota_calls], [12, 12, 12])
         self.assertTrue(all(call[1][7].endswith(":initialization") for call in quota_calls))
-        self.assertEqual([len(call[2]) for call in quota_calls], [20, 12, 8])
+        self.assertEqual([len(call[2]) for call in quota_calls], [21, 13, 9])
         self.assertEqual(quota_calls[0][2][2], key_digest)
         self.assertEqual(quota_calls[1][2][4], key_digest)
         self.assertEqual(quota_calls[2][2][4], key_digest)
@@ -3111,6 +3276,7 @@ class RedisStateStoreTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(
             set(SCRIPT_SOURCES),
             {
+                "drain_complete",
                 "epoch_read",
                 "time_read",
                 "epoch_advance",
