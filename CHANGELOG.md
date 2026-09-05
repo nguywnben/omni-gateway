@@ -79,6 +79,8 @@ All notable user-facing changes are documented in this file. Omni Gateway follow
   failures.
 - Prevented v1/corrupt/expiring or incompletely reconciled quota state from entering a ready epoch,
   and made quota reconciliation cursors, page bounds, identifiers, and pipeline replies fail closed.
+- Corrected the synthetic HA evidence output so it no longer reports provider, batch, pool, or
+  quota blockers that later Wave 4 checkpoints already resolved.
 
 ## [1.4.0] - 2026-08-21
 

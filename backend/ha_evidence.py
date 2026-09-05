@@ -146,10 +146,8 @@ async def run_synthetic_evidence(*, operations: int = 256) -> dict[str, object]:
         "not_activation_evidence": True,
         "activation_eligible": False,
         "activation_blockers": [
-            "required external Redis/database/two-replica topology was not exercised",
-            "provider OAuth and device-flow transactions remain process-local",
-            "credential batch idempotency and pool mutation locks remain process-local",
-            "Redis quota transition cost is unmeasured at the configured record ceiling",
+            "required external Redis/shared-database/two-replica "
+            "failure/load/rollback topology was not exercised",
         ],
         "load": {
             "one_logical_client": baseline,

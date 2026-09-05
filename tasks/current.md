@@ -4,7 +4,8 @@
 
 - Updated: 2026-09-05 (Asia/Saigon).
 - Branch: `codex/enterprise-overhaul`.
-- Last committed code checkpoint: `69616a2` (Quota State v2 hardening).
+- Latest committed evidence checkpoint: current `HEAD` (current HA blocker projection); Quota State
+  v2 hardening is `69616a2`.
 - Original program progress: 24/28 approved checklist items complete (85.7%). Wave execution-slice
   checkboxes refine those items and are not added to the denominator.
 - Control state: **W4 LOCAL ENGINEERING COMPLETE; CHECKPOINT W4-C / HA ACTIVATION BLOCKED BY
@@ -42,6 +43,8 @@
 - All 1,116 referenced console keys remain populated across all 15 locales.
 - Review hardening covers valid v1 chronology, marker TTL/order, cursor canonicality, input/count
   bounds, duplicate scan candidates, exact pipeline replies, and authoritative ready confirmation.
+- The synthetic HA evidence tool now reports only the remaining external-topology blocker instead
+  of the four historical blockers from its original W4.19 snapshot.
 
 ## Activation Disposition
 

@@ -22,7 +22,13 @@ class HaEvidenceTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(evidence["scope"], "synthetic_in_process")
         self.assertTrue(evidence["not_activation_evidence"])
         self.assertFalse(evidence["activation_eligible"])
-        self.assertEqual(len(evidence["activation_blockers"]), 4)
+        self.assertEqual(
+            evidence["activation_blockers"],
+            [
+                "required external Redis/shared-database/two-replica "
+                "failure/load/rollback topology was not exercised"
+            ],
+        )
         self.assertEqual(evidence["correctness"]["duplicate_state_transitions"], 0)
         self.assertTrue(evidence["correctness"]["stale_epoch_denied"])
         self.assertTrue(evidence["correctness"]["dependency_failure_closed"])
