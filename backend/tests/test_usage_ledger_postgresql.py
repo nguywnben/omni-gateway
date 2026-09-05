@@ -155,6 +155,19 @@ class PostgreSQLUsageLedgerTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("durable_usage_budget_keys", statements)
         self.assertIn("durable_usage_ledger", statements)
 
+    async def test_initialize_projects_catalog_constraint_type_as_text(self):
+        connection = AsyncMock()
+        connection.fetch.side_effect = [_schema_rows(), _constraint_rows(), _index_rows()]
+        acquire = AsyncMock()
+        acquire.__aenter__.return_value = connection
+        pool = Mock()
+        pool.acquire.return_value = acquire
+
+        await PostgreSQLUsageLedgerRepository(pool).initialize()
+
+        constraint_query = connection.fetch.await_args_list[1].args[0]
+        self.assertIn("constraint_ref.contype::text AS contype", constraint_query)
+
     async def test_initialize_rejects_an_existing_incompatible_schema(self):
         connection = AsyncMock()
         connection.fetch.side_effect = [

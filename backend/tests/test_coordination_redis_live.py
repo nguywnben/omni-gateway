@@ -392,7 +392,12 @@ class LiveRedisCoordinationTests(CoordinationStoreContract, unittest.IsolatedAsy
         await self.cleanup_client.hset(records_key, chronology_id, b"|".join(fields))
         with self.assertRaises(CoordinationCorruptError):
             await self.store.reserve_quota(
-                _reservation("chronology-next", now=now, key_id=chronology_key)
+                _reservation(
+                    chronology_id,
+                    now=now,
+                    key_id=chronology_key,
+                    operation_id="chronology-corruption-probe",
+                )
             )
 
     async def test_quota_replay_terminal_retention_commit_fallback_and_overspend(self) -> None:

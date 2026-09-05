@@ -170,7 +170,7 @@ class PostgreSQLUsageLedgerRepository:
                         raise UsageLedgerCorrupt("Usage ledger schema is incompatible.")
                     constraint_rows = await connection.fetch(
                         """
-                        SELECT table_ref.relname AS table_name, constraint_ref.contype,
+                        SELECT table_ref.relname AS table_name, constraint_ref.contype::text AS contype,
                                pg_get_constraintdef(constraint_ref.oid) AS definition
                         FROM pg_constraint AS constraint_ref
                         JOIN pg_class AS table_ref
