@@ -124,11 +124,11 @@ class ScenarioAndOracleTests(unittest.TestCase):
         samples = (
             RequestSample(1, "app-a", 200, 1.0, True, False),
             RequestSample(2, "app-b", 503, 1.0, False, False),
-            RequestSample(3, "app-a", 0, 1.0, False, True),
+            RequestSample(3, "app-a", 0, 1.0, False, True, transport_error="timeout"),
         )
         self.assertEqual(
             _outcome_summary(samples),
-            "statuses=0:1,200:1,503:1;transport_failures=1",
+            "statuses=0:1,200:1,503:1;transport_failures=1;transport_errors=timeout:1",
         )
 
     def test_fault_acknowledgement_requires_an_observed_data_path_milestone(self) -> None:
@@ -595,7 +595,7 @@ class RecoveryTransitionTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(seen, [(10, 20), (11, 21)])
         self.assertEqual([sample.sequence for sample in result.samples], [10, 11])
-        self.assertTrue(all(isinstance(client, httpx.AsyncClient) for client in clients))
+        self.assertTrue(all(isinstance(client, httpx.Client) for client in clients))
         self.assertIs(clients[0], clients[1])
 
     async def test_predeclared_seed_changes_the_deterministic_replica_schedule(self) -> None:
@@ -622,6 +622,27 @@ class RecoveryTransitionTests(unittest.IsolatedAsyncioTestCase):
         self.assertNotEqual(schedules[0], schedules[1])
         self.assertEqual(set(schedules[0]), {"app-a", "app-b"})
         self.assertEqual(set(schedules[1]), {"app-a", "app-b"})
+
+    async def test_workload_deadline_includes_concurrency_queue_time(self) -> None:
+        def send(sample_sequence, _request_sequence, _operation_sequence, replica, *args):
+            time.sleep(0.2)
+            return RequestSample(sample_sequence, replica, 200, 200.0, True, False)
+
+        with patch("tools.ha_topology_evidence.load._send_request", side_effect=send) as mocked:
+            result = await run_workload(
+                (("app-a", "http://127.0.0.1:14283"),),
+                api_key="sk-ogw-synthetic",
+                attempts=2,
+                concurrency=1,
+                offered_rps=10_000,
+                request_deadline_ms=100,
+            )
+
+        self.assertEqual(mocked.call_count, 1)
+        self.assertTrue(result.samples[1].transport_failure)
+        self.assertEqual(result.samples[1].transport_error, "timeout")
+        self.assertEqual(result.samples[1].status_code, 0)
+        self.assertLess(result.elapsed_ms, 1_000)
 
     async def test_correctness_scenario_timeout_fails_closed(self) -> None:
         from backend.tests.test_ha_topology_evidence_contract import candidate

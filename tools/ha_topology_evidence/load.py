@@ -30,6 +30,7 @@ class RequestSample:
     request_id: str = ""
     operation_digest: str = ""
     delivery_digest: str = ""
+    transport_error: str = ""
 
     def __post_init__(self) -> None:
         if type(self.sequence) is not int or self.sequence < 0:
@@ -55,6 +56,8 @@ class RequestSample:
             or type(self.transport_failure) is not bool
             or (self.success and (self.status_code != 200 or self.transport_failure))
             or (self.transport_failure and self.status_code != 0)
+            or self.transport_error not in {"", "timeout", "connect", "protocol", "transport"}
+            or (bool(self.transport_error) and not self.transport_failure)
         ):
             raise EvidenceVerificationError("Request sample result is invalid.")
         if (
@@ -72,6 +75,7 @@ class RequestSample:
 
     def safe_dict(self, *, include_request_id: bool = False) -> dict[str, object]:
         value = asdict(self)
+        value.pop("transport_error")
         if not include_request_id:
             value.pop("request_id")
         return value
@@ -111,17 +115,9 @@ class WorkloadResult:
         )
 
 
-async def _send_request(
-    sequence: int,
-    request_sequence: int,
-    operation_sequence: int,
-    replica: str,
-    base_url: str,
-    api_key: str,
-    deadline_seconds: float,
-    operation_key: bytes,
-    client: httpx.AsyncClient,
-) -> RequestSample:
+def _sample_identity(
+    sequence: int, operation_sequence: int, operation_key: bytes
+) -> tuple[str, str, str]:
     logical_operation = str(operation_sequence).encode("ascii")
     request_id = (
         "w4e-"
@@ -141,6 +137,47 @@ async def _send_request(
         b"omni-ha-evidence-delivery-v1\x00" + str(sequence).encode("ascii"),
         hashlib.sha256,
     ).hex()
+    return request_id, operation_digest, delivery_digest
+
+
+def _deadline_sample(
+    sequence: int,
+    operation_sequence: int,
+    replica: str,
+    duration_ms: float,
+    operation_key: bytes,
+) -> RequestSample:
+    request_id, operation_digest, delivery_digest = _sample_identity(
+        sequence, operation_sequence, operation_key
+    )
+    return RequestSample(
+        sequence=sequence,
+        replica=replica,
+        status_code=0,
+        duration_ms=duration_ms,
+        success=False,
+        transport_failure=True,
+        request_id=request_id,
+        operation_digest=operation_digest,
+        delivery_digest=delivery_digest,
+        transport_error="timeout",
+    )
+
+
+def _send_request(
+    sequence: int,
+    request_sequence: int,
+    operation_sequence: int,
+    replica: str,
+    base_url: str,
+    api_key: str,
+    deadline_seconds: float,
+    operation_key: bytes,
+    client: httpx.Client,
+) -> RequestSample:
+    request_id, operation_digest, delivery_digest = _sample_identity(
+        sequence, operation_sequence, operation_key
+    )
     body = json.dumps(
         {
             "model": "omni-evidence-model",
@@ -161,8 +198,9 @@ async def _send_request(
     status = 0
     success = False
     transport_failure = False
+    transport_error = ""
     try:
-        async with client.stream(
+        with client.stream(
             "POST",
             f"{base_url.rstrip('/')}/v1/chat/completions",
             content=body,
@@ -176,13 +214,23 @@ async def _send_request(
         ) as response:
             status = response.status_code
             length = 0
-            async for chunk in response.aiter_bytes():
+            for chunk in response.iter_bytes():
                 length += len(chunk)
                 if length > 1_048_576:
                     break
             success = status == 200 and length <= 1_048_576
-    except (httpx.HTTPError, OSError, TimeoutError):
+    except (httpx.TimeoutException, TimeoutError):
         transport_failure = True
+        transport_error = "timeout"
+    except httpx.ConnectError:
+        transport_failure = True
+        transport_error = "connect"
+    except httpx.RemoteProtocolError:
+        transport_failure = True
+        transport_error = "protocol"
+    except (httpx.HTTPError, OSError):
+        transport_failure = True
+        transport_error = "transport"
     elapsed = (time.perf_counter_ns() - started) / 1_000_000
     return RequestSample(
         sequence=sequence,
@@ -194,6 +242,7 @@ async def _send_request(
         request_id=request_id,
         operation_digest=operation_digest,
         delivery_digest=delivery_digest,
+        transport_error=transport_error,
     )
 
 
@@ -247,15 +296,16 @@ async def run_workload(
         max_keepalive_connections=concurrency,
         keepalive_expiry=30.0,
     )
-    async with httpx.AsyncClient(
+    with httpx.Client(
         limits=limits,
         trust_env=False,
         follow_redirects=False,
         http2=False,
     ) as client:
+        schedule_start = time.perf_counter()
 
         async def one(index: int) -> RequestSample:
-            due = start / 1_000_000_000 + index / offered_rps
+            due = schedule_start + index / offered_rps
             delay = due - time.perf_counter()
             if delay > 0:
                 await asyncio.sleep(delay)
@@ -272,18 +322,51 @@ async def run_workload(
                 if operation_sequence_offset is None
                 else operation_sequence_offset + index
             )
-            async with semaphore:
-                return await _send_request(
+            deadline_seconds = request_deadline_ms / 1000.0
+            deadline = due + deadline_seconds
+            remaining = deadline - time.perf_counter()
+            if remaining <= 0:
+                return _deadline_sample(
+                    sample_sequence,
+                    operation_sequence,
+                    name,
+                    deadline_seconds * 1000,
+                    operation_key,
+                )
+            try:
+                await asyncio.wait_for(semaphore.acquire(), timeout=remaining)
+            except TimeoutError:
+                return _deadline_sample(
+                    sample_sequence,
+                    operation_sequence,
+                    name,
+                    deadline_seconds * 1000,
+                    operation_key,
+                )
+            try:
+                remaining = deadline - time.perf_counter()
+                if remaining <= 0:
+                    return _deadline_sample(
+                        sample_sequence,
+                        operation_sequence,
+                        name,
+                        deadline_seconds * 1000,
+                        operation_key,
+                    )
+                return await asyncio.to_thread(
+                    _send_request,
                     sample_sequence,
                     request_sequence,
                     operation_sequence,
                     name,
                     url,
                     api_key,
-                    request_deadline_ms / 1000.0,
+                    remaining,
                     operation_key,
                     client,
                 )
+            finally:
+                semaphore.release()
 
         samples = await asyncio.gather(*(one(index) for index in range(attempts)))
     elapsed = (time.perf_counter_ns() - start) / 1_000_000

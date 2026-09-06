@@ -37,7 +37,12 @@ def _outcome_summary(samples: tuple[RequestSample, ...]) -> str:
         statuses[sample.status_code] = statuses.get(sample.status_code, 0) + 1
     encoded = ",".join(f"{status}:{statuses[status]}" for status in sorted(statuses))
     transport = sum(sample.transport_failure for sample in samples)
-    return f"statuses={encoded};transport_failures={transport}"
+    errors: dict[str, int] = {}
+    for sample in samples:
+        if sample.transport_error:
+            errors[sample.transport_error] = errors.get(sample.transport_error, 0) + 1
+    error_counts = ",".join(f"{name}:{errors[name]}" for name in sorted(errors)) or "none"
+    return f"statuses={encoded};transport_failures={transport};transport_errors={error_counts}"
 
 
 @dataclass(frozen=True, slots=True)
