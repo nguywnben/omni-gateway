@@ -261,7 +261,12 @@ class MatrixRunner:
             phase="warmup",
         )
         if not all(sample.success for sample in result.samples):
-            raise EvidenceVerificationError("Performance warm-up did not complete every request.")
+            statuses = ",".join(
+                str(status) for status in sorted({sample.status_code for sample in result.samples})
+            )
+            raise EvidenceVerificationError(
+                f"Performance warm-up did not complete every request (statuses={statuses})."
+            )
         await self._wait_conservation(before, self.candidate.warmup_requests)
         await self._verified_counters(result.samples)
 
@@ -440,7 +445,9 @@ class MatrixRunner:
 
     async def _performance_pair(self, repetition: int) -> tuple[ScenarioObservation, ...]:
         seed = self.candidate.pair_seeds[repetition - 1]
-        self.controller.compose(ComposeAction.STOP, ("app-b",))
+        # A graceful application shutdown is a cluster-wide drain transition,
+        # not a neutral way to establish the one-replica performance baseline.
+        self.controller.compose(ComposeAction.KILL, ("app-b",))
         self.controller.wait_http(f"{self.endpoints[0][1]}/ready")
         await self._warmup(
             (self.endpoints[0],),

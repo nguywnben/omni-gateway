@@ -342,6 +342,44 @@ class ScenarioAndOracleTests(unittest.TestCase):
 
 
 class RecoveryTransitionTests(unittest.IsolatedAsyncioTestCase):
+    async def test_performance_baseline_removes_second_replica_without_cluster_drain(self) -> None:
+        from backend.tests.test_ha_topology_evidence_contract import candidate
+
+        class Controller:
+            def __init__(self) -> None:
+                self.actions = []
+
+            def compose(self, action, services=()):
+                self.actions.append((action, services))
+
+            def wait_http(self, _url):
+                return 200
+
+        controller = Controller()
+        runner = object.__new__(MatrixRunner)
+        runner.candidate = candidate()
+        runner.controller = controller
+        runner.endpoints = (
+            ("app-a", "http://127.0.0.1:14283"),
+            ("app-b", "http://127.0.0.1:14284"),
+        )
+        observation = ScenarioObservation(
+            "coordinated-baseline", 1, 1, 2, 1, 0, CorrectnessCounters(attempted=1)
+        )
+        with (
+            patch.object(runner, "_warmup", AsyncMock()),
+            patch.object(runner, "_observed_load", AsyncMock(return_value=observation)),
+        ):
+            await runner._performance_pair(1)
+
+        self.assertEqual(
+            controller.actions,
+            [
+                (ComposeAction.KILL, ("app-b",)),
+                (ComposeAction.START, ("app-b",)),
+            ],
+        )
+
     async def test_durable_oracle_reads_usage_request_identity_from_json_payload(self) -> None:
         request_id = "w4e-" + "1" * 32
         operation_key = b"k" * 32
