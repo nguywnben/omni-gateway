@@ -2,10 +2,10 @@
 ARG PRODUCTION_IMAGE
 FROM ${PRODUCTION_IMAGE}
 
-ARG PRODUCTION_IMAGE
+ARG PRODUCTION_IMAGE_ID
 ARG EVIDENCE_LAUNCHER_DIGEST
 LABEL com.omni-gateway.evidence.launcher-digest="${EVIDENCE_LAUNCHER_DIGEST}" \
-      com.omni-gateway.evidence.production-image="${PRODUCTION_IMAGE}" \
+      com.omni-gateway.evidence.production-image="${PRODUCTION_IMAGE_ID}" \
       com.omni-gateway.evidence.production="false"
 
 USER root

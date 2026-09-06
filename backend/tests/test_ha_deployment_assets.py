@@ -73,6 +73,7 @@ class HaDeploymentAssetTests(unittest.TestCase):
         self.assertIn("${EVIDENCE_IMAGE:?", source)
         self.assertIn("${OMNI_EVIDENCE_IMAGE:?", source)
         dockerfile = (ROOT / "deploy" / "evidence" / "Dockerfile").read_text(encoding="utf-8")
+        self.assertIn("ARG PRODUCTION_IMAGE_ID", dockerfile)
         self.assertIn("com.omni-gateway.evidence.production-image", dockerfile)
         self.assertIn("com.omni-gateway.evidence.launcher-digest", dockerfile)
 

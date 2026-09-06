@@ -32,7 +32,8 @@ $w4cLauncherDigest = .\.venv\Scripts\python.exe -c `
   "from pathlib import Path; from tools.ha_topology_evidence.candidate import launcher_digest; print(launcher_digest(Path.cwd()))"
 
 docker build --file deploy/evidence/Dockerfile `
-  --build-arg PRODUCTION_IMAGE=$w4cProductionImage `
+  --build-arg PRODUCTION_IMAGE=omni-gateway:w4c-candidate `
+  --build-arg PRODUCTION_IMAGE_ID=$w4cProductionImage `
   --build-arg EVIDENCE_LAUNCHER_DIGEST=$w4cLauncherDigest `
   --tag omni-gateway:w4c-evidence .
 $w4cEvidenceImage = docker image inspect omni-gateway:w4c-evidence --format '{{.Id}}'
