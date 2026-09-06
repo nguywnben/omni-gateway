@@ -124,6 +124,7 @@ class InferenceScopeAuthenticationTests(unittest.IsolatedAsyncioTestCase):
             requested_model="",
             request_body=None,
             candidate_models=None,
+            operation_id="",
         )
         note_last_used.assert_awaited_once_with(record)
 

@@ -261,6 +261,43 @@ class VirtualKeyEnforcementTests(unittest.TestCase):
         _run(scenario())
         self.assertEqual(self.manager._test_usage_ledger.reserve_budget.await_count, 2)
 
+    def test_operation_identity_derives_same_durable_reservation_across_replicas(self):
+        record = self._make_key(budget_daily_usd=10.0)
+        other = _patched_manager(_FakeStorage())
+        other._loaded = True
+
+        async def scenario():
+            first_id = await self.manager.enforce(
+                record,
+                operation_id="w4e-0123456789abcdef0123456789abcdef",
+                now=1_000.0,
+            )
+            second_id = await other.enforce(
+                record,
+                operation_id="w4e-0123456789abcdef0123456789abcdef",
+                now=1_000.0,
+            )
+            return first_id, second_id
+
+        first_id, second_id = _run(scenario())
+        self.assertEqual(first_id, second_id)
+        self.assertRegex(first_id, r"^qrs_[0-9a-f]{32}$")
+
+    def test_operation_identity_is_bound_to_virtual_key(self):
+        first = self._make_key(budget_daily_usd=10.0)
+        second = VirtualKey(**{**first.__dict__, "id": "vk_other"})
+        other = _patched_manager(_FakeStorage())
+        other._loaded = True
+
+        async def scenario():
+            return (
+                await self.manager.enforce(first, operation_id="request-1", now=1_000.0),
+                await other.enforce(second, operation_id="request-1", now=1_000.0),
+            )
+
+        first_id, second_id = _run(scenario())
+        self.assertNotEqual(first_id, second_id)
+
 
 class VirtualKeyCoordinationTests(unittest.TestCase):
     @staticmethod

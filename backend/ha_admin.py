@@ -14,7 +14,7 @@ from core.redis_state_store import RedisStateStore
 from core.storage_adapter import close_storage_adapter, get_storage_adapter
 
 
-def _quota_page_size(value: str) -> int:
+def _page_size(value: str) -> int:
     try:
         result = int(value)
     except ValueError:
@@ -35,10 +35,12 @@ def _parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--operation-id", help="Stable idempotency ID for epoch mutations.")
     parser.add_argument(
+        "--page-size",
         "--quota-page-size",
-        type=_quota_page_size,
+        dest="page_size",
+        type=_page_size,
         default=256,
-        help="Maximum quota records inspected by one reconcile call (1-256).",
+        help="Maximum component records inspected by one reconcile call (1-256).",
     )
     return parser
 
@@ -66,9 +68,12 @@ async def _execute(arguments: argparse.Namespace) -> dict[str, object]:
         if arguments.command == "drain":
             return await operator.drain(apply=arguments.apply)
         if arguments.command == "reconcile":
+            if not arguments.operation_id:
+                raise RuntimeError("--operation-id is required for this command.")
             return await operator.reconcile(
+                arguments.operation_id,
                 apply=arguments.apply,
-                quota_page_size=arguments.quota_page_size,
+                page_size=arguments.page_size,
             )
         if not arguments.operation_id:
             raise RuntimeError("--operation-id is required for this command.")

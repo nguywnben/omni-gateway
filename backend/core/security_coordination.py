@@ -338,6 +338,22 @@ class SessionPage:
 
 
 @dataclass(frozen=True, slots=True)
+class SessionReconciliationSnapshot:
+    active_count: int
+    digest: str
+
+    def __post_init__(self) -> None:
+        _strict_int(
+            self.active_count,
+            "Session reconciliation count",
+            minimum=0,
+            maximum=MAX_COORDINATION_INTEGER,
+        )
+        if type(self.digest) is not str or not _HMAC_INDEX_PATTERN.fullmatch(self.digest):
+            raise ValueError("Session reconciliation digest is invalid.")
+
+
+@dataclass(frozen=True, slots=True)
 class AttemptReservationRequest:
     category: SecurityAttemptCategory
     client_index: str = field(repr=False)
@@ -536,6 +552,8 @@ class IdentitySecurityCoordinationStore(CoordinationStore, Protocol):
     ) -> SessionRevokeResult: ...
 
     async def list_security_sessions(self, request: SessionListRequest) -> SessionPage: ...
+
+    async def read_session_reconciliation(self, *, epoch: int) -> SessionReconciliationSnapshot: ...
 
     async def reserve_security_attempt(
         self, request: AttemptReservationRequest

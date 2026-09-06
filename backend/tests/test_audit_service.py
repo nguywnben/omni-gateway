@@ -205,6 +205,24 @@ class AuditServiceTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(storage.repositories[0].prune_calls, [])
         self.assertEqual(service.retention_policy, AuditRetentionPolicy())
 
+    async def test_inference_audit_is_redacted_and_prunes_in_bounded_batches(self):
+        storage = _Storage()
+        service = await AuditService.create(storage)
+
+        for index in range(256):
+            event = await service.record_inference(
+                request_id=f"inference-{index}",
+                protocol="openai_chat",
+                status_code=200,
+            )
+
+        repository = storage.repositories[0]
+        self.assertEqual(len(repository.events), 256)
+        self.assertEqual(len(repository.prune_calls), 1)
+        self.assertEqual(event.action, "inference.execute")
+        self.assertEqual(event.target_type, "inference_route")
+        self.assertNotIn("openai_chat", repr(event.to_record()))
+
     async def test_credential_evidence_maps_to_canonical_durable_contract(self):
         storage = _Storage()
         service = await AuditService.create(storage)

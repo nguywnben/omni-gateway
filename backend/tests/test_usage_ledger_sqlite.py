@@ -108,6 +108,43 @@ class SQLiteUsageLedgerTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(spend.total_tokens, 120)
         self.assertEqual(spend.cost_nanos, usd_to_nanos("0.25"))
 
+    async def test_reconciliation_pages_only_scan_active_liabilities(self):
+        for suffix in "abcde":
+            await self.repository.append_usage(_usage(suffix, cost_nanos=0))
+        first_reservation = _reservation("f", daily_budget_nanos=usd_to_nanos("2.00"))
+        second_reservation = _reservation("0", daily_budget_nanos=usd_to_nanos("2.00"))
+        await self.repository.reserve_budget(first_reservation)
+        await self.repository.reserve_budget(second_reservation)
+
+        first = await self.repository.reconciliation_page(after=None, limit=1)
+        second = await self.repository.reconciliation_page(after=first.cursor, limit=1)
+
+        self.assertFalse(first.complete)
+        self.assertEqual(first.scanned, 1)
+        self.assertTrue(second.complete)
+        self.assertEqual(second.scanned, 1)
+        self.assertEqual(
+            first.active_liability_nanos + second.active_liability_nanos,
+            first_reservation.estimated_cost_nanos + second_reservation.estimated_cost_nanos,
+        )
+        self.assertEqual(first.active_reservations + second.active_reservations, 2)
+        self.assertNotEqual(first.snapshot_digest, second.snapshot_digest)
+        replay = await self.repository.reconciliation_page(after=None, limit=1)
+        self.assertEqual(replay, first)
+
+        with self.assertRaisesRegex(ValueError, "cursor"):
+            await self.repository.reconciliation_page(after="not-a-ledger-id", limit=1)
+
+    async def test_reconciliation_counts_zero_cost_active_reservations(self):
+        reservation = _reservation("f", estimated_cost_nanos=0)
+        self.assertTrue((await self.repository.reserve_budget(reservation)).accepted)
+
+        page = await self.repository.reconciliation_page(after=None, limit=1)
+
+        self.assertTrue(page.complete)
+        self.assertEqual(page.active_liability_nanos, 0)
+        self.assertEqual(page.active_reservations, 1)
+
     async def test_initialize_rejects_an_existing_incompatible_schema(self):
         incompatible_path = str(Path(self.database_path).with_name("incompatible.db"))
         connection = sqlite3.connect(incompatible_path)

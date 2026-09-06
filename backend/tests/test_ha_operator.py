@@ -4,22 +4,21 @@ import base64
 import json
 import sys
 import unittest
+from datetime import datetime, timezone
 from pathlib import Path
 
 BACKEND_DIR = Path(__file__).resolve().parents[1]
 if str(BACKEND_DIR) not in sys.path:
     sys.path.insert(0, str(BACKEND_DIR))
 
-from core.coordination import (
-    CoordinationReconciliationRequiredError,
-    EpochState,
-    QuotaReconciliationResult,
-    QuotaReservationRequest,
-)
+from core.coordination import EpochState, QuotaReconciliationResult
 from core.ha_coordination_binding import CoordinationBindingManager
 from core.ha_operator import HaRuntimeOperator
+from core.ha_reconciliation import ReconciliationComponent, ReconciliationPage
 from core.ha_runtime_policy import HaRuntimePolicy
+from core.identity.repository import OidcPolicyRevisionRecord
 from core.state_store import InMemoryStateStore
+from core.usage_ledger import UsageLiabilityPage
 
 from backend.tests.durable_migration_fixtures import (
     PLAN_ID,
@@ -42,6 +41,21 @@ class _Storage:
 
     async def create_migration_checkpoint_repository(self):
         return self.checkpoints
+
+    async def create_usage_ledger_repository(self):
+        return self
+
+    async def reconciliation_page(self, *, after, limit):
+        return UsageLiabilityPage(0, True, None, "a" * 64, 0)
+
+    async def create_identity_repository(self):
+        return self
+
+    async def list_identities(self, *, limit=100, after=None):
+        return []
+
+    async def get_oidc_policy_revision(self):
+        return OidcPolicyRevisionRecord.initial(now=datetime(2026, 9, 6, tzinfo=timezone.utc))
 
 
 def policy(epoch: int = 1) -> HaRuntimePolicy:
@@ -76,6 +90,18 @@ class HaRuntimeOperatorTests(unittest.IsolatedAsyncioTestCase):
             apply=True,
         )
 
+    async def _reconcile_all(
+        self,
+        operator: HaRuntimeOperator,
+        operation_id: str = "reconcile-operation-1",
+    ) -> dict[str, object]:
+        result: dict[str, object] = {}
+        for _ in range(8):
+            result = await operator.reconcile(operation_id, apply=True)
+            if result["reconciliation_complete"]:
+                return result
+        self.fail("Reconciliation did not complete within the bounded component inventory.")
+
     async def test_full_drain_epoch_reconcile_ready_flow_is_bounded_and_idempotent(self) -> None:
         operator = HaRuntimeOperator(
             policy(), self.storage, self.store, activation_verifier=lambda _record: True
@@ -89,7 +115,7 @@ class HaRuntimeOperatorTests(unittest.IsolatedAsyncioTestCase):
         self.assertIsInstance(await self.store.get(operator.DRAIN_KEY), str)
         self.assertEqual(
             json.loads(await self.store.get(operator.DRAIN_KEY))["schema_version"],
-            2,
+            3,
         )
         self.assertEqual((await operator.status())["state"], "draining")
 
@@ -105,10 +131,12 @@ class HaRuntimeOperatorTests(unittest.IsolatedAsyncioTestCase):
         next_operator = HaRuntimeOperator(
             policy(2), self.storage, self.store, activation_verifier=lambda _record: True
         )
-        reconciled = await next_operator.reconcile(apply=True)
+        reconciled = await self._reconcile_all(next_operator)
         self.assertTrue(reconciled["applied"])
         self.assertEqual(reconciled["epoch"], 2)
-        self.assertEqual((await next_operator.reconcile(apply=True))["epoch"], 2)
+        self.assertEqual(
+            (await next_operator.reconcile("reconcile-operation-1", apply=True))["epoch"], 2
+        )
 
         ready = await next_operator.mark_ready("ready-op-00000001", apply=True)
         self.assertEqual(ready["state"], "ready")
@@ -128,7 +156,7 @@ class HaRuntimeOperatorTests(unittest.IsolatedAsyncioTestCase):
             policy(2), self.storage, self.store, activation_verifier=lambda _record: True
         )
         with self.assertRaisesRegex(RuntimeError, "drain"):
-            await operator.reconcile(apply=True)
+            await operator.reconcile("reconcile-without-drain", apply=True)
 
     async def test_mark_ready_retry_removes_drain_after_crash_boundary(self) -> None:
         from unittest.mock import patch
@@ -141,7 +169,7 @@ class HaRuntimeOperatorTests(unittest.IsolatedAsyncioTestCase):
         operator = HaRuntimeOperator(
             policy(2), self.storage, self.store, activation_verifier=lambda _record: True
         )
-        await operator.reconcile(apply=True)
+        await self._reconcile_all(operator, "reconcile-crash-retry")
         with patch.object(
             self.store, "complete_admission_drain", side_effect=RuntimeError("injected crash")
         ):
@@ -161,7 +189,7 @@ class HaRuntimeOperatorTests(unittest.IsolatedAsyncioTestCase):
             policy(), self.storage, self.store, activation_verifier=lambda _record: True
         )
         await operator.drain(apply=True)
-        with self.assertRaisesRegex(RuntimeError, "drain"):
+        with self.assertRaisesRegex(RuntimeError, "reconciliation"):
             await operator.mark_ready("unrelated-ready", apply=True)
 
     async def test_mark_ready_crash_retry_rejects_different_operation(self) -> None:
@@ -175,7 +203,7 @@ class HaRuntimeOperatorTests(unittest.IsolatedAsyncioTestCase):
         operator = HaRuntimeOperator(
             policy(2), self.storage, self.store, activation_verifier=lambda _record: True
         )
-        await operator.reconcile(apply=True)
+        await self._reconcile_all(operator, "reconcile-ready-operation")
         with patch.object(
             self.store, "complete_admission_drain", side_effect=RuntimeError("injected crash")
         ):
@@ -185,7 +213,7 @@ class HaRuntimeOperatorTests(unittest.IsolatedAsyncioTestCase):
             await operator.mark_ready("different-ready", apply=True)
         self.assertIsNotNone(await self.store.get(operator.DRAIN_KEY))
 
-    async def test_mark_ready_requires_complete_quota_reconciliation(self) -> None:
+    async def test_mark_ready_requires_complete_reconciliation_receipt(self) -> None:
         operator = HaRuntimeOperator(
             policy(), self.storage, self.store, activation_verifier=lambda _record: True
         )
@@ -193,70 +221,223 @@ class HaRuntimeOperatorTests(unittest.IsolatedAsyncioTestCase):
         await operator.advance_epoch("epoch-op-quota-gate", apply=True)
 
         async def incomplete_reconciliation(**_kwargs: object) -> QuotaReconciliationResult:
-            return QuotaReconciliationResult(256, False, "opaque-cursor")
+            return QuotaReconciliationResult(256, False, "opaque-cursor", "a" * 64)
 
         self.store.reconcile_quota_state = incomplete_reconciliation  # type: ignore[method-assign]
         next_operator = HaRuntimeOperator(
             policy(2), self.storage, self.store, activation_verifier=lambda _record: True
         )
-        page = await next_operator.reconcile(apply=True)
+        page = await next_operator.reconcile("reconcile-quota-gate", apply=True)
 
-        self.assertFalse(page["quota_complete"])
-        self.assertTrue(page["quota_cursor_present"])
+        self.assertFalse(page["reconciliation_complete"])
+        self.assertTrue(page["cursor_present"])
         self.assertNotIn("opaque-cursor", repr(page))
-        with self.assertRaisesRegex(RuntimeError, "quota reconciliation"):
+        with self.assertRaisesRegex(RuntimeError, "reconciliation evidence"):
             await next_operator.mark_ready("ready-op-quota-gate", apply=True)
+
+    async def test_reconciliation_resumes_after_restart_at_every_component_boundary(self) -> None:
+        operator = HaRuntimeOperator(
+            policy(), self.storage, self.store, activation_verifier=lambda _record: True
+        )
+        await operator.drain(apply=True)
+        await operator.advance_epoch("boundary-advance", apply=True)
+
+        expected_components = (
+            "quota_state",
+            "usage_liability",
+            "identity_policy",
+            "cache_invalidation",
+        )
+        for index, component in enumerate(expected_components):
+            # Recreate the operator on every boundary to prove that the durable
+            # receipt, rather than process memory, is the resume authority.
+            operator = HaRuntimeOperator(
+                policy(2),
+                self.storage,
+                self.store,
+                activation_verifier=lambda _record: True,
+            )
+            result = await operator.reconcile("boundary-reconcile", apply=True)
+            self.assertEqual(result["component"], component)
+            self.assertEqual(
+                result["reconciliation_complete"],
+                index == len(expected_components) - 1,
+            )
+
+        receipt = await operator._receipt()
+        self.assertIsNotNone(receipt)
+        assert receipt is not None
+        self.assertTrue(receipt.complete)
+        self.assertTrue(all(item.pages == 1 for item in receipt.components))
+
+    async def test_reconciliation_is_side_effect_free_in_preview_and_operation_bound(self) -> None:
+        operator = HaRuntimeOperator(
+            policy(), self.storage, self.store, activation_verifier=lambda _record: True
+        )
+        await operator.drain(apply=True)
+        await operator.advance_epoch("preview-advance", apply=True)
+        operator = HaRuntimeOperator(
+            policy(2), self.storage, self.store, activation_verifier=lambda _record: True
+        )
+
+        preview = await operator.reconcile("preview-reconcile", apply=False)
+
+        self.assertFalse(preview["applied"])
+        self.assertIsNone(await self.storage.get_config(operator.RECEIPT_KEY, None))
+        await operator.reconcile("preview-reconcile", apply=True)
+        with self.assertRaisesRegex(RuntimeError, "operation identity"):
+            await operator.reconcile("different-reconcile", apply=True)
+
+    async def test_reconciliation_and_ready_mutations_share_one_owned_transition_lock(self) -> None:
+        operator = HaRuntimeOperator(
+            policy(), self.storage, self.store, activation_verifier=lambda _record: True
+        )
+        await operator.drain(apply=True)
+        await operator.advance_epoch("locked-transition-advance", apply=True)
+        operator = HaRuntimeOperator(
+            policy(2), self.storage, self.store, activation_verifier=lambda _record: True
+        )
+
+        self.assertTrue(
+            await self.store.acquire_lock(
+                operator.RECONCILIATION_LOCK_KEY,
+                ttl_seconds=operator.RECONCILIATION_LOCK_TTL_SECONDS,
+            )
+        )
+        with self.assertRaisesRegex(RuntimeError, "in progress"):
+            await operator.reconcile("locked-transition-reconcile", apply=True)
+        await self.store.release_lock(operator.RECONCILIATION_LOCK_KEY)
+
+        await self._reconcile_all(operator, "locked-transition-reconcile")
+        self.assertTrue(
+            await self.store.acquire_lock(
+                operator.RECONCILIATION_LOCK_KEY,
+                ttl_seconds=operator.RECONCILIATION_LOCK_TTL_SECONDS,
+            )
+        )
+        with self.assertRaisesRegex(RuntimeError, "in progress"):
+            await operator.mark_ready("locked-transition-ready", apply=True)
+        await self.store.release_lock(operator.RECONCILIATION_LOCK_KEY)
+        self.assertIs((await self.store.read_epoch()).state, EpochState.RECONCILING)
+
+    async def test_expired_lock_owner_cannot_publish_after_a_newer_fence(self) -> None:
+        operator = HaRuntimeOperator(
+            policy(), self.storage, self.store, activation_verifier=lambda _record: True
+        )
+        await operator.drain(apply=True)
+        await operator.advance_epoch("stale-owner-advance", apply=True)
+        operator = HaRuntimeOperator(
+            policy(2), self.storage, self.store, activation_verifier=lambda _record: True
+        )
+        stale_fence = await self.store.increment(operator.RECONCILIATION_FENCE_KEY)
+
+        async def lose_ownership(*_args, **_kwargs):
+            await self.store.increment(operator.RECONCILIATION_FENCE_KEY)
+            return ReconciliationPage(
+                ReconciliationComponent.QUOTA,
+                None,
+                0,
+                True,
+                None,
+                "a" * 64,
+                1,
+            )
+
+        operator._reconciliation.next_page = lose_ownership  # type: ignore[method-assign]
+        with self.assertRaisesRegex(RuntimeError, "ownership is stale"):
+            await operator._reconcile_locked(
+                "stale-owner-reconcile",
+                apply=True,
+                page_size=256,
+                transition_fence=stale_fence,
+            )
+        self.assertNotIn(operator._receipt_storage_key(stale_fence), self.storage.values)
+
+    async def test_reconciliation_rejects_a_tampered_incomplete_binding(self) -> None:
+        operator = HaRuntimeOperator(
+            policy(), self.storage, self.store, activation_verifier=lambda _record: True
+        )
+        await operator.drain(apply=True)
+        await operator.advance_epoch("tampered-incomplete-advance", apply=True)
+        operator = HaRuntimeOperator(
+            policy(2), self.storage, self.store, activation_verifier=lambda _record: True
+        )
+        await operator.reconcile("tampered-incomplete-reconcile", apply=True)
+        latest = await operator._receipt()
+        assert latest is not None
+        receipt_key = operator._receipt_storage_key(latest.transition_fence)
+        receipt = dict(self.storage.values[receipt_key])
+        self.storage.values[receipt_key] = {
+            **receipt,
+            "manifest_checksum": "e" * 64,
+        }
+
+        with self.assertRaisesRegex(RuntimeError, "not authentic"):
+            await operator.reconcile("tampered-incomplete-reconcile", apply=True)
+
+    async def test_mark_ready_rejects_tampered_receipt_binding_fields(self) -> None:
+        operator = HaRuntimeOperator(
+            policy(), self.storage, self.store, activation_verifier=lambda _record: True
+        )
+        await operator.drain(apply=True)
+        await operator.advance_epoch("receipt-binding-advance", apply=True)
+        operator = HaRuntimeOperator(
+            policy(2), self.storage, self.store, activation_verifier=lambda _record: True
+        )
+        await self._reconcile_all(operator, "receipt-binding-reconcile")
+        latest = await operator._receipt()
+        assert latest is not None
+        receipt_key = operator._receipt_storage_key(latest.transition_fence)
+        original = dict(self.storage.values[receipt_key])
+
+        for field, value in (
+            ("target_epoch", 3),
+            ("manifest_checksum", "e" * 64),
+            ("migration_checkpoint_revision", 999),
+            ("migration_checkpoint_checksum", "f" * 64),
+            ("operation_id", "tampered-operation"),
+        ):
+            with self.subTest(field=field):
+                self.storage.values[receipt_key] = {**original, field: value}
+                with self.assertRaisesRegex(RuntimeError, "reconciliation"):
+                    await operator.mark_ready("receipt-binding-ready", apply=True)
+        self.storage.values[receipt_key] = original
 
     async def test_mark_ready_revalidates_a_tampered_complete_drain_record(self) -> None:
         operator = HaRuntimeOperator(
             policy(), self.storage, self.store, activation_verifier=lambda _record: True
         )
-        decision = await self.store.reserve_quota(
-            QuotaReservationRequest(
-                reservation_id="active-before-drain",
-                key_id="virtual-key",
-                now=1.0,
-                ttl_seconds=61.0,
-                estimated_tokens=1,
-                estimated_cost_usd=0.0,
-                rpm_limit=None,
-                tpm_limit=None,
-                daily_budget_usd=None,
-                monthly_budget_usd=None,
-                daily_spend_usd=0.0,
-                monthly_spend_usd=0.0,
-                daily_snapshot_started_at=1.0,
-                monthly_snapshot_started_at=1.0,
-            )
-        )
-        self.assertTrue(decision.accepted)
         await operator.drain(apply=True)
         await operator.advance_epoch("epoch-op-tampered-drain", apply=True)
         next_operator = HaRuntimeOperator(
             policy(2), self.storage, self.store, activation_verifier=lambda _record: True
         )
-        with self.assertRaises(CoordinationReconciliationRequiredError):
-            await next_operator.reconcile(apply=True)
+        await self._reconcile_all(next_operator, "reconcile-tampered-drain")
         drain = json.loads(await self.store.get(operator.DRAIN_KEY))
         await self.store.set(
             operator.DRAIN_KEY,
             operator._encode_record(
                 {
                     **drain,
-                    "quota_reconciliation_cursor": None,
-                    "quota_reconciliation_complete": True,
+                    "reconciliation_receipt_checksum": "e" * 64,
                 }
             ),
         )
 
-        with self.assertRaises(CoordinationReconciliationRequiredError):
+        with self.assertRaisesRegex(RuntimeError, "reconciliation"):
             await next_operator.mark_ready("ready-op-tampered-drain", apply=True)
         self.assertIs((await self.store.read_epoch()).state, EpochState.RECONCILING)
 
-    async def test_rollback_plan_is_content_free_and_never_mutates(self) -> None:
+    async def test_rollback_plan_requires_a_fresh_active_drain_and_never_mutates(self) -> None:
         operator = HaRuntimeOperator(
             policy(), self.storage, self.store, activation_verifier=lambda _record: True
         )
+        await operator.drain(apply=True)
+        await operator.advance_epoch("rollback-advance", apply=True)
+        operator = HaRuntimeOperator(
+            policy(2), self.storage, self.store, activation_verifier=lambda _record: True
+        )
+        await self._reconcile_all(operator, "rollback-reconcile")
         before = await self.store.read_epoch()
         plan = await operator.rollback_plan()
         after = await self.store.read_epoch()
@@ -266,6 +447,21 @@ class HaRuntimeOperatorTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(plan["workers"], 1)
         self.assertEqual(plan["replicas"], 1)
         self.assertNotIn("redis://", repr(plan))
+
+    async def test_rollback_plan_rejects_a_receipt_after_admission_resumes(self) -> None:
+        operator = HaRuntimeOperator(
+            policy(), self.storage, self.store, activation_verifier=lambda _record: True
+        )
+        await operator.drain(apply=True)
+        await operator.advance_epoch("rollback-stale-advance", apply=True)
+        operator = HaRuntimeOperator(
+            policy(2), self.storage, self.store, activation_verifier=lambda _record: True
+        )
+        await self._reconcile_all(operator, "rollback-stale-reconcile")
+        await operator.mark_ready("rollback-stale-ready", apply=True)
+
+        with self.assertRaisesRegex(RuntimeError, "active completed drain"):
+            await operator.rollback_plan()
 
     async def test_status_fails_closed_when_the_namespace_binding_is_missing(self) -> None:
         await self.store.delete(CoordinationBindingManager.STORE_KEY)

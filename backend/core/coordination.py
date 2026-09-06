@@ -149,9 +149,9 @@ def decode_admission_json(value: object) -> dict[str, object]:
 class AdmissionFence:
     namespace_digest: str = field(repr=False)
     epoch: int
-    quota_reconciliation_cursor: str | None = field(repr=False)
-    quota_reconciliation_complete: bool
-    schema_version: int = 2
+    reconciliation_receipt_checksum: str | None = field(repr=False)
+    reconciliation_complete: bool
+    schema_version: int = 3
 
     def encode(self) -> str:
         return json.dumps(asdict(self), separators=(",", ":"), sort_keys=True)
@@ -164,8 +164,8 @@ class AdmissionFence:
                 "schema_version",
                 "namespace_digest",
                 "epoch",
-                "quota_reconciliation_cursor",
-                "quota_reconciliation_complete",
+                "reconciliation_receipt_checksum",
+                "reconciliation_complete",
             }:
                 raise ValueError
             return cls(**value)
@@ -174,21 +174,21 @@ class AdmissionFence:
 
     def __post_init__(self) -> None:
         validate_epoch(self.epoch)
-        cursor = self.quota_reconciliation_cursor
+        checksum = self.reconciliation_receipt_checksum
         if (
             type(self.schema_version) is not int
-            or self.schema_version != 2
+            or self.schema_version != 3
             or not isinstance(self.namespace_digest, str)
             or len(self.namespace_digest) != 64
             or any(char not in "0123456789abcdef" for char in self.namespace_digest)
-            or type(self.quota_reconciliation_complete) is not bool
-            or self.quota_reconciliation_complete != (cursor is None)
+            or type(self.reconciliation_complete) is not bool
+            or self.reconciliation_complete != (checksum is not None)
             or (
-                cursor is not None
+                checksum is not None
                 and (
-                    not isinstance(cursor, str)
-                    or not 1 <= len(cursor) <= 4096
-                    or any(ord(char) < 32 or ord(char) > 126 for char in cursor)
+                    not isinstance(checksum, str)
+                    or len(checksum) != 64
+                    or any(char not in "0123456789abcdef" for char in checksum)
                 )
             )
         ):
@@ -455,6 +455,7 @@ class QuotaReconciliationResult:
     scanned: int
     complete: bool
     cursor: str | None
+    snapshot_digest: str
 
     def __post_init__(self) -> None:
         _require_int(self.scanned, "Quota reconciliation count", minimum=0, maximum=256)
@@ -467,6 +468,13 @@ class QuotaReconciliationResult:
                 not (character.isascii() and (character.isalnum() or character in "-_"))
                 for character in self.cursor
             )
+        ):
+            raise ValueError("Quota reconciliation result is invalid.")
+        if (
+            not isinstance(self.snapshot_digest, str)
+            or len(self.snapshot_digest) != 64
+            or any(character not in "0123456789abcdef" for character in self.snapshot_digest)
+            or self.snapshot_digest == "0" * 64
         ):
             raise ValueError("Quota reconciliation result is invalid.")
 
@@ -655,7 +663,13 @@ class CoordinationStore(Protocol):
     ) -> bool: ...
 
     async def reconcile_quota_state(
-        self, *, epoch: int, cursor: str | None, limit: int, apply: bool
+        self,
+        *,
+        epoch: int,
+        cursor: str | None,
+        limit: int,
+        apply: bool,
+        operation_id: str | None = None,
     ) -> QuotaReconciliationResult: ...
 
     async def close(self) -> None: ...

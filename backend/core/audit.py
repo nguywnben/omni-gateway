@@ -81,6 +81,7 @@ AUDIT_ACTIONS = frozenset(
         "session.revoke",
         "oidc_policy.advance",
         "management.access_denied",
+        "inference.execute",
     }
 )
 AUDIT_TARGET_TYPES = frozenset(
@@ -102,6 +103,7 @@ AUDIT_TARGET_TYPES = frozenset(
         "role_binding",
         "oidc_policy",
         "management_route",
+        "inference_route",
     }
 )
 AUDIT_OUTCOMES = frozenset(

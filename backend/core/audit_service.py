@@ -26,6 +26,7 @@ AUDIT_RETENTION_CONFIG = "_internal_audit_retention_v1"
 _MASTER_KEY_BYTES = 32
 _FINGERPRINT_DOMAIN = b"omni-gateway:audit:fingerprint:v1"
 _CURSOR_DOMAIN = b"omni-gateway:audit:cursor:v1"
+_INFERENCE_RETENTION_PRUNE_INTERVAL = 256
 
 
 def _encode_master_key(value: bytes) -> str:
@@ -84,6 +85,7 @@ class AuditService:
         self._fingerprint_key = fingerprint_key
         self._retention_policy = retention_policy
         self._retention_lock = asyncio.Lock()
+        self._inference_since_prune = 0
 
     @classmethod
     async def create(cls, storage: Any) -> "AuditService":
@@ -167,6 +169,48 @@ class AuditService:
                 self._retention_policy,
                 now=datetime.now(timezone.utc),
             )
+        return event
+
+    async def record_inference(
+        self,
+        *,
+        request_id: str,
+        protocol: str,
+        status_code: int,
+    ) -> AuditEvent:
+        """Append one redacted audit fact for a completed inference admission."""
+
+        if not isinstance(protocol, str) or not protocol:
+            raise ValueError("A classified inference protocol is required.")
+        if type(status_code) is not int or not 100 <= status_code <= 599:
+            raise ValueError("Inference audit status is invalid.")
+        outcome = (
+            "succeeded"
+            if status_code < 400
+            else "denied"
+            if status_code in {401, 403, 429}
+            else "failed"
+        )
+        event = create_audit_event(
+            request_id=request_id,
+            actor_type="system",
+            actor_identifier="omni-gateway",
+            action="inference.execute",
+            target_type="inference_route",
+            target_identifier=protocol,
+            outcome=outcome,
+            change_codes=("no_change",),
+            fingerprint_key=self._fingerprint_key,
+        )
+        async with self._retention_lock:
+            await self._repository.append(event)
+            self._inference_since_prune += 1
+            if self._inference_since_prune >= _INFERENCE_RETENTION_PRUNE_INTERVAL:
+                await self._repository.prune(
+                    self._retention_policy,
+                    now=datetime.now(timezone.utc),
+                )
+                self._inference_since_prune = 0
         return event
 
 

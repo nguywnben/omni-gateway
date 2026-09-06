@@ -189,6 +189,12 @@ class CoordinationBindingManager:
         self._activation_verifier = activation_verifier or (lambda _record: False)
         self._migration_checkpoints = migration_checkpoints
 
+    async def _set_durable_record(self, key: str, value: object) -> bool:
+        writer = getattr(self._storage, "set_internal_config", None)
+        if writer is None:
+            writer = self._storage.set_config
+        return bool(await writer(key, value))
+
     @staticmethod
     def decode_record(value: object, code: str) -> CoordinationBinding:
         try:
@@ -377,7 +383,7 @@ class CoordinationBindingManager:
                     raise HaBindingError("epoch_namespace_missing") from None
             if epoch.epoch != policy.fencing_epoch or epoch.state is not EpochState.READY:
                 raise HaBindingError("epoch_not_ready")
-            if not await self._storage.set_config(self.DURABLE_KEY, expected.to_dict()):
+            if not await self._set_durable_record(self.DURABLE_KEY, expected.to_dict()):
                 raise HaBindingError("durable_write_failed")
             return BindingBootstrapResult(True, expected, prerequisite)
         finally:

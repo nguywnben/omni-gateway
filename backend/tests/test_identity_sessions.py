@@ -596,6 +596,28 @@ class SessionServiceTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(resolved.principal, ManagementPrincipal.local_owner())
         self.assertEqual(service._store._fencing_epoch, 2)
 
+    async def test_epoch_advance_prevents_prior_session_resurrection(self):
+        coordination = InMemoryStateStore(clock=lambda: 1_000.0)
+        first = await SessionService.create(
+            self.storage,
+            policy=SessionPolicy(idle_ttl_seconds=300, absolute_ttl_seconds=900),
+            coordination=coordination,
+            fencing_epoch=1,
+        )
+        issued = await first.issue_local_owner(now=1_000.0)
+
+        await coordination.advance_epoch(1, "session-invalidation-advance")
+        await coordination.mark_epoch_ready(2, "session-invalidation-ready")
+        second = await SessionService.create(
+            self.storage,
+            policy=SessionPolicy(idle_ttl_seconds=300, absolute_ttl_seconds=900),
+            coordination=coordination,
+            fencing_epoch=2,
+        )
+
+        with self.assertRaises(SessionNotFound):
+            await second.resolve(issued.token, now=1_001.0)
+
     async def test_factory_rejects_invalid_coordination_epoch_before_persisting_key(self):
         with self.assertRaises(ValueError):
             await SessionService.create(

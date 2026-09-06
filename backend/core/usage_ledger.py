@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
+import hashlib
+import json
 import math
 import re
 from dataclasses import dataclass, fields
 from decimal import ROUND_CEILING, Decimal, InvalidOperation
 from enum import StrEnum
-from typing import Any, Mapping, Protocol
+from typing import Any, Mapping, Protocol, Sequence
 
 from core.quality_decision import COMPRESSION_REASONS, MAX_POLICY_REVISION, QUALITY_PROFILES
 
@@ -19,6 +21,7 @@ DAILY_WINDOW_SECONDS = 86_400.0
 MONTHLY_WINDOW_SECONDS = 30 * DAILY_WINDOW_SECONDS
 MAX_RECONCILE_BATCH = 1_000
 MAX_USAGE_REPORT_ROWS = 100_000
+MAX_LIABILITY_PAGE = 256
 
 _EVENT_ID = re.compile(r"use_[0-9a-f]{32}")
 _RESERVATION_ID = re.compile(r"qrs_[0-9a-f]{32}")
@@ -261,6 +264,51 @@ class UsageTimeBucket:
             raise ValueError("Usage bucket request totals are contradictory.")
 
 
+@dataclass(frozen=True, slots=True)
+class UsageLiabilityPage:
+    scanned: int
+    complete: bool
+    cursor: str | None
+    snapshot_digest: str
+    active_liability_nanos: int
+    active_reservations: int = 0
+
+    def __post_init__(self) -> None:
+        _strict_int(self.scanned, "Usage liability page count", maximum=MAX_LIABILITY_PAGE)
+        if type(self.complete) is not bool or self.complete != (self.cursor is None):
+            raise ValueError("Usage liability page is invalid.")
+        if self.cursor is not None and (
+            not isinstance(self.cursor, str)
+            or not 1 <= len(self.cursor) <= 64
+            or not (_EVENT_ID.fullmatch(self.cursor) or _RESERVATION_ID.fullmatch(self.cursor))
+        ):
+            raise ValueError("Usage liability cursor is invalid.")
+        if not isinstance(self.snapshot_digest, str) or not re.fullmatch(
+            r"[0-9a-f]{64}", self.snapshot_digest
+        ):
+            raise ValueError("Usage liability digest is invalid.")
+        _strict_int(
+            self.active_liability_nanos,
+            "Usage active liability",
+            maximum=MAX_COST_NANOS,
+        )
+        _strict_int(
+            self.active_reservations,
+            "Usage active reservation count",
+            maximum=MAX_LIABILITY_PAGE,
+        )
+
+
+def validate_usage_liability_cursor(value: object) -> str | None:
+    if value is None:
+        return None
+    if not isinstance(value, str) or not (
+        _EVENT_ID.fullmatch(value) or _RESERVATION_ID.fullmatch(value)
+    ):
+        raise ValueError("Usage liability cursor is invalid.")
+    return value
+
+
 class UsageLedgerRepository(Protocol):
     async def initialize(self) -> None: ...
 
@@ -288,6 +336,8 @@ class UsageLedgerRepository(Protocol):
     ) -> BudgetReleaseResult: ...
 
     async def reconcile_expired(self, *, now: float, limit: int) -> int: ...
+
+    async def reconciliation_page(self, *, after: str | None, limit: int) -> UsageLiabilityPage: ...
 
     async def get_spend(self, *, since: float, api_key_id: str = "") -> SpendSnapshot: ...
 
@@ -566,3 +616,51 @@ def budget_reservation_from_record(record: object) -> BudgetReservation:
         return BudgetReservation(**values)
     except (TypeError, ValueError) as exc:
         raise ValueError("Stored budget reservation is invalid.") from exc
+
+
+def usage_liability_page(
+    records: Sequence[UsageLedgerEntry | BudgetReservation],
+    *,
+    complete: bool,
+    cursor: str | None,
+) -> UsageLiabilityPage:
+    """Build content-addressed, attribution-safe evidence for one bounded ledger page."""
+
+    if not isinstance(records, Sequence) or len(records) > MAX_LIABILITY_PAGE:
+        raise ValueError("Usage liability records are invalid.")
+    hasher = hashlib.sha256(b"omni-usage-liability-page-v1\x00")
+    liability = 0
+    active_reservations = 0
+    identifiers: list[str] = []
+    for record in records:
+        if type(record) is UsageLedgerEntry:
+            identifier = record.event_id
+            kind = "usage"
+        elif type(record) is BudgetReservation:
+            identifier = record.reservation_id
+            kind = "reservation"
+            if record.state is BudgetReservationState.ACTIVE:
+                active_reservations += 1
+                liability += record.estimated_cost_nanos
+                if liability > MAX_COST_NANOS:
+                    raise ValueError("Usage active liability is invalid.")
+        else:
+            raise ValueError("Usage liability record is invalid.")
+        identifiers.append(identifier)
+        payload = json.dumps(
+            {"kind": kind, "record": record.to_record()},
+            separators=(",", ":"),
+            sort_keys=True,
+        ).encode("utf-8")
+        hasher.update(len(payload).to_bytes(8, "big"))
+        hasher.update(payload)
+    if identifiers != sorted(set(identifiers)):
+        raise ValueError("Usage liability record order is invalid.")
+    return UsageLiabilityPage(
+        len(records),
+        complete,
+        cursor,
+        hasher.hexdigest(),
+        liability,
+        active_reservations,
+    )

@@ -28,9 +28,12 @@ from core.usage_ledger import (
     UsageLedgerEntry,
     UsageLedgerError,
     UsageLedgerStateConflict,
+    UsageLiabilityPage,
     UsageTimeBucket,
     budget_reservation_from_record,
     usage_entry_from_record,
+    usage_liability_page,
+    validate_usage_liability_cursor,
 )
 from pymongo import ASCENDING, IndexModel
 from pymongo.errors import DuplicateKeyError
@@ -348,6 +351,26 @@ class MongoDBUsageLedgerRepository:
             return len(documents)
 
         return await self._run_transaction(reconcile)
+
+    async def reconciliation_page(self, *, after: str | None, limit: int) -> UsageLiabilityPage:
+        self._ensure_initialized()
+        after = validate_usage_liability_cursor(after)
+        if type(limit) is not int or not 1 <= limit <= 256:
+            raise ValueError("Usage liability page size is invalid.")
+        query: dict[str, object] = {"kind": "reservation", "state": "active"}
+        if after is not None:
+            query["_id"] = {"$gt": after}
+        cursor_reader = self._ledger.find(query).sort("_id", ASCENDING).limit(limit + 1)
+        documents = [document async for document in cursor_reader]
+        records = tuple(self._decode(document) for document in documents[:limit])
+        complete = len(documents) <= limit
+        cursor = None
+        if not complete:
+            last = records[-1]
+            if type(last) is not BudgetReservation:
+                raise UsageLedgerCorrupt("Usage liability row is not an active reservation.")
+            cursor = last.reservation_id
+        return usage_liability_page(records, complete=complete, cursor=cursor)
 
     async def get_spend(self, *, since: float, api_key_id: str = "") -> SpendSnapshot:
         self._ensure_initialized()

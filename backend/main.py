@@ -14,7 +14,7 @@ from app_version import get_application_version
 from config import get_server_host, get_server_port, trust_proxy_headers_enabled
 
 # Import managers and utilities
-from core.audit_service import close_audit_service, initialize_audit_service
+from core.audit_service import close_audit_service, get_audit_service, initialize_audit_service
 from core.credential_manager import credential_manager
 from core.ha_runtime import (
     close_ha_runtime,
@@ -442,6 +442,18 @@ async def add_security_headers(request, call_next):
                 "Durable management audit append failed "
                 f"(request_id={request_id}, error_type={type(exc).__name__})."
             )
+        if protocol is not None:
+            try:
+                await get_audit_service().record_inference(
+                    request_id=request_id,
+                    protocol=protocol,
+                    status_code=response.status_code,
+                )
+            except Exception as exc:
+                log.critical(
+                    "Durable inference audit append failed "
+                    f"(request_id={request_id}, error_type={type(exc).__name__})."
+                )
 
     trace_recorded = False
 

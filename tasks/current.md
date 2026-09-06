@@ -2,14 +2,14 @@
 
 ## Resume Here
 
-- Updated: 2026-09-05 (Asia/Saigon).
+- Updated: 2026-09-06 (Asia/Saigon).
 - Branch: `codex/enterprise-overhaul`.
 - Latest committed evidence checkpoint: current `HEAD` (current HA blocker projection); Quota State
   v2 hardening is `69616a2`.
 - Original program progress: 24/28 approved checklist items complete (85.7%). Wave execution-slice
   checkboxes refine those items and are not added to the denominator.
-- Control state: **W4 LOCAL ENGINEERING COMPLETE; CHECKPOINT W4-C / HA ACTIVATION BLOCKED BY
-  EXTERNAL TOPOLOGY EVIDENCE**.
+- Control state: **W4-C TASKS 1–6 IMPLEMENTED; CHECKPOINT W4-C / HA ACTIVATION AWAITS THE
+  MANDATORY EXTERNAL TOPOLOGY MATRIX**.
 - Supported runtime: standalone, one worker, one replica. OIDC remains disabled by default.
 - Worktree and committed-runtime state must be rechecked after the final evidence commit.
 
@@ -73,12 +73,12 @@ Separately, Phase 7 should migrate seven remaining Pydantic v2 class-based `Conf
 
 ## Immediate Next Action
 
-From an Administrator PowerShell, enable `Microsoft-Windows-Subsystem-Linux` and
-`VirtualMachinePlatform`, then restart Windows. After restart, verify `wsl --status` and Docker
-daemon health. Provision Redis plus shared PostgreSQL or MongoDB with two application replicas and
-run the ADR-008 partition/restart/load/completeness/rollback matrix. If every target passes, create
-and review one immutable activation record, raise only the documented topology ceiling, check W4-C,
-and obtain human acceptance. Otherwise keep standalone operation supported.
+Commit the reviewed Tasks 4–6 implementation so the source revision is immutable, then build the
+pinned production/evidence images and execute the complete Redis plus shared PostgreSQL,
+two-replica ADR-008 matrix. If every target passes, create and review one immutable activation
+record, raise only the documented topology ceiling, rerun the complete matrix against the activated
+build, close W4-C, and obtain human acceptance. Otherwise keep standalone operation supported and
+record the exact failed disposition.
 
 ## Authoritative Reading Order
 

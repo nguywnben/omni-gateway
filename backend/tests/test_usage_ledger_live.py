@@ -64,8 +64,8 @@ def _usage(suffix: str, *, cost: str = "0.25") -> UsageLedgerEntry:
     )
 
 
-def _reservation(suffix: str) -> BudgetReservationRequest:
-    return BudgetReservationRequest(
+def _reservation(suffix: str, **overrides) -> BudgetReservationRequest:
+    values = dict(
         schema_version=USAGE_LEDGER_SCHEMA_VERSION,
         reservation_id="qrs_" + (suffix * 32),
         key_id=KEY_ID,
@@ -76,6 +76,8 @@ def _reservation(suffix: str) -> BudgetReservationRequest:
         daily_budget_nanos=usd_to_nanos("1.00"),
         monthly_budget_nanos=usd_to_nanos("10.00"),
     )
+    values.update(overrides)
+    return BudgetReservationRequest(**values)
 
 
 class UsageLedgerLiveParityMixin:
@@ -116,6 +118,33 @@ class UsageLedgerLiveParityMixin:
         decisions = [first, second]
         self.assertEqual(sum(item.accepted for item in decisions), 1)
         self.assertEqual([item.reason for item in decisions if not item.accepted], ["daily_budget"])
+
+    async def test_reconciliation_pages_exclude_history_and_preserve_active_liability(self):
+        first_reservation = _reservation("d", daily_budget_nanos=usd_to_nanos("2.00"))
+        second_reservation = _reservation("f", daily_budget_nanos=usd_to_nanos("2.00"))
+        self.assertTrue((await self.repository.reserve_budget(first_reservation)).accepted)
+        await self.repository.append_entry(_usage("e"))
+        self.assertTrue((await self.repository.reserve_budget(second_reservation)).accepted)
+
+        first = await self.repository.reconciliation_page(after=None, limit=1)
+        second = await self.repository.reconciliation_page(after=first.cursor, limit=1)
+
+        self.assertFalse(first.complete)
+        self.assertTrue(second.complete)
+        self.assertEqual(first.scanned + second.scanned, 2)
+        self.assertEqual(
+            first.active_liability_nanos + second.active_liability_nanos,
+            first_reservation.estimated_cost_nanos + second_reservation.estimated_cost_nanos,
+        )
+        self.assertEqual(first.active_reservations + second.active_reservations, 2)
+
+        restarted = await self.restart_repository()
+        replay_first = await restarted.reconciliation_page(after=None, limit=1)
+        replay_second = await restarted.reconciliation_page(
+            after=replay_first.cursor,
+            limit=1,
+        )
+        self.assertEqual((replay_first, replay_second), (first, second))
 
 
 @unittest.skipUnless(POSTGRESQL_URI, "OMNI_TEST_POSTGRESQL_URI is not configured")

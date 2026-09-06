@@ -269,6 +269,7 @@ async def authenticate_flexible(
         requested_model=requested_model,
         request_body=billable_body,
         candidate_models=candidate_models,
+        operation_id=str(getattr(request.state, "request_id", "") or ""),
     )
     try:
         await virtual_key_manager.note_last_used(record)

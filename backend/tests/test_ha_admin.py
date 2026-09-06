@@ -25,8 +25,8 @@ class HaAdminTests(unittest.TestCase):
         self.assertEqual(arguments.operation_id, "epoch-op-00000001")
 
     def test_reconciliation_page_size_is_closed_and_bounded(self) -> None:
-        arguments = _parser().parse_args(["reconcile", "--quota-page-size", "17"])
-        self.assertEqual(arguments.quota_page_size, 17)
+        arguments = _parser().parse_args(["reconcile", "--page-size", "17"])
+        self.assertEqual(arguments.page_size, 17)
         with self.assertRaises(SystemExit):
             _parser().parse_args(["reconcile", "--quota-page-size", "257"])
 

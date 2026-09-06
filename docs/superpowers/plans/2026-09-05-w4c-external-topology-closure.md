@@ -184,6 +184,7 @@
 
 **Files:**
 
+- Add only after a real run: `docs/evidence/<run-id>/candidate.json`
 - Add only after a real run: `docs/evidence/<run-id>/manifest.json`
 - Add only after a real run: `docs/evidence/<run-id>/events.jsonl`
 - Add only after a real run: `docs/evidence/<run-id>/samples.jsonl`

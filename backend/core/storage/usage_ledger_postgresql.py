@@ -28,9 +28,12 @@ from core.usage_ledger import (
     UsageLedgerCorrupt,
     UsageLedgerEntry,
     UsageLedgerStateConflict,
+    UsageLiabilityPage,
     UsageTimeBucket,
     budget_reservation_from_record,
     usage_entry_from_record,
+    usage_liability_page,
+    validate_usage_liability_cursor,
 )
 
 _COLUMNS = (
@@ -436,6 +439,31 @@ class PostgreSQLUsageLedgerRepository:
                 limit,
             )
         return len(result)
+
+    async def reconciliation_page(self, *, after: str | None, limit: int) -> UsageLiabilityPage:
+        self._ensure_initialized()
+        after = validate_usage_liability_cursor(after)
+        if type(limit) is not int or not 1 <= limit <= 256:
+            raise ValueError("Usage liability page size is invalid.")
+        where = "WHERE kind = 'reservation' AND state = 'active'"
+        if after is not None:
+            where += " AND record_id > $2"
+        arguments = (limit + 1,) if after is None else (limit + 1, after)
+        async with self._pool.acquire() as connection:
+            rows = await connection.fetch(
+                f"SELECT {', '.join(_COLUMNS)} FROM durable_usage_ledger "
+                f"{where} ORDER BY record_id LIMIT $1",
+                *arguments,
+            )
+        records = tuple(self._decode(row) for row in rows[:limit])
+        complete = len(rows) <= limit
+        cursor = None
+        if not complete:
+            last = records[-1]
+            if type(last) is not BudgetReservation:
+                raise UsageLedgerCorrupt("Usage liability row is not an active reservation.")
+            cursor = last.reservation_id
+        return usage_liability_page(records, complete=complete, cursor=cursor)
 
     async def get_spend(self, *, since: float, api_key_id: str = "") -> SpendSnapshot:
         self._ensure_initialized()

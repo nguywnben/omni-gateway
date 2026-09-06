@@ -48,11 +48,11 @@ class CoordinationStoreContract:
             CoordinationBindingManager.STORE_KEY, CoordinationBindingManager.encode_record(binding)
         )
         record = {
-            "schema_version": 2,
+            "schema_version": 3,
             "namespace_digest": binding.namespace_digest,
             "epoch": 1,
-            "quota_reconciliation_cursor": "pending",
-            "quota_reconciliation_complete": False,
+            "reconciliation_receipt_checksum": None,
+            "reconciliation_complete": False,
             **changes,
         }
         await self.store.set("ha-runtime-drain-v1", json.dumps(record))
@@ -544,7 +544,10 @@ class CoordinationStoreContract:
         binding["fencing_epoch"] = 2
         await self.store.set("ha-runtime-binding-v1", json.dumps(binding))
         value = json.loads(await self.store.get("ha-runtime-drain-v1"))
-        value.update(quota_reconciliation_cursor=None, quota_reconciliation_complete=True)
+        value.update(
+            reconciliation_receipt_checksum="f" * 64,
+            reconciliation_complete=True,
+        )
         fence = AdmissionFence.decode(value)
         await self.store.set("ha-runtime-drain-v1", fence.encode())
         await self.store.mark_epoch_ready(2, "drain-ready")

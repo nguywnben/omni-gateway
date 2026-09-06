@@ -6,6 +6,7 @@ import base64
 import binascii
 import os
 import re
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from enum import StrEnum
 from typing import Mapping
@@ -84,6 +85,8 @@ class HaRuntimePolicy:
     def from_environment(
         cls,
         environment: Mapping[str, str] | None = None,
+        *,
+        topology_verifier: Callable[[RuntimeMode, int], bool] | None = None,
     ) -> HaRuntimePolicy:
         selected = os.environ if environment is None else environment
         raw_mode = _value(selected, "OMNI_RUNTIME_MODE", RuntimeMode.STANDALONE.value)
@@ -112,7 +115,10 @@ class HaRuntimePolicy:
                 )
             return cls(mode, workers, replicas, durable_backend)
 
-        if replicas != 1:
+        replica_topology_accepted = replicas == 1 or bool(
+            topology_verifier is not None and topology_verifier(mode, replicas)
+        )
+        if not replica_topology_accepted:
             raise RuntimeError("W4.18 coordinated mode requires OMNI_REPLICA_COUNT=1.")
         if durable_backend == "sqlite":
             raise RuntimeError("Coordinated mode requires PostgreSQL or MongoDB durable storage.")

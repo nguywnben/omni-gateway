@@ -13,7 +13,11 @@ if str(BACKEND_DIR) not in sys.path:
     sys.path.insert(0, str(BACKEND_DIR))
 
 from core.response_cache import CoordinatedResponseCache, ResponseCache, generate_cache_key
-from core.routing_coordination import CACHE_SCOPE_EXACT, RoutingCoordinationAdapter
+from core.routing_coordination import (
+    CACHE_SCOPE_EXACT,
+    VALID_INVALIDATION_SCOPES,
+    RoutingCoordinationAdapter,
+)
 from core.state_store import InMemoryStateStore
 
 
@@ -63,6 +67,7 @@ class CoordinatedResponseCacheTests(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self) -> None:
         self.now = 1_000.0
         store = InMemoryStateStore(clock=lambda: self.now)
+        self.store = store
         self.first_local = ResponseCache(default_ttl_seconds=30, max_entries=5)
         self.second_local = ResponseCache(default_ttl_seconds=30, max_entries=5)
         first_adapter = RoutingCoordinationAdapter(store, identifier_key=b"c" * 32, fencing_epoch=1)
@@ -102,6 +107,20 @@ class CoordinatedResponseCacheTests(unittest.IsolatedAsyncioTestCase):
         await self.first._coordination._store.advance_epoch(1, "advance")
 
         self.assertIsNone(await self.first.get("cache-key"))
+
+    async def test_epoch_advance_invalidates_every_cache_and_governance_scope(self) -> None:
+        before = {
+            scope: (await self.store.read_invalidation_generation(scope)).generation or 0
+            for scope in VALID_INVALIDATION_SCOPES
+        }
+
+        await self.store.advance_epoch(1, "invalidate-all-on-advance")
+
+        after = {
+            scope: (await self.store.read_invalidation_generation(scope)).generation or 0
+            for scope in VALID_INVALIDATION_SCOPES
+        }
+        self.assertEqual(after, {scope: value + 1 for scope, value in before.items()})
 
     def test_digest_binds_body_and_media_type(self) -> None:
         first = CoordinatedResponseCache.content_digest(b"value", "text/plain")

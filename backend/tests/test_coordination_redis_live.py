@@ -43,6 +43,12 @@ from core.ha_coordination_binding import (
 from core.ha_runtime_policy import HaRuntimePolicy
 from core.redis_state_store import RedisStateStore
 from core.redis_state_store import _fingerprint as _redis_fingerprint
+from core.routing_coordination import VALID_INVALIDATION_SCOPES
+from core.security_coordination import (
+    SecurityPrincipalType,
+    SessionIssueRequest,
+    SessionListRequest,
+)
 
 REDIS_URI = os.getenv("OMNI_TEST_REDIS_URI", "").strip()
 _CONNECT_TIMEOUT_SECONDS = 5.0
@@ -216,6 +222,39 @@ class LiveRedisCoordinationTests(CoordinationStoreContract, unittest.IsolatedAsy
         await self.assert_epoch_cas_and_invalidation_contract(
             advance_cas_clock=advance_server_clock
         )
+
+    async def test_epoch_advance_atomically_invalidates_authority_and_sessions(self) -> None:
+        before = {
+            scope: (await self.store.read_invalidation_generation(scope)).generation or 0
+            for scope in VALID_INVALIDATION_SCOPES
+        }
+        issued = await self.store.issue_security_session(
+            SessionIssueRequest(
+                session_digest="a" * 64,
+                session_reference="ssr_" + ("b" * 32),
+                principal_index="c" * 64,
+                principal_type=SecurityPrincipalType.LOCAL_OWNER,
+                payload=b"opaque-session-payload",
+                idle_ttl_seconds=300.0,
+                absolute_ttl_seconds=900.0,
+                fencing_epoch=1,
+                operation_id="live-session-before-advance",
+            )
+        )
+        self.assertTrue(issued.applied)
+
+        await self.store.advance_epoch(1, "live-authority-advance")
+
+        after = {
+            scope: (await self.store.read_invalidation_generation(scope)).generation or 0
+            for scope in VALID_INVALIDATION_SCOPES
+        }
+        self.assertEqual(after, {scope: value + 1 for scope, value in before.items()})
+        snapshot = await self.store.read_session_reconciliation(epoch=2)
+        self.assertEqual(snapshot.active_count, 0)
+        await self.store.mark_epoch_ready(2, "live-authority-ready")
+        sessions = await self.store.list_security_sessions(SessionListRequest(10, 2))
+        self.assertEqual(sessions.sessions, ())
 
     async def test_empty_epoch_namespace_never_self_initializes_on_read(self) -> None:
         epoch_key = self.store._key("epoch")

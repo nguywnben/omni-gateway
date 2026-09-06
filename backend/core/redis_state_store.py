@@ -73,6 +73,7 @@ from core.security_coordination import (
     SessionListRequest,
     SessionMutationResult,
     SessionPage,
+    SessionReconciliationSnapshot,
     SessionResolveRequest,
     SessionResolveResult,
     SessionRevokeRequest,
@@ -259,7 +260,37 @@ end
 if current_epoch == '9223372036854775807' then
   return redis.error_reply('COORDINATION_CORRUPT')
 end
+for index = 5, 11 do
+  local generation_count = redis.call('HLEN', KEYS[index])
+  if generation_count ~= 0 and generation_count ~= 2 then
+    return redis.error_reply('COORDINATION_CORRUPT')
+  end
+  if generation_count == 2 then
+    local generation_record = redis.call('HMGET', KEYS[index], 'schema_version', 'generation')
+    if generation_record[1] ~= '1' or not valid_integer(generation_record[2])
+      or generation_record[2] == '9223372036854775807' then
+      return redis.error_reply('COORDINATION_CORRUPT')
+    end
+  end
+end
+local session_count = redis.call('HLEN', KEYS[12])
+if session_count ~= redis.call('ZCARD', KEYS[13])
+  or session_count ~= redis.call('HLEN', KEYS[14])
+  or session_count ~= redis.call('ZCARD', KEYS[15])
+  or session_count ~= redis.call('ZCARD', KEYS[16])
+  or session_count ~= redis.call('ZCARD', KEYS[17])
+  or redis.call('HLEN', KEYS[18]) ~= redis.call('ZCARD', KEYS[19]) then
+  return redis.error_reply('COORDINATION_CORRUPT')
+end
 local new_epoch = next_integer(current_epoch)
+for index = 5, 11 do
+  if redis.call('HLEN', KEYS[index]) == 0 then
+    redis.call('HSET', KEYS[index], 'schema_version', '1', 'generation', '1')
+  else
+    redis.call('HINCRBY', KEYS[index], 'generation', 1)
+  end
+end
+redis.call('DEL', unpack(KEYS, 12, 19))
 redis.call('SET', KEYS[1], '1|' .. new_epoch .. '|reconciling')
 local expires_at = now_ms + tonumber(ARGV[3])
 local expires_text = string.format('%.0f', expires_at)
@@ -1051,6 +1082,36 @@ return reply
 )
 
 
+_SECURITY_SESSION_RECONCILIATION_SCRIPT = r"""-- omni:security_session_reconciliation:v1
+local function valid_integer(value)
+  return value and string.match(value, '^[1-9][0-9]*$')
+    and (#value < 19 or (#value == 19 and value <= '9223372036854775807'))
+end
+local marker, encoded = redis.call('GET', KEYS[2]), redis.call('GET', KEYS[1])
+if marker ~= '1|initialized' or not encoded or redis.call('PTTL', KEYS[2]) ~= -1
+  or redis.call('PTTL', KEYS[1]) ~= -1 then
+  return redis.error_reply('COORDINATION_CORRUPT')
+end
+local schema, epoch, state = string.match(encoded, '^([^|]+)|([^|]+)|([^|]+)$')
+if schema ~= '1' or not valid_integer(epoch) then
+  return redis.error_reply('COORDINATION_CORRUPT')
+end
+if epoch ~= ARGV[1] or state ~= 'reconciling' then
+  return redis.error_reply('COORDINATION_UNAVAILABLE')
+end
+local session_count = redis.call('HLEN', KEYS[3])
+if session_count ~= redis.call('ZCARD', KEYS[4])
+  or session_count ~= redis.call('HLEN', KEYS[5])
+  or session_count ~= redis.call('ZCARD', KEYS[6])
+  or session_count ~= redis.call('ZCARD', KEYS[7])
+  or session_count ~= redis.call('ZCARD', KEYS[8])
+  or redis.call('HLEN', KEYS[9]) ~= redis.call('ZCARD', KEYS[10]) then
+  return redis.error_reply('COORDINATION_CORRUPT')
+end
+return {'1', 'ok', tostring(session_count)}
+"""
+
+
 _SECURITY_ATTEMPT_COMMON = r"""
 local function valid_integer(value)
   return value and (value == '0' or string.match(value, '^[1-9][0-9]*$'))
@@ -1484,7 +1545,7 @@ if admission_fenced then
     return value, positions
   end
   local d, dp = decode_closed(drain, {schema_version=true, namespace_digest=true, epoch=true,
-    quota_reconciliation_cursor=true, quota_reconciliation_complete=true}, 5)
+    reconciliation_receipt_checksum=true, reconciliation_complete=true}, 5)
   local b, bp = decode_closed(binding, {schema_version=true, deployment_id=true,
     namespace_digest=true, identifier_key_fingerprint=true, fencing_epoch=true,
     manifest_checksum=true, activation_record=true, migration_plan_id=true,
@@ -1503,9 +1564,9 @@ if admission_fenced then
   local encoded_epoch = redis.call('GET', KEYS[1])
   if not encoded_epoch or #encoded_epoch > 34 then return redis.error_reply('COORDINATION_CORRUPT') end
   local current_epoch, current_state = string.match(encoded_epoch or '', '^1|([1-9][0-9]*)|(%a+)$')
-  if not d or not b or not current_epoch or d.schema_version ~= 2 or b.schema_version ~= 2
+  if not d or not b or not current_epoch or d.schema_version ~= 3 or b.schema_version ~= 2
     or #current_epoch > 19 or (#current_epoch == 19 and current_epoch > '9223372036854775807')
-    or integer_field(drain, dp.schema_version) ~= '2'
+    or integer_field(drain, dp.schema_version) ~= '3'
     or integer_field(binding, bp.schema_version) ~= '2'
     or not digest(d.namespace_digest) or d.namespace_digest ~= ARGV[#ARGV]
     or d.namespace_digest ~= b.namespace_digest or not digest(b.identifier_key_fingerprint)
@@ -1520,12 +1581,10 @@ if admission_fenced then
     or not integer_field(binding, bp.migration_target_revision)
     or not digest(b.migration_checkpoint_checksum)
     or redis.call('PTTL', KEYS[#KEYS - 1]) ~= -1 or redis.call('PTTL', KEYS[#KEYS]) ~= -1
-    or type(d.quota_reconciliation_complete) ~= 'boolean'
-    or d.quota_reconciliation_complete ~= (d.quota_reconciliation_cursor == cjson.null)
-    or (d.quota_reconciliation_cursor ~= cjson.null and
-      (type(d.quota_reconciliation_cursor) ~= 'string' or #d.quota_reconciliation_cursor < 1
-      or #d.quota_reconciliation_cursor > 4096
-      or string.find(d.quota_reconciliation_cursor, '[^ -~]')))
+    or type(d.reconciliation_complete) ~= 'boolean'
+    or d.reconciliation_complete ~= (d.reconciliation_receipt_checksum ~= cjson.null)
+    or (d.reconciliation_receipt_checksum ~= cjson.null and
+      not digest(d.reconciliation_receipt_checksum))
   then return redis.error_reply('COORDINATION_CORRUPT') end
   local drain_epoch = integer_field(drain, dp.epoch)
   local binding_epoch = integer_field(binding, bp.fencing_epoch)
@@ -1541,7 +1600,7 @@ if admission_fenced then
   end
   if not drain_epoch or not binding_epoch or binding_epoch ~= current_epoch
     or not (drain_epoch == current_epoch or
-      (drain_epoch == prior(current_epoch) and d.quota_reconciliation_complete))
+      (drain_epoch == prior(current_epoch) and d.reconciliation_complete))
     or (current_state ~= 'ready' and current_state ~= 'reconciling')
   then return redis.error_reply('COORDINATION_CORRUPT') end
 end
@@ -1644,6 +1703,7 @@ SCRIPT_SOURCES = {
         "security_session_rotate": _SECURITY_SESSION_ROTATE_SCRIPT,
         "security_session_revoke": _SECURITY_SESSION_REVOKE_SCRIPT,
         "security_session_list": _SECURITY_SESSION_LIST_SCRIPT,
+        "security_session_reconciliation": _SECURITY_SESSION_RECONCILIATION_SCRIPT,
         "security_attempt_reserve": _SECURITY_ATTEMPT_RESERVE_SCRIPT,
         "security_attempt_clear": _SECURITY_ATTEMPT_CLEAR_SCRIPT,
         "oidc_transaction_create": _OIDC_TRANSACTION_CREATE_SCRIPT,
@@ -2790,6 +2850,12 @@ class RedisStateStore:
     async def advance_epoch(self, expected_epoch: int, operation_id: str) -> Epoch:
         expected = validate_epoch(expected_epoch)
         operation = validate_operation_id(operation_id)
+        from core.routing_coordination import VALID_INVALIDATION_SCOPES
+
+        invalidation_keys = [
+            self._key("invalidation", scope) for scope in sorted(VALID_INVALIDATION_SCOPES)
+        ]
+        security_keys = self._security_session_keys()[2:]
         reply = await self._run_script(
             "epoch_advance",
             keys=[
@@ -2797,6 +2863,8 @@ class RedisStateStore:
                 self._key("replay:epoch-advance"),
                 self._key("expiry:epoch-advance"),
                 self._key("initialization"),
+                *invalidation_keys,
+                *security_keys,
             ],
             args=[
                 _integer_bytes(expected),
@@ -2902,7 +2970,7 @@ class RedisStateStore:
         if (
             type(fence) is not AdmissionFence
             or fence.epoch != epoch - 1
-            or not fence.quota_reconciliation_complete
+            or not fence.reconciliation_complete
         ):
             raise ValueError("Coordination drain is invalid.")
         reply = await self._run_script(
@@ -3105,17 +3173,123 @@ class RedisStateStore:
         return _decode_quota_release_reply(reply)
 
     async def reconcile_quota_state(
-        self, *, epoch: int, cursor: str | None, limit: int, apply: bool
+        self,
+        *,
+        epoch: int,
+        cursor: str | None,
+        limit: int,
+        apply: bool,
+        operation_id: str | None = None,
     ) -> QuotaReconciliationResult:
         requested_epoch = validate_epoch(epoch)
         if isinstance(limit, bool) or not isinstance(limit, int) or not 1 <= limit <= 256:
             raise ValueError("Quota reconciliation limit is invalid.")
         if not isinstance(apply, bool):
             raise ValueError("Quota reconciliation mode is invalid.")
+        if operation_id is not None:
+            validate_operation_id(operation_id)
         state = _decode_quota_reconciliation_cursor(cursor)
         current = await self.read_epoch()
         if current.epoch != requested_epoch or current.state is not EpochState.RECONCILING:
             raise CoordinationUnavailableError("Coordination epoch is not reconciling.")
+        replay_fingerprint = hashlib.sha256(
+            json.dumps(
+                {"epoch": requested_epoch, "cursor": cursor, "limit": limit},
+                separators=(",", ":"),
+                sort_keys=True,
+            ).encode("utf-8")
+        ).hexdigest()
+        replay_key = (
+            None
+            if operation_id is None
+            else self._key(
+                "quota:reconciliation-operation",
+                f"{requested_epoch}:{operation_id}",
+            )
+        )
+        if replay_key is not None:
+            stored_replay = await self._run_command("get", replay_key)
+            if stored_replay is not None:
+                try:
+                    decoded_replay = json.loads(stored_replay)
+                except (TypeError, UnicodeError, json.JSONDecodeError):
+                    raise CoordinationCorruptError(
+                        "Stored quota reconciliation replay is invalid."
+                    ) from None
+                if (
+                    not isinstance(decoded_replay, dict)
+                    or set(decoded_replay)
+                    != {"fingerprint", "scanned", "complete", "cursor", "snapshot_digest"}
+                    or decoded_replay.get("fingerprint") != replay_fingerprint
+                ):
+                    raise CoordinationCorruptError("Stored quota reconciliation replay is invalid.")
+                try:
+                    return QuotaReconciliationResult(
+                        decoded_replay["scanned"],
+                        decoded_replay["complete"],
+                        decoded_replay["cursor"],
+                        decoded_replay["snapshot_digest"],
+                    )
+                except (TypeError, ValueError) as exc:
+                    raise CoordinationCorruptError(
+                        "Stored quota reconciliation replay is invalid."
+                    ) from exc
+
+        def build_result(
+            scanned: int,
+            complete: bool,
+            next_cursor: str | None,
+            observed: object,
+        ) -> tuple[QuotaReconciliationResult, bytes | None]:
+            snapshot_digest = hashlib.sha256(
+                b"omni-quota-reconciliation-snapshot-v1\x00"
+                + json.dumps(
+                    {
+                        "epoch": requested_epoch,
+                        "input_cursor": cursor,
+                        "limit": limit,
+                        "observed": observed,
+                        "scanned": scanned,
+                        "complete": complete,
+                        "next_cursor": next_cursor,
+                    },
+                    allow_nan=False,
+                    separators=(",", ":"),
+                    sort_keys=True,
+                ).encode("utf-8")
+            ).hexdigest()
+            result = QuotaReconciliationResult(scanned, complete, next_cursor, snapshot_digest)
+            payload = (
+                None
+                if replay_key is None
+                else json.dumps(
+                    {
+                        "fingerprint": replay_fingerprint,
+                        "scanned": scanned,
+                        "complete": complete,
+                        "cursor": next_cursor,
+                        "snapshot_digest": snapshot_digest,
+                    },
+                    separators=(",", ":"),
+                    sort_keys=True,
+                ).encode("utf-8")
+            )
+            return result, payload
+
+        async def finish(
+            scanned: int,
+            complete: bool,
+            next_cursor: str | None,
+            observed: object,
+        ) -> QuotaReconciliationResult:
+            result, payload = build_result(scanned, complete, next_cursor, observed)
+            if apply and replay_key is not None:
+                assert payload is not None
+                stored = await self._run_command("set", replay_key, payload)
+                if stored is not True:
+                    raise CoordinationUnavailableError("Redis coordination is unavailable.")
+            return result
+
         completion_key = self._key("quota:reconciliation", str(requested_epoch))
         completed, completion_ttl = await asyncio.gather(
             self._run_command("get", completion_key),
@@ -3124,7 +3298,7 @@ class RedisStateStore:
         if completed is not None:
             if completed != b"1|complete" or completion_ttl != -1:
                 raise CoordinationCorruptError("Stored coordination state is invalid.")
-            return QuotaReconciliationResult(0, True, None)
+            return await finish(0, True, None, {"completion": "1|complete"})
         if completion_ttl != -2:
             raise CoordinationCorruptError("Stored coordination state is invalid.")
 
@@ -3153,6 +3327,7 @@ class RedisStateStore:
             markers = sorted(set(scan_reply[1]))
             if len(markers) != len(scan_reply[1]):
                 raise CoordinationCorruptError("Coordination reply is invalid.")
+            schema_observed: list[dict[str, object]] = []
             for marker_key_bytes in markers:
                 try:
                     marker_key = marker_key_bytes.decode("ascii")
@@ -3185,36 +3360,136 @@ class RedisStateStore:
                     or replay_count != 0
                 ):
                     raise CoordinationCorruptError("Stored coordination state is invalid.")
-                if apply:
-                    deleted = await self._run_command(
-                        "delete", self._quota_bucket_key("quota:rate-buckets", key_digest)
+                schema_observed.append(
+                    {
+                        "marker_key": marker_key,
+                        "marker": marker.hex(),
+                        "record_count": record_count,
+                        "replay_count": replay_count,
+                    }
+                )
+
+            async def finish_schema(
+                scanned: int,
+                complete: bool,
+                next_cursor: str | None,
+                observed: object,
+            ) -> QuotaReconciliationResult:
+                result, replay_payload = build_result(scanned, complete, next_cursor, observed)
+                if not apply:
+                    return result
+                client = await self._get_client()
+                marker_keys = [str(item["marker_key"]) for item in schema_observed]
+                bucket_keys = [
+                    self._quota_bucket_key(
+                        "quota:rate-buckets",
+                        marker_key.removeprefix(schema_prefix).encode("ascii"),
                     )
-                    if (
-                        isinstance(deleted, bool)
-                        or not isinstance(deleted, int)
-                        or deleted
-                        not in {
-                            0,
-                            1,
-                        }
-                    ):
-                        raise CoordinationCorruptError("Coordination reply is invalid.")
-                    reply = await self._run_command(
-                        "set", marker_key, f"2|{requested_epoch}|ready".encode("ascii")
+                    for marker_key in marker_keys
+                ]
+                record_keys = [
+                    self._quota_bucket_key(
+                        "quota:records",
+                        marker_key.removeprefix(schema_prefix).encode("ascii"),
                     )
-                    if reply is not True:
-                        raise CoordinationUnavailableError("Redis coordination is unavailable.")
+                    for marker_key in marker_keys
+                ]
+                replay_keys = [
+                    self._quota_bucket_key(
+                        "quota:replay",
+                        marker_key.removeprefix(schema_prefix).encode("ascii"),
+                    )
+                    for marker_key in marker_keys
+                ]
+                watched = [
+                    completion_key,
+                    *marker_keys,
+                    *bucket_keys,
+                    *record_keys,
+                    *replay_keys,
+                ]
+                if replay_key is not None:
+                    watched.append(replay_key)
+                try:
+                    async with client.pipeline(transaction=True) as pipeline:
+                        await pipeline.watch(*watched)
+                        if replay_key is not None:
+                            current_replay = await pipeline.get(replay_key)
+                            if current_replay is not None:
+                                if current_replay != replay_payload:
+                                    raise CoordinationCorruptError(
+                                        "Stored quota reconciliation replay is invalid."
+                                    )
+                                await pipeline.unwatch()
+                                return result
+                        if await pipeline.get(completion_key) is not None:
+                            raise CoordinationCorruptError(
+                                "Quota reconciliation completed concurrently."
+                            )
+                        for item in schema_observed:
+                            marker_key = str(item["marker_key"])
+                            digest = marker_key.removeprefix(schema_prefix).encode("ascii")
+                            if (
+                                await pipeline.get(marker_key) != bytes.fromhex(str(item["marker"]))
+                                or await pipeline.hlen(
+                                    self._quota_bucket_key("quota:records", digest)
+                                )
+                                != item["record_count"]
+                                or await pipeline.hlen(
+                                    self._quota_bucket_key("quota:replay", digest)
+                                )
+                                != item["replay_count"]
+                            ):
+                                raise CoordinationUnavailableError(
+                                    "Quota schema page changed before commit."
+                                )
+                        pipeline.multi()
+                        for marker_key, bucket_key in zip(marker_keys, bucket_keys, strict=True):
+                            pipeline.delete(bucket_key)
+                            pipeline.set(
+                                marker_key,
+                                f"2|{requested_epoch}|ready".encode("ascii"),
+                            )
+                        if complete:
+                            pipeline.set(completion_key, b"1|complete")
+                        if replay_key is not None:
+                            assert replay_payload is not None
+                            pipeline.set(replay_key, replay_payload)
+                        results = await pipeline.execute()
+                        expected_results = (
+                            len(marker_keys) * 2 + int(complete) + int(replay_key is not None)
+                        )
+                        if (
+                            not isinstance(results, (list, tuple))
+                            or len(results) != expected_results
+                        ):
+                            raise CoordinationCorruptError("Coordination reply is invalid.")
+                except (CoordinationCorruptError, CoordinationUnavailableError):
+                    raise
+                except Exception as exc:
+                    error_text = str(exc).upper()
+                    if any(marker in error_text for marker in _CORRUPT_DRIVER_ERROR_MARKERS):
+                        raise CoordinationCorruptError(
+                            "Stored coordination state is invalid."
+                        ) from None
+                    raise CoordinationUnavailableError(
+                        "Redis coordination is unavailable."
+                    ) from None
+                return result
+
             next_schema_scan = scan_reply[0]
             if next_schema_scan != 0:
-                return QuotaReconciliationResult(
+                next_cursor = _encode_quota_reconciliation_cursor(
+                    family="replays",
+                    key_scan=next_schema_scan,
+                    target="@schema",
+                    member_scan=0,
+                )
+                return await finish_schema(
                     len(markers),
                     False,
-                    _encode_quota_reconciliation_cursor(
-                        family="replays",
-                        key_scan=next_schema_scan,
-                        target="@schema",
-                        member_scan=0,
-                    ),
+                    next_cursor,
+                    {"phase": "schema", "markers": schema_observed},
                 )
             for pending_family, pending_prefix in (
                 ("records", f"{self._prefix}:quota:records:*"),
@@ -3232,21 +3507,30 @@ class RedisStateStore:
                 ):
                     raise CoordinationCorruptError("Coordination reply is invalid.")
                 if pending_reply[0] != 0 or pending_reply[1]:
-                    return QuotaReconciliationResult(
+                    next_cursor = _encode_quota_reconciliation_cursor(
+                        family=pending_family,
+                        key_scan=0,
+                        target=None,
+                        member_scan=0,
+                    )
+                    return await finish_schema(
                         len(markers),
                         False,
-                        _encode_quota_reconciliation_cursor(
-                            family=pending_family,
-                            key_scan=0,
-                            target=None,
-                            member_scan=0,
-                        ),
+                        next_cursor,
+                        {
+                            "phase": "schema",
+                            "markers": schema_observed,
+                            "pending_family": pending_family,
+                            "pending_scan": pending_reply[0],
+                            "pending_keys": [key.hex() for key in pending_reply[1]],
+                        },
                     )
-            if apply:
-                reply = await self._run_command("set", completion_key, b"1|complete")
-                if reply is not True:
-                    raise CoordinationUnavailableError("Redis coordination is unavailable.")
-            return QuotaReconciliationResult(len(markers), True, None)
+            return await finish_schema(
+                len(markers),
+                True,
+                None,
+                {"phase": "schema-complete", "markers": schema_observed},
+            )
 
         category = "records" if family == "records" else "replay"
         index_category = "lifecycle" if family == "records" else "replay-expiry"
@@ -3279,42 +3563,50 @@ class RedisStateStore:
                         "Stored coordination state is invalid."
                     ) from None
             elif next_scan != 0:
-                return QuotaReconciliationResult(
+                next_cursor = _encode_quota_reconciliation_cursor(
+                    family=family,
+                    key_scan=next_scan,
+                    target=None,
+                    member_scan=0,
+                )
+                return await finish(
                     0,
                     False,
-                    _encode_quota_reconciliation_cursor(
-                        family=family,
-                        key_scan=next_scan,
-                        target=None,
-                        member_scan=0,
-                    ),
+                    next_cursor,
+                    {"phase": "bucket-scan", "family": family, "keys": []},
                 )
             elif scan_cursor != 0:
-                return QuotaReconciliationResult(
+                next_cursor = _encode_quota_reconciliation_cursor(
+                    family=family,
+                    key_scan=0,
+                    target=None,
+                    member_scan=0,
+                )
+                return await finish(
                     0,
                     False,
-                    _encode_quota_reconciliation_cursor(
-                        family=family,
-                        key_scan=0,
-                        target=None,
-                        member_scan=0,
-                    ),
+                    next_cursor,
+                    {"phase": "bucket-scan-wrap", "family": family},
                 )
             elif family == "records":
-                return QuotaReconciliationResult(
+                next_cursor = _encode_quota_reconciliation_cursor(
+                    family="replays", key_scan=0, target=None, member_scan=0
+                )
+                return await finish(
                     0,
                     False,
-                    _encode_quota_reconciliation_cursor(
-                        family="replays", key_scan=0, target=None, member_scan=0
-                    ),
+                    next_cursor,
+                    {"phase": "records-empty"},
                 )
             else:
-                return QuotaReconciliationResult(
+                next_cursor = _encode_quota_reconciliation_cursor(
+                    family="replays", key_scan=0, target="@schema", member_scan=0
+                )
+                return await finish(
                     0,
                     False,
-                    _encode_quota_reconciliation_cursor(
-                        family="replays", key_scan=0, target="@schema", member_scan=0
-                    ),
+                    next_cursor,
+                    {"phase": "replays-empty"},
                 )
 
         if not isinstance(target, str) or not target.startswith(target_prefix):
@@ -3368,7 +3660,10 @@ class RedisStateStore:
             raise CoordinationCorruptError("Coordination reply is invalid.")
         now_ms = now_reply[0] * 1000 + now_reply[1] // 1000
         validated: list[bytes] = []
+        validated_values: list[bytes] = []
+        validated_scores: list[int] = []
         locator_names: list[str] = []
+        member_snapshot: list[dict[str, object]] = []
         for item in page:
             if (
                 not isinstance(item, (list, tuple))
@@ -3401,31 +3696,126 @@ class RedisStateStore:
             else:
                 _quota_reconciliation_replay(value, score)
             validated.append(member)
+            validated_values.append(value)
+            validated_scores.append(int(score))
             locator_names.append(locator_name)
+            member_snapshot.append(
+                {
+                    "member": member.hex(),
+                    "score": repr(score),
+                    "value": value.hex(),
+                }
+            )
 
-        if apply and validated:
+        target_complete = start + len(validated) >= record_count
+        counterpart = self._quota_bucket_key(
+            "quota:replay" if family == "records" else "quota:records",
+            key_digest,
+        )
+        counterpart_count = 1
+        if target_complete:
+            counterpart_count = await self._run_command("hlen", counterpart)
+            if isinstance(counterpart_count, bool) or not isinstance(counterpart_count, int):
+                raise CoordinationCorruptError("Coordination reply is invalid.")
+        cleanup_bucket = target_complete and counterpart_count == 0
+        if target_complete:
+            target = None
+            member_cursor = 0
+        else:
+            member_cursor = start + len(validated)
+        next_cursor = _encode_quota_reconciliation_cursor(
+            family=family,
+            key_scan=next_scan,
+            target=target,
+            member_scan=member_cursor,
+        )
+        result, replay_payload = build_result(
+            len(validated),
+            False,
+            next_cursor,
+            {
+                "phase": "members",
+                "family": family,
+                "target": target_prefix + digest_text,
+                "record_count": record_count,
+                "index_count": index_count,
+                "marker": None if existing_marker is None else existing_marker.hex(),
+                "members": member_snapshot,
+            },
+        )
+        if apply:
             client = await self._get_client()
+            locator_category = "quota:locator" if family == "records" else "quota:operation"
+            locator_keys = [self._key(locator_category, identifier) for identifier in locator_names]
+            watched = [
+                target_prefix + digest_text,
+                index_key,
+                counterpart,
+                marker_key,
+                *locator_keys,
+            ]
+            if replay_key is not None:
+                watched.append(replay_key)
             try:
                 async with client.pipeline(transaction=True) as pipeline:
-                    pipeline.hdel(target, *validated)
-                    pipeline.zrem(index_key, *validated)
-                    locator_category = "quota:locator" if family == "records" else "quota:operation"
-                    for identifier in locator_names:
-                        pipeline.delete(self._key(locator_category, identifier))
-                    results = await pipeline.execute()
+                    await pipeline.watch(*watched)
+                    if replay_key is not None:
+                        current_replay = await pipeline.get(replay_key)
+                        if current_replay is not None:
+                            if current_replay != replay_payload:
+                                raise CoordinationCorruptError(
+                                    "Stored quota reconciliation replay is invalid."
+                                )
+                            await pipeline.unwatch()
+                            return result
                     if (
-                        not isinstance(results, (list, tuple))
-                        or len(results) != 2 + len(validated)
-                        or results[0:2] != [len(validated), len(validated)]
-                        or any(
-                            isinstance(result, bool)
-                            or not isinstance(result, int)
-                            or result not in {0, 1}
-                            for result in results[2:]
-                        )
+                        await pipeline.hlen(target_prefix + digest_text) != record_count
+                        or await pipeline.zcard(index_key) != index_count
                     ):
+                        raise CoordinationUnavailableError(
+                            "Quota reconciliation page changed before commit."
+                        )
+                    for member, expected_value, expected_score in zip(
+                        validated, validated_values, validated_scores, strict=True
+                    ):
+                        if await pipeline.hget(
+                            target_prefix + digest_text, member
+                        ) != expected_value or await pipeline.zscore(index_key, member) != float(
+                            expected_score
+                        ):
+                            raise CoordinationUnavailableError(
+                                "Quota reconciliation page changed before commit."
+                            )
+                    if cleanup_bucket and await pipeline.hlen(counterpart) != 0:
+                        raise CoordinationUnavailableError(
+                            "Quota reconciliation counterpart changed before commit."
+                        )
+                    pipeline.multi()
+                    if validated:
+                        pipeline.hdel(target_prefix + digest_text, *validated)
+                        pipeline.zrem(index_key, *validated)
+                        for locator_key in locator_keys:
+                            pipeline.delete(locator_key)
+                    if cleanup_bucket:
+                        pipeline.delete(self._quota_bucket_key("quota:rate-buckets", key_digest))
+                        pipeline.set(
+                            marker_key,
+                            f"2|{requested_epoch}|ready".encode("ascii"),
+                        )
+                    if replay_key is not None:
+                        assert replay_payload is not None
+                        pipeline.set(replay_key, replay_payload)
+                    results = await pipeline.execute()
+                    expected_results = (
+                        (2 + len(locator_keys) if validated else 0)
+                        + (2 if cleanup_bucket else 0)
+                        + (1 if replay_key is not None else 0)
+                    )
+                    if not isinstance(results, (list, tuple)) or len(results) != expected_results:
                         raise CoordinationCorruptError("Coordination reply is invalid.")
-            except CoordinationCorruptError:
+                    if validated and results[:2] != [len(validated), len(validated)]:
+                        raise CoordinationCorruptError("Coordination reply is invalid.")
+            except (CoordinationCorruptError, CoordinationUnavailableError):
                 raise
             except Exception as exc:
                 error_text = str(exc).upper()
@@ -3434,61 +3824,7 @@ class RedisStateStore:
                         "Stored coordination state is invalid."
                     ) from None
                 raise CoordinationUnavailableError("Redis coordination is unavailable.") from None
-
-        target_complete = start + len(validated) >= record_count
-        if apply and target_complete:
-            counterpart = self._quota_bucket_key(
-                "quota:replay" if family == "records" else "quota:records",
-                key_digest,
-            )
-            counterpart_count = await self._run_command("hlen", counterpart)
-            if isinstance(counterpart_count, bool) or not isinstance(counterpart_count, int):
-                raise CoordinationCorruptError("Coordination reply is invalid.")
-            if counterpart_count == 0:
-                remaining_count = await self._run_command("hlen", target)
-                if (
-                    isinstance(remaining_count, bool)
-                    or not isinstance(remaining_count, int)
-                    or remaining_count != 0
-                ):
-                    raise CoordinationCorruptError("Stored coordination state is invalid.")
-                deleted = await self._run_command(
-                    "delete", self._quota_bucket_key("quota:rate-buckets", key_digest)
-                )
-                if (
-                    isinstance(deleted, bool)
-                    or not isinstance(deleted, int)
-                    or deleted
-                    not in {
-                        0,
-                        1,
-                    }
-                ):
-                    raise CoordinationCorruptError("Coordination reply is invalid.")
-                reply = await self._run_command(
-                    "set",
-                    marker_key,
-                    f"2|{requested_epoch}|ready".encode("ascii"),
-                )
-                if reply is not True:
-                    raise CoordinationUnavailableError("Redis coordination is unavailable.")
-            target = None
-            member_cursor = 0
-        elif target_complete:
-            target = None
-            member_cursor = 0
-        else:
-            member_cursor = start + len(validated)
-        return QuotaReconciliationResult(
-            len(validated),
-            False,
-            _encode_quota_reconciliation_cursor(
-                family=family,
-                key_scan=next_scan,
-                target=target,
-                member_scan=member_cursor,
-            ),
-        )
+        return result
 
     async def issue_security_session(self, request: SessionIssueRequest) -> SessionMutationResult:
         if not isinstance(request, SessionIssueRequest):
@@ -3631,6 +3967,23 @@ class RedisStateStore:
             ],
         )
         return _decode_session_page_reply(reply, requested_limit=request.limit)
+
+    async def read_session_reconciliation(self, *, epoch: int) -> SessionReconciliationSnapshot:
+        requested = validate_epoch(epoch)
+        reply = await self._run_script(
+            "security_session_reconciliation",
+            keys=self._security_session_keys(),
+            args=[_integer_bytes(requested)],
+        )
+        fields = _strict_array(reply, 3)
+        if fields[1] != b"ok":
+            raise CoordinationCorruptError("Coordination reply is invalid.")
+        count = _strict_nonnegative_int(fields[2])
+        # Reconciliation only accepts an empty session set. Keep the canonical
+        # digest identical to the in-memory implementation so receipts remain
+        # backend-independent during topology rehearsals.
+        digest = hashlib.sha256(b"omni-session-reconciliation-v1\x00[]").hexdigest()
+        return SessionReconciliationSnapshot(count, digest)
 
     async def reserve_security_attempt(
         self, request: AttemptReservationRequest

@@ -198,10 +198,10 @@ class StatefulRegisteredScript:
                             "schema_version",
                             "namespace_digest",
                             "epoch",
-                            "quota_reconciliation_cursor",
-                            "quota_reconciliation_complete",
+                            "reconciliation_receipt_checksum",
+                            "reconciliation_complete",
                         }
-                        and value["schema_version"] == 2
+                        and value["schema_version"] == 3
                         and type(value["epoch"]) is int
                         and value["namespace_digest"]
                         == binding["namespace_digest"]
@@ -211,7 +211,7 @@ class StatefulRegisteredScript:
                             value["epoch"] == self.client.epoch[0]
                             or (
                                 value["epoch"] == self.client.epoch[0] - 1
-                                and value["quota_reconciliation_complete"] is True
+                                and value["reconciliation_complete"] is True
                             )
                         )
                     )
@@ -285,6 +285,32 @@ class _StatefulPipeline:
     async def __aexit__(self, *_args: object) -> None:
         return None
 
+    async def watch(self, *_keys: str) -> None:
+        return None
+
+    async def unwatch(self) -> None:
+        return None
+
+    def multi(self) -> None:
+        return None
+
+    async def get(self, key: str):
+        stored = self.client.values.get(key)
+        return None if stored is None else stored[0]
+
+    async def hlen(self, key: str) -> int:
+        return len(self.client.redis_hashes.get(key, {}))
+
+    async def zcard(self, key: str) -> int:
+        return len(self.client.redis_zsets.get(key, {}))
+
+    async def hget(self, key: str, member: bytes):
+        return self.client.redis_hashes.get(key, {}).get(member)
+
+    async def zscore(self, key: str, member: bytes):
+        value = self.client.redis_zsets.get(key, {}).get(member)
+        return None if value is None else float(value)
+
     def hdel(self, key: str, *members: bytes) -> None:
         self.operations.append(("hdel", key, members))
 
@@ -293,6 +319,9 @@ class _StatefulPipeline:
 
     def delete(self, key: str) -> None:
         self.operations.append(("delete", key, ()))
+
+    def set(self, key: str, value: bytes) -> None:
+        self.operations.append(("set", key, (value,)))
 
     async def execute(self) -> list[int]:
         results: list[int] = []
@@ -313,13 +342,17 @@ class _StatefulPipeline:
                 if not target:
                     self.client.redis_zsets.pop(key, None)
                 results.append(removed)
-            else:
+            elif operation == "delete":
                 removed = int(
                     self.client.values.pop(key, None) is not None
                     or self.client.redis_hashes.pop(key, None) is not None
                     or self.client.redis_zsets.pop(key, None) is not None
                 )
                 results.append(removed)
+            else:
+                assert operation == "set" and len(members) == 1
+                self.client.values[key] = (members[0], None)
+                results.append(True)
         return results
 
 
@@ -330,7 +363,7 @@ class StatefulRedisClient(FakeRedisClient):
         "epoch_initialize": (3, 0),
         "epoch_read": (2, 0),
         "time_read": (2, 1),
-        "epoch_advance": (4, 4),
+        "epoch_advance": (19, 4),
         "epoch_ready": (4, 4),
         "cas": (5, 9),
         "cas_read": (3, 1),
@@ -562,6 +595,8 @@ class StatefulRedisClient(FakeRedisClient):
                 capacity = self._remember(name, operation_id, expected, result, int(ttl), limit_int)
                 if capacity is not None:
                     return [b"1", b"reconciliation_required", b"", b""]
+                for key in keys[4:11]:
+                    self.generations[key] = self.generations.get(key, 0) + 1
                 self.epoch = (expected_int + 1, b"reconciling")
                 return result
             if name == "epoch_ready" and self.epoch == (expected_int, b"reconciling"):
@@ -1652,6 +1687,42 @@ class RedisStateStoreTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(first, replay)
         self.assertEqual((client.redis_hashes, client.redis_zsets, client.values), before)
 
+    async def test_quota_reconciliation_replays_exact_destructive_page(self) -> None:
+        client = StatefulRedisClient()
+        client.epoch = (2, b"reconciling")
+        store = RedisStateStore(
+            "redis://redis.example/0",
+            deployment_namespace="quota-page-replay",
+            _redis_module_for_testing=FakeRedisModule(client),
+        )
+        key_digest = b"6" * 64
+        records_key = store._quota_bucket_key("quota:records", key_digest)
+        lifecycle_key = store._quota_bucket_key("quota:lifecycle", key_digest)
+        reservation = b"replayed-reservation"
+        expiry = client.now_ms + 50_000
+        client.redis_hashes[records_key] = {
+            reservation: self._legacy_terminal_record(key_digest, retained_until=expiry)
+        }
+        client.redis_zsets[lifecycle_key] = {reservation: expiry}
+
+        first = await store.reconcile_quota_state(
+            epoch=2,
+            cursor=None,
+            limit=1,
+            apply=True,
+            operation_id="quota-reconciliation-page-1",
+        )
+        replay = await store.reconcile_quota_state(
+            epoch=2,
+            cursor=None,
+            limit=1,
+            apply=True,
+            operation_id="quota-reconciliation-page-1",
+        )
+
+        self.assertEqual(replay, first)
+        self.assertNotEqual(first.snapshot_digest, "0" * 64)
+
     async def test_quota_reconciliation_accepts_valid_v1_committed_chronology(self) -> None:
         client = StatefulRedisClient()
         client.epoch = (2, b"reconciling")
@@ -1969,8 +2040,12 @@ class RedisStateStoreTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(len(self.client.script_calls), 1)
         name, keys, args = self.client.script_calls[0]
         self.assertEqual(name, "epoch_advance")
-        self.assertEqual(len(keys), 4)
-        self.assertTrue(keys[-1].endswith(":initialization"))
+        self.assertEqual(len(keys), 19)
+        self.assertTrue(keys[3].endswith(":initialization"))
+        self.assertEqual(len(keys[4:11]), 7)
+        self.assertTrue(all(":invalidation:" in key for key in keys[4:11]))
+        self.assertTrue(keys[11].endswith(":security:sessions"))
+        self.assertTrue(keys[-1].endswith(":security:session-replay-expiry"))
         self.assertEqual(args[:3], [b"1", b"advance-1", b"2592000000"])
         self.assertEqual(args[-1], b"100000")
 
@@ -3429,6 +3504,7 @@ class RedisStateStoreTests(unittest.IsolatedAsyncioTestCase):
                 "security_session_rotate",
                 "security_session_revoke",
                 "security_session_list",
+                "security_session_reconciliation",
                 "security_attempt_reserve",
                 "security_attempt_clear",
                 "oidc_transaction_create",
@@ -3510,6 +3586,8 @@ class RedisStateStoreTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("saved_epoch == next_integer(fingerprint)", advance_source)
         self.assertIn("saved_state == 'reconciling'", advance_source)
         self.assertNotIn("next_integer(ARGV[1])", advance_source)
+        self.assertIn("redis.call('DEL', unpack(KEYS, 12, 19))", advance_source)
+        self.assertIn("for index = 5, 11 do", advance_source)
 
         ready_source = SCRIPT_SOURCES["epoch_ready"]
         self.assertIn("valid_integer(fingerprint)", ready_source)

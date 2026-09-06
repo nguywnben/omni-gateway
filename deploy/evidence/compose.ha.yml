@@ -1,0 +1,172 @@
+name: ${COMPOSE_PROJECT_NAME:?Set an isolated evidence project name}
+
+x-app: &app
+  image: "${EVIDENCE_IMAGE:?Set a locally built evidence image pinned by digest}"
+  init: true
+  entrypoint: [python, -m, tools.ha_topology_evidence.app]
+  command: []
+  read_only: true
+  user: "10001:10001"
+  restart: "no"
+  cap_drop: [ALL]
+  security_opt: [no-new-privileges:true]
+  pids_limit: 256
+  mem_limit: 768m
+  cpus: 1.0
+  tmpfs:
+    - /tmp:rw,noexec,nosuid,size=64m,uid=10001,gid=10001
+    - /app/backend/data/creds:rw,noexec,nosuid,size=32m,uid=10001,gid=10001
+    - /app/backend/data/logs:rw,noexec,nosuid,size=32m,uid=10001,gid=10001
+  networks: [evidence]
+  depends_on:
+    postgres: {condition: service_healthy}
+    redis-primary: {condition: service_healthy}
+    fixture: {condition: service_healthy}
+  environment: &app-environment
+    HOST: 0.0.0.0
+    PORT: "4283"
+    WORKERS: "1"
+    OMNI_RUNTIME_MODE: coordinated
+    OMNI_COORDINATION_NAMESPACE: "${EVIDENCE_NAMESPACE:?Set synthetic namespace}"
+    OMNI_DEPLOYMENT_ID: "${EVIDENCE_DEPLOYMENT_ID:?Set synthetic deployment ID}"
+    OMNI_COORDINATION_KEY: "${EVIDENCE_COORDINATION_KEY:?Set ephemeral coordination key}"
+    OMNI_COORDINATION_EPOCH: "${EVIDENCE_EPOCH:-1}"
+    OMNI_EVIDENCE_CANDIDATE_FILE: /evidence/run/candidate.json
+    OMNI_EVIDENCE_SOURCE_REVISION: "${EVIDENCE_SOURCE_REVISION:?Set source revision}"
+    OMNI_EVIDENCE_SOURCE_TREE_DIGEST: "${EVIDENCE_SOURCE_TREE_DIGEST:?Set source tree digest}"
+    OMNI_EVIDENCE_PRODUCTION_IMAGE: "${PRODUCTION_IMAGE:?Set production image digest}"
+    OMNI_EVIDENCE_IMAGE: "${OMNI_EVIDENCE_IMAGE:?Set evidence image digest}"
+    OMNI_EVIDENCE_LAUNCHER_DIGEST: "${EVIDENCE_LAUNCHER_DIGEST:?Set launcher digest}"
+    OMNI_EVIDENCE_MIGRATION_MANIFEST_CHECKSUM: "${EVIDENCE_MIGRATION_MANIFEST_CHECKSUM:?Set migration manifest checksum}"
+    OMNI_EVIDENCE_REDIS_IMAGE: "${REDIS_IMAGE:?Set Redis image digest}"
+    OMNI_EVIDENCE_POSTGRES_IMAGE: "${POSTGRES_IMAGE:?Set PostgreSQL image digest}"
+    PANEL_PASSWORD: "${EVIDENCE_PANEL_PASSWORD:?Set ephemeral panel password}"
+    API_KEY: "${EVIDENCE_API_KEY:?Set ephemeral API key}"
+    SETUP_TOKEN: "${EVIDENCE_SETUP_TOKEN:?Set ephemeral setup token}"
+    RETRY_429_ENABLED: "false"
+    RETRY_429_MAX_RETRIES: "0"
+    RESPONSE_CACHE_ENABLED: "true"
+    RESPONSE_CACHE_TTL_SECONDS: "300"
+    RESPONSE_CACHE_MAX_ENTRIES: "1000"
+    OTEL_EXPORT_ENABLED: "false"
+    PROMETHEUS_EXPORT_ENABLED: "true"
+    KEEPALIVE_URL: ""
+  volumes:
+    - "${EVIDENCE_RUN_DIR:?Set absolute run directory}:/evidence/run:ro"
+
+services:
+  app-a:
+    <<: *app
+    ports: ["127.0.0.1:${APP_A_PORT:-14283}:4283"]
+    environment:
+      <<: *app-environment
+      OMNI_REPLICA_COUNT: "${EVIDENCE_REPLICA_COUNT:-2}"
+      OMNI_EVIDENCE_REPLICA_ID: app-a
+      POSTGRESQL_URI: postgresql://omni@fixture:15432/omni_evidence
+      REDIS_URL: redis://fixture:16379/0
+
+  app-b:
+    <<: *app
+    ports: ["127.0.0.1:${APP_B_PORT:-14284}:4283"]
+    environment:
+      <<: *app-environment
+      OMNI_REPLICA_COUNT: "${EVIDENCE_REPLICA_COUNT:-2}"
+      OMNI_EVIDENCE_REPLICA_ID: app-b
+      POSTGRESQL_URI: postgresql://omni@fixture:15433/omni_evidence
+      REDIS_URL: redis://fixture:16380/0
+
+  redis-primary:
+    image: "${REDIS_IMAGE:?Set Redis 8 patch image pinned by digest}"
+    command: [redis-server, /usr/local/etc/redis/redis.conf]
+    read_only: true
+    restart: "no"
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    pids_limit: 128
+    mem_limit: 384m
+    cpus: 0.75
+    volumes:
+      - ./redis-primary.conf:/usr/local/etc/redis/redis.conf:ro
+      - redis-primary-data:/data
+    networks: [evidence]
+    ports: ["127.0.0.1:${REDIS_DIRECT_PORT:-16381}:6379"]
+    healthcheck:
+      test: [CMD, redis-cli, ping]
+      interval: 2s
+      timeout: 1s
+      retries: 30
+
+  redis-standby:
+    image: "${REDIS_IMAGE:?Set Redis 8 patch image pinned by digest}"
+    command: [redis-server, /usr/local/etc/redis/redis.conf]
+    read_only: true
+    restart: "no"
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    pids_limit: 128
+    mem_limit: 384m
+    cpus: 0.75
+    volumes:
+      - ./redis-standby.conf:/usr/local/etc/redis/redis.conf:ro
+      - redis-standby-data:/data
+    networks: [evidence]
+    ports: ["127.0.0.1:${REDIS_STANDBY_DIRECT_PORT:-16382}:6379"]
+    depends_on: [redis-primary]
+
+  postgres:
+    image: "${POSTGRES_IMAGE:?Set PostgreSQL 17 patch image pinned by digest}"
+    read_only: true
+    restart: "no"
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    pids_limit: 256
+    mem_limit: 768m
+    cpus: 1.0
+    environment:
+      POSTGRES_USER: omni
+      POSTGRES_DB: omni_evidence
+      POSTGRES_HOST_AUTH_METHOD: trust
+    tmpfs:
+      - "/tmp:rw,noexec,nosuid,size=64m"
+      - "/run/postgresql:rw,noexec,nosuid,size=16m"
+    volumes: [postgres-data:/var/lib/postgresql/data]
+    networks: [evidence]
+    ports: ["127.0.0.1:${POSTGRES_DIRECT_PORT:-15434}:5432"]
+    healthcheck:
+      test: [CMD-SHELL, pg_isready -U omni -d omni_evidence]
+      interval: 2s
+      timeout: 2s
+      retries: 30
+
+  fixture:
+    image: "${EVIDENCE_IMAGE:?Set a locally built evidence image pinned by digest}"
+    entrypoint: [python, -m, tools.ha_topology_evidence.fixture]
+    command: []
+    environment:
+      EVIDENCE_CONTROL_TOKEN: "${EVIDENCE_CONTROL_TOKEN:?Set ephemeral fault-control token}"
+    read_only: true
+    user: "10001:10001"
+    restart: "no"
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    pids_limit: 128
+    mem_limit: 256m
+    cpus: 0.5
+    tmpfs:
+      - "/tmp:rw,noexec,nosuid,size=32m,uid=10001,gid=10001"
+    ports: ["127.0.0.1:${FIXTURE_CONTROL_PORT:-18081}:8081"]
+    networks: [evidence]
+    healthcheck:
+      test: [CMD, python, -c, "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8081/health', timeout=1)"]
+      interval: 2s
+      timeout: 1s
+      retries: 30
+
+networks:
+  evidence:
+    internal: true
+
+volumes:
+  postgres-data: {}
+  redis-primary-data: {}
+  redis-standby-data: {}

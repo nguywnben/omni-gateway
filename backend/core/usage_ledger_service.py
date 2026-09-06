@@ -21,6 +21,7 @@ from core.usage_ledger import (
     UsageLedgerEntry,
     UsageLedgerRepository,
     UsageLedgerStateConflict,
+    UsageLiabilityPage,
     UsageTimeBucket,
 )
 
@@ -128,6 +129,12 @@ class UsageLedgerService:
     async def reconcile_expired(self, *, now: float, limit: int) -> int:
         return await self._run(
             "reconcile", self._repository.reconcile_expired(now=now, limit=limit)
+        )
+
+    async def reconciliation_page(self, *, after: str | None, limit: int) -> UsageLiabilityPage:
+        return await self._run(
+            "reconciliation_page",
+            self._repository.reconciliation_page(after=after, limit=limit),
         )
 
     async def get_spend(self, *, since: float, api_key_id: str = "") -> SpendSnapshot:

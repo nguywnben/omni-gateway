@@ -56,6 +56,69 @@ class HaDeploymentAssetTests(unittest.TestCase):
             self.assertIn(name, rules)
             self.assertTrue(rules[name]["annotations"]["runbook_url"].endswith("ha-lifecycle.md"))
 
+    def test_external_evidence_topology_is_isolated_bounded_and_closed(self) -> None:
+        path = ROOT / "deploy" / "evidence" / "compose.ha.yml"
+        source = path.read_text(encoding="utf-8")
+        data = yaml.safe_load(source)
+        services = data["services"]
+        self.assertEqual(
+            set(services),
+            {"app-a", "app-b", "redis-primary", "redis-standby", "postgres", "fixture"},
+        )
+        self.assertTrue(data["networks"]["evidence"]["internal"])
+        self.assertNotIn("docker.sock", source)
+        self.assertNotIn("/opt/omni-gateway", source)
+        self.assertIn("${REDIS_IMAGE:?", source)
+        self.assertIn("${POSTGRES_IMAGE:?", source)
+        self.assertIn("${EVIDENCE_IMAGE:?", source)
+        self.assertIn("${OMNI_EVIDENCE_IMAGE:?", source)
+        dockerfile = (ROOT / "deploy" / "evidence" / "Dockerfile").read_text(encoding="utf-8")
+        self.assertIn("com.omni-gateway.evidence.production-image", dockerfile)
+        self.assertIn("com.omni-gateway.evidence.launcher-digest", dockerfile)
+
+        production_dockerfile = (ROOT / "deploy" / "Dockerfile").read_text(encoding="utf-8")
+        self.assertIn(
+            "FROM python:3.12-slim@sha256:"
+            "78387bc3881b8273120a12ebe6c1ab22b018ccc2c9adf565ae1ac9b536e184ea",
+            production_dockerfile,
+        )
+
+        for name, service in services.items():
+            self.assertTrue(service["read_only"], name)
+            self.assertEqual(service["restart"], "no", name)
+            self.assertIn("ALL", service["cap_drop"], name)
+            self.assertIn("no-new-privileges:true", service["security_opt"], name)
+            self.assertGreater(service["pids_limit"], 0, name)
+            self.assertTrue(service["mem_limit"], name)
+            self.assertGreater(service["cpus"], 0, name)
+            for published in service.get("ports", []):
+                self.assertTrue(str(published).startswith("127.0.0.1:"), (name, published))
+
+        for name in ("app-a", "app-b"):
+            environment = services[name]["environment"]
+            self.assertEqual(environment["WORKERS"], "1")
+            self.assertEqual(environment["OMNI_RUNTIME_MODE"], "coordinated")
+        self.assertEqual(environment["RETRY_429_ENABLED"], "false")
+        self.assertEqual(environment["RETRY_429_MAX_RETRIES"], "0")
+        self.assertEqual(environment["RESPONSE_CACHE_ENABLED"], "true")
+
+    def test_external_rollback_is_one_standalone_process_on_the_same_postgresql_history(
+        self,
+    ) -> None:
+        path = ROOT / "deploy" / "evidence" / "compose.rollback.yml"
+        source = path.read_text(encoding="utf-8")
+        data = yaml.safe_load(source)
+        self.assertEqual(set(data["services"]), {"app-a"})
+        service = data["services"]["app-a"]
+        self.assertIn("${PRODUCTION_IMAGE:?", service["image"])
+        self.assertEqual(service["environment"]["WORKERS"], "1")
+        self.assertEqual(service["environment"]["OMNI_RUNTIME_MODE"], "standalone")
+        self.assertEqual(service["environment"]["OMNI_REPLICA_COUNT"], "1")
+        self.assertEqual(service["environment"]["REDIS_URL"], "")
+        self.assertIn("postgresql://omni@fixture:", service["environment"]["POSTGRESQL_URI"])
+        self.assertNotIn("depends_on", service)
+        self.assertTrue(data["networks"]["evidence"]["external"])
+
 
 if __name__ == "__main__":
     unittest.main()

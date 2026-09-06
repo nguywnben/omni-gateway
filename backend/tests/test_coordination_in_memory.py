@@ -17,6 +17,7 @@ if str(TESTS_DIR) not in sys.path:
 from coordination_store_contract import CoordinationStoreContract
 from core.coordination import (
     CasRequest,
+    CoordinationCorruptError,
     CoordinationReconciliationRequiredError,
     Epoch,
     EpochState,
@@ -176,7 +177,7 @@ class InMemoryCoordinationTests(CoordinationStoreContract, unittest.IsolatedAsyn
             {"epoch": 2},
             {"namespace_digest": "f" * 64},
             {"epoch": True},
-            {"schema_version": 3},
+            {"schema_version": 2},
             {"unexpected": "value"},
         ):
             with self.subTest(changes=changes):
@@ -823,10 +824,11 @@ class InMemoryCoordinationTests(CoordinationStoreContract, unittest.IsolatedAsyn
         self.assertEqual(self.store._quota_records, {})
         self.assertEqual(self.store._quota_replays, {})
         self.assertEqual(self.store._quota_rate_windows, {})
-        self.assertEqual(
-            await self.store.reconcile_quota_state(epoch=2, cursor=None, limit=2, apply=True),
-            type(page)(0, True, None),
+        replayed_complete = await self.store.reconcile_quota_state(
+            epoch=2, cursor=None, limit=2, apply=True
         )
+        self.assertEqual((replayed_complete.scanned, replayed_complete.complete), (0, True))
+        self.assertNotEqual(replayed_complete.snapshot_digest, "0" * 64)
 
     async def test_quota_reconciliation_rejects_active_state_and_malformed_cursor(self) -> None:
         self.assertTrue((await self.store.reserve_quota(_reservation("active"))).accepted)
@@ -839,6 +841,40 @@ class InMemoryCoordinationTests(CoordinationStoreContract, unittest.IsolatedAsyn
                 epoch=2, cursor="not-a-valid-closed-cursor", limit=256, apply=True
             )
         self.assertIn("active", self.store._quota_records)
+
+    async def test_quota_reconciliation_replays_exact_page_after_destructive_apply(self) -> None:
+        decision = await self.store.reserve_quota(_reservation("replay-page"))
+        self.assertTrue(decision.accepted)
+        await self.store.release_quota(
+            "replay-page", now=self.clock.value, operation_id="release-replay-page"
+        )
+        await self.store.advance_epoch(1, "advance-replay-page")
+
+        first = await self.store.reconcile_quota_state(
+            epoch=2,
+            cursor=None,
+            limit=1,
+            apply=True,
+            operation_id="quota-reconciliation-page-1",
+        )
+        replay = await self.store.reconcile_quota_state(
+            epoch=2,
+            cursor=None,
+            limit=1,
+            apply=True,
+            operation_id="quota-reconciliation-page-1",
+        )
+
+        self.assertEqual(replay, first)
+        self.assertNotEqual(first.snapshot_digest, "0" * 64)
+        with self.assertRaises(CoordinationCorruptError):
+            await self.store.reconcile_quota_state(
+                epoch=2,
+                cursor=first.cursor,
+                limit=1,
+                apply=True,
+                operation_id="quota-reconciliation-page-1",
+            )
 
     async def test_capacity_exhaustion_is_a_closed_admission_decision(self) -> None:
         store = InMemoryStateStore(clock=self.clock, _quota_record_limit_for_testing=2)

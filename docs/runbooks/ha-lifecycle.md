@@ -52,33 +52,37 @@ Commands are dry-run unless `--apply` is present. Capture each JSON result in th
    python backend/ha_admin.py advance-epoch --operation-id epoch-change-00000001 --apply
    ```
 
-4. Update only `OMNI_COORDINATION_EPOCH` to the returned epoch, then preview bounded binding and
-   quota reconciliation. The quota page size is closed to `1..256` and defaults to 256:
+4. Update only `OMNI_COORDINATION_EPOCH` to the returned epoch, then choose one stable
+   reconciliation operation ID. Preview bounded binding and reconciliation. The page size is
+   closed to `1..256` and defaults to 256:
 
    ```text
-   python backend/ha_admin.py reconcile
-   python backend/ha_admin.py reconcile --quota-page-size 256
+   python backend/ha_admin.py reconcile --operation-id reconcile-00000001
+   python backend/ha_admin.py reconcile --operation-id reconcile-00000001 --page-size 256
    ```
 
 5. Apply reconciliation repeatedly until the content-free result reports
-   `quota_complete: true`. Each successful apply stores an opaque cursor in the drain record; the
-   cursor is never printed. An interruption is resumed by running the same command again. Do not
-   proceed if the command reports corrupt state, an active reservation that has not drained, or a
-   Redis transport failure:
+   `reconciliation_complete: true`. Components execute in the fixed order quota, durable
+   usage/reservation liability, identity/session policy, and cache/governance invalidation. Each
+   successful apply stores an opaque cursor inside an HMAC-authenticated durable receipt; output
+   reports only whether a cursor exists. An interruption is resumed with the same operation ID,
+   after authenticating the intermediate checkpoint. A different ID,
+   stale cursor, missing generation, surviving prior-epoch session, active reservation conflict,
+   durable-owner failure, or Redis failure stops the workflow:
 
    ```text
-   python backend/ha_admin.py reconcile --quota-page-size 256 --apply
+   python backend/ha_admin.py reconcile --operation-id reconcile-00000001 --page-size 256 --apply
    ```
 
-   Every call validates at most 256 lifecycle records, replay records, or schema markers. Terminal
+   Every call validates at most 256 records and the full receipt permits at most 64 pages. Terminal
    v1 evidence is disposed because monetary budget authority remains in the durable usage ledger;
    active unexpired reservations stop the workflow. Empty per-key rate buckets are initialized as
    schema `2|<epoch>|ready` only while the exact epoch is reconciling.
 
 6. Check `python backend/ha_admin.py status`. It must report
-   `quota_reconciliation_complete: true` and `quota_cursor_present: false`. After durable authority
-   and backups are independently verified, mark the exact epoch ready with another stable
-   operation ID:
+   `reconciliation_complete: true` and `reconciliation_receipt_present: true`. After durable
+   authority, active liability, identity/session policy, cache generations, and backups are
+   independently verified, mark the exact epoch ready with another stable operation ID:
 
    ```text
    python backend/ha_admin.py mark-ready --operation-id epoch-ready-00000001
@@ -101,7 +105,8 @@ bytes round-trip through Redis and the in-memory reference store.
 ## Rollback to supported standalone mode
 
 `python backend/ha_admin.py rollback-plan` returns the immutable target: standalone, one worker,
-one replica, durable authority preserved. It performs no mutation.
+one replica, durable authority preserved. It performs no mutation and refuses to produce a plan
+unless the current binding still matches the complete signed reconciliation receipt.
 
 1. Drain coordinated admission and preserve both backends for forensics/recovery.
 2. Stop all coordinated replicas.

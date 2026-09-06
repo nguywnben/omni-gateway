@@ -2,8 +2,9 @@
 
 ## Status
 
-Accepted implementation specification for W4.18. It defines configuration, ownership, readiness,
-reconciliation, and rollback without granting the W4.19 activation record or production release.
+Accepted implementation specification extended by W4-C. It defines configuration, ownership,
+readiness, reconciliation, and rollback without granting an activation record or production
+release.
 
 ## Closed runtime policy
 
@@ -92,20 +93,107 @@ The lifecycle exposes bounded commands for `status`, `drain`, `advance-epoch`, `
   Retained Redis CAS replay schema v1 remains readable with its legacy fingerprint before the
   fence rejects new admission, including during a valid drain. It has no capability encoding and
   therefore cannot authorize a new settlement; schema-v2 proof membership remains mandatory.
-- Epoch advance moves exactly `ready(N)` to `reconciling(N+1)`.
+- Epoch advance moves exactly `ready(N)` to `reconciling(N+1)`. In the same Redis transaction it
+  destroys every prior-epoch revocable management session and advances all exact/semantic cache
+  and governance invalidation generations. Corrupt session indexes or generation records abort
+  the whole transition; an epoch can never advance while stale authority remains accepted.
 - Reconciliation validates bindings and durable authority; it never copies, switches, or deletes
-  durable data automatically.
+  durable data automatically. The old quota-only completion bit is not readiness evidence. A
+  version-one receipt contains the exact deployment and namespace digest, prior/target epoch,
+  stable reconciliation operation ID, durable manifest checksum, migration plan/checkpoint
+  revision and checksum, four ordered component results, and an HMAC signature derived from the
+  coordination key. Unknown, duplicate, missing, reordered, stale, incomplete, or tampered fields
+  fail closed. Every persisted intermediate receipt is HMAC-authenticated before it can be resumed;
+  the final signature is additionally accepted only when all four components are complete.
+- The ordered components are quota state, durable usage/reservation liability, identity
+  authorization/session policy, and cache/governance invalidation authority. Each component uses
+  a canonical chained digest, bounded record/page counts, opaque resume cursor, positive challenge
+  count, and (for usage) active-reservation count plus liability nanos. Empty inventories still
+  require a real challenged operation; zero rows alone never prove success. Any page observing a
+  nonzero active-reservation count or nonzero active liability is rejected without advancing its
+  cursor, including zero-cost reservations, so settlement can complete and the exact page can be
+  retried. Pages are at most 256 records and 64 pages.
+- Applied reconciliation pages and `mark-ready` share one owner-token coordination lock. A
+  concurrent operator fails closed and retries; it cannot regress a completed receipt, recreate a
+  cleared drain, or race the readiness boundary.
+  Identity evidence binds every durable identity/role revision and OIDC policy epoch and requires
+  zero surviving sessions from the prior epoch. Cache evidence binds all seven fixed invalidation
+  scopes and requires a post-transition generation for each.
+- The signed receipt is stored durably through the lifecycle-only internal configuration boundary;
+  ordinary configuration invalidation is deliberately not invoked while the epoch is reconciling.
+  The drain stores only the receipt checksum and completion state. Repeated calls must use the same
+  operation ID and exact cursor. Component mutation and durable receipt persistence are
+  interruption-safe: a retry replays bounded idempotent work before advancing the receipt.
 - Mark-ready accepts only the exact reconciling epoch after reconciliation evidence. If a crash
   occurs after marking the epoch ready but before removing the drain, retrying the identical
   mark-ready operation completes removal without advancing/changing the epoch. Removal compares
   the exact completed prior-epoch drain, binding, ready epoch, and successful retained operation
   replay atomically. A different operation or mismatched/replaced drain remains an error. Dry-run
   never removes the drain. A fully completed transition with no remaining drain remains retry-safe.
-  Crash completion requires the original mark-ready operation replay to remain retained.
-- Rollback emits and validates a plan to one standalone worker/replica. It never changes durable
-  authority, clears Redis, or edits deployment configuration automatically.
+  Crash completion requires the original mark-ready operation replay to remain retained. Both the
+  reconciling and already-ready retry paths revalidate the HMAC receipt and exact drain checksum.
+- Rollback emits and validates a plan to one standalone worker/replica only when the same complete
+  signed receipt is still bound to the current deployment, epoch, manifest, and migration
+  checkpoint. It never changes durable authority, clears Redis, or edits deployment configuration
+  automatically.
+
+## Recovery clocks and failure behavior
+
+Quota reconciliation uses Redis server time and its bounded existing cursor semantics. Durable
+usage liability is a stable application-table scan; identity evidence uses durable creation order;
+session invalidation and cache generation advancement linearize with the Redis epoch transition.
+Receipt signatures contain no wall-clock assertion, so clock skew cannot convert stale evidence
+into valid evidence. Recovery duration is measured externally from the first positively exercised
+fault until both direct app readiness and the independent oracle recover.
+
+Any unavailable owner, malformed cursor, page overflow, active quota conflict, surviving session,
+missing generation, any active reservation, any nonzero active liability, liability overflow,
+signature mismatch, or binding
+change leaves the epoch reconciling and admission fenced. No component can be skipped and no
+operator error reveals a cursor, identifier key, session payload, DSN, or raw namespace.
 
 ## Deployment and evidence boundary
+
+An external evidence candidate is not an activation record. The isolated evidence package freezes
+the source revision/tree digest, production and launcher image digests, identical pinned Redis
+primary/standby images, pinned PostgreSQL image, durable migration manifest, topology, workload,
+and complete scenario inventory. Its content digest yields a syntactically valid `act_<32hex>`
+candidate identifier, while the production allowlist remains empty and the production policy
+continues to reject replica count two.
+
+Only an evidence-owned `CandidateVerifier` may accept that one identifier, and only when every
+independently observed source, image, dependency, worker, replica, and manifest input matches. It
+is injected through the existing binding, operator, and lifecycle constructors. An ASGI wrapper
+delegates all HTTP/WebSocket traffic to the original application and enters the original lifespan;
+it neither patches readiness nor replaces repositories. The production policy parser first
+validates a private one-replica mapping, after which the evidence boundary derives only the frozen
+experimental replica count. Startup and shutdown retain exactly one lifecycle owner.
+
+After a first matrix is independently verified and ADR-009 accepts its identifier, a newly frozen
+candidate may name that identifier as its predecessor activation record. That field changes the
+new candidate digest. In this mode neither the evidence policy nor the runtime lifecycle may use
+the candidate verifier as activation authority: the exact predecessor must pass the compiled
+production allowlist and the production policy parser itself must accept two replicas. The full
+matrix is rerun against that activated build; an empty/mismatched allowlist or unchanged
+one-replica ceiling fails startup.
+
+Evidence manifests are closed, immutable, canonical JSON. Passing requires every required
+scenario/repetition exactly once, a complete-pass state, positive challenged operations, observed
+fault milestones where applicable, zero safety-violation counters, exact candidate/source/image
+identity, and a recomputed SHA-256 for every regular artifact beneath the run directory. Missing,
+duplicate, failed, skipped, unavailable, interrupted, not-exercised, non-finite, path-escaping, or
+tampered evidence fails closed. A verified candidate is only `activation_eligible_for_review`; a
+separate accepted ADR and subsequent production regression matrix are still required to change the
+allowlist or replica ceiling.
+
+The report archives canonical `candidate.json` under the same artifact inventory and verifies it
+against an independently supplied candidate. The installed launcher package also recomputes its
+own digest at application startup rather than trusting only an image label. The offline verifier
+requires exactly 28,704 uniquely identified HTTP deliveries covering 28,703 logical operations
+(one operation is deliberately delivered twice), the exact challenged-operation and
+fault-milestone count for every frozen scenario, and aggregate sample outcomes equal to scenario
+counters;
+truncated, padded, contradictory, or relabeled success evidence is ineligible.
 
 Compose, Helm, and container defaults remain one worker/replica and standalone. Coordinated values
 are explicit and secrets use environment/Secret references. Termination grace must allow drain;

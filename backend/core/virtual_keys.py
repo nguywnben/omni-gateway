@@ -635,6 +635,7 @@ class VirtualKeyManager:
         request_body: Any = None,
         candidate_models: Optional[Sequence[str]] = None,
         reservation_id: str = "",
+        operation_id: str = "",
         now: Optional[float] = None,
     ) -> Optional[str]:
         """Authorize and atomically reserve constrained inference capacity."""
@@ -686,11 +687,28 @@ class VirtualKeyManager:
         )
         hard_budget = self._has_hard_budget(record)
         supplied_id = str(reservation_id or "")
+        supplied_operation = str(operation_id or "")
+        if supplied_operation and not 1 <= len(supplied_operation) <= 128:
+            raise ValueError("Quota operation identity is invalid.")
+        deterministic_suffix = (
+            hashlib.sha256(
+                b"omni-gateway:quota-reservation:v1\0"
+                + record.id.encode("utf-8")
+                + b"\0"
+                + supplied_operation.encode("utf-8")
+            ).hexdigest()[:32]
+            if supplied_operation
+            else ""
+        )
         if hard_budget:
             internal_id = (
                 supplied_id
                 if re.fullmatch(r"qrs_[0-9a-f]{32}", supplied_id)
-                else f"qrs_{secrets.token_hex(16)}"
+                else (
+                    f"qrs_{deterministic_suffix}"
+                    if deterministic_suffix
+                    else f"qrs_{secrets.token_hex(16)}"
+                )
             )
             if not self._claim_local_durable_reservation(
                 internal_id,
@@ -750,7 +768,14 @@ class VirtualKeyManager:
                     0,
                 )
         else:
-            internal_id = str(supplied_id or f"qrr_{secrets.token_hex(16)}")[:128]
+            internal_id = str(
+                supplied_id
+                or (
+                    f"qrr_{deterministic_suffix}"
+                    if deterministic_suffix
+                    else f"qrr_{secrets.token_hex(16)}"
+                )
+            )[:128]
         try:
             decision = await self._state_store.reserve_quota(
                 QuotaReservationRequest(
@@ -769,6 +794,7 @@ class VirtualKeyManager:
                     daily_snapshot_started_at=current,
                     monthly_snapshot_started_at=current,
                     fencing_epoch=self._fencing_epoch,
+                    operation_id=supplied_operation or internal_id,
                 )
             )
         except Exception as exc:

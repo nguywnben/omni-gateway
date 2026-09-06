@@ -11,8 +11,9 @@ BACKEND_DIR = Path(__file__).resolve().parents[1]
 if str(BACKEND_DIR) not in sys.path:
     sys.path.insert(0, str(BACKEND_DIR))
 
-from core.usage_ledger import SpendSnapshot, UsageLedgerError
+from core.usage_ledger import SpendSnapshot, UsageLedgerError, UsageLiabilityPage
 from core.usage_ledger_service import (
+    UsageLedgerService,
     close_usage_ledger_service,
     get_usage_ledger_service,
     initialize_usage_ledger_service,
@@ -84,6 +85,17 @@ class UsageLedgerServiceTests(unittest.IsolatedAsyncioTestCase):
         await service.check_available()
 
         repository.check_available.assert_awaited_once_with()
+
+    async def test_reconciliation_page_preserves_typed_liability_evidence(self):
+        evidence = UsageLiabilityPage(0, True, None, "a" * 64, 0)
+        repository = Mock()
+        repository.reconciliation_page = AsyncMock(return_value=evidence)
+        service = UsageLedgerService(repository)
+
+        result = await service.reconciliation_page(after=None, limit=256)
+
+        self.assertEqual(result, evidence)
+        repository.reconciliation_page.assert_awaited_once_with(after=None, limit=256)
 
 
 if __name__ == "__main__":
