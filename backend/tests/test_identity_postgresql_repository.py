@@ -169,6 +169,9 @@ class PostgreSQLIdentityRepositoryTests(unittest.IsolatedAsyncioTestCase):
     async def test_initialize_is_additive_transactional_and_bootstraps_metadata(self):
         schema = "\n".join(sql for sql, _args in self.connection.executions)
 
+        first_sql, first_args = self.connection.executions[0]
+        self.assertIn("pg_advisory_xact_lock", first_sql)
+        self.assertEqual(first_args, (0x4F4D4E4949445631,))
         self.assertIn("CREATE TABLE IF NOT EXISTS management_identities", schema)
         self.assertIn("CREATE TABLE IF NOT EXISTS management_role_bindings", schema)
         self.assertIn("ON CONFLICT DO NOTHING", schema)

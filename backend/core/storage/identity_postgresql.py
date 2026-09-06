@@ -55,6 +55,7 @@ _BINDING_COLUMNS = (
     "created_at",
     "updated_at",
 )
+_IDENTITY_SCHEMA_LOCK_ID = 0x4F4D4E4949445631
 
 
 class PostgreSQLIdentityRepository:
@@ -77,6 +78,13 @@ class PostgreSQLIdentityRepository:
             try:
                 async with self._pool.acquire() as connection:
                     async with connection.transaction():
+                        # Multiple replicas may initialize the additive schema at
+                        # the same instant. PostgreSQL's IF NOT EXISTS does not
+                        # serialize the related table/index/bootstrap lock graph.
+                        await connection.execute(
+                            "SELECT pg_advisory_xact_lock($1)",
+                            _IDENTITY_SCHEMA_LOCK_ID,
+                        )
                         await self._create_schema(connection)
                         await self._bootstrap(connection)
                         await self._validate_store(connection)
