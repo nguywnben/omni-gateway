@@ -1,28 +1,11 @@
 # syntax=docker/dockerfile:1.7
 FROM python:3.12-slim@sha256:78387bc3881b8273120a12ebe6c1ab22b018ccc2c9adf565ae1ac9b536e184ea AS runtime
 
-ARG BUILD_DATE=""
-ARG VERSION="dev"
-ARG REVISION="unknown"
-
-LABEL org.opencontainers.image.title="Omni Gateway" \
-      org.opencontainers.image.description="Universal AI router for coding tools" \
-      org.opencontainers.image.source="https://github.com/nguywnben/omni-gateway" \
-      org.opencontainers.image.url="https://github.com/nguywnben/omni-gateway" \
-      org.opencontainers.image.documentation="https://github.com/nguywnben/omni-gateway#readme" \
-      org.opencontainers.image.licenses="MIT" \
-      org.opencontainers.image.created="${BUILD_DATE}" \
-      org.opencontainers.image.version="${VERSION}" \
-      org.opencontainers.image.revision="${REVISION}"
-
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     PIP_NO_CACHE_DIR=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1 \
-    TZ=UTC \
-    BUILD_DATE=${BUILD_DATE} \
-    BUILD_VERSION=${VERSION} \
-    BUILD_REVISION=${REVISION}
+    TZ=UTC
 
 WORKDIR /app
 
@@ -43,6 +26,26 @@ COPY deploy/scripts/docker-entrypoint.sh /usr/local/bin/omni-gateway-entrypoint
 RUN chmod 0755 /usr/local/bin/omni-gateway-entrypoint && \
     mkdir -p /app/backend/data/creds /app/backend/data/logs && \
     chown -R gateway:gateway /app
+
+# Build identity belongs after dependency/application layers so a new immutable
+# revision does not force network-bound package installation to run again.
+ARG BUILD_DATE=""
+ARG VERSION="dev"
+ARG REVISION="unknown"
+
+ENV BUILD_DATE=${BUILD_DATE} \
+    BUILD_VERSION=${VERSION} \
+    BUILD_REVISION=${REVISION}
+
+LABEL org.opencontainers.image.title="Omni Gateway" \
+      org.opencontainers.image.description="Universal AI router for coding tools" \
+      org.opencontainers.image.source="https://github.com/nguywnben/omni-gateway" \
+      org.opencontainers.image.url="https://github.com/nguywnben/omni-gateway" \
+      org.opencontainers.image.documentation="https://github.com/nguywnben/omni-gateway#readme" \
+      org.opencontainers.image.licenses="MIT" \
+      org.opencontainers.image.created="${BUILD_DATE}" \
+      org.opencontainers.image.version="${VERSION}" \
+      org.opencontainers.image.revision="${REVISION}"
 
 EXPOSE 4283
 STOPSIGNAL SIGTERM

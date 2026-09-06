@@ -89,6 +89,10 @@ class HaDeploymentAssetTests(unittest.TestCase):
             "78387bc3881b8273120a12ebe6c1ab22b018ccc2c9adf565ae1ac9b536e184ea",
             production_dockerfile,
         )
+        self.assertLess(
+            production_dockerfile.index("RUN pip install --no-cache-dir --require-hashes"),
+            production_dockerfile.index('ARG REVISION="unknown"'),
+        )
 
         for name, service in services.items():
             self.assertEqual(set(service["networks"]), {"evidence", "control"}, name)
