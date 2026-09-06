@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import sys
 import unittest
 from datetime import datetime, timezone
@@ -39,6 +40,20 @@ class _Repository:
     async def prune(self, policy, *, now):
         self.prunes.append((policy, now))
         return 0
+
+
+class _ConcurrentRepository(_Repository):
+    def __init__(self):
+        super().__init__()
+        self.started = 0
+        self.both_started = asyncio.Event()
+
+    async def append(self, trace):
+        self.started += 1
+        if self.started == 2:
+            self.both_started.set()
+        await asyncio.wait_for(self.both_started.wait(), timeout=0.25)
+        self.traces.append(trace)
 
 
 class _Storage:
@@ -154,6 +169,21 @@ class RequestTraceServiceTests(unittest.IsolatedAsyncioTestCase):
             storage.values[REQUEST_TRACE_RETENTION_CONFIG],
             {"retention_days": 3, "max_traces": 2_000},
         )
+
+    async def test_record_appends_are_concurrent_and_retention_is_amortized(self):
+        storage = _Storage()
+        service = await RequestTraceService.create(storage)
+        repository = _ConcurrentRepository()
+        service._repository = repository
+        traces = [
+            RequestTraceCollector(f"request-{index}", "openai_responses").complete(status_code=200)
+            for index in range(2)
+        ]
+
+        await asyncio.gather(*(service.record(trace) for trace in traces))
+
+        self.assertCountEqual(repository.traces, traces)
+        self.assertEqual(len(repository.prunes), 1)
 
 
 if __name__ == "__main__":

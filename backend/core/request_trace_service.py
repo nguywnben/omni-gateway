@@ -28,6 +28,8 @@ REQUEST_TRACE_MASTER_KEY_CONFIG = "request_trace_master_key_v1"
 REQUEST_TRACE_RETENTION_CONFIG = "request_trace_retention_v1"
 _CURSOR_DOMAIN = b"omni-gateway/request-trace/cursor/v1"
 _MASTER_KEY_BYTES = 32
+_RETENTION_PRUNE_INTERVAL_SECONDS = 60.0
+_RETENTION_PRUNE_RECORD_INTERVAL = 256
 _current_collector: ContextVar[RequestTraceCollector | None] = ContextVar(
     "request_trace_collector", default=None
 )
@@ -231,7 +233,9 @@ class RequestTraceService:
         self._repository = repository
         self._storage = storage
         self._retention_policy = retention_policy
-        self._lock = asyncio.Lock()
+        self._retention_lock = asyncio.Lock()
+        self._records_since_prune = 0
+        self._last_prune_monotonic = 0.0
 
     @classmethod
     async def create(cls, storage: Any) -> "RequestTraceService":
@@ -256,9 +260,28 @@ class RequestTraceService:
     async def record(self, trace: RequestTrace) -> None:
         if not isinstance(trace, RequestTrace):
             raise ValueError("A validated RequestTrace is required.")
-        async with self._lock:
-            await self._repository.append(trace)
+        # Durable inserts are independent and must not queue behind a global
+        # retention scan. One worker amortizes pruning while concurrent writers
+        # continue; the bounded record interval also caps burst overshoot.
+        await self._repository.append(trace)
+        self._records_since_prune += 1
+        now_monotonic = time.monotonic()
+        due = (
+            self._records_since_prune >= _RETENTION_PRUNE_RECORD_INTERVAL
+            or now_monotonic - self._last_prune_monotonic >= _RETENTION_PRUNE_INTERVAL_SECONDS
+        )
+        if not due or self._retention_lock.locked():
+            return
+        async with self._retention_lock:
+            now_monotonic = time.monotonic()
+            if (
+                self._records_since_prune < _RETENTION_PRUNE_RECORD_INTERVAL
+                and now_monotonic - self._last_prune_monotonic < _RETENTION_PRUNE_INTERVAL_SECONDS
+            ):
+                return
             await self._repository.prune(self._retention_policy, now=datetime.now(timezone.utc))
+            self._records_since_prune = 0
+            self._last_prune_monotonic = now_monotonic
 
     async def query(self, query: RequestTraceQuery) -> RequestTracePage:
         if not isinstance(query, RequestTraceQuery):
@@ -277,11 +300,14 @@ class RequestTraceService:
         if prune_time.tzinfo is None:
             raise ValueError("Request trace prune timestamp must be timezone-aware.")
         record = {"retention_days": policy.retention_days, "max_traces": policy.max_traces}
-        async with self._lock:
+        async with self._retention_lock:
             if not await self._storage.set_config(REQUEST_TRACE_RETENTION_CONFIG, record):
                 raise RuntimeError("Unable to persist the request trace retention policy.")
             self._retention_policy = policy
-            return await self._repository.prune(policy, now=prune_time.astimezone(timezone.utc))
+            removed = await self._repository.prune(policy, now=prune_time.astimezone(timezone.utc))
+            self._records_since_prune = 0
+            self._last_prune_monotonic = time.monotonic()
+            return removed
 
 
 _request_trace_service: RequestTraceService | None = None
