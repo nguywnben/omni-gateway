@@ -66,6 +66,12 @@ class HaDeploymentAssetTests(unittest.TestCase):
             {"app-a", "app-b", "redis-primary", "redis-standby", "postgres", "fixture"},
         )
         self.assertTrue(data["networks"]["evidence"]["internal"])
+        self.assertEqual(
+            data["networks"]["control"]["driver_opts"][
+                "com.docker.network.bridge.enable_ip_masquerade"
+            ],
+            "false",
+        )
         self.assertNotIn("docker.sock", source)
         self.assertNotIn("/opt/omni-gateway", source)
         self.assertIn("${REDIS_IMAGE:?", source)
@@ -85,6 +91,7 @@ class HaDeploymentAssetTests(unittest.TestCase):
         )
 
         for name, service in services.items():
+            self.assertEqual(set(service["networks"]), {"evidence", "control"}, name)
             self.assertTrue(service["read_only"], name)
             self.assertEqual(service["restart"], "no", name)
             self.assertIn("ALL", service["cap_drop"], name)
