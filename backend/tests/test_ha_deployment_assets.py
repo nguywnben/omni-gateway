@@ -102,6 +102,11 @@ class HaDeploymentAssetTests(unittest.TestCase):
         self.assertEqual(environment["RETRY_429_ENABLED"], "false")
         self.assertEqual(environment["RETRY_429_MAX_RETRIES"], "0")
         self.assertEqual(environment["RESPONSE_CACHE_ENABLED"], "true")
+        for name in ("redis-primary", "redis-standby"):
+            self.assertEqual(services[name]["user"], "999:1000")
+            self.assertEqual(services[name]["cap_drop"], ["ALL"])
+        self.assertEqual(services["postgres"]["user"], "70:70")
+        self.assertEqual(services["postgres"]["cap_drop"], ["ALL"])
 
     def test_external_rollback_is_one_standalone_process_on_the_same_postgresql_history(
         self,
