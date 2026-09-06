@@ -107,6 +107,11 @@ class CandidateIsolationTests(unittest.TestCase):
 
 
 class CandidateApplicationLifecycleTests(unittest.IsolatedAsyncioTestCase):
+    def test_evidence_server_uses_the_locked_production_asgi_runtime(self) -> None:
+        source = (ROOT / "tools" / "ha_topology_evidence" / "app.py").read_text(encoding="utf-8")
+        self.assertIn("from hypercorn.asyncio import serve", source)
+        self.assertNotIn("import uvicorn", source)
+
     async def test_original_lifespan_owns_exactly_one_candidate_start_and_close(self) -> None:
         from tools.ha_topology_evidence import app as evidence_app
 

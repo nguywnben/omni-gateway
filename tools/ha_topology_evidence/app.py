@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import os
 import sys
 from collections.abc import AsyncIterator, Awaitable, Callable
@@ -137,7 +138,8 @@ def build_candidate_application(
 def serve_candidate_application() -> None:
     """Load a frozen candidate and run the original app through its evidence-only lifespan."""
 
-    import uvicorn
+    from hypercorn.asyncio import serve
+    from hypercorn.config import Config
     from main import app as production_application
     from main import lifespan as production_lifespan
 
@@ -158,7 +160,13 @@ def serve_candidate_application() -> None:
         replica_count=verifier.replica_count,
         original_lifespan=production_lifespan,
     )
-    uvicorn.run(application, host="0.0.0.0", port=4283, workers=1, log_level="info")
+    config = Config()
+    config.bind = ["0.0.0.0:4283"]
+    config.workers = 1
+    config.accesslog = "-"
+    config.errorlog = "-"
+    config.loglevel = "INFO"
+    asyncio.run(serve(application, config))
 
 
 if __name__ == "__main__":
