@@ -4,6 +4,7 @@ import base64
 import json
 import sys
 import unittest
+from dataclasses import replace
 from pathlib import Path
 
 BACKEND_DIR = Path(__file__).resolve().parents[1]
@@ -11,6 +12,7 @@ if str(BACKEND_DIR) not in sys.path:
     sys.path.insert(0, str(BACKEND_DIR))
 
 from core.coordination import CoordinationUninitializedError
+from core.durable_migration import AuthoritySide, MigrationPhase
 from core.ha_coordination_binding import (
     CoordinationBinding,
     CoordinationBindingManager,
@@ -19,11 +21,18 @@ from core.ha_coordination_binding import (
 from core.ha_runtime_policy import HaRuntimePolicy
 from core.state_store import InMemoryStateStore
 
+from backend.tests.durable_migration_fixtures import (
+    PLAN_ID,
+    MemoryMigrationCheckpoints,
+    completed_migration_checkpoint,
+)
+
 
 class _Storage:
     def __init__(self) -> None:
         self.config: dict[str, object] = {}
         self.fail_next_write = False
+        self.checkpoints = MemoryMigrationCheckpoints(completed_migration_checkpoint())
 
     async def get_config(self, key: str, default=None):
         return self.config.get(key, default)
@@ -34,6 +43,9 @@ class _Storage:
             return False
         self.config[key] = value
         return True
+
+    async def create_migration_checkpoint_repository(self):
+        return self.checkpoints
 
 
 class _ExplicitNamespaceStore(InMemoryStateStore):
@@ -76,7 +88,9 @@ class CoordinationBindingManagerTests(unittest.IsolatedAsyncioTestCase):
         self.manager = CoordinationBindingManager(self.storage, self.store)
 
     async def test_verify_requires_matching_durable_and_coordination_records(self) -> None:
-        expected = CoordinationBinding.for_policy(policy(), "act_" + ("a" * 32))
+        expected = CoordinationBinding.for_policy(
+            policy(), "act_" + ("a" * 32), completed_migration_checkpoint()
+        )
         self.storage.config[self.manager.DURABLE_KEY] = expected.to_dict()
         await self.store.set(self.manager.STORE_KEY, expected.to_dict())
 
@@ -87,7 +101,9 @@ class CoordinationBindingManagerTests(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn("k" * 32, repr(verified))
 
     async def test_shared_binding_accepts_canonical_json_transport(self) -> None:
-        expected = CoordinationBinding.for_policy(policy(), "act_" + ("a" * 32))
+        expected = CoordinationBinding.for_policy(
+            policy(), "act_" + ("a" * 32), completed_migration_checkpoint()
+        )
         self.storage.config[self.manager.DURABLE_KEY] = expected.to_dict()
         await self.store.set(
             self.manager.STORE_KEY,
@@ -97,7 +113,9 @@ class CoordinationBindingManagerTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(await self.manager.verify(policy()), expected)
 
     async def test_missing_or_mismatched_records_fail_with_safe_codes(self) -> None:
-        expected = CoordinationBinding.for_policy(policy(), "act_" + ("a" * 32))
+        expected = CoordinationBinding.for_policy(
+            policy(), "act_" + ("a" * 32), completed_migration_checkpoint()
+        )
         cases = []
         cases.append(({}, None, "durable_binding_missing"))
         cases.append(({self.manager.DURABLE_KEY: expected.to_dict()}, None, "namespace_missing"))
@@ -127,18 +145,77 @@ class CoordinationBindingManagerTests(unittest.IsolatedAsyncioTestCase):
         plan = await self.manager.bootstrap(
             policy(),
             activation_record="act_" + ("a" * 32),
+            migration_plan_id=PLAN_ID,
             apply=False,
         )
         self.assertFalse(plan.applied)
+        self.assertTrue(plan.prerequisite.eligible)
         self.assertIsNone(await self.store.get(self.manager.STORE_KEY))
 
         with self.assertRaises(HaBindingError) as raised:
             await self.manager.bootstrap(
                 policy(),
                 activation_record="act_" + ("a" * 32),
+                migration_plan_id=PLAN_ID,
                 apply=True,
             )
         self.assertEqual(raised.exception.code, "activation_gate_closed")
+
+    async def test_dry_run_reports_missing_and_ineligible_migration_without_writing(self) -> None:
+        self.storage.checkpoints.records.clear()
+        missing = await self.manager.bootstrap(
+            policy(),
+            activation_record="act_" + ("a" * 32),
+            migration_plan_id=PLAN_ID,
+            apply=False,
+        )
+        self.assertIsNone(missing.binding)
+        self.assertEqual(missing.prerequisite.code, "migration_checkpoint_missing")
+
+        checkpoint = completed_migration_checkpoint()
+        checkpoint = replace(
+            checkpoint,
+            phase=MigrationPhase.VERIFYING,
+            authority=AuthoritySide.SOURCE,
+            families=tuple(
+                replace(item, verified=False) if index == 0 else item
+                for index, item in enumerate(checkpoint.families)
+            ),
+        )
+        self.storage.checkpoints.records[PLAN_ID] = checkpoint
+        ineligible = await self.manager.bootstrap(
+            policy(),
+            activation_record="act_" + ("a" * 32),
+            migration_plan_id=PLAN_ID,
+            apply=False,
+        )
+        self.assertFalse(ineligible.prerequisite.eligible)
+        self.assertEqual(
+            ineligible.prerequisite.mismatched_families,
+            (checkpoint.families[0].family.value,),
+        )
+        self.assertIsNone(await self.store.get(self.manager.STORE_KEY))
+
+    async def test_verify_rejects_checkpoint_changed_after_binding(self) -> None:
+        manager = CoordinationBindingManager(
+            self.storage,
+            self.store,
+            activation_verifier=lambda _record: True,
+        )
+        await manager.bootstrap(
+            policy(),
+            activation_record="act_" + ("f" * 32),
+            migration_plan_id=PLAN_ID,
+            apply=True,
+        )
+        self.storage.checkpoints.records[PLAN_ID] = replace(
+            completed_migration_checkpoint(), revision=5
+        )
+
+        with self.assertRaises(HaBindingError) as raised:
+            await manager.verify(policy())
+
+        self.assertEqual(raised.exception.code, "migration_checkpoint_mismatch")
 
     async def test_partial_bootstrap_resumes_without_overwriting_shared_marker(self) -> None:
         manager = CoordinationBindingManager(
@@ -151,6 +228,7 @@ class CoordinationBindingManagerTests(unittest.IsolatedAsyncioTestCase):
             await manager.bootstrap(
                 policy(),
                 activation_record="act_" + ("b" * 32),
+                migration_plan_id=PLAN_ID,
                 apply=True,
             )
         self.assertEqual(raised.exception.code, "durable_write_failed")
@@ -160,6 +238,7 @@ class CoordinationBindingManagerTests(unittest.IsolatedAsyncioTestCase):
         result = await manager.bootstrap(
             policy(),
             activation_record="act_" + ("b" * 32),
+            migration_plan_id=PLAN_ID,
             apply=True,
         )
         self.assertTrue(result.applied)
@@ -175,7 +254,10 @@ class CoordinationBindingManagerTests(unittest.IsolatedAsyncioTestCase):
         )
 
         result = await manager.bootstrap(
-            policy(), activation_record="act_" + ("c" * 32), apply=True
+            policy(),
+            activation_record="act_" + ("c" * 32),
+            migration_plan_id=PLAN_ID,
+            apply=True,
         )
 
         self.assertTrue(result.applied)
@@ -183,7 +265,9 @@ class CoordinationBindingManagerTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(await manager.verify(policy()), result.binding)
 
     async def test_existing_durable_binding_never_bootstraps_a_lost_epoch_namespace(self) -> None:
-        expected = CoordinationBinding.for_policy(policy(), "act_" + ("d" * 32))
+        expected = CoordinationBinding.for_policy(
+            policy(), "act_" + ("d" * 32), completed_migration_checkpoint()
+        )
         self.storage.config[self.manager.DURABLE_KEY] = expected.to_dict()
         store = _ExplicitNamespaceStore(initialized=False)
         await store.set(self.manager.STORE_KEY, expected.to_dict())
@@ -195,14 +279,19 @@ class CoordinationBindingManagerTests(unittest.IsolatedAsyncioTestCase):
 
         with self.assertRaises(HaBindingError) as raised:
             await manager.bootstrap(
-                policy(), activation_record=expected.activation_record, apply=True
+                policy(),
+                activation_record=expected.activation_record,
+                migration_plan_id=PLAN_ID,
+                apply=True,
             )
 
         self.assertEqual(raised.exception.code, "epoch_namespace_missing")
         self.assertEqual(store.initialize_calls, 0)
 
     async def test_verify_reports_lost_epoch_namespace_without_reinitializing(self) -> None:
-        expected = CoordinationBinding.for_policy(policy(), "act_" + ("e" * 32))
+        expected = CoordinationBinding.for_policy(
+            policy(), "act_" + ("e" * 32), completed_migration_checkpoint()
+        )
         self.storage.config[self.manager.DURABLE_KEY] = expected.to_dict()
         store = _ExplicitNamespaceStore(initialized=False)
         await store.set(self.manager.STORE_KEY, expected.to_dict())

@@ -67,7 +67,7 @@ class HaRuntimeOperator:
         shared = await self._shared_binding()
         epoch = await self._store.read_epoch()
         drain = await self._drain_record()
-        expected = CoordinationBinding.for_policy(self.policy, durable.activation_record)
+        expected = await self._bindings.expected_for_binding(self.policy, durable)
         accepted = {expected}
         if expected.fencing_epoch > 1:
             accepted.add(replace(expected, fencing_epoch=expected.fencing_epoch - 1))
@@ -112,7 +112,7 @@ class HaRuntimeOperator:
     async def advance_epoch(self, operation_id: str, *, apply: bool = False) -> dict[str, object]:
         binding = await self._durable_binding()
         shared = await self._shared_binding()
-        expected = CoordinationBinding.for_policy(self.policy, binding.activation_record)
+        expected = await self._bindings.expected_for_binding(self.policy, binding)
         if binding != expected or shared != expected:
             raise RuntimeError("Matching bindings are required before advancing the epoch.")
         self._activation_required(binding.activation_record)
@@ -145,7 +145,7 @@ class HaRuntimeOperator:
         durable = await self._durable_binding()
         shared = await self._shared_binding()
         self._activation_required(durable.activation_record)
-        expected = CoordinationBinding.for_policy(self.policy, durable.activation_record)
+        expected = await self._bindings.expected_for_binding(self.policy, durable)
         prior = replace(expected, fencing_epoch=expected.fencing_epoch - 1)
         if (
             expected.fencing_epoch <= 1
@@ -217,7 +217,7 @@ class HaRuntimeOperator:
             return {"applied": bool(apply), "epoch": epoch.epoch, "state": "ready"}
         durable = await self._durable_binding()
         shared = await self._shared_binding()
-        expected = CoordinationBinding.for_policy(self.policy, durable.activation_record)
+        expected = await self._bindings.expected_for_binding(self.policy, durable)
         self._activation_required(durable.activation_record)
         if durable != expected or shared != expected:
             raise RuntimeError("Reconciled bindings are required before marking ready.")

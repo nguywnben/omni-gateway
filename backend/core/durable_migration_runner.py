@@ -170,6 +170,8 @@ class MigrationRunner:
             target_backend=self._target.descriptor.backend,
             source_instance_id=self._source.descriptor.instance_id,
             target_instance_id=self._target.descriptor.instance_id,
+            source_revision=self._source.descriptor.revision,
+            target_revision=self._target.descriptor.revision,
             source_barrier_id=source_barrier_id,
             phase=MigrationPhase.PLANNED,
             authority=AuthoritySide.SOURCE,
@@ -397,6 +399,8 @@ class MigrationRunner:
             or checkpoint.target_backend is not self._target.descriptor.backend
             or checkpoint.source_instance_id != self._source.descriptor.instance_id
             or checkpoint.target_instance_id != self._target.descriptor.instance_id
+            or checkpoint.source_revision != self._source.descriptor.revision
+            or checkpoint.target_revision != self._target.descriptor.revision
         ):
             raise MigrationError("Migration endpoint does not match the persisted plan.")
         return checkpoint

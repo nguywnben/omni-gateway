@@ -46,6 +46,8 @@ def _checkpoint():
         target_backend=DurableBackend.POSTGRESQL,
         source_instance_id="ins_11111111111111111111111111111111",
         target_instance_id="ins_22222222222222222222222222222222",
+        source_revision=1,
+        target_revision=1,
         source_barrier_id="bar_33333333333333333333333333333333",
         phase=MigrationPhase.PLANNED,
         authority=AuthoritySide.SOURCE,

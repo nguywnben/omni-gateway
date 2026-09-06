@@ -25,6 +25,7 @@ from core.durable_migration import (
     DurableBackend,
     DurableFamily,
     FamilyProgress,
+    HistoricalMigrationCheckpoint,
     MigrationCheckpoint,
     MigrationPhase,
 )
@@ -52,6 +53,8 @@ def _checkpoint(*, revision=1, phase=MigrationPhase.PLANNED, updated_at=NOW):
         target_backend=DurableBackend.POSTGRESQL,
         source_instance_id="ins_11111111111111111111111111111111",
         target_instance_id="ins_22222222222222222222222222222222",
+        source_revision=1,
+        target_revision=1,
         source_barrier_id="bar_33333333333333333333333333333333",
         phase=phase,
         authority=AuthoritySide.SOURCE,
@@ -120,6 +123,27 @@ class SQLiteMigrationCheckpointRepositoryTests(unittest.IsolatedAsyncioTestCase)
             await self.repository.compare_and_set(
                 dataclasses.replace(updated, revision=4), expected_revision=2
             )
+
+    async def test_historical_v1_checkpoint_survives_repository_restart_as_ineligible(self):
+        record = _checkpoint().to_record()
+        record["manifest_version"] = 1
+        record["manifest_checksum"] = "9" * 64
+        record.pop("source_revision")
+        record.pop("target_revision")
+        async with aiosqlite.connect(self.database_path) as db:
+            await db.execute(
+                "INSERT INTO durable_migration_checkpoints (plan_id, revision, record_json) "
+                "VALUES (?, ?, ?)",
+                (PLAN_ID, 1, json.dumps(record)),
+            )
+            await db.commit()
+
+        restarted = SQLiteMigrationCheckpointRepository(self.database_path)
+        await restarted.initialize()
+        historical = await restarted.get(PLAN_ID)
+
+        self.assertIsInstance(historical, HistoricalMigrationCheckpoint)
+        self.assertFalse(historical.eligible_for_binding)
 
     async def test_corrupt_unknown_or_contradictory_stored_record_fails_closed(self):
         checkpoint = _checkpoint()

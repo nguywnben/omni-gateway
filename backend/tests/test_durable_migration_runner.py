@@ -282,20 +282,21 @@ class MigrationVerificationAndAuthorityTests(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(progress.verified)
         self.assertEqual(checkpoint.failure_code, "verification_mismatch")
 
-    async def test_canonical_readiness_gaps_make_authority_switch_unreachable(self):
+    async def test_complete_canonical_manifest_can_switch_only_by_explicit_activation(self):
         runner, *_rest = await self._copied()
         checkpoint = await runner.verify(PLAN_ID, now=NOW + timedelta(seconds=20))
 
-        self.assertIs(checkpoint.phase, MigrationPhase.VERIFYING)
+        self.assertIs(checkpoint.phase, MigrationPhase.READY_TO_SWITCH)
         self.assertIs(checkpoint.authority, AuthoritySide.SOURCE)
-        self.assertEqual(checkpoint.failure_code, "inventory_not_ready")
+        self.assertIsNone(checkpoint.failure_code)
         self.assertTrue(all(item.verified for item in checkpoint.families))
-        with self.assertRaises(ValueError):
-            await runner.activate_target(
-                PLAN_ID,
-                expected_revision=checkpoint.revision,
-                now=NOW + timedelta(seconds=21),
-            )
+        activated = await runner.activate_target(
+            PLAN_ID,
+            expected_revision=checkpoint.revision,
+            now=NOW + timedelta(seconds=21),
+        )
+        self.assertIs(activated.phase, MigrationPhase.TARGET_AUTHORITATIVE)
+        self.assertIs(activated.authority, AuthoritySide.TARGET)
         self.assertFalse(hasattr(runner, "complete_rollback"))
 
     async def test_barrier_loss_after_scans_cannot_publish_verified_evidence(self):

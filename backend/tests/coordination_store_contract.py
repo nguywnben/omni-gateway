@@ -38,6 +38,11 @@ class CoordinationStoreContract:
             1,
             "b" * 64,
             "act_" + "c" * 32,
+            "dmg_" + "d" * 32,
+            4,
+            7,
+            11,
+            "e" * 64,
         )
         await self.store.set(
             CoordinationBindingManager.STORE_KEY, CoordinationBindingManager.encode_record(binding)

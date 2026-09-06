@@ -21,10 +21,17 @@ from core.ha_operator import HaRuntimeOperator
 from core.ha_runtime_policy import HaRuntimePolicy
 from core.state_store import InMemoryStateStore
 
+from backend.tests.durable_migration_fixtures import (
+    PLAN_ID,
+    MemoryMigrationCheckpoints,
+    completed_migration_checkpoint,
+)
+
 
 class _Storage:
     def __init__(self) -> None:
         self.values: dict[str, object] = {}
+        self.checkpoints = MemoryMigrationCheckpoints(completed_migration_checkpoint())
 
     async def get_config(self, key: str, default=None):
         return self.values.get(key, default)
@@ -32,6 +39,9 @@ class _Storage:
     async def set_config(self, key: str, value: object) -> bool:
         self.values[key] = value
         return True
+
+    async def create_migration_checkpoint_repository(self):
+        return self.checkpoints
 
 
 def policy(epoch: int = 1) -> HaRuntimePolicy:
@@ -59,7 +69,12 @@ class HaRuntimeOperatorTests(unittest.IsolatedAsyncioTestCase):
             self.store,
             activation_verifier=lambda _record: True,
         )
-        await manager.bootstrap(policy(), activation_record="act_" + ("a" * 32), apply=True)
+        await manager.bootstrap(
+            policy(),
+            activation_record="act_" + ("a" * 32),
+            migration_plan_id=PLAN_ID,
+            apply=True,
+        )
 
     async def test_full_drain_epoch_reconcile_ready_flow_is_bounded_and_idempotent(self) -> None:
         operator = HaRuntimeOperator(

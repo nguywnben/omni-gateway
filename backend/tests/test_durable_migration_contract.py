@@ -23,6 +23,7 @@ from core.durable_migration import (
     DurableFamily,
     DurableRecord,
     FamilyProgress,
+    HistoricalMigrationCheckpoint,
     MigrationCheckpoint,
     MigrationDigest,
     MigrationPhase,
@@ -60,6 +61,8 @@ def _checkpoint(**overrides) -> MigrationCheckpoint:
         "target_backend": DurableBackend.POSTGRESQL,
         "source_instance_id": "ins_11111111111111111111111111111111",
         "target_instance_id": "ins_22222222222222222222222222222222",
+        "source_revision": 1,
+        "target_revision": 1,
         "source_barrier_id": "bar_33333333333333333333333333333333",
         "phase": MigrationPhase.PLANNED,
         "authority": AuthoritySide.SOURCE,
@@ -74,7 +77,7 @@ def _checkpoint(**overrides) -> MigrationCheckpoint:
 
 
 class DurableInventoryContractTests(unittest.TestCase):
-    def test_inventory_is_closed_complete_and_marks_blocking_gaps(self):
+    def test_inventory_is_closed_complete_and_switch_ready_in_manifest_v2(self):
         expected = {
             DurableFamily.CONFIGURATION,
             DurableFamily.PROVIDER_CREDENTIAL,
@@ -95,11 +98,19 @@ class DurableInventoryContractTests(unittest.TestCase):
         self.assertEqual(len(DURABLE_INVENTORY), len(expected))
         readiness = {entry.family: entry.switch_ready for entry in DURABLE_INVENTORY}
         copy_required = {entry.family: entry.copy_required for entry in DURABLE_INVENTORY}
-        self.assertFalse(readiness[DurableFamily.USAGE_LEDGER])
-        self.assertFalse(readiness[DurableFamily.HARD_BUDGET_RESERVATION])
-        self.assertTrue(readiness[DurableFamily.AUDIT_EVENT])
-        self.assertTrue(readiness[DurableFamily.IDENTITY])
+        self.assertEqual(DURABLE_MANIFEST_VERSION, 2)
+        self.assertTrue(all(readiness.values()))
         self.assertFalse(copy_required[DurableFamily.MIGRATION_CHECKPOINT])
+
+    def test_every_manifest_family_has_concrete_sqlite_and_postgresql_adapter(self):
+        from core.storage.durable_family_postgresql import (
+            POSTGRESQL_DURABLE_FAMILY_ADAPTERS,
+        )
+        from core.storage.durable_family_sqlite import SQLITE_DURABLE_FAMILY_ADAPTERS
+
+        expected = {entry.family for entry in DURABLE_INVENTORY}
+        self.assertEqual(set(SQLITE_DURABLE_FAMILY_ADAPTERS), expected)
+        self.assertEqual(set(POSTGRESQL_DURABLE_FAMILY_ADAPTERS), expected)
 
     def test_inventory_and_checkpoint_metadata_have_no_payload_or_secret_fields(self):
         inventory_fields = {field.name for field in dataclasses.fields(DURABLE_INVENTORY[0])}
@@ -197,6 +208,18 @@ class DurableRecordContractTests(unittest.TestCase):
 
 
 class MigrationCheckpointContractTests(unittest.TestCase):
+    def test_historical_manifest_v1_checkpoint_remains_parseable_but_ineligible(self):
+        record = _checkpoint().to_record()
+        record["manifest_version"] = 1
+        record["manifest_checksum"] = "9" * 64
+        record.pop("source_revision")
+        record.pop("target_revision")
+
+        restored = checkpoint_from_record(record)
+
+        self.assertIsInstance(restored, HistoricalMigrationCheckpoint)
+        self.assertFalse(restored.eligible_for_binding)
+
     def test_checkpoint_requires_one_authority_and_valid_phase_invariants(self):
         with self.assertRaises(ValueError):
             _checkpoint(authority=AuthoritySide.TARGET)
@@ -211,15 +234,15 @@ class MigrationCheckpointContractTests(unittest.TestCase):
             target_checksum="a" * 64,
             verified=True,
         )
-        with self.assertRaises(ValueError):
-            _checkpoint(
-                phase=MigrationPhase.READY_TO_SWITCH,
-                families=tuple(
-                    dataclasses.replace(verified, family=family) for family in DURABLE_COPY_FAMILIES
-                ),
-                revision=4,
-                updated_at=(NOW + timedelta(minutes=1)).isoformat(),
-            )
+        ready = _checkpoint(
+            phase=MigrationPhase.READY_TO_SWITCH,
+            families=tuple(
+                dataclasses.replace(verified, family=family) for family in DURABLE_COPY_FAMILIES
+            ),
+            revision=4,
+            updated_at=(NOW + timedelta(minutes=1)).isoformat(),
+        )
+        self.assertIs(ready.authority, AuthoritySide.SOURCE)
         with self.assertRaises(ValueError):
             dataclasses.replace(
                 _checkpoint(),

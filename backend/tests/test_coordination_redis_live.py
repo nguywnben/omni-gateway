@@ -228,9 +228,17 @@ class LiveRedisCoordinationTests(CoordinationStoreContract, unittest.IsolatedAsy
         self.assertEqual(await self.cleanup_client.exists(epoch_key, initialization_key), 0)
 
     async def test_durable_binding_prevents_lost_epoch_namespace_rebootstrap(self) -> None:
+        from backend.tests.durable_migration_fixtures import (
+            MemoryMigrationCheckpoints,
+            completed_migration_checkpoint,
+        )
+
         class Storage:
             async def get_config(self, key, default=None):
                 return self.values.get(key, default)
+
+            async def create_migration_checkpoint_repository(self):
+                return self.checkpoints
 
         policy = HaRuntimePolicy.from_environment(
             {
@@ -245,9 +253,11 @@ class LiveRedisCoordinationTests(CoordinationStoreContract, unittest.IsolatedAsy
                 "OMNI_COORDINATION_EPOCH": "1",
             }
         )
-        expected = CoordinationBinding.for_policy(policy, "act_" + ("a" * 32))
+        checkpoint = completed_migration_checkpoint()
+        expected = CoordinationBinding.for_policy(policy, "act_" + ("a" * 32), checkpoint)
         storage = Storage()
         storage.values = {CoordinationBindingManager.DURABLE_KEY: expected.to_dict()}
+        storage.checkpoints = MemoryMigrationCheckpoints(checkpoint)
         await self.store.set(
             CoordinationBindingManager.STORE_KEY,
             CoordinationBindingManager.encode_record(expected),

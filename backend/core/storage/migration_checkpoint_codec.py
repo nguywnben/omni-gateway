@@ -5,7 +5,11 @@ from __future__ import annotations
 import json
 import re
 
-from core.durable_migration import MigrationCheckpoint, checkpoint_from_record
+from core.durable_migration import (
+    HistoricalMigrationCheckpoint,
+    MigrationCheckpoint,
+    checkpoint_from_record,
+)
 from core.durable_migration_runner import CheckpointStoreCorrupt
 
 _PLAN_ID = re.compile(r"dmg_[0-9a-f]{32}")
@@ -34,7 +38,9 @@ def encode_checkpoint(checkpoint: MigrationCheckpoint) -> str:
     )
 
 
-def decode_checkpoint(*, plan_id: object, revision: object, encoded: object) -> MigrationCheckpoint:
+def decode_checkpoint(
+    *, plan_id: object, revision: object, encoded: object
+) -> MigrationCheckpoint | HistoricalMigrationCheckpoint:
     try:
         safe_plan_id = require_plan_id(plan_id)
         if type(revision) is not int or revision < 1 or not isinstance(encoded, str):

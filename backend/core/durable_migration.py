@@ -11,14 +11,14 @@ import hmac
 import json
 import math
 import re
-from dataclasses import dataclass, fields
+from dataclasses import dataclass, field, fields
 from datetime import datetime, timezone
 from enum import StrEnum
 from types import MappingProxyType
 from typing import Any, Mapping
 
 MIGRATION_SCHEMA_VERSION = 1
-DURABLE_MANIFEST_VERSION = 1
+DURABLE_MANIFEST_VERSION = 2
 _PLAN_ID = re.compile(r"dmg_[0-9a-f]{32}")
 _LOGICAL_ID = re.compile(r"[a-z]{3}_[0-9a-f]{16,64}")
 _INSTANCE_ID = re.compile(r"ins_[0-9a-f]{32}")
@@ -172,18 +172,18 @@ DURABLE_INVENTORY = (
     DurableInventoryEntry(
         DurableFamily.USAGE_LEDGER,
         "standalone_usage_stats_db",
-        False,
         True,
         True,
-        "Selected-backend repository parity is deferred to W4.14.",
+        True,
+        "Usage and cost events in the selected backend durable ledger.",
     ),
     DurableInventoryEntry(
         DurableFamily.HARD_BUDGET_RESERVATION,
         "not_implemented",
-        False,
         True,
         True,
-        "Durable reservation journal is deferred to W4.14/W4.17.",
+        True,
+        "Reservation rows in the selected backend durable usage ledger.",
     ),
     DurableInventoryEntry(
         DurableFamily.MIGRATION_CHECKPOINT,
@@ -217,15 +217,83 @@ DURABLE_COPY_FAMILIES = tuple(entry.family for entry in DURABLE_INVENTORY if ent
 
 
 @dataclass(frozen=True, slots=True)
+class DurableFamilyAdapterSpec:
+    """Closed mapping from one manifest family to its real application table."""
+
+    table: str
+    columns: tuple[str, ...]
+    key_columns: tuple[str, ...]
+    logical_prefix: str
+    predicate: str = ""
+    json_columns: tuple[str, ...] = ()
+    boolean_columns: tuple[str, ...] = ()
+    timestamp_columns: tuple[str, ...] = ()
+
+    def __post_init__(self) -> None:
+        identifiers = (self.table, *self.columns, *self.key_columns)
+        if any(
+            not isinstance(value, str) or not value.replace("_", "").isalnum()
+            for value in identifiers
+        ):
+            raise ValueError("Durable adapter identifier is invalid.")
+        if (
+            not self.columns
+            or not self.key_columns
+            or not set(self.key_columns) <= set(self.columns)
+        ):
+            raise ValueError("Durable adapter columns are invalid.")
+        if not re.fullmatch(r"[a-z]{3}", self.logical_prefix):
+            raise ValueError("Durable adapter logical prefix is invalid.")
+        if not set(self.json_columns + self.boolean_columns + self.timestamp_columns) <= set(
+            self.columns
+        ):
+            raise ValueError("Durable adapter normalization columns are invalid.")
+
+
+def durable_logical_id(
+    family: DurableFamily, spec: DurableFamilyAdapterSpec, row: Mapping[str, Any]
+) -> str:
+    """Return a non-secret stable identity derived from the actual table key."""
+
+    try:
+        key = json.dumps(
+            [row[column] for column in spec.key_columns],
+            ensure_ascii=False,
+            allow_nan=False,
+            separators=(",", ":"),
+        ).encode("utf-8")
+    except (KeyError, TypeError, ValueError) as exc:
+        raise ValueError("Durable adapter record key is invalid.") from exc
+    digest = hashlib.sha256(family.value.encode("ascii") + b"\0" + key).hexdigest()[:32]
+    return f"{spec.logical_prefix}_{digest}"
+
+
+def durable_ordering_key(spec: DurableFamilyAdapterSpec, row: Mapping[str, Any]) -> str:
+    """Return the private application-key order shared by both migration adapters."""
+
+    try:
+        return json.dumps(
+            [row[column] for column in spec.key_columns],
+            ensure_ascii=False,
+            allow_nan=False,
+            separators=(",", ":"),
+        )
+    except (KeyError, TypeError, ValueError) as exc:
+        raise ValueError("Durable adapter record key is invalid.") from exc
+
+
+@dataclass(frozen=True, slots=True)
 class MigrationEndpointDescriptor:
     backend: DurableBackend
     instance_id: str
+    revision: int = 1
 
     def __post_init__(self) -> None:
         if type(self.backend) is not DurableBackend:
             raise ValueError("Migration endpoint backend is invalid.")
         if not isinstance(self.instance_id, str) or not _INSTANCE_ID.fullmatch(self.instance_id):
             raise ValueError("Migration endpoint instance ID is invalid.")
+        _strict_positive_int(self.revision, "Migration endpoint revision")
 
 
 def _strict_non_negative_int(value: object, label: str) -> int:
@@ -287,12 +355,24 @@ def _thaw_json(value: object) -> object:
     return value
 
 
+def durable_record_payload(record: DurableRecord) -> dict[str, Any]:
+    """Return a mutable JSON-compatible copy for a backend write boundary."""
+
+    if type(record) is not DurableRecord:
+        raise ValueError("Durable record is invalid.")
+    value = _thaw_json(record.payload)
+    if not isinstance(value, dict):
+        raise ValueError("Durable record payload is invalid.")
+    return value
+
+
 def _canonical_record(record: DurableRecord) -> bytes:
     return json.dumps(
         {
             "family": record.family.value,
             "logical_id": record.logical_id,
             "schema_version": record.schema_version,
+            "ordering_key_digest": hashlib.sha256(record.ordering_key.encode("utf-8")).hexdigest(),
             "payload": _thaw_json(record.payload),
         },
         ensure_ascii=False,
@@ -308,6 +388,7 @@ class DurableRecord:
     logical_id: str
     schema_version: int
     payload: Mapping[str, Any]
+    ordering_key: str = field(default="", repr=False)
 
     def __post_init__(self) -> None:
         if type(self.family) is not DurableFamily:
@@ -319,6 +400,8 @@ class DurableRecord:
             raise ValueError("Durable record payload is invalid.")
         normalized = _json_compatible(self.payload)
         object.__setattr__(self, "payload", _freeze_json(normalized))
+        if not isinstance(self.ordering_key, str) or len(self.ordering_key.encode("utf-8")) > 4096:
+            raise ValueError("Durable record ordering key is invalid.")
 
     def __repr__(self) -> str:
         return (
@@ -331,7 +414,9 @@ class DurableRecord:
 def compute_records_digest(
     records: tuple[DurableRecord, ...] | list[DurableRecord], *, integrity_key: bytes
 ) -> str:
-    ordered = sorted(records, key=lambda item: (item.family.value, item.logical_id))
+    ordered = sorted(
+        records, key=lambda item: (item.family.value, item.ordering_key or item.logical_id)
+    )
     digest = MigrationDigest(integrity_key=integrity_key)
     for record in ordered:
         digest.add(record)
@@ -355,7 +440,7 @@ class MigrationDigest:
     def add(self, record: DurableRecord) -> None:
         if type(record) is not DurableRecord:
             raise ValueError("Migration digest record is invalid.")
-        identity = (record.family.value, record.logical_id)
+        identity = (record.family.value, record.ordering_key or record.logical_id)
         if self._last_identity is not None and identity <= self._last_identity:
             raise ValueError("Migration digest records are duplicated or out of order.")
         encoded = _canonical_record(record)
@@ -465,6 +550,8 @@ class MigrationCheckpoint:
     target_backend: DurableBackend
     source_instance_id: str
     target_instance_id: str
+    source_revision: int
+    target_revision: int
     source_barrier_id: str
     phase: MigrationPhase
     authority: AuthoritySide
@@ -495,6 +582,8 @@ class MigrationCheckpoint:
                 raise ValueError("Migration endpoint instance ID is invalid.")
         if self.source_instance_id == self.target_instance_id:
             raise ValueError("Migration source and target instances must differ.")
+        _strict_positive_int(self.source_revision, "Migration source revision")
+        _strict_positive_int(self.target_revision, "Migration target revision")
         if not isinstance(self.source_barrier_id, str) or not _BARRIER_ID.fullmatch(
             self.source_barrier_id
         ):
@@ -542,6 +631,8 @@ class MigrationCheckpoint:
             "target_backend": self.target_backend.value,
             "source_instance_id": self.source_instance_id,
             "target_instance_id": self.target_instance_id,
+            "source_revision": self.source_revision,
+            "target_revision": self.target_revision,
             "source_barrier_id": self.source_barrier_id,
             "phase": self.phase.value,
             "authority": self.authority.value,
@@ -569,7 +660,80 @@ def _progress_from_record(record: object) -> FamilyProgress:
         raise ValueError("Stored migration family progress is invalid.") from exc
 
 
-def checkpoint_from_record(record: object) -> MigrationCheckpoint:
+@dataclass(frozen=True, slots=True)
+class HistoricalMigrationCheckpoint:
+    """Strictly decoded v1 evidence retained for audit, never for HA admission."""
+
+    plan_id: str
+    manifest_version: int
+    manifest_checksum: str
+    revision: int
+    record: Mapping[str, Any] = field(repr=False)
+
+    @property
+    def eligible_for_binding(self) -> bool:
+        return False
+
+
+_V1_CHECKPOINT_FIELDS = {
+    "schema_version",
+    "manifest_version",
+    "manifest_checksum",
+    "plan_id",
+    "source_backend",
+    "target_backend",
+    "source_instance_id",
+    "target_instance_id",
+    "source_barrier_id",
+    "phase",
+    "authority",
+    "revision",
+    "families",
+    "failure_code",
+    "created_at",
+    "updated_at",
+}
+
+
+def _historical_checkpoint_from_record(record: object) -> HistoricalMigrationCheckpoint:
+    values = _exact_record(record, _V1_CHECKPOINT_FIELDS, "migration checkpoint")
+    if (
+        values.get("schema_version") != 1
+        or values.get("manifest_version") != 1
+        or not isinstance(values.get("manifest_checksum"), str)
+        or not _CHECKSUM.fullmatch(values["manifest_checksum"])
+        or not isinstance(values.get("plan_id"), str)
+        or not _PLAN_ID.fullmatch(values["plan_id"])
+    ):
+        raise ValueError("Stored migration checkpoint is invalid.")
+    # Revalidate all historical family records and the bounded structural fields. Historical
+    # evidence remains inspectable, but its old manifest meaning can never open HA readiness.
+    raw_families = values.get("families")
+    if not isinstance(raw_families, list) or not raw_families:
+        raise ValueError("Stored migration checkpoint is invalid.")
+    tuple(_progress_from_record(item) for item in raw_families)
+    try:
+        DurableBackend(values["source_backend"])
+        DurableBackend(values["target_backend"])
+        MigrationPhase(values["phase"])
+        AuthoritySide(values["authority"])
+        _strict_positive_int(values["revision"], "Migration checkpoint revision")
+        _timestamp(values["created_at"], "Migration creation timestamp")
+        _timestamp(values["updated_at"], "Migration update timestamp")
+    except (TypeError, ValueError) as exc:
+        raise ValueError("Stored migration checkpoint is invalid.") from exc
+    return HistoricalMigrationCheckpoint(
+        plan_id=values["plan_id"],
+        manifest_version=1,
+        manifest_checksum=values["manifest_checksum"],
+        revision=values["revision"],
+        record=MappingProxyType(values),
+    )
+
+
+def checkpoint_from_record(record: object) -> MigrationCheckpoint | HistoricalMigrationCheckpoint:
+    if isinstance(record, Mapping) and record.get("manifest_version") == 1:
+        return _historical_checkpoint_from_record(record)
     expected = {field.name for field in fields(MigrationCheckpoint)}
     values = _exact_record(record, expected, "migration checkpoint")
     try:
@@ -584,3 +748,42 @@ def checkpoint_from_record(record: object) -> MigrationCheckpoint:
         return MigrationCheckpoint(**values)
     except (TypeError, ValueError) as exc:
         raise ValueError("Stored migration checkpoint is invalid.") from exc
+
+
+def checkpoint_evidence_checksum(checkpoint: MigrationCheckpoint) -> str:
+    """Hash the complete, canonical checkpoint without exposing family payloads."""
+
+    if type(checkpoint) is not MigrationCheckpoint:
+        raise ValueError("Migration checkpoint evidence is invalid.")
+    encoded = json.dumps(
+        checkpoint.to_record(),
+        ensure_ascii=False,
+        allow_nan=False,
+        separators=(",", ":"),
+        sort_keys=True,
+    ).encode("utf-8")
+    return hashlib.sha256(encoded).hexdigest()
+
+
+def binding_eligible_checkpoint(checkpoint: object) -> bool:
+    """Return whether immutable migration evidence may back a coordinated binding."""
+
+    return bool(
+        type(checkpoint) is MigrationCheckpoint
+        and checkpoint.manifest_version == DURABLE_MANIFEST_VERSION
+        and checkpoint.manifest_checksum == DURABLE_MANIFEST_CHECKSUM
+        and checkpoint.source_backend is DurableBackend.SQLITE
+        and checkpoint.target_backend is DurableBackend.POSTGRESQL
+        and checkpoint.phase is MigrationPhase.TARGET_AUTHORITATIVE
+        and checkpoint.authority is AuthoritySide.TARGET
+        and checkpoint.families
+        and tuple(item.family for item in checkpoint.families) == DURABLE_COPY_FAMILIES
+        and all(
+            item.verified
+            and item.copy_complete
+            and item.source_count == item.target_count
+            and item.source_checksum == item.target_checksum
+            and item.source_count is not None
+            for item in checkpoint.families
+        )
+    )

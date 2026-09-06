@@ -1487,7 +1487,9 @@ if admission_fenced then
     quota_reconciliation_cursor=true, quota_reconciliation_complete=true}, 5)
   local b, bp = decode_closed(binding, {schema_version=true, deployment_id=true,
     namespace_digest=true, identifier_key_fingerprint=true, fencing_epoch=true,
-    manifest_checksum=true, activation_record=true}, 7)
+    manifest_checksum=true, activation_record=true, migration_plan_id=true,
+    migration_checkpoint_revision=true, migration_source_revision=true,
+    migration_target_revision=true, migration_checkpoint_checksum=true}, 12)
   local function digest(value)
     return type(value) == 'string' and #value == 64 and string.match(value, '^[0-9a-f]+$')
   end
@@ -1501,16 +1503,22 @@ if admission_fenced then
   local encoded_epoch = redis.call('GET', KEYS[1])
   if not encoded_epoch or #encoded_epoch > 34 then return redis.error_reply('COORDINATION_CORRUPT') end
   local current_epoch, current_state = string.match(encoded_epoch or '', '^1|([1-9][0-9]*)|(%a+)$')
-  if not d or not b or not current_epoch or d.schema_version ~= 2 or b.schema_version ~= 1
+  if not d or not b or not current_epoch or d.schema_version ~= 2 or b.schema_version ~= 2
     or #current_epoch > 19 or (#current_epoch == 19 and current_epoch > '9223372036854775807')
     or integer_field(drain, dp.schema_version) ~= '2'
-    or integer_field(binding, bp.schema_version) ~= '1'
+    or integer_field(binding, bp.schema_version) ~= '2'
     or not digest(d.namespace_digest) or d.namespace_digest ~= ARGV[#ARGV]
     or d.namespace_digest ~= b.namespace_digest or not digest(b.identifier_key_fingerprint)
     or not digest(b.manifest_checksum) or type(b.deployment_id) ~= 'string'
     or #b.deployment_id < 8 or #b.deployment_id > 64
     or type(b.activation_record) ~= 'string' or #b.activation_record ~= 36
     or not string.match(b.activation_record, '^act_[0-9a-f]+$')
+    or type(b.migration_plan_id) ~= 'string' or #b.migration_plan_id ~= 36
+    or not string.match(b.migration_plan_id, '^dmg_[0-9a-f]+$')
+    or not integer_field(binding, bp.migration_checkpoint_revision)
+    or not integer_field(binding, bp.migration_source_revision)
+    or not integer_field(binding, bp.migration_target_revision)
+    or not digest(b.migration_checkpoint_checksum)
     or redis.call('PTTL', KEYS[#KEYS - 1]) ~= -1 or redis.call('PTTL', KEYS[#KEYS]) ~= -1
     or type(d.quota_reconciliation_complete) ~= 'boolean'
     or d.quota_reconciliation_complete ~= (d.quota_reconciliation_cursor == cjson.null)

@@ -177,7 +177,22 @@ class StatefulRegisteredScript:
                         entry[1] is None
                         and binding_entry[1] is None
                         and type(binding["schema_version"]) is int
-                        and binding["schema_version"] == 1
+                        and binding["schema_version"] == 2
+                        and set(binding)
+                        == {
+                            "schema_version",
+                            "deployment_id",
+                            "namespace_digest",
+                            "identifier_key_fingerprint",
+                            "fencing_epoch",
+                            "manifest_checksum",
+                            "activation_record",
+                            "migration_plan_id",
+                            "migration_checkpoint_revision",
+                            "migration_source_revision",
+                            "migration_target_revision",
+                            "migration_checkpoint_checksum",
+                        }
                         and set(value)
                         == {
                             "schema_version",
