@@ -351,7 +351,12 @@ def main(argv: list[str] | None = None) -> int:
                         )
                     )
                 except BaseException:
-                    cleanup_project_resources(cleanup_scope, cleanup_key)
+                    try:
+                        cleanup_project_resources(cleanup_scope, cleanup_key)
+                    except BaseException as cleanup_error:
+                        raise EvidenceVerificationError(
+                            "Evidence run failed and authenticated cleanup also failed."
+                        ) from cleanup_error
                     key_path.unlink(missing_ok=True)
                     scope_path.unlink(missing_ok=True)
                     raise

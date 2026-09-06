@@ -50,6 +50,7 @@ from tools.ha_topology_evidence.scenarios import (
     ComposeAction,
     HostController,
     ProjectResources,
+    _labeled_names,
     cleanup_project_resources,
     create_cleanup_scope,
     require_immutable_image_reference,
@@ -203,6 +204,26 @@ class ScenarioAndOracleTests(unittest.TestCase):
                 ("unrelated_postgres-data",),
                 (),
             )
+
+    def test_labeled_resource_inventory_reads_names_not_engine_ids(self) -> None:
+        project = "w4c-123456789abc"
+        with patch(
+            "tools.ha_topology_evidence.scenarios._run_read_only",
+            return_value=f"{project}_evidence\n",
+        ) as run:
+            self.assertEqual(_labeled_names("network", project), (f"{project}_evidence",))
+        self.assertEqual(
+            run.call_args.args[0],
+            [
+                "docker",
+                "network",
+                "ls",
+                "--format",
+                "{{.Name}}",
+                "--filter",
+                f"label=com.docker.compose.project={project}",
+            ],
+        )
 
     def test_cleanup_scope_is_create_only_authenticated_and_tamper_evident(self) -> None:
         empty = ProjectResources("w4c-123456789abc", (), (), ())

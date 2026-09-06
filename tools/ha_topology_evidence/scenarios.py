@@ -400,7 +400,8 @@ def _labeled_names(kind: str, project: str) -> tuple[str, ...]:
             "docker",
             kind,
             "ls",
-            "-q",
+            "--format",
+            "{{.Name}}",
             "--filter",
             f"label=com.docker.compose.project={project}",
         ]
