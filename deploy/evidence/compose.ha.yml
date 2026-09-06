@@ -155,7 +155,7 @@ services:
     security_opt: [no-new-privileges:true]
     pids_limit: 128
     mem_limit: 256m
-    cpus: 0.5
+    cpus: 2.0
     tmpfs:
       - "/tmp:rw,noexec,nosuid,size=32m,uid=10001,gid=10001"
     ports: ["127.0.0.1:${FIXTURE_CONTROL_PORT:-18081}:8081"]

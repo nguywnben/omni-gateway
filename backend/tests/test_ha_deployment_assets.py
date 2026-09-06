@@ -119,6 +119,7 @@ class HaDeploymentAssetTests(unittest.TestCase):
             self.assertEqual(services[name]["cap_drop"], ["ALL"])
         self.assertEqual(services["postgres"]["user"], "70:70")
         self.assertEqual(services["postgres"]["cap_drop"], ["ALL"])
+        self.assertEqual(services["fixture"]["cpus"], 2.0)
 
     def test_external_rollback_is_one_standalone_process_on_the_same_postgresql_history(
         self,
