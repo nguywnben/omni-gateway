@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import sys
 import unittest
 from pathlib import Path
@@ -50,6 +51,29 @@ def credential_state(**overrides: Any) -> Dict[str, Any]:
 
 
 class SmartCredentialRouterTests(unittest.IsolatedAsyncioTestCase):
+    async def test_concurrent_acquisitions_do_not_serialize_coordination_io(self):
+        storage = FakeStorageAdapter({"shared.json": credential_state()})
+        router = SmartCredentialRouter(clock=lambda: 100.0)
+        original = router._coordination.read_credential
+        both_started = asyncio.Event()
+        started = 0
+
+        async def concurrent_read(*args, **kwargs):
+            nonlocal started
+            started += 1
+            if started == 2:
+                both_started.set()
+            await asyncio.wait_for(both_started.wait(), timeout=0.25)
+            return await original(*args, **kwargs)
+
+        router._coordination.read_credential = concurrent_read
+        first, second = await asyncio.gather(
+            router.acquire(storage, mode="primary", model_name="model-a"),
+            router.acquire(storage, mode="primary", model_name="model-a"),
+        )
+
+        self.assertEqual((first[0], second[0]), ("shared.json", "shared.json"))
+
     async def test_candidate_capacity_exhaustion_fails_closed_before_provider_reads(self):
         storage = FakeStorageAdapter(
             {f"credential-{index:03d}.json": credential_state() for index in range(101)}

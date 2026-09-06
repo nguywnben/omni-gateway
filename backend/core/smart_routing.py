@@ -63,7 +63,11 @@ class SmartCredentialRouter:
         self._max_backoff_seconds = max(self._base_backoff_seconds, float(max_backoff_seconds))
         self._auth_backoff_seconds = max(self._max_backoff_seconds, float(auth_backoff_seconds))
         self._model_backoff_seconds = max(self._base_backoff_seconds, float(model_backoff_seconds))
-        self._lock = asyncio.Lock()
+        self._state_lock = asyncio.Lock()
+        # Distributed CAS is the admission authority. Holding a process-wide
+        # mutex across Redis/storage I/O serializes every otherwise independent
+        # request, so only bound the number of concurrent routing operations.
+        self._io_slots = asyncio.Semaphore(MAX_CREDENTIAL_LEASES)
         self._coordination = (
             coordination
             if coordination is not None
@@ -304,7 +308,7 @@ class SmartCredentialRouter:
         excluded_credential_models: Optional[Set[Tuple[str, str]]] = None,
     ) -> tuple[Optional[CredentialResult], RouteDecision]:
         """Reserve the best credential and return its diagnostic decision."""
-        async with self._lock:
+        async with self._io_slots:
             await self._credential_generation.synchronize(self._invalidate_credential_views)
             now = self._clock()
             cached = self._state_cache.get(mode)
@@ -587,7 +591,7 @@ class SmartCredentialRouter:
 
     async def recent_decisions(self, limit: int = 20) -> tuple[RouteDecision, ...]:
         """Return recent sanitized decisions for diagnostics without credential secrets."""
-        async with self._lock:
+        async with self._state_lock:
             return tuple(list(self._recent_decisions)[-max(0, int(limit)) :])
 
     async def complete(
@@ -601,7 +605,7 @@ class SmartCredentialRouter:
         error_code: Optional[int] = None,
     ) -> None:
         """Release one reservation and update the short-lived health penalty."""
-        async with self._lock:
+        async with self._io_slots:
             now = self._clock()
             self._state_cache.pop(mode, None)
             key = (mode, filename)
@@ -657,19 +661,27 @@ class SmartCredentialRouter:
 
     async def release(self, filename: str, *, mode: str = "primary") -> None:
         """Release one reservation without changing credential health."""
-        async with self._lock:
+        async with self._io_slots:
             self._state_cache.pop(mode, None)
             lease = self._take_active_lease((mode, filename))
             if lease is not None:
                 await self._coordination.release_credential(lease)
 
     async def reset(self) -> None:
-        async with self._lock:
-            leases = [lease for queue in self._active_leases.values() for lease in queue]
-            self._active_leases.clear()
+        acquired_slots = 0
+        try:
+            for _ in range(MAX_CREDENTIAL_LEASES):
+                await self._io_slots.acquire()
+                acquired_slots += 1
+            async with self._state_lock:
+                leases = [lease for queue in self._active_leases.values() for lease in queue]
+                self._active_leases.clear()
+                self._providers.clear()
+                self._state_cache.clear()
+                self._recent_decisions.clear()
+                self._provider_variants.clear()
             for lease in leases:
                 await self._coordination.release_credential(lease)
-            self._providers.clear()
-            self._state_cache.clear()
-            self._recent_decisions.clear()
-            self._provider_variants.clear()
+        finally:
+            for _ in range(acquired_slots):
+                self._io_slots.release()
