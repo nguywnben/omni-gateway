@@ -42,6 +42,7 @@ from tools.ha_topology_evidence.report import EvidenceReportWriter, scan_secret_
 from tools.ha_topology_evidence.runner import (
     MatrixRunner,
     ScenarioObservation,
+    _outcome_summary,
     opaque_run_id,
     require_milestone_delta,
 )
@@ -117,6 +118,17 @@ class FixtureTests(unittest.IsolatedAsyncioTestCase):
 
 
 class ScenarioAndOracleTests(unittest.TestCase):
+    def test_outcome_summary_contains_only_bounded_status_counts(self) -> None:
+        samples = (
+            RequestSample(1, "app-a", 200, 1.0, True, False),
+            RequestSample(2, "app-b", 503, 1.0, False, False),
+            RequestSample(3, "app-a", 0, 1.0, False, True),
+        )
+        self.assertEqual(
+            _outcome_summary(samples),
+            "statuses=0:1,200:1,503:1;transport_failures=1",
+        )
+
     def test_fault_acknowledgement_requires_an_observed_data_path_milestone(self) -> None:
         require_milestone_delta(
             {"milestones": {"redis:app-a:blocked": 1}},

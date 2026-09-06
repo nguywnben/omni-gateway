@@ -31,6 +31,15 @@ from .scenarios import ComposeAction, HostController
 LifecycleHook = Callable[[str], Awaitable[dict[str, object]]]
 
 
+def _outcome_summary(samples: tuple[RequestSample, ...]) -> str:
+    statuses: dict[int, int] = {}
+    for sample in samples:
+        statuses[sample.status_code] = statuses.get(sample.status_code, 0) + 1
+    encoded = ",".join(f"{status}:{statuses[status]}" for status in sorted(statuses))
+    transport = sum(sample.transport_failure for sample in samples)
+    return f"statuses={encoded};transport_failures={transport}"
+
+
 @dataclass(frozen=True, slots=True)
 class ScenarioObservation:
     scenario_id: str
@@ -261,11 +270,9 @@ class MatrixRunner:
             phase="warmup",
         )
         if not all(sample.success for sample in result.samples):
-            statuses = ",".join(
-                str(status) for status in sorted({sample.status_code for sample in result.samples})
-            )
             raise EvidenceVerificationError(
-                f"Performance warm-up did not complete every request (statuses={statuses})."
+                "Performance warm-up did not complete every request "
+                f"({_outcome_summary(result.samples)})."
             )
         await self._wait_conservation(before, self.candidate.warmup_requests)
         await self._verified_counters(result.samples)
@@ -352,7 +359,8 @@ class MatrixRunner:
         successes = sum(sample.success for sample in result.samples)
         if require_all_success and successes != attempts:
             raise EvidenceVerificationError(
-                f"Scenario {scenario_id} did not complete every request."
+                f"Scenario {scenario_id} did not complete every request "
+                f"({_outcome_summary(result.samples)})."
             )
         await self._wait_conservation(before, successes)
         counters = await self._verified_counters(result.samples)
