@@ -14,6 +14,14 @@ from core.routing_coordination import VALID_INVALIDATION_SCOPES
 from core.security_coordination import SessionListRequest
 
 _OPERATION_DOMAIN: Final = b"omni-ha-evidence-operation-v1\x00"
+_DURABLE_USAGE_PREDICATE: Final = (
+    "(kind = 'usage' OR (kind = 'reservation' AND state = 'committed'))"
+)
+_DURABLE_USAGE_REQUEST: Final = (
+    "CASE WHEN kind = 'usage' THEN payload->>'request_id' "
+    "WHEN kind = 'reservation' AND state = 'committed' "
+    "THEN payload->'usage'->>'request_id' END"
+)
 
 
 def opaque_operation_digest(operation_id: str, key: bytes) -> str:
@@ -117,8 +125,12 @@ class DurableOracle:
             ledger = await connection.fetchrow(
                 """
                 SELECT COUNT(*) AS usage_records,
-                       COUNT(*) FILTER (WHERE kind = 'usage') AS usage_events,
-                       COUNT(*) FILTER (WHERE kind = 'usage' AND success IS TRUE)
+                       COUNT(*) FILTER (WHERE
+                         kind = 'usage' OR (kind = 'reservation' AND state = 'committed')
+                       ) AS usage_events,
+                       COUNT(*) FILTER (WHERE (
+                         kind = 'usage' OR (kind = 'reservation' AND state = 'committed')
+                       ) AND success IS TRUE)
                          AS successful_usage_events,
                        COUNT(*) FILTER (WHERE kind = 'reservation' AND state = 'active')
                          AS active_reservations,
@@ -178,10 +190,13 @@ class DurableOracle:
                 extra: str = "",
                 *,
                 total_expression: str = "COUNT(*)",
+                request_expression: str = "request_id",
             ) -> dict[str, tuple[int, int]]:
                 rows = await connection.fetch(
-                    f"SELECT request_id, {total_expression} AS total {extra} FROM {table} "
-                    "WHERE request_id = ANY($1::text[]) GROUP BY request_id",
+                    f"SELECT {request_expression} AS request_id, "
+                    f"{total_expression} AS total {extra} FROM {table} "
+                    f"WHERE {request_expression} = ANY($1::text[]) "
+                    f"GROUP BY {request_expression}",
                     list(unique_request_ids),
                 )
                 return {
@@ -196,8 +211,10 @@ class DurableOracle:
             traces = await counts("request_traces")
             usage = await counts(
                 "durable_usage_ledger",
-                ", COUNT(*) FILTER (WHERE kind = 'usage' AND success IS TRUE) AS successful",
-                total_expression="COUNT(*) FILTER (WHERE kind = 'usage')",
+                f", COUNT(*) FILTER (WHERE {_DURABLE_USAGE_PREDICATE} "
+                "AND success IS TRUE) AS successful",
+                total_expression=f"COUNT(*) FILTER (WHERE {_DURABLE_USAGE_PREDICATE})",
+                request_expression=_DURABLE_USAGE_REQUEST,
             )
         finally:
             await connection.close()

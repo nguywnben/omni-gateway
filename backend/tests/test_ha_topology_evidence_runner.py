@@ -32,6 +32,7 @@ from tools.ha_topology_evidence.fixture import FaultAction, FixtureState
 from tools.ha_topology_evidence.lifecycle import LifecycleScenarioDriver
 from tools.ha_topology_evidence.load import RequestSample, WorkloadResult, run_workload
 from tools.ha_topology_evidence.oracle import (
+    DurableOracle,
     DurableOracleSnapshot,
     OperationOracleEvidence,
     assert_conservation,
@@ -341,6 +342,67 @@ class ScenarioAndOracleTests(unittest.TestCase):
 
 
 class RecoveryTransitionTests(unittest.IsolatedAsyncioTestCase):
+    async def test_durable_oracle_reads_usage_request_identity_from_json_payload(self) -> None:
+        request_id = "w4e-" + "1" * 32
+        operation_key = b"k" * 32
+        sample = RequestSample(
+            1,
+            "app-a",
+            200,
+            1.0,
+            True,
+            False,
+            request_id,
+            opaque_operation_digest(request_id, operation_key),
+            "d" * 64,
+        )
+        connection = AsyncMock()
+        connection.fetch.side_effect = (
+            [{"request_id": request_id, "total": 1}],
+            [{"request_id": request_id, "total": 1}],
+            [{"request_id": request_id, "total": 1, "successful": 1}],
+        )
+        with patch(
+            "tools.ha_topology_evidence.oracle.asyncpg.connect",
+            AsyncMock(return_value=connection),
+        ):
+            evidence = await DurableOracle(
+                "postgresql://omni@127.0.0.1:15434/test"
+            ).operation_evidence(
+                (sample,),
+                operation_key=operation_key,
+            )
+
+        usage_query = connection.fetch.await_args_list[2].args[0]
+        self.assertIn("payload->>'request_id'", usage_query)
+        self.assertIn("payload->'usage'->>'request_id'", usage_query)
+        self.assertIn("kind = 'reservation' AND state = 'committed'", usage_query)
+        self.assertEqual(evidence[0].usage_events, 1)
+        self.assertEqual(evidence[0].successful_usage_events, 1)
+
+    async def test_durable_oracle_snapshot_counts_committed_reservations_as_usage(self) -> None:
+        connection = AsyncMock()
+        connection.fetchval.return_value = 0
+        connection.fetchrow.return_value = {
+            "usage_records": 1,
+            "usage_events": 1,
+            "successful_usage_events": 1,
+            "active_reservations": 0,
+            "active_liability_nanos": 0,
+        }
+        connection.fetch.return_value = []
+        with patch(
+            "tools.ha_topology_evidence.oracle.asyncpg.connect",
+            AsyncMock(return_value=connection),
+        ):
+            snapshot_value = await DurableOracle(
+                "postgresql://omni@127.0.0.1:15434/test"
+            ).snapshot()
+
+        ledger_query = connection.fetchrow.await_args.args[0]
+        self.assertIn("kind = 'reservation' AND state = 'committed'", ledger_query)
+        self.assertEqual(snapshot_value.usage_events, 1)
+
     async def test_performance_warmup_requires_success_and_durable_conservation(self) -> None:
         from backend.tests.test_ha_topology_evidence_contract import candidate
 
