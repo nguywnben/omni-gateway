@@ -121,3 +121,17 @@ class GovernanceCoordinationTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertTrue(await observer.synchronize(callback))
         self.assertEqual(callback.await_count, 2)
+
+    async def test_repeated_reads_share_one_bounded_generation_poll(self) -> None:
+        coordination = AsyncMock()
+        coordination.current_generation.return_value = 1
+        configure_governance_coordination(coordination)
+        observer = GovernanceGenerationObserver(GOVERNANCE_SCOPE_CONFIG)
+        callback = AsyncMock()
+
+        self.assertTrue(await observer.synchronize(callback))
+        for _ in range(20):
+            self.assertFalse(await observer.synchronize(callback))
+
+        coordination.current_generation.assert_awaited_once_with(GOVERNANCE_SCOPE_CONFIG)
+        callback.assert_awaited_once_with()

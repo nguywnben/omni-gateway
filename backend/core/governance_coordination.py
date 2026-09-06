@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import time
 from collections.abc import Awaitable, Callable
 from typing import Final
 
@@ -22,6 +23,8 @@ _CONFIG_SCOPE_BY_KEY: Final = {
 }
 _governance_coordination: RoutingCoordinationAdapter | None = None
 _governance_binding_revision = 0
+_local_scope_revisions = {scope: 0 for scope in VALID_INVALIDATION_SCOPES}
+_GENERATION_POLL_INTERVAL_SECONDS: Final = 0.1
 
 
 def configure_governance_coordination(
@@ -44,7 +47,9 @@ async def publish_governance_invalidation(scope: str) -> int | None:
     coordination = _governance_coordination
     if coordination is None:
         return None
-    return await coordination.invalidate(scope)
+    generation = await coordination.invalidate(scope)
+    _local_scope_revisions[scope] += 1
+    return generation
 
 
 class GovernanceGenerationObserver:
@@ -56,6 +61,8 @@ class GovernanceGenerationObserver:
         self._scope = scope
         self._observed: int | None = None
         self._binding_revision: int | None = None
+        self._local_scope_revision = -1
+        self._next_poll_monotonic = 0.0
         self._lock = asyncio.Lock()
 
     @property
@@ -67,20 +74,39 @@ class GovernanceGenerationObserver:
         if coordination is None:
             return False
         binding_revision = _governance_binding_revision
-        generation = await coordination.current_generation(self._scope)
-        if self._observed == generation and self._binding_revision == binding_revision:
+        local_revision = _local_scope_revisions[self._scope]
+        now = time.monotonic()
+        if (
+            self._observed is not None
+            and self._binding_revision == binding_revision
+            and self._local_scope_revision == local_revision
+            and now < self._next_poll_monotonic
+        ):
             return False
         async with self._lock:
             coordination = _governance_coordination
             if coordination is None:
                 return False
             binding_revision = _governance_binding_revision
+            local_revision = _local_scope_revisions[self._scope]
+            now = time.monotonic()
+            if (
+                self._observed is not None
+                and self._binding_revision == binding_revision
+                and self._local_scope_revision == local_revision
+                and now < self._next_poll_monotonic
+            ):
+                return False
             generation = await coordination.current_generation(self._scope)
             if self._observed == generation and self._binding_revision == binding_revision:
+                self._local_scope_revision = local_revision
+                self._next_poll_monotonic = time.monotonic() + _GENERATION_POLL_INTERVAL_SECONDS
                 return False
             await invalidate()
             self._observed = generation
             self._binding_revision = binding_revision
+            self._local_scope_revision = local_revision
+            self._next_poll_monotonic = time.monotonic() + _GENERATION_POLL_INTERVAL_SECONDS
             return True
 
 
