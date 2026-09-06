@@ -50,6 +50,7 @@ x-app: &app
     RESPONSE_CACHE_MAX_ENTRIES: "1000"
     OTEL_EXPORT_ENABLED: "false"
     PROMETHEUS_EXPORT_ENABLED: "true"
+    METRICS_TOKEN: "${EVIDENCE_METRICS_TOKEN:?Set ephemeral metrics token}"
     KEEPALIVE_URL: ""
   volumes:
     - "${EVIDENCE_RUN_DIR:?Set absolute run directory}:/evidence/run:ro"

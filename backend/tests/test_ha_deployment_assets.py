@@ -109,6 +109,7 @@ class HaDeploymentAssetTests(unittest.TestCase):
         self.assertEqual(environment["RETRY_429_ENABLED"], "false")
         self.assertEqual(environment["RETRY_429_MAX_RETRIES"], "0")
         self.assertEqual(environment["RESPONSE_CACHE_ENABLED"], "true")
+        self.assertIn("${EVIDENCE_METRICS_TOKEN:?", source)
         for name in ("redis-primary", "redis-standby"):
             self.assertEqual(services[name]["user"], "999:1000")
             self.assertEqual(services[name]["cap_drop"], ["ALL"])

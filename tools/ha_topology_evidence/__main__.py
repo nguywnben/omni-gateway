@@ -91,6 +91,7 @@ def _compose_environment(
         "EVIDENCE_API_KEY": "sk-ogw-" + token(32),
         "EVIDENCE_SETUP_TOKEN": token(24),
         "EVIDENCE_CONTROL_TOKEN": token(32),
+        "EVIDENCE_METRICS_TOKEN": token(32),
         "EVIDENCE_SOURCE_REVISION": candidate.source_revision,
         "EVIDENCE_SOURCE_TREE_DIGEST": candidate.source_tree_digest,
         "EVIDENCE_LAUNCHER_DIGEST": candidate.evidence_launcher_digest,
