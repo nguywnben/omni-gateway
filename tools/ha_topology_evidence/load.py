@@ -8,13 +8,13 @@ import hmac
 import json
 import math
 import time
-import urllib.error
-import urllib.request
 from dataclasses import asdict, dataclass
 from typing import Final, Iterable
 
+import httpx
+
 from .contract import CorrectnessCounters, EvidenceVerificationError
-from .scenarios import loopback_opener, require_loopback_http_url
+from .scenarios import require_loopback_http_url
 
 MAX_ATTEMPTS: Final = 100_000
 
@@ -111,7 +111,7 @@ class WorkloadResult:
         )
 
 
-def _send_request(
+async def _send_request(
     sequence: int,
     request_sequence: int,
     operation_sequence: int,
@@ -120,6 +120,7 @@ def _send_request(
     api_key: str,
     deadline_seconds: float,
     operation_key: bytes,
+    client: httpx.AsyncClient,
 ) -> RequestSample:
     logical_operation = str(operation_sequence).encode("ascii")
     request_id = (
@@ -156,30 +157,31 @@ def _send_request(
         },
         separators=(",", ":"),
     ).encode("ascii")
-    request = urllib.request.Request(
-        f"{base_url.rstrip('/')}/v1/chat/completions",
-        method="POST",
-        data=body,
-        headers={
-            "Authorization": f"Bearer {api_key}",
-            "Content-Type": "application/json",
-            "X-Omni-Evidence-Sequence": str(request_sequence),
-            "X-Request-ID": request_id,
-        },
-    )
     started = time.perf_counter_ns()
     status = 0
     success = False
     transport_failure = False
     try:
-        with loopback_opener().open(request, timeout=deadline_seconds) as response:
-            status = response.status
-            payload = response.read(1_048_577)
-            success = status == 200 and len(payload) <= 1_048_576
-    except urllib.error.HTTPError as exc:
-        status = exc.code
-        exc.read(1_048_577)
-    except (OSError, TimeoutError, urllib.error.URLError):
+        async with client.stream(
+            "POST",
+            f"{base_url.rstrip('/')}/v1/chat/completions",
+            content=body,
+            headers={
+                "Authorization": f"Bearer {api_key}",
+                "Content-Type": "application/json",
+                "X-Omni-Evidence-Sequence": str(request_sequence),
+                "X-Request-ID": request_id,
+            },
+            timeout=deadline_seconds,
+        ) as response:
+            status = response.status_code
+            length = 0
+            async for chunk in response.aiter_bytes():
+                length += len(chunk)
+                if length > 1_048_576:
+                    break
+            success = status == 200 and length <= 1_048_576
+    except (httpx.HTTPError, OSError, TimeoutError):
         transport_failure = True
     elapsed = (time.perf_counter_ns() - started) / 1_000_000
     return RequestSample(
@@ -240,35 +242,49 @@ async def run_workload(
     semaphore = asyncio.Semaphore(concurrency)
     start = time.perf_counter_ns()
 
-    async def one(index: int) -> RequestSample:
-        due = start / 1_000_000_000 + index / offered_rps
-        delay = due - time.perf_counter()
-        if delay > 0:
-            await asyncio.sleep(delay)
-        schedule_slot = ((index * 1_103_515_245 + schedule_seed) >> 16) % len(selected)
-        name, url = selected[schedule_slot]
-        sample_sequence = sequence_offset + index
-        request_sequence = (
-            sample_sequence if request_sequence_offset is None else request_sequence_offset + index
-        )
-        operation_sequence = (
-            sample_sequence
-            if operation_sequence_offset is None
-            else operation_sequence_offset + index
-        )
-        async with semaphore:
-            return await asyncio.to_thread(
-                _send_request,
-                sample_sequence,
-                request_sequence,
-                operation_sequence,
-                name,
-                url,
-                api_key,
-                request_deadline_ms / 1000.0,
-                operation_key,
-            )
+    limits = httpx.Limits(
+        max_connections=concurrency,
+        max_keepalive_connections=concurrency,
+        keepalive_expiry=30.0,
+    )
+    async with httpx.AsyncClient(
+        limits=limits,
+        trust_env=False,
+        follow_redirects=False,
+        http2=False,
+    ) as client:
 
-    samples = await asyncio.gather(*(one(index) for index in range(attempts)))
+        async def one(index: int) -> RequestSample:
+            due = start / 1_000_000_000 + index / offered_rps
+            delay = due - time.perf_counter()
+            if delay > 0:
+                await asyncio.sleep(delay)
+            schedule_slot = ((index * 1_103_515_245 + schedule_seed) >> 16) % len(selected)
+            name, url = selected[schedule_slot]
+            sample_sequence = sequence_offset + index
+            request_sequence = (
+                sample_sequence
+                if request_sequence_offset is None
+                else request_sequence_offset + index
+            )
+            operation_sequence = (
+                sample_sequence
+                if operation_sequence_offset is None
+                else operation_sequence_offset + index
+            )
+            async with semaphore:
+                return await _send_request(
+                    sample_sequence,
+                    request_sequence,
+                    operation_sequence,
+                    name,
+                    url,
+                    api_key,
+                    request_deadline_ms / 1000.0,
+                    operation_key,
+                    client,
+                )
+
+        samples = await asyncio.gather(*(one(index) for index in range(attempts)))
     elapsed = (time.perf_counter_ns() - start) / 1_000_000
     return WorkloadResult(tuple(samples), elapsed)

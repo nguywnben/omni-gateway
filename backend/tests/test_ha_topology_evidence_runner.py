@@ -10,6 +10,8 @@ import unittest
 from pathlib import Path
 from unittest.mock import AsyncMock, patch
 
+import httpx
+
 BACKEND_DIR = Path(__file__).resolve().parents[1]
 if str(BACKEND_DIR) not in sys.path:
     sys.path.insert(0, str(BACKEND_DIR))
@@ -572,9 +574,11 @@ class RecoveryTransitionTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_workload_can_bind_unique_samples_to_one_cache_request(self) -> None:
         seen: list[tuple[int, int]] = []
+        clients = []
 
-        def send(sample_sequence, request_sequence, _operation_sequence, replica, *_args):
+        def send(sample_sequence, request_sequence, _operation_sequence, replica, *args):
             seen.append((sample_sequence, request_sequence))
+            clients.append(args[-1])
             return RequestSample(sample_sequence, replica, 200, 1.0, True, False)
 
         with patch("tools.ha_topology_evidence.load._send_request", side_effect=send):
@@ -591,6 +595,8 @@ class RecoveryTransitionTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(seen, [(10, 20), (11, 21)])
         self.assertEqual([sample.sequence for sample in result.samples], [10, 11])
+        self.assertTrue(all(isinstance(client, httpx.AsyncClient) for client in clients))
+        self.assertIs(clients[0], clients[1])
 
     async def test_predeclared_seed_changes_the_deterministic_replica_schedule(self) -> None:
         def send(sample_sequence, _request_sequence, _operation_sequence, replica, *_args):
