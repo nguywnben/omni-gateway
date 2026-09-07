@@ -17,6 +17,9 @@ from .contract import CorrectnessCounters, EvidenceVerificationError
 from .scenarios import require_loopback_http_url
 
 MAX_ATTEMPTS: Final = 100_000
+# Hypercorn closes an idle HTTP/1.1 connection after five seconds. Expire the
+# evidence client's pooled connection first so it never races that server close.
+CLIENT_KEEPALIVE_EXPIRY_SECONDS: Final = 4.0
 
 
 @dataclass(frozen=True, slots=True)
@@ -294,7 +297,7 @@ async def run_workload(
     limits = httpx.Limits(
         max_connections=concurrency,
         max_keepalive_connections=concurrency,
-        keepalive_expiry=30.0,
+        keepalive_expiry=CLIENT_KEEPALIVE_EXPIRY_SECONDS,
     )
     async with httpx.AsyncClient(
         limits=limits,

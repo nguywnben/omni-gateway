@@ -734,6 +734,38 @@ class RecoveryTransitionTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(all(isinstance(client, httpx.AsyncClient) for client in clients))
         self.assertIs(clients[0], clients[1])
 
+    async def test_workload_expires_idle_connections_before_hypercorn(self) -> None:
+        captured = {}
+
+        class Client:
+            async def __aenter__(self):
+                return self
+
+            async def __aexit__(self, *_args):
+                return None
+
+        def client_factory(**kwargs):
+            captured.update(kwargs)
+            return Client()
+
+        async def send(sample_sequence, _request_sequence, _operation_sequence, replica, *_args):
+            return RequestSample(sample_sequence, replica, 200, 1.0, True, False)
+
+        with (
+            patch("tools.ha_topology_evidence.load.httpx.AsyncClient", side_effect=client_factory),
+            patch("tools.ha_topology_evidence.load._send_request", side_effect=send),
+        ):
+            await run_workload(
+                (("app-a", "http://127.0.0.1:14283"),),
+                api_key="sk-ogw-synthetic",
+                attempts=1,
+                concurrency=1,
+                offered_rps=1,
+                request_deadline_ms=5_000,
+            )
+
+        self.assertEqual(captured["limits"].keepalive_expiry, 4.0)
+
     async def test_predeclared_seed_changes_the_deterministic_replica_schedule(self) -> None:
         async def send(sample_sequence, _request_sequence, _operation_sequence, replica, *_args):
             return RequestSample(sample_sequence, replica, 200, 1.0, True, False)
