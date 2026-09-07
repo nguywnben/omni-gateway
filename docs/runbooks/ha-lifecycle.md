@@ -12,6 +12,11 @@ Back up the selected durable backend and Redis namespace before any planned tran
 `FLUSHDB`, `FLUSHALL`, `SCRIPT FLUSH`, wildcard deletion, manual epoch edits, or direct binding
 record edits.
 
+The W4-C external evidence runner isolates its host-side lifecycle administrator in a dedicated,
+initially empty temporary credentials directory. Do not point that runner at a workstation or
+production credentials directory: legacy local SQLite files are not evidence inputs and the
+synthetic PostgreSQL inventory is the sole durable authority for the matrix.
+
 ## Diagnose readiness
 
 1. Confirm `/health` is HTTP 200. Liveness does not touch dependencies.

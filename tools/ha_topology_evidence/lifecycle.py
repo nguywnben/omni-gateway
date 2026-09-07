@@ -36,6 +36,7 @@ class LifecycleScenarioDriver:
         controller: HostController,
         environment: Mapping[str, str],
         *,
+        host_credentials_dir: Path,
         host_postgresql_uri: str,
         host_redis_url: str,
         app_a_url: str,
@@ -43,9 +44,21 @@ class LifecycleScenarioDriver:
         api_key: str,
         oracle: DurableOracle,
     ) -> None:
+        if (
+            not isinstance(host_credentials_dir, Path)
+            or not host_credentials_dir.is_absolute()
+            or host_credentials_dir.is_symlink()
+            or not host_credentials_dir.is_dir()
+        ):
+            raise EvidenceVerificationError(
+                "Host evidence credentials directory must be an absolute regular directory."
+            )
+        if next(host_credentials_dir.iterdir(), None) is not None:
+            raise EvidenceVerificationError("Host evidence credentials directory must start empty.")
         self.candidate = candidate
         self.controller = controller
         self.environment = dict(environment)
+        self.host_credentials_dir = host_credentials_dir.resolve(strict=True)
         self.host_postgresql_uri = host_postgresql_uri
         self.host_redis_url = host_redis_url
         self.endpoints = (("app-a", app_a_url), ("app-b", app_b_url))
@@ -75,11 +88,14 @@ class LifecycleScenarioDriver:
         *,
         redis_url: str | None = None,
     ) -> AsyncIterator[tuple[CandidateAdmin, RedisStateStore]]:
-        previous = os.environ.get("POSTGRESQL_URI")
+        previous_postgresql_uri = os.environ.get("POSTGRESQL_URI")
+        previous_credentials_dir = os.environ.get("CREDENTIALS_DIR")
         os.environ["POSTGRESQL_URI"] = self.host_postgresql_uri
-        storage = PostgreSQLManager()
+        os.environ["CREDENTIALS_DIR"] = str(self.host_credentials_dir)
+        storage: PostgreSQLManager | None = None
         store: RedisStateStore | None = None
         try:
+            storage = PostgreSQLManager()
             await storage.initialize()
             policy = experimental_policy(
                 self._policy_environment(epoch), self.candidate, replica_count=2
@@ -91,13 +107,22 @@ class LifecycleScenarioDriver:
             verifier = CandidateVerifier.exact(self.candidate, replica_count=2)
             yield CandidateAdmin(policy, storage, store, verifier), store
         finally:
-            if store is not None:
-                await store.close()
-            await storage.close()
-            if previous is None:
-                os.environ.pop("POSTGRESQL_URI", None)
-            else:
-                os.environ["POSTGRESQL_URI"] = previous
+            try:
+                if store is not None:
+                    await store.close()
+            finally:
+                try:
+                    if storage is not None:
+                        await storage.close()
+                finally:
+                    if previous_postgresql_uri is None:
+                        os.environ.pop("POSTGRESQL_URI", None)
+                    else:
+                        os.environ["POSTGRESQL_URI"] = previous_postgresql_uri
+                    if previous_credentials_dir is None:
+                        os.environ.pop("CREDENTIALS_DIR", None)
+                    else:
+                        os.environ["CREDENTIALS_DIR"] = previous_credentials_dir
 
     async def _probe(self, *, expect_success: bool) -> tuple[dict[str, object], ...]:
         sequence = self._probe_sequence

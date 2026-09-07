@@ -200,6 +200,11 @@ fault-milestone count for every frozen scenario, and aggregate sample outcomes e
 counters;
 truncated, padded, contradictory, or relabeled success evidence is ineligible.
 
+Host-side lifecycle administration runs with a dedicated, initially empty temporary credentials
+directory for the entire matrix and restores the caller environment after every operation. It must
+never discover or gate on a developer workstation's legacy SQLite usage ledger; the migrated
+synthetic PostgreSQL inventory remains the only durable evidence authority.
+
 Compose, Helm, and container defaults remain one worker/replica and standalone. Coordinated values
 are explicit and secrets use environment/Secret references. Termination grace must allow drain;
 probes remain `/health` and `/ready`.

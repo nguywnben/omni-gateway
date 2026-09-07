@@ -8,6 +8,7 @@ import base64
 import json
 import os
 import secrets
+import tempfile
 import time
 from pathlib import Path
 
@@ -179,26 +180,28 @@ async def _execute_run(
         controller.wait_http(f"{endpoint}/ready")
 
     oracle = DurableOracle("postgresql://omni@127.0.0.1:15434/omni_evidence")
-    lifecycle = LifecycleScenarioDriver(
-        candidate,
-        controller,
-        environment,
-        host_postgresql_uri="postgresql://omni@127.0.0.1:15434/omni_evidence",
-        host_redis_url="redis://127.0.0.1:16381/0",
-        app_a_url=app_a_url,
-        app_b_url=app_b_url,
-        api_key=environment["EVIDENCE_API_KEY"],
-        oracle=oracle,
-    )
-    execution = await MatrixRunner(
-        candidate,
-        controller,
-        oracle,
-        app_a_url=app_a_url,
-        app_b_url=app_b_url,
-        api_key=environment["EVIDENCE_API_KEY"],
-        lifecycle_hook=lifecycle.execute,
-    ).execute(bootstrap)
+    with tempfile.TemporaryDirectory(prefix="omni-w4c-admin-") as credentials_dir:
+        lifecycle = LifecycleScenarioDriver(
+            candidate,
+            controller,
+            environment,
+            host_credentials_dir=Path(credentials_dir),
+            host_postgresql_uri="postgresql://omni@127.0.0.1:15434/omni_evidence",
+            host_redis_url="redis://127.0.0.1:16381/0",
+            app_a_url=app_a_url,
+            app_b_url=app_b_url,
+            api_key=environment["EVIDENCE_API_KEY"],
+            oracle=oracle,
+        )
+        execution = await MatrixRunner(
+            candidate,
+            controller,
+            oracle,
+            app_a_url=app_a_url,
+            app_b_url=app_b_url,
+            api_key=environment["EVIDENCE_API_KEY"],
+            lifecycle_hook=lifecycle.execute,
+        ).execute(bootstrap)
     event_digest = writer.write_jsonl(
         "events.jsonl", (item.safe_event() for item in execution.observations)
     )

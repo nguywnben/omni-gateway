@@ -4,6 +4,7 @@ import asyncio
 import dataclasses
 import hashlib
 import json
+import os
 import sys
 import time
 import unittest
@@ -356,6 +357,63 @@ class ScenarioAndOracleTests(unittest.TestCase):
 
 
 class RecoveryTransitionTests(unittest.IsolatedAsyncioTestCase):
+    async def test_host_lifecycle_admin_isolates_legacy_usage_source(self) -> None:
+        from backend.tests.test_ha_topology_evidence_contract import candidate
+
+        class Policy:
+            coordination_namespace = "isolated-admin"
+
+        with workspace_temp_directory() as directory:
+            root = Path(directory)
+            host_credentials = root / "host-credentials"
+            evidence_credentials = root / "evidence-credentials"
+            host_credentials.mkdir()
+            evidence_credentials.mkdir()
+            driver = object.__new__(LifecycleScenarioDriver)
+            driver.candidate = candidate()
+            driver.environment = {
+                "EVIDENCE_NAMESPACE": "w4c-evidence-isolated",
+                "EVIDENCE_DEPLOYMENT_ID": "w4c-evidence-isolated",
+                "EVIDENCE_COORDINATION_KEY": "a" * 43,
+            }
+            driver.host_postgresql_uri = "postgresql://omni@127.0.0.1:15434/test"
+            driver.host_redis_url = "redis://127.0.0.1:16381/0"
+            driver.host_credentials_dir = evidence_credentials
+            storage = AsyncMock()
+            storage.close.side_effect = RuntimeError("synthetic close failure")
+            store = AsyncMock()
+
+            with (
+                patch.dict(os.environ, {"CREDENTIALS_DIR": str(host_credentials)}),
+                patch(
+                    "tools.ha_topology_evidence.lifecycle.PostgreSQLManager",
+                    return_value=storage,
+                ),
+                patch(
+                    "tools.ha_topology_evidence.lifecycle.RedisStateStore",
+                    return_value=store,
+                ),
+                patch(
+                    "tools.ha_topology_evidence.lifecycle.experimental_policy",
+                    return_value=Policy(),
+                ),
+                patch(
+                    "tools.ha_topology_evidence.lifecycle.CandidateVerifier.exact",
+                    return_value=object(),
+                ),
+                patch(
+                    "tools.ha_topology_evidence.lifecycle.CandidateAdmin",
+                    return_value=object(),
+                ),
+            ):
+                with self.assertRaisesRegex(RuntimeError, "synthetic close failure"):
+                    async with driver._admin(1):
+                        self.assertEqual(
+                            Path(os.environ["CREDENTIALS_DIR"]),
+                            evidence_credentials,
+                        )
+                self.assertEqual(Path(os.environ["CREDENTIALS_DIR"]), host_credentials)
+
     async def test_performance_baseline_removes_second_replica_without_cluster_drain(self) -> None:
         from backend.tests.test_ha_topology_evidence_contract import candidate
 
