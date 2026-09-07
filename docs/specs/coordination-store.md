@@ -74,13 +74,17 @@ Common bounds:
 
 ## Fencing lifecycle
 
-A new namespace has one persistent initialization marker and one persistent epoch record in the
-same deployment hash slot. `read_epoch()` is always side-effect free. When both members are absent
+A new namespace has one persistent initialization marker, one persistent epoch record, and
+generation `1` records for every fixed cache/governance invalidation scope in the same deployment
+hash slot. `read_epoch()` is always side-effect free. When both epoch members are absent
 it raises the typed `CoordinationUninitializedError`; when exactly one is absent, either is
 malformed/expiring, or a normal mutation observes an absent member, the namespace is corrupt and
 the operation fails closed. Only the explicit `initialize_epoch()` bootstrap transition may
-atomically create marker plus ready epoch `1`, and it refuses to do so when the Redis binding marker
-already exists. CAS, invalidation, quota reserve, quota commit, quota release, epoch advance, and
+atomically create marker plus ready epoch `1` and the complete invalidation-authority set, and it
+refuses to do so when the Redis binding marker or any partial authority already exists. Replaying
+the explicit initializer validates every authority record as persistent and well formed; it never
+repairs an existing partial namespace. A missing fixed-scope generation is corruption rather than
+generation zero. CAS, invalidation, quota reserve, quota commit, quota release, epoch advance, and
 epoch ready never infer or repair initialization.
 
 The binding bootstrap calls `initialize_epoch()` only after activation verification and only when

@@ -109,11 +109,15 @@ end
 local marker = redis.call('GET', KEYS[2])
 local encoded_epoch = redis.call('GET', KEYS[1])
 if not marker and not encoded_epoch then
-  if redis.call('EXISTS', KEYS[3]) ~= 0 then
+  if redis.call('EXISTS', KEYS[3]) ~= 0
+    or redis.call('EXISTS', unpack(KEYS, 4, #KEYS)) ~= 0 then
     return redis.error_reply('COORDINATION_CORRUPT')
   end
   if redis.call('MSETNX', KEYS[1], '1|1|ready', KEYS[2], '1|initialized') ~= 1 then
     return redis.error_reply('COORDINATION_CORRUPT')
+  end
+  for index = 4, #KEYS do
+    redis.call('HSET', KEYS[index], 'schema_version', '1', 'generation', '1')
   end
   marker, encoded_epoch = '1|initialized', '1|1|ready'
 elseif not marker or not encoded_epoch then
@@ -127,6 +131,15 @@ local schema, epoch, state = string.match(encoded_epoch, '^([^|]+)|([^|]+)|([^|]
 if schema ~= '1' or not valid_integer(epoch)
   or (state ~= 'ready' and state ~= 'reconciling') then
   return redis.error_reply('COORDINATION_CORRUPT')
+end
+for index = 4, #KEYS do
+  if redis.call('HLEN', KEYS[index]) ~= 2 or redis.call('PTTL', KEYS[index]) ~= -1 then
+    return redis.error_reply('COORDINATION_CORRUPT')
+  end
+  local record = redis.call('HMGET', KEYS[index], 'schema_version', 'generation')
+  if record[1] ~= '1' or not valid_integer(record[2]) then
+    return redis.error_reply('COORDINATION_CORRUPT')
+  end
 end
 return {'1', 'ok', epoch, state}
 """
@@ -2827,12 +2840,15 @@ class RedisStateStore:
         return _decode_epoch_reply(reply)
 
     async def initialize_epoch(self) -> Epoch:
+        from core.routing_coordination import VALID_INVALIDATION_SCOPES
+
         reply = await self._run_script(
             "epoch_initialize",
             keys=[
                 self._key("epoch"),
                 self._key("initialization"),
                 self._key("generic", ADMISSION_BINDING_KEY),
+                *(self._key("invalidation", scope) for scope in sorted(VALID_INVALIDATION_SCOPES)),
             ],
             args=[],
         )

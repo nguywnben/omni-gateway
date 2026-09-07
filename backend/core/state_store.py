@@ -358,7 +358,11 @@ class InMemoryStateStore(BaseStateStore):
         self._cas_replays: Dict[str, _Replay] = {}
         self._cas_expiries: list[tuple[float, str]] = []
         self._cas_replay_expiries: list[tuple[float, str]] = []
-        self._invalidation_generations: Dict[str, int] = {}
+        from core.routing_coordination import VALID_INVALIDATION_SCOPES
+
+        self._invalidation_generations: Dict[str, int] = {
+            scope: 1 for scope in VALID_INVALIDATION_SCOPES
+        }
         self._invalidation_replays: Dict[str, _Replay] = {}
         self._invalidation_replay_expiries: list[tuple[float, str]] = []
         self._quota_records: Dict[str, _QuotaLifecycleRecord] = {}

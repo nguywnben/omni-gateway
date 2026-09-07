@@ -46,12 +46,15 @@ ID, namespace digest, identifier-key fingerprint, fencing epoch, manifest checks
 record revision. Redis contains a matching fixed-key fenced marker. Neither side stores the raw
 namespace key or Redis URI.
 
-The lifecycle requires both records to exist and match before constructing consumers. A missing
-Redis marker with an existing durable binding means namespace loss and fails readiness/startup; it
-must never initialize a fresh deployment silently. A missing durable binding requires the explicit
-bootstrap command, which is itself blocked until the canonical durable inventory and W4.19
-activation record are ready. Partial bootstrap is resumable from the stable deployment ID and
-fingerprints, never by deleting either side.
+The lifecycle requires both records to exist and match before constructing consumers. Explicit
+fresh bootstrap atomically establishes epoch one plus every fixed cache/governance invalidation
+authority at generation one. A missing Redis marker, epoch, or fixed-scope generation after that
+point is namespace loss/corruption and fails readiness or the first coordinated read; generation
+zero is never inferred. Existing durable/shared bindings and partial authority must never initialize
+or repair a fresh deployment silently. A missing durable binding requires the explicit bootstrap
+command, which is itself blocked until the canonical durable inventory and W4.19 activation record
+are ready. Partial bootstrap is resumable from the stable deployment ID and fingerprints, never by
+deleting either side.
 
 ## Lifecycle states and readiness
 

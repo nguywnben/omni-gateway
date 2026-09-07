@@ -92,7 +92,7 @@ class CoordinatedResponseCacheTests(unittest.IsolatedAsyncioTestCase):
 
         generation = await self.second.invalidate()
 
-        self.assertEqual(generation, 1)
+        self.assertEqual(generation, 2)
         self.assertIsNone(await self.first.get("cache-key"))
         self.assertIsNone(self.first_local.get("cache-key"))
 

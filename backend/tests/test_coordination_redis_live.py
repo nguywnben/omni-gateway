@@ -256,6 +256,15 @@ class LiveRedisCoordinationTests(CoordinationStoreContract, unittest.IsolatedAsy
         sessions = await self.store.list_security_sessions(SessionListRequest(10, 2))
         self.assertEqual(sessions.sessions, ())
 
+    async def test_existing_namespace_missing_invalidation_authority_fails_closed(self) -> None:
+        scope = sorted(VALID_INVALIDATION_SCOPES)[0]
+        self.assertEqual(
+            await self.cleanup_client.delete(self.store._key("invalidation", scope)), 1
+        )
+
+        with self.assertRaises(CoordinationCorruptError):
+            await self.store.initialize_epoch()
+
     async def test_empty_epoch_namespace_never_self_initializes_on_read(self) -> None:
         epoch_key = self.store._key("epoch")
         initialization_key = self.store._key("initialization")
@@ -439,7 +448,7 @@ class LiveRedisCoordinationTests(CoordinationStoreContract, unittest.IsolatedAsy
             {"epoch": 2},
             {"namespace_digest": "f" * 64},
             {"epoch": True},
-            {"schema_version": 3},
+            {"schema_version": 2},
             {"unexpected": "value"},
         ):
             with self.subTest(changes=changes):

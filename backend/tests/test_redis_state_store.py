@@ -360,7 +360,7 @@ class StatefulRedisClient(FakeRedisClient):
     """Small deterministic driver model for Task 3's public transition sequence."""
 
     _KEY_COUNTS = {
-        "epoch_initialize": (3, 0),
+        "epoch_initialize": (10, 0),
         "epoch_read": (2, 0),
         "time_read": (2, 1),
         "epoch_advance": (19, 4),
@@ -561,6 +561,12 @@ class StatefulRedisClient(FakeRedisClient):
                 self.epoch = (1, b"ready")
                 self.epoch_exists = True
                 self.initialization_exists = True
+                for key in keys[3:]:
+                    self.generations[key] = 1
+            elif name == "epoch_initialize" and any(
+                self.generations.get(key) is None for key in keys[3:]
+            ):
+                raise RuntimeError("COORDINATION_CORRUPT")
             return [b"1", b"ok", str(self.epoch[0]).encode(), self.epoch[1]]
         if name == "time_read":
             if not self.epoch_exists or not self.initialization_exists:
@@ -2410,6 +2416,8 @@ class RedisStateStoreTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual((await fresh_store.initialize_epoch()).epoch, 1)
         self.assertTrue(fresh_client.epoch_exists)
         self.assertTrue(fresh_client.initialization_exists)
+        self.assertTrue(all(value == 1 for value in fresh_client.generations.values()))
+        self.assertEqual(len(fresh_client.generations), 7)
         self.assertTrue(
             (await fresh_store.compare_and_set(CasRequest("key", 0, b"value", 5, 1, "cas"))).applied
         )

@@ -548,8 +548,11 @@ class RoutingCoordinationAdapter:
             raise ValueError("Invalidation scope is invalid.")
         await self._now_ms()
         snapshot = await self._store.read_invalidation_generation(scope)
+        if snapshot.generation is None:
+            _increment_metric("generation_read", "conflict")
+            raise CoordinationCorruptError("Invalidation authority is missing.")
         _increment_metric("generation_read", "success")
-        return snapshot.generation or 0
+        return snapshot.generation
 
     async def invalidate(self, scope: str) -> int:
         if scope not in VALID_INVALIDATION_SCOPES:

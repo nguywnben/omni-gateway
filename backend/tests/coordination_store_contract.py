@@ -764,6 +764,15 @@ class CoordinationStoreContract:
         epoch = await self.store.read_epoch()
         self.assertEqual(epoch.epoch, 1)
         self.assertEqual(epoch.state, EpochState.READY)
+        from core.routing_coordination import VALID_INVALIDATION_SCOPES
+
+        self.assertEqual(
+            {
+                scope: (await self.store.read_invalidation_generation(scope)).generation
+                for scope in VALID_INVALIDATION_SCOPES
+            },
+            {scope: 1 for scope in VALID_INVALIDATION_SCOPES},
+        )
         first_clock = await self.store.read_coordination_time(epoch=1)
         self.assertGreaterEqual(first_clock.milliseconds, 0)
 

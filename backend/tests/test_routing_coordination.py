@@ -138,8 +138,14 @@ class RoutingCoordinationAdapterTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual((await adapter.read_credential("primary", "unknown.json")).in_flight, 1)
 
         generation = await adapter.invalidate(CACHE_SCOPE_EXACT)
-        self.assertEqual(generation, 1)
-        self.assertEqual(await adapter.current_generation(CACHE_SCOPE_EXACT), 1)
+        self.assertEqual(generation, 2)
+        self.assertEqual(await adapter.current_generation(CACHE_SCOPE_EXACT), 2)
+
+    async def test_missing_invalidation_authority_fails_closed(self) -> None:
+        self.store._invalidation_generations.pop(CACHE_SCOPE_EXACT)
+
+        with self.assertRaises(CoordinationCorruptError):
+            await self.first.current_generation(CACHE_SCOPE_EXACT)
 
     async def test_store_receives_only_domain_separated_hmac_identifiers(self) -> None:
         lease = await self.first.acquire_credential(
@@ -202,7 +208,7 @@ class RoutingCoordinationAdapterTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(metadata.media_kind, "json")
 
         invalidated = await self.second.invalidate(CACHE_SCOPE_EXACT)
-        self.assertEqual(invalidated, 1)
+        self.assertEqual(invalidated, 2)
         self.assertIsNone(
             await self.first.resolve_cache_metadata(
                 CacheKind.EXACT,
