@@ -181,6 +181,39 @@ class ScenarioAndOracleTests(unittest.TestCase):
             controller.compose(ComposeAction.RECREATE, ("app-a",))
         self.assertIn("--force-recreate", run.call_args.args[0])
 
+    def test_redis_restore_control_timeout_covers_the_bounded_replication_wait(self) -> None:
+        timeouts: list[float] = []
+
+        class Response:
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *_):
+                return False
+
+            def read(self, _limit: int) -> bytes:
+                return json.dumps({"action": FaultAction.REDIS_RESTORE_PRIMARY.value}).encode(
+                    "ascii"
+                )
+
+        class Opener:
+            def open(self, _request, *, timeout: float):
+                timeouts.append(timeout)
+                return Response()
+
+        controller = HostController(
+            (ROOT / "deploy" / "evidence" / "compose.ha.yml").resolve(),
+            "w4c-123456789abc",
+            "http://127.0.0.1:18081",
+            control_token="s" * 32,
+        )
+        with patch(
+            "tools.ha_topology_evidence.scenarios.loopback_opener",
+            return_value=Opener(),
+        ):
+            controller.fault(FaultAction.REDIS_RESTORE_PRIMARY)
+        self.assertEqual(timeouts, [30.0])
+
     def test_loopback_url_validation_rejects_userinfo_and_external_hosts(self) -> None:
         self.assertEqual(
             require_loopback_http_url("http://127.0.0.1:18081"),
@@ -357,6 +390,45 @@ class ScenarioAndOracleTests(unittest.TestCase):
 
 
 class RecoveryTransitionTests(unittest.IsolatedAsyncioTestCase):
+    async def test_recovery_waits_for_restarted_coordination_before_transition(self) -> None:
+        from core.coordination import CoordinationUnavailableError
+
+        driver = object.__new__(LifecycleScenarioDriver)
+        driver.epoch = 4
+        expected = object()
+        coordination = AsyncMock()
+        coordination.snapshot.side_effect = (
+            CoordinationUnavailableError("synthetic startup race"),
+            expected,
+        )
+        with patch("tools.ha_topology_evidence.lifecycle.asyncio.sleep", new=AsyncMock()) as sleep:
+            observed = await driver._initial_coordination_snapshot(coordination)
+        self.assertIs(observed, expected)
+        self.assertEqual(coordination.snapshot.await_count, 2)
+        sleep.assert_awaited_once_with(0.1)
+
+    async def test_recovery_fails_closed_when_coordination_never_restarts(self) -> None:
+        from core.coordination import CoordinationUnavailableError
+
+        driver = object.__new__(LifecycleScenarioDriver)
+        driver.epoch = 4
+        coordination = AsyncMock()
+        coordination.snapshot.side_effect = CoordinationUnavailableError(
+            "synthetic persistent outage"
+        )
+        with (
+            patch(
+                "tools.ha_topology_evidence.lifecycle.time.monotonic",
+                side_effect=(100.0, 110.0),
+            ),
+            self.assertRaisesRegex(
+                EvidenceVerificationError,
+                "did not become available",
+            ),
+        ):
+            await driver._initial_coordination_snapshot(coordination)
+        coordination.snapshot.assert_awaited_once_with(expected_epoch=4)
+
     async def test_host_lifecycle_admin_isolates_legacy_usage_source(self) -> None:
         from backend.tests.test_ha_topology_evidence_contract import candidate
 

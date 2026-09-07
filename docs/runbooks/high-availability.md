@@ -107,6 +107,11 @@ is included in the artifacts, and is counted by the durable-conservation oracle.
 scenarios have an individual 120-second timeout;
 the entire bootstrap, matrix, report, and verification path is bounded by 45 minutes.
 
+Container restart recovery waits up to 10 seconds for the existing fenced Redis epoch to become
+readable before beginning any lifecycle mutation. Standby verification and promotion controls use
+fixed 15-second deadlines; primary restoration uses a fixed 30-second deadline because it includes
+replication catch-up and a bounded `WAIT`. Exceeding any deadline fails the scenario closed.
+
 The completed report archives the exact canonical `candidate.json` alongside the event, sample,
 scenario, and summary artifacts. Verification recomputes every artifact hash, requires that
 archived candidate to equal the independently supplied candidate, and rejects missing, duplicate, skipped, unavailable,

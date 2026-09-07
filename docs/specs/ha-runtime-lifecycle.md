@@ -150,6 +150,10 @@ order; session invalidation and cache generation advancement linearize with the 
 Receipt signatures contain no wall-clock assertion, so clock skew cannot convert stale evidence
 into valid evidence. Recovery duration is measured externally from the first positively exercised
 fault until both direct app readiness and the independent oracle recover.
+After a container restart, the evidence controller may retry only the initial read-only epoch
+snapshot for up to ten seconds while Redis becomes reachable; it never retries a drain, epoch,
+reconciliation, or ready mutation implicitly. Replication verification, promotion, and restoration
+controls have separate fixed deadlines, and a deadline expiry leaves the scenario failed.
 
 Any unavailable owner, malformed cursor, page overflow, active quota conflict, surviving session,
 missing generation, any active reservation, any nonzero active liability, liability overflow,

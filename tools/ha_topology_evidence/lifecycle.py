@@ -13,6 +13,7 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import AsyncIterator, Final, Mapping
 
+from core.coordination import CoordinationUnavailableError
 from core.ha_coordination_binding import CoordinationBindingManager
 from core.redis_state_store import RedisStateStore
 from core.storage.postgresql_manager import PostgreSQLManager
@@ -21,7 +22,7 @@ from .admin import CandidateAdmin, experimental_policy
 from .contract import CandidateTopology, CandidateVerifier, EvidenceVerificationError
 from .fixture import FaultAction
 from .load import run_workload
-from .oracle import CoordinationOracle, DurableOracle
+from .oracle import CoordinationOracle, CoordinationOracleSnapshot, DurableOracle
 from .scenarios import ComposeAction, HostController, NoRedirect
 
 ROLLBACK_COMPOSE_FILE: Final = (
@@ -153,6 +154,20 @@ class LifecycleScenarioDriver:
         for _, endpoint in self.endpoints:
             self.controller.wait_http(f"{endpoint}/ready")
 
+    async def _initial_coordination_snapshot(
+        self, coordination: CoordinationOracle
+    ) -> CoordinationOracleSnapshot:
+        deadline = time.monotonic() + 10.0
+        while True:
+            try:
+                return await coordination.snapshot(expected_epoch=self.epoch)
+            except CoordinationUnavailableError:
+                if time.monotonic() >= deadline:
+                    raise EvidenceVerificationError(
+                        "Coordination dependency did not become available for recovery."
+                    ) from None
+                await asyncio.sleep(0.1)
+
     async def _transition(
         self, *, probe_stale: bool, redis_url: str | None = None
     ) -> dict[str, object]:
@@ -162,7 +177,7 @@ class LifecycleScenarioDriver:
             redis_url or self.host_redis_url, self.environment["EVIDENCE_NAMESPACE"]
         )
         try:
-            before = await coordination.snapshot(expected_epoch=self.epoch)
+            before = await self._initial_coordination_snapshot(coordination)
             async with self._admin(self.epoch, redis_url=redis_url) as (admin, _):
                 await admin.operator.drain(apply=True)
                 await admin.operator.advance_epoch(operation, apply=True)

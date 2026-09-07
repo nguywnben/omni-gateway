@@ -66,6 +66,11 @@ _IMMUTABLE_IMAGE = re.compile(r"(?:[a-z0-9][a-z0-9./:_-]*@)?sha256:[0-9a-f]{64}"
 _SERVICES: Final = frozenset(
     {"app-a", "app-b", "redis-primary", "redis-standby", "postgres", "fixture"}
 )
+_FAULT_CONTROL_TIMEOUT_SECONDS: Final = {
+    FaultAction.REDIS_VERIFY_STANDBY_CAUGHT_UP: 15.0,
+    FaultAction.REDIS_PROMOTE_STANDBY: 15.0,
+    FaultAction.REDIS_RESTORE_PRIMARY: 30.0,
+}
 
 
 def require_loopback_http_url(value: str, *, allow_path: bool = False) -> str:
@@ -193,8 +198,9 @@ class HostController:
             data=b"",
             headers={"Content-Length": "0", "X-Evidence-Control": self.control_token},
         )
+        timeout_seconds = _FAULT_CONTROL_TIMEOUT_SECONDS.get(action, 5.0)
         try:
-            with loopback_opener().open(request, timeout=5.0) as response:
+            with loopback_opener().open(request, timeout=timeout_seconds) as response:
                 raw = response.read(65_537)
                 if len(raw) > 65_536:
                     raise EvidenceVerificationError("Fixture fault acknowledgement is oversized.")
