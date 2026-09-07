@@ -142,9 +142,11 @@ The lifecycle exposes bounded commands for `status`, `drain`, `advance-epoch`, `
 
 ## Recovery clocks and failure behavior
 
-Quota reconciliation uses Redis server time and its bounded existing cursor semantics. Durable
-usage liability is a stable application-table scan; identity evidence uses durable creation order;
-session invalidation and cache generation advancement linearize with the Redis epoch transition.
+Quota reconciliation uses Redis server time and its bounded existing cursor semantics. One page
+may advance through at most its requested page size of empty Redis `SCAN` windows, so unrelated
+keys in a sparse namespace cannot consume the 64-page reconciliation budget one window at a time.
+Durable usage liability is a stable application-table scan; identity evidence uses durable creation
+order; session invalidation and cache generation advancement linearize with the Redis epoch transition.
 Receipt signatures contain no wall-clock assertion, so clock skew cannot convert stale evidence
 into valid evidence. Recovery duration is measured externally from the first positively exercised
 fault until both direct app readiness and the independent oracle recover.

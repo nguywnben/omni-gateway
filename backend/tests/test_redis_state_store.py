@@ -1642,6 +1642,60 @@ class RedisStateStoreTests(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn(store._key("quota:locator", reservation.decode("ascii")), client.values)
         self.assertNotIn(store._key("quota:operation", operation.decode("ascii")), client.values)
 
+    async def test_empty_quota_reconciliation_skips_sparse_namespace_within_page_limit(
+        self,
+    ) -> None:
+        class SparseScanRedisClient(StatefulRedisClient):
+            async def _command(self, name: str, *args: object, **kwargs: object) -> object:
+                if name != "scan":
+                    return await super()._command(name, *args, **kwargs)
+                self.command_calls.append((name, args, kwargs))
+                cursor = int(args[0])
+                pattern = kwargs.get("match")
+                assert isinstance(pattern, str) and pattern.endswith("*")
+                prefix = pattern[:-1]
+                keys = sorted(
+                    key
+                    for key in {*self.redis_hashes, *self.redis_zsets, *self.values}
+                    if bool(self.redis_hashes.get(key))
+                    or bool(self.redis_zsets.get(key))
+                    or key in self.values
+                )
+                count = int(kwargs.get("count", 10))
+                window = keys[cursor : cursor + count]
+                next_cursor = 0 if cursor + count >= len(keys) else cursor + count
+                return next_cursor, [
+                    key.encode("ascii") for key in window if key.startswith(prefix)
+                ]
+
+        client = SparseScanRedisClient()
+        client.epoch = (2, b"reconciling")
+        store = RedisStateStore(
+            "redis://redis.example/0",
+            deployment_namespace="sparse-empty-quota",
+            _redis_module_for_testing=FakeRedisModule(client),
+        )
+        for index in range(100):
+            client.values[store._key("generic", f"unrelated-{index}")] = (b"value", None)
+
+        cursor = None
+        for page_number in range(64):
+            page = await store.reconcile_quota_state(
+                epoch=2,
+                cursor=cursor,
+                limit=256,
+                apply=True,
+                operation_id=f"qrc_{page_number:032x}",
+            )
+            if page.complete:
+                break
+            cursor = page.cursor
+        else:
+            self.fail("Empty quota reconciliation exceeded its page limit in a sparse namespace.")
+
+        self.assertLessEqual(page_number + 1, 3)
+        self.assertIsNone(page.cursor)
+
     async def test_quota_reconciliation_migrates_marker_only_state(self) -> None:
         client = StatefulRedisClient()
         client.epoch = (2, b"reconciling")

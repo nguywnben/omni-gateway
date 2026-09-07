@@ -3318,6 +3318,34 @@ class RedisStateStore:
         if completion_ttl != -2:
             raise CoordinationCorruptError("Stored coordination state is invalid.")
 
+        async def scan_matching_keys(
+            *, scan_cursor: int, pattern: str
+        ) -> tuple[int, list[bytes], int]:
+            next_cursor = scan_cursor
+            candidates: list[bytes] = []
+            scan_steps = 0
+            while scan_steps < limit:
+                scan_reply = await self._run_command("scan", next_cursor, match=pattern, count=1)
+                if (
+                    not isinstance(scan_reply, (list, tuple))
+                    or len(scan_reply) != 2
+                    or isinstance(scan_reply[0], bool)
+                    or not isinstance(scan_reply[0], int)
+                    or not isinstance(scan_reply[1], (list, tuple))
+                    or any(not isinstance(key, bytes) for key in scan_reply[1])
+                ):
+                    raise CoordinationCorruptError("Coordination reply is invalid.")
+                if not 0 <= scan_reply[0] <= MAX_COORDINATION_INTEGER:
+                    raise CoordinationCorruptError("Coordination reply is invalid.")
+                next_cursor = scan_reply[0]
+                candidates = sorted(scan_reply[1])
+                if len(candidates) != len(set(candidates)):
+                    raise CoordinationCorruptError("Coordination reply is invalid.")
+                scan_steps += 1
+                if candidates or next_cursor == 0:
+                    break
+            return next_cursor, candidates, scan_steps
+
         family = state["family"]
         assert isinstance(family, str)
         target = state["target"]
@@ -3511,21 +3539,14 @@ class RedisStateStore:
                 ("records", f"{self._prefix}:quota:records:*"),
                 ("replays", f"{self._prefix}:quota:replay:*"),
             ):
-                pending_reply = await self._run_command("scan", 0, match=pending_prefix, count=1)
-                if (
-                    not isinstance(pending_reply, (list, tuple))
-                    or len(pending_reply) != 2
-                    or isinstance(pending_reply[0], bool)
-                    or not isinstance(pending_reply[0], int)
-                    or not 0 <= pending_reply[0] <= MAX_COORDINATION_INTEGER
-                    or not isinstance(pending_reply[1], (list, tuple))
-                    or any(not isinstance(key, bytes) for key in pending_reply[1])
-                ):
-                    raise CoordinationCorruptError("Coordination reply is invalid.")
-                if pending_reply[0] != 0 or pending_reply[1]:
+                pending_scan, pending_keys, pending_scan_steps = await scan_matching_keys(
+                    scan_cursor=0,
+                    pattern=pending_prefix,
+                )
+                if pending_scan != 0 or pending_keys:
                     next_cursor = _encode_quota_reconciliation_cursor(
                         family=pending_family,
-                        key_scan=0,
+                        key_scan=0 if pending_keys else pending_scan,
                         target=None,
                         member_scan=0,
                     )
@@ -3537,8 +3558,9 @@ class RedisStateStore:
                             "phase": "schema",
                             "markers": schema_observed,
                             "pending_family": pending_family,
-                            "pending_scan": pending_reply[0],
-                            "pending_keys": [key.hex() for key in pending_reply[1]],
+                            "pending_scan": pending_scan,
+                            "pending_keys": [key.hex() for key in pending_keys],
+                            "pending_scan_steps": pending_scan_steps,
                         },
                     )
             return await finish_schema(
@@ -3553,24 +3575,10 @@ class RedisStateStore:
         target_prefix = f"{self._prefix}:quota:{category}:"
         next_scan = scan_cursor
         if target is None:
-            scan_reply = await self._run_command(
-                "scan", scan_cursor, match=target_prefix + "*", count=1
+            next_scan, candidates, scan_steps = await scan_matching_keys(
+                scan_cursor=scan_cursor,
+                pattern=target_prefix + "*",
             )
-            if (
-                not isinstance(scan_reply, (list, tuple))
-                or len(scan_reply) != 2
-                or isinstance(scan_reply[0], bool)
-                or not isinstance(scan_reply[0], int)
-                or not isinstance(scan_reply[1], (list, tuple))
-                or any(not isinstance(key, bytes) for key in scan_reply[1])
-            ):
-                raise CoordinationCorruptError("Coordination reply is invalid.")
-            if not 0 <= scan_reply[0] <= MAX_COORDINATION_INTEGER:
-                raise CoordinationCorruptError("Coordination reply is invalid.")
-            next_scan = scan_reply[0]
-            candidates = sorted(scan_reply[1])
-            if len(candidates) != len(set(candidates)):
-                raise CoordinationCorruptError("Coordination reply is invalid.")
             if candidates:
                 try:
                     target = candidates[0].decode("ascii")
@@ -3589,7 +3597,12 @@ class RedisStateStore:
                     0,
                     False,
                     next_cursor,
-                    {"phase": "bucket-scan", "family": family, "keys": []},
+                    {
+                        "phase": "bucket-scan",
+                        "family": family,
+                        "keys": [],
+                        "scan_steps": scan_steps,
+                    },
                 )
             elif scan_cursor != 0:
                 next_cursor = _encode_quota_reconciliation_cursor(
