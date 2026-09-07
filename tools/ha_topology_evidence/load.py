@@ -164,7 +164,7 @@ def _deadline_sample(
     )
 
 
-def _send_request(
+async def _send_request(
     sequence: int,
     request_sequence: int,
     operation_sequence: int,
@@ -173,7 +173,7 @@ def _send_request(
     api_key: str,
     deadline_seconds: float,
     operation_key: bytes,
-    client: httpx.Client,
+    client: httpx.AsyncClient,
 ) -> RequestSample:
     request_id, operation_digest, delivery_digest = _sample_identity(
         sequence, operation_sequence, operation_key
@@ -200,7 +200,7 @@ def _send_request(
     transport_failure = False
     transport_error = ""
     try:
-        with client.stream(
+        async with client.stream(
             "POST",
             f"{base_url.rstrip('/')}/v1/chat/completions",
             content=body,
@@ -214,7 +214,7 @@ def _send_request(
         ) as response:
             status = response.status_code
             length = 0
-            for chunk in response.iter_bytes():
+            async for chunk in response.aiter_bytes():
                 length += len(chunk)
                 if length > 1_048_576:
                     break
@@ -296,7 +296,7 @@ async def run_workload(
         max_keepalive_connections=concurrency,
         keepalive_expiry=30.0,
     )
-    with httpx.Client(
+    async with httpx.AsyncClient(
         limits=limits,
         trust_env=False,
         follow_redirects=False,
@@ -353,8 +353,7 @@ async def run_workload(
                         deadline_seconds * 1000,
                         operation_key,
                     )
-                return await asyncio.to_thread(
-                    _send_request,
+                return await _send_request(
                     sample_sequence,
                     request_sequence,
                     operation_sequence,

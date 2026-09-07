@@ -576,12 +576,18 @@ class RecoveryTransitionTests(unittest.IsolatedAsyncioTestCase):
         seen: list[tuple[int, int]] = []
         clients = []
 
-        def send(sample_sequence, request_sequence, _operation_sequence, replica, *args):
+        async def send(sample_sequence, request_sequence, _operation_sequence, replica, *args):
             seen.append((sample_sequence, request_sequence))
             clients.append(args[-1])
             return RequestSample(sample_sequence, replica, 200, 1.0, True, False)
 
-        with patch("tools.ha_topology_evidence.load._send_request", side_effect=send):
+        with (
+            patch("tools.ha_topology_evidence.load._send_request", side_effect=send),
+            patch(
+                "tools.ha_topology_evidence.load.asyncio.to_thread",
+                side_effect=AssertionError("HTTP transport must stay on the event loop"),
+            ),
+        ):
             result = await run_workload(
                 (("app-a", "http://127.0.0.1:14283"),),
                 api_key="sk-ogw-synthetic",
@@ -595,11 +601,11 @@ class RecoveryTransitionTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(seen, [(10, 20), (11, 21)])
         self.assertEqual([sample.sequence for sample in result.samples], [10, 11])
-        self.assertTrue(all(isinstance(client, httpx.Client) for client in clients))
+        self.assertTrue(all(isinstance(client, httpx.AsyncClient) for client in clients))
         self.assertIs(clients[0], clients[1])
 
     async def test_predeclared_seed_changes_the_deterministic_replica_schedule(self) -> None:
-        def send(sample_sequence, _request_sequence, _operation_sequence, replica, *_args):
+        async def send(sample_sequence, _request_sequence, _operation_sequence, replica, *_args):
             return RequestSample(sample_sequence, replica, 200, 1.0, True, False)
 
         schedules = []
@@ -624,8 +630,8 @@ class RecoveryTransitionTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(set(schedules[1]), {"app-a", "app-b"})
 
     async def test_workload_deadline_includes_concurrency_queue_time(self) -> None:
-        def send(sample_sequence, _request_sequence, _operation_sequence, replica, *args):
-            time.sleep(0.2)
+        async def send(sample_sequence, _request_sequence, _operation_sequence, replica, *args):
+            await asyncio.sleep(0.2)
             return RequestSample(sample_sequence, replica, 200, 200.0, True, False)
 
         with patch("tools.ha_topology_evidence.load._send_request", side_effect=send) as mocked:
