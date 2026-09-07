@@ -656,7 +656,7 @@ async def collect_streaming_response(stream_generator) -> Response:
 
     merged_response["response"]["candidates"][0]["content"]["parts"] = final_parts
 
-    log.info(
+    log.debug(
         f"[STREAM COLLECTOR] Collected {len(collected_text)} text chunks, "
         f"{len(collected_thought_text)} thought chunks, {len(collected_other_parts)} other parts "
         f"(tool parts: {collected_tool_parts_count})"
