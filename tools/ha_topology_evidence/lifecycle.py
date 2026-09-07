@@ -128,23 +128,26 @@ class LifecycleScenarioDriver:
     async def _probe(self, *, expect_success: bool) -> tuple[dict[str, object], ...]:
         sequence = self._probe_sequence
         self._probe_sequence += len(self.endpoints)
-        result = await run_workload(
-            self.endpoints,
-            api_key=self.api_key,
-            attempts=2,
-            concurrency=2,
-            offered_rps=32,
-            request_deadline_ms=self.candidate.request_deadline_ms,
-            sequence_offset=sequence,
-        )
+        samples = []
+        for index, endpoint in enumerate(self.endpoints):
+            result = await run_workload(
+                (endpoint,),
+                api_key=self.api_key,
+                attempts=1,
+                concurrency=1,
+                offered_rps=32,
+                request_deadline_ms=self.candidate.request_deadline_ms,
+                sequence_offset=sequence + index,
+            )
+            samples.extend(result.samples)
         success = (
-            all(sample.success for sample in result.samples)
+            all(sample.success for sample in samples)
             if expect_success
-            else any(sample.success for sample in result.samples)
+            else any(sample.success for sample in samples)
         )
         if success != expect_success:
             raise EvidenceVerificationError("Lifecycle admission probe had an unexpected outcome.")
-        return tuple(sample.safe_dict(include_request_id=True) for sample in result.samples)
+        return tuple(sample.safe_dict(include_request_id=True) for sample in samples)
 
     def _restart_coordinated(self) -> None:
         if self.controller.compose_environment is None:

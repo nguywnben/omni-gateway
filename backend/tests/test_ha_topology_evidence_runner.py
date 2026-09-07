@@ -806,19 +806,53 @@ class RecoveryTransitionTests(unittest.IsolatedAsyncioTestCase):
         driver.api_key = "sk-ogw-synthetic"
         driver.candidate = candidate()
         driver._probe_sequence = 200_000
-        result = WorkloadResult(
-            (
-                RequestSample(1, "app-a", 200, 1.0, True, False),
-                RequestSample(2, "app-b", 503, 1.0, False, False),
-            ),
+        app_a_result = WorkloadResult(
+            (RequestSample(1, "app-a", 200, 1.0, True, False),),
+            1.0,
+        )
+        app_b_result = WorkloadResult(
+            (RequestSample(2, "app-b", 503, 1.0, False, False),),
             1.0,
         )
         with patch(
             "tools.ha_topology_evidence.lifecycle.run_workload",
-            new=AsyncMock(return_value=result),
+            new=AsyncMock(side_effect=(app_a_result, app_b_result)),
         ):
             with self.assertRaises(EvidenceVerificationError):
                 await driver._probe(expect_success=True)
+
+    async def test_lifecycle_probe_addresses_each_replica_directly(self) -> None:
+        from backend.tests.test_ha_topology_evidence_contract import candidate
+
+        driver = object.__new__(LifecycleScenarioDriver)
+        driver.endpoints = (
+            ("app-a", "http://127.0.0.1:14283"),
+            ("app-b", "http://127.0.0.1:14284"),
+        )
+        driver.api_key = "sk-ogw-synthetic"
+        driver.candidate = candidate()
+        driver._probe_sequence = 200_000
+        calls = []
+
+        async def workload(endpoints, **kwargs):
+            calls.append((endpoints, kwargs))
+            name, _url = endpoints[0]
+            return WorkloadResult(
+                (RequestSample(kwargs["sequence_offset"], name, 200, 1.0, True, False),),
+                1.0,
+            )
+
+        with patch(
+            "tools.ha_topology_evidence.lifecycle.run_workload",
+            side_effect=workload,
+        ):
+            samples = await driver._probe(expect_success=True)
+
+        self.assertEqual(
+            [call[0] for call in calls], [(driver.endpoints[0],), (driver.endpoints[1],)]
+        )
+        self.assertTrue(all(call[1]["attempts"] == 1 for call in calls))
+        self.assertEqual([sample["replica"] for sample in samples], ["app-a", "app-b"])
 
     async def test_dependency_recovery_requires_full_epoch_transition_before_reentry(self) -> None:
         from backend.tests.test_ha_topology_evidence_contract import candidate
