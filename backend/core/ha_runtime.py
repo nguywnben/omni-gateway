@@ -106,13 +106,19 @@ class HaRuntimeLifecycle:
             "fencing_epoch": self.policy.fencing_epoch,
         }
 
+    @property
+    def admission_available(self) -> bool:
+        return self.state in {
+            HaRuntimeState.STANDALONE_READY,
+            HaRuntimeState.COORDINATED_READY,
+        } and not (self.policy.mode is RuntimeMode.COORDINATED and self._recovery_latched)
+
     def health_snapshot(self) -> dict[str, object]:
         service = self._coordination_service
         return {
             "mode": self.policy.mode.value,
             "state": self.state.value,
-            "ready": self.state
-            in {HaRuntimeState.STANDALONE_READY, HaRuntimeState.COORDINATED_READY},
+            "ready": self.admission_available,
             "failure_code": self._failure_code,
             "recovery_latched": self._recovery_latched,
             "recovery_reason": self._recovery_reason,

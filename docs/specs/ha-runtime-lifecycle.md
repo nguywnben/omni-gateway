@@ -71,6 +71,11 @@ reconciliation, mark-ready, and a process restart configured for the new epoch; 
 reconciling epochs never become ready automatically. Standalone retains ordinary successful-probe
 recovery because it has no distributed authority to fence.
 
+Both public inference entry points consult the process-local lifecycle admission state before
+guardrails, cache lookup, routing, or upstream dispatch. This adds no dependency I/O to the request
+hot path, but ensures a process already latched unavailable by readiness cannot continue serving
+cached or uncached inference after binding or namespace loss.
+
 ## Operator transitions
 
 The lifecycle exposes bounded commands for `status`, `drain`, `advance-epoch`, `reconcile`,

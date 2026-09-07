@@ -57,6 +57,7 @@ from core.credential_manager import credential_manager
 from core.gateway_pipeline import (
     apply_pre_call_guardrails,
     lookup_response_cache,
+    runtime_admission_response,
     store_response_cache,
 )
 from core.google_ai_studio import (
@@ -538,6 +539,10 @@ async def stream_request(
     model_routing: bool = False,
 ):
     """Public streaming entry point: guardrails first, then upstream dispatch."""
+    admission_response = runtime_admission_response()
+    if admission_response is not None:
+        yield admission_response
+        return
     guard_response, body = await apply_pre_call_guardrails(body)
     if guard_response is not None:
         yield guard_response
@@ -990,6 +995,9 @@ async def non_stream_request(
     model_routing: bool = False,
 ) -> Response:
     """Public non-streaming entry point: guardrails, cache, then upstream."""
+    admission_response = runtime_admission_response()
+    if admission_response is not None:
+        return admission_response
     guard_response, body = await apply_pre_call_guardrails(body)
     if guard_response is not None:
         return guard_response

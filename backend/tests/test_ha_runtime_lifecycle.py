@@ -179,6 +179,7 @@ class HaRuntimeLifecycleTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(snapshot["recovery_reason"], "dependency_unavailable")
         self.assertNotIn("credential", repr(snapshot))
         self.assertNotIn("leaked-secret", repr(snapshot))
+        self.assertFalse(lifecycle.admission_available)
 
 
 if __name__ == "__main__":

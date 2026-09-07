@@ -29,6 +29,27 @@ MAX_CACHEABLE_RESPONSE_BYTES = 512 * 1024
 CACHE_HIT_HEADER = "x-omni-cache"
 
 
+def runtime_admission_response() -> Optional[Response]:
+    """Reject inference after the process lifecycle has closed admission."""
+    from core.ha_runtime import get_runtime_lifecycle
+
+    lifecycle = get_runtime_lifecycle()
+    if lifecycle is None or lifecycle.admission_available:
+        return None
+    return Response(
+        content=json.dumps(
+            {
+                "error": {
+                    "message": "Gateway runtime is temporarily unavailable.",
+                    "type": "runtime_unavailable",
+                }
+            }
+        ),
+        status_code=503,
+        media_type="application/json",
+    )
+
+
 def _iter_text_parts(body: Dict[str, Any]) -> List[Dict[str, Any]]:
     """Collect mutable references to every text part in a Gemini payload."""
     parts: List[Dict[str, Any]] = []
