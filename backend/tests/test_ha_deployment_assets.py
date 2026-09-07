@@ -117,6 +117,13 @@ class HaDeploymentAssetTests(unittest.TestCase):
         for name in ("redis-primary", "redis-standby"):
             self.assertEqual(services[name]["user"], "999:1000")
             self.assertEqual(services[name]["cap_drop"], ["ALL"])
+            redis_config = (ROOT / "deploy" / "evidence" / f"{name}.conf").read_text(
+                encoding="utf-8"
+            )
+            self.assertIn("appendonly yes", redis_config)
+            self.assertIn("appendfsync always", redis_config)
+            self.assertIn('save ""', redis_config)
+            self.assertNotRegex(redis_config, r"(?m)^save\s+\d")
         self.assertEqual(services["postgres"]["user"], "70:70")
         self.assertEqual(services["postgres"]["cap_drop"], ["ALL"])
         self.assertEqual(services["fixture"]["cpus"], 2.0)

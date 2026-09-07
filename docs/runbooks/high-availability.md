@@ -67,6 +67,12 @@ label, the rendered Compose model, project-name isolation, empty project ownersh
 the digest of its installed launcher package and compares it with `candidate.json`; a matching
 label on mismatched launcher code is insufficient.
 
+The tested Redis pair is AOF-only on both primary and standby, with `appendfsync always` and
+scheduled RDB snapshots disabled. AOF therefore remains the restart source for every acknowledged
+coordination write, while removing periodic `BGSAVE` fork/copy-on-write stalls from the online
+coordination path. This topology does not replace an operator's separate, restore-tested backup
+policy for durable business data, whose authority remains PostgreSQL.
+
 ## Run and verify
 
 Create a new parent directory but do not create the report directory itself. The writer is
