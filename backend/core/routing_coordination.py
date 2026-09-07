@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import hmac
 import json
@@ -28,6 +29,7 @@ from core.coordination import (
 
 MAX_COORDINATION_RETRIES: Final = 8
 MAX_CREDENTIAL_LEASES: Final = 128
+LEASE_MUTATION_LOCK_STRIPES: Final = 64
 MAX_LATENCY_SAMPLES: Final = 10
 MAX_CREDENTIAL_TTL_SECONDS: Final = 15 * 60
 ROUTE_RECORD_TTL_SECONDS: Final = 30 * 86_400
@@ -187,6 +189,9 @@ class RoutingCoordinationAdapter:
         self._store = store
         self._identifier_key = bytes(identifier_key)
         self._fencing_epoch = validate_epoch(fencing_epoch)
+        self._lease_mutation_locks = tuple(
+            asyncio.Lock() for _index in range(LEASE_MUTATION_LOCK_STRIPES)
+        )
 
     @property
     def fencing_epoch(self) -> int:
@@ -206,6 +211,10 @@ class RoutingCoordinationAdapter:
             _require_text(mode, "Routing mode", maximum=32),
             _require_text(filename, "Credential name"),
         )
+
+    def _lease_mutation_lock(self, key: str) -> asyncio.Lock:
+        stripe = hashlib.sha256(key.encode("ascii")).digest()[0] % len(self._lease_mutation_locks)
+        return self._lease_mutation_locks[stripe]
 
     def _route_key(self, mode: str, filename: str, model_name: str) -> str:
         clean_model = str(model_name or "")
@@ -330,66 +339,72 @@ class RoutingCoordinationAdapter:
         ):
             raise ValueError("Credential concurrency is invalid.")
         key = self._lease_key(mode, filename)
-        lease_id = secrets.token_hex(16)
-        for _attempt in range(MAX_COORDINATION_RETRIES):
-            now_ms = await self._now_ms()
-            snapshot = await self._store.read_cas(key, epoch=self._fencing_epoch)
-            leases, _last_selected = self._decode_lease(snapshot)
-            active = [lease for lease in leases if lease[1] > now_ms]
-            if len(active) >= max_concurrency:
-                _increment_metric("lease_acquire", "rejected")
-                return None
-            expires_ms = now_ms + math.ceil(ttl * 1000)
-            active.append((lease_id, expires_ms))
-            admission = CasRequest(
-                key,
-                snapshot.revision or 0,
-                self._lease_payload(active, now_ms),
-                ROUTE_RECORD_TTL_SECONDS,
-                self._fencing_epoch,
-                self._operation_id("lease-acquire"),
-                settlement_targets=(CasSettlementTarget(key, CasSettlementTransition.UPDATE),),
-            )
-            result = await self._compare_and_set_with_replay(admission)
-            if result.applied:
-                _increment_metric("lease_acquire", "success")
-                return CredentialLease(key, lease_id, len(active), admission)
+        lock = self._lease_mutation_lock(key)
+        async with lock:
+            lease_id = secrets.token_hex(16)
+            for _attempt in range(MAX_COORDINATION_RETRIES):
+                now_ms = await self._now_ms()
+                snapshot = await self._store.read_cas(key, epoch=self._fencing_epoch)
+                leases, _last_selected = self._decode_lease(snapshot)
+                active = [lease for lease in leases if lease[1] > now_ms]
+                if len(active) >= max_concurrency:
+                    _increment_metric("lease_acquire", "rejected")
+                    return None
+                expires_ms = now_ms + math.ceil(ttl * 1000)
+                active.append((lease_id, expires_ms))
+                admission = CasRequest(
+                    key,
+                    snapshot.revision or 0,
+                    self._lease_payload(active, now_ms),
+                    ROUTE_RECORD_TTL_SECONDS,
+                    self._fencing_epoch,
+                    self._operation_id("lease-acquire"),
+                    settlement_targets=(CasSettlementTarget(key, CasSettlementTransition.UPDATE),),
+                )
+                result = await self._compare_and_set_with_replay(admission)
+                if result.applied:
+                    _increment_metric("lease_acquire", "success")
+                    return CredentialLease(key, lease_id, len(active), admission)
         _increment_metric("lease_acquire", "conflict")
         raise CoordinationUnavailableError("Credential lease coordination conflicted.")
 
     async def release_credential(self, lease: CredentialLease) -> bool:
         if not isinstance(lease, CredentialLease):
             raise ValueError("Credential lease is invalid.")
-        for _attempt in range(MAX_COORDINATION_RETRIES):
-            now_ms = await self._now_ms()
-            snapshot = await self._store.read_cas(lease.record_key, epoch=self._fencing_epoch)
-            leases, last_selected = self._decode_lease(snapshot)
-            active = [item for item in leases if item[1] > now_ms]
-            retained = [item for item in active if item[0] != lease.lease_id]
-            if len(retained) == len(active):
-                _increment_metric("lease_release", "miss")
-                return False
-            result = await self._compare_and_set_with_replay(
-                CasRequest(
-                    lease.record_key,
-                    snapshot.revision or 0,
-                    self._lease_payload(retained, last_selected),
-                    ROUTE_RECORD_TTL_SECONDS,
-                    self._fencing_epoch,
-                    self._operation_id("lease-release"),
-                    settlement=(
-                        CasSettlementProof(
-                            lease.admission,
-                            CasSettlementTarget(lease.record_key, CasSettlementTransition.UPDATE),
-                        )
-                        if lease.admission
-                        else None
-                    ),
+        lock = self._lease_mutation_lock(lease.record_key)
+        async with lock:
+            for _attempt in range(MAX_COORDINATION_RETRIES):
+                now_ms = await self._now_ms()
+                snapshot = await self._store.read_cas(lease.record_key, epoch=self._fencing_epoch)
+                leases, last_selected = self._decode_lease(snapshot)
+                active = [item for item in leases if item[1] > now_ms]
+                retained = [item for item in active if item[0] != lease.lease_id]
+                if len(retained) == len(active):
+                    _increment_metric("lease_release", "miss")
+                    return False
+                result = await self._compare_and_set_with_replay(
+                    CasRequest(
+                        lease.record_key,
+                        snapshot.revision or 0,
+                        self._lease_payload(retained, last_selected),
+                        ROUTE_RECORD_TTL_SECONDS,
+                        self._fencing_epoch,
+                        self._operation_id("lease-release"),
+                        settlement=(
+                            CasSettlementProof(
+                                lease.admission,
+                                CasSettlementTarget(
+                                    lease.record_key, CasSettlementTransition.UPDATE
+                                ),
+                            )
+                            if lease.admission
+                            else None
+                        ),
+                    )
                 )
-            )
-            if result.applied:
-                _increment_metric("lease_release", "success")
-                return True
+                if result.applied:
+                    _increment_metric("lease_release", "success")
+                    return True
         _increment_metric("lease_release", "conflict")
         raise CoordinationUnavailableError("Credential lease coordination conflicted.")
 

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import sys
 import time
 import unittest
@@ -64,6 +65,24 @@ class _UnknownOutcomeStore(_RecordingStore):
             self.fail_next_invalidation = False
             raise CoordinationUnavailableError("unknown invalidation outcome")
         return result
+
+
+class _ContendedStore(_RecordingStore):
+    """Expose same-process CAS contention that a local adapter can avoid."""
+
+    def __init__(self, *, clock) -> None:
+        super().__init__(clock=clock)
+        self.active_writes = 0
+        self.maximum_active_writes = 0
+
+    async def compare_and_set(self, request):
+        self.active_writes += 1
+        self.maximum_active_writes = max(self.maximum_active_writes, self.active_writes)
+        try:
+            await asyncio.sleep(0)
+            return await super().compare_and_set(request)
+        finally:
+            self.active_writes -= 1
 
 
 class RoutingCoordinationAdapterTests(unittest.IsolatedAsyncioTestCase):
@@ -229,6 +248,42 @@ class RoutingCoordinationAdapterTests(unittest.IsolatedAsyncioTestCase):
         for lease in leases:
             assert lease is not None
             self.assertTrue(await self.first.release_credential(lease))
+
+    async def test_same_adapter_serializes_only_same_credential_lease_mutations(self) -> None:
+        store = _ContendedStore(clock=self.clock)
+        adapter = RoutingCoordinationAdapter(
+            store,
+            identifier_key=b"c" * 32,
+            fencing_epoch=1,
+        )
+
+        leases = await asyncio.gather(
+            *(
+                adapter.acquire_credential(
+                    "primary",
+                    "contended.json",
+                    ttl_seconds=10,
+                    max_concurrency=16,
+                )
+                for _index in range(16)
+            )
+        )
+
+        self.assertTrue(all(lease is not None for lease in leases))
+        self.assertEqual(
+            (await adapter.read_credential("primary", "contended.json")).in_flight,
+            16,
+        )
+        self.assertEqual(store.maximum_active_writes, 1)
+
+        store.maximum_active_writes = 0
+        left, right = await asyncio.gather(
+            adapter.acquire_credential("primary", "left.json", ttl_seconds=10, max_concurrency=1),
+            adapter.acquire_credential("primary", "right.json", ttl_seconds=10, max_concurrency=1),
+        )
+        self.assertIsNotNone(left)
+        self.assertIsNotNone(right)
+        self.assertEqual(store.maximum_active_writes, 2)
 
     def test_invalid_keys_epochs_kinds_and_bounds_are_rejected(self) -> None:
         for invalid_key in (b"short", b"a" * 31, b"a" * 65):
