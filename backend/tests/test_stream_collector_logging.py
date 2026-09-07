@@ -15,6 +15,20 @@ from core.api.utils import collect_streaming_response
 
 
 class StreamCollectorLoggingTests(unittest.IsolatedAsyncioTestCase):
+    async def test_done_marker_still_drains_upstream_cleanup(self) -> None:
+        completed = False
+
+        async def stream():
+            nonlocal completed
+            yield 'data: {"response":{"candidates":[{"content":{"parts":[{"text":"ok"}]}}]}}'
+            yield "data: [DONE]"
+            completed = True
+
+        response = await collect_streaming_response(stream())
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(completed)
+
     async def test_success_summary_is_debug_not_per_request_info(self) -> None:
         async def stream():
             yield (

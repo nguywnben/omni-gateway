@@ -496,6 +496,7 @@ async def collect_streaming_response(stream_generator) -> Response:
     collected_tool_parts_count = 0
     has_data = False
     line_count = 0
+    done_marker_received = False
 
     log.debug("[STREAM COLLECTOR] Starting to collect streaming response")
 
@@ -530,9 +531,15 @@ async def collect_streaming_response(stream_generator) -> Response:
                 continue
 
             raw = line_str[6:].strip()
+            if done_marker_received:
+                log.debug("[STREAM COLLECTOR] Ignoring data after the [DONE] marker")
+                continue
             if raw == "[DONE]":
                 log.debug("[STREAM COLLECTOR] Received [DONE] marker")
-                break
+                # Drain the upstream generator so its success accounting and
+                # credential-lease cleanup run before this response returns.
+                done_marker_received = True
+                continue
 
             try:
                 log.debug(f"[STREAM COLLECTOR] Parsing JSON: {raw[:200]}")

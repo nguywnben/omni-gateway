@@ -25,6 +25,58 @@ class FakeUpstreamResponse:
 
 
 class VirtualModelBlacklistRoutingTests(unittest.IsolatedAsyncioTestCase):
+    async def test_closing_stream_releases_the_active_credential_lease(self):
+        credential = {
+            "provider": "google_antigravity",
+            "token": "example-token",
+            "project_id": "example-project",
+        }
+        context = ProviderRequestContext(
+            provider_id="google_antigravity",
+            target_url="http://fixture.invalid/api/chat",
+            headers={},
+            payload={"model": "model-a"},
+            request_metrics={},
+        )
+
+        def fake_stream_post_async(**_kwargs):
+            async def chunks():
+                yield b'data: {"response":"partial"}\n\n'
+
+            return chunks()
+
+        release = AsyncMock()
+        with (
+            patch(
+                "core.api.primary.credential_manager.get_valid_model_credential",
+                AsyncMock(return_value=("model-a", "credential.json", credential)),
+            ),
+            patch("core.api.primary.credential_manager.release_credential", release),
+            patch("core.api.primary.prepare_provider_request", AsyncMock(return_value=context)),
+            patch(
+                "core.api.primary.get_retry_config",
+                AsyncMock(
+                    return_value={
+                        "retry_enabled": False,
+                        "max_retries": 0,
+                        "retry_interval": 0,
+                    }
+                ),
+            ),
+            patch(
+                "core.api.primary.get_antigravity_switch_credential_enabled",
+                AsyncMock(return_value=False),
+            ),
+            patch("core.api.primary.get_auto_disable_error_codes", AsyncMock(return_value=[])),
+            patch("core.api.primary.get_upstream_timeout_seconds", AsyncMock(return_value=30)),
+            patch("core.api.primary.stream_post_async", side_effect=fake_stream_post_async),
+        ):
+            stream = stream_request(body={"model": "model-a"})
+            self.assertEqual(await anext(stream), b'data: {"response":"partial"}\n\n')
+            await stream.aclose()
+
+        release.assert_awaited_once_with("credential.json", mode="primary")
+
     async def test_model_route_miss_sets_a_credential_scoped_cooldown(self):
         manager = AsyncMock()
 

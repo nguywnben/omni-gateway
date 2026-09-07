@@ -548,14 +548,18 @@ async def stream_request(
         yield guard_response
         return
 
-    async for item in _stream_request_upstream(
+    upstream = _stream_request_upstream(
         body,
         native=native,
         headers=headers,
         model_candidates=model_candidates,
         model_routing=model_routing,
-    ):
-        yield item
+    )
+    try:
+        async for item in upstream:
+            yield item
+    finally:
+        await upstream.aclose()
 
 
 async def _stream_request_upstream(
@@ -898,6 +902,12 @@ async def _stream_request_upstream(
                         return
                 continue
 
+        except (asyncio.CancelledError, GeneratorExit):
+            # A disconnected client closes this async generator at its current
+            # yield point. Release the active distributed lease explicitly;
+            # normal success/error accounting may not get a chance to run.
+            await credential_manager.release_credential(current_file, mode="primary")
+            raise
         except Exception as e:
             exception_status = int(getattr(e, "status_code", 500) or 500)
             log.error(
