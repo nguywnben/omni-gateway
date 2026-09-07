@@ -26,6 +26,7 @@ from core.ha_runtime import (  # noqa: E402
     get_runtime_lifecycle,
     set_runtime_lifecycle,
 )
+from core.http_server import configure_hypercorn  # noqa: E402
 from core.storage_adapter import get_storage_adapter  # noqa: E402
 
 LifespanFactory = Callable[[Any], AsyncIterator[None]]
@@ -166,6 +167,7 @@ def serve_candidate_application() -> None:
     config.accesslog = "-"
     config.errorlog = "-"
     config.loglevel = "INFO"
+    configure_hypercorn(config)
     asyncio.run(serve(application, config))
 
 

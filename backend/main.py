@@ -22,6 +22,7 @@ from core.ha_runtime import (
     initialize_ha_runtime,
 )
 from core.health import router as health_router
+from core.http_server import configure_hypercorn
 from core.httpx_client import http_client
 from core.i18n import LocalizedJSONResponse, locale_context, resolve_locale
 from core.identity import (
@@ -650,6 +651,7 @@ def main():
         config.accesslog = "-"
         config.errorlog = "-"
         config.loglevel = "INFO"
+        configure_hypercorn(config)
 
         await serve(app, config)
 
