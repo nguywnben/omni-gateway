@@ -125,7 +125,7 @@ class ExperimentalHaSuiteIsolationTests(unittest.TestCase):
     def test_default_compose_does_not_request_experimental_dependencies(self) -> None:
         compose = (ROOT / "deploy" / "docker-compose.yml").read_text(encoding="utf-8")
 
-        self.assertIn("OMNI_RUNTIME_MODE=${OMNI_RUNTIME_MODE:-standalone}", compose)
+        self.assertIn("OMNI_RUNTIME_MODE: standalone", compose)
         for name in (
             "REDIS_URL",
             "OMNI_COORDINATION_NAMESPACE",

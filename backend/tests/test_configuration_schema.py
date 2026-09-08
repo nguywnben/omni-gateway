@@ -9,6 +9,8 @@ import unittest
 from pathlib import Path
 from unittest.mock import AsyncMock, patch
 
+import yaml
+
 ROOT = Path(__file__).resolve().parents[2]
 BACKEND_DIR = ROOT / "backend"
 if str(BACKEND_DIR) not in sys.path:
@@ -37,11 +39,14 @@ def _example_variables() -> set[str]:
 
 
 def _compose_environment_defaults() -> dict[str, str]:
-    pattern = re.compile(r"^\s*-\s+([A-Z][A-Z0-9_]*)=\$\{\1:-(.*)}\s*$")
-    defaults = {}
-    for line in (ROOT / "deploy/docker-compose.yml").read_text(encoding="utf-8").splitlines():
-        if match := pattern.match(line):
-            defaults[match.group(1)] = match.group(2)
+    defaults: dict[str, str] = {}
+    for filename in ("docker-compose.yml", "compose.advanced.yml"):
+        compose = yaml.safe_load((ROOT / "deploy" / filename).read_text(encoding="utf-8"))
+        environment = compose["services"]["app"]["environment"]
+        for name, raw_value in environment.items():
+            value = str(raw_value)
+            interpolation = re.fullmatch(rf"\$\{{{re.escape(name)}:-(.*)}}", value)
+            defaults[name] = interpolation.group(1) if interpolation else value
     return defaults
 
 

@@ -186,13 +186,25 @@ Sau đó khởi động lại container bằng chính lệnh `docker run` ở tr
 ```bash
 git clone https://github.com/nguywnben/omni-gateway.git
 cd omni-gateway
-sudo mkdir -p /opt/omni-gateway/creds /opt/omni-gateway/logs
 docker compose -f deploy/docker-compose.yml up -d
 ```
 
-File compose đi kèm sẽ kéo image `nguywnben/omni-gateway:latest` và sử dụng `/opt/omni-gateway` theo mặc định cho dữ liệu máy chủ bền vững. Đặt `IMAGE=nguywnben/omni-gateway:1.4.0` để ghim bản phát hành này, và đặt `DATA_DIR=/duong/dan/tuy/chinh` khi máy chủ sử dụng vị trí lưu trữ khác.
+Profile mặc định không cần cơ sở dữ liệu ngoài hoặc Redis. Compose mặc định sử dụng image
+`nguywnben/omni-gateway:latest` và lưu toàn bộ thư mục dữ liệu ứng dụng trong volume có tên
+`omni-gateway-data`. Đặt `IMAGE=nguywnben/omni-gateway:1.4.0` để ghim bản phát hành
+và `DATA_VOLUME=ten-volume-tuy-chinh` để dùng lại một volume có tên khác. Lệnh
+`docker compose down` thông thường giữ nguyên volume; `docker compose down --volumes` sẽ xóa nó.
 
-Compose sẽ chuyển tiếp `API_KEY`, `PANEL_PASSWORD`, `SETUP_TOKEN`, URI lưu trữ bên ngoài và `PROXY` từ shell hoặc file `.env` ở thư mục gốc. Để trống các biến này nếu muốn giữ cơ chế tự tạo key tự động, thiết lập trong lần chạy đầu, lưu trữ SQLite cục bộ và kết nối mạng ra trực tiếp.
+Profile mặc định chỉ nhận các thiết lập phổ biến `API_KEY`, `PANEL_PASSWORD`, `SETUP_TOKEN`,
+`LOG_LEVEL` và `HOST_PORT` từ shell hoặc file `.env` ở thư mục gốc. Để trống các giá trị xác thực
+nếu muốn giữ cơ chế tự tạo key và thiết lập trong lần chạy đầu.
+
+Lưu trữ ngoài, OIDC, proxy, chính sách định tuyến, guardrail, cache và telemetry là các thiết lập
+nâng cao có chủ đích. Sau khi chỉ khai báo những giá trị cần dùng trong `.env`, bật lớp này bằng:
+
+```bash
+docker compose -f deploy/docker-compose.yml -f deploy/compose.advanced.yml up -d
+```
 
 ### Kubernetes / Helm (thử nghiệm)
 
@@ -492,7 +504,10 @@ Tên chế độ xác thực (Credential mode names):
 
 ## Lưu trữ
 
-Triển khai đơn tiến trình sử dụng bộ lưu trữ nền SQLite trong thư mục dữ liệu được gắn kết. Trên Docker, luôn gắn kết `/app/backend/data/creds` và `/app/backend/data/logs` vào các đường dẫn máy chủ host bền vững như `/opt/omni-gateway/creds` và `/opt/omni-gateway/logs`.
+Triển khai đơn tiến trình sử dụng bộ lưu trữ SQLite trong thư mục dữ liệu ứng dụng. Docker Compose
+lưu toàn bộ `/app/backend/data` trong volume có tên `omni-gateway-data`. Khi dùng trực tiếp
+`docker run`, hãy gắn `/app/backend/data/creds` và `/app/backend/data/logs` vào các đường dẫn bền
+vững trên máy chủ như `/opt/omni-gateway/creds` và `/opt/omni-gateway/logs`.
 
 MongoDB hoặc PostgreSQL có thể thay thế SQLite cục bộ theo nhu cầu vận hành hoặc kiểm thử di chuyển dữ liệu:
 
@@ -562,7 +577,8 @@ Nền tảng tiêu chuẩn cho môi trường sản xuất là Python 3.12, và 
   [tài liệu quan sát vận hành](../observability.md). Nội dung prompt và phản hồi không bao giờ được xuất.
 - Docker image chỉ chạy với quyền root trong khoảng thời gian đủ ngắn để sửa chữa quyền sở hữu thư mục dữ liệu được gắn kết, sau đó chạy dịch vụ dưới người dùng không có đặc quyền `gateway`.
 - Đặt `CORS_ORIGINS` thành các origin đáng tin cậy rõ ràng khi các client trên trình duyệt cần quyền truy cập cross-origin.
-- Luôn sao lưu `/opt/omni-gateway` hoặc thư mục `DATA_DIR` đã chọn trước khi nâng cấp hoặc chuyển máy chủ.
+- Luôn sao lưu volume Compose `omni-gateway-data`, hoặc `/opt/omni-gateway` khi chạy Docker trực
+  tiếp, trước khi nâng cấp hoặc chuyển máy chủ.
 - Quy trình xuất bản Docker image sử dụng secret kho lưu trữ `DOCKERHUB_USERNAME` và `DOCKERHUB_TOKEN` cho Docker Hub, và `GITHUB_TOKEN` tích hợp sẵn cho GitHub Packages tại `ghcr.io/nguywnben/omni-gateway`. Chỉ đặt biến kho lưu trữ `IMAGE_NAME` tùy chọn khi xuất bản sang một tên image Docker Hub tùy chỉnh.
 - Duy trì `WORKERS=1` và một replica ứng dụng duy nhất cho toàn bộ chuỗi phiên bản 1.x; bộ lưu trữ bên ngoài không thể thay thế cho việc điều phối phân tán.
 - Sử dụng các route quản lý chuẩn tắc `/api/credentials`. Các route bí danh `/api/creds` trong giai đoạn beta đã bị loại bỏ từ bản 1.0.0.

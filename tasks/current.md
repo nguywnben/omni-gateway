@@ -6,9 +6,9 @@
 - Active plan: `PROD-SELFHOST-R1`
 - Target: production-quality self-hosting for one person or a trusted team, not enterprise service
   operation.
-- Progress: **7/36 implementation tasks**; Phase 1 is in progress (1/6).
-- Completed: **P1.1 — Authoritative typed configuration schema**.
-- Next task: **P1.2 — Minimal canonical Docker Compose profile**.
+- Progress: **8/36 implementation tasks**; Phase 1 is in progress (2/6).
+- Completed: **P1.2 — Minimal canonical Docker Compose profile**.
+- Next task: **P1.3 — First-run setup and preflight**.
 - Supported runtime today: standalone, one worker, one replica.
 - Redis coordination, multi-replica HA, and Helm are experimental and no longer R1 release blockers.
 
@@ -48,6 +48,13 @@ Do not push unless the user requests it.
 
 ## Latest Evidence
 
+- `docs/evidence/p1.2-minimal-compose-profile.md`
+- Default Compose now needs no external database or Redis, exposes only common production
+  controls, and persists all application state in one named volume; advanced controls require an
+  explicit override file.
+- The canonical CI path performs fresh setup, force-recreate persistence, readiness, and graceful
+  shutdown checks through Compose. Local Docker evidence passed both authenticated smoke runs;
+  shutdown exited 0 in 0.96 seconds with a read-only root filesystem.
 - `docs/evidence/p1.1-authoritative-configuration-schema.md`
 - All 124 documented environment variables now have one typed Basic/Advanced/Experimental schema;
   startup validates scalar boundaries before storage initialization and warns on unknown `OMNI_*`

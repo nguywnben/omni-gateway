@@ -39,6 +39,9 @@ All notable user-facing changes are documented in this file. Omni Gateway follow
 
 ### Changed
 
+- Simplified the default Docker Compose deployment to common standalone controls and one durable
+  named volume; optional storage, identity, routing, guardrail, cache, and telemetry controls now
+  require the explicit advanced override, and CI verifies state across container recreation.
 - Invalid documented environment values now fail startup with field-specific remediation instead
   of relying on scattered fallback behavior; unknown `OMNI_*` controls emit spelling warnings.
 - System Settings validation and field ownership are schema-derived, removing the duplicated route

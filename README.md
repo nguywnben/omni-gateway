@@ -197,13 +197,25 @@ For repository-based deployments:
 ```bash
 git clone https://github.com/nguywnben/omni-gateway.git
 cd omni-gateway
-sudo mkdir -p /opt/omni-gateway/creds /opt/omni-gateway/logs
 docker compose -f deploy/docker-compose.yml up -d
 ```
 
-The included compose file pulls `nguywnben/omni-gateway:latest` and uses `/opt/omni-gateway` by default for persistent host data. Set `IMAGE=nguywnben/omni-gateway:1.4.0` to pin this release, and set `DATA_DIR=/custom/path` when the server uses a different storage location.
+The default profile needs no database or Redis. It uses `nguywnben/omni-gateway:latest` by default
+and stores the complete application data directory in the named volume `omni-gateway-data`. Set
+`IMAGE=nguywnben/omni-gateway:1.4.0` to pin this release and
+`DATA_VOLUME=custom-volume-name` to reuse a differently named volume. A normal
+`docker compose down` preserves the volume; `docker compose down --volumes` deletes it.
 
-Compose forwards `API_KEY`, `PANEL_PASSWORD`, `SETUP_TOKEN`, external storage URIs, and `PROXY` from the shell or a root `.env` file. Leave them empty to retain automatic key generation, first-run setup, local SQLite storage, and direct outbound networking.
+The default profile accepts only the common controls `API_KEY`, `PANEL_PASSWORD`, `SETUP_TOKEN`,
+`LOG_LEVEL`, and `HOST_PORT` from the shell or a root `.env` file. Leave the authentication values
+empty to retain automatic key generation and first-run setup.
+
+External storage, OIDC, proxy, routing policy, guardrails, cache, and telemetry are explicit
+advanced controls. After configuring only the values you need in `.env`, enable that layer with:
+
+```bash
+docker compose -f deploy/docker-compose.yml -f deploy/compose.advanced.yml up -d
+```
 
 ### Kubernetes / Helm (experimental)
 
@@ -508,7 +520,10 @@ Credential mode names:
 
 ## Storage
 
-Single-instance deployments use SQLite-backed storage in the mounted data directory. On Docker, keep `/app/backend/data/creds` and `/app/backend/data/logs` mounted to durable host paths such as `/opt/omni-gateway/creds` and `/opt/omni-gateway/logs`.
+Single-instance deployments use SQLite-backed storage in the application data directory. Docker
+Compose persists all of `/app/backend/data` in the `omni-gateway-data` named volume. Direct
+`docker run` deployments must mount `/app/backend/data/creds` and `/app/backend/data/logs` to
+durable host paths such as `/opt/omni-gateway/creds` and `/opt/omni-gateway/logs`.
 
 MongoDB or PostgreSQL can replace local SQLite for operational preference or migration testing:
 
@@ -582,7 +597,8 @@ The production baseline is Python 3.12, and CI currently verifies Python 3.12 an
   [Operational observability](docs/observability.md). Prompt and response content is never exported.
 - The Docker image starts as root only long enough to repair mounted data-directory ownership, then runs the service as the unprivileged `gateway` user.
 - Set `CORS_ORIGINS` to explicit trusted origins when browser clients need cross-origin access.
-- Keep `/opt/omni-gateway` or your chosen `DATA_DIR` backed up before upgrading or moving servers.
+- Back up the `omni-gateway-data` Compose volume, or `/opt/omni-gateway` for direct Docker runs,
+  before upgrading or moving servers.
 - Docker image publishing uses the `DOCKERHUB_USERNAME` and `DOCKERHUB_TOKEN` repository secrets for Docker Hub, and the built-in `GITHUB_TOKEN` for GitHub Packages at `ghcr.io/nguywnben/omni-gateway`. Set the optional `IMAGE_NAME` repository variable only when publishing to a custom Docker Hub image name.
 - Keep `WORKERS=1` and one application replica for the 1.x series; external storage is not a substitute for distributed coordination.
 - Use the canonical `/api/credentials` management routes. The beta `/api/creds` aliases were removed in 1.0.0.

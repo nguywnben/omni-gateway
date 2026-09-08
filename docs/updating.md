@@ -1,6 +1,6 @@
 # Updating Omni Gateway
 
-Update only after the console reports that a newer version is available. Replace `<version>` with the version shown in the console, such as `1.3.1`, and back up the persistent data directory before changing a production deployment.
+Update only after the console reports that a newer version is available. Replace `<version>` with the version shown in the console, such as `1.3.1`, and back up the persistent data directory or named volume before changing a production deployment.
 
 ## Docker
 
@@ -33,6 +33,17 @@ IMAGE=nguywnben/omni-gateway:<version> docker compose -f deploy/docker-compose.y
 IMAGE=nguywnben/omni-gateway:<version> docker compose -f deploy/docker-compose.yml up -d
 ```
 
+Compose keeps application state in the `omni-gateway-data` named volume by default. Recreating the
+service preserves that volume. Do not add `--volumes` to `docker compose down` during an update.
+If the deployment uses `DATA_VOLUME`, keep the same value for every update and rollback command.
+
+Deployments using advanced controls must include the same override during pull and recreate:
+
+```bash
+IMAGE=nguywnben/omni-gateway:<version> docker compose -f deploy/docker-compose.yml -f deploy/compose.advanced.yml pull
+IMAGE=nguywnben/omni-gateway:<version> docker compose -f deploy/docker-compose.yml -f deploy/compose.advanced.yml up -d
+```
+
 If the compose files changed in the release, update the repository first:
 
 ```bash
@@ -54,4 +65,4 @@ The health endpoint should return `{"status":"ok"}`. Open the About page afterwa
 
 ## Roll Back
 
-If the new image does not start correctly, run the same deployment command with the previously working image tag, such as `nguywnben/omni-gateway:1.2.1`. Persistent credentials, configuration, usage data, and logs remain intact as long as the existing mounted directories are preserved.
+If the new image does not start correctly, run the same deployment command with the previously working image tag, such as `nguywnben/omni-gateway:1.2.1`. Persistent credentials, configuration, usage data, and logs remain intact as long as the existing mounted directories or named volume are preserved.

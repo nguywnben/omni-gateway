@@ -73,6 +73,7 @@ CONFIGURATION_CONTRACTS = GateStep(
             "-m",
             "unittest",
             "backend.tests.test_configuration_schema",
+            "backend.tests.test_compose_profile",
             "backend.tests.test_config_initialization",
             "backend.tests.test_config_security",
             "backend.tests.test_runtime_configuration",
