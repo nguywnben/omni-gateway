@@ -59,6 +59,25 @@ MAX_MODEL_PATTERNS = 64
 MAX_MODEL_PATTERN_LENGTH = 128
 MAX_FALLBACK_PRICE_USD_PER_MILLION = 100_000.0
 
+# Only fields that contribute prompt/context tokens belong in an input reservation.
+# Transport and sampling controls (model, stream, temperature, generation config,
+# and similar fields) must not consume a customer's TPM or hard-budget allowance.
+_INPUT_CONTEXT_FIELDS = (
+    "messages",
+    "input",
+    "prompt",
+    "instructions",
+    "system",
+    "tools",
+    "functions",
+    "tool_choice",
+    "contents",
+    "systemInstruction",
+    "cachedContent",
+    "toolConfig",
+    "response_format",
+)
+
 INFERENCE_SCOPES = (
     "inference:openai",
     "inference:anthropic",
@@ -920,13 +939,27 @@ class VirtualKeyManager:
     def _estimate_tokens(request_body: Any) -> Tuple[int, int]:
         if not isinstance(request_body, dict) or not request_body:
             return 0, 0
-        input_tokens = min(MAX_RESERVED_TOKENS, estimate_input_tokens(request_body))
+
+        protocol_request = request_body.get("request")
+        if not isinstance(protocol_request, dict):
+            protocol_request = request_body
+        prompt_payload = {
+            field_name: protocol_request[field_name]
+            for field_name in _INPUT_CONTEXT_FIELDS
+            if field_name in protocol_request
+        }
+        # Unknown provider shapes remain conservative rather than silently becoming
+        # a zero-token reservation. Recognized protocols exclude non-context controls.
+        input_tokens = min(
+            MAX_RESERVED_TOKENS,
+            estimate_input_tokens(prompt_payload or protocol_request),
+        )
         raw_output = None
         for field_name in ("max_output_tokens", "max_completion_tokens", "max_tokens"):
-            if request_body.get(field_name) is not None:
-                raw_output = request_body.get(field_name)
+            if protocol_request.get(field_name) is not None:
+                raw_output = protocol_request.get(field_name)
                 break
-        generation_config = request_body.get("generationConfig")
+        generation_config = protocol_request.get("generationConfig")
         if raw_output is None and isinstance(generation_config, dict):
             raw_output = generation_config.get("maxOutputTokens")
         try:

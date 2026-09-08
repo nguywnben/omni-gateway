@@ -17,6 +17,7 @@ if str(BACKEND_DIR) not in sys.path:
 from core import usage_stats
 from core.state_store import InMemoryStateStore
 from core.storage.usage_ledger_sqlite import SQLiteUsageLedgerRepository
+from core.token_estimator import estimate_input_tokens
 from core.usage_ledger import (
     BudgetReleaseResult,
     BudgetReservationDecision,
@@ -123,6 +124,49 @@ class VirtualKeyReservationTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(raised.exception.status_code, 429)
         self.assertIn("Token rate limit", raised.exception.detail)
+
+    def test_estimator_excludes_openai_transport_and_generation_controls(self):
+        prompt = {
+            "messages": [{"role": "user", "content": "synthetic-evidence-operation-00080000"}]
+        }
+        request = {
+            "model": "omni-evidence-model",
+            **prompt,
+            "max_tokens": 4,
+            "temperature": 0.0,
+            "generationConfig": {"temperature": 0.0},
+            "stream": False,
+        }
+
+        input_tokens, output_tokens = self.manager._estimate_tokens(request)
+
+        self.assertEqual(input_tokens, estimate_input_tokens(prompt))
+        self.assertEqual(output_tokens, 4)
+
+    def test_estimator_unwraps_internal_protocol_request(self):
+        prompt = {
+            "contents": [{"role": "user", "parts": [{"text": "Explain durable reservations."}]}]
+        }
+        request = {
+            "model": "gemini-enterprise",
+            "request": {
+                **prompt,
+                "generationConfig": {"maxOutputTokens": 7, "temperature": 0.0},
+            },
+        }
+
+        input_tokens, output_tokens = self.manager._estimate_tokens(request)
+
+        self.assertEqual(input_tokens, estimate_input_tokens(prompt))
+        self.assertEqual(output_tokens, 7)
+
+    def test_estimator_keeps_unknown_payloads_conservative(self):
+        request = {"custom_prompt": "opaque provider request"}
+
+        input_tokens, output_tokens = self.manager._estimate_tokens(request)
+
+        self.assertEqual(input_tokens, estimate_input_tokens(request))
+        self.assertEqual(output_tokens, 4096)
 
     async def test_deny_unknown_pricing_fails_closed_for_hard_budget(self):
         record = self._key(budget_daily_usd=1.0, unknown_pricing_policy="deny")
