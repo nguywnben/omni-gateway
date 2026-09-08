@@ -2,7 +2,9 @@
 
 ## Status
 
-Approved for incremental implementation on 2026-08-23.
+Superseded on 2026-09-08 by `docs/specs/production-self-hosted.md` for current product scope and
+release criteria. This document remains a historical record of delivered work; unfinished
+enterprise/HA objectives no longer block the production self-hosted baseline.
 
 ## Objective
 
