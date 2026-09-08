@@ -4,24 +4,24 @@ Use this checklist when preparing a tagged Omni Gateway release.
 
 ## Automated Gates
 
-- Run `ruff check backend` and `ruff format --check backend`.
-- Run `python -m compileall -q backend`.
-- Run `python -m backend.tests --audit` to verify the suite partition.
-- Run `python -m backend.tests --suite core`.
-- Run `node --check` for every file under `frontend/js`.
-- Run `yamllint --strict .github deploy .yamllint.yml`.
-- Run `python -m pip_audit --local --progress-spinner off`.
+- Inspect the immutable release plan with `python tools/quality_gate.py release --dry-run` and resolve
+  every `pending` entry through its existing owner task.
+- Run the single local command `python tools/quality_gate.py release` on the candidate commit.
+- Confirm the required CI application and container smoke jobs passed for the same commit.
 - Regenerate `requirements.lock` and confirm that `git diff --exit-code requirements.lock` is clean.
 - Confirm the CI container smoke test builds the image and completes setup, login, management API, and invalid-key checks.
 - Confirm public authentication, validation, upstream, and pre-stream errors match the OpenAI, Anthropic, and Google GenAI envelopes.
 - Confirm every public response includes a bounded `X-Request-ID`.
 - Confirm oversized fixed-length and chunked requests return `413` in the selected SDK envelope.
 
-The separately runnable `experimental-ha` suite and external two-replica evidence are not R1 release
-gates. Report their latest result as experimental evidence only; a failure or unavailable test
-environment cannot change the production release result.
+The separately listed optional storage/provider suites, `experimental-ha` suite, and external
+two-replica evidence are not R1 release gates. Report their latest result under their own
+classification only; a failure or unavailable environment cannot change the production result.
 
 ## Manual Provider Checks
+
+These real-provider checks are optional evidence because they require external accounts and quotas.
+Core provider behavior is release-blocking through deterministic contracts instead.
 
 - Add one Google Antigravity credential through OAuth and complete a message test.
 - Add one Google AI Studio key and complete a message test.

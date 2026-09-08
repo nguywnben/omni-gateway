@@ -6,9 +6,9 @@
 - Active plan: `PROD-SELFHOST-R1`
 - Target: production-quality self-hosting for one person or a trusted team, not enterprise service
   operation.
-- Progress: **4/36 implementation tasks**; Phase 0 is 4/6 complete.
-- Completed: **P0.4 — Risk and maintainability baseline**.
-- Next task: **P0.5 — Fast, phase, and release gates**.
+- Progress: **5/36 implementation tasks**; Phase 0 is 5/6 complete.
+- Completed: **P0.5 — Fast, phase, and release gates**.
+- Next task: **P0.6 — Compatibility and deprecation guard**.
 - Supported runtime today: standalone, one worker, one replica.
 - Redis coordination, multi-replica HA, and Helm are experimental and no longer R1 release blockers.
 
@@ -48,6 +48,13 @@ documents should be committed separately after approval. Do not push unless the 
 
 ## Latest Evidence
 
+- `docs/evidence/p0.5-fixed-quality-gates.md`
+- One runner now defines fast, focused task, affected phase, and single release scopes. The fast
+  gate passed in seconds without the complete Core suite; the release dry-run lists 16 fixed steps.
+- Required CI checks are visibly named, while optional storage/provider tests and experimental HA
+  are listed separately and cannot change the production result.
+- The focused gate contract passed 8 tests. The current partition contains 167 Core modules and 13
+  experimental-HA modules; no complete Core or HA topology run was added to P0.5.
 - `docs/evidence/p0.4-risk-maintainability-baseline.md`
 - The reproducible inventory records 9 modules at or above 1,500 lines, 7 parallel persistence
   families, 8 Pydantic v1-style sites, 480 broad exception handlers across 96 runtime files, 11

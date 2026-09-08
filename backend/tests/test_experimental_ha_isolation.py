@@ -127,8 +127,7 @@ class ExperimentalHaSuiteIsolationTests(unittest.TestCase):
     def test_release_checklist_keeps_experimental_ha_out_of_required_gates(self) -> None:
         checklist = (ROOT / "docs" / "release-checklist.md").read_text(encoding="utf-8")
 
-        self.assertIn("python -m backend.tests --audit", checklist)
-        self.assertIn("python -m backend.tests --suite core", checklist)
+        self.assertIn("python tools/quality_gate.py release", checklist)
         automated_gates = checklist.split("## Manual Provider Checks", 1)[0]
         self.assertNotIn("python -m backend.tests --suite experimental-ha", automated_gates)
 

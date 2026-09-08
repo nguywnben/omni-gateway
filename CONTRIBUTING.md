@@ -37,21 +37,31 @@ The console is available at `http://127.0.0.1:4283`. Runtime credentials, databa
 
 ## Required Checks
 
-Run the complete local quality gate before opening a pull request:
+Use the smallest gate matching the work. During implementation, run the fast gate and only the
+affected test modules:
 
 ```bash
-ruff check backend
-ruff format --check backend
-python -m compileall -q backend
-python -m backend.tests
-for script in frontend/js/*.js; do node --check "$script"; done
-yamllint --strict .github deploy .yamllint.yml
-bash -n deploy/scripts/*.sh
-python -m pip check
-python -m pip_audit --local --progress-spinner off
+python tools/quality_gate.py fast
+python tools/quality_gate.py task --test-module backend.tests.test_config_security
 ```
 
-CI repeats these checks on the supported Python matrix and performs an application smoke test.
+At a phase boundary, pass the affected integration/contract modules once:
+
+```bash
+python tools/quality_gate.py phase --test-module backend.tests.test_product_surface_inventory
+```
+
+Do not run the complete core suite after every edit. The single release command, its current
+pending prerequisites, and separately classified optional suites can be inspected with:
+
+```bash
+python tools/quality_gate.py release --dry-run
+python tools/quality_gate.py --list-suites
+```
+
+CI labels production-blocking jobs and steps as `Required`. Live storage/provider checks and
+experimental HA are never part of the production result. See [Quality gates](docs/quality-gates.md)
+for the exact cadence and suite classifications.
 
 When `requirements.txt` changes, regenerate the production lock with Python 3.12:
 

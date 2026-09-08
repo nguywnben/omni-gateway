@@ -17,6 +17,7 @@ concurrency:
 
 jobs:
   verify:
+    name: "Required: Python verification (${{ matrix.python-version }})"
     runs-on: ubuntu-latest
     timeout-minutes: 20
     strategy:
@@ -52,46 +53,29 @@ jobs:
       - name: Install development dependencies
         run: python -m pip install -r requirements-dev.txt
 
-      - name: Verify dependency compatibility
+      - name: "Required: dependency compatibility"
         run: python -m pip check
 
-      - name: Audit Python dependencies
+      - name: "Required: dependency audit"
         if: matrix.python-version == '3.12'
         run: python -m pip_audit --local --progress-spinner off
 
-      - name: Lint backend modules
+      - name: "Required: fast gate"
         if: matrix.python-version == '3.12'
-        run: ruff check backend
+        run: python tools/quality_gate.py fast
 
-      - name: Check backend formatting
-        if: matrix.python-version == '3.12'
-        run: ruff format --check backend
-
-      - name: Lint repository YAML
-        if: matrix.python-version == '3.12'
-        run: yamllint --strict .github deploy .yamllint.yml
-
-      - name: Compile backend modules
+      - name: "Required: Python compile (3.14)"
+        if: matrix.python-version == '3.14'
         run: python -m compileall -q backend
 
-      - name: Validate frontend JavaScript
-        if: matrix.python-version == '3.12'
-        run: |
-          find frontend/js -type f -name '*.js' -print0 \
-            | sort -z \
-            | xargs -0 -n 1 node --check
-
-      - name: Validate shell scripts
-        if: matrix.python-version == '3.12'
-        run: bash -n deploy/scripts/*.sh
-
-      - name: Audit production and experimental test partition
+      - name: "Required: test partition audit (3.14)"
+        if: matrix.python-version == '3.14'
         run: python -m backend.tests --audit
 
-      - name: Run production core tests
+      - name: "Required: production core tests"
         run: python -m backend.tests --suite core
 
-      - name: Verify route contracts
+      - name: "Required: route contracts"
         if: matrix.python-version == '3.12'
         run: |
           python - <<'PY'
@@ -133,7 +117,7 @@ jobs:
           print("Route contract verified.")
           PY
 
-      - name: Smoke test the application
+      - name: "Required: application smoke"
         if: matrix.python-version == '3.12'
         env:
           CREDENTIALS_DIR: /tmp/omni-gateway-ci/creds
@@ -160,11 +144,7 @@ jobs:
           curl --fail --silent http://127.0.0.1:4283/frontend/assets/providers/codex-logo.png >/dev/null
           curl --fail --silent http://127.0.0.1:4283/frontend/assets/providers/openai-platform-logo.png >/dev/null
 
-      - name: Check whitespace
-        if: matrix.python-version == '3.12'
-        run: git diff --check
-
-      - name: Check tracked generated Python artifacts
+      - name: "Required: generated artifact audit"
         if: matrix.python-version == '3.12'
         run: |
           if git ls-files | grep -E '(^|/)__pycache__/|\.pyc$' >/dev/null; then
@@ -173,7 +153,7 @@ jobs:
           fi
 
   container-smoke:
-    name: Container smoke test
+    name: "Required: container smoke"
     needs: verify
     runs-on: ubuntu-latest
     timeout-minutes: 20

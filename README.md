@@ -543,19 +543,14 @@ This section is for contributors and local debugging. Production deployments sho
 ```bash
 python -m pip install --require-hashes -r requirements.lock
 python -m pip install -r requirements-dev.txt
-ruff check backend
-ruff format --check backend
-python -m compileall -q backend
-python -m backend.tests --suite core
-for script in frontend/js/*.js; do node --check "$script"; done
-yamllint --strict .github deploy .yamllint.yml
-python -m pip_audit --local --progress-spinner off
+python tools/quality_gate.py fast
+python tools/quality_gate.py task --test-module backend.tests.test_config_security
 ```
 
-The default and `core` suites exclude unfinished coordinated-runtime evidence. Maintainers can list
-that non-release suite with `python -m backend.tests --suite experimental-ha --list` and run it with
-`python -m backend.tests --suite experimental-ha`. It is not part of the R1 production gate and may
-require isolated Redis/PostgreSQL test infrastructure.
+Use [Quality gates](docs/quality-gates.md) to select task, phase, or release scope. The default and
+`core` suites exclude unfinished coordinated-runtime evidence. Optional live storage/provider checks
+and experimental HA are listed separately with `python tools/quality_gate.py --list-suites`; they
+cannot change the R1 production result.
 
 Start the service after the checks pass:
 
