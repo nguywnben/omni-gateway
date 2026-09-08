@@ -6,9 +6,9 @@
 - Active plan: `PROD-SELFHOST-R1`
 - Target: production-quality self-hosting for one person or a trusted team, not enterprise service
   operation.
-- Progress: **3/36 implementation tasks**; Phase 0 is 3/6 complete.
-- Completed: **P0.3 — Isolate unfinished HA work**.
-- Next task: **P0.4 — Risk and maintainability baseline**.
+- Progress: **4/36 implementation tasks**; Phase 0 is 4/6 complete.
+- Completed: **P0.4 — Risk and maintainability baseline**.
+- Next task: **P0.5 — Fast, phase, and release gates**.
 - Supported runtime today: standalone, one worker, one replica.
 - Redis coordination, multi-replica HA, and Helm are experimental and no longer R1 release blockers.
 
@@ -48,10 +48,18 @@ documents should be committed separately after approval. Do not push unless the 
 
 ## Latest Evidence
 
+- `docs/evidence/p0.4-risk-maintainability-baseline.md`
+- The reproducible inventory records 9 modules at or above 1,500 lines, 7 parallel persistence
+  families, 8 Pydantic v1-style sites, 480 broad exception handlers across 96 runtime files, 11
+  conditional skip sites, 7 live/environment-gated modules, and the missing browser harness.
+- All 12 bounded risks are owned by existing P0–P5 tasks or the post-R1 backlog. No file-size-only
+  refactor, new task, wave, phase, or denominator was authorized.
+- The focused baseline contract passed 5 tests and the independent inventory reproduction check
+  matched the saved artifact.
 - `docs/evidence/p0.3-experimental-ha-isolation.md`
 - Default startup is standalone without Redis; coordinated startup is rejected before external I/O,
   and the compiled experimental activation allowlist remains empty.
-- The checked test partition contains 165 core modules and 13 experimental-HA modules. The focused
+- The P0.3 checked partition contained 165 core modules and 13 experimental-HA modules. The focused
   P0.3 gate passed 35 tests; the independently runnable experimental suite passed 109 tests and
   skipped 32 existing opt-in live cases.
 - CI and the R1 release checklist now require the partition audit and core suite, not external
