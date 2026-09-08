@@ -579,6 +579,31 @@ class SessionServiceTests(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn(issued.token, serialized_config)
         self.assertNotIn(issued.token, repr(service))
 
+    async def test_factories_with_shared_hmac_key_interoperate_without_storage_write(self) -> None:
+        coordination = InMemoryStateStore(clock=lambda: 1_000.0)
+
+        async def reject_non_atomic_write(key, value):
+            raise AssertionError("coordinated session keys must not race through storage")
+
+        self.storage.set_config = reject_non_atomic_write
+        first, second = await asyncio.gather(
+            SessionService.create(
+                self.storage,
+                coordination=coordination,
+                hmac_key=b"h" * 32,
+            ),
+            SessionService.create(
+                self.storage,
+                coordination=coordination,
+                hmac_key=b"h" * 32,
+            ),
+        )
+
+        issued = await first.issue_local_owner(now=1_000.0)
+        resolved = await second.resolve(issued.token, now=1_001.0)
+        self.assertEqual(resolved.principal, ManagementPrincipal.local_owner())
+        self.assertEqual(self.storage.config, {})
+
     async def test_factory_preserves_selected_nondefault_coordination_epoch(self):
         coordination = InMemoryStateStore(clock=lambda: 1_000.0)
         await coordination.advance_epoch(1, "session-advance-epoch")
@@ -625,6 +650,14 @@ class SessionServiceTests(unittest.IsolatedAsyncioTestCase):
                 policy=SessionPolicy(idle_ttl_seconds=300, absolute_ttl_seconds=900),
                 fencing_epoch=True,
             )
+
+        self.assertEqual(self.storage.config, {})
+
+    async def test_factory_rejects_invalid_explicit_hmac_key_without_storage_write(self):
+        for invalid in (b"", b"h" * 31, b"h" * 33, bytearray(b"h" * 32)):
+            with self.subTest(invalid_type=type(invalid).__name__, length=len(invalid)):
+                with self.assertRaises(ValueError):
+                    await SessionService.create(self.storage, hmac_key=invalid)
 
         self.assertEqual(self.storage.config, {})
 

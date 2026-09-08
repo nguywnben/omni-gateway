@@ -1292,22 +1292,28 @@ class SessionService:
         policy: SessionPolicy | None = None,
         coordination: IdentitySecurityCoordinationStore | None = None,
         fencing_epoch: int = 1,
+        hmac_key: bytes | None = None,
     ) -> SessionService:
         selected_policy = policy or get_session_policy()
         if type(fencing_epoch) is not int or fencing_epoch < 1:
             raise ValueError("Session fencing epoch is invalid.")
-        encoded_master = await storage.get_config(_SESSION_MASTER_KEY_CONFIG, None)
-        if encoded_master is None:
-            generated = _encode_master_key(secrets.token_bytes(_SESSION_MASTER_KEY_BYTES))
-            if not await storage.set_config(_SESSION_MASTER_KEY_CONFIG, generated):
-                raise RuntimeError("Unable to persist the session master key.")
+        if hmac_key is None:
             encoded_master = await storage.get_config(_SESSION_MASTER_KEY_CONFIG, None)
-        master_key = _decode_master_key(encoded_master)
-        session_key = hmac.digest(
-            master_key,
-            _SESSION_HMAC_DOMAIN + b"index-key",
-            hashlib.sha256,
-        )
+            if encoded_master is None:
+                generated = _encode_master_key(secrets.token_bytes(_SESSION_MASTER_KEY_BYTES))
+                if not await storage.set_config(_SESSION_MASTER_KEY_CONFIG, generated):
+                    raise RuntimeError("Unable to persist the session master key.")
+                encoded_master = await storage.get_config(_SESSION_MASTER_KEY_CONFIG, None)
+            master_key = _decode_master_key(encoded_master)
+            session_key = hmac.digest(
+                master_key,
+                _SESSION_HMAC_DOMAIN + b"index-key",
+                hashlib.sha256,
+            )
+        else:
+            if type(hmac_key) is not bytes or len(hmac_key) != _SESSION_MASTER_KEY_BYTES:
+                raise ValueError("Session HMAC key is invalid.")
+            session_key = hmac_key
         identity_repository = await storage.create_identity_repository()
         if coordination is None:
             from core.state_store import InMemoryStateStore
@@ -1540,6 +1546,7 @@ async def initialize_session_service(
     *,
     coordination: IdentitySecurityCoordinationStore | None = None,
     fencing_epoch: int = 1,
+    hmac_key: bytes | None = None,
 ) -> SessionService:
     global _session_service
     async with _session_service_lock:
@@ -1552,6 +1559,7 @@ async def initialize_session_service(
                 storage,
                 coordination=coordination,
                 fencing_epoch=fencing_epoch,
+                hmac_key=hmac_key,
             )
         return _session_service
 

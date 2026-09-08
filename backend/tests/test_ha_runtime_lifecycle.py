@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import hashlib
+import hmac
 import sys
 import unittest
 from pathlib import Path
@@ -54,6 +56,7 @@ class HaRuntimeLifecycleTests(unittest.IsolatedAsyncioTestCase):
         cache.assert_called_once_with(singleton._routing_coordination)
         self.assertEqual(lifecycle.session_initialization_kwargs["fencing_epoch"], 1)
         self.assertIs(lifecycle.session_initialization_kwargs["coordination"], service)
+        self.assertNotIn("hmac_key", lifecycle.session_initialization_kwargs)
         self.assertTrue(await lifecycle.check_ready())
 
         await lifecycle.close()
@@ -164,6 +167,14 @@ class HaRuntimeLifecycleTests(unittest.IsolatedAsyncioTestCase):
             patch("core.ha_runtime.configure_primary_session_coordinator"),
         ):
             await lifecycle.start(storage=object())
+            self.assertEqual(
+                lifecycle.session_initialization_kwargs["hmac_key"],
+                hmac.digest(
+                    coordinated.coordination_key,
+                    b"omni-gateway:runtime-management-session-identifiers:v1\0",
+                    hashlib.sha256,
+                ),
+            )
             self.assertTrue(await lifecycle.check_ready())
             manager.verify.side_effect = RuntimeError("redis credential leaked-secret")
             self.assertFalse(await lifecycle.check_ready())

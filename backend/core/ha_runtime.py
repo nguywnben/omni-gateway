@@ -44,6 +44,7 @@ from core.virtual_keys import virtual_key_manager
 
 _ROUTING_KEY_DOMAIN = b"omni-gateway:runtime-routing-identifiers:v1\0"
 _ATTEMPT_KEY_DOMAIN = b"omni-gateway:runtime-auth-attempt-identifiers:v1\0"
+_MANAGEMENT_SESSION_KEY_DOMAIN = b"omni-gateway:runtime-management-session-identifiers:v1\0"
 _PRIMARY_SESSION_KEY_DOMAIN = b"omni-gateway:runtime-primary-session-identifiers:v1\0"
 _PROVIDER_AUTHORIZATION_KEY_DOMAIN = b"omni-gateway:runtime-provider-authorization-identifiers:v1\0"
 _DEVICE_AUTHORIZATION_KEY_DOMAIN = b"omni-gateway:runtime-device-authorization-identifiers:v1\0"
@@ -101,10 +102,18 @@ class HaRuntimeLifecycle:
     def session_initialization_kwargs(self) -> dict[str, object]:
         if self._coordination_service is None:
             raise RuntimeError("HA runtime lifecycle is not initialized.")
-        return {
+        kwargs: dict[str, object] = {
             "coordination": self._coordination_service,
             "fencing_epoch": self.policy.fencing_epoch,
         }
+        if self.policy.mode is RuntimeMode.COORDINATED:
+            assert self.policy.coordination_key is not None
+            kwargs["hmac_key"] = hmac.digest(
+                self.policy.coordination_key,
+                _MANAGEMENT_SESSION_KEY_DOMAIN,
+                hashlib.sha256,
+            )
+        return kwargs
 
     @property
     def admission_available(self) -> bool:

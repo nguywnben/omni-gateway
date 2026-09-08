@@ -163,6 +163,12 @@ the default standalone backend and is rejected for HA activation.
 - Local derived: immutable snapshots and caches that can be discarded and rebuilt without changing
   an authorization, limit, routing, or billing decision.
 
+In coordinated mode, every replica derives the opaque management-session HMAC key from the shared
+coordination key with a dedicated domain separator. It must not race through a last-writer-wins
+durable config bootstrap. Standalone mode retains its persisted random session master key so local
+sessions survive a process restart. Rotating the coordinated key intentionally invalidates all
+sessions tied to the previous coordination trust domain.
+
 The W4.4–W4.5 durable identity contract uses exact case-sensitive issuer/subject identity, separate
 optimistic revisions for identity and binding resources, authorization epochs, and a fixed additive
 migration checkpoint. SQLite, PostgreSQL, and MongoDB bootstrap an immutable enabled local owner and
