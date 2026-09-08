@@ -272,6 +272,19 @@ class SQLiteUsageLedgerRepository:
                 existing = await self._get_locked(db, request.reservation_id)
                 if existing is not None:
                     decoded = self._decode_reservation(existing)
+                    if decoded.admits_delivery_replay(request):
+                        await db.rollback()
+                        return BudgetReservationDecision(
+                            True,
+                            request.reservation_id,
+                            idempotent=True,
+                            replayed=True,
+                        )
+                    if (
+                        decoded.state is BudgetReservationState.COMMITTED
+                        and decoded.matches_operation(request)
+                    ):
+                        raise UsageLedgerStateConflict("Budget reservation replay window expired.")
                     if self._request_from_reservation(decoded) != request:
                         raise UsageLedgerConflict("Budget reservation idempotency conflict.")
                     if decoded.state is not BudgetReservationState.ACTIVE:

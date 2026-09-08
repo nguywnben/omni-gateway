@@ -177,7 +177,10 @@ async def apply_pre_call_guardrails(
 
 def _is_cacheable_request(body: Dict[str, Any]) -> bool:
     """Only deterministic requests (explicit temperature == 0) are cacheable."""
-    generation_config = body.get("generationConfig")
+    request_body = body.get("request")
+    if not isinstance(request_body, dict):
+        request_body = body
+    generation_config = request_body.get("generationConfig")
     if not isinstance(generation_config, dict):
         return False
     temperature = generation_config.get("temperature")
@@ -196,6 +199,23 @@ async def lookup_response_cache(
     cacheable; ``cached_response`` is ``None`` on cache miss.
     """
     from config import get_response_cache_config
+    from core.request_context import is_operation_replay_required
+
+    replay_required = is_operation_replay_required()
+
+    def replay_miss() -> Tuple[None, Response]:
+        return None, Response(
+            content=json.dumps(
+                {
+                    "error": {
+                        "message": "The prior operation result is temporarily unavailable.",
+                        "type": "operation_replay_unavailable",
+                    }
+                }
+            ),
+            status_code=503,
+            media_type="application/json",
+        )
 
     try:
         settings = await get_response_cache_config()
@@ -207,7 +227,7 @@ async def lookup_response_cache(
             result="failed",
             reason="policy_unavailable",
         )
-        return None, None
+        return replay_miss() if replay_required else (None, None)
 
     if not settings["enabled"]:
         trace_decision(
@@ -216,7 +236,7 @@ async def lookup_response_cache(
             result="skipped",
             reason="feature_disabled",
         )
-        return None, None
+        return replay_miss() if replay_required else (None, None)
     if not _is_cacheable_request(body):
         trace_decision(
             category="cache",
@@ -224,7 +244,7 @@ async def lookup_response_cache(
             result="skipped",
             reason="not_eligible",
         )
-        return None, None
+        return replay_miss() if replay_required else (None, None)
 
     response_cache.default_ttl_seconds = settings["ttl_seconds"]
     response_cache.max_entries = settings["max_entries"]
@@ -238,7 +258,7 @@ async def lookup_response_cache(
             result="miss",
             reason="cache_miss",
         )
-        return cache_key, None
+        return replay_miss() if replay_required else (cache_key, None)
 
     content, media_type = entry
     log.info(f"[response-cache] HIT for model={body.get('model')}")

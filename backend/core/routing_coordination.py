@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import base64
 import hashlib
 import hmac
 import json
@@ -15,6 +16,7 @@ from typing import Any, Final
 
 from core.coordination import (
     MAX_COORDINATION_INTEGER,
+    MAX_PAYLOAD_BYTES,
     CasRequest,
     CasSettlementProof,
     CasSettlementTarget,
@@ -26,11 +28,13 @@ from core.coordination import (
     InvalidationRequest,
     validate_epoch,
 )
+from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
 MAX_COORDINATION_RETRIES: Final = 8
 MAX_CREDENTIAL_LEASES: Final = 128
 LEASE_MUTATION_LOCK_STRIPES: Final = 64
 MAX_LATENCY_SAMPLES: Final = 10
+MAX_SHARED_CACHE_CONTENT_BYTES: Final = 10 * 1024
 MAX_CREDENTIAL_TTL_SECONDS: Final = 15 * 60
 ROUTE_RECORD_TTL_SECONDS: Final = 30 * 86_400
 CACHE_SCOPE_EXACT: Final = "cache-exact"
@@ -140,6 +144,8 @@ class CacheMetadata:
     content_digest: str
     media_kind: str
     generation: int
+    content: bytes | None = field(default=None, repr=False)
+    media_type: str | None = None
 
 
 def _require_text(value: object, label: str, *, maximum: int = 255) -> str:
@@ -188,6 +194,11 @@ class RoutingCoordinationAdapter:
             raise ValueError("Coordination identifier key is invalid.")
         self._store = store
         self._identifier_key = bytes(identifier_key)
+        self._cache_content_key = hmac.digest(
+            self._identifier_key,
+            b"omni-gateway:cache-content-encryption:v1\0",
+            hashlib.sha256,
+        )
         self._fencing_epoch = validate_epoch(fencing_epoch)
         self._lease_mutation_locks = tuple(
             asyncio.Lock() for _index in range(LEASE_MUTATION_LOCK_STRIPES)
@@ -580,6 +591,8 @@ class RoutingCoordinationAdapter:
         media_kind: str,
         generation: int,
         ttl_seconds: float,
+        content: bytes | None = None,
+        media_type: str | None = None,
     ) -> bool:
         key = self._cache_key(kind, cache_key)
         if (
@@ -593,16 +606,43 @@ class RoutingCoordinationAdapter:
         ):
             raise ValueError("Cache metadata is invalid.")
         ttl = _require_positive_number(ttl_seconds, "Cache metadata TTL", maximum=30 * 86_400)
-        payload = _encode(
-            {
-                "schema_version": 1,
-                "type": "cache_metadata",
-                "kind": kind.value,
-                "content_digest": content_digest,
-                "media_kind": media_kind,
-                "generation": generation,
-            }
-        )
+        base_payload: dict[str, object] = {
+            "schema_version": 1,
+            "type": "cache_metadata",
+            "kind": kind.value,
+            "content_digest": content_digest,
+            "media_kind": media_kind,
+            "generation": generation,
+        }
+        payload = _encode(base_payload)
+        if content is not None:
+            if (
+                not isinstance(content, bytes)
+                or not isinstance(media_type, str)
+                or not 1 <= len(media_type) <= 255
+                or any(ord(character) < 32 for character in media_type)
+                or hashlib.sha256(
+                    len(media_type.encode("utf-8")).to_bytes(4, "big")
+                    + media_type.encode("utf-8")
+                    + len(content).to_bytes(8, "big")
+                    + content
+                ).hexdigest()
+                != content_digest
+            ):
+                raise ValueError("Cache content is invalid.")
+            if len(content) <= MAX_SHARED_CACHE_CONTENT_BYTES:
+                nonce = secrets.token_bytes(12)
+                aad = _encode(base_payload)
+                sealed = nonce + AESGCM(self._cache_content_key).encrypt(nonce, content, aad)
+                shared_payload = {
+                    **base_payload,
+                    "schema_version": 2,
+                    "media_type": media_type,
+                    "sealed_content": base64.b64encode(sealed).decode("ascii"),
+                }
+                encoded_shared = _encode(shared_payload)
+                if len(encoded_shared) <= MAX_PAYLOAD_BYTES:
+                    payload = encoded_shared
         for _attempt in range(MAX_COORDINATION_RETRIES):
             snapshot = await self._store.read_cas(key, epoch=self._fencing_epoch)
             result = await self._compare_and_set_with_replay(
@@ -633,20 +673,35 @@ class RoutingCoordinationAdapter:
         if snapshot.payload is None:
             _increment_metric("cache_resolve", "miss")
             return None
-        value = _decode(
-            snapshot.payload,
-            frozenset(
-                {
-                    "schema_version",
-                    "type",
-                    "kind",
-                    "content_digest",
-                    "media_kind",
-                    "generation",
-                }
-            ),
-            "cache_metadata",
+        try:
+            value = json.loads(snapshot.payload)
+        except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+            raise CoordinationCorruptError("Cache metadata payload is invalid.") from exc
+        base_keys = {
+            "schema_version",
+            "type",
+            "kind",
+            "content_digest",
+            "media_kind",
+            "generation",
+        }
+        schema_version = value.get("schema_version") if isinstance(value, dict) else None
+        expected_keys = (
+            base_keys
+            if schema_version == 1
+            else base_keys
+            | {
+                "media_type",
+                "sealed_content",
+            }
         )
+        if (
+            not isinstance(value, dict)
+            or set(value) != expected_keys
+            or schema_version not in {1, 2}
+            or value.get("type") != "cache_metadata"
+        ):
+            raise CoordinationCorruptError("Cache metadata payload is invalid.")
         digest = value["content_digest"]
         media_kind = value["media_kind"]
         stored_generation = value["generation"]
@@ -664,5 +719,46 @@ class RoutingCoordinationAdapter:
         if stored_generation != generation:
             _increment_metric("cache_resolve", "miss")
             return None
+        content = None
+        media_type = None
+        if schema_version == 2:
+            media_type = value["media_type"]
+            sealed_content = value["sealed_content"]
+            if (
+                not isinstance(media_type, str)
+                or not 1 <= len(media_type) <= 255
+                or any(ord(character) < 32 for character in media_type)
+                or not isinstance(sealed_content, str)
+            ):
+                raise CoordinationCorruptError("Cache metadata payload is invalid.")
+            try:
+                sealed = base64.b64decode(sealed_content, validate=True)
+                if len(sealed) < 29:
+                    raise ValueError("sealed cache content is too short")
+                base_payload = {key: value[key] for key in base_keys}
+                base_payload["schema_version"] = 1
+                content = AESGCM(self._cache_content_key).decrypt(
+                    sealed[:12],
+                    sealed[12:],
+                    _encode(base_payload),
+                )
+            except Exception as exc:
+                raise CoordinationCorruptError("Cache content authentication failed.") from exc
+            encoded_media = media_type.encode("utf-8")
+            actual_digest = hashlib.sha256(
+                len(encoded_media).to_bytes(4, "big")
+                + encoded_media
+                + len(content).to_bytes(8, "big")
+                + content
+            ).hexdigest()
+            normalized_media = (
+                "json"
+                if "json" in media_type.lower()
+                else "text"
+                if media_type.lower().startswith("text/")
+                else "binary"
+            )
+            if actual_digest != digest or normalized_media != media_kind:
+                raise CoordinationCorruptError("Cache content evidence is invalid.")
         _increment_metric("cache_resolve", "hit")
-        return CacheMetadata(digest, media_kind, stored_generation)
+        return CacheMetadata(digest, media_kind, stored_generation, content, media_type)

@@ -11,6 +11,9 @@ _request_id: ContextVar[str] = ContextVar("request_id", default="")
 _request_started_at: ContextVar[float] = ContextVar("request_started_at", default=0.0)
 _api_key_id: ContextVar[str] = ContextVar("api_key_id", default="")
 _virtual_key_reservation_id: ContextVar[str] = ContextVar("virtual_key_reservation_id", default="")
+_operation_replay_required: ContextVar[bool] = ContextVar(
+    "operation_replay_required", default=False
+)
 
 
 @contextmanager
@@ -20,9 +23,11 @@ def request_scope(request_id: str) -> Iterator[None]:
     start_token: Token[float] = _request_started_at.set(time.perf_counter())
     api_key_token: Token[str] = _api_key_id.set("")
     reservation_token: Token[str] = _virtual_key_reservation_id.set("")
+    replay_token: Token[bool] = _operation_replay_required.set(False)
     try:
         yield
     finally:
+        _operation_replay_required.reset(replay_token)
         _virtual_key_reservation_id.reset(reservation_token)
         _api_key_id.reset(api_key_token)
         _request_id.reset(request_token)
@@ -56,3 +61,13 @@ def set_virtual_key_reservation_id(reservation_id: str) -> None:
 
 def get_virtual_key_reservation_id() -> str:
     return _virtual_key_reservation_id.get()
+
+
+def set_operation_replay_required(required: bool) -> None:
+    """Require the request path to return coordinated cached content or fail closed."""
+
+    _operation_replay_required.set(bool(required))
+
+
+def is_operation_replay_required() -> bool:
+    return _operation_replay_required.get()

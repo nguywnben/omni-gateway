@@ -77,14 +77,37 @@ class CoordinatedResponseCacheTests(unittest.IsolatedAsyncioTestCase):
         self.first = CoordinatedResponseCache(self.first_local, first_adapter)
         self.second = CoordinatedResponseCache(self.second_local, second_adapter)
 
-    async def test_body_remains_local_and_requires_published_metadata(self) -> None:
+    async def test_small_body_is_encrypted_and_available_cross_replica(self) -> None:
         stored = await self.first.set("cache-key", (b'{"ok":true}', "application/json"), 30)
         self.assertTrue(stored)
         self.assertEqual(
             await self.first.get("cache-key"),
             (b'{"ok":true}', "application/json"),
         )
-        self.assertIsNone(await self.second.get("cache-key"))
+        self.assertEqual(
+            await self.second.get("cache-key"),
+            (b'{"ok":true}', "application/json"),
+        )
+
+    async def test_large_body_remains_local_only(self) -> None:
+        content = b"x" * (16 * 1024)
+        stored = await self.first.set("large-cache-key", (content, "text/plain"), 30)
+        self.assertTrue(stored)
+        self.assertEqual(await self.first.get("large-cache-key"), (content, "text/plain"))
+        self.assertIsNone(await self.second.get("large-cache-key"))
+
+    async def test_other_deployment_key_cannot_decrypt_shared_body(self) -> None:
+        await self.first.set("cache-key", (b"trusted", "text/plain"), 30)
+        foreign = CoordinatedResponseCache(
+            ResponseCache(default_ttl_seconds=30, max_entries=5),
+            RoutingCoordinationAdapter(
+                self.store,
+                identifier_key=b"d" * 32,
+                fencing_epoch=1,
+            ),
+        )
+
+        self.assertIsNone(await foreign.get("cache-key"))
 
     async def test_cross_replica_invalidation_prevents_stale_local_hit(self) -> None:
         await self.first.set("cache-key", (b"old", "text/plain"), 30)

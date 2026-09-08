@@ -17,6 +17,7 @@ if str(TESTS_DIR) not in sys.path:
     sys.path.insert(0, str(TESTS_DIR))
 
 from core import gateway_pipeline
+from core.request_context import request_scope, set_operation_replay_required
 from core.response_cache import response_cache
 from fastapi import Response
 
@@ -201,6 +202,40 @@ class ResponseCachePipelineTests(unittest.TestCase):
         self.assertEqual(cached2.status_code, 200)
         self.assertEqual(json.loads(cached2.body), {"answer": 42})
         self.assertEqual(cached2.headers.get(gateway_pipeline.CACHE_HIT_HEADER), "hit")
+
+    def test_nested_internal_request_is_cacheable_and_body_bound(self):
+        first = {
+            "model": "gemini-2.5-flash",
+            "request": _gemini_body("question A", temperature=0),
+        }
+        second = {
+            "model": "gemini-2.5-flash",
+            "request": _gemini_body("question B", temperature=0),
+        }
+        with patch("config.get_response_cache_config", new=AsyncMock(return_value=CACHE_ON)):
+            first_key, _ = _run(gateway_pipeline.lookup_response_cache(first))
+            second_key, _ = _run(gateway_pipeline.lookup_response_cache(second))
+
+        self.assertIsNotNone(first_key)
+        self.assertIsNotNone(second_key)
+        self.assertNotEqual(first_key, second_key)
+
+    def test_committed_operation_replay_fails_closed_without_cached_body(self):
+        body = _gemini_body("replay", temperature=0)
+        with (
+            request_scope("replayed-request"),
+            patch("config.get_response_cache_config", new=AsyncMock(return_value=CACHE_ON)),
+        ):
+            set_operation_replay_required(True)
+            cache_key, response = _run(gateway_pipeline.lookup_response_cache(body))
+
+        self.assertIsNone(cache_key)
+        self.assertIsNotNone(response)
+        self.assertEqual(response.status_code, 503)
+        self.assertEqual(
+            json.loads(response.body)["error"]["type"],
+            "operation_replay_unavailable",
+        )
 
     def test_error_responses_are_not_cached(self):
         body = _gemini_body("q", temperature=0)

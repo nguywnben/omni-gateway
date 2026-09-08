@@ -27,18 +27,22 @@ def generate_cache_key(
     stream: bool = False,
 ) -> str:
     """Generate a deterministic SHA-256 hash key for a given request payload."""
+    request_payload = payload.get("request")
+    if not isinstance(request_payload, dict):
+        request_payload = payload
     normalized_data = {
         "model": str(model).strip().lower(),
         "stream": bool(stream),
-        "messages": payload.get("messages", []),
-        "contents": payload.get("contents", []),
-        "prompt": payload.get("prompt", ""),
-        "system_instruction": payload.get("system_instruction") or payload.get("systemInstruction"),
-        "temperature": payload.get("temperature"),
-        "top_p": payload.get("top_p"),
-        "max_tokens": payload.get("max_tokens") or payload.get("max_output_tokens"),
-        "generation_config": payload.get("generationConfig"),
-        "tools": payload.get("tools"),
+        "messages": request_payload.get("messages", []),
+        "contents": request_payload.get("contents", []),
+        "prompt": request_payload.get("prompt", ""),
+        "system_instruction": request_payload.get("system_instruction")
+        or request_payload.get("systemInstruction"),
+        "temperature": request_payload.get("temperature"),
+        "top_p": request_payload.get("top_p"),
+        "max_tokens": request_payload.get("max_tokens") or request_payload.get("max_output_tokens"),
+        "generation_config": request_payload.get("generationConfig"),
+        "tools": request_payload.get("tools"),
     }
 
     # Dump deterministically sorted JSON string
@@ -165,6 +169,9 @@ class CoordinatedResponseCache:
             self._local.delete(key)
             return None
         local = self._local.get(key)
+        if local is None and metadata.content is not None and metadata.media_type is not None:
+            local = (metadata.content, metadata.media_type)
+            self._local.set(key, local)
         if (
             not isinstance(local, tuple)
             or len(local) != 2
@@ -213,6 +220,8 @@ class CoordinatedResponseCache:
                 media_kind=self._media_kind(media_type),
                 generation=generation,
                 ttl_seconds=ttl_seconds,
+                content=content,
+                media_type=media_type,
             )
         except CoordinationError:
             self._local.delete(key)

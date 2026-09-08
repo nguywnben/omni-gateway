@@ -64,6 +64,19 @@ INFERENCE_SCOPES = (
     "inference:anthropic",
     "inference:gemini",
 )
+
+
+class QuotaReservationHandle(str):
+    """String-compatible reservation identity with terminal replay evidence."""
+
+    replayed: bool
+
+    def __new__(cls, value: str, *, replayed: bool = False):
+        instance = super().__new__(cls, value)
+        instance.replayed = bool(replayed)
+        return instance
+
+
 MANAGEMENT_SCOPES = ("management:read", "management:write")
 VIRTUAL_KEY_SCOPES = INFERENCE_SCOPES + MANAGEMENT_SCOPES
 DEFAULT_INFERENCE_SCOPES = INFERENCE_SCOPES
@@ -781,6 +794,17 @@ class VirtualKeyManager:
                     durable_decision.reason,
                     0,
                 )
+            if durable_decision.replayed:
+                self._discard_local_durable_reservation(internal_id)
+                _increment_quota_metric("delivery_replayed")
+                trace_decision(
+                    category="quota",
+                    action="replayed",
+                    result="succeeded",
+                    reason="operation_already_committed",
+                    model=requested_model,
+                )
+                return QuotaReservationHandle(internal_id, replayed=True)
         else:
             internal_id = str(
                 supplied_id
@@ -868,7 +892,7 @@ class VirtualKeyManager:
             original_tokens=estimated_tokens,
             cost_usd=estimated_cost,
         )
-        return decision.reservation_id
+        return QuotaReservationHandle(decision.reservation_id)
 
     def authorize_management(self, record: VirtualKey, *, write: bool) -> None:
         """Authorize a management read or write without consuming inference limits."""

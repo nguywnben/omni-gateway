@@ -241,6 +241,45 @@ class SQLiteUsageLedgerTests(unittest.IsolatedAsyncioTestCase):
                 transitioned_at=NOW + 20,
             )
 
+    async def test_committed_operation_admits_bounded_delivery_replay(self):
+        request = _reservation("a")
+        await self.repository.reserve_budget(request)
+        await self.repository.commit_reservation(
+            request.reservation_id,
+            _usage(occurred_at=NOW + 10),
+            transitioned_at=NOW + 10,
+        )
+
+        replay = await self.repository.reserve_budget(
+            dataclasses.replace(
+                request,
+                created_at=NOW + 20,
+                expires_at=NOW + 80,
+            )
+        )
+
+        self.assertTrue(replay.accepted)
+        self.assertTrue(replay.idempotent)
+        self.assertTrue(replay.replayed)
+
+        with self.assertRaises(UsageLedgerConflict):
+            await self.repository.reserve_budget(
+                dataclasses.replace(
+                    request,
+                    created_at=NOW + 20,
+                    expires_at=NOW + 80,
+                    estimated_tokens=request.estimated_tokens + 1,
+                )
+            )
+        with self.assertRaises(UsageLedgerStateConflict):
+            await self.repository.reserve_budget(
+                dataclasses.replace(
+                    request,
+                    created_at=NOW + 61,
+                    expires_at=NOW + 121,
+                )
+            )
+
     async def test_release_and_expiry_are_terminal_and_idempotent(self):
         released_request = _reservation("a")
         await self.repository.reserve_budget(released_request)

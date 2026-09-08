@@ -23,7 +23,12 @@ from core.usage_ledger import (
     UsageLedgerError,
 )
 from core.usage_ledger_service import UsageLedgerService
-from core.virtual_keys import RESERVATION_TTL_SECONDS, VirtualKey, VirtualKeyManager
+from core.virtual_keys import (
+    RESERVATION_TTL_SECONDS,
+    QuotaReservationHandle,
+    VirtualKey,
+    VirtualKeyManager,
+)
 from fastapi import HTTPException
 
 from backend.tests.support import workspace_temp_directory
@@ -322,6 +327,31 @@ class VirtualKeyReservationTests(unittest.IsolatedAsyncioTestCase):
             )
 
         self.assertEqual(raised.exception.status_code, 503)
+
+    async def test_committed_delivery_replay_skips_hot_quota_reservation(self):
+        record = self._key(budget_daily_usd=100.0, rpm_limit=1)
+
+        async def replay(request):
+            return BudgetReservationDecision(
+                True,
+                request.reservation_id,
+                idempotent=True,
+                replayed=True,
+            )
+
+        self.ledger.reserve_budget.side_effect = replay
+        handle = await self.manager.enforce(
+            record,
+            requested_model="gpt-4o-mini",
+            request_body=self._body(),
+            operation_id="operation-replay",
+            now=1000.0,
+        )
+
+        self.assertIsInstance(handle, QuotaReservationHandle)
+        self.assertTrue(handle.replayed)
+        self.assertNotIn(str(handle), self.manager._durable_reservation_ids)
+        self.assertFalse(self.manager._state_store._quota_records)
 
     async def test_pending_capacity_claim_is_atomic_across_concurrent_admission(self):
         record = self._key(budget_daily_usd=100.0, rpm_limit=10)

@@ -120,9 +120,12 @@ class BudgetReservationDecision:
     reservation_id: str
     reason: str = ""
     idempotent: bool = False
+    replayed: bool = False
 
     def __post_init__(self) -> None:
-        if type(self.accepted) is not bool or type(self.idempotent) is not bool:
+        if any(
+            type(value) is not bool for value in (self.accepted, self.idempotent, self.replayed)
+        ):
             raise ValueError("Budget reservation decision is invalid.")
         if not isinstance(self.reservation_id, str) or not _RESERVATION_ID.fullmatch(
             self.reservation_id
@@ -130,7 +133,11 @@ class BudgetReservationDecision:
             raise ValueError("Budget reservation decision ID is invalid.")
         if self.reason not in {"", "daily_budget", "monthly_budget"}:
             raise ValueError("Budget reservation decision reason is invalid.")
-        if self.accepted == bool(self.reason) or (not self.accepted and self.idempotent):
+        if (
+            self.accepted == bool(self.reason)
+            or (not self.accepted and self.idempotent)
+            or (self.replayed and (not self.accepted or not self.idempotent))
+        ):
             raise ValueError("Budget reservation decision is contradictory.")
 
 
@@ -585,6 +592,33 @@ class BudgetReservation:
             "transitioned_at": self.transitioned_at,
             "usage": None if self.usage is None else self.usage.to_record(),
         }
+
+    def matches_operation(self, request: BudgetReservationRequest) -> bool:
+        """Compare the immutable billable operation fingerprint."""
+
+        return (
+            self.schema_version == request.schema_version
+            and self.reservation_id == request.reservation_id
+            and self.key_id == request.key_id
+            and self.estimated_tokens == request.estimated_tokens
+            and self.estimated_cost_nanos == request.estimated_cost_nanos
+            and self.daily_budget_nanos == request.daily_budget_nanos
+            and self.monthly_budget_nanos == request.monthly_budget_nanos
+        )
+
+    def admits_delivery_replay(self, request: BudgetReservationRequest) -> bool:
+        """Match one completed logical operation inside its bounded replay window.
+
+        Creation/expiry timestamps describe individual delivery attempts and therefore
+        are deliberately excluded from the operation fingerprint. The original
+        reservation expiry remains the replay deadline.
+        """
+
+        return (
+            self.state is BudgetReservationState.COMMITTED
+            and self.created_at <= request.created_at < self.expires_at
+            and self.matches_operation(request)
+        )
 
 
 def _exact_record(record: object, expected: set[str], label: str) -> dict[str, Any]:

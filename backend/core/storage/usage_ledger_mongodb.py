@@ -177,6 +177,18 @@ class MongoDBUsageLedgerRepository:
             existing = await self._ledger.find_one({"_id": request.reservation_id}, session=session)
             if existing is not None:
                 reservation = self._decode_reservation(existing)
+                if reservation.admits_delivery_replay(request):
+                    return BudgetReservationDecision(
+                        True,
+                        request.reservation_id,
+                        idempotent=True,
+                        replayed=True,
+                    )
+                if (
+                    reservation.state is BudgetReservationState.COMMITTED
+                    and reservation.matches_operation(request)
+                ):
+                    raise UsageLedgerStateConflict("Budget reservation replay window expired.")
                 if self._request(reservation) != request:
                     raise UsageLedgerConflict("Budget reservation idempotency conflict.")
                 if reservation.state is not BudgetReservationState.ACTIVE:

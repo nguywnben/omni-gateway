@@ -221,7 +221,11 @@ async def authenticate_flexible(
         return token
 
     # Fall back to virtual API keys (per-key budgets, rate limits, scopes).
-    from core.request_context import set_api_key_id, set_virtual_key_reservation_id
+    from core.request_context import (
+        set_api_key_id,
+        set_operation_replay_required,
+        set_virtual_key_reservation_id,
+    )
     from core.router.protocol_errors import protocol_for_path
     from core.virtual_keys import extract_requested_model, virtual_key_manager
 
@@ -276,9 +280,11 @@ async def authenticate_flexible(
     except Exception:
         await virtual_key_manager.release_reservation(reservation_id)
         raise
+    replayed = bool(getattr(reservation_id, "replayed", False))
     set_api_key_id(record.id)
-    set_virtual_key_reservation_id(reservation_id or "")
-    if reservation_id:
+    set_operation_replay_required(replayed)
+    set_virtual_key_reservation_id("" if replayed else reservation_id or "")
+    if reservation_id and not replayed:
         request.state.virtual_key_reservation_id = reservation_id
     log.debug(f"Authentication successful using {auth_method} (virtual key)")
     return token
