@@ -6,8 +6,9 @@
 - Active plan: `PROD-SELFHOST-R1`
 - Target: production-quality self-hosting for one person or a trusted team, not enterprise service
   operation.
-- Progress: **0/36 implementation tasks**; plan/spec/constraints approved on 2026-09-08.
-- Active task: **P0.1 — Capability registry and support tiers**.
+- Progress: **1/36 implementation tasks**; Phase 0 is 1/6 complete.
+- Completed: **P0.1 — Capability registry and support tiers**.
+- Next task: **P0.2 — Product terminology and navigation inventory**.
 - Supported runtime today: standalone, one worker, one replica.
 - Redis coordination, multi-replica HA, and Helm are experimental and no longer R1 release blockers.
 
@@ -44,3 +45,11 @@ documents should be committed separately after approval. Do not push unless the 
 - No HA topology matrix in R1.
 - No cross-model review except one security pass for backup/restore or final auth/security closure,
   unless the user explicitly requests another.
+
+## Latest Evidence
+
+- `docs/evidence/p0.1-capability-registry.md`
+- Default runtime snapshot: 31 capabilities; only Core entries are active.
+- Focused contract/runtime matrix: 45 tests passed.
+- Full backend gate: 1,522 tests passed; 54 existing optional/live-backend skips.
+- Ruff, compileall, runtime HTTP projection, and whitespace checks passed.

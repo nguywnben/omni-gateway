@@ -3,6 +3,7 @@ from fastapi import APIRouter
 from . import (
     audit_routes,
     auth,
+    capabilities,
     config_routes,
     credentials,
     environment_credentials,
@@ -27,6 +28,7 @@ def create_router() -> APIRouter:
 
     router.include_router(root.router)
     router.include_router(auth.router)
+    router.include_router(capabilities.router)
     router.include_router(environment_credentials.router)
     router.include_router(identity_browser_routes.router)
     router.include_router(identity_routes.router)

@@ -82,7 +82,11 @@ _MANAGEMENT_ROUTE_MANIFEST = (
         ("GET", "/api/credentials/download/{filename}"),
         ("GET", "/api/credentials/download-all"),
     ),
-    *_http(ManagementPermission.CONFIGURATION_READ, ("GET", "/api/config/get")),
+    *_http(
+        ManagementPermission.CONFIGURATION_READ,
+        ("GET", "/api/capabilities"),
+        ("GET", "/api/config/get"),
+    ),
     *_http(
         ManagementPermission.CONFIGURATION_MANAGE,
         ("POST", "/api/config/save"),
