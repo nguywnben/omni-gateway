@@ -35,6 +35,7 @@ class _RecordingStore(InMemoryStateStore):
         super().__init__(clock=clock)
         self.keys: list[str] = []
         self.payloads: list[bytes] = []
+        self.requests: list[CasRequest] = []
 
     async def read_cas(self, key: str, *, epoch: int):
         self.keys.append(key)
@@ -43,6 +44,7 @@ class _RecordingStore(InMemoryStateStore):
     async def compare_and_set(self, request):
         self.keys.append(request.key)
         self.payloads.append(request.payload)
+        self.requests.append(request)
         return await super().compare_and_set(request)
 
 
@@ -140,6 +142,36 @@ class RoutingCoordinationAdapterTests(unittest.IsolatedAsyncioTestCase):
         generation = await adapter.invalidate(CACHE_SCOPE_EXACT)
         self.assertEqual(generation, 2)
         self.assertEqual(await adapter.current_generation(CACHE_SCOPE_EXACT), 2)
+
+    async def test_high_churn_mutations_bound_replay_retention_independently(self) -> None:
+        lease = await self.first.acquire_credential(
+            "primary", "bounded-replay.json", ttl_seconds=300, max_concurrency=2
+        )
+        assert lease is not None
+        await self.first.release_credential(lease)
+        await self.first.record_route_outcome(
+            "primary",
+            "bounded-replay.json",
+            "model",
+            success=True,
+            failure_kind="",
+            retry_after_seconds=0,
+            latency_ms=1,
+        )
+        generation = await self.first.current_generation(CACHE_SCOPE_EXACT)
+        await self.first.publish_cache_metadata(
+            CacheKind.EXACT,
+            "bounded-replay-cache-key",
+            content_digest="c" * 64,
+            media_kind="json",
+            generation=generation,
+            ttl_seconds=300,
+        )
+
+        replay_ttls = [request.effective_replay_ttl_seconds for request in self.store.requests]
+        self.assertEqual(replay_ttls[0], 300)
+        self.assertTrue(all(ttl <= 60 for ttl in replay_ttls[1:]))
+        self.assertTrue(all(request.ttl_seconds >= 300 for request in self.store.requests))
 
     async def test_missing_invalidation_authority_fails_closed(self) -> None:
         self.store._invalidation_generations.pop(CACHE_SCOPE_EXACT)

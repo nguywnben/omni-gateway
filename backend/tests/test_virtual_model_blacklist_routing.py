@@ -11,8 +11,15 @@ BACKEND_DIR = Path(__file__).resolve().parents[1]
 if str(BACKEND_DIR) not in sys.path:
     sys.path.insert(0, str(BACKEND_DIR))
 
-from core.api.primary import ProviderRequestContext, non_stream_request, stream_request
+from core.api.primary import (
+    ProviderRequestContext,
+    _non_stream_request_upstream,
+    _stream_request_upstream,
+    non_stream_request,
+    stream_request,
+)
 from core.api.utils import record_model_route_miss
+from core.coordination import CoordinationReconciliationRequiredError
 from fastapi import Response
 
 
@@ -25,6 +32,61 @@ class FakeUpstreamResponse:
 
 
 class VirtualModelBlacklistRoutingTests(unittest.IsolatedAsyncioTestCase):
+    async def test_non_stream_coordination_capacity_returns_bounded_503(self):
+        record = AsyncMock()
+        with (
+            patch(
+                "core.api.primary.get_antigravity_stream_to_nonstream",
+                AsyncMock(return_value=False),
+            ),
+            patch(
+                "core.api.primary.credential_manager.get_valid_model_credential",
+                AsyncMock(
+                    side_effect=CoordinationReconciliationRequiredError(
+                        "secret coordination detail"
+                    )
+                ),
+            ),
+            patch("core.api.primary.record_unassigned_api_call_error", record),
+        ):
+            response = await _non_stream_request_upstream({"model": "model-a"})
+
+        self.assertEqual(response.status_code, 503)
+        self.assertIn(b"temporarily unavailable", response.body)
+        self.assertNotIn(b"secret coordination detail", response.body)
+        record.assert_awaited_once_with(
+            status_code=503,
+            mode="primary",
+            model_name="model-a",
+            reason="coordination_unavailable",
+        )
+
+    async def test_stream_coordination_capacity_returns_bounded_503(self):
+        record = AsyncMock()
+        with (
+            patch(
+                "core.api.primary.credential_manager.get_valid_model_credential",
+                AsyncMock(
+                    side_effect=CoordinationReconciliationRequiredError(
+                        "secret coordination detail"
+                    )
+                ),
+            ),
+            patch("core.api.primary.record_unassigned_api_call_error", record),
+        ):
+            stream = _stream_request_upstream({"model": "model-a"})
+            response = await anext(stream)
+
+        self.assertEqual(response.status_code, 503)
+        self.assertIn(b"temporarily unavailable", response.body)
+        self.assertNotIn(b"secret coordination detail", response.body)
+        record.assert_awaited_once_with(
+            status_code=503,
+            mode="primary",
+            model_name="model-a",
+            reason="coordination_unavailable",
+        )
+
     async def test_closing_stream_releases_the_active_credential_lease(self):
         credential = {
             "provider": "google_antigravity",

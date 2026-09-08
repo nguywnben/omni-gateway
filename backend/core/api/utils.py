@@ -398,6 +398,7 @@ async def record_unassigned_api_call_error(
     status_code: int = 500,
     mode: str = "primary",
     model_name: Optional[str] = None,
+    reason: str = "no_candidate",
 ) -> None:
     """Record a gateway-level request failure that cannot be attributed to a credential."""
     try:
@@ -416,7 +417,11 @@ async def record_unassigned_api_call_error(
         category="routing",
         action="unavailable",
         result="failed",
-        reason="no_candidate",
+        reason=(
+            reason
+            if reason in {"no_candidate", "coordination_unavailable"}
+            else "coordination_unavailable"
+        ),
         model=model_name or "",
         status_code=status_code,
     )

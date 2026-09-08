@@ -512,7 +512,7 @@ if (not current_revision and ARGV[1] == '0')
   end
   redis.call('PEXPIRE', KEYS[2], tonumber(ARGV[3]))
 end
-local expires_at = now_ms + tonumber(ARGV[3])
+local expires_at = now_ms + tonumber(ARGV[14])
 local expires_text = string.format('%.0f', expires_at)
 local capabilities = status == 'applied' and ARGV[12] or ''
 if not valid_capabilities(capabilities) then return redis.error_reply('COORDINATION_CORRUPT') end
@@ -2927,14 +2927,17 @@ class RedisStateStore:
             )
 
         def request_fingerprint(value: CasRequest) -> bytes:
-            return _fingerprint(
+            parts: list[object] = [
                 value.key,
                 value.expected_revision,
                 value.payload,
                 float(value.ttl_seconds),
                 value.epoch,
                 _cas_settlement_capabilities(value),
-            )
+            ]
+            if value.replay_ttl_seconds is not None:
+                parts.append(value.effective_replay_ttl_seconds)
+            return _fingerprint(*parts)
 
         fingerprint = request_fingerprint(request)
         legacy_fingerprint = legacy_request_fingerprint(request)
@@ -2974,6 +2977,7 @@ class RedisStateStore:
                 requested_target,
                 _cas_settlement_capabilities(request),
                 legacy_fingerprint,
+                _integer_bytes(_ttl_ms(request.effective_replay_ttl_seconds)),
             ],
         )
         return _decode_cas_reply(reply)

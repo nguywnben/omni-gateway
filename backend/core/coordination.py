@@ -232,6 +232,7 @@ class CasRequest:
     operation_id: str = field(repr=False)
     settlement_targets: tuple[CasSettlementTarget, ...] = field(default=(), repr=False)
     settlement: CasSettlementProof | None = field(default=None, repr=False)
+    replay_ttl_seconds: float | None = field(default=None, repr=False)
 
     def __post_init__(self) -> None:
         _require_identifier(self.key, "Coordination key")
@@ -251,6 +252,13 @@ class CasRequest:
         )
         validate_epoch(self.epoch)
         validate_operation_id(self.operation_id)
+        if self.replay_ttl_seconds is not None:
+            _require_finite_float(
+                self.replay_ttl_seconds,
+                "Coordination replay TTL",
+                minimum=MIN_TTL_SECONDS,
+                maximum=MAX_TTL_SECONDS,
+            )
         if (
             type(self.settlement_targets) is not tuple
             or len(self.settlement_targets) > MAX_CAS_SETTLEMENT_TARGETS
@@ -264,6 +272,16 @@ class CasRequest:
             or self.settlement_targets
         ):
             raise ValueError("CAS settlement proof is invalid.")
+
+    @property
+    def effective_replay_ttl_seconds(self) -> float:
+        """Retention for idempotency evidence, independent of record lifetime."""
+
+        return float(
+            self.ttl_seconds
+            if self.replay_ttl_seconds is None
+            else self.replay_ttl_seconds
+        )
 
 
 @dataclass(frozen=True, slots=True)

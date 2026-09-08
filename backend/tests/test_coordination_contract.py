@@ -121,12 +121,38 @@ class CoordinationDomainTests(unittest.TestCase):
         for value in (math.nan, math.inf, -math.inf, 0.0, 30 * 86_400 + 1):
             with self.subTest(value=value), self.assertRaises(ValueError):
                 CasRequest("key", 0, b"payload", value, 1, "op")
+        for value in (math.nan, math.inf, -math.inf, 0.0, 30 * 86_400 + 1):
+            with self.subTest(replay_ttl=value), self.assertRaises(ValueError):
+                CasRequest(
+                    "key",
+                    0,
+                    b"payload",
+                    300.0,
+                    1,
+                    "op",
+                    replay_ttl_seconds=value,
+                )
         for revision in (-1, 2**63):
             with self.subTest(revision=revision), self.assertRaises(ValueError):
                 CasRequest("key", revision, b"payload", 1.0, 1, "op")
         for epoch in (0, -1, 2**63):
             with self.subTest(epoch=epoch), self.assertRaises(ValueError):
                 InvalidationRequest("scope", epoch, "op")
+
+    def test_cas_replay_ttl_defaults_to_record_ttl_and_can_be_bounded_separately(self) -> None:
+        defaulted = CasRequest("key", 0, b"payload", 300.0, 1, "defaulted")
+        bounded = CasRequest(
+            "key",
+            0,
+            b"payload",
+            300.0,
+            1,
+            "bounded",
+            replay_ttl_seconds=60.0,
+        )
+
+        self.assertEqual(defaulted.effective_replay_ttl_seconds, 300.0)
+        self.assertEqual(bounded.effective_replay_ttl_seconds, 60.0)
 
     def test_quota_snapshots_must_be_ordered_and_not_from_the_future(self) -> None:
         for overrides in (

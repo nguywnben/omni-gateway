@@ -521,6 +521,7 @@ class InMemoryStateStore(BaseStateStore):
             request.epoch,
             request.settlement_targets,
             request.settlement,
+            request.effective_replay_ttl_seconds,
         )
 
     @staticmethod
@@ -979,19 +980,22 @@ class InMemoryStateStore(BaseStateStore):
                 existing is not None and existing.revision != request.expected_revision
             ):
                 result = CasResult(False, None)
-                expires_at = now + request.ttl_seconds
+                expires_at = now + request.effective_replay_ttl_seconds
                 self._cas_replays[request.operation_id] = _Replay(fingerprint, result, expires_at)
                 self._replace_heap_member_locked(
                     self._cas_replay_expiries, request.operation_id, expires_at
                 )
                 return result
-            expires_at = now + request.ttl_seconds
+            record_expires_at = now + request.ttl_seconds
+            replay_expires_at = now + request.effective_replay_ttl_seconds
             result = CasResult(True, revision)
-            self._cas[request.key] = _CasRecord(revision, request.payload, expires_at)
-            self._cas_replays[request.operation_id] = _Replay(fingerprint, result, expires_at)
-            self._replace_heap_member_locked(self._cas_expiries, request.key, expires_at)
+            self._cas[request.key] = _CasRecord(revision, request.payload, record_expires_at)
+            self._cas_replays[request.operation_id] = _Replay(
+                fingerprint, result, replay_expires_at
+            )
+            self._replace_heap_member_locked(self._cas_expiries, request.key, record_expires_at)
             self._replace_heap_member_locked(
-                self._cas_replay_expiries, request.operation_id, expires_at
+                self._cas_replay_expiries, request.operation_id, replay_expires_at
             )
             return result
 

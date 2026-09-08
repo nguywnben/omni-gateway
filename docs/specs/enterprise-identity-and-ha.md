@@ -182,6 +182,13 @@ invalidation semantics—not Redis commands. New admissions and security mutatio
 required coordination is unavailable. After a Redis topology loss, an epoch/reconciliation barrier
 must complete before admissions resume.
 
+CAS record lifetime and CAS replay-evidence lifetime are separate contract values. Durable routing
+and outcome records may outlive the short uncertainty window in which retrying an operation must
+return its exact prior result. High-churn routing, release, outcome, and cache mutations therefore
+retain replay evidence for a bounded window; credential admissions retain it for at least the lease
+lifetime so an admitted request can still present a valid settlement proof. Exhausted or unavailable
+coordination is reported as a sanitized HTTP 503 and never leaks a storage exception as HTTP 500.
+
 Redis is not the sole source of truth for an accepted hard-budget reservation: the reservation is
 written through to a durable idempotent journal before provider work starts. Reconciliation rebuilds
 coordination state from that journal and the committed usage ledger, avoiding an overspend window

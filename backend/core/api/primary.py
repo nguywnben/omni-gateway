@@ -54,6 +54,7 @@ from core.codex import (
     fetch_codex_model_ids,
     gemini_request_to_codex,
 )
+from core.coordination import CoordinationUnavailableError
 from core.credential_manager import credential_manager
 from core.gateway_pipeline import (
     apply_pre_call_guardrails,
@@ -497,6 +498,26 @@ def _no_credential_error_message(model_name: str) -> str:
     return "No credentials are available."
 
 
+async def _coordination_unavailable_response(
+    *, log_prefix: str, model_name: str, error: CoordinationUnavailableError
+) -> Response:
+    log.error(
+        f"{log_prefix} Credential routing coordination is unavailable "
+        f"(error_type={type(error).__name__})."
+    )
+    await record_unassigned_api_call_error(
+        status_code=503,
+        mode="primary",
+        model_name=model_name,
+        reason="coordination_unavailable",
+    )
+    return Response(
+        content=json.dumps({"error": "Credential routing is temporarily unavailable."}),
+        status_code=503,
+        media_type="application/json",
+    )
+
+
 async def _switch_credential_for_retry(
     *,
     refresh_credential_fast,
@@ -576,13 +597,21 @@ async def _stream_request_upstream(
     route_exclusions: set[tuple[str, str]] = set()
     credential_route_exclusions: set[tuple[str, str]] = set()
 
-    route_result = await credential_manager.get_valid_model_credential(
-        candidates,
-        mode="primary",
-        respect_model_blacklist=model_routing,
-        excluded_provider_models=route_exclusions,
-        excluded_credential_models=credential_route_exclusions,
-    )
+    try:
+        route_result = await credential_manager.get_valid_model_credential(
+            candidates,
+            mode="primary",
+            respect_model_blacklist=model_routing,
+            excluded_provider_models=route_exclusions,
+            excluded_credential_models=credential_route_exclusions,
+        )
+    except CoordinationUnavailableError as exc:
+        yield await _coordination_unavailable_response(
+            log_prefix="[provider stream]",
+            model_name=requested_model,
+            error=exc,
+        )
+        return
 
     if not route_result:
         log.error("[provider stream] No credentials currently available")
@@ -909,6 +938,13 @@ async def _stream_request_upstream(
             # normal success/error accounting may not get a chance to run.
             await credential_manager.release_credential(current_file, mode="primary")
             raise
+        except CoordinationUnavailableError as exc:
+            yield await _coordination_unavailable_response(
+                log_prefix="[provider stream]",
+                model_name=requested_model,
+                error=exc,
+            )
+            return
         except Exception as e:
             exception_status = int(getattr(e, "status_code", 500) or 500)
             log.error(
@@ -1064,13 +1100,20 @@ async def _non_stream_request_upstream(
     route_exclusions: set[tuple[str, str]] = set()
     credential_route_exclusions: set[tuple[str, str]] = set()
 
-    route_result = await credential_manager.get_valid_model_credential(
-        candidates,
-        mode="primary",
-        respect_model_blacklist=model_routing,
-        excluded_provider_models=route_exclusions,
-        excluded_credential_models=credential_route_exclusions,
-    )
+    try:
+        route_result = await credential_manager.get_valid_model_credential(
+            candidates,
+            mode="primary",
+            respect_model_blacklist=model_routing,
+            excluded_provider_models=route_exclusions,
+            excluded_credential_models=credential_route_exclusions,
+        )
+    except CoordinationUnavailableError as exc:
+        return await _coordination_unavailable_response(
+            log_prefix="[provider]",
+            model_name=requested_model,
+            error=exc,
+        )
 
     if not route_result:
         log.error("[provider] No credentials currently available")
@@ -1450,6 +1493,12 @@ async def _non_stream_request_upstream(
                         )
                 continue
 
+        except CoordinationUnavailableError as exc:
+            return await _coordination_unavailable_response(
+                log_prefix="[provider]",
+                model_name=requested_model,
+                error=exc,
+            )
         except Exception as e:
             log.error(
                 f"[provider] non-streaming request raised an exception: {e}; credential={current_file}"

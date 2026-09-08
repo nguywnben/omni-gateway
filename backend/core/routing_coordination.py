@@ -37,6 +37,7 @@ MAX_LATENCY_SAMPLES: Final = 10
 MAX_SHARED_CACHE_CONTENT_BYTES: Final = 10 * 1024
 MAX_CREDENTIAL_TTL_SECONDS: Final = 15 * 60
 ROUTE_RECORD_TTL_SECONDS: Final = 30 * 86_400
+ROUTING_MUTATION_REPLAY_TTL_SECONDS: Final = 60
 CACHE_SCOPE_EXACT: Final = "cache-exact"
 CACHE_SCOPE_SEMANTIC: Final = "cache-semantic"
 GOVERNANCE_SCOPE_CONFIG: Final = "governance-config"
@@ -371,6 +372,7 @@ class RoutingCoordinationAdapter:
                     self._fencing_epoch,
                     self._operation_id("lease-acquire"),
                     settlement_targets=(CasSettlementTarget(key, CasSettlementTransition.UPDATE),),
+                    replay_ttl_seconds=max(ttl, ROUTING_MUTATION_REPLAY_TTL_SECONDS),
                 )
                 result = await self._compare_and_set_with_replay(admission)
                 if result.applied:
@@ -411,6 +413,7 @@ class RoutingCoordinationAdapter:
                             if lease.admission
                             else None
                         ),
+                        replay_ttl_seconds=ROUTING_MUTATION_REPLAY_TTL_SECONDS,
                     )
                 )
                 if result.applied:
@@ -538,6 +541,7 @@ class RoutingCoordinationAdapter:
                     ROUTE_RECORD_TTL_SECONDS,
                     self._fencing_epoch,
                     self._operation_id("route-outcome"),
+                    replay_ttl_seconds=ROUTING_MUTATION_REPLAY_TTL_SECONDS,
                 )
             )
             if result.applied:
@@ -653,6 +657,7 @@ class RoutingCoordinationAdapter:
                     ttl,
                     self._fencing_epoch,
                     self._operation_id("cache-publish"),
+                    replay_ttl_seconds=ROUTING_MUTATION_REPLAY_TTL_SECONDS,
                 )
             )
             if result.applied:

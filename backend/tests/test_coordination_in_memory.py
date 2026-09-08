@@ -749,6 +749,33 @@ class InMemoryCoordinationTests(CoordinationStoreContract, unittest.IsolatedAsyn
         admitted = await store.compare_and_set(CasRequest("second", 0, b"second", 10.0, 1, "cas-2"))
         self.assertTrue(admitted.applied)
 
+    async def test_cas_replay_can_expire_before_the_durable_record(self) -> None:
+        store = InMemoryStateStore(clock=self.clock, _coordination_replay_limit_for_testing=1)
+        first = CasRequest(
+            "long-lived-record",
+            0,
+            b"first",
+            300.0,
+            1,
+            "cas-short-replay-1",
+            replay_ttl_seconds=1.0,
+        )
+        self.assertTrue((await store.compare_and_set(first)).applied)
+
+        self.clock.advance(1.1)
+        second = CasRequest(
+            "long-lived-record",
+            1,
+            b"second",
+            300.0,
+            1,
+            "cas-short-replay-2",
+            replay_ttl_seconds=1.0,
+        )
+        self.assertTrue((await store.compare_and_set(second)).applied)
+        snapshot = await store.read_cas("long-lived-record", epoch=1)
+        self.assertEqual(snapshot.payload, b"second")
+
     async def test_invalidation_replay_capacity_is_bounded_and_expires(self) -> None:
         store = InMemoryStateStore(clock=self.clock, _coordination_replay_limit_for_testing=1)
         first_request = InvalidationRequest("scope-1", 1, "invalidate-1", 10.0)

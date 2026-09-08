@@ -35,6 +35,9 @@ class RoutingCoordinationRedisParityTests(unittest.IsolatedAsyncioTestCase):
             deployment_namespace="routing-parity",
             _redis_module_for_testing=module,
         )
+        self.client.epoch_exists = False
+        self.client.initialization_exists = False
+        await first_store.initialize_epoch()
         self.first = RoutingCoordinationAdapter(
             first_store, identifier_key=b"p" * 32, fencing_epoch=1
         )

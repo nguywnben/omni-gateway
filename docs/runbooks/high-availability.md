@@ -182,6 +182,13 @@ docker volume ls --filter "label=com.docker.compose.project=$w4cProject"
 Application logs and incomplete output are diagnostic only and never acceptance evidence. Fix the
 production owner, commit it, freeze a new candidate, and rerun the invalidated matrix from scratch.
 
+If sustained load begins returning routing 503 responses, inspect the fixed-cardinality
+`omni_routing_coordination_events_total` metrics and the Redis CAS replay hash/cardinality as one
+paired diagnostic. Record TTL and replay TTL are intentionally independent: a long-lived routing
+record must not imply a long-lived replay entry. A growing replay journal that does not converge
+after the configured uncertainty window is a production defect; do not raise the 100,000-entry
+safety bound or weaken reconciliation to make the evidence run pass.
+
 ## Bounded cleanup
 
 Before creating Docker resources, `run` verifies that the project label is empty and writes a

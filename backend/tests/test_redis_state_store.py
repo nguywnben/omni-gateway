@@ -234,9 +234,15 @@ class StatefulRegisteredScript:
                 self.client.values.pop(self.client.script_calls[-1][1][-2], None)
                 return [b"1", b"ok"]
             if self.name == "cas":
-                operation, fingerprint, proof_target, requested_target, capabilities, legacy = args[
-                    7:
-                ]
+                (
+                    operation,
+                    fingerprint,
+                    proof_target,
+                    requested_target,
+                    capabilities,
+                    legacy,
+                    replay_ttl,
+                ) = args[7:]
                 settled = self.client.replays["cas"].get(args[4])
                 if settled is not None and settled[2] > self.client.now_ms:
                     expected = (
@@ -245,7 +251,7 @@ class StatefulRegisteredScript:
                     if settled[0] == expected:
                         return [*settled[1][:-1], b"1"]
                     return [b"1", b"not_applied", b"", b"0"]
-                args = [*args[:7], capabilities, legacy]
+                args = [*args[:7], capabilities, legacy, replay_ttl]
                 if operation:
                     proof = self.client.replays["cas"].get(operation)
                     admitted_capabilities = self.client.cas_capabilities.get(operation, b"")
@@ -365,7 +371,7 @@ class StatefulRedisClient(FakeRedisClient):
         "time_read": (2, 1),
         "epoch_advance": (19, 4),
         "epoch_ready": (4, 4),
-        "cas": (5, 9),
+        "cas": (5, 10),
         "cas_read": (3, 1),
         "invalidation": (5, 5),
         "invalidation_read": (3, 0),
@@ -624,6 +630,7 @@ class StatefulRedisClient(FakeRedisClient):
                 limit,
                 capabilities,
                 _legacy_fingerprint,
+                replay_ttl,
             ) = byte_args
             if self.epoch != (int(epoch), b"ready"):
                 return [b"1", b"not_applied", b"", b"0"]
@@ -643,7 +650,14 @@ class StatefulRedisClient(FakeRedisClient):
                 if applied
                 else [b"1", b"not_applied", b"", b"0"]
             )
-            capacity = self._remember(name, operation_id, fingerprint, result, int(ttl), int(limit))
+            capacity = self._remember(
+                name,
+                operation_id,
+                fingerprint,
+                result,
+                int(replay_ttl),
+                int(limit),
+            )
             if capacity is not None:
                 return capacity
             if applied:
@@ -2111,7 +2125,15 @@ class RedisStateStoreTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_cas_keys_and_args_are_exact_and_replay_result_is_strict(self) -> None:
         self.queue("cas", [b"1", b"applied", b"7", b"1"])
-        request = CasRequest("opaque-key", 6, b"\x00value\xff", 2.5, 3, "cas-op")
+        request = CasRequest(
+            "opaque-key",
+            6,
+            b"\x00value\xff",
+            2.5,
+            3,
+            "cas-op",
+            replay_ttl_seconds=1.25,
+        )
         result = await self.store.compare_and_set(request)
         self.assertEqual((result.applied, result.revision, result.idempotent), (True, 7, True))
         name, keys, args = self.client.script_calls[0]
@@ -2120,6 +2142,7 @@ class RedisStateStoreTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(args[:5], [b"6", b"\x00value\xff", b"2500", b"3", b"cas-op"])
         self.assertEqual(len(args[5]), 64)
         self.assertEqual(args[6], b"100000")
+        self.assertEqual(args[-2], b"1250")
 
     async def test_cas_read_keys_args_and_reply_schema_are_exact(self) -> None:
         self.queue(
@@ -2409,6 +2432,39 @@ class RedisStateStoreTests(unittest.IsolatedAsyncioTestCase):
         await cap_store.compare_and_set(CasRequest("cap", 0, b"one", 5, 1, "one"))
         with self.assertRaises(CoordinationReconciliationRequiredError):
             await cap_store.compare_and_set(CasRequest("other", 0, b"two", 5, 1, "two"))
+
+        short_replay_client = StatefulRedisClient()
+        short_replay_store = RedisStateStore(
+            "redis://redis.example/0",
+            deployment_namespace="short-replay-zone",
+            _coordination_replay_limit_for_testing=1,
+            _redis_module_for_testing=FakeRedisModule(short_replay_client),
+        )
+        await short_replay_store.compare_and_set(
+            CasRequest(
+                "durable",
+                0,
+                b"one",
+                300,
+                1,
+                "short-one",
+                replay_ttl_seconds=1,
+            )
+        )
+        short_replay_client.advance(1_001)
+        updated = await short_replay_store.compare_and_set(
+            CasRequest(
+                "durable",
+                1,
+                b"two",
+                300,
+                1,
+                "short-two",
+                replay_ttl_seconds=1,
+            )
+        )
+        self.assertTrue(updated.applied)
+        self.assertEqual((await short_replay_store.read_cas("durable", epoch=1)).payload, b"two")
 
         cleanup_client = StatefulRedisClient()
         cleanup_client.replays["cas"] = {
