@@ -12,7 +12,7 @@ BACKEND_DIR = Path(__file__).resolve().parents[1]
 if str(BACKEND_DIR) not in sys.path:
     sys.path.insert(0, str(BACKEND_DIR))
 
-from core.api.utils import record_api_call_success
+from core.api.utils import record_api_call_success, record_response_cache_hit
 from core.request_context import request_scope, set_api_key_id, set_virtual_key_reservation_id
 from core.state_store import QuotaCommitResult
 from main import add_security_headers
@@ -118,6 +118,42 @@ class QuotaSuccessCommitTests(unittest.IsolatedAsyncioTestCase):
             "reservation-success",
             actual_tokens=100,
             actual_cost_usd=0.125,
+            durable_cost_recorded=True,
+        )
+
+    async def test_cache_hit_commits_a_non_billable_durable_usage_event(self) -> None:
+        cost = AsyncMock(return_value=0.0)
+        commit = AsyncMock(return_value=QuotaCommitResult(True))
+        ledger = AsyncMock(return_value=True)
+
+        with (
+            request_scope("request-cache-hit"),
+            patch("core.api.utils.virtual_key_manager.calculate_actual_cost", cost),
+            patch("core.api.utils.virtual_key_manager.commit_reservation", commit),
+            patch(
+                "core.api.utils.virtual_key_manager.is_durable_reservation",
+                return_value=True,
+            ),
+            patch("core.api.utils.record_call", ledger),
+        ):
+            set_api_key_id("vk_cache")
+            set_virtual_key_reservation_id("reservation-cache")
+            await record_response_cache_hit(model_name="gemini-2.5-flash")
+
+        cost.assert_awaited_once_with(
+            "vk_cache",
+            model="gemini-2.5-flash",
+            provider="response_cache",
+            token_usage=None,
+        )
+        self.assertTrue(ledger.call_args.kwargs["success"])
+        self.assertIsNone(ledger.call_args.kwargs["token_usage"])
+        self.assertEqual(ledger.call_args.kwargs["provider"], "response_cache")
+        self.assertEqual(ledger.call_args.kwargs["cost_override_usd"], 0.0)
+        commit.assert_awaited_once_with(
+            "reservation-cache",
+            actual_tokens=0,
+            actual_cost_usd=0.0,
             durable_cost_recorded=True,
         )
 

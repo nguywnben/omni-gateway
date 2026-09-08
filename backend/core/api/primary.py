@@ -44,6 +44,7 @@ from core.api.utils import (
     record_api_call_error,
     record_api_call_success,
     record_model_route_miss,
+    record_response_cache_hit,
     record_unassigned_api_call_error,
 )
 from core.codex import (
@@ -1014,6 +1015,10 @@ async def non_stream_request(
 
     cache_key, cached_response = await lookup_response_cache(body)
     if cached_response is not None:
+        await record_response_cache_hit(
+            model_name=str(body.get("model") or ""),
+            status_code=cached_response.status_code,
+        )
         return cached_response
 
     response = await _non_stream_request_upstream(

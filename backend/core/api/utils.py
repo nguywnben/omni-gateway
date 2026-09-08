@@ -449,6 +449,19 @@ async def record_unassigned_api_call_success(
     )
 
 
+async def record_response_cache_hit(*, model_name: str, status_code: int = 200) -> None:
+    """Persist one non-billable cache success and settle its quota reservation."""
+
+    await _record_success_usage(
+        filename=UNASSIGNED_USAGE_FILENAME,
+        model_name=model_name,
+        provider="response_cache",
+        status_code=status_code,
+        token_usage=None,
+        request_metrics=None,
+    )
+
+
 async def parse_and_log_cooldown(error_text: str, mode: str = "code_assist") -> Optional[float]:
     try:
         error_data = json.loads(error_text)
