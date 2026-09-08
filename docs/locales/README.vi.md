@@ -43,9 +43,18 @@
 
 ---
 
+Tiếng Anh và tiếng Việt là hai ngôn ngữ sản phẩm được đội ngũ duy trì trực tiếp. Các ngôn ngữ còn
+lại là bản dịch tương thích do cộng đồng duy trì và sẽ dùng nội dung tiếng Anh khi thiếu thông điệp.
+
 Một router AI vạn năng dành cho các công cụ lập trình (coding tools). Omni Gateway cung cấp khả năng tự động chuyển đổi dự phòng thông minh (smart auto-fallback), dọn dẹp ngữ cảnh nhận biết token, minh bạch hóa mức độ sử dụng và chuyển đổi định dạng liền mạch để các agent cục bộ, trợ lý IDE và script tự động hóa có thể tận dụng dung lượng LLM miễn phí lẫn trả phí thông qua một giao diện API ổn định duy nhất.
 
-> **Trạng thái dự án:** Ổn định. Phiên bản `1.4.0` bổ sung quản trị doanh nghiệp và FinOps: khóa API ảo kèm ngân sách và giới hạn tần suất, sổ cái chi phí USD mỗi lượt gọi từ bảng giá mô hình, guardrails và bộ nhớ đệm phản hồi tùy chọn, 3 chiến lược định tuyến mới, endpoint Prometheus `/metrics`, xuất trace sang Langfuse và Helm chart — trong khi vẫn duy trì ổn định các tuyến SDK, tuyến quản trị chuẩn hóa, tên cấu hình và giao ước chạy đơn phiên bản đã thiết lập từ `1.0.0`.
+> **Phạm vi sản phẩm:** Omni Gateway đang được hoàn thiện cho mô hình tự triển khai production bởi
+> một cá nhân hoặc một nhóm tin cậy. Topology production được hỗ trợ gồm một worker và một replica;
+> Docker Compose, quyền chủ sở hữu cục bộ, SQLite, định tuyến nhà cung cấp và các tuyến SDK đã ghi tài
+> liệu thuộc tier Core. PostgreSQL, truy cập nhóm qua OIDC, reverse proxy và telemetry bên ngoài là
+> các tùy chọn Advanced. MongoDB và các ngôn ngữ không được duy trì trực tiếp thuộc tier
+> Compatibility. Điều phối Redis và tài nguyên Kubernetes vẫn là Experimental, không phải cam kết
+> production. Xem [đặc tả Production Self-Hosted R1](../specs/production-self-hosted.md).
 
 ## Tại sao nên chọn Omni Gateway
 
@@ -53,9 +62,9 @@ Quy trình lập trình hiện đại thường kết hợp nhiều client và p
 
 ## <a id="tinh-nang-cot-loi"></a>Tính năng cốt lõi
 
-Omni Gateway records request volume, success rate, credential attribution, provider-reported token usage, estimated context-compression savings, and an estimated USD cost per call computed from a maintained model pricing table. Override or extend prices by placing a `model_pricing.json` file in the credentials directory; prices are USD per one million tokens. Aggregates are available on the dashboard, per virtual key through the `/api/virtual-keys` management API, and for monitoring systems through the Prometheus `/metrics` endpoint. Compression savings and costs are labeled as estimates because provider tokenizers and billing rules remain authoritative.
+Omni Gateway ghi lại khối lượng yêu cầu, tỷ lệ thành công, thông tin xác thực được sử dụng, số token do nhà cung cấp báo cáo, lượng token ước tính tiết kiệm nhờ nén ngữ cảnh và chi phí USD ước tính cho mỗi lượt gọi theo bảng giá mô hình được duy trì. Có thể ghi đè hoặc bổ sung giá bằng tệp `model_pricing.json` trong thư mục thông tin xác thực; giá được tính bằng USD trên một triệu token. Dữ liệu tổng hợp có trên dashboard, theo từng khóa ảo qua API quản trị `/api/virtual-keys` và qua endpoint Prometheus `/metrics`. Mức tiết kiệm và chi phí luôn được ghi là ước tính vì tokenizer và quy tắc tính phí của nhà cung cấp mới là căn cứ cuối cùng.
 
-Virtual API keys let one gateway serve multiple clients under separate limits. Each key carries optional daily and monthly USD budgets enforced from the cost ledger, requests-per-minute and tokens-per-minute sliding windows, an expiry timestamp, and a model allowlist with glob patterns. Keys are stored as SHA-256 hashes; the plaintext secret is shown exactly once at creation time.
+Khóa API ảo cho phép một gateway phục vụ nhiều client với giới hạn riêng. Mỗi khóa có thể đặt ngân sách USD theo ngày và tháng, giới hạn số yêu cầu và token mỗi phút, thời điểm hết hạn và danh sách mô hình cho phép theo mẫu glob. Khóa được lưu dưới dạng băm SHA-256; bí mật dạng văn bản thuần chỉ hiển thị một lần khi tạo.
 
 ## Giao diện Console
 
@@ -107,6 +116,9 @@ docs/          Ghi chú kiến trúc và tài liệu bảo trì của dự án
 Xem [Kiến trúc](../architecture.md) để biết thêm về ranh giới các module, luồng xử lý yêu cầu, quyền sở hữu trạng thái và các ràng buộc phát hành hiện tại.
 
 ## <a id="trien-khai"></a>Triển khai
+
+Docker Compose là cách triển khai production chuẩn cho profile một máy, một worker được hỗ trợ.
+Quy trình `docker run` trực tiếp vẫn phù hợp cho các cài đặt đơn giản.
 
 Omni Gateway được thiết kế cho các môi trường triển khai thực tế. Docker là giải pháp được khuyến nghị cho môi trường VPS và máy chủ vì nó giữ runtime cô lập trong khi vẫn lưu trữ bền vững thông tin xác thực và log trên máy chủ host.
 
@@ -182,16 +194,20 @@ File compose đi kèm sẽ kéo image `nguywnben/omni-gateway:latest` và sử d
 
 Compose sẽ chuyển tiếp `API_KEY`, `PANEL_PASSWORD`, `SETUP_TOKEN`, URI lưu trữ bên ngoài và `PROXY` từ shell hoặc file `.env` ở thư mục gốc. Để trống các biến này nếu muốn giữ cơ chế tự tạo key tự động, thiết lập trong lần chạy đầu, lưu trữ SQLite cục bộ và kết nối mạng ra trực tiếp.
 
-### Kubernetes (Helm)
+### Kubernetes / Helm (thử nghiệm)
 
-Helm chart được cung cấp tại `deploy/helm/omni-gateway` kèm ổ lưu trữ bền vững cho thông tin xác thực và sổ cái sử dụng, probe liveness/readiness, Ingress tùy chọn và ServiceMonitor Prometheus nối tới `/metrics`:
+Chart hiện có tại `deploy/helm/omni-gateway` được giữ lại như một tài nguyên thử nghiệm do cộng đồng
+sử dụng. Chart phù hợp để đánh giá nhưng nằm ngoài phạm vi hỗ trợ Production Self-Hosted R1 và không
+kèm cam kết production hoặc mở rộng ngang. Chart có ổ lưu trữ bền vững, probe liveness/readiness,
+Ingress tùy chọn và ServiceMonitor Prometheus:
 
 ```bash
 helm install omni-gateway deploy/helm/omni-gateway \
   --set secrets.panelPassword=change-me
 ```
 
-Chart triển khai chính xác 1 bản sao (replica) với chiến lược `Recreate` vì bản 1.x lưu trạng thái định tuyến và giới hạn tần suất trong bộ nhớ tiến trình. Không mở rộng (scale) Deployment theo chiều ngang.
+Chart triển khai chính xác một replica với chiến lược `Recreate` vì runtime lưu trạng thái định tuyến
+và giới hạn tần suất trong bộ nhớ tiến trình. Không mở rộng Deployment này theo chiều ngang.
 
 ### Phát triển cục bộ
 
@@ -275,7 +291,7 @@ Omni Gateway đọc cấu hình ưu tiên từ các biến môi trường trư�
 | `RETURN_THOUGHTS_TO_FRONTEND` | `true` | Trả về trường suy nghĩ/lập luận của mô hình (reasoning) khi có sẵn. |
 | `MONGODB_URI` | trống | Bật lưu trữ MongoDB khi được thiết lập. |
 | `POSTGRESQL_URI` | trống | Bật lưu trữ PostgreSQL khi được thiết lập. |
-| `REDIS_URL` | trống | Bật bộ nhớ đệm / trạng thái phiên trên nền Redis khi được thiết lập. |
+| `REDIS_URL` | trống | Phụ thuộc điều phối thử nghiệm. Biến này không bật chế độ nhiều replica; profile production R1 vẫn chặn chế độ coordinated. |
 | `CODE_ASSIST_CLIENT_ID` | tích hợp sẵn | Ghi đè tùy chọn cho Client ID OAuth của Code Assist. |
 | `CODE_ASSIST_CLIENT_SECRET` | tích hợp sẵn | Ghi đè tùy chọn cho Client Secret OAuth của Code Assist. |
 | `ANTIGRAVITY_CLIENT_ID` | tích hợp sẵn | Ghi đè tùy chọn cho Client ID OAuth của Google Antigravity. Có thể quản lý từ trang Providers. |
@@ -489,13 +505,15 @@ MONGODB_DATABASE=omni_gateway
 POSTGRESQL_URI=postgresql://user:password@localhost:5432/omni_gateway
 ```
 
-Redis có thể được thêm vào để tăng tốc bộ nhớ đệm / phiên làm việc:
+Cấu hình Redis chỉ được giữ lại để đánh giá runtime điều phối thử nghiệm:
 
 ```bash
 REDIS_URL=redis://127.0.0.1:6379/0
 ```
 
-Bộ lưu trữ bên ngoài không làm cho runtime 1.x có thể mở rộng theo chiều ngang (horizontal scaling). Hãy chạy một worker và một bản sao (replica) duy nhất cho đến khi việc đặt chỗ credential phân tán, cooldown, vô hiệu hóa phiên và tổng hợp dữ liệu sử dụng được triển khai hoàn chỉnh. Chỉ cấu hình một trong hai: MongoDB hoặc PostgreSQL, không cấu hình cả hai; lỗi khởi tạo cơ sở dữ liệu bên ngoài rõ ràng sẽ dừng quá trình khởi động thay vì âm thầm quay về sử dụng SQLite.
+Bộ lưu trữ bên ngoài hoặc Redis không làm cho runtime R1 có thể mở rộng theo chiều ngang. Môi trường
+production phải chạy một worker và một replica. Chỉ cấu hình một trong hai: MongoDB hoặc PostgreSQL;
+lỗi khởi tạo cơ sở dữ liệu bên ngoài sẽ dừng quá trình khởi động thay vì âm thầm quay về SQLite.
 
 Khả năng nhập thông tin xác thực từ môi trường có sẵn từ bảng điều khiển. Đặt một trong các biến sau thành chuỗi JSON thô hoặc sử dụng biến thể `_B64` tương ứng cho chuỗi JSON mã hóa base64:
 

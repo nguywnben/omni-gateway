@@ -43,9 +43,18 @@
 
 ---
 
+English and Vietnamese are the maintainer-curated product languages. The other listed locales are
+community-maintained compatibility translations and fall back to English when a message is absent.
+
 A universal AI router for coding tools. Omni Gateway provides smart auto-fallback, token-aware request cleanup, usage visibility, and seamless format translation so local agents, IDE assistants, and automation scripts can use free and premium LLM capacity through one stable API surface.
 
-> **Project status:** Stable. Version `1.4.0` adds enterprise governance and FinOps: virtual API keys with budgets and rate limits, a per-call USD cost ledger backed by a maintained pricing table, optional guardrails and response caching, three new routing strategies, a Prometheus metrics endpoint, Langfuse trace export, and a Helm chart — while preserving the stable SDK routes, canonical management routes, configuration names, and single-instance runtime contract established in `1.0.0`.
+> **Product boundary:** Omni Gateway is being hardened for production self-hosting by one person or
+> a trusted team. The supported production topology is one application worker and one replica;
+> Docker Compose, local-owner access, SQLite, provider routing, and the documented SDK routes form
+> the core profile. PostgreSQL, OIDC team access, reverse-proxy operation, and external telemetry
+> are advanced opt-ins. MongoDB and non-curated locales are compatibility surfaces. Redis
+> coordination and Kubernetes assets remain experimental and are not production guarantees. See
+> the [Production Self-Hosted R1 specification](docs/specs/production-self-hosted.md).
 
 ## Why Omni Gateway
 
@@ -118,6 +127,9 @@ docs/          Architecture notes and maintained project assets
 See [Architecture](docs/architecture.md) for module boundaries, request flow, state ownership, and current release constraints.
 
 ## Deployment
+
+Docker Compose is the canonical production deployment path for the supported single-machine,
+single-worker profile. The direct `docker run` workflow remains available for simple installations.
 
 Omni Gateway is intended for real deployments. Docker is the recommended path for VPS and server environments because it keeps the runtime isolated while preserving credentials and logs on the host.
 
@@ -193,16 +205,20 @@ The included compose file pulls `nguywnben/omni-gateway:latest` and uses `/opt/o
 
 Compose forwards `API_KEY`, `PANEL_PASSWORD`, `SETUP_TOKEN`, external storage URIs, and `PROXY` from the shell or a root `.env` file. Leave them empty to retain automatic key generation, first-run setup, local SQLite storage, and direct outbound networking.
 
-### Kubernetes (Helm)
+### Kubernetes / Helm (experimental)
 
-A Helm chart is provided at `deploy/helm/omni-gateway` with a persistent volume for credentials and the usage ledger, liveness/readiness probes, optional Ingress, and an optional Prometheus ServiceMonitor wired to `/metrics`:
+The existing chart at `deploy/helm/omni-gateway` is retained as an experimental community asset.
+It is useful for evaluation, but it is outside the Production Self-Hosted R1 support boundary and
+does not carry a production or horizontal-scaling guarantee. The chart includes a persistent volume,
+liveness/readiness probes, optional Ingress, and an optional Prometheus ServiceMonitor:
 
 ```bash
 helm install omni-gateway deploy/helm/omni-gateway \
   --set secrets.panelPassword=change-me
 ```
 
-The chart deploys exactly one replica with a `Recreate` strategy because the 1.x runtime holds routing and rate-limit state in process memory. Do not scale the Deployment horizontally.
+The chart deploys exactly one replica with a `Recreate` strategy because the runtime holds routing
+and rate-limit state in process memory. Do not scale this Deployment horizontally.
 
 ### Local Development
 
@@ -288,7 +304,7 @@ Omni Gateway reads configuration from environment variables first, then stored c
 | `RETURN_THOUGHTS_TO_FRONTEND` | `true` | Include model reasoning fields when available. |
 | `MONGODB_URI` | empty | Enables MongoDB storage when set. |
 | `POSTGRESQL_URI` | empty | Enables PostgreSQL storage when set. |
-| `REDIS_URL` | empty | Redis endpoint. It does not activate HA by itself; coordinated mode also requires a shared durable backend, namespace/key/epoch settings, and an accepted activation record. |
+| `REDIS_URL` | empty | Experimental coordination dependency. It does not enable multi-replica operation; the R1 production profile leaves coordinated mode blocked. |
 | `CODE_ASSIST_CLIENT_ID` | bundled desktop client | Optional override for the Code Assist OAuth client ID. |
 | `CODE_ASSIST_CLIENT_SECRET` | bundled desktop client | Optional override for the Code Assist OAuth client secret. |
 | `ANTIGRAVITY_CLIENT_ID` | bundled desktop client | Optional override for the Google Antigravity OAuth client ID. It can also be managed from the Providers page. |
@@ -501,13 +517,15 @@ MONGODB_DATABASE=omni_gateway
 POSTGRESQL_URI=postgresql://user:password@localhost:5432/omni_gateway
 ```
 
-Redis can be added for cache/session acceleration:
+Redis configuration is retained only for experimental coordinated-runtime evaluation:
 
 ```bash
 REDIS_URL=redis://127.0.0.1:6379/0
 ```
 
-External storage does not make the 1.x runtime horizontally scalable. Run one worker and one replica until distributed credential reservations, cooldowns, session invalidation, and usage aggregation are implemented. Configure either MongoDB or PostgreSQL, not both; an explicit external-database initialization failure stops startup rather than silently falling back to SQLite.
+External storage or Redis does not make the R1 runtime horizontally scalable. Production deployments
+must run one worker and one replica. Configure either MongoDB or PostgreSQL, not both; an explicit
+external-database initialization failure stops startup rather than silently falling back to SQLite.
 
 Environment credential import is available from the control panel. Set one of the following variables to raw JSON or use the matching `_B64` variant for base64-encoded JSON:
 

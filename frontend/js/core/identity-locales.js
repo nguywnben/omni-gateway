@@ -107,7 +107,7 @@ const IDENTITY_LOCALE_VALUES = {
 };
 
 const IDENTITY_SUPPLEMENTAL_LOCALE_VALUES = {
-    "en": {"identity.already_exists": "An identity with this exact issuer and subject already exists."},
+    "en": {"identity.already_exists": "An identity with this exact issuer and subject already exists.", "identity.governance": "Access & team"},
     "zh-CN": {"identity.already_exists": "已存在具有完全相同颁发者和主体的身份。"},
     "zh-TW": {"identity.already_exists": "已存在具有完全相同發行者與主體的身分。"},
     "de": {"identity.already_exists": "Eine Identität mit genau diesem Aussteller und Betreff ist bereits vorhanden."},
@@ -121,7 +121,7 @@ const IDENTITY_SUPPLEMENTAL_LOCALE_VALUES = {
     "ru": {"identity.already_exists": "Идентичность с такими точными издателем и субъектом уже существует."},
     "th": {"identity.already_exists": "มีข้อมูลประจำตัวที่มีผู้ออกและหัวเรื่องตรงกันนี้อยู่แล้ว"},
     "tr": {"identity.already_exists": "Bu tam yayımcı ve özneye sahip bir kimlik zaten var."},
-    "vi": {"identity.already_exists": "Đã tồn tại một danh tính có chính xác nhà phát hành và chủ thể này."}
+    "vi": {"identity.already_exists": "Đã tồn tại một danh tính có chính xác nhà phát hành và chủ thể này.", "identity.governance": "Truy cập và nhóm"}
 };
 
 const IDENTITY_ALIASES = {

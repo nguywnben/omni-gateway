@@ -6,9 +6,9 @@
 - Active plan: `PROD-SELFHOST-R1`
 - Target: production-quality self-hosting for one person or a trusted team, not enterprise service
   operation.
-- Progress: **1/36 implementation tasks**; Phase 0 is 1/6 complete.
-- Completed: **P0.1 — Capability registry and support tiers**.
-- Next task: **P0.2 — Product terminology and navigation inventory**.
+- Progress: **2/36 implementation tasks**; Phase 0 is 2/6 complete.
+- Completed: **P0.2 — Product terminology and navigation inventory**.
+- Next task: **P0.3 — Isolate unfinished HA work**.
 - Supported runtime today: standalone, one worker, one replica.
 - Redis coordination, multi-replica HA, and Helm are experimental and no longer R1 release blockers.
 
@@ -48,6 +48,12 @@ documents should be committed separately after approval. Do not push unless the 
 
 ## Latest Evidence
 
+- `docs/evidence/p0.2-product-surface-inventory.md`
+- Checked inventory: 11 pages/tabs, 134 OpenAPI operations, 24 Settings controls, 123 example
+  environment variables, 16 advertised claims, and explicit locale ownership.
+- Product copy now presents the fixed Core/Advanced/Compatibility/Experimental self-host boundary in
+  both curated languages; Redis coordination and Kubernetes/Helm are explicitly experimental.
+- P0.2 focused console/localization gate: 53 tests passed; all four localization audits passed.
 - `docs/evidence/p0.1-capability-registry.md`
 - Default runtime snapshot: 31 capabilities; only Core entries are active.
 - Focused contract/runtime matrix: 45 tests passed.
