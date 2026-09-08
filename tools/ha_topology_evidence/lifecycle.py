@@ -16,6 +16,10 @@ from typing import AsyncIterator, Final, Mapping
 from core.coordination import CoordinationUnavailableError
 from core.ha_coordination_binding import CoordinationBindingManager
 from core.redis_state_store import RedisStateStore
+from core.smart_routing import (
+    DEFAULT_ROUTE_STATE_CACHE_TTL_SECONDS,
+    DEFAULT_ROUTE_TRANSIENT_BACKOFF_SECONDS,
+)
 from core.storage.postgresql_manager import PostgreSQLManager
 
 from .admin import CandidateAdmin, experimental_policy
@@ -28,6 +32,7 @@ from .scenarios import ComposeAction, HostController, NoRedirect
 ROLLBACK_COMPOSE_FILE: Final = (
     Path(__file__).resolve().parents[2] / "deploy" / "evidence" / "compose.rollback.yml"
 )
+ROUTE_RECOVERY_MARGIN_SECONDS: Final = 0.25
 
 
 class LifecycleScenarioDriver:
@@ -466,8 +471,12 @@ class LifecycleScenarioDriver:
             request_deadline_ms=self.candidate.request_deadline_ms,
             sequence_offset=90_000,
         )
-        if result.samples[0].success:
-            raise EvidenceVerificationError("Unknown-outcome response unexpectedly succeeded.")
+        if (
+            result.samples[0].success
+            or result.samples[0].status_code != 500
+            or result.samples[0].transport_failure
+        ):
+            raise EvidenceVerificationError("Unknown-outcome response shape is invalid.")
         fixture_after = self.controller.fixture_state()
         before_milestones = fixture_before.get("milestones")
         after_milestones = fixture_after.get("milestones")
@@ -482,6 +491,12 @@ class LifecycleScenarioDriver:
             raise EvidenceVerificationError(
                 "Unknown-outcome fault did not reach the upstream response boundary."
             )
+        backoff_samples = await self._probe(expect_success=False)
+        if any(
+            sample.get("status_code") != 503 or sample.get("transport_failure") is not False
+            for sample in backoff_samples
+        ):
+            raise EvidenceVerificationError("Unknown-outcome route backoff is invalid.")
         deadline = time.monotonic() + 30
         while time.monotonic() < deadline:
             after = await self.oracle.snapshot()
@@ -492,14 +507,24 @@ class LifecycleScenarioDriver:
             raise EvidenceVerificationError("Unknown-outcome liability did not settle.")
         if after.usage_records < before.usage_records:
             raise EvidenceVerificationError("Unknown-outcome durable history regressed.")
+        # An upstream outcome that is unknown to the gateway deliberately applies
+        # the production router's transient penalty. Prove admission fails closed during
+        # that penalty, then wait beyond its bounded cache/backoff window and
+        # prove both replicas recover without operator intervention.
+        await asyncio.sleep(
+            DEFAULT_ROUTE_TRANSIENT_BACKOFF_SECONDS
+            + DEFAULT_ROUTE_STATE_CACHE_TTL_SECONDS
+            + ROUTE_RECOVERY_MARGIN_SECONDS
+        )
         probe_samples = await self._probe(expect_success=True)
         return {
             "exercised": True,
             "safe": True,
-            "challenged_operations": 3,
+            "challenged_operations": 5,
             "fault_milestones": 2,
             "samples": (
                 *(sample.safe_dict(include_request_id=True) for sample in result.samples),
+                *backoff_samples,
                 *probe_samples,
             ),
         }

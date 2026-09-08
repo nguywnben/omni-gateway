@@ -390,6 +390,73 @@ class ScenarioAndOracleTests(unittest.TestCase):
 
 
 class RecoveryTransitionTests(unittest.IsolatedAsyncioTestCase):
+    async def test_unknown_outcome_proves_route_backoff_then_recovers(self) -> None:
+        from backend.tests.test_ha_topology_evidence_contract import candidate
+
+        class Controller:
+            def __init__(self) -> None:
+                self.dropped = 0
+
+            def fault(self, action) -> None:
+                self.asserted_action = action
+                self.dropped += 1
+
+            def fixture_state(self):
+                return {"milestones": {"provider-response-dropped": self.dropped}}
+
+        driver = object.__new__(LifecycleScenarioDriver)
+        driver.candidate = candidate()
+        driver.controller = Controller()
+        driver.endpoints = (
+            ("app-a", "http://127.0.0.1:14283"),
+            ("app-b", "http://127.0.0.1:14284"),
+        )
+        driver.api_key = "sk-ogw-synthetic"
+        driver.oracle = AsyncMock()
+        driver.oracle.snapshot.return_value = snapshot()
+        backoff_samples = (
+            RequestSample(200_000, "app-a", 503, 1.0, False, False).safe_dict(
+                include_request_id=True
+            ),
+            RequestSample(200_001, "app-b", 503, 1.0, False, False).safe_dict(
+                include_request_id=True
+            ),
+        )
+        recovered_samples = (
+            RequestSample(200_002, "app-a", 200, 1.0, True, False).safe_dict(
+                include_request_id=True
+            ),
+            RequestSample(200_003, "app-b", 200, 1.0, True, False).safe_dict(
+                include_request_id=True
+            ),
+        )
+        driver._probe = AsyncMock(side_effect=(backoff_samples, recovered_samples))
+        failed = WorkloadResult(
+            (RequestSample(90_000, "app-a", 500, 1.0, False, False),),
+            1.0,
+        )
+
+        with (
+            patch(
+                "tools.ha_topology_evidence.lifecycle.run_workload",
+                new=AsyncMock(return_value=failed),
+            ),
+            patch("tools.ha_topology_evidence.lifecycle.asyncio.sleep", new=AsyncMock()) as sleep,
+        ):
+            result = await driver.cancellation_unknown_outcome()
+
+        self.assertEqual(result["challenged_operations"], 5)
+        self.assertEqual(len(result["samples"]), 5)
+        self.assertEqual(
+            [sample["status_code"] for sample in result["samples"]],
+            [500, 503, 503, 200, 200],
+        )
+        self.assertEqual(
+            driver._probe.await_args_list,
+            [unittest.mock.call(expect_success=False), unittest.mock.call(expect_success=True)],
+        )
+        sleep.assert_awaited_once_with(2.5)
+
     async def test_recovery_waits_for_restarted_coordination_before_transition(self) -> None:
         from core.coordination import CoordinationUnavailableError
 

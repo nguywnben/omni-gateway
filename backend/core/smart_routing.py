@@ -38,6 +38,8 @@ VALID_ROUTING_STRATEGIES = frozenset(
 )
 LATENCY_BUCKET_MS = 100.0
 MAX_ROUTING_CANDIDATES = 100
+DEFAULT_ROUTE_STATE_CACHE_TTL_SECONDS = 0.25
+DEFAULT_ROUTE_TRANSIENT_BACKOFF_SECONDS = 2.0
 _PROCESS_ROUTING_IDENTIFIER_KEY = secrets.token_bytes(32)
 
 
@@ -49,8 +51,8 @@ class SmartCredentialRouter:
         *,
         clock: Callable[[], float] = time.time,
         lease_ttl_seconds: float = 15 * 60,
-        state_cache_ttl_seconds: float = 0.25,
-        base_backoff_seconds: float = 2.0,
+        state_cache_ttl_seconds: float = DEFAULT_ROUTE_STATE_CACHE_TTL_SECONDS,
+        base_backoff_seconds: float = DEFAULT_ROUTE_TRANSIENT_BACKOFF_SECONDS,
         max_backoff_seconds: float = 30.0,
         auth_backoff_seconds: float = 300.0,
         model_backoff_seconds: float = 60.0,

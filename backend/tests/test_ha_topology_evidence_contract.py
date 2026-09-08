@@ -52,6 +52,13 @@ def candidate() -> CandidateTopology:
     )
 
 
+def sample_outcome(scenario: str, phase: str, attempt: int) -> tuple[int, bool]:
+    if scenario == "cancellation-unknown-outcome":
+        return ((500, False), (503, False), (503, False), (200, True), (200, True))[attempt - 1]
+    success = phase != "fault"
+    return (200 if success else 503), success
+
+
 def manifest(root: Path, topology: CandidateTopology | None = None) -> RunManifest:
     selected = topology or candidate()
     candidate_payload = canonical_bytes(selected.to_dict()) + b"\n"
@@ -68,12 +75,12 @@ def manifest(root: Path, topology: CandidateTopology | None = None) -> RunManife
             milestones = expected_fault_milestones(scenario)
             for phase, count in expected_sample_partitions(selected, scenario).items():
                 for attempt in range(1, count + 1):
-                    success = phase != "fault"
+                    status_code, success = sample_outcome(scenario, phase, attempt)
                     sample_records.append(
                         {
                             "sequence": sequence,
-                            "replica": "app-a" if sequence % 2 == 0 else "app-b",
-                            "status_code": 200 if success else 503,
+                            "replica": "app-a" if attempt % 2 == 1 else "app-b",
+                            "status_code": status_code,
                             "duration_ms": 1.0,
                             "success": success,
                             "transport_failure": False,
@@ -297,7 +304,7 @@ class CandidateContractTests(unittest.TestCase):
         self.assertRegex(topology.candidate_id, r"^act_[0-9a-f]{32}$")
         self.assertTrue(CandidateVerifier.exact(topology, replica_count=2)(topology.candidate_id))
         self.assertFalse(CandidateVerifier.exact(topology, replica_count=2)("act_" + ("0" * 32)))
-        self.assertEqual(topology.expected_sample_count, 28_704)
+        self.assertEqual(topology.expected_sample_count, 28_706)
 
         raw = topology.to_dict()
         raw["unknown"] = True
@@ -464,6 +471,36 @@ class CandidateContractTests(unittest.TestCase):
                 for name, value in run.artifacts
             )
             with self.assertRaisesRegex(EvidenceVerificationError, "semantic"):
+                verify_run_manifest(
+                    dataclasses.replace(run, artifacts=artifacts),
+                    topology,
+                    root,
+                )
+
+    def test_verifier_rejects_forged_unknown_outcome_progression(self) -> None:
+        with workspace_temp_directory() as directory:
+            root = Path(directory)
+            topology = candidate()
+            run = manifest(root, topology)
+            samples = load_jsonl(root / "samples.jsonl")
+            lifecycle = [
+                sample
+                for sample in samples
+                if sample["scenario_id"] == "cancellation-unknown-outcome"
+            ]
+            lifecycle[1]["attempt"], lifecycle[3]["attempt"] = (
+                lifecycle[3]["attempt"],
+                lifecycle[1]["attempt"],
+            )
+            payload = b"".join(canonical_bytes(sample) + b"\n" for sample in samples)
+            (root / "samples.jsonl").write_bytes(payload)
+            digest = hashlib.sha256(payload).hexdigest()
+            artifacts = tuple(
+                (name, digest if name == "samples.jsonl" else value)
+                for name, value in run.artifacts
+            )
+
+            with self.assertRaisesRegex(EvidenceVerificationError, "progression"):
                 verify_run_manifest(
                     dataclasses.replace(run, artifacts=artifacts),
                     topology,

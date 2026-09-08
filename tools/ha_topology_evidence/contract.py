@@ -226,10 +226,11 @@ class CandidateTopology:
     def expected_sample_count(self) -> int:
         """Return the exact HTTP-sample inventory implied by the frozen matrix."""
 
-        performance = self.pair_repetitions * 2 * (self.warmup_requests + self.measured_attempts)
-        correctness = 10 * self.correctness_attempts
-        recovery_and_management_probes = 30
-        return performance + correctness + recovery_and_management_probes + 2
+        return sum(
+            sum(expected_sample_partitions(self, scenario).values())
+            * (self.pair_repetitions if scenario in _PERFORMANCE_SCENARIOS else 1)
+            for scenario in self.required_scenarios
+        )
 
 
 @dataclass(frozen=True, slots=True)
@@ -395,7 +396,7 @@ def expected_challenged_operations(candidate: CandidateTopology, scenario_id: st
     if scenario_id in {"stale-epoch", "partial-namespace"}:
         return 4
     if scenario_id == "cancellation-unknown-outcome":
-        return 3
+        return 5
     if scenario_id == "duplicate-delivery":
         return 2
     return candidate.correctness_attempts + 11
@@ -453,7 +454,7 @@ def expected_sample_partitions(candidate: CandidateTopology, scenario_id: str) -
     exact = {
         "stale-epoch": {"lifecycle": 4},
         "partial-namespace": {"lifecycle": 4},
-        "cancellation-unknown-outcome": {"lifecycle": 3},
+        "cancellation-unknown-outcome": {"lifecycle": 5},
         "duplicate-delivery": {"lifecycle": 2},
         "drain-reconcile-mark-ready": {"lifecycle": candidate.correctness_attempts + 5},
         "standalone-rollback": {"lifecycle": candidate.correctness_attempts},
@@ -954,6 +955,29 @@ def verify_run_manifest(
                 raise EvidenceVerificationError("Performance warm-up did not pass.")
             if phase == "fault" and any(sample["success"] for sample in partition):
                 raise EvidenceVerificationError("Fault partition admitted a request.")
+        if result.scenario_id == "cancellation-unknown-outcome":
+            lifecycle = sorted(actual_partitions["lifecycle"], key=lambda sample: sample["attempt"])
+            outcomes = tuple(
+                (
+                    sample["status_code"],
+                    sample["success"],
+                    sample["transport_failure"],
+                )
+                for sample in lifecycle
+            )
+            if (
+                outcomes
+                != (
+                    (500, False, False),
+                    (503, False, False),
+                    (503, False, False),
+                    (200, True, False),
+                    (200, True, False),
+                )
+                or {sample["replica"] for sample in lifecycle[1:3]} != {"app-a", "app-b"}
+                or {sample["replica"] for sample in lifecycle[3:5]} != {"app-a", "app-b"}
+            ):
+                raise EvidenceVerificationError("Unknown-outcome lifecycle progression is invalid.")
         counted = [sample for sample in selected_samples if sample["phase"] != "warmup"]
         sample_success = sum(bool(sample["success"]) for sample in counted)
         sample_transport = sum(bool(sample["transport_failure"]) for sample in counted)
