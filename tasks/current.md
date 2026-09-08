@@ -51,5 +51,6 @@ documents should be committed separately after approval. Do not push unless the 
 - `docs/evidence/p0.1-capability-registry.md`
 - Default runtime snapshot: 31 capabilities; only Core entries are active.
 - Focused contract/runtime matrix: 45 tests passed.
-- Full backend gate: 1,522 tests passed; 54 existing optional/live-backend skips.
+- Full backend gate: 1,522 tests run; 1,468 passed and 54 existing optional/live-backend cases
+  skipped.
 - Ruff, compileall, runtime HTTP projection, and whitespace checks passed.
