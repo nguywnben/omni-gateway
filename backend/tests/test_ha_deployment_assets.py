@@ -17,14 +17,21 @@ class HaDeploymentAssetTests(unittest.TestCase):
         self.assertIn("OMNI_REPLICA_COUNT=1", source)
         self.assertIn("# OMNI_COORDINATION_KEY=", source)
 
-    def test_compose_is_standalone_by_default_and_allows_drain(self) -> None:
+    def test_compose_is_standalone_by_default_and_omits_coordination_inputs(self) -> None:
         source = (ROOT / "deploy" / "docker-compose.yml").read_text(encoding="utf-8")
         data = yaml.safe_load(source)
         service = data["services"]["app"]
         environment = service["environment"]
         self.assertIn("OMNI_RUNTIME_MODE=${OMNI_RUNTIME_MODE:-standalone}", environment)
         self.assertIn("OMNI_REPLICA_COUNT=${OMNI_REPLICA_COUNT:-1}", environment)
-        self.assertIn("OMNI_COORDINATION_KEY=${OMNI_COORDINATION_KEY:-}", environment)
+        for name in (
+            "REDIS_URL",
+            "OMNI_COORDINATION_NAMESPACE",
+            "OMNI_DEPLOYMENT_ID",
+            "OMNI_COORDINATION_KEY",
+            "OMNI_COORDINATION_EPOCH",
+        ):
+            self.assertFalse(any(item.startswith(f"{name}=") for item in environment))
         self.assertEqual(service["stop_grace_period"], "45s")
 
     def test_helm_keeps_w418_replica_ceiling_and_secret_references(self) -> None:

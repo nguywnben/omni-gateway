@@ -6,9 +6,9 @@
 - Active plan: `PROD-SELFHOST-R1`
 - Target: production-quality self-hosting for one person or a trusted team, not enterprise service
   operation.
-- Progress: **2/36 implementation tasks**; Phase 0 is 2/6 complete.
-- Completed: **P0.2 — Product terminology and navigation inventory**.
-- Next task: **P0.3 — Isolate unfinished HA work**.
+- Progress: **3/36 implementation tasks**; Phase 0 is 3/6 complete.
+- Completed: **P0.3 — Isolate unfinished HA work**.
+- Next task: **P0.4 — Risk and maintainability baseline**.
 - Supported runtime today: standalone, one worker, one replica.
 - Redis coordination, multi-replica HA, and Helm are experimental and no longer R1 release blockers.
 
@@ -48,8 +48,16 @@ documents should be committed separately after approval. Do not push unless the 
 
 ## Latest Evidence
 
+- `docs/evidence/p0.3-experimental-ha-isolation.md`
+- Default startup is standalone without Redis; coordinated startup is rejected before external I/O,
+  and the compiled experimental activation allowlist remains empty.
+- The checked test partition contains 165 core modules and 13 experimental-HA modules. The focused
+  P0.3 gate passed 35 tests; the independently runnable experimental suite passed 109 tests and
+  skipped 32 existing opt-in live cases.
+- CI and the R1 release checklist now require the partition audit and core suite, not external
+  two-replica evidence.
 - `docs/evidence/p0.2-product-surface-inventory.md`
-- Checked inventory: 11 pages/tabs, 134 OpenAPI operations, 24 Settings controls, 123 example
+- Checked inventory: 11 pages/tabs, 134 OpenAPI operations, 24 Settings controls, 124 example
   environment variables, 16 advertised claims, and explicit locale ownership.
 - Product copy now presents the fixed Core/Advanced/Compatibility/Experimental self-host boundary in
   both curated languages; Redis coordination and Kubernetes/Helm are explicitly experimental.

@@ -262,7 +262,7 @@ Omni Gateway reads configuration from environment variables first, then stored c
 | `PORT` | `4283` | HTTP port. |
 | `HOST_PORT` | `4283` | Host-side port used only by Docker Compose. |
 | `WORKERS` | `1` | Supported worker count. Values above one require an exact activation record compiled into the running release; the current allowlist is empty. |
-| `OMNI_RUNTIME_MODE` | `standalone` | Runtime coordination mode. `coordinated` is rejected unless every prerequisite and exact activation record is present. |
+| `OMNI_RUNTIME_MODE` | `standalone` | Runtime coordination mode. `coordinated` is experimental, requires an explicit maintainer opt-in, and remains blocked in this build because the activation allowlist is empty. |
 | `OMNI_REPLICA_COUNT` | `1` | Declared application replica count. The current release accepts one only. |
 | `CORS_ORIGINS` | empty | Comma-separated browser origins allowed to call the API cross-origin. Leave empty for same-origin console usage. |
 | `CORS_ORIGIN_REGEX` | empty | Optional regex for managed dynamic browser origins. |
@@ -546,11 +546,16 @@ python -m pip install -r requirements-dev.txt
 ruff check backend
 ruff format --check backend
 python -m compileall -q backend
-python -m backend.tests
+python -m backend.tests --suite core
 for script in frontend/js/*.js; do node --check "$script"; done
 yamllint --strict .github deploy .yamllint.yml
 python -m pip_audit --local --progress-spinner off
 ```
+
+The default and `core` suites exclude unfinished coordinated-runtime evidence. Maintainers can list
+that non-release suite with `python -m backend.tests --suite experimental-ha --list` and run it with
+`python -m backend.tests --suite experimental-ha`. It is not part of the R1 production gate and may
+require isolated Redis/PostgreSQL test infrastructure.
 
 Start the service after the checks pass:
 

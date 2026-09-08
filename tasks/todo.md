@@ -1,6 +1,6 @@
 # Omni Gateway Production Self-Hosted R1 — Fixed Checklist
 
-Progress denominator: **2/36** implementation tasks. Planning artifacts do not count as completed
+Progress denominator: **3/36** implementation tasks. Planning artifacts do not count as completed
 implementation. The denominator cannot change without an approved `CR-###` in `tasks/plan.md`.
 
 ## Approval Gate
@@ -8,11 +8,11 @@ implementation. The denominator cannot change without an approved `CR-###` in `t
 - [x] User approved `CONSTRAINTS.md`, `docs/specs/production-self-hosted.md`, and `tasks/plan.md` on
   2026-09-08.
 
-## Phase 0 — Scope Reset and Truthful Baseline (2/6)
+## Phase 0 — Scope Reset and Truthful Baseline (3/6)
 
 - [x] P0.1 Capability registry and support tiers
 - [x] P0.2 Product terminology and navigation inventory
-- [ ] P0.3 Isolate unfinished HA work
+- [x] P0.3 Isolate unfinished HA work
 - [ ] P0.4 Risk and maintainability baseline
 - [ ] P0.5 Fast, phase, and release gates
 - [ ] P0.6 Compatibility and deprecation guard

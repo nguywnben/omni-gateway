@@ -96,7 +96,7 @@
     {"id": "postgresql", "pattern": "^POSTGRESQL_URI$", "tier": "advanced", "journey": "install_configure"},
     {"id": "reverse_proxy", "pattern": "^TRUST_PROXY_HEADERS$", "tier": "advanced", "journey": "install_configure"},
     {"id": "mongodb", "pattern": "^MONGODB_(?:DATABASE|URI)$", "tier": "compatibility", "journey": "install_configure"},
-    {"id": "coordination", "pattern": "^(?:OMNI_COORDINATION_(?:EPOCH|KEY|NAMESPACE)|OMNI_DEPLOYMENT_ID|REDIS_URL)$", "tier": "experimental", "journey": "install_configure"}
+    {"id": "coordination", "pattern": "^(?:OMNI_COORDINATION_(?:EPOCH|KEY|NAMESPACE)|OMNI_DEPLOYMENT_ID|OMNI_EXPERIMENTAL_COORDINATION|REDIS_URL)$", "tier": "experimental", "journey": "install_configure"}
   ],
   "translation_policy": [
     {"id": "english", "locale": "en", "tier": "core", "owner": "maintainers", "semantic_review": true},

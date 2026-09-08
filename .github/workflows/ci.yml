@@ -85,8 +85,11 @@ jobs:
         if: matrix.python-version == '3.12'
         run: bash -n deploy/scripts/*.sh
 
-      - name: Run unit tests
-        run: python -m backend.tests
+      - name: Audit production and experimental test partition
+        run: python -m backend.tests --audit
+
+      - name: Run production core tests
+        run: python -m backend.tests --suite core
 
       - name: Verify route contracts
         if: matrix.python-version == '3.12'

@@ -119,7 +119,9 @@ class HaRuntimePolicy:
             topology_verifier is not None and topology_verifier(mode, replicas)
         )
         if not replica_topology_accepted:
-            raise RuntimeError("W4.18 coordinated mode requires OMNI_REPLICA_COUNT=1.")
+            raise RuntimeError(
+                "Experimental coordinated mode currently requires OMNI_REPLICA_COUNT=1."
+            )
         if durable_backend == "sqlite":
             raise RuntimeError("Coordinated mode requires PostgreSQL or MongoDB durable storage.")
         if not redis_url:

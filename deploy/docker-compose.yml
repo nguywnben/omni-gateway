@@ -21,10 +21,6 @@ services:
       - WORKERS=${WORKERS:-1}
       - OMNI_RUNTIME_MODE=${OMNI_RUNTIME_MODE:-standalone}
       - OMNI_REPLICA_COUNT=${OMNI_REPLICA_COUNT:-1}
-      - OMNI_COORDINATION_NAMESPACE=${OMNI_COORDINATION_NAMESPACE:-}
-      - OMNI_DEPLOYMENT_ID=${OMNI_DEPLOYMENT_ID:-}
-      - OMNI_COORDINATION_KEY=${OMNI_COORDINATION_KEY:-}
-      - OMNI_COORDINATION_EPOCH=${OMNI_COORDINATION_EPOCH:-}
       - CORS_ORIGINS=${CORS_ORIGINS:-}
       - PANEL_SESSION_TTL_SECONDS=${PANEL_SESSION_TTL_SECONDS:-86400}
       - PANEL_COOKIE_SECURE=${PANEL_COOKIE_SECURE:-}
@@ -39,9 +35,6 @@ services:
       - LOG_FILE=${LOG_FILE:-./backend/data/logs/omni-gateway.log}
       - LOG_MAX_MB=${LOG_MAX_MB:-10}
       - LOG_BACKUP_COUNT=${LOG_BACKUP_COUNT:-3}
-
-      # Optional: Redis-backed cache and session state
-      - REDIS_URL=${REDIS_URL:-}
 
       # Optional: MongoDB storage backend
       - MONGODB_URI=${MONGODB_URI:-}

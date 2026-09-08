@@ -20,7 +20,10 @@ from core.device_authorization_coordination import (
     configure_device_authorization_service,
 )
 from core.governance_coordination import configure_governance_coordination
-from core.ha_activation import verify_ha_activation_record
+from core.ha_activation import (
+    require_coordinated_runtime_activation,
+    verify_ha_activation_record,
+)
 from core.ha_coordination_binding import CoordinationBindingManager
 from core.ha_runtime_policy import HaRuntimePolicy, RuntimeMode
 from core.identity import configure_oidc_transaction_coordination
@@ -337,11 +340,13 @@ async def initialize_ha_runtime(storage: Any | None = None) -> HaRuntimeLifecycl
     global _runtime_lifecycle
     if _runtime_lifecycle is not None:
         return _runtime_lifecycle
+    policy = HaRuntimePolicy.from_environment()
+    require_coordinated_runtime_activation(policy.mode)
     if storage is None:
         from core.storage_adapter import get_storage_adapter
 
         storage = await get_storage_adapter()
-    lifecycle = HaRuntimeLifecycle()
+    lifecycle = HaRuntimeLifecycle(policy=policy)
     await lifecycle.start(storage=storage)
     _runtime_lifecycle = lifecycle
     return lifecycle

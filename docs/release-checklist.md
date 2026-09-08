@@ -6,7 +6,8 @@ Use this checklist when preparing a tagged Omni Gateway release.
 
 - Run `ruff check backend` and `ruff format --check backend`.
 - Run `python -m compileall -q backend`.
-- Run `python -m backend.tests`.
+- Run `python -m backend.tests --audit` to verify the suite partition.
+- Run `python -m backend.tests --suite core`.
 - Run `node --check` for every file under `frontend/js`.
 - Run `yamllint --strict .github deploy .yamllint.yml`.
 - Run `python -m pip_audit --local --progress-spinner off`.
@@ -15,6 +16,10 @@ Use this checklist when preparing a tagged Omni Gateway release.
 - Confirm public authentication, validation, upstream, and pre-stream errors match the OpenAI, Anthropic, and Google GenAI envelopes.
 - Confirm every public response includes a bounded `X-Request-ID`.
 - Confirm oversized fixed-length and chunked requests return `413` in the selected SDK envelope.
+
+The separately runnable `experimental-ha` suite and external two-replica evidence are not R1 release
+gates. Report their latest result as experimental evidence only; a failure or unavailable test
+environment cannot change the production release result.
 
 ## Manual Provider Checks
 
