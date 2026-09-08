@@ -162,6 +162,37 @@ class VirtualKeyCrudTests(unittest.TestCase):
         self.assertIsNotNone(record)
         self.assertEqual(record.name, "persisted")
 
+    def test_cache_miss_forces_generation_refresh_before_rejecting_key(self):
+        plaintext = "synthetic-cross-replica-token"
+        record = VirtualKey(
+            id="vk_cross_replica",
+            name="cross-replica",
+            key_hash=hash_key(plaintext),
+            key_preview="synthetic...token",
+            enabled=True,
+            created_at=1_000.0,
+        )
+        self.storage.config[virtual_keys.VIRTUAL_KEYS_CONFIG_KEY] = [record.to_storage_dict()]
+        self.manager._loaded = True
+        self.manager._keys_by_hash = {}
+        generation = AsyncMock()
+
+        async def synchronize(invalidate, *, force=False):
+            if force:
+                await invalidate()
+                return True
+            return False
+
+        generation.synchronize.side_effect = synchronize
+        self.manager._generation = generation
+
+        matched = _run(self.manager.verify(plaintext))
+
+        self.assertIsNotNone(matched)
+        self.assertEqual(matched.id, "vk_cross_replica")
+        self.assertEqual(generation.synchronize.await_count, 2)
+        self.assertTrue(generation.synchronize.await_args_list[1].kwargs["force"])
+
 
 class VirtualKeyEnforcementTests(unittest.TestCase):
     def _make_key(self, **kwargs) -> VirtualKey:

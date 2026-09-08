@@ -135,3 +135,30 @@ class GovernanceCoordinationTests(unittest.IsolatedAsyncioTestCase):
 
         coordination.current_generation.assert_awaited_once_with(GOVERNANCE_SCOPE_CONFIG)
         callback.assert_awaited_once_with()
+
+    async def test_forced_read_bypasses_poll_window_after_a_cache_miss(self) -> None:
+        coordination = AsyncMock()
+        coordination.current_generation.side_effect = (1, 2)
+        configure_governance_coordination(coordination)
+        observer = GovernanceGenerationObserver(GOVERNANCE_SCOPE_VIRTUAL_KEYS)
+        callback = AsyncMock()
+
+        self.assertTrue(await observer.synchronize(callback))
+        self.assertFalse(await observer.synchronize(callback))
+        self.assertTrue(await observer.synchronize(callback, force=True))
+
+        self.assertEqual(coordination.current_generation.await_count, 2)
+        self.assertEqual(callback.await_count, 2)
+
+    async def test_forced_read_keeps_cache_when_generation_is_unchanged(self) -> None:
+        coordination = AsyncMock()
+        coordination.current_generation.return_value = 1
+        configure_governance_coordination(coordination)
+        observer = GovernanceGenerationObserver(GOVERNANCE_SCOPE_VIRTUAL_KEYS)
+        callback = AsyncMock()
+
+        self.assertTrue(await observer.synchronize(callback))
+        self.assertFalse(await observer.synchronize(callback, force=True))
+
+        self.assertEqual(coordination.current_generation.await_count, 2)
+        callback.assert_awaited_once_with()

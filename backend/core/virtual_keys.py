@@ -341,8 +341,11 @@ class VirtualKeyManager:
         self._keys_by_hash = {}
         self._loaded = False
 
-    async def _ensure_loaded(self) -> None:
-        await self._generation.synchronize(self._invalidate_cached_keys)
+    async def _ensure_loaded(self, *, force_generation_poll: bool = False) -> None:
+        await self._generation.synchronize(
+            self._invalidate_cached_keys,
+            force=force_generation_poll,
+        )
         if self._loaded:
             return
         async with self._lock:
@@ -597,6 +600,13 @@ class VirtualKeyManager:
         """Constant-time hash comparison against every stored key."""
         await self._ensure_loaded()
         candidate_hash = hash_key(token)
+        matched = self._match_hash(candidate_hash)
+        if matched is not None:
+            return matched
+        await self._ensure_loaded(force_generation_poll=True)
+        return self._match_hash(candidate_hash)
+
+    def _match_hash(self, candidate_hash: str) -> Optional[VirtualKey]:
         matched: Optional[VirtualKey] = None
         for stored_hash, record in self._keys_by_hash.items():
             if secrets.compare_digest(candidate_hash, stored_hash):

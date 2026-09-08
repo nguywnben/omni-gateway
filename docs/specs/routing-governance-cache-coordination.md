@@ -95,6 +95,13 @@ An invalidation monotonically increments the cache scope. Local caches observe i
 Governance mutations similarly increment fixed scopes consumed by configuration, virtual-key,
 credential, blacklist, and model-catalog caches.
 
+Virtual-key reads use the bounded generation poll during ordinary hits. A token missing from the
+local snapshot forces one current-generation read before authentication is rejected. If a
+completed cross-replica mutation advanced the generation, the reader discards its snapshot and
+reloads the durable key set first; an unchanged generation never triggers a durable reload. This
+keeps the normal hit path bounded while ensuring a key returned by a completed management
+mutation is immediately usable through another replica.
+
 ## Bounds and Failure Posture
 
 - Maximum credential candidates per coordinated selection: 100.
@@ -128,4 +135,3 @@ deployment assets, and rollback. W4.19 owns forced-failure/load evidence and any
   transition preserves the configured fencing epoch.
 - Two cache coordinators cannot serve a local body after another replica invalidates its scope.
 - Redis live parity is opt-in and reported as unavailable—not passed—when no test URI is supplied.
-

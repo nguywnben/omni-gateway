@@ -69,14 +69,19 @@ class GovernanceGenerationObserver:
     def observed_generation(self) -> int | None:
         return self._observed
 
-    async def synchronize(self, invalidate: Callable[[], Awaitable[None]]) -> bool:
+    async def synchronize(
+        self,
+        invalidate: Callable[[], Awaitable[None]],
+        *,
+        force: bool = False,
+    ) -> bool:
         coordination = _governance_coordination
         if coordination is None:
             return False
         binding_revision = _governance_binding_revision
         local_revision = _local_scope_revisions[self._scope]
         now = time.monotonic()
-        if (
+        if not force and (
             self._observed is not None
             and self._binding_revision == binding_revision
             and self._local_scope_revision == local_revision
@@ -90,7 +95,7 @@ class GovernanceGenerationObserver:
             binding_revision = _governance_binding_revision
             local_revision = _local_scope_revisions[self._scope]
             now = time.monotonic()
-            if (
+            if not force and (
                 self._observed is not None
                 and self._binding_revision == binding_revision
                 and self._local_scope_revision == local_revision
