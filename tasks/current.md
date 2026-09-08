@@ -6,9 +6,9 @@
 - Active plan: `PROD-SELFHOST-R1`
 - Target: production-quality self-hosting for one person or a trusted team, not enterprise service
   operation.
-- Progress: **6/36 implementation tasks**; Phase 0 is complete (6/6).
-- Completed: **P0.6 — Compatibility and deprecation guard**.
-- Next task: **P1.1 — Authoritative typed configuration schema**.
+- Progress: **7/36 implementation tasks**; Phase 1 is in progress (1/6).
+- Completed: **P1.1 — Authoritative typed configuration schema**.
+- Next task: **P1.2 — Minimal canonical Docker Compose profile**.
 - Supported runtime today: standalone, one worker, one replica.
 - Redis coordination, multi-replica HA, and Helm are experimental and no longer R1 release blockers.
 
@@ -34,8 +34,8 @@ override the current product boundary or completion rules.
 
 ## Working Tree Caution
 
-Before starting P0.1, inspect the working tree and preserve any unrelated user-owned changes. Plan
-documents should be committed separately after approval. Do not push unless the user requests it.
+Before starting the next task, inspect the working tree and preserve unrelated user-owned changes.
+Do not push unless the user requests it.
 
 ## Fixed Verification Cadence
 
@@ -48,6 +48,14 @@ documents should be committed separately after approval. Do not push unless the 
 
 ## Latest Evidence
 
+- `docs/evidence/p1.1-authoritative-configuration-schema.md`
+- All 124 documented environment variables now have one typed Basic/Advanced/Experimental schema;
+  startup validates scalar boundaries before storage initialization and warns on unknown `OMNI_*`
+  controls.
+- Settings field ownership, secret-safe metadata, environment locks, restart classification,
+  writable/resettable keys, generated documentation, and `.env`/Compose parity derive from or are
+  checked against the same contract.
+- The focused P1.1 task gate passed without running the complete Core or experimental HA suites.
 - `docs/evidence/p0.6-compatibility-deprecation-guard.md`
 - The immutable `r1-v1` fixture protects 18 public inference operations, 112 management
   operations, console routes/aliases, config migrations, nine stored schema versions, and seven

@@ -72,6 +72,7 @@ CONFIGURATION_CONTRACTS = GateStep(
             PYTHON,
             "-m",
             "unittest",
+            "backend.tests.test_configuration_schema",
             "backend.tests.test_config_initialization",
             "backend.tests.test_config_security",
             "backend.tests.test_runtime_configuration",

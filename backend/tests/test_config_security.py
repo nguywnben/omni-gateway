@@ -18,11 +18,15 @@ if str(BACKEND_DIR) not in sys.path:
     sys.path.insert(0, str(BACKEND_DIR))
 
 import config
+from core.configuration_schema import CONFIGURATION_FIELDS, ApplyMode
 from core.models import AccessCredentialsUpdateRequest
 from core.panel.config_routes import (
     ACCESS_SECRET_KEYS,
     ALLOWED_CONFIG_KEYS,
+    POLICY_ONLY_CONFIG_KEYS,
     PROVIDER_SPECIFIC_CONFIG_KEYS,
+    RESETTABLE_CONFIG_KEYS,
+    RESTART_REQUIRED_CONFIG_KEYS,
     _classify_config_updates,
     _redact_access_secrets,
     update_access_credentials,
@@ -56,6 +60,28 @@ class ConfigResponseSecurityTests(unittest.TestCase):
     def test_global_config_contract_excludes_access_and_provider_secrets(self):
         self.assertFalse(ALLOWED_CONFIG_KEYS & ACCESS_SECRET_KEYS)
         self.assertFalse(ALLOWED_CONFIG_KEYS & PROVIDER_SPECIFIC_CONFIG_KEYS)
+
+    def test_settings_ownership_and_apply_modes_are_schema_derived(self):
+        by_surface = {
+            surface: {
+                field.config_key
+                for field in CONFIGURATION_FIELDS
+                if field.config_key and field.surface == surface
+            }
+            for surface in ("system", "provider", "quality")
+        }
+        self.assertEqual(ALLOWED_CONFIG_KEYS, by_surface["system"])
+        self.assertEqual(PROVIDER_SPECIFIC_CONFIG_KEYS, by_surface["provider"])
+        self.assertEqual(POLICY_ONLY_CONFIG_KEYS, by_surface["quality"])
+        self.assertEqual(RESETTABLE_CONFIG_KEYS, by_surface["system"])
+        self.assertEqual(
+            RESTART_REQUIRED_CONFIG_KEYS,
+            {
+                field.config_key
+                for field in CONFIGURATION_FIELDS
+                if field.config_key and field.apply is ApplyMode.RESTART
+            },
+        )
 
     def test_redacts_password_values_and_reports_configuration_state(self):
         config = {

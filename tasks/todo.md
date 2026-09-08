@@ -1,6 +1,6 @@
 # Omni Gateway Production Self-Hosted R1 — Fixed Checklist
 
-Progress denominator: **6/36** implementation tasks. Planning artifacts do not count as completed
+Progress denominator: **7/36** implementation tasks. Planning artifacts do not count as completed
 implementation. The denominator cannot change without an approved `CR-###` in `tasks/plan.md`.
 
 ## Approval Gate
@@ -17,9 +17,9 @@ implementation. The denominator cannot change without an approved `CR-###` in `t
 - [x] P0.5 Fast, phase, and release gates
 - [x] P0.6 Compatibility and deprecation guard
 
-## Phase 1 — Installation, Configuration, Recovery (0/6)
+## Phase 1 — Installation, Configuration, Recovery (1/6)
 
-- [ ] P1.1 Authoritative typed configuration schema
+- [x] P1.1 Authoritative typed configuration schema
 - [ ] P1.2 Minimal canonical Docker Compose profile
 - [ ] P1.3 First-run setup and preflight
 - [ ] P1.4 Versioned backup, validation, and restore

@@ -2,6 +2,12 @@ import asyncio
 import os
 from typing import Any, Optional
 
+from core.configuration_schema import (
+    CONFIGURATION_FIELDS,
+    ConfigurationError,
+    parse_environment,
+    validate_stored_configuration,
+)
 from core.governance_coordination import GovernanceGenerationObserver
 from core.routing_coordination import GOVERNANCE_SCOPE_CONFIG
 from dotenv import load_dotenv
@@ -76,70 +82,9 @@ DEFAULT_CLAUDE_USER_AGENT = "claude-cli/omni-gateway"
 
 
 ENV_MAPPINGS = {
-    "CODE_ASSIST_ENDPOINT": "code_assist_endpoint",
-    "CREDENTIALS_DIR": "credentials_dir",
-    "PROXY": "proxy",
-    "OAUTH_URL": "oauth_url",
-    "GOOGLE_APIS_URL": "google_apis_url",
-    "RESOURCE_MANAGER_URL": "resource_manager_url",
-    "SERVICE_USAGE_URL": "service_usage_url",
-    "ANTIGRAVITY_API_URL": "antigravity_api_url",
-    "GOOGLE_AI_STUDIO_API_URL": "google_ai_studio_api_url",
-    "XAI_API_URL": "xai_api_url",
-    "XAI_OAUTH_API_URL": "xai_oauth_api_url",
-    "XAI_OAUTH_ISSUER": "xai_oauth_issuer",
-    "XAI_CLIENT_ID": "xai_client_id",
-    "XAI_USER_AGENT": "xai_user_agent",
-    "OPENAI_API_URL": "openai_api_url",
-    "CODEX_API_URL": "codex_api_url",
-    "CODEX_USAGE_URL": "codex_usage_url",
-    "CODEX_AUTH_BASE": "codex_auth_base",
-    "CODEX_CLIENT_ID": "codex_client_id",
-    "CODEX_USER_AGENT": "codex_user_agent",
-    "ANTHROPIC_API_URL": "anthropic_api_url",
-    "CLAUDE_OAUTH_AUTHORIZE_URL": "claude_oauth_authorize_url",
-    "CLAUDE_OAUTH_TOKEN_URL": "claude_oauth_token_url",
-    "CLAUDE_CLIENT_ID": "claude_client_id",
-    "CLAUDE_USER_AGENT": "claude_user_agent",
-    "CODE_ASSIST_CLIENT_ID": "code_assist_client_id",
-    "CODE_ASSIST_CLIENT_SECRET": "code_assist_client_secret",
-    "ANTIGRAVITY_CLIENT_ID": "antigravity_client_id",
-    "ANTIGRAVITY_CLIENT_SECRET": "antigravity_client_secret",
-    "ANTIGRAVITY_USER_AGENT": "antigravity_user_agent",
-    "ANTIGRAVITY_PAYLOAD_USER_AGENT": "antigravity_payload_user_agent",
-    "AUTO_DISABLE": "auto_disable_enabled",
-    "AUTO_DISABLE_ERROR_CODES": "auto_disable_error_codes",
-    "RETRY_429_MAX_RETRIES": "retry_429_max_retries",
-    "RETRY_429_ENABLED": "retry_429_enabled",
-    "RETRY_429_INTERVAL": "retry_429_interval",
-    "ANTI_TRUNCATION_MAX_ATTEMPTS": "anti_truncation_max_attempts",
-    "TOKEN_COMPRESSION_ENABLED": "token_compression_enabled",
-    "TOKEN_COMPRESSION_THRESHOLD": "token_compression_threshold",
-    "TOKEN_COMPRESSION_TARGET": "token_compression_target",
-    "TOKEN_COMPRESSION_MIN_RECENT_TURNS": "token_compression_min_recent_turns",
-    "RESPONSE_CACHE_ENABLED": "response_cache_enabled",
-    "RESPONSE_CACHE_TTL_SECONDS": "response_cache_ttl_seconds",
-    "RESPONSE_CACHE_MAX_ENTRIES": "response_cache_max_entries",
-    "GUARDRAILS_ENABLED": "guardrails_enabled",
-    "GUARDRAILS_PII_MASKING_ENABLED": "guardrails_pii_masking_enabled",
-    "GUARDRAILS_INJECTION_DETECTION_ENABLED": "guardrails_injection_detection_enabled",
-    "GUARDRAILS_BLOCKED_KEYWORDS": "guardrails_blocked_keywords",
-    "ROUTING_STRATEGY": "routing_strategy",
-    "PREFERRED_PROVIDER": "preferred_provider",
-    "UPSTREAM_TIMEOUT_SECONDS": "upstream_timeout_seconds",
-    "LOG_LEVEL": "log_level",
-    "LOG_MAX_MB": "log_max_mb",
-    "LOG_BACKUP_COUNT": "log_backup_count",
-    "COMPATIBILITY_MODE": "compatibility_mode_enabled",
-    "RETURN_THOUGHTS_TO_FRONTEND": "return_thoughts_to_frontend",
-    "STREAM_TO_NONSTREAM": "stream_to_nonstream",
-    "SWITCH_CREDENTIAL_ENABLED": "switch_credential_enabled",
-    "HOST": "host",
-    "PORT": "port",
-    "API_KEY": "api_key",
-    "PANEL_PASSWORD": "panel_password",
-    "KEEPALIVE_URL": "keepalive_url",
-    "KEEPALIVE_INTERVAL": "keepalive_interval",
+    field.env_name: field.config_key
+    for field in CONFIGURATION_FIELDS
+    if field.config_key is not None
 }
 
 
@@ -152,6 +97,12 @@ async def init_config():
     async with _config_lock:
         if _config_initialized:
             return
+        try:
+            environment = parse_environment(os.environ)
+        except ConfigurationError as exc:
+            raise RuntimeError(f"Invalid environment configuration: {exc}") from exc
+        for warning in environment.warnings:
+            log.warning(warning)
         for removed_name, replacement in REMOVED_ENVIRONMENT_ERRORS.items():
             if os.getenv(removed_name) and not os.getenv(replacement):
                 raise RuntimeError(
@@ -194,7 +145,10 @@ async def init_config():
             if migrated or legacy_keys:
                 values = await storage_adapter.get_all_config()
 
-            _config_cache = values
+            try:
+                _config_cache = validate_stored_configuration(values)
+            except ConfigurationError as exc:
+                raise RuntimeError(f"Invalid stored configuration: {exc}") from exc
             _config_initialized = True
         except Exception:
             _config_cache = {}
@@ -213,7 +167,10 @@ async def reload_config():
         await storage_adapter.reload_config_cache()
 
         values = await storage_adapter.get_all_config()
-        _config_cache = values
+        try:
+            _config_cache = validate_stored_configuration(values)
+        except ConfigurationError as exc:
+            raise RuntimeError(f"Invalid stored configuration: {exc}") from exc
         _config_initialized = True
 
 
@@ -245,7 +202,7 @@ async def get_config_value(key: str, default: Any = None, env_var: Optional[str]
 
     # Priority 1: Environment variable
     if env_var and os.getenv(env_var):
-        return os.getenv(env_var)
+        return os.environ[env_var]
 
     # Priority 2: Memory cache
     value = _get_cached_config(key)

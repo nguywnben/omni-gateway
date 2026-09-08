@@ -6,6 +6,8 @@ All notable user-facing changes are documented in this file. Omni Gateway follow
 
 ### Added
 
+- Added one typed configuration schema for startup validation, Settings metadata, environment
+  ownership, restart requirements, `.env`/Compose parity checks, and a generated operator reference.
 - Added a localized Audit surface under Observability with safe category filters, cursor
   pagination, redacted event details, request-ID pivots, confirmed retention controls, and
   bounded JSONL/CSV export.
@@ -37,6 +39,11 @@ All notable user-facing changes are documented in this file. Omni Gateway follow
 
 ### Changed
 
+- Invalid documented environment values now fail startup with field-specific remediation instead
+  of relying on scattered fallback behavior; unknown `OMNI_*` controls emit spelling warnings.
+- System Settings validation and field ownership are schema-derived, removing the duplicated route
+  whitelist and per-field validation block while keeping provider, quality, and access ownership
+  separate.
 - Hard daily and monthly virtual-key budgets now reserve and settle against the selected durable
   ledger before provider admission. RPM and TPM remain single-process until the Redis coordination
   phase, so worker and replica limits are unchanged.

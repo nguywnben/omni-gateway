@@ -255,6 +255,10 @@ Local development uses the same first-run setup screen as the Docker deployment.
 ## Configuration
 
 Omni Gateway reads configuration from environment variables first, then stored configuration, then defaults.
+The complete [generated configuration reference](docs/reference/configuration.md) identifies every
+field's type, Basic/Advanced/Experimental group, Settings owner, and whether it applies live,
+requires restart, or is environment-only. Startup rejects malformed values with the exact variable
+name; likely misspelled `OMNI_*` variables produce a warning.
 
 | Variable | Default | Purpose |
 | --- | --- | --- |
