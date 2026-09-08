@@ -377,6 +377,10 @@ class VirtualKeyManager:
                 log.info(f"[virtual-keys] loaded {len(keys)} virtual API keys")
 
     async def _invalidate_cached_keys(self) -> None:
+        from core.storage_adapter import get_storage_adapter
+
+        storage_adapter = await get_storage_adapter()
+        await storage_adapter.reload_config_cache()
         self._keys_by_hash = {}
         self._loaded = False
 

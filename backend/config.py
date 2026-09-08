@@ -213,8 +213,7 @@ async def reload_config():
 
         storage_adapter = await get_storage_adapter()
 
-        if hasattr(storage_adapter._backend, "reload_config_cache"):
-            await storage_adapter._backend.reload_config_cache()
+        await storage_adapter.reload_config_cache()
 
         values = await storage_adapter.get_all_config()
         _config_cache = values

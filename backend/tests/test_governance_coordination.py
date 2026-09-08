@@ -100,6 +100,16 @@ class GovernanceCoordinationTests(unittest.IsolatedAsyncioTestCase):
             ],
         )
 
+    async def test_storage_adapter_exposes_backend_config_cache_refresh(self) -> None:
+        backend = AsyncMock()
+        adapter = StorageAdapter()
+        adapter._backend = backend
+        adapter._initialized = True
+
+        await adapter.reload_config_cache()
+
+        backend.reload_config_cache.assert_awaited_once_with()
+
     async def test_unconfigured_observer_is_a_noop(self) -> None:
         configure_governance_coordination(None)
         callback = AsyncMock()

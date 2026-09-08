@@ -32,6 +32,7 @@ from fastapi import HTTPException
 class _FakeStorage:
     def __init__(self):
         self.config = {}
+        self.reload_count = 0
 
     async def get_config(self, key, default=None):
         return self.config.get(key, default)
@@ -39,6 +40,9 @@ class _FakeStorage:
     async def set_config(self, key, value):
         self.config[key] = value
         return True
+
+    async def reload_config_cache(self):
+        self.reload_count += 1
 
 
 class _FalseValuedQuotaStore(InMemoryStateStore):
@@ -190,6 +194,7 @@ class VirtualKeyCrudTests(unittest.TestCase):
 
         self.assertIsNotNone(matched)
         self.assertEqual(matched.id, "vk_cross_replica")
+        self.assertEqual(self.storage.reload_count, 1)
         self.assertEqual(generation.synchronize.await_count, 2)
         self.assertTrue(generation.synchronize.await_args_list[1].kwargs["force"])
 

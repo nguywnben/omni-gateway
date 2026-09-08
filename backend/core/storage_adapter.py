@@ -68,6 +68,8 @@ class StorageBackend(Protocol):
 
     async def get_all_config(self) -> Dict[str, Any]: ...
 
+    async def reload_config_cache(self) -> None: ...
+
     async def delete_config(self, key: str) -> bool: ...
 
     async def create_audit_repository(self, *, cursor_signing_key: bytes) -> "AuditRepository": ...
@@ -254,6 +256,12 @@ class StorageAdapter:
     async def get_all_config(self) -> Dict[str, Any]:
         self._ensure_initialized()
         return await self._backend.get_all_config()
+
+    async def reload_config_cache(self) -> None:
+        """Refresh the selected backend's process-local durable config view."""
+
+        self._ensure_initialized()
+        await self._backend.reload_config_cache()
 
     async def delete_config(self, key: str) -> bool:
         self._ensure_initialized()
