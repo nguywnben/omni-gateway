@@ -223,6 +223,45 @@ class LiveRedisCoordinationTests(CoordinationStoreContract, unittest.IsolatedAsy
             advance_cas_clock=advance_server_clock
         )
 
+    async def test_expired_cas_replay_backlog_is_drained_in_bounded_batches(self) -> None:
+        from core.coordination import CasRequest
+
+        requests = [
+            CasRequest(
+                f"live-replay-backlog-record-{index}",
+                0,
+                b"value",
+                300,
+                1,
+                f"live-replay-backlog-operation-{index}",
+                replay_ttl_seconds=5,
+            )
+            for index in range(257)
+        ]
+        results = []
+        for request in requests:
+            results.append(await self.store.compare_and_set(request))
+        self.assertTrue(all(result.applied for result in results))
+
+        await asyncio.wait_for(asyncio.sleep(5.1), timeout=6.1)
+        after_backlog = await self.store.compare_and_set(
+            CasRequest(
+                "live-replay-after-backlog",
+                0,
+                b"value",
+                300,
+                1,
+                "live-replay-after-backlog-operation",
+                replay_ttl_seconds=5,
+            )
+        )
+
+        self.assertTrue(after_backlog.applied)
+        replay_key = self.store._key("replay:cas")
+        expiry_key = self.store._key("expiry:cas")
+        self.assertEqual(await self.cleanup_client.hlen(replay_key), 2)
+        self.assertEqual(await self.cleanup_client.zcard(expiry_key), 2)
+
     async def test_epoch_advance_atomically_invalidates_authority_and_sessions(self) -> None:
         before = {
             scope: (await self.store.read_invalidation_generation(scope)).generation or 0

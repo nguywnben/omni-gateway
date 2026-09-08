@@ -450,7 +450,9 @@ class StatefulRedisClient(FakeRedisClient):
             for identifier, (_fingerprint, _result, expiry) in entries.items()
             if expiry <= self.now_ms
         ]
-        if len(due) > 256:
+        if name == "cas":
+            due = due[:256]
+        elif len(due) > 256:
             return [b"1", b"reconciliation_required", b"", b"0"]
         for identifier in due:
             del entries[identifier]
@@ -2476,8 +2478,11 @@ class RedisStateStoreTests(unittest.IsolatedAsyncioTestCase):
             deployment_namespace="cleanup-zone",
             _redis_module_for_testing=FakeRedisModule(cleanup_client),
         )
-        with self.assertRaises(CoordinationReconciliationRequiredError):
-            await cleanup_store.compare_and_set(CasRequest("cleanup", 0, b"one", 5, 1, "cleanup"))
+        cleaned = await cleanup_store.compare_and_set(
+            CasRequest("cleanup", 0, b"one", 5, 1, "cleanup")
+        )
+        self.assertTrue(cleaned.applied)
+        self.assertEqual(len(cleanup_client.replays["cas"]), 2)
 
     async def test_stateful_epoch_replay_distinguishes_corrupt_record_from_changed_input(
         self,
@@ -3638,13 +3643,23 @@ class RedisStateStoreTests(unittest.IsolatedAsyncioTestCase):
                 self.assertNotIn('REDIS.CALL("SCAN"', upper)
                 self.assertNotIn("WHILE ", upper)
                 if "ZRANGEBYSCORE" in upper:
-                    self.assertIn("LIMIT', 0, 257", source)
+                    self.assertIn(
+                        "LIMIT', 0, 256" if name == "cas" else "LIMIT', 0, 257",
+                        source,
+                    )
                     self.assertIn("redis.call('ZCARD'", source)
                     if name.startswith("quota_"):
                         self.assertIn("#replay_due > 256", source)
                         self.assertIn("#lifecycle_due > 256", source)
                         self.assertLess(
                             source.index("for _, operation_id in ipairs(replay_due) do"),
+                            source.index("redis.call('HDEL'"),
+                        )
+                    elif name == "cas":
+                        self.assertIn("LIMIT', 0, 256", source)
+                        self.assertNotIn("#due > 256", source)
+                        self.assertLess(
+                            source.index("local due = redis.call('ZRANGEBYSCORE'"),
                             source.index("redis.call('HDEL'"),
                         )
                     elif not name.startswith("security_session_"):

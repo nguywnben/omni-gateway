@@ -465,10 +465,7 @@ if replay and tonumber(replay_expiry) > now_ms then
   end
   return {'1', 'not_applied', '', '0'}
 end
-local due = redis.call('ZRANGEBYSCORE', KEYS[4], '-inf', now_ms, 'LIMIT', 0, 257)
-if #due > 256 then
-  return {'1', 'reconciliation_required', '', '0'}
-end
+local due = redis.call('ZRANGEBYSCORE', KEYS[4], '-inf', now_ms, 'LIMIT', 0, 256)
 for _, operation_id in ipairs(due) do
   if not valid_replay(redis.call('HGET', KEYS[3], operation_id),
       redis.call('ZSCORE', KEYS[4], operation_id)) then

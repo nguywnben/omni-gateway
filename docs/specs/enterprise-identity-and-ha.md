@@ -188,6 +188,9 @@ return its exact prior result. High-churn routing, release, outcome, and cache m
 retain replay evidence for a bounded window; credential admissions retain it for at least the lease
 lifetime so an admitted request can still present a valid settlement proof. Exhausted or unavailable
 coordination is reported as a sanitized HTTP 503 and never leaks a storage exception as HTTP 500.
+Expired high-churn CAS replay evidence is validated and removed in fixed batches of at most 256 per
+mutation. A larger expiry backlog therefore converges incrementally without unbounded Lua work or a
+permanent reconciliation loop; the global replay-capacity check remains enforced after each batch.
 
 Redis is not the sole source of truth for an accepted hard-budget reservation: the reservation is
 written through to a durable idempotent journal before provider work starts. Reconciliation rebuilds

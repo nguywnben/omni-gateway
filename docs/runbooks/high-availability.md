@@ -188,6 +188,9 @@ paired diagnostic. Record TTL and replay TTL are intentionally independent: a lo
 record must not imply a long-lived replay entry. A growing replay journal that does not converge
 after the configured uncertainty window is a production defect; do not raise the 100,000-entry
 safety bound or weaken reconciliation to make the evidence run pass.
+Cleanup is deliberately incremental: each CAS mutation validates and removes at most 256 expired
+entries before applying the capacity gate. A short-lived expiry backlog may take multiple mutations
+to drain, but it must continue shrinking rather than latch every caller into reconciliation.
 
 ## Bounded cleanup
 
