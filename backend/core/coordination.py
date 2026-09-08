@@ -278,9 +278,7 @@ class CasRequest:
         """Retention for idempotency evidence, independent of record lifetime."""
 
         return float(
-            self.ttl_seconds
-            if self.replay_ttl_seconds is None
-            else self.replay_ttl_seconds
+            self.ttl_seconds if self.replay_ttl_seconds is None else self.replay_ttl_seconds
         )
 
 
