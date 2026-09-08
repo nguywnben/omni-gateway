@@ -552,6 +552,10 @@ Use [Quality gates](docs/quality-gates.md) to select task, phase, or release sco
 and experimental HA are listed separately with `python tools/quality_gate.py --list-suites`; they
 cannot change the R1 production result.
 
+Public SDK routes, console management routes, compatibility URLs, config migrations, stored schema
+versions, and client examples are protected by the versioned
+[compatibility contract](docs/compatibility.md).
+
 Start the service after the checks pass:
 
 ```bash

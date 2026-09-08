@@ -22,6 +22,9 @@ The application and container smokes are already implemented as required CI evid
 runner labels them as CI-owned instead of pretending to execute them locally. The release checklist
 requires both jobs to pass for the same candidate commit.
 
+The phase/release configuration contracts also run the versioned R1 compatibility guard and load
+the pre-R1 SQLite upgrade fixture. See [Compatibility and deprecation](compatibility.md).
+
 ## Required Versus Non-Required
 
 CI names production-blocking verification jobs and steps with `Required:`. The production release

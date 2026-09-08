@@ -29,6 +29,17 @@ LEGACY_ENV_RENAMES = {
     "ANTIGRAVITY_SWITCH_CREDENTIAL": "SWITCH_CREDENTIAL_ENABLED",
 }
 
+REMOVED_ENVIRONMENT_ERRORS = {"PASSWORD": "PANEL_PASSWORD"}
+
+LEGACY_STORED_KEY_RENAMES = {
+    "password": "panel_password",
+    "client_id": "antigravity_client_id",
+    "client_secret": "antigravity_client_secret",
+    "api_url": "antigravity_api_url",
+}
+
+REMOVED_STORED_KEYS = frozenset({"api_password", *LEGACY_STORED_KEY_RENAMES})
+
 # Client Configuration
 
 
@@ -141,10 +152,12 @@ async def init_config():
     async with _config_lock:
         if _config_initialized:
             return
-        if os.getenv("PASSWORD") and not os.getenv("PANEL_PASSWORD"):
-            raise RuntimeError(
-                "PASSWORD is no longer supported. Rename it to PANEL_PASSWORD before startup."
-            )
+        for removed_name, replacement in REMOVED_ENVIRONMENT_ERRORS.items():
+            if os.getenv(removed_name) and not os.getenv(replacement):
+                raise RuntimeError(
+                    f"{removed_name} is no longer supported. "
+                    f"Rename it to {replacement} before startup."
+                )
 
         for legacy_name, replacement in LEGACY_ENV_RENAMES.items():
             if os.getenv(legacy_name) and not os.getenv(replacement):
@@ -159,14 +172,8 @@ async def init_config():
             storage_adapter = await get_storage_adapter()
             values = await storage_adapter.get_all_config()
 
-            stored_migrations = {
-                "password": "panel_password",
-                "client_id": "antigravity_client_id",
-                "client_secret": "antigravity_client_secret",
-                "api_url": "antigravity_api_url",
-            }
             migrated = False
-            for legacy_key, canonical_key in stored_migrations.items():
+            for legacy_key, canonical_key in LEGACY_STORED_KEY_RENAMES.items():
                 legacy_value = values.get(legacy_key)
                 if legacy_value and not values.get(canonical_key):
                     saved = await storage_adapter.set_config(canonical_key, legacy_value)
@@ -178,17 +185,7 @@ async def init_config():
                     log.info(f"Migrated legacy configuration key {legacy_key} to {canonical_key}.")
                     migrated = True
 
-            legacy_keys = [
-                key
-                for key in (
-                    "password",
-                    "api_password",
-                    "client_id",
-                    "client_secret",
-                    "api_url",
-                )
-                if key in values
-            ]
+            legacy_keys = [key for key in REMOVED_STORED_KEYS if key in values]
             for key in legacy_keys:
                 deleted = await storage_adapter.delete_config(key)
                 if not deleted:

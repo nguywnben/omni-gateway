@@ -234,12 +234,24 @@ class CoordinatedResponseCache:
 
 
 # Global singleton instance
-response_cache = ResponseCache()
-response_cache_coordinator = CoordinatedResponseCache(
-    response_cache,
-    RoutingCoordinationAdapter(
+def _new_process_local_coordination() -> RoutingCoordinationAdapter:
+    """Build a fresh standalone coordination boundary for cache metadata."""
+
+    return RoutingCoordinationAdapter(
         InMemoryStateStore(),
         identifier_key=secrets.token_bytes(32),
         fencing_epoch=1,
-    ),
+    )
+
+
+response_cache = ResponseCache()
+response_cache_coordinator = CoordinatedResponseCache(
+    response_cache,
+    _new_process_local_coordination(),
 )
+
+
+def reset_response_cache_coordination() -> None:
+    """Restore cache coordination after a runtime lifecycle is closed or aborted."""
+
+    response_cache_coordinator.configure_coordination(_new_process_local_coordination())

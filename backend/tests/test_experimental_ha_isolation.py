@@ -16,6 +16,7 @@ if str(BACKEND) not in sys.path:
     sys.path.insert(0, str(BACKEND))
 
 from core.ha_runtime import close_ha_runtime, initialize_ha_runtime
+from core.response_cache import response_cache, response_cache_coordinator
 
 from backend.tests.suite_manifest import (
     EXPERIMENTAL_HA_MODULES,
@@ -52,6 +53,24 @@ class ExperimentalHaRuntimeIsolationTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual((lifecycle.policy.workers, lifecycle.policy.replicas), (1, 1))
         self.assertIsNone(lifecycle.policy.redis_url)
         self.assertEqual(lifecycle.state, "standalone_ready")
+
+    async def test_close_restores_a_usable_process_local_response_cache(self) -> None:
+        with patch.dict(os.environ, {}, clear=True):
+            await initialize_ha_runtime(storage=object())
+
+        await close_ha_runtime()
+        response_cache.clear()
+        stored = await response_cache_coordinator.set(
+            "after-runtime-close",
+            (b"{}", "application/json"),
+            60,
+        )
+
+        self.assertTrue(stored)
+        self.assertEqual(
+            await response_cache_coordinator.get("after-runtime-close"),
+            (b"{}", "application/json"),
+        )
 
     async def test_normal_start_rejects_coordinated_mode_before_storage_or_redis(self) -> None:
         storage_factory = AsyncMock()

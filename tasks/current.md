@@ -6,9 +6,9 @@
 - Active plan: `PROD-SELFHOST-R1`
 - Target: production-quality self-hosting for one person or a trusted team, not enterprise service
   operation.
-- Progress: **5/36 implementation tasks**; Phase 0 is 5/6 complete.
-- Completed: **P0.5 — Fast, phase, and release gates**.
-- Next task: **P0.6 — Compatibility and deprecation guard**.
+- Progress: **6/36 implementation tasks**; Phase 0 is complete (6/6).
+- Completed: **P0.6 — Compatibility and deprecation guard**.
+- Next task: **P1.1 — Authoritative typed configuration schema**.
 - Supported runtime today: standalone, one worker, one replica.
 - Redis coordination, multi-replica HA, and Helm are experimental and no longer R1 release blockers.
 
@@ -48,12 +48,21 @@ documents should be committed separately after approval. Do not push unless the 
 
 ## Latest Evidence
 
+- `docs/evidence/p0.6-compatibility-deprecation-guard.md`
+- The immutable `r1-v1` fixture protects 18 public inference operations, 112 management
+  operations, console routes/aliases, config migrations, nine stored schema versions, and seven
+  generated client examples.
+- A populated pre-R1 SQLite fixture now upgrades without losing credentials or config. The fixture
+  exposed and fixed SQLite's rejection of expression defaults during additive column migration.
+- The Phase 0 gate passed configuration/inventory contracts, all translation audits (1,116 keys),
+  and 71 affected tests. The 168-module Core suite was covered in order after fixes: 1,417 tests
+  passed with 22 intentional optional/live skips. No HA topology matrix ran.
 - `docs/evidence/p0.5-fixed-quality-gates.md`
 - One runner now defines fast, focused task, affected phase, and single release scopes. The fast
   gate passed in seconds without the complete Core suite; the release dry-run lists 16 fixed steps.
 - Required CI checks are visibly named, while optional storage/provider tests and experimental HA
   are listed separately and cannot change the production result.
-- The focused gate contract passed 8 tests. The current partition contains 167 Core modules and 13
+- The focused gate contract passed 8 tests. The checked partition contained 167 Core modules and 13
   experimental-HA modules; no complete Core or HA topology run was added to P0.5.
 - `docs/evidence/p0.4-risk-maintainability-baseline.md`
 - The reproducible inventory records 9 modules at or above 1,500 lines, 7 parallel persistence

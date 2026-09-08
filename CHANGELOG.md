@@ -61,6 +61,12 @@ All notable user-facing changes are documented in this file. Omni Gateway follow
 
 ### Fixed
 
+- Preserved upgrades from populated pre-R1 SQLite credential stores by adding timestamp columns in
+  an SQLite-compatible additive step, backfilling existing rows, and timestamping new writes
+  explicitly. A versioned compatibility guard now detects accidental SDK, console, config, or
+  stored-schema contract breaks before release. Runtime shutdown also restores a fresh standalone
+  response-cache coordination boundary instead of leaving the cache attached to a closed store.
+
 - Hardened OIDC outage handling with bounded shared discovery backoff, removed implicit owner
   fallback from verified-session authorization, and invalidated older sessions after a failed
   claim-role re-evaluation.

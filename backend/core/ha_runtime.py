@@ -40,7 +40,7 @@ from core.provider_authorization_coordination import (
     configure_provider_authorization_service,
 )
 from core.redis_state_store import RedisStateStore
-from core.response_cache import response_cache_coordinator
+from core.response_cache import reset_response_cache_coordination, response_cache_coordinator
 from core.routing_coordination import RoutingCoordinationAdapter
 from core.state_store import InMemoryStateStore
 from core.virtual_keys import virtual_key_manager
@@ -260,6 +260,7 @@ class HaRuntimeLifecycle:
                 await service.close()
             elif raw_store is not None:
                 await raw_store.close()
+            reset_response_cache_coordination()
             raise
 
     async def check_ready(self) -> bool:
@@ -319,6 +320,7 @@ class HaRuntimeLifecycle:
         self._binding_manager = None
         if service is not None:
             await service.close()
+        reset_response_cache_coordination()
         self.state = HaRuntimeState.CLOSED
 
 

@@ -47,8 +47,8 @@ class SQLiteManager:
             ("tier", "TEXT DEFAULT 'pro'"),
             ("rotation_order", "INTEGER DEFAULT 0"),
             ("call_count", "INTEGER DEFAULT 0"),
-            ("created_at", "REAL DEFAULT (unixepoch())"),
-            ("updated_at", "REAL DEFAULT (unixepoch())"),
+            ("created_at", "REAL"),
+            ("updated_at", "REAL"),
         ],
         "primary_credentials": [
             ("disabled", "INTEGER DEFAULT 0"),
@@ -61,8 +61,8 @@ class SQLiteManager:
             ("enable_credit", "INTEGER DEFAULT 0"),
             ("rotation_order", "INTEGER DEFAULT 0"),
             ("call_count", "INTEGER DEFAULT 0"),
-            ("created_at", "REAL DEFAULT (unixepoch())"),
-            ("updated_at", "REAL DEFAULT (unixepoch())"),
+            ("created_at", "REAL"),
+            ("updated_at", "REAL"),
         ],
     }
 
@@ -124,22 +124,28 @@ class SQLiteManager:
                     existing_columns = {row[1] for row in await cursor.fetchall()}
 
                 added_count = 0
+                added_columns = set()
                 for col_name, col_def in columns:
                     if col_name not in existing_columns:
-                        try:
-                            await db.execute(
-                                f"ALTER TABLE {table_name} ADD COLUMN {col_name} {col_def}"
-                            )
-                            log.info(f"Added missing column {table_name}.{col_name}")
-                            added_count += 1
-                        except Exception as e:
-                            log.error(f"Failed to add column {table_name}.{col_name}: {e}")
+                        await db.execute(
+                            f"ALTER TABLE {table_name} ADD COLUMN {col_name} {col_def}"
+                        )
+                        log.info(f"Added missing column {table_name}.{col_name}")
+                        added_count += 1
+                        added_columns.add(col_name)
+
+                timestamp_columns = added_columns & {"created_at", "updated_at"}
+                for column in timestamp_columns:
+                    await db.execute(
+                        f"UPDATE {table_name} SET {column} = unixepoch() WHERE {column} IS NULL"
+                    )
 
                 if added_count > 0:
                     log.info(f"Table {table_name}: added {added_count} missing column(s)")
 
         except Exception as e:
             log.error(f"Error ensuring schema compatibility: {e}")
+            raise
 
     async def _create_tables(self, db: aiosqlite.Connection):
         await db.execute("""
@@ -540,8 +546,9 @@ class SQLiteManager:
                     await db.execute(
                         f"""
                         INSERT INTO {table_name}
-                        (filename, credential_data, rotation_order, last_success)
-                        VALUES (?, ?, ?, ?)
+                        (filename, credential_data, rotation_order, last_success,
+                         created_at, updated_at)
+                        VALUES (?, ?, ?, ?, unixepoch(), unixepoch())
                     """,
                         (filename, json.dumps(credential_data), next_order, time.time()),
                     )
@@ -609,8 +616,9 @@ class SQLiteManager:
                         else:
                             await db.execute(
                                 f"""INSERT INTO {table_name}
-                                    (filename, credential_data, user_email, rotation_order, last_success)
-                                    VALUES (?, ?, ?, ?, ?)""",
+                                    (filename, credential_data, user_email, rotation_order,
+                                     last_success, created_at, updated_at)
+                                    VALUES (?, ?, ?, ?, ?, unixepoch(), unixepoch())""",
                                 (
                                     write.filename,
                                     json.dumps(write.credential_data),

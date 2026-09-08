@@ -76,6 +76,7 @@ CONFIGURATION_CONTRACTS = GateStep(
             "backend.tests.test_config_security",
             "backend.tests.test_runtime_configuration",
             "backend.tests.test_product_surface_inventory",
+            "backend.tests.test_compatibility_guard",
             "-v",
         ),
     ),

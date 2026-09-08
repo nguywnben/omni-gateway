@@ -43,8 +43,10 @@ class QualityGatePlanTests(unittest.TestCase):
     def test_phase_gate_adds_config_translation_and_only_the_affected_slice(self) -> None:
         plan = build_gate_plan("phase", ("backend.tests.test_quality_gates",))
         step_ids = {step.id for step in plan}
+        configuration = next(step for step in plan if step.id == "configuration-contracts")
 
         self.assertIn("configuration-contracts", step_ids)
+        self.assertIn("backend.tests.test_compatibility_guard", configuration.commands[0])
         self.assertIn("translation-audit", step_ids)
         self.assertIn("focused-tests", step_ids)
         self.assertNotIn("core-suite", step_ids)

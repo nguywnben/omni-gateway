@@ -548,7 +548,10 @@ assert(!('identity' in AppState.tabLoadTimes), '401 response retained the Identi
         self.assertEqual(set(supplemental), expected)
         for locale, messages in supplemental.items():
             with self.subTest(locale=locale, catalog="supplemental"):
-                self.assertEqual(set(messages), {"identity.already_exists"})
+                expected_keys = {"identity.already_exists"}
+                if locale in {"en", "vi"}:
+                    expected_keys.add("identity.governance")
+                self.assertEqual(set(messages), expected_keys)
                 self.assertTrue(messages["identity.already_exists"])
 
     def test_identity_has_dedicated_responsive_and_focus_styles(self):

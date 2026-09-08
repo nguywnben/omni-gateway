@@ -156,7 +156,7 @@
           {
             "backend": "sqlite",
             "path": "backend/core/storage/sqlite_manager.py",
-            "lines": 1453
+            "lines": 1461
           }
         ]
       },
@@ -224,8 +224,8 @@
       }
     ],
     "broad_exception_handlers": {
-      "handlers": 480,
-      "without_reraise": 305,
+      "handlers": 479,
+      "without_reraise": 303,
       "files": 96,
       "by_area": {
         "access_security": 68,
@@ -233,7 +233,7 @@
         "protocol_routing": 58,
         "provider_credentials": 77,
         "runtime_operations": 129,
-        "storage": 137
+        "storage": 136
       },
       "top_hotspots": [
         {
@@ -243,8 +243,8 @@
         },
         {
           "path": "backend/core/storage/sqlite_manager.py",
-          "handlers": 26,
-          "without_reraise": 24
+          "handlers": 25,
+          "without_reraise": 22
         },
         {
           "path": "backend/core/storage/postgresql_manager.py",
