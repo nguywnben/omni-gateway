@@ -483,6 +483,8 @@ class HaReconciliationCoordinator:
                     + b"\x00"
                     + (progress.cursor or "").encode("utf-8")
                     + b"\x00"
+                    + str(progress.pages).encode("ascii")
+                    + b"\x00"
                     + str(limit).encode("ascii")
                 ).hexdigest()[:32]
             )

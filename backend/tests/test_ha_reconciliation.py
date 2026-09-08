@@ -9,8 +9,10 @@ BACKEND_DIR = Path(__file__).resolve().parents[1]
 if str(BACKEND_DIR) not in sys.path:
     sys.path.insert(0, str(BACKEND_DIR))
 
+from core.coordination import QuotaReconciliationResult
 from core.ha_reconciliation import (
     RECONCILIATION_COMPONENTS,
+    HaReconciliationCoordinator,
     ReconciliationComponent,
     ReconciliationPage,
     ReconciliationReceipt,
@@ -194,6 +196,42 @@ class ReconciliationReceiptTests(unittest.TestCase):
         raw["components"] = raw["components"][:-1]
         with self.assertRaises(ValueError):
             ReconciliationReceipt.from_dict(raw)
+
+
+class ReconciliationCoordinatorTests(unittest.IsolatedAsyncioTestCase):
+    async def test_quota_operation_distinguishes_revisited_cursor_pages(self) -> None:
+        class QuotaStore:
+            def __init__(self) -> None:
+                self.operations: list[str] = []
+
+            async def reconcile_quota_state(self, **kwargs):
+                self.operations.append(kwargs["operation_id"])
+                return QuotaReconciliationResult(0, False, "revisited", HEX_A)
+
+        store = QuotaStore()
+        coordinator = HaReconciliationCoordinator(object(), store)
+        receipt = ReconciliationReceiptTests().receipt()
+        first_page = ReconciliationPage(
+            ReconciliationComponent.QUOTA,
+            None,
+            0,
+            False,
+            "revisited",
+            HEX_A,
+            1,
+        )
+        first_progress = advance_reconciliation_receipt(receipt, first_page)
+        await coordinator.next_page(first_progress, limit=256, apply=True)
+        await coordinator.next_page(first_progress, limit=256, apply=True)
+
+        second_progress = advance_reconciliation_receipt(
+            first_progress,
+            dataclasses.replace(first_page, input_cursor="revisited"),
+        )
+        await coordinator.next_page(second_progress, limit=256, apply=True)
+
+        self.assertEqual(store.operations[0], store.operations[1])
+        self.assertNotEqual(store.operations[1], store.operations[2])
 
 
 if __name__ == "__main__":
