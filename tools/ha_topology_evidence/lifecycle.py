@@ -385,6 +385,7 @@ class LifecycleScenarioDriver:
         result = await run_workload(
             self.endpoints,
             api_key=plaintext,
+            operation_identity_key=hashlib.sha256(self.api_key.encode("utf-8")).digest(),
             attempts=self.candidate.correctness_attempts,
             concurrency=self.candidate.concurrency,
             offered_rps=self.candidate.offered_rps,

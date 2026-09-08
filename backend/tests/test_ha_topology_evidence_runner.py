@@ -9,7 +9,7 @@ import sys
 import time
 import unittest
 from pathlib import Path
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, Mock, patch
 
 import httpx
 
@@ -390,6 +390,48 @@ class ScenarioAndOracleTests(unittest.TestCase):
 
 
 class RecoveryTransitionTests(unittest.IsolatedAsyncioTestCase):
+    async def test_hard_budget_samples_use_run_identity_not_ephemeral_auth_key(self) -> None:
+        from backend.tests.test_ha_topology_evidence_contract import candidate
+
+        driver = object.__new__(LifecycleScenarioDriver)
+        driver.candidate = candidate()
+        driver.endpoints = (
+            ("app-a", "http://127.0.0.1:14283"),
+            ("app-b", "http://127.0.0.1:14284"),
+        )
+        driver.api_key = "sk-ogw-run-identity"
+        driver.oracle = AsyncMock()
+        driver.oracle.snapshot.return_value = snapshot()
+        driver._management_request = Mock(
+            side_effect=(
+                (
+                    200,
+                    {
+                        "data": {"id": "vk_budget"},
+                        "key": "sk-ogw-vk-budget-ephemeral",
+                    },
+                ),
+                (200, {"data": {"daily": {"cost_usd": 0.01}}}),
+            )
+        )
+        workload = AsyncMock(
+            return_value=WorkloadResult(
+                (
+                    RequestSample(80_000, "app-a", 200, 1.0, True, False),
+                    RequestSample(80_001, "app-b", 429, 1.0, False, False),
+                ),
+                2.0,
+            )
+        )
+
+        with patch("tools.ha_topology_evidence.lifecycle.run_workload", new=workload):
+            await driver._exercise_hard_budget(object())
+
+        self.assertEqual(
+            workload.await_args.kwargs["operation_identity_key"],
+            hashlib.sha256(driver.api_key.encode("utf-8")).digest(),
+        )
+
     async def test_unknown_outcome_proves_route_backoff_then_recovers(self) -> None:
         from backend.tests.test_ha_topology_evidence_contract import candidate
 
