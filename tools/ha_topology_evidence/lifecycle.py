@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import http.cookiejar
 import json
 import os
@@ -560,6 +561,7 @@ class LifecycleScenarioDriver:
             sequence_offset=110_000,
             request_sequence_offset=110_000,
             operation_sequence_offset=110_000,
+            operation_identity_key=hashlib.sha256(self.api_key.encode("utf-8")).digest(),
         )
         second = await run_workload(
             (self.endpoints[1],),
@@ -571,6 +573,7 @@ class LifecycleScenarioDriver:
             sequence_offset=110_001,
             request_sequence_offset=110_000,
             operation_sequence_offset=110_000,
+            operation_identity_key=hashlib.sha256(self.api_key.encode("utf-8")).digest(),
         )
         samples = (*first.samples, *second.samples)
         if (

@@ -801,6 +801,27 @@ class RecoveryTransitionTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(all(isinstance(client, httpx.AsyncClient) for client in clients))
         self.assertIs(clients[0], clients[1])
 
+    async def test_workload_identity_can_be_decoupled_from_authentication_key(self) -> None:
+        identity_key = b"i" * 32
+        observed_keys = []
+
+        async def send(sample_sequence, _request_sequence, _operation_sequence, replica, *args):
+            observed_keys.append(args[-2])
+            return RequestSample(sample_sequence, replica, 200, 1.0, True, False)
+
+        with patch("tools.ha_topology_evidence.load._send_request", side_effect=send):
+            await run_workload(
+                (("app-a", "http://127.0.0.1:14283"),),
+                api_key="sk-ogw-different-authentication-key",
+                operation_identity_key=identity_key,
+                attempts=1,
+                concurrency=1,
+                offered_rps=1,
+                request_deadline_ms=5_000,
+            )
+
+        self.assertEqual(observed_keys, [identity_key])
+
     async def test_workload_expires_idle_connections_before_hypercorn(self) -> None:
         captured = {}
 

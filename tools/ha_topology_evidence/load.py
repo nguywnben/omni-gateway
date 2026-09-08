@@ -260,6 +260,7 @@ async def run_workload(
     sequence_offset: int = 0,
     request_sequence_offset: int | None = None,
     operation_sequence_offset: int | None = None,
+    operation_identity_key: bytes | None = None,
     schedule_seed: int = 0,
 ) -> WorkloadResult:
     selected = tuple(endpoints)
@@ -276,6 +277,10 @@ async def run_workload(
         or not 100 <= request_deadline_ms <= 120_000
         or not isinstance(api_key, str)
         or not api_key.startswith("sk-ogw-")
+        or (
+            operation_identity_key is not None
+            and (not isinstance(operation_identity_key, bytes) or len(operation_identity_key) < 32)
+        )
         or type(schedule_seed) is not int
         or not 0 <= schedule_seed <= 2_147_483_647
         or (
@@ -290,7 +295,11 @@ async def run_workload(
         raise EvidenceVerificationError("Evidence workload configuration is invalid.")
     for _, url in selected:
         require_loopback_http_url(url)
-    operation_key = hashlib.sha256(api_key.encode("utf-8")).digest()
+    operation_key = (
+        hashlib.sha256(api_key.encode("utf-8")).digest()
+        if operation_identity_key is None
+        else bytes(operation_identity_key)
+    )
     semaphore = asyncio.Semaphore(concurrency)
     start = time.perf_counter_ns()
 
