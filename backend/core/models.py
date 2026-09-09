@@ -1,6 +1,6 @@
 from typing import Annotated, Any, Dict, List, Literal, Optional, Union
 
-from pydantic import BaseModel, Field, SecretStr, WithJsonSchema
+from pydantic import BaseModel, ConfigDict, Field, SecretStr, WithJsonSchema
 
 
 def model_to_dict(model: BaseModel) -> Dict[str, Any]:
@@ -27,22 +27,30 @@ class ModelList(BaseModel):
 
 # OpenAI Models
 class OpenAIToolFunction(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     name: str
     arguments: str  # JSON string
 
 
 class OpenAIToolCall(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     id: str
     type: str = "function"
     function: OpenAIToolFunction
 
 
 class OpenAITool(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     type: str = "function"
     function: Dict[str, Any]
 
 
 class OpenAIChatMessage(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     role: str
     content: Union[str, List[Dict[str, Any]], None] = None
     reasoning_content: Optional[str] = None
@@ -52,12 +60,15 @@ class OpenAIChatMessage(BaseModel):
 
 
 class OpenAIChatCompletionRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     model: str
     messages: List[OpenAIChatMessage]
     stream: bool = False
     temperature: Optional[float] = Field(None, ge=0.0, le=2.0)
     top_p: Optional[float] = Field(None, ge=0.0, le=1.0)
     max_tokens: Optional[int] = Field(None, ge=1)
+    max_completion_tokens: Optional[int] = Field(None, ge=1)
     stop: Optional[Union[str, List[str]]] = None
     frequency_penalty: Optional[float] = Field(None, ge=-2.0, le=2.0)
     presence_penalty: Optional[float] = Field(None, ge=-2.0, le=2.0)
@@ -67,9 +78,8 @@ class OpenAIChatCompletionRequest(BaseModel):
     top_k: Optional[int] = Field(None, ge=1)
     tools: Optional[List[OpenAITool]] = None
     tool_choice: Optional[Union[str, Dict[str, Any]]] = None
-
-    class Config:
-        extra = "allow"  # Allow additional fields not explicitly defined
+    reasoning_effort: Optional[str] = None
+    size: Optional[str] = None
 
 
 ChatCompletionRequest = OpenAIChatCompletionRequest
@@ -77,6 +87,8 @@ ChatCompletionRequest = OpenAIChatCompletionRequest
 
 class OpenAIResponsesRequest(BaseModel):
     """Supported subset of the OpenAI Responses create contract."""
+
+    model_config = ConfigDict(extra="forbid")
 
     model: str
     input: Union[str, List[Dict[str, Any]]]
@@ -90,9 +102,10 @@ class OpenAIResponsesRequest(BaseModel):
     parallel_tool_calls: bool = True
     metadata: Optional[Dict[str, str]] = None
     store: bool = False
-
-    class Config:
-        extra = "allow"
+    text: Optional[Dict[str, Any]] = None
+    reasoning: Optional[Dict[str, Any]] = None
+    previous_response_id: Optional[str] = None
+    conversation: Optional[Union[str, Dict[str, Any]]] = None
 
 
 class OpenAIChatCompletionChoice(BaseModel):
@@ -136,32 +149,45 @@ class OpenAIChatCompletionStreamResponse(BaseModel):
 
 # Gemini Models
 class GeminiPart(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     text: Optional[str] = None
     inlineData: Optional[Dict[str, Any]] = None
     fileData: Optional[Dict[str, Any]] = None
     thought: Optional[bool] = None
-
-    class Config:
-        extra = "allow"
+    thoughtSignature: Optional[str] = None
+    functionCall: Optional[Dict[str, Any]] = None
+    functionResponse: Optional[Dict[str, Any]] = None
+    executableCode: Optional[Dict[str, Any]] = None
+    codeExecutionResult: Optional[Dict[str, Any]] = None
 
 
 class GeminiContent(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     role: str
     parts: List[GeminiPart]
 
 
 class GeminiSystemInstruction(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    role: Optional[str] = None
     parts: List[GeminiPart]
 
 
 class GeminiImageConfig(BaseModel):
-    aspect_ratio: Optional[str] = (
+    model_config = ConfigDict(extra="forbid")
+
+    aspectRatio: Optional[str] = (
         None  # "1:1", "2:3", "3:2", "3:4", "4:3", "4:5", "5:4", "9:16", "16:9", "21:9"
     )
-    image_size: Optional[str] = None  # "1K", "2K", "4K"
+    imageSize: Optional[str] = None  # "1K", "2K", "4K"
 
 
 class GeminiGenerationConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     temperature: Optional[float] = Field(None, ge=0.0, le=2.0)
     topP: Optional[float] = Field(None, ge=0.0, le=1.0)
     topK: Optional[int] = Field(None, ge=1)
@@ -175,16 +201,20 @@ class GeminiGenerationConfig(BaseModel):
     presencePenalty: Optional[float] = Field(None, ge=-2.0, le=2.0)
     thinkingConfig: Optional[Dict[str, Any]] = None
 
-    response_modalities: Optional[List[str]] = None  # ["TEXT", "IMAGE"]
-    image_config: Optional[GeminiImageConfig] = None
+    responseModalities: Optional[List[str]] = None  # ["TEXT", "IMAGE"]
+    imageConfig: Optional[GeminiImageConfig] = None
 
 
 class GeminiSafetySetting(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     category: str
     threshold: str
 
 
 class GeminiRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     contents: List[GeminiContent]
     systemInstruction: Optional[GeminiSystemInstruction] = None
     generationConfig: Optional[GeminiGenerationConfig] = None
@@ -192,9 +222,6 @@ class GeminiRequest(BaseModel):
     tools: Optional[List[Dict[str, Any]]] = None
     toolConfig: Optional[Dict[str, Any]] = None
     cachedContent: Optional[str] = None
-
-    class Config:
-        extra = "allow"
 
 
 class GeminiCandidate(BaseModel):
@@ -222,6 +249,8 @@ class GeminiResponse(BaseModel):
 
 # Claude Models
 class ClaudeContentBlock(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     type: str  # "text", "image", "tool_use", "tool_result"
     text: Optional[str] = None
     source: Optional[Dict[str, Any]] = None  # for image type
@@ -230,24 +259,37 @@ class ClaudeContentBlock(BaseModel):
     input: Optional[Dict[str, Any]] = None  # for tool_use
     tool_use_id: Optional[str] = None  # for tool_result
     content: Optional[Union[str, List[Dict[str, Any]]]] = None  # for tool_result
+    thinking: Optional[str] = None
+    signature: Optional[str] = None
+    thoughtSignature: Optional[str] = None
+    data: Optional[str] = None
 
 
 class ClaudeMessage(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     role: str  # "user" or "assistant"
     content: Union[str, List[ClaudeContentBlock]]
 
 
 class ClaudeTool(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     name: str
     description: Optional[str] = None
     input_schema: Optional[Dict[str, Any]] = None
+    strict: Optional[bool] = None
 
 
 class ClaudeMetadata(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     user_id: Optional[str] = None
 
 
 class ClaudeRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     model: str
     messages: List[ClaudeMessage]
     max_tokens: int = Field(..., ge=1)
@@ -260,9 +302,9 @@ class ClaudeRequest(BaseModel):
     metadata: Optional[ClaudeMetadata] = None
     tools: Optional[List[ClaudeTool]] = None
     tool_choice: Optional[Union[str, Dict[str, Any]]] = None
-
-    class Config:
-        extra = "allow"
+    thinking: Optional[Dict[str, Any]] = None
+    output_config: Optional[Dict[str, Any]] = None
+    size: Optional[str] = None
 
 
 class ClaudeUsage(BaseModel):
