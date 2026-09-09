@@ -51,9 +51,7 @@ class CredentialOperationEnforcementTests(unittest.IsolatedAsyncioTestCase):
             },
         )
         self.assertEqual(body["diagnostic"]["category"], "unsupported_operation")
-        self.assertEqual(
-            body["diagnostic"]["code"], "provider_connection_unsupported_operation"
-        )
+        self.assertEqual(body["diagnostic"]["code"], "provider_connection_unsupported_operation")
         self.assertFalse(body["diagnostic"]["retryable"])
         self.assertTrue(body["diagnostic"]["remediation"])
 

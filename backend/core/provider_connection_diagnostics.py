@@ -299,7 +299,9 @@ def build_connection_test_failure(
     """Build an additive response that retains the legacy string error fields."""
     payload: dict[str, Any] = {
         "success": False,
-        "status_code": status_code or diagnostic.provider_status or _http_status(diagnostic.category),
+        "status_code": status_code
+        or diagnostic.provider_status
+        or _http_status(diagnostic.category),
         "message": "Model test failed.",
         "error": diagnostic.message,
         "detail": diagnostic.message,

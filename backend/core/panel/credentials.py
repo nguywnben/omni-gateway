@@ -1707,7 +1707,11 @@ async def _test_credential_unbounded(
     except Exception as e:
         diagnostic = classify_provider_exception(e)
         status_code = diagnostic.provider_status or (
-            500 if diagnostic.category == "internal" else 504 if diagnostic.category == "timeout" else 502
+            500
+            if diagnostic.category == "internal"
+            else 504
+            if diagnostic.category == "timeout"
+            else 502
         )
         log.error(
             "Credential test raised a normalized exception - "
