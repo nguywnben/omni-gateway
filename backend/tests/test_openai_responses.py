@@ -69,6 +69,28 @@ class OpenAIResponsesTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn(b"event: error", payload)
         self.assertNotIn(b"event: response.completed", payload)
 
+    async def test_responses_stream_caps_accumulated_final_output(self):
+        async def chunks():
+            yield b'data: {"choices":[{"delta":{"content":"12345"}}]}\n\n'
+            yield b'data: {"choices":[{"delta":{"content":"67890"}}]}\n\n'
+            yield b"data: [DONE]\n\n"
+
+        request = OpenAIResponsesRequest(
+            model="gemini-test", input="hello", stream=True
+        )
+        with patch("core.router.primary.responses._MAX_RESPONSES_OUTPUT_BYTES", 8):
+            payload = b"".join(
+                [
+                    chunk
+                    async for chunk in _responses_stream(
+                        StreamingResponse(chunks()), request
+                    )
+                ]
+            )
+
+        self.assertIn(b"event: error", payload)
+        self.assertNotIn(b"event: response.completed", payload)
+
     def test_string_input_and_instructions_translate_to_chat_messages(self):
         request = OpenAIResponsesRequest(
             model="gemini-2.5-flash",

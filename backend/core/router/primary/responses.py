@@ -22,6 +22,7 @@ from fastapi.responses import JSONResponse, StreamingResponse
 
 router = APIRouter()
 _MAX_SSE_FRAME_BYTES = MAX_STREAM_LINE_BYTES
+_MAX_RESPONSES_OUTPUT_BYTES = 8 * MAX_STREAM_LINE_BYTES
 
 
 def _content_to_chat(content: Any) -> Any:
@@ -344,6 +345,7 @@ async def _responses_stream(
     response_id = f"resp_{uuid.uuid4().hex}"
     message_id = f"msg_{uuid.uuid4().hex}"
     output_text = ""
+    output_bytes = 0
     output_item = {
         "id": message_id,
         "type": "message",
@@ -395,13 +397,33 @@ async def _responses_stream(
             delta = choices[0].get("delta", {}) if choices else {}
             text = delta.get("content")
             if text:
-                output_text += str(text)
+                text = str(text)
+                text_bytes = len(text.encode("utf-8"))
+                if output_bytes + text_bytes > _MAX_RESPONSES_OUTPUT_BYTES:
+                    trace_decision(
+                        category="upstream",
+                        action="failed",
+                        result="failed",
+                        reason="provider_error",
+                        provider="responses_adapter",
+                        model=request.model,
+                        status_code=502,
+                    )
+                    yield event(
+                        "error",
+                        code="response_output_limit",
+                        message="The streaming response exceeded the supported output limit.",
+                        param=None,
+                    )
+                    return
+                output_text += text
+                output_bytes += text_bytes
                 yield event(
                     "response.output_text.delta",
                     item_id=message_id,
                     output_index=0,
                     content_index=0,
-                    delta=str(text),
+                    delta=text,
                     logprobs=[],
                 )
     except UpstreamStreamProtocolError:

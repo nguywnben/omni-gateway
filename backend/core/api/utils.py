@@ -19,6 +19,7 @@ from core.request_context import (
     get_virtual_key_reservation_id,
 )
 from core.request_trace_service import trace_decision
+from core.router.stream_passthrough import close_async_iterator
 from core.usage_stats import normalize_token_usage, record_call
 from core.virtual_keys import virtual_key_manager
 from fastapi import Response
@@ -27,6 +28,7 @@ from log import log
 UNASSIGNED_USAGE_FILENAME = "__gateway_unassigned__.json"
 MODEL_NOT_FOUND_COOLDOWN_SECONDS = 2 * 60
 RETRYABLE_UPSTREAM_STATUS_CODES = frozenset({408, 409, 429, 500, 502, 503, 504})
+MAX_COLLECTED_STREAM_BYTES = 8 * 1024 * 1024
 
 
 def _generation_trace_metadata(
@@ -515,6 +517,7 @@ async def collect_streaming_response(stream_generator) -> Response:
     has_data = False
     line_count = 0
     done_marker_received = False
+    collected_bytes = 0
 
     log.debug("[STREAM COLLECTOR] Starting to collect streaming response")
 
@@ -541,6 +544,23 @@ async def collect_streaming_response(stream_generator) -> Response:
             else:
                 log.debug(f"[STREAM COLLECTOR] Skipping non-string/bytes line: {type(line)}")
                 continue
+
+            collected_bytes += len(line_str.encode("utf-8"))
+            if collected_bytes > MAX_COLLECTED_STREAM_BYTES:
+                trace_decision(
+                    category="upstream",
+                    action="failed",
+                    result="failed",
+                    reason="provider_error",
+                    status_code=502,
+                )
+                return Response(
+                    content=json.dumps(
+                        {"error": "The upstream streaming response exceeded the collection limit."}
+                    ),
+                    status_code=502,
+                    media_type="application/json",
+                )
 
             if not line_str.startswith("data: "):
                 log.debug(
@@ -648,11 +668,20 @@ async def collect_streaming_response(stream_generator) -> Response:
 
     except Exception as e:
         log.error(f"[STREAM COLLECTOR] Error collecting stream after {line_count} lines: {e}")
+        trace_decision(
+            category="upstream",
+            action="failed",
+            result="failed",
+            reason="provider_error",
+            status_code=502,
+        )
         return Response(
             content=json.dumps({"error": "Failed to collect the upstream streaming response."}),
-            status_code=500,
+            status_code=502,
             media_type="application/json",
         )
+    finally:
+        await close_async_iterator(stream_generator)
 
     log.debug(
         f"[STREAM COLLECTOR] Finished iteration, has_data={has_data}, line_count={line_count}"

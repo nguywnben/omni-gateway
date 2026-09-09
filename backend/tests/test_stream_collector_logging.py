@@ -7,6 +7,8 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
+from fastapi import Response
+
 BACKEND_DIR = Path(__file__).resolve().parents[1]
 if str(BACKEND_DIR) not in sys.path:
     sys.path.insert(0, str(BACKEND_DIR))
@@ -15,6 +17,30 @@ from core.api.utils import collect_streaming_response
 
 
 class StreamCollectorLoggingTests(unittest.IsolatedAsyncioTestCase):
+    async def test_collector_closes_source_after_prefetched_error(self) -> None:
+        closed = False
+
+        async def stream():
+            nonlocal closed
+            try:
+                yield Response(status_code=502)
+            finally:
+                closed = True
+
+        response = await collect_streaming_response(stream())
+
+        self.assertEqual(response.status_code, 502)
+        self.assertTrue(closed)
+
+    async def test_collector_rejects_output_above_memory_limit(self) -> None:
+        async def stream():
+            yield 'data: {"candidates":[{"content":{"parts":[{"text":"too large"}]}}]}'
+
+        with patch("core.api.utils.MAX_COLLECTED_STREAM_BYTES", 16):
+            response = await collect_streaming_response(stream())
+
+        self.assertEqual(response.status_code, 502)
+
     async def test_done_marker_still_drains_upstream_cleanup(self) -> None:
         completed = False
 
