@@ -6,10 +6,10 @@
 - Active plan: `PROD-SELFHOST-R1`
 - Target: production-quality self-hosting for one person or a trusted team, not enterprise service
   operation.
-- Progress: **14/36 implementation tasks**; Phase 2 is in progress (2/6).
-- Completed: **P2.2 — Connection tests and actionable provider errors**.
-- Next: **P2.3 — Cross-protocol contract corpus**. Do not begin it until a new user
-  request to continue the fixed plan.
+- Progress: **15/36 implementation tasks**; Phase 2 is in progress (3/6).
+- Completed: **P2.3 — Cross-protocol contract corpus**.
+- Next: **P2.4 — Streaming, cancellation, timeout, and retry semantics**. Do not begin it until a
+  new user request to continue the fixed plan.
 - Supported runtime today: standalone, one worker, one replica.
 - Redis coordination, multi-replica HA, and Helm are experimental and no longer R1 release blockers.
 
@@ -49,6 +49,16 @@ Do not push unless the user requests it.
 
 ## Latest Evidence
 
+- `docs/evidence/p2.3-cross-protocol-contract-corpus.md`
+- Five advertised ingress families now share one versioned feature matrix and request/response
+  golden corpora for text, images, system instructions, tools, structured output, reasoning,
+  usage, finish reasons, and native errors.
+- Unknown or untranslatable request semantics fail with native 400 errors; unknown upstream parts
+  fail with native 502 errors. Developer/system intent, signed Anthropic thinking, structured
+  output, cached/reasoning usage, and incomplete/safety finishes survive translation.
+- The task gate passed lint/format for 421 files, compilation, the 179-Core/13-experimental
+  partition, JavaScript, YAML, six shell checks, whitespace, 103 affected tests, and five immutable
+  compatibility tests after runtime validators were made invisible to the frozen OpenAPI schema.
 - `docs/evidence/p2.2-provider-connection-diagnostics.md`
 - Provider connection tests now expose one safe versioned diagnostic contract across all nine
   advertised variants, with actionable categories, remediation, bounded provider status, and an

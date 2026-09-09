@@ -6,6 +6,9 @@ All notable user-facing changes are documented in this file. Omni Gateway follow
 
 ### Added
 
+- Added a versioned cross-protocol contract and shared golden corpora for OpenAI Chat, OpenAI
+  Responses, Anthropic Messages, Gemini, and Vertex text, images, system instructions, tools,
+  structured output, reasoning, usage, finish reasons, and native errors.
 - Added a versioned safe diagnostic contract for credential connection tests with consistent
   categories, remediation, retry guidance, bounded provider status, and deterministic coverage for
   all nine advertised provider/authentication variants.
@@ -51,6 +54,9 @@ All notable user-facing changes are documented in this file. Omni Gateway follow
 
 ### Changed
 
+- Public inference request models now reject unknown or untranslatable semantics with native
+  protocol errors instead of silently dropping fields; translated responses preserve signed
+  reasoning, cached/reasoning token accounting, and incomplete/safety finish states.
 - Credential model tests now have one cancelable 30-second operation deadline; raw upstream bodies
   and exception text are no longer returned or persisted, while the console presents actionable
   limited/failure states through labels completed across all 15 locales.

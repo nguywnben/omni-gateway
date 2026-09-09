@@ -34,7 +34,8 @@ infer support from provider names, credential fields, or another variant of the 
 
 `All` means the current normalized ingress families: `openai_chat_completions`,
 `openai_responses`, `anthropic_messages`, `gemini_native`, and `vertex`. This declares routing
-eligibility, not perfect field parity; the detailed translation corpus belongs to P2.3.
+eligibility, not perfect field parity; field-level behavior is defined by the
+[protocol translation contract](protocol-translation-contract.md) and its versioned golden corpus.
 
 Operation meanings:
 
