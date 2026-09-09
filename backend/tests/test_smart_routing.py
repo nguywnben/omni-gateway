@@ -164,6 +164,67 @@ class SmartCredentialRouterTests(unittest.IsolatedAsyncioTestCase):
         candidates = {candidate.filename: candidate for candidate in decision.candidates}
         self.assertEqual(candidates["disabled.json"].reason, "disabled")
         self.assertEqual(candidates["ready.json"].state, "selected")
+        self.assertEqual(decision.reason, "healthy_candidate")
+
+    async def test_unavailable_decision_explains_cooldown_and_recovery_time(self):
+        now = [100.0]
+        storage = FakeStorageAdapter({"cooldown.json": credential_state()})
+        router = SmartCredentialRouter(clock=lambda: now[0], base_backoff_seconds=5.0)
+        selected = await router.acquire(storage, mode="primary", model_name="model-a")
+        await router.complete(
+            selected[0],
+            mode="primary",
+            model_name="model-a",
+            success=False,
+            error_code=429,
+        )
+
+        result, decision = await router.acquire_with_decision(
+            storage,
+            mode="primary",
+            model_name="model-a",
+        )
+
+        self.assertIsNone(result)
+        self.assertEqual(decision.reason, "cooldown_active")
+        self.assertEqual(decision.retry_after_seconds, 5.0)
+        self.assertEqual(decision.candidates[0].retry_after_seconds, 5.0)
+        self.assertIn("Retry in 5 seconds", decision.message)
+
+    async def test_failure_backoff_is_bounded_and_success_resets_health(self):
+        now = [100.0]
+        storage = FakeStorageAdapter({"route.json": credential_state()})
+        router = SmartCredentialRouter(
+            clock=lambda: now[0],
+            base_backoff_seconds=2.0,
+            max_backoff_seconds=5.0,
+        )
+
+        for expected_delay in (2.0, 4.0, 5.0):
+            selected = await router.acquire(storage, mode="primary", model_name="model-a")
+            await router.complete(
+                selected[0],
+                mode="primary",
+                model_name="model-a",
+                success=False,
+                error_code=503,
+            )
+            outcome = await router._coordination.read_route_outcome(
+                "primary", "route.json", "model-a"
+            )
+            self.assertEqual(outcome.retry_after_seconds, expected_delay)
+            now[0] += expected_delay
+
+        recovered = await router.acquire(storage, mode="primary", model_name="model-a")
+        await router.complete(
+            recovered[0],
+            mode="primary",
+            model_name="model-a",
+            success=True,
+        )
+        outcome = await router._coordination.read_route_outcome("primary", "route.json", "model-a")
+        self.assertEqual(outcome.failure_count, 0)
+        self.assertEqual(outcome.retry_after_seconds, 0.0)
 
     async def test_concurrent_acquisitions_spread_across_available_credentials(self):
         now = [100.0]

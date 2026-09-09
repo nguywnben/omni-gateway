@@ -139,12 +139,45 @@ class SmartCredentialRouter:
         return int((sum(samples) / len(samples)) // LATENCY_BUCKET_MS)
 
     @staticmethod
-    def _is_model_available(state: Dict[str, Any], model_name: Optional[str], now: float) -> bool:
+    def _model_retry_after(state: Dict[str, Any], model_name: Optional[str], now: float) -> float:
         if not model_name:
-            return True
+            return 0.0
         cooldowns = state.get("model_cooldowns") or {}
         cooldown_until = cooldowns.get(model_name)
-        return not isinstance(cooldown_until, (int, float)) or cooldown_until <= now
+        if isinstance(cooldown_until, (int, float)) and cooldown_until > now:
+            return float(cooldown_until - now)
+        return 0.0
+
+    @staticmethod
+    def _unavailable_reason(
+        decisions: Dict[str, RouteCandidate],
+        *,
+        has_credentials: bool,
+    ) -> tuple[str, float]:
+        if not has_credentials:
+            return "no_credentials", 0.0
+        retry_delays = [
+            candidate.retry_after_seconds
+            for candidate in decisions.values()
+            if candidate.retry_after_seconds > 0
+        ]
+        if retry_delays:
+            return "cooldown_active", min(retry_delays)
+        reasons = {candidate.reason for candidate in decisions.values()}
+        if reasons == {"disabled"}:
+            return "credentials_disabled", 0.0
+        if "coordination_capacity" in reasons:
+            return "capacity_exhausted", 0.0
+        if reasons.intersection(
+            {
+                "credential_model_blacklist",
+                "model_unsupported",
+                "preview_incompatible",
+                "provider_model_blacklist",
+            }
+        ):
+            return "model_unavailable", 0.0
+        return "no_candidate", 0.0
 
     @staticmethod
     def _preview_penalty(
@@ -193,7 +226,8 @@ class SmartCredentialRouter:
                     consecutive_failures=consecutive_failures,
                 )
                 continue
-            if not self._is_model_available(state, model_name, now):
+            model_retry_after = self._model_retry_after(state, model_name, now)
+            if model_retry_after > 0:
                 decisions[filename] = RouteCandidate(
                     filename,
                     provider_id,
@@ -201,6 +235,7 @@ class SmartCredentialRouter:
                     "model_cooldown",
                     in_flight=in_flight,
                     consecutive_failures=consecutive_failures,
+                    retry_after_seconds=model_retry_after,
                 )
                 continue
 
@@ -278,6 +313,7 @@ class SmartCredentialRouter:
                 failure_reason,
                 in_flight=in_flight,
                 consecutive_failures=consecutive_failures,
+                retry_after_seconds=max(0.0, retry_after - now),
             )
 
         ready = [item for item in candidates if item[2] <= now]
@@ -339,6 +375,7 @@ class SmartCredentialRouter:
                     candidates=(),
                     created_at=now,
                     request_id=get_request_id(),
+                    reason="candidate_capacity",
                 )
                 self._recent_decisions.append(decision)
                 trace_decision(
@@ -527,6 +564,7 @@ class SmartCredentialRouter:
                     candidates=tuple(decisions[name] for name in sorted(decisions)),
                     created_at=now,
                     request_id=get_request_id(),
+                    reason="healthy_candidate",
                 )
                 self._recent_decisions.append(decision)
                 trace_decision(
@@ -549,6 +587,10 @@ class SmartCredentialRouter:
                 )
                 return (filename, credential_data), decision
 
+            reason, retry_after_seconds = self._unavailable_reason(
+                decisions,
+                has_credentials=bool(states),
+            )
             decision = RouteDecision(
                 mode=mode,
                 requested_model=str(model_name or ""),
@@ -559,13 +601,19 @@ class SmartCredentialRouter:
                 candidates=tuple(decisions[name] for name in sorted(decisions)),
                 created_at=now,
                 request_id=get_request_id(),
+                reason=reason,
+                retry_after_seconds=retry_after_seconds,
             )
             self._recent_decisions.append(decision)
             trace_decision(
                 category="routing",
                 action="unavailable",
                 result="failed",
-                reason="no_candidate",
+                reason=(
+                    reason
+                    if reason in {"cooldown_active", "model_unavailable", "no_candidate"}
+                    else "no_candidate"
+                ),
                 model=str(model_name or ""),
                 candidate_count=len(decision.candidates),
             )

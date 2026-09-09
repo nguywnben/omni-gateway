@@ -485,7 +485,7 @@ class RoutingCoordinationAdapter:
         snapshot = await self._store.read_cas(key, epoch=self._fencing_epoch)
         count, kind, retry_ms, latencies = self._decode_route(snapshot)
         if retry_ms <= now_ms:
-            count, kind, retry_ms = 0, "", 0
+            retry_ms = 0
         result = RouteOutcomeSnapshot(
             count,
             kind,
