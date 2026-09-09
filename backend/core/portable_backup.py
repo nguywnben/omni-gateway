@@ -67,6 +67,8 @@ _CORE_TABLES = frozenset(
         "request_traces",
     }
 )
+_OPTIONAL_COMPATIBILITY_TABLES = frozenset({"durable_migration_checkpoints"})
+_ALLOWED_TABLES = _CORE_TABLES | _OPTIONAL_COMPATIBILITY_TABLES | {"sqlite_sequence"}
 _COMPONENTS = (
     "audit",
     "configuration",
@@ -261,9 +263,13 @@ def _sqlite_backup(source_path: Path, destination_path: Path) -> None:
 
 
 def _database_schema_fingerprint(connection: sqlite3.Connection) -> str:
+    names = sorted(_CORE_TABLES)
+    placeholders = ",".join("?" for _ in names)
     rows = connection.execute(
         "SELECT type, name, tbl_name, COALESCE(sql, '') FROM sqlite_master "
-        "WHERE name NOT LIKE 'sqlite_%' ORDER BY type, name"
+        f"WHERE name IN ({placeholders}) OR tbl_name IN ({placeholders}) "
+        "ORDER BY type, name",
+        (*names, *names),
     ).fetchall()
     return _sha256(_canonical_json([list(row) for row in rows]))
 
@@ -293,6 +299,8 @@ def _inspect_database(path: Path) -> tuple[str, dict[str, int]]:
             }
             if not _CORE_TABLES.issubset(tables):
                 raise BackupArchiveError("Backup database schema is incomplete.")
+            if not tables.issubset(_ALLOWED_TABLES):
+                raise BackupArchiveError("Backup database contains an unknown table.")
             if any(not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", table) for table in tables):
                 raise BackupArchiveError("Backup database contains an unsafe table name.")
             counts = {

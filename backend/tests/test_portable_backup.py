@@ -263,6 +263,30 @@ class PortableBackupTests(unittest.IsolatedAsyncioTestCase):
                 conflict_policy=RestoreConflictPolicy.REPLACE,
             )
 
+    async def test_inert_compatibility_table_does_not_block_core_restore(self) -> None:
+        with patch.dict(os.environ, {"CREDENTIALS_DIR": str(self.source)}):
+            manager = SQLiteManager()
+            await manager.initialize()
+            await manager.create_migration_checkpoint_repository()
+            await manager.close()
+        artifact = await self.source_service.create_backup(PASSPHRASE)
+
+        plan = await self.destination_service.validate_restore(
+            artifact.content,
+            PASSPHRASE,
+            conflict_policy=RestoreConflictPolicy.REPLACE,
+        )
+        self.assertTrue(plan.compatible)
+        self.assertIn("durable_migration_checkpoints", plan.table_counts)
+
+    async def test_unknown_sqlite_table_fails_closed(self) -> None:
+        with closing(sqlite3.connect(self.source / "credentials.db")) as connection:
+            connection.execute("CREATE TABLE attacker_payload (value TEXT)")
+            connection.commit()
+
+        with self.assertRaisesRegex(BackupArchiveError, "unknown table"):
+            await self.source_service.create_backup(PASSPHRASE)
+
     async def test_restore_rolls_back_database_when_runtime_reload_fails(self) -> None:
         artifact = await self.source_service.create_backup(PASSPHRASE)
         failing_service = PortableBackupService(

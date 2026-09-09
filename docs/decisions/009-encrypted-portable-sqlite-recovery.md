@@ -35,7 +35,8 @@ values and aggregate counts and is explicitly non-restorable.
 - Corruption, unsafe ZIP structure, resource abuse, wrong passphrases, and incompatible schemas
   fail before live state changes.
 - Exact-schema compatibility is conservative. Cross-version schema migration belongs to the
-  versioned update workflow, not archive parsing.
+  versioned update workflow, not archive parsing. Known inert compatibility tables do not alter the
+  core fingerprint; unknown tables fail closed.
 - The feature supports SQLite only. PostgreSQL and MongoDB remain advanced and use their native
   operational backup mechanisms.
 - Operators must retain the archive passphrase independently and verify a restored instance before
@@ -51,4 +52,3 @@ values and aggregate counts and is explicitly non-restorable.
   provider and gateway secrets.
 - Automatic best-effort migration of an unknown schema was rejected because it can silently
   produce partially compatible authorization or routing state.
-

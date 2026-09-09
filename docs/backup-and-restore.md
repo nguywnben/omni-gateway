@@ -29,7 +29,8 @@ must not be treated as a recovery artifact.
 - The upload is limited to 64 MiB, SQLite state to 45 MiB, and expanded archive to 46 MiB.
   Member count, hashes, duplicate JSON fields, traversal/symlink flags,
   SQLite integrity, foreign keys, table names, schema inventory, and validation time are bounded.
-- Archive format, state schema, and exact SQLite schema fingerprints must be compatible. R1 fails
+- Archive format, state schema, and the exact core SQLite schema fingerprint must be compatible.
+  Known inert compatibility tables may be carried without changing the core fingerprint. R1 fails
   closed rather than attempting an implicit cross-schema migration; update Omni Gateway through
   the supported version path before restoring an older schema.
 - Portable restore is unavailable for PostgreSQL and MongoDB. Their platform-native backup tools
