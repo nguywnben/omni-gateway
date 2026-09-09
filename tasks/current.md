@@ -7,9 +7,9 @@
 - Target: production-quality self-hosting for one person or a trusted team, not enterprise service
   operation.
 - Progress: **10/36 implementation tasks**; Phase 1 is in progress (4/6).
-- Completed: **P1.4 — Versioned backup, validation, and restore**.
-- Next: **P1.5 — Update and rollback workflow**. Do not begin it until a new user request to
-  continue the fixed plan.
+- Active: **P1.5 — Update and rollback workflow**.
+- Fixed contract: `docs/specs/compose-update-rollback.md`. Implement the host tool and offline
+  recovery entry point, then run one two-version update and one forced-failure rollback rehearsal.
 - Supported runtime today: standalone, one worker, one replica.
 - Redis coordination, multi-replica HA, and Helm are experimental and no longer R1 release blockers.
 
