@@ -93,6 +93,16 @@ _MANAGEMENT_ROUTE_MANIFEST = (
         ("POST", "/api/config/access"),
         ("POST", "/api/config/reset"),
     ),
+    *_http(
+        ManagementPermission.BACKUP_EXPORT,
+        ("POST", "/api/backups"),
+        ("POST", "/api/backups/sanitized-export"),
+    ),
+    *_http(
+        ManagementPermission.BACKUP_RESTORE,
+        ("POST", "/api/backups/validate"),
+        ("POST", "/api/backups/restore"),
+    ),
     *_http(ManagementPermission.LOGS_MANAGE, ("POST", "/api/logs/clear")),
     *_http(ManagementPermission.LOGS_READ, ("GET", "/api/logs/download")),
     *_http(

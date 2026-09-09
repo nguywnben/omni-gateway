@@ -74,6 +74,9 @@ MANAGEMENT_MUTATIONS: dict[tuple[str, str], ManagementMutation] = {
     ("POST", "/api/config/save"): _mutation("config.update", "configuration", "settings_changed"),
     ("POST", "/api/config/access"): _mutation("config.update", "configuration", "settings_changed"),
     ("POST", "/api/config/reset"): _mutation("config.reset", "configuration", "settings_changed"),
+    ("POST", "/api/backups"): _mutation("backup.create", "backup", "created"),
+    ("POST", "/api/backups/restore"): _mutation("backup.restore", "backup", "restored"),
+    ("POST", "/api/backups/sanitized-export"): _mutation("backup.export", "backup", "exported"),
     ("POST", "/api/logs/clear"): _mutation("logs.clear", "log_store", "deleted"),
     ("PUT", "/api/audit/retention"): _mutation(
         "audit.retention_update", "audit_policy", "retention_changed"
@@ -189,11 +192,15 @@ MANAGEMENT_MUTATIONS: dict[tuple[str, str], ManagementMutation] = {
 }
 
 MANAGEMENT_AUDIT_EXCLUSIONS: dict[tuple[str, str], str] = {
+    ("POST", "/api/auth/setup/preflight"): (
+        "Pre-authentication readiness probe; setup completion owns the durable audit event."
+    ),
     ("POST", "/api/auth/start"): "OAuth handshake only; no durable state mutation.",
     ("POST", "/api/providers/xai/oauth/start"): "OAuth handshake only.",
     ("POST", "/api/providers/openai/codex/oauth/start"): "OAuth handshake only.",
     ("POST", "/api/providers/anthropic/claude-code/oauth/start"): "OAuth handshake only.",
     ("POST", "/api/quality-policy/preview"): "Side-effect-free policy preview.",
+    ("POST", "/api/backups/validate"): "Side-effect-free backup validation.",
     ("POST", "/api/credentials/action"): "Bridged from per-target credential evidence.",
     ("POST", "/api/credentials/batch-action"): "Bridged from per-target credential evidence.",
 }
@@ -258,6 +265,7 @@ def _semantic_target_identifier(
         "model_blacklist": "global",
         "trace_policy": "request-traces",
         "oidc_policy": "global",
+        "backup": "portable-state",
     }
     if mutation.target_type in fixed_targets:
         return fixed_targets[mutation.target_type]
