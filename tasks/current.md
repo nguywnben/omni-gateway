@@ -7,8 +7,9 @@
 - Target: production-quality self-hosting for one person or a trusted team, not enterprise service
   operation.
 - Progress: **9/36 implementation tasks**; Phase 1 is in progress (3/6).
-- Completed: **P1.3 — First-run setup and preflight**.
-- Next task: **P1.4 — Versioned backup, validation, and restore**.
+- Active: **P1.4 — Versioned backup, validation, and restore**.
+- P1.4 implementation, fixed task gate, and final-candidate container round trip are complete.
+  Exactly one independent adversarial review and finding reconciliation remain before closure.
 - Supported runtime today: standalone, one worker, one replica.
 - Redis coordination, multi-replica HA, and Helm are experimental and no longer R1 release blockers.
 
@@ -48,6 +49,15 @@ Do not push unless the user requests it.
 
 ## Latest Evidence
 
+- `docs/evidence/p1.4-versioned-backup-restore.md` (closure pending independent review)
+- Candidate `a38ca74` provides one encrypted SQLite recovery artifact, strict dry-run/conflict/schema
+  validation, encrypted pre-restore snapshots, cancellation-safe atomic replacement, complete
+  runtime cache/service rebinding, and a separate non-restorable sanitized inventory.
+- The fixed task gate passed 51 selected tests. A clean read-only container restored original
+  routing and root access after deliberate mutation, rejected the superseded key, emitted no
+  secret in sanitized export, and retained its encrypted recovery snapshot before cleanup.
+- Resume P1.4 with `docs/reviews/p1.4-cross-model-review-prompt.md`; do not start P1.5 or increment
+  the 9/36 denominator until the resulting report is reconciled.
 - `docs/evidence/p1.3-first-run-setup-preflight.md`
 - First-run setup now models fresh, resumed, configured, and invalid states with one next action;
   preflight verifies durable writes, address, listener, transport/cookies, token policy, and owner
