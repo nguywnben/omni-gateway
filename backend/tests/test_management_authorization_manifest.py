@@ -77,6 +77,8 @@ class ManagementRouteManifestCoverageTests(unittest.TestCase):
             ("POST", "/api/auth/keys/reset"): ManagementPermission.ROOT_KEY_ROTATE,
             ("POST", "/api/config/access"): ManagementPermission.CONFIGURATION_MANAGE,
             ("GET", "/api/credentials/download-all"): ManagementPermission.CREDENTIALS_EXPORT,
+            ("GET", "/api/observability/routing"): ManagementPermission.DASHBOARD_READ,
+            ("GET", "/api/providers/capabilities"): ManagementPermission.PROVIDERS_READ,
             ("GET", "/api/audit/export"): ManagementPermission.AUDIT_EXPORT,
             ("GET", "/api/traces/export"): ManagementPermission.TRACES_EXPORT,
             ("WEBSOCKET", "/api/logs/stream"): ManagementPermission.LOGS_READ,

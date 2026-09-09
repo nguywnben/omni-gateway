@@ -110,6 +110,7 @@ _MANAGEMENT_ROUTE_MANIFEST = (
         ("GET", "/api/usage/stats"),
         ("GET", "/api/usage/aggregated"),
         ("GET", "/api/observability/health"),
+        ("GET", "/api/observability/routing"),
     ),
     *_http(
         ManagementPermission.ACCESS_READ,
@@ -127,6 +128,7 @@ _MANAGEMENT_ROUTE_MANIFEST = (
     *_http(
         ManagementPermission.PROVIDERS_READ,
         ("GET", "/api/providers"),
+        ("GET", "/api/providers/capabilities"),
         ("GET", "/api/providers/antigravity/config"),
         ("GET", "/api/providers/google-ai-studio/config"),
         ("GET", "/api/providers/xai/config"),
