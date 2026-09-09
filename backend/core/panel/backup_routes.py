@@ -12,6 +12,7 @@ from core.portable_backup import (
     BackupBackendError,
     BackupConflictError,
     BackupRestoreError,
+    BackupSizeError,
     PortableBackupService,
     RestoreConflictPolicy,
 )
@@ -123,7 +124,7 @@ async def _read_archive(upload: UploadFile) -> bytes:
                 break
             content.extend(chunk)
             if len(content) > MAX_BACKUP_UPLOAD_BYTES:
-                raise BackupArchiveError("Encrypted backup upload exceeds the size limit.")
+                raise BackupSizeError("Encrypted backup upload exceeds the size limit.")
     finally:
         await upload.close()
     if not content:
@@ -144,6 +145,12 @@ def _workflow_error(operation: str, exc: Exception) -> JSONResponse:
             409,
             "backup_restore_conflict",
             "The current instance contains state; choose the replace policy to overwrite it.",
+        )
+    if isinstance(exc, BackupSizeError):
+        return _error(
+            413,
+            "backup_archive_too_large",
+            "The backup archive exceeds a supported resource limit.",
         )
     if isinstance(exc, BackupArchiveError):
         return _error(

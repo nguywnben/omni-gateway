@@ -6,6 +6,9 @@ All notable user-facing changes are documented in this file. Omni Gateway follow
 
 ### Added
 
+- Added versioned, passphrase-encrypted portable SQLite backup with dry-run validation, explicit
+  conflict policy, automatic encrypted pre-restore snapshots, transactional replacement and
+  rollback, plus a separate non-restorable sanitized inventory export.
 - Added one typed configuration schema for startup validation, Settings metadata, environment
   ownership, restart requirements, `.env`/Compose parity checks, and a generated operator reference.
 - Added a localized Audit surface under Observability with safe category filters, cursor

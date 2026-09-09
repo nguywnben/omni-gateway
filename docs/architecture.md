@@ -276,3 +276,4 @@ Current decisions:
 - [ADR-006: Separate Durable Data from Coordinated Runtime State](decisions/006-durable-and-coordinated-enterprise-state.md)
 - [ADR-007: Use Explicit Management Principals, RBAC, and OIDC](decisions/007-explicit-rbac-and-oidc-identity.md)
 - [ADR-008: Gate High Availability on Coordinated State and Failure Evidence](decisions/008-gated-high-availability-activation.md)
+- [ADR-009: Use One Encrypted SQLite Artifact for Portable Recovery](decisions/009-encrypted-portable-sqlite-recovery.md)

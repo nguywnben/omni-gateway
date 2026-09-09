@@ -17,6 +17,7 @@ import re
 import shutil
 import sqlite3
 import stat
+import time
 import uuid
 import zipfile
 from collections.abc import Awaitable, Callable
@@ -28,7 +29,7 @@ from pathlib import Path
 from typing import Any
 
 from app_version import get_application_version
-from core.configuration_schema import CONFIGURATION_FIELDS, ConfigValueType
+from core import sanitized_backup_export
 from core.encrypted_backup import (
     MAX_BACKUP_ENVELOPE_BYTES,
     BackupEnvelopeError,
@@ -39,21 +40,19 @@ from core.encrypted_backup import (
 BACKUP_ARCHIVE_FORMAT = "omni-gateway-portable-state"
 BACKUP_ARCHIVE_VERSION = 1
 BACKUP_STATE_SCHEMA_VERSION = 1
-SANITIZED_EXPORT_FORMAT = "omni-gateway-sanitized-state"
-SANITIZED_EXPORT_VERSION = 1
+SANITIZED_EXPORT_FORMAT = sanitized_backup_export.SANITIZED_EXPORT_FORMAT
+SANITIZED_EXPORT_VERSION = sanitized_backup_export.SANITIZED_EXPORT_VERSION
 BACKUP_EXTENSION = ".ogb"
 MAX_BACKUP_UPLOAD_BYTES = 64 * 1024 * 1024
 MAX_BACKUP_DATABASE_BYTES = 120 * 1024 * 1024
-MAX_BACKUP_PRICING_BYTES = 1024 * 1024
 MAX_BACKUP_MANIFEST_BYTES = 64 * 1024
-MAX_BACKUP_UNCOMPRESSED_BYTES = 122 * 1024 * 1024
+MAX_BACKUP_UNCOMPRESSED_BYTES = 121 * 1024 * 1024
 MAX_BACKUP_COMPRESSION_RATIO = 200
+MAX_BACKUP_SQLITE_VALIDATION_SECONDS = 15
 
 _DATABASE_MEMBER = "state/credentials.db"
-_PRICING_MEMBER = "state/model_pricing.json"
 _MANIFEST_MEMBER = "manifest.json"
-_ALLOWED_MEMBERS = frozenset({_MANIFEST_MEMBER, _DATABASE_MEMBER, _PRICING_MEMBER})
-_REQUIRED_MEMBERS = frozenset({_MANIFEST_MEMBER, _DATABASE_MEMBER})
+_ALLOWED_MEMBERS = frozenset({_MANIFEST_MEMBER, _DATABASE_MEMBER})
 _CORE_TABLES = frozenset(
     {
         "audit_events",
@@ -114,6 +113,10 @@ class BackupArchiveError(BackupError):
     """Raised when an archive is corrupt, unsafe, or incompatible."""
 
 
+class BackupSizeError(BackupArchiveError):
+    """Raised when an archive exceeds a documented resource boundary."""
+
+
 class BackupConflictError(BackupError):
     """Raised when the requested conflict policy prevents replacement."""
 
@@ -145,7 +148,6 @@ class RestorePlan:
     components: tuple[str, ...]
     excluded: tuple[str, ...]
     table_counts: dict[str, int]
-    pricing_override_included: bool
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -157,7 +159,6 @@ class RestorePlan:
             "components": list(self.components),
             "excluded": list(self.excluded),
             "table_counts": dict(self.table_counts),
-            "pricing_override_included": self.pricing_override_included,
         }
 
 
@@ -183,7 +184,6 @@ class RestoreResult:
 class _ValidatedArchive:
     manifest: dict[str, Any]
     database_path: Path
-    pricing_override: bytes | None
 
 
 def _utc_now() -> datetime:
@@ -210,6 +210,7 @@ def _canonical_json(value: Any) -> bytes:
     return json.dumps(
         value,
         ensure_ascii=True,
+        allow_nan=False,
         sort_keys=True,
         separators=(",", ":"),
     ).encode("ascii")
@@ -230,11 +231,14 @@ def _reject_duplicate_fields(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
 
 def _load_json_object(value: bytes, *, label: str, maximum: int) -> dict[str, Any]:
     if not value or len(value) > maximum:
-        raise BackupArchiveError(f"Backup {label} size is invalid.")
+        raise BackupSizeError(f"Backup {label} size is invalid.")
     try:
         parsed = json.loads(
             value.decode("utf-8", errors="strict"),
             object_pairs_hook=_reject_duplicate_fields,
+            parse_constant=lambda _value: (_ for _ in ()).throw(
+                BackupArchiveError(f"Backup {label} contains a non-finite number.")
+            ),
         )
     except BackupArchiveError:
         raise
@@ -271,9 +275,13 @@ def _inspect_database(path: Path) -> tuple[str, dict[str, int]]:
         raise BackupArchiveError("Backup database is missing or unsafe.")
     size = path.stat().st_size
     if size <= 0 or size > MAX_BACKUP_DATABASE_BYTES:
-        raise BackupArchiveError("Backup database size is invalid.")
+        raise BackupSizeError("Backup database size is invalid.")
     try:
         with sqlite3.connect(_safe_database_uri(path), uri=True, timeout=30) as connection:
+            deadline = time.monotonic() + MAX_BACKUP_SQLITE_VALIDATION_SECONDS
+            connection.set_progress_handler(lambda: int(time.monotonic() > deadline), 10_000)
+            connection.execute("PRAGMA trusted_schema = OFF")
+            connection.execute("PRAGMA query_only = ON")
             integrity = connection.execute("PRAGMA quick_check").fetchone()
             if integrity != ("ok",):
                 raise BackupArchiveError("Backup database integrity check failed.")
@@ -287,6 +295,8 @@ def _inspect_database(path: Path) -> tuple[str, dict[str, int]]:
             }
             if not _CORE_TABLES.issubset(tables):
                 raise BackupArchiveError("Backup database schema is incomplete.")
+            if any(not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", table) for table in tables):
+                raise BackupArchiveError("Backup database contains an unsafe table name.")
             counts = {
                 table: int(connection.execute(f'SELECT COUNT(*) FROM "{table}"').fetchone()[0])
                 for table in sorted(tables - {"sqlite_sequence"})
@@ -319,21 +329,12 @@ def _build_archive(
     *,
     application_version: str,
     created_at: str,
-    pricing_override: bytes | None,
 ) -> tuple[bytes, dict[str, Any]]:
     schema_fingerprint, table_counts = _inspect_database(database_path)
     database = database_path.read_bytes()
     records = [
         _content_record(_DATABASE_MEMBER, database, "application/vnd.sqlite3"),
     ]
-    if pricing_override is not None:
-        _load_json_object(
-            pricing_override,
-            label="pricing override",
-            maximum=MAX_BACKUP_PRICING_BYTES,
-        )
-        records.append(_content_record(_PRICING_MEMBER, pricing_override, "application/json"))
-    records.sort(key=lambda item: item["path"])
     manifest = {
         "format": BACKUP_ARCHIVE_FORMAT,
         "archive_version": BACKUP_ARCHIVE_VERSION,
@@ -350,11 +351,9 @@ def _build_archive(
     with zipfile.ZipFile(output, "w", allowZip64=False) as archive:
         archive.writestr(_zip_info(_MANIFEST_MEMBER), _canonical_json(manifest))
         archive.writestr(_zip_info(_DATABASE_MEMBER), database)
-        if pricing_override is not None:
-            archive.writestr(_zip_info(_PRICING_MEMBER), pricing_override)
     payload = output.getvalue()
     if len(payload) > MAX_BACKUP_UNCOMPRESSED_BYTES:
-        raise BackupArchiveError("Backup archive exceeds the supported size.")
+        raise BackupSizeError("Backup archive exceeds the supported size.")
     return payload, manifest
 
 
@@ -367,7 +366,7 @@ def _read_member(archive: zipfile.ZipFile, info: zipfile.ZipInfo, maximum: int) 
                 break
             result.extend(chunk)
             if len(result) > maximum:
-                raise BackupArchiveError(f"Backup member {info.filename!r} exceeds its size limit.")
+                raise BackupSizeError(f"Backup member {info.filename!r} exceeds its size limit.")
     if len(result) != info.file_size:
         raise BackupArchiveError(f"Backup member {info.filename!r} size is inconsistent.")
     return bytes(result)
@@ -416,19 +415,16 @@ def _validate_manifest(manifest: dict[str, Any]) -> dict[str, dict[str, Any]]:
     ):
         raise BackupArchiveError("Backup table inventory is invalid.")
     contents = manifest["contents"]
-    if not isinstance(contents, list) or not 1 <= len(contents) <= 2:
+    if not isinstance(contents, list) or len(contents) != 1:
         raise BackupArchiveError("Backup content inventory is invalid.")
     indexed: dict[str, dict[str, Any]] = {}
     for record in contents:
         if not isinstance(record, dict) or set(record) != _CONTENT_FIELDS:
             raise BackupArchiveError("Backup content record is invalid.")
         path = record["path"]
-        if path not in {_DATABASE_MEMBER, _PRICING_MEMBER} or path in indexed:
+        if path != _DATABASE_MEMBER or path in indexed:
             raise BackupArchiveError("Backup content path is invalid.")
-        expected_media = (
-            "application/vnd.sqlite3" if path == _DATABASE_MEMBER else "application/json"
-        )
-        if record["media_type"] != expected_media:
+        if record["media_type"] != "application/vnd.sqlite3":
             raise BackupArchiveError("Backup content media type is invalid.")
         if (
             type(record["size_bytes"]) is not int
@@ -445,7 +441,7 @@ def _validate_manifest(manifest: dict[str, Any]) -> dict[str, dict[str, Any]]:
 
 def _validate_zip(payload: bytes, work_dir: Path) -> _ValidatedArchive:
     if not payload or len(payload) > MAX_BACKUP_UNCOMPRESSED_BYTES:
-        raise BackupArchiveError("Backup archive size is invalid.")
+        raise BackupSizeError("Backup archive size is invalid.")
     try:
         archive = zipfile.ZipFile(io.BytesIO(payload), "r")
     except (OSError, zipfile.BadZipFile) as exc:
@@ -453,12 +449,7 @@ def _validate_zip(payload: bytes, work_dir: Path) -> _ValidatedArchive:
     with archive:
         entries = archive.infolist()
         names = [entry.filename for entry in entries]
-        if (
-            len(entries) not in {2, 3}
-            or len(names) != len(set(names))
-            or not _REQUIRED_MEMBERS.issubset(names)
-            or not set(names).issubset(_ALLOWED_MEMBERS)
-        ):
+        if len(entries) != 2 or len(names) != len(set(names)) or set(names) != _ALLOWED_MEMBERS:
             raise BackupArchiveError("Backup archive members are invalid.")
         total_size = 0
         by_name: dict[str, zipfile.ZipInfo] = {}
@@ -467,7 +458,7 @@ def _validate_zip(payload: bytes, work_dir: Path) -> _ValidatedArchive:
             if (
                 entry.is_dir()
                 or entry.flag_bits & 0x1
-                or mode == stat.S_IFLNK
+                or stat.S_ISLNK(mode)
                 or entry.file_size < 0
                 or entry.compress_size < 0
             ):
@@ -475,19 +466,18 @@ def _validate_zip(payload: bytes, work_dir: Path) -> _ValidatedArchive:
             maximum = {
                 _MANIFEST_MEMBER: MAX_BACKUP_MANIFEST_BYTES,
                 _DATABASE_MEMBER: MAX_BACKUP_DATABASE_BYTES,
-                _PRICING_MEMBER: MAX_BACKUP_PRICING_BYTES,
             }[entry.filename]
             if entry.file_size <= 0 or entry.file_size > maximum:
-                raise BackupArchiveError("Backup archive member size is invalid.")
+                raise BackupSizeError("Backup archive member size is invalid.")
             if entry.file_size > 1024 * 1024 and (
                 entry.compress_size == 0
                 or entry.file_size > entry.compress_size * MAX_BACKUP_COMPRESSION_RATIO
             ):
-                raise BackupArchiveError("Backup archive compression ratio is unsafe.")
+                raise BackupSizeError("Backup archive compression ratio is unsafe.")
             total_size += entry.file_size
             by_name[entry.filename] = entry
         if total_size > MAX_BACKUP_UNCOMPRESSED_BYTES:
-            raise BackupArchiveError("Backup archive expands beyond the supported size.")
+            raise BackupSizeError("Backup archive expands beyond the supported size.")
 
         manifest_bytes = _read_member(
             archive,
@@ -522,24 +512,7 @@ def _validate_zip(payload: bytes, work_dir: Path) -> _ValidatedArchive:
         if table_counts != manifest["table_counts"]:
             raise BackupArchiveError("Backup database inventory does not match the manifest.")
 
-        pricing_override = None
-        if _PRICING_MEMBER in inventory:
-            pricing_override = _read_member(
-                archive,
-                by_name[_PRICING_MEMBER],
-                MAX_BACKUP_PRICING_BYTES,
-            )
-            if (
-                len(pricing_override) != inventory[_PRICING_MEMBER]["size_bytes"]
-                or _sha256(pricing_override) != inventory[_PRICING_MEMBER]["sha256"]
-            ):
-                raise BackupArchiveError("Backup pricing hash does not match the manifest.")
-            _load_json_object(
-                pricing_override,
-                label="pricing override",
-                maximum=MAX_BACKUP_PRICING_BYTES,
-            )
-        return _ValidatedArchive(manifest, database_path, pricing_override)
+        return _ValidatedArchive(manifest, database_path)
 
 
 def _is_configured(database_path: Path) -> bool:
@@ -557,17 +530,6 @@ def _is_configured(database_path: Path) -> bool:
         ).fetchone()[0]
         usage = connection.execute("SELECT COUNT(*) FROM durable_usage_ledger").fetchone()[0]
     return any(int(value) > 0 for value in (credential_count, configured, oidc_users, usage))
-
-
-def _read_pricing_override(root: Path) -> bytes | None:
-    path = root / "model_pricing.json"
-    if not path.exists():
-        return None
-    if not path.is_file() or path.is_symlink() or path.resolve().parent != root:
-        raise BackupArchiveError("Pricing override path is unsafe.")
-    value = path.read_bytes()
-    _load_json_object(value, label="pricing override", maximum=MAX_BACKUP_PRICING_BYTES)
-    return value
 
 
 class PortableBackupService:
@@ -604,21 +566,19 @@ class PortableBackupService:
         passphrase: str,
         *,
         created_at: str,
-        pricing_override: bytes | None,
     ) -> BackupArtifact:
         payload, manifest = await asyncio.to_thread(
             _build_archive,
             snapshot,
             application_version=self._application_version,
             created_at=created_at,
-            pricing_override=pricing_override,
         )
         try:
             encrypted = await asyncio.to_thread(encrypt_bytes, payload, passphrase)
         except BackupEnvelopeError as exc:
             raise BackupArchiveError(str(exc)) from exc
         if len(encrypted) > MAX_BACKUP_UPLOAD_BYTES:
-            raise BackupArchiveError("Encrypted backup exceeds the portable upload limit.")
+            raise BackupSizeError("Encrypted backup exceeds the portable upload limit.")
         stamp = created_at.replace("-", "").replace(":", "").replace("+00:00", "Z")
         return BackupArtifact(
             encrypted,
@@ -639,7 +599,6 @@ class PortableBackupService:
                     snapshot,
                     passphrase,
                     created_at=_timestamp(),
-                    pricing_override=await asyncio.to_thread(_read_pricing_override, self._root),
                 )
 
     async def validate_restore(
@@ -693,45 +652,23 @@ class PortableBackupService:
 
                 previous_database = work_dir / "pre-restore.db"
                 await self._snapshot_database(previous_database)
-                previous_pricing = await asyncio.to_thread(_read_pricing_override, self._root)
                 snapshot = await self._create_from_snapshot(
                     previous_database,
                     passphrase,
                     created_at=_timestamp(),
-                    pricing_override=previous_pricing,
                 )
                 snapshot_id = await asyncio.to_thread(self._persist_snapshot, snapshot.content)
 
+                replacement = asyncio.create_task(
+                    self._replace_and_reload(validated.database_path, previous_database)
+                )
                 try:
-                    await asyncio.to_thread(
-                        _sqlite_backup,
-                        validated.database_path,
-                        self._database,
-                    )
-                    await asyncio.to_thread(
-                        self._replace_pricing_override,
-                        validated.pricing_override,
-                    )
-                    await self._reload()
-                except Exception as exc:
-                    try:
-                        await asyncio.to_thread(
-                            _sqlite_backup,
-                            previous_database,
-                            self._database,
-                        )
-                        await asyncio.to_thread(
-                            self._replace_pricing_override,
-                            previous_pricing,
-                        )
-                        await self._reload()
-                    except Exception as rollback_exc:
-                        raise BackupRestoreError(
-                            "Restore failed and the automatic rollback could not be completed."
-                        ) from rollback_exc
-                    raise BackupRestoreError(
-                        "Restore failed; the previous state was restored from its snapshot."
-                    ) from exc
+                    await asyncio.shield(replacement)
+                except asyncio.CancelledError:
+                    # SQLite work dispatched to a thread cannot be cancelled safely. Finish
+                    # replacement or rollback before allowing request cancellation to escape.
+                    await replacement
+                    raise
 
                 return RestoreResult(
                     restored=True,
@@ -749,7 +686,11 @@ class PortableBackupService:
             with _work_directory(self._root, "backup-sanitize") as work_dir:
                 snapshot = work_dir / "snapshot.db"
                 await self._snapshot_database(snapshot)
-                exported = await asyncio.to_thread(self._sanitized_inventory, snapshot)
+                exported = await asyncio.to_thread(
+                    sanitized_backup_export.build_sanitized_inventory,
+                    snapshot,
+                    self._application_version,
+                )
                 return _canonical_json(exported)
 
     async def _decrypt_and_validate(
@@ -763,7 +704,7 @@ class PortableBackupService:
             or not encrypted
             or len(encrypted) > min(MAX_BACKUP_UPLOAD_BYTES, MAX_BACKUP_ENVELOPE_BYTES)
         ):
-            raise BackupArchiveError("Encrypted backup upload size is invalid.")
+            raise BackupSizeError("Encrypted backup upload size is invalid.")
         try:
             payload = await asyncio.to_thread(decrypt_bytes, encrypted, passphrase)
         except BackupEnvelopeError as exc:
@@ -792,7 +733,6 @@ class PortableBackupService:
             components=_COMPONENTS,
             excluded=_EXCLUDED,
             table_counts=dict(manifest["table_counts"]),
-            pricing_override_included=validated.pricing_override is not None,
         )
 
     def _assert_live_database(self) -> None:
@@ -825,132 +765,22 @@ class PortableBackupService:
             temporary.unlink(missing_ok=True)
         return identifier
 
-    def _replace_pricing_override(self, content: bytes | None) -> None:
-        path = self._root / "model_pricing.json"
-        if path.exists() and (path.is_symlink() or path.resolve().parent != self._root):
-            raise BackupRestoreError("Pricing override path is unsafe.")
-        if content is None:
-            path.unlink(missing_ok=True)
-            return
-        _load_json_object(content, label="pricing override", maximum=MAX_BACKUP_PRICING_BYTES)
-        temporary = self._root / f".model-pricing-{uuid.uuid4().hex}.tmp"
-        try:
-            with temporary.open("xb") as stream:
-                stream.write(content)
-                stream.flush()
-                os.fsync(stream.fileno())
-            os.chmod(temporary, 0o600)
-            os.replace(temporary, path)
-        finally:
-            temporary.unlink(missing_ok=True)
-
     async def _reload(self) -> None:
         if self._reload_callback is not None:
             await self._reload_callback()
 
-    def _sanitized_inventory(self, database_path: Path) -> dict[str, Any]:
-        safe_types = {
-            ConfigValueType.BOOLEAN,
-            ConfigValueType.INTEGER,
-            ConfigValueType.NUMBER,
-            ConfigValueType.INTEGER_LIST,
-        }
-        safe_fields = {
-            field.config_key: field
-            for field in CONFIGURATION_FIELDS
-            if field.config_key and not field.secret
-        }
-        with sqlite3.connect(_safe_database_uri(database_path), uri=True) as connection:
-            raw_config = {
-                str(key): json.loads(value)
-                for key, value in connection.execute("SELECT key, value FROM config").fetchall()
-            }
-            configuration: dict[str, Any] = {}
-            for key, field in safe_fields.items():
-                if key not in raw_config:
-                    continue
-                value = raw_config[key]
-                if field.value_type in safe_types:
-                    configuration[key] = value
-                elif field.choices and type(value) is str and value in field.choices:
-                    configuration[key] = value
-
-            virtual_keys = raw_config.get("virtual_keys")
-            key_records = virtual_keys if isinstance(virtual_keys, list) else []
-            quality = raw_config.get("quality_policy_document")
-            pool = raw_config.get("virtual_model_pool")
-            blacklist = raw_config.get("model_route_blacklist")
-            role_counts = {
-                str(role): int(count)
-                for role, count in connection.execute(
-                    "SELECT role, COUNT(*) FROM management_role_bindings GROUP BY role"
-                ).fetchall()
-            }
-
-            def count(table: str) -> int:
-                return int(connection.execute(f'SELECT COUNT(*) FROM "{table}"').fetchone()[0])
-
-            return {
-                "format": SANITIZED_EXPORT_FORMAT,
-                "version": SANITIZED_EXPORT_VERSION,
-                "application_version": self._application_version,
-                "created_at": _timestamp(),
-                "backend": "sqlite",
-                "configuration": configuration,
-                "credentials": {
-                    "code_assist": count("credentials"),
-                    "primary": count("primary_credentials"),
-                },
-                "routing": {
-                    "virtual_pool_configured": isinstance(pool, dict),
-                    "selected_model_count": (
-                        len(pool.get("selected_models", []))
-                        if isinstance(pool, dict) and isinstance(pool.get("selected_models"), list)
-                        else 0
-                    ),
-                    "blacklist_entry_count": (
-                        len(blacklist.get("entries", []))
-                        if isinstance(blacklist, dict)
-                        and isinstance(blacklist.get("entries"), list)
-                        else 0
-                    ),
-                },
-                "quality_policy": {
-                    "configured": isinstance(quality, dict),
-                    "profile": (
-                        quality.get("profile")
-                        if isinstance(quality, dict)
-                        and quality.get("profile") in {"quality", "balanced", "capacity", "custom"}
-                        else None
-                    ),
-                    "revision": (
-                        quality.get("revision")
-                        if isinstance(quality, dict) and type(quality.get("revision")) is int
-                        else None
-                    ),
-                },
-                "virtual_keys": {
-                    "configured": len(key_records),
-                    "enabled": sum(
-                        1
-                        for record in key_records
-                        if isinstance(record, dict) and record.get("enabled") is True
-                    ),
-                },
-                "identity": {
-                    "identities": count("management_identities"),
-                    "roles": role_counts,
-                },
-                "records": {
-                    "audit_events": count("audit_events"),
-                    "request_traces": count("request_traces"),
-                    "usage_ledger": count("durable_usage_ledger"),
-                },
-                "excluded": [
-                    "access_secrets",
-                    "credential_payloads",
-                    "raw_logs",
-                    "restorable_key_material",
-                ],
-                "restorable": False,
-            }
+    async def _replace_and_reload(self, incoming: Path, previous: Path) -> None:
+        try:
+            await asyncio.to_thread(_sqlite_backup, incoming, self._database)
+            await self._reload()
+        except Exception as exc:
+            try:
+                await asyncio.to_thread(_sqlite_backup, previous, self._database)
+                await self._reload()
+            except Exception as rollback_exc:
+                raise BackupRestoreError(
+                    "Restore failed and the automatic rollback could not be completed."
+                ) from rollback_exc
+            raise BackupRestoreError(
+                "Restore failed; the previous state was restored from its snapshot."
+            ) from exc

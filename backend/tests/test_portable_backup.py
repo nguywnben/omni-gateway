@@ -30,6 +30,7 @@ from core.portable_backup import (
 from core.storage.sqlite_manager import SQLiteManager
 
 PASSPHRASE = "portable backup test passphrase"
+GOLDEN_CONTRACT = BACKEND_DIR / "tests" / "fixtures" / "p1_4_golden_archive_contract.json"
 
 
 async def _initialize_state(root: Path, marker: str) -> None:
@@ -165,6 +166,22 @@ class PortableBackupTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("sk-live-source-must-not-leak", credential[0])
         self.assertEqual(len(list((self.destination / "backups").glob("*.ogb"))), 1)
 
+    async def test_golden_archive_contract_matches_versioned_fixture(self) -> None:
+        artifact = await self.source_service.create_backup(PASSPHRASE)
+        expected = json.loads(GOLDEN_CONTRACT.read_text(encoding="utf-8"))
+        with zipfile.ZipFile(io.BytesIO(decrypt_bytes(artifact.content, PASSPHRASE))) as archive:
+            manifest = json.loads(archive.read("manifest.json"))
+            actual = {
+                "archive_version": manifest["archive_version"],
+                "components": manifest["components"],
+                "excluded": manifest["excluded"],
+                "format": manifest["format"],
+                "members": sorted(archive.namelist()),
+                "state_schema_version": manifest["state_schema_version"],
+            }
+
+        self.assertEqual(actual, expected)
+
     async def test_dry_run_and_abort_policy_do_not_mutate_or_snapshot(self) -> None:
         artifact = await self.source_service.create_backup(PASSPHRASE)
 
@@ -246,28 +263,69 @@ class PortableBackupTests(unittest.IsolatedAsyncioTestCase):
                 conflict_policy=RestoreConflictPolicy.REPLACE,
             )
 
-    async def test_restore_rolls_back_database_when_secondary_state_write_fails(self) -> None:
-        (self.source / "model_pricing.json").write_text(
-            '{"gpt-test":{"input":1,"output":2}}', encoding="utf-8"
-        )
+    async def test_restore_rolls_back_database_when_runtime_reload_fails(self) -> None:
         artifact = await self.source_service.create_backup(PASSPHRASE)
+        failing_service = PortableBackupService(
+            self.destination / "credentials.db",
+            credentials_dir=self.destination,
+            application_version="1.4.0",
+            reload_callback=self._fail_reload_once(),
+        )
 
-        with patch.object(
-            self.destination_service,
-            "_replace_pricing_override",
-            side_effect=OSError("injected failure"),
-        ):
-            with self.assertRaises(BackupRestoreError):
-                await self.destination_service.restore(
-                    artifact.content,
-                    PASSPHRASE,
-                    conflict_policy=RestoreConflictPolicy.REPLACE,
-                )
+        with self.assertRaises(BackupRestoreError):
+            await failing_service.restore(
+                artifact.content,
+                PASSPHRASE,
+                conflict_policy=RestoreConflictPolicy.REPLACE,
+            )
 
         self.assertEqual(
             _read_config(self.destination / "credentials.db", "routing_strategy"),
             "destination",
         )
+
+    async def test_request_cancellation_waits_for_consistent_restored_state(self) -> None:
+        artifact = await self.source_service.create_backup(PASSPHRASE)
+        reload_started = asyncio.Event()
+
+        async def delayed_reload() -> None:
+            reload_started.set()
+            await asyncio.sleep(0.05)
+
+        service = PortableBackupService(
+            self.destination / "credentials.db",
+            credentials_dir=self.destination,
+            application_version="1.4.0",
+            reload_callback=delayed_reload,
+        )
+        operation = asyncio.create_task(
+            service.restore(
+                artifact.content,
+                PASSPHRASE,
+                conflict_policy=RestoreConflictPolicy.REPLACE,
+            )
+        )
+        await reload_started.wait()
+        operation.cancel()
+
+        with self.assertRaises(asyncio.CancelledError):
+            await operation
+        self.assertEqual(
+            _read_config(self.destination / "credentials.db", "routing_strategy"),
+            "source",
+        )
+
+    @staticmethod
+    def _fail_reload_once():
+        attempts = 0
+
+        async def callback() -> None:
+            nonlocal attempts
+            attempts += 1
+            if attempts == 1:
+                raise OSError("injected reload failure")
+
+        return callback
 
     async def test_sanitized_export_contains_inventory_but_no_usable_secret(self) -> None:
         exported = json.loads(await self.source_service.create_sanitized_export())

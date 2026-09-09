@@ -597,8 +597,9 @@ The production baseline is Python 3.12, and CI currently verifies Python 3.12 an
   [Operational observability](docs/observability.md). Prompt and response content is never exported.
 - The Docker image starts as root only long enough to repair mounted data-directory ownership, then runs the service as the unprivileged `gateway` user.
 - Set `CORS_ORIGINS` to explicit trusted origins when browser clients need cross-origin access.
-- Back up the `omni-gateway-data` Compose volume, or `/opt/omni-gateway` for direct Docker runs,
-  before upgrading or moving servers.
+- Use the authenticated [encrypted backup and restore workflow](docs/backup-and-restore.md) before
+  upgrading or moving a standalone SQLite deployment. Keep the archive and its passphrase outside
+  the `omni-gateway-data` volume.
 - Docker image publishing uses the `DOCKERHUB_USERNAME` and `DOCKERHUB_TOKEN` repository secrets for Docker Hub, and the built-in `GITHUB_TOKEN` for GitHub Packages at `ghcr.io/nguywnben/omni-gateway`. Set the optional `IMAGE_NAME` repository variable only when publishing to a custom Docker Hub image name.
 - Keep `WORKERS=1` and one application replica for the 1.x series; external storage is not a substitute for distributed coordination.
 - Use the canonical `/api/credentials` management routes. The beta `/api/creds` aliases were removed in 1.0.0.

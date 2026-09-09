@@ -34,6 +34,7 @@ from core.portable_backup import (
     BackupArtifact,
     BackupBackendError,
     BackupConflictError,
+    BackupSizeError,
     RestoreConflictPolicy,
     RestorePlan,
     RestoreResult,
@@ -64,7 +65,6 @@ class _BackupService:
                 components=("configuration", "credentials"),
                 excluded=("raw_logs",),
                 table_counts={"config": 2},
-                pricing_override_included=False,
             )
         )
         self.restore = AsyncMock(
@@ -191,6 +191,7 @@ class BackupRouteTests(unittest.IsolatedAsyncioTestCase):
         scenarios = (
             (BackupBackendError("C:/private/database.db"), 409, "backup_backend_unsupported"),
             (BackupConflictError("secret conflict"), 409, "backup_restore_conflict"),
+            (BackupSizeError("large secret archive"), 413, "backup_archive_too_large"),
             (BackupArchiveError("wrong password secret"), 400, "backup_archive_invalid"),
         )
         for error, status, code in scenarios:
