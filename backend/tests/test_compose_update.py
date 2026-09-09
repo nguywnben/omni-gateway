@@ -8,8 +8,10 @@ import shutil
 import unittest
 import uuid
 from pathlib import Path
+from unittest.mock import patch
 
 from tools.compose_update import (
+    MAX_BACKUP_BYTES,
     ComposeUpdater,
     RecoveryStore,
     RuntimeState,
@@ -253,6 +255,35 @@ class ComposeUpdateTests(unittest.TestCase):
             updater.rollback(result.record_path)
 
         self.assertEqual(runtime.calls, calls_before_rollback)
+
+    def test_record_and_archive_resource_limits_fail_before_large_reads(self) -> None:
+        runtime = FakeRuntime()
+        store = RecoveryStore(self.recovery)
+        updater = ComposeUpdater(
+            runtime,
+            store,
+            passphrase_provider=lambda _confirm: "correct horse battery staple",
+            health_timeout=30,
+        )
+        result = updater.update("nguywnben/omni-gateway:1.5.0")
+        record_path = result.record_path
+
+        original_record = record_path.read_bytes()
+        record_path.write_bytes(original_record + b" " * (70 * 1024))
+        with self.assertRaisesRegex(UpdateError, "record size"):
+            store.load(record_path)
+
+        record_path.write_bytes(original_record)
+        record = json.loads(record_path.read_text(encoding="utf-8"))
+        backup_path = Path(record["backup_path"])
+        with backup_path.open("wb") as stream:
+            stream.seek(MAX_BACKUP_BYTES)
+            stream.write(b"x")
+        with (
+            patch.object(Path, "read_bytes", side_effect=AssertionError("large read")),
+            self.assertRaisesRegex(UpdateError, "backup size"),
+        ):
+            store.load(record_path)
 
 
 if __name__ == "__main__":

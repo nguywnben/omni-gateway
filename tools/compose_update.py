@@ -22,6 +22,7 @@ ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_COMPOSE_FILE = ROOT / "deploy" / "docker-compose.yml"
 DEFAULT_RECOVERY_DIR = Path.home() / ".omni-gateway" / "recovery"
 MAX_BACKUP_BYTES = 64 * 1024 * 1024
+MAX_RECORD_BYTES = 64 * 1024
 _IMAGE_ID = re.compile(r"^sha256:[0-9a-f]{64}$")
 _DIGEST_REFERENCE = re.compile(r"^\S+@sha256:[0-9a-f]{64}$")
 _VERSION_REFERENCE = re.compile(
@@ -256,6 +257,8 @@ class RecoveryStore:
         candidate = Path(path).expanduser().absolute()
         if candidate.is_symlink() or not candidate.is_file() or candidate.suffix != ".json":
             raise UpdateError("Update record is missing or unsafe.")
+        if not 0 < candidate.stat().st_size <= MAX_RECORD_BYTES:
+            raise UpdateError("Update record size is invalid.")
         try:
             payload = json.loads(candidate.read_text(encoding="utf-8"))
         except (OSError, UnicodeError, json.JSONDecodeError) as exc:
@@ -282,9 +285,9 @@ class RecoveryStore:
         archive_path = Path(record.backup_path).expanduser().absolute()
         if archive_path.is_symlink() or not archive_path.is_file() or archive_path.suffix != ".ogb":
             raise UpdateError("Recorded encrypted backup is missing or unsafe.")
-        archive = archive_path.read_bytes()
-        if not archive or len(archive) > MAX_BACKUP_BYTES:
+        if not 0 < archive_path.stat().st_size <= MAX_BACKUP_BYTES:
             raise UpdateError("Recorded encrypted backup size is invalid.")
+        archive = archive_path.read_bytes()
         if hashlib.sha256(archive).hexdigest() != record.backup_sha256:
             raise UpdateError("Recorded encrypted backup checksum does not match.")
         return record
@@ -302,7 +305,7 @@ class ComposeUpdater:
         health_timeout: int = 90,
     ) -> None:
         if not 10 <= health_timeout <= 600:
-            raise ValueError("health_timeout must be between 10 and 600 seconds")
+            raise UpdateError("Health timeout must be between 10 and 600 seconds.")
         self.runtime = runtime
         self.store = recovery_store
         self.passphrase_provider = passphrase_provider
