@@ -166,6 +166,13 @@ class SmartCredentialRouterTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(candidates["ready.json"].state, "selected")
         self.assertEqual(decision.reason, "healthy_candidate")
 
+    async def test_recent_decision_limit_zero_returns_no_records(self):
+        storage = FakeStorageAdapter({"ready.json": credential_state()})
+        router = SmartCredentialRouter(clock=lambda: 100.0)
+        await router.acquire(storage, mode="primary", model_name="model-a")
+
+        self.assertEqual(await router.recent_decisions(limit=0), ())
+
     async def test_unavailable_decision_explains_cooldown_and_recovery_time(self):
         now = [100.0]
         storage = FakeStorageAdapter({"cooldown.json": credential_state()})

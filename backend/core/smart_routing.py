@@ -646,8 +646,11 @@ class SmartCredentialRouter:
 
     async def recent_decisions(self, limit: int = 20) -> tuple[RouteDecision, ...]:
         """Return recent sanitized decisions for diagnostics without credential secrets."""
+        bounded_limit = min(self._recent_decisions.maxlen or 100, max(0, int(limit)))
+        if bounded_limit == 0:
+            return ()
         async with self._state_lock:
-            return tuple(list(self._recent_decisions)[-max(0, int(limit)) :])
+            return tuple(list(self._recent_decisions)[-bounded_limit:])
 
     async def complete(
         self,
