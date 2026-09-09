@@ -180,15 +180,18 @@ View logs:
 sudo docker logs -f omni-gateway
 ```
 
-Update to the newest stable image:
+For a direct `docker run` deployment, first create an encrypted backup and pull an exact release
+rather than a floating tag:
 
 ```bash
-sudo docker pull nguywnben/omni-gateway:latest
+sudo docker pull nguywnben/omni-gateway:<version>
 sudo docker stop omni-gateway
 sudo docker rm omni-gateway
 ```
 
-Then start the container again with the same `docker run` command above. The mounted `/opt/omni-gateway` directories preserve credentials, configuration, usage data, and logs across container updates.
+Then start the container again with the same mounts and the exact version. The mounted
+`/opt/omni-gateway` directories preserve credentials, configuration, usage data, and logs. The
+automated health-checked rollback workflow applies to the canonical Compose deployment below.
 
 ### Docker Compose
 
@@ -209,6 +212,11 @@ and stores the complete application data directory in the named volume `omni-gat
 The default profile accepts only the common controls `API_KEY`, `PANEL_PASSWORD`, `SETUP_TOKEN`,
 `LOG_LEVEL`, and `HOST_PORT` from the shell or a root `.env` file. Leave the authentication values
 empty to retain automatic key generation and first-run setup.
+
+Updates use one dry-run-first command that pins the resolved image ID, creates an encrypted backup,
+checks `/ready`, and automatically restores the previous image and state on failure. Follow the
+[Compose update and rollback guide](docs/updating.md); never replace its version argument with
+`latest` or `edge`.
 
 External storage, OIDC, proxy, routing policy, guardrails, cache, and telemetry are explicit
 advanced controls. After configuring only the values you need in `.env`, enable that layer with:

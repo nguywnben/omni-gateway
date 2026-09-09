@@ -98,3 +98,7 @@ After verification succeeds, inspect `backend/data/creds/backups/` and remove re
 that are no longer required, retaining at least the newest known-good rollback point outside the
 live volume. R1 does not prune snapshots automatically because it cannot know which operator
 recovery point is safe to delete; check free space before repeated restore rehearsals.
+
+For release changes, use the [Compose update and rollback workflow](updating.md). It creates this
+encrypted recovery artifact before replacing the image and automatically restores it if target
+health verification fails.

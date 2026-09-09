@@ -51,7 +51,7 @@ _RECORD_STATUSES = frozenset(
     {
         "prepared",
         "updated",
-        "rolled_back_after_failed_health",
+        "rolled_back_after_failed_update",
         "rolled_back_by_operator",
         "rollback_failed",
     }
@@ -315,7 +315,7 @@ class ComposeUpdater:
     def _update_actions(target_reference: str) -> tuple[str, ...]:
         return (
             "preflight Docker, Compose, active image, health, and data volume",
-            f"pull and resolve {target_reference} to an immutable image ID",
+            f"resolve {target_reference} to an immutable image ID; pull versioned registry refs",
             "create encrypted backup in the host recovery directory",
             "write a prepared update record",
             "recreate only the app service from the resolved target image ID",
@@ -379,7 +379,7 @@ class ComposeUpdater:
             raise UpdateRollbackError(
                 f"Update failed and rollback did not complete; recovery record: {record_path}"
             ) from rollback_exc
-        record.status = "rolled_back_after_failed_health"
+        record.status = "rolled_back_after_failed_update"
         self.store.save(record_path, record)
         return WorkflowResult(
             record.status, self._update_actions(record.target_reference), record_path
@@ -715,7 +715,7 @@ def main(arguments: list[str] | None = None) -> int:
     if result.record_path is not None:
         print(f"Recovery record: {result.record_path}")
     print(f"Result: {result.status}")
-    return 2 if result.status == "rolled_back_after_failed_health" else 0
+    return 2 if result.status == "rolled_back_after_failed_update" else 0
 
 
 if __name__ == "__main__":

@@ -185,9 +185,9 @@ class ComposeUpdateTests(unittest.TestCase):
 
         result = updater.update("nguywnben/omni-gateway:1.5.0")
 
-        self.assertEqual(result.status, "rolled_back_after_failed_health")
+        self.assertEqual(result.status, "rolled_back_after_failed_update")
         record = json.loads(result.record_path.read_text(encoding="utf-8"))
-        self.assertEqual(record["status"], "rolled_back_after_failed_health")
+        self.assertEqual(record["status"], "rolled_back_after_failed_update")
         self.assertEqual(runtime.current_image, "sha256:" + "1" * 64)
         self.assertEqual(
             runtime.calls[-4:],
