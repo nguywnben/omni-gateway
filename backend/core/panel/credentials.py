@@ -1641,11 +1641,6 @@ async def _test_credential_unbounded(
                     except Exception as e:
                         log.error(f"Preview model test failed for {filename}: {e}")
 
-            message = (
-                "Credential is valid, but the upstream provider is currently rate limited."
-                if status_code == 429
-                else "Model test completed successfully."
-            )
             diagnostic = (
                 classify_provider_response(
                     status_code,
@@ -1654,6 +1649,7 @@ async def _test_credential_unbounded(
                 if status_code == 429
                 else None
             )
+            message = diagnostic.message if diagnostic else "Model test completed successfully."
             return JSONResponse(
                 status_code=200,
                 content={

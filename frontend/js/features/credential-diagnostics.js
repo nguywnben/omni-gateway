@@ -111,19 +111,22 @@ async function testCredential(filename, model, signal) {
         const data = await response.json();
 
         const logicalStatus = data.status_code || response.status;
-        const isRateLimited = logicalStatus === 429 && data.success === true;
+        const isLimited = logicalStatus === 429 && data.success === true;
 
-        if (response.status === 200 || isRateLimited) {
+        if (response.status === 200 || isLimited) {
 
             const resultHtml = buildCredentialTestResultHtml(filename, data, response, { mode: 'Code Assist' });
 
-            showStatus(isRateLimited ? t('credential_rate_limited') : t('test_successful'), isRateLimited ? 'warning' : 'success');
+            showStatus(
+                isLimited ? (data?.diagnostic?.message || t('credential_rate_limited')) : t('test_successful'),
+                isLimited ? 'warning' : 'success'
+            );
 
             await AppState.creds.refresh();
 
             return {
                 html: resultHtml,
-                type: isRateLimited ? 'info' : 'success'
+                type: isLimited ? 'info' : 'success'
             };
 
         }
@@ -196,19 +199,22 @@ async function testPrimaryCredential(filename, model, signal) {
         const data = await response.json();
 
         const logicalStatus = data.status_code || response.status;
-        const isRateLimited = logicalStatus === 429 && data.success === true;
+        const isLimited = logicalStatus === 429 && data.success === true;
 
-        if (response.status === 200 || isRateLimited) {
+        if (response.status === 200 || isLimited) {
 
             const resultHtml = buildCredentialTestResultHtml(filename, data, response, { mode: 'Provider' });
 
-            showStatus(isRateLimited ? t('credential_rate_limited') : t('test_successful'), isRateLimited ? 'warning' : 'success');
+            showStatus(
+                isLimited ? (data?.diagnostic?.message || t('credential_rate_limited')) : t('test_successful'),
+                isLimited ? 'warning' : 'success'
+            );
 
             await AppState.primaryCreds.refresh();
 
             return {
                 html: resultHtml,
-                type: isRateLimited ? 'info' : 'success'
+                type: isLimited ? 'info' : 'success'
             };
 
         }

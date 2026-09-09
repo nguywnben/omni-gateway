@@ -561,6 +561,7 @@ class CredentialStatusModelTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(payload["diagnostic"]["category"], "rate_limit")
         self.assertTrue(payload["diagnostic"]["retryable"])
         self.assertTrue(payload["diagnostic"]["remediation"])
+        self.assertEqual(payload["message"], payload["diagnostic"]["message"])
 
     async def test_complete_connection_test_has_one_hard_timeout(self):
         storage = FakeCredentialStorage()

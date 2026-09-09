@@ -417,6 +417,7 @@ class ControlPanelAssetTests(unittest.TestCase):
         self.assertIn("options.onTest(model, activeController.signal)", dialog_script)
         self.assertIn("signal", diagnostic_script)
         self.assertIn("signal?.aborted", diagnostic_script)
+        self.assertIn("data?.diagnostic?.message", diagnostic_script)
         self.assertIn("data?.diagnostic", content_script)
         self.assertIn("diagnostic.remediation", content_script)
         self.assertIn("diagnostic.provider_code", content_script)

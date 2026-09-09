@@ -280,18 +280,20 @@ function buildCredentialTestErrorHtml(filename, data, response) {
 function buildCredentialTestResultHtml(filename, data, response, options = {}) {
 
     const logicalStatus = data.status_code || response.status;
-    const isRateLimited = logicalStatus === 429 && data.success === true;
     const diagnostic = data?.diagnostic?.schema_version === 1 ? data.diagnostic : null;
-    const statusMessage = isRateLimited
-        ? t('credential_rate_limited')
+    const isLimited = logicalStatus === 429 && data.success === true;
+    const statusMessage = isLimited
+        ? (diagnostic?.message || t('credential_rate_limited'))
         : (data.message || t('credential_available'));
 
     return buildApiResultHtml({
-        intro: isRateLimited
-            ? t('credential_rate_limited')
+        intro: isLimited
+            ? statusMessage
             : t('test_successful'),
         rows: [
-            [t('status'), t(isRateLimited ? 'runtime.rate_limited' : 'success')],
+            [t('status'), isLimited
+                ? String(diagnostic?.category || t('runtime.rate_limited')).replaceAll('_', ' ')
+                : t('success')],
             [t('table_filename'), filename],
             [t('http_code_prefix'), logicalStatus || response.status],
             [t('credential_status_label').replace(':', ''), statusMessage],
