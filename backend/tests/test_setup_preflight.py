@@ -152,6 +152,22 @@ class SetupPreflightTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result["next_action"], "use_https")
         self.assertEqual(result["checks"]["transport"]["status"], "fail")
 
+    async def test_docker_bridge_request_to_loopback_origin_allows_local_http(self):
+        request = build_request(client_host="172.18.0.1", hostname="127.0.0.1")
+        with patch.dict(os.environ, {"SETUP_TOKEN": "a-strong-setup-token-value-123"}):
+            result = await build_setup_status(
+                request,
+                FakeStorage(),
+                setup_required=True,
+                authenticated=False,
+            )
+
+        self.assertEqual(result["state"], "fresh")
+        self.assertEqual(result["next_action"], "enter_setup_token")
+        self.assertEqual(
+            result["checks"]["transport"], {"status": "pass", "code": "transport_local"}
+        )
+
     async def test_remote_setup_without_operator_token_fails_closed(self):
         request = build_request(client_host="198.51.100.20", hostname="gateway.example.com")
         with patch.dict(os.environ, {}, clear=False):

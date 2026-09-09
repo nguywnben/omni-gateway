@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import os
+from ipaddress import ip_address
 from typing import Any
+from urllib.parse import urlsplit
 
 import config
 from core.utils import _panel_cookie_is_secure, _request_origin
@@ -19,6 +21,15 @@ def _check(status: str, code: str) -> dict[str, str]:
     return {"status": status, "code": code}
 
 
+def _origin_is_loopback(origin: str) -> bool:
+    """Recognize host-loopback URLs even when Docker obscures the client address."""
+    try:
+        hostname = urlsplit(origin).hostname
+        return hostname == "localhost" or bool(hostname and ip_address(hostname).is_loopback)
+    except ValueError:
+        return False
+
+
 async def build_setup_status(
     request: Request,
     storage: Any,
@@ -29,6 +40,7 @@ async def build_setup_status(
     """Describe one installation state and one operator action without secrets."""
     origin = _request_origin(request)
     policy = get_setup_access_policy(request)
+    local_origin = _origin_is_loopback(origin)
     host = await config.get_server_host()
     port = await config.get_server_port()
     checks = {
@@ -37,7 +49,8 @@ async def build_setup_status(
             "pass" if origin else "fail", "address_valid" if origin else "address_invalid"
         ),
         "transport": _check(
-            "pass", "transport_local" if policy.local_request else "transport_secure"
+            "pass",
+            "transport_local" if policy.local_request or local_origin else "transport_secure",
         ),
         "setup_token": _check("pass", "setup_token_not_required"),
         "owner": _check("pending", "owner_not_created"),
@@ -70,7 +83,7 @@ async def build_setup_status(
             checks["setup_token"] = _check("pending", "setup_token_entry_required")
 
     secure_cookie_setting = os.getenv("PANEL_COOKIE_SECURE", "").strip().lower()
-    if not policy.local_request and not origin.startswith("https://"):
+    if not policy.local_request and not local_origin and not origin.startswith("https://"):
         checks["transport"] = _check("fail", "https_required")
         failures.append("use_https")
     elif origin.startswith("https://") and not _panel_cookie_is_secure(request):
