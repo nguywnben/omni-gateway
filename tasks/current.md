@@ -6,10 +6,10 @@
 - Active plan: `PROD-SELFHOST-R1`
 - Target: production-quality self-hosting for one person or a trusted team, not enterprise service
   operation.
-- Progress: **12/36 implementation tasks**; Phase 1 is complete (6/6).
-- Completed: **P1.6 — Supported install matrix**.
-- Next: **P2.1 — Provider capability matrix**. Do not begin it until a new user request to continue
-  the fixed plan.
+- Progress: **13/36 implementation tasks**; Phase 2 is in progress (1/6).
+- Completed: **P2.1 — Provider capability matrix**.
+- Next: **P2.2 — Connection tests and actionable provider errors**. Do not begin it until a new user
+  request to continue the fixed plan.
 - Supported runtime today: standalone, one worker, one replica.
 - Redis coordination, multi-replica HA, and Helm are experimental and no longer R1 release blockers.
 
@@ -49,6 +49,13 @@ Do not push unless the user requests it.
 
 ## Latest Evidence
 
+- `docs/evidence/p2.1-provider-capability-matrix.md`
+- All nine advertised provider/auth variants now share a versioned capability contract covering
+  lifecycle operations, discovery, quota, OAuth refresh, and five normalized ingress protocol
+  families. The console derives card and mixed-selection actions from that server contract.
+- Unsupported operations fail closed with the stable typed 422 envelope before provider I/O or
+  mutation. The additive v2 route preserves the immutable `/api/providers` v1 contract. The fixed
+  task gate passed its environment-only shell retry and all 85 focused affected tests.
 - `docs/evidence/p1.6-supported-install-matrix.md`
 - One linear, version-pinned Compose guide now covers Windows Docker Desktop/WSL2, Linux Docker
   Engine, and the remaining macOS manual check; native launchers and hosted descriptors are

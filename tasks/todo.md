@@ -1,6 +1,6 @@
 # Omni Gateway Production Self-Hosted R1 — Fixed Checklist
 
-Progress denominator: **12/36** implementation tasks. Planning artifacts do not count as completed
+Progress denominator: **13/36** implementation tasks. Planning artifacts do not count as completed
 implementation. The denominator cannot change without an approved `CR-###` in `tasks/plan.md`.
 
 ## Approval Gate
@@ -26,9 +26,9 @@ implementation. The denominator cannot change without an approved `CR-###` in `t
 - [x] P1.5 Update and rollback workflow
 - [x] P1.6 Supported install matrix
 
-## Phase 2 — Gateway Correctness and AI Quality (0/6)
+## Phase 2 — Gateway Correctness and AI Quality (1/6)
 
-- [ ] P2.1 Provider capability matrix
+- [x] P2.1 Provider capability matrix
 - [ ] P2.2 Connection tests and actionable provider errors
 - [ ] P2.3 Cross-protocol contract corpus
 - [ ] P2.4 Streaming, cancellation, timeout, and retry semantics

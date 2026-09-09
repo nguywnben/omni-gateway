@@ -6,6 +6,9 @@ All notable user-facing changes are documented in this file. Omni Gateway follow
 
 ### Added
 
+- Added a versioned provider/auth capability matrix for all nine advertised variants, including
+  lifecycle actions, discovery, OAuth refresh, quota, and normalized ingress protocols; the
+  credential console now derives valid card and mixed-selection actions from the same contract.
 - Added versioned, passphrase-encrypted portable SQLite backup with dry-run validation, explicit
   conflict policy, automatic encrypted pre-restore snapshots, transactional replacement and
   rollback, plus a separate non-restorable sanitized inventory export.
