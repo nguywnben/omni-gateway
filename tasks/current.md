@@ -6,9 +6,9 @@
 - Active plan: `PROD-SELFHOST-R1`
 - Target: production-quality self-hosting for one person or a trusted team, not enterprise service
   operation.
-- Progress: **11/36 implementation tasks**; Phase 1 is in progress (5/6).
-- Completed: **P1.5 — Update and rollback workflow**.
-- Next: **P1.6 — Supported install matrix**. Do not begin it until a new user request to continue
+- Progress: **12/36 implementation tasks**; Phase 1 is complete (6/6).
+- Completed: **P1.6 — Supported install matrix**.
+- Next: **P2.1 — Provider capability matrix**. Do not begin it until a new user request to continue
   the fixed plan.
 - Supported runtime today: standalone, one worker, one replica.
 - Redis coordination, multi-replica HA, and Helm are experimental and no longer R1 release blockers.
@@ -49,6 +49,14 @@ Do not push unless the user requests it.
 
 ## Latest Evidence
 
+- `docs/evidence/p1.6-supported-install-matrix.md`
+- One linear, version-pinned Compose guide now covers Windows Docker Desktop/WSL2, Linux Docker
+  Engine, and the remaining macOS manual check; native launchers and hosted descriptors are
+  explicitly compatibility-only, while Helm remains experimental.
+- The Windows rehearsal completed fresh setup, authenticated runtime smoke, recreate persistence,
+  and a no-error/no-overflow browser login on the isolated port 4298. The Phase 1 gate covered all
+  fixed steps after two exposed inventory/compatibility debts were corrected without overwriting
+  the immutable R1 fixture.
 - `docs/evidence/p1.5-compose-update-rollback.md`
 - Compose updates now require a version/digest, deploy the resolved immutable ID, preserve a
   checksum-bound encrypted host recovery point, detect `.env`/port drift, and automatically restore

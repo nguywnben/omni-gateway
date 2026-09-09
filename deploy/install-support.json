@@ -26,6 +26,7 @@
       "id": "windows-docker-desktop-wsl2",
       "tier": "core",
       "verification": "local-runtime",
+      "evidence": "docs/evidence/p1.6-supported-install-matrix.md",
       "prerequisites": [
         "Docker Desktop with the WSL2 backend",
         "Linux containers",
@@ -41,6 +42,7 @@
       "id": "linux-docker-engine",
       "tier": "core",
       "verification": "required-ci",
+      "evidence": ".github/workflows/ci.yml#container-smoke",
       "prerequisites": [
         "Docker Engine",
         "Docker Compose v2 plugin",
@@ -56,6 +58,7 @@
       "id": "macos-docker-desktop",
       "tier": "core",
       "verification": "manual-check",
+      "evidence": "docs/installation.md#remaining-macos-manual-check",
       "prerequisites": [
         "Docker Desktop",
         "Docker Compose v2",
