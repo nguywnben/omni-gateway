@@ -139,7 +139,7 @@ Ouvrez le panneau de configuration à l'adresse :
 http://IP_DE_VOTRE_SERVEUR:4283
 ```
 
-Lors de la première exécution, définissez le mot de passe de la console sur l'écran de configuration. Aucun mot de passe par défaut n'est fourni. Un navigateur distant doit également saisir le token d'initialisation (bootstrap token) affiché par `docker logs omni-gateway` ; une configuration directe sur localhost ne l'exige pas. Définissez `SETUP_TOKEN` avant le démarrage si l'automatisation du déploiement requiert un token prédéterminé fixe.
+Lors du premier démarrage, l’écran de configuration vérifie le stockage, l’adresse de la console, le transport/les cookies et l’état de l’installation avant d’autoriser la création du propriétaire. Aucun mot de passe par défaut n’est fourni. La configuration directe sur localhost ne nécessite pas de jeton. Avant une configuration distante, définissez un `SETUP_TOKEN` unique d’au moins 24 caractères puis redémarrez le service ; l’application ne génère ni ne journalise ce secret. Le mot de passe du propriétaire doit comporter entre 12 et 256 caractères.
 
 Les mots de passe gérés par l'application sont stockés sous forme de hachages scrypt avec sel, les sessions de la console utilisent des cookies HttpOnly et les requêtes SDK publiques s'authentifient avec la clé API générée au format `sk-ogw-`. Pour un déploiement non interactif, préconfigurez `PANEL_PASSWORD` afin d'ignorer entièrement l'écran de configuration initiale.
 
@@ -241,7 +241,7 @@ Omni Gateway lit la configuration en priorité depuis les variables d'environnem
 | `CORS_ORIGIN_REGEX` | vide | Expression régulière optionnelle pour les origines de navigateur dynamiques gérées. |
 | `API_KEY` | générée automatiquement | Clé privilégiée pour les requêtes API client publiques. Doit commencer par `sk-ogw-`. |
 | `PANEL_PASSWORD` | vide jusqu'à configuration | Mot de passe pour le panneau de contrôle web. |
-| `SETUP_TOKEN` | généré par processus | Token de démarrage fixe optionnel requis pour la configuration initiale distante. Si omis, lire le token dans les logs de l'application ou du conteneur. |
+| `SETUP_TOKEN` | vide | Requis avant la première configuration distante ; utilisez une valeur unique d’au moins 24 caractères. L’application ne la génère ni ne la journalise. Inutile en accès direct localhost. |
 | `PANEL_SESSION_TTL_SECONDS` | `86400` | Durée de vie de la session de console web en secondes. |
 | `PANEL_COOKIE_SECURE` | automatique | Définir à `true` pour forcer les cookies de console uniquement via HTTPS. Laisser vide pour une détection automatique via `X-Forwarded-Proto`. |
 | `PANEL_LOGIN_WINDOW_SECONDS` | `300` | Fenêtre de limitation de débit de connexion en secondes. |

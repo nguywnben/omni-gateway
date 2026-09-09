@@ -144,7 +144,7 @@ Abra o painel de controle em:
 http://IP_DO_SEU_SERVIDOR:4283
 ```
 
-Na primeira execução, crie a senha do console na tela de configuração inicial. Nenhuma senha padrão é fornecida de fábrica. Um navegador remoto também deve inserir o token de inicialização (bootstrap token) exibido em `docker logs omni-gateway`; a configuração direta no localhost dispensa o token. Defina `SETUP_TOKEN` antes de iniciar caso a automação de deploy exija um token fixo.
+Na primeira execução, a tela de configuração verifica armazenamento, endereço do console, transporte/cookies e estado da instalação antes de habilitar a criação do proprietário. Não há senha padrão. A configuração direta no localhost dispensa token. Antes da configuração remota, defina um `SETUP_TOKEN` exclusivo com pelo menos 24 caracteres e reinicie o serviço; o aplicativo não gera nem registra esse segredo. A senha do proprietário deve ter 12–256 caracteres.
 
 Senhas gerenciadas pela aplicação são salvas como hashes scrypt com salt, sessões do painel usam cookies HttpOnly e requisições públicas de SDKs autenticam com a chave de API gerada no formato `sk-ogw-`. Para deploys não interativos, configure previamente `PANEL_PASSWORD` para ignorar a tela de configuração inicial.
 
@@ -245,7 +245,7 @@ O Omni Gateway lê as configurações primeiro a partir de variáveis de ambient
 | `CORS_ORIGIN_REGEX` | vazio | Expressão regular opcional para origens dinâmicas gerenciadas no navegador. |
 | `API_KEY` | gerada automaticamente | Chave principal para requisições públicas de clientes da API. Deve iniciar com `sk-ogw-`. |
 | `PANEL_PASSWORD` | vazio até configuração | Senha para o painel de controle web. |
-| `SETUP_TOKEN` | gerado por processo | Token de inicialização fixo opcional para configuração remota no primeiro uso. Quando omitido, leia o token gerado nos logs da aplicação ou contêiner. |
+| `SETUP_TOKEN` | vazio | Obrigatório antes da primeira configuração remota; use um valor exclusivo com pelo menos 24 caracteres. O aplicativo não o gera nem registra. Não é necessário no localhost direto. |
 | `PANEL_SESSION_TTL_SECONDS` | `86400` | Duração da sessão do console web em segundos. |
 | `PANEL_COOKIE_SECURE` | automático | Defina como `true` para exigir cookies seguros apenas via HTTPS. Deixe vazio para detectar HTTPS via `X-Forwarded-Proto`. |
 | `PANEL_LOGIN_WINDOW_SECONDS` | `300` | Janela de limitação de taxa de login em segundos. |

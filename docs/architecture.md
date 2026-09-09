@@ -176,7 +176,7 @@ The Render Blueprint deliberately uses a paid persistent disk. Free Render servi
 ## Security Boundaries
 
 - Public inference requests use the generated API key; browser management routes use HttpOnly session cookies.
-- Direct loopback setup remains frictionless. Remote first-run setup requires a bootstrap token from `SETUP_TOKEN` or the application logs.
+- First-run preflight checks durable writes, address, transport/cookie safety, and installation state before owner creation. Direct loopback setup remains token-free; remote setup requires an operator-configured strong `SETUP_TOKEN` that is never generated or logged.
 - Runtime-log WebSockets require a matching console origin and authenticate only through the HttpOnly session cookie; credentials are never accepted in their URLs.
 - Forwarded client and protocol headers are ignored unless `TRUST_PROXY_HEADERS=true`.
 - Imported archives and credentials are validated by provider-specific paths before persistence.

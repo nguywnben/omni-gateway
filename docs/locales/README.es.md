@@ -139,7 +139,7 @@ Abra la consola de administración en el navegador:
 http://IP_DE_SU_SERVIDOR:4283
 ```
 
-En la primera ejecución, establezca la contraseña del panel en la pantalla de configuración inicial. El proyecto no incluye contraseñas predeterminadas. El acceso desde navegadores remotos también requiere ingresar el token de inicialización (bootstrap token) mostrado en `docker logs omni-gateway`; el acceso directo desde localhost no lo requerirá. Puede configurar la variable de entorno `SETUP_TOKEN` antes del inicio si la automatización del despliegue necesita un token predeterminado fijo.
+En la primera ejecución, la pantalla de configuración comprueba el almacenamiento, la dirección de la consola, el transporte/cookies y el estado de instalación antes de habilitar la creación del propietario. No hay contraseña predeterminada. La configuración directa desde localhost no necesita token. Antes de una configuración remota, defina un `SETUP_TOKEN` único de al menos 24 caracteres y reinicie el servicio; la aplicación no genera ni registra este secreto. La contraseña del propietario debe tener entre 12 y 256 caracteres.
 
 Las contraseñas administradas por el sistema se almacenan como hashes scrypt con sal, las sesiones del panel utilizan cookies HttpOnly y las solicitudes de SDK públicas se autentican mediante claves API `sk-ogw-` generadas automáticamente. Para despliegues no interactivos, preconfigure `PANEL_PASSWORD` para omitir la interfaz de configuración inicial.
 
@@ -241,7 +241,7 @@ Omni Gateway lee la configuración con la siguiente prioridad: variables de ento
 | `CORS_ORIGIN_REGEX` | vacío | Expresión regular opcional para orígenes de navegador dinámicos. |
 | `API_KEY` | generada automáticamente | Clave preferida para solicitudes de API de clientes públicos. Debe comenzar con `sk-ogw-`. |
 | `PANEL_PASSWORD` | vacía hasta configuración | Contraseña de acceso al panel de control web. |
-| `SETUP_TOKEN` | generado por proceso | Token de inicialización fijo opcional para configuración remota inicial. Si se omite, léalo en los registros de la aplicación o del contenedor. |
+| `SETUP_TOKEN` | vacío | Obligatorio antes de la configuración remota inicial; use un valor único de al menos 24 caracteres. La aplicación no lo genera ni lo registra. No se exige en localhost directo. |
 | `PANEL_SESSION_TTL_SECONDS` | `86400` | Tiempo de vida de la sesión del panel de control web en segundos. |
 | `PANEL_COOKIE_SECURE` | automático | Establezca en `true` para forzar cookies solo a través de HTTPS. Vacío para autodetección mediante `X-Forwarded-Proto`. |
 | `PANEL_LOGIN_WINDOW_SECONDS` | `300` | Ventana de límite de tasa de inicio de sesión en segundos. |

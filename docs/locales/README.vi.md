@@ -151,7 +151,7 @@ Mở bảng điều khiển tại địa chỉ:
 http://IP_SERVER_CUA_BAN:4283
 ```
 
-Trong lần chạy đầu tiên, hãy tạo mật khẩu bảng điều khiển trên màn hình thiết lập. Dự án không đi kèm mật khẩu mặc định. Trình duyệt truy cập từ xa cũng phải nhập mã bootstrap token được hiển thị trong `docker logs omni-gateway`; thiết lập trực tiếp trên localhost sẽ không yêu cầu mã này. Bạn có thể thiết lập biến môi trường `SETUP_TOKEN` trước khi khởi động nếu quy trình tự động hóa triển khai cần một bootstrap token cố định.
+Trong lần chạy đầu tiên, màn hình thiết lập sẽ kiểm tra quyền ghi dữ liệu, địa chỉ bảng điều khiển, kết nối/cookie và trạng thái cài đặt trước khi cho phép tạo chủ sở hữu. Dự án không có mật khẩu mặc định. Thiết lập trực tiếp trên localhost không cần mã. Trước khi mở một bản cài đặt chưa cấu hình qua tên máy từ xa, hãy đặt `SETUP_TOKEN` riêng, dài ít nhất 24 ký tự rồi khởi động lại dịch vụ; ứng dụng không tự sinh hoặc ghi bí mật này vào log. Mật khẩu chủ sở hữu phải là cụm mật khẩu riêng dài từ 12 đến 256 ký tự.
 
 Mật khẩu quản lý bởi ứng dụng được lưu trữ dưới dạng băm scrypt có thêm muối (salted hash), phiên bảng điều khiển sử dụng cookie HttpOnly và các request SDK công khai xác thực thông qua API key định dạng `sk-ogw-` được tạo tự động. Đối với triển khai không tương tác, hãy cấu hình sẵn `PANEL_PASSWORD` để bỏ qua hoàn toàn màn hình thiết lập.
 
@@ -267,7 +267,7 @@ Omni Gateway đọc cấu hình ưu tiên từ các biến môi trường trư�
 | `CORS_ORIGIN_REGEX` | trống | Biểu thức chính quy tùy chọn cho các origin trình duyệt động được quản lý. |
 | `API_KEY` | tạo tự động | Key ưu tiên cho các request API client công khai. Phải bắt đầu bằng `sk-ogw-`. |
 | `PANEL_PASSWORD` | trống cho đến khi thiết lập | Mật khẩu cho bảng điều khiển web. |
-| `SETUP_TOKEN` | tạo theo từng tiến trình | Mã bootstrap token cố định tùy chọn cho thiết lập từ xa lần đầu. Khi bỏ qua, hãy đọc token được tạo từ log ứng dụng hoặc container. |
+| `SETUP_TOKEN` | để trống | Bắt buộc trước khi thiết lập từ xa lần đầu; dùng giá trị riêng dài ít nhất 24 ký tự. Ứng dụng không tự sinh hoặc ghi giá trị này vào log. Thiết lập trực tiếp trên localhost không cần mã. |
 | `PANEL_SESSION_TTL_SECONDS` | `86400` | Thời gian sống của phiên bảng điều khiển web tính bằng giây. |
 | `PANEL_COOKIE_SECURE` | tự động | Đặt `true` để bắt buộc cookie bảng điều khiển chỉ truyền qua HTTPS. Để trống để tự động phát hiện HTTPS qua `X-Forwarded-Proto`. |
 | `PANEL_LOGIN_WINDOW_SECONDS` | `300` | Cửa sổ giới hạn tần suất đăng nhập tính bằng giây. |

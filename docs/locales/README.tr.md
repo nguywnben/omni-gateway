@@ -139,7 +139,7 @@ Kontrol panelini şu adresten açın:
 http://SUNUCU_IP_ADRESINIZ:4283
 ```
 
-İlk çalıştırmada, kurulum ekranında konsol şifresini oluşturun. Varsayılan bir şifre tanımlı gelmez. Uzak bir tarayıcı, `docker logs omni-gateway` tarafından yazdırılan bootstrap belirtecini de girmelidir; doğrudan localhost kurulumu bunu gerektirmez. Dağıtım otomasyonu kararlı bir bootstrap belirteci gerektirdiğinde başlatmadan önce `SETUP_TOKEN` değişkenini ayarlayın.
+İlk çalıştırmada kurulum ekranı, sahip oluşturmayı etkinleştirmeden önce depolamayı, konsol adresini, aktarım/çerezleri ve kurulum durumunu denetler. Varsayılan parola yoktur. Doğrudan localhost kurulumu belirteç gerektirmez. Uzaktan kurulumdan önce en az 24 karakterlik benzersiz bir `SETUP_TOKEN` ayarlayıp hizmeti yeniden başlatın; uygulama bu sırrı üretmez veya günlüğe yazmaz. Sahip parolası 12–256 karakter olmalıdır.
 
 Uygulama tarafından yönetilen şifreler tuzlanmış scrypt karmaları (salted hashes) olarak saklanır, kontrol paneli oturumları HttpOnly çerezleri kullanır ve genel SDK istekleri oluşturulan `sk-ogw-` API anahtarıyla kimlik doğrulaması yapar. Etkileşimsiz bir dağıtım için `PANEL_PASSWORD` değişkenini önceden yapılandırın ve kurulum ekranını tamamen atlayın.
 
@@ -241,7 +241,7 @@ Omni Gateway, yapılandırmayı önce ortam değişkenlerinden, ardından kayded
 | `CORS_ORIGIN_REGEX` | boş | Yönetilen dinamik tarayıcı kaynakları için isteğe bağlı regex. |
 | `API_KEY` | otomatik üretilir | Genel istemci API istekleri için tercih edilen anahtar. `sk-ogw-` ile başlamalıdır. |
 | `PANEL_PASSWORD` | kuruluma kadar boş | Web kontrol paneli şifresi. |
-| `SETUP_TOKEN` | süreç başına üretilir | Uzaktan ilk çalıştırma kurulumu için gerekli isteğe bağlı sabit bootstrap belirteci. Atlandığında, oluşturulan belirteci uygulama veya konteyner günlüklerinden okuyun. |
+| `SETUP_TOKEN` | boş | İlk uzaktan kurulumdan önce zorunludur; en az 24 karakterlik benzersiz bir değer kullanın. Uygulama bunu üretmez veya günlüğe yazmaz. Doğrudan localhost için gerekmez. |
 | `PANEL_SESSION_TTL_SECONDS` | `86400` | Saniye cinsinden web konsolu oturum ömrü. |
 | `PANEL_COOKIE_SECURE` | otomatik | Yalnızca HTTPS panel çerezleri gerektirmek için `true` yapın. HTTPS'yi `X-Forwarded-Proto` üzerinden algılamak için boş bırakın. |
 | `PANEL_LOGIN_WINDOW_SECONDS` | `300` | Saniye cinsinden giriş hız sınırlama penceresi. |

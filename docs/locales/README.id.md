@@ -139,7 +139,7 @@ Buka panel kontrol di:
 http://IP_SERVER_ANDA:4283
 ```
 
-Pada peluncuran pertama, buat kata sandi konsol di layar pengaturan. Tidak ada kata sandi default yang disertakan. Peramban jarak jauh juga harus memasukkan bootstrap token yang dicetak oleh `docker logs omni-gateway`; pengaturan langsung di localhost tidak memerlukannya. Tetapkan `SETUP_TOKEN` sebelum startup saat otomatisasi penerapan memerlukan bootstrap token yang stabil.
+Pada peluncuran pertama, layar penyiapan memeriksa penyimpanan, alamat konsol, transport/cookie, dan status instalasi sebelum mengaktifkan pembuatan pemilik. Tidak ada kata sandi bawaan. Penyiapan localhost langsung tidak memerlukan token. Sebelum penyiapan jarak jauh, tetapkan `SETUP_TOKEN` unik minimal 24 karakter lalu mulai ulang layanan; aplikasi tidak membuat atau mencatat rahasia ini. Kata sandi pemilik harus 12–256 karakter.
 
 Kata sandi yang dikelola oleh aplikasi disimpan sebagai hash scrypt bergaram (salted), sesi panel kontrol menggunakan cookie HttpOnly, dan permintaan SDK publik mengautentikasi dengan kunci API `sk-ogw-` yang dihasilkan. Untuk penerapan non-interaktif, konfigurasikan `PANEL_PASSWORD` sebelumnya dan lewati layar pengaturan sepenuhnya.
 
@@ -241,7 +241,7 @@ Omni Gateway membaca konfigurasi dari variabel lingkungan terlebih dahulu, kemud
 | `CORS_ORIGIN_REGEX` | kosong | Regex opsional untuk origin peramban dinamis yang dikelola. |
 | `API_KEY` | dibuat otomatis | Kunci pilihan untuk permintaan API klien publik. Harus dimulai dengan `sk-ogw-`. |
 | `PANEL_PASSWORD` | kosong hingga disiapkan | Kata sandi untuk panel kontrol web. |
-| `SETUP_TOKEN` | dibuat per proses | Bootstrap token tetap opsional yang diperlukan untuk pengaturan jarak jauh pertama kali. Jika diabaikan, baca token yang dibuat dari log aplikasi atau kontainer. |
+| `SETUP_TOKEN` | kosong | Wajib sebelum penyiapan jarak jauh pertama; gunakan nilai unik minimal 24 karakter. Aplikasi tidak membuat atau mencatatnya. Tidak diperlukan untuk localhost langsung. |
 | `PANEL_SESSION_TTL_SECONDS` | `86400` | Masa berlaku sesi konsol web dalam detik. |
 | `PANEL_COOKIE_SECURE` | otomatis | Tetapkan `true` untuk mewajibkan cookie panel hanya melalui HTTPS. Biarkan kosong untuk mendeteksi HTTPS melalui `X-Forwarded-Proto`. |
 | `PANEL_LOGIN_WINDOW_SECONDS` | `300` | Jendela pembatasan laju login dalam detik. |

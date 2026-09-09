@@ -144,7 +144,7 @@ Derselbe Release wird auch auf GitHub Packages als `ghcr.io/nguywnben/omni-gatew
 http://IHRE_SERVER_IP:4283
 ```
 
-Erstellen Sie beim ersten Start das Konsolenpasswort im Setup-Bildschirm. Ein Standardpasswort ist nicht vorkonfiguriert. Bei Remote-Zugriff über einen Browser muss zudem das Bootstrap-Token eingegeben werden, das in `docker logs omni-gateway` ausgegeben wird; bei direktem Localhost-Setup entfällt diese Abfrage. Setzen Sie `SETUP_TOKEN` vor dem Start, wenn Bereitstellungsautomatisierungen ein festes Token benötigen.
+Beim ersten Start prüft der Einrichtungsbildschirm Datenspeicher, Konsolenadresse, Transport/Cookies und Installationsstatus, bevor der Besitzer angelegt werden kann. Es gibt kein Standardpasswort. Für direktes Localhost-Setup ist kein Token nötig. Vor einer Remote-Einrichtung muss ein eindeutiges `SETUP_TOKEN` mit mindestens 24 Zeichen gesetzt und der Dienst neu gestartet werden; die Anwendung erzeugt oder protokolliert dieses Geheimnis nicht. Besitzerpasswörter müssen 12 bis 256 Zeichen lang sein.
 
 Vom Gateway verwaltete Passwörter werden als gesalzene scrypt-Hashes gespeichert, Konsolensitzungen nutzen HttpOnly-Cookies und öffentliche SDK-Anfragen authentifizieren sich mit dem generierten `sk-ogw-`-API-Schlüssel. Für nicht-interaktive Bereitstellungen konfigurieren Sie `PANEL_PASSWORD` vor, um den Setup-Bildschirm vollständig zu überspringen.
 
@@ -246,7 +246,7 @@ Omni Gateway liest Konfigurationen vorrangig aus Umgebungsvariablen, danach aus 
 | `CORS_ORIGIN_REGEX` | leer | Optionaler regulärer Ausdruck für dynamisch verwaltete Browser-Origins. |
 | `API_KEY` | automatisch generiert | Bevorzugter Schlüssel für öffentliche Client-API-Anfragen. Muss mit `sk-ogw-` beginnen. |
 | `PANEL_PASSWORD` | leer bis zur Einrichtung | Passwort für das Web-Control-Panel. |
-| `SETUP_TOKEN` | pro Prozess generiert | Optionales festes Bootstrap-Token für die Remote-Ersteinrichtung. Wenn weggelassen, Token aus den Anwendungs- oder Container-Logs lesen. |
+| `SETUP_TOKEN` | leer | Vor der Remote-Ersteinrichtung erforderlich; eindeutigen Wert mit mindestens 24 Zeichen verwenden. Die Anwendung erzeugt oder protokolliert ihn nicht. Für direktes Localhost-Setup nicht erforderlich. |
 | `PANEL_SESSION_TTL_SECONDS` | `86400` | Lebensdauer von Webkonsolen-Sitzungen in Sekunden. |
 | `PANEL_COOKIE_SECURE` | automatisch | Auf `true` setzen, um reine HTTPS-Panel-Cookies zu erzwingen. Leer lassen, um HTTPS über `X-Forwarded-Proto` zu erkennen. |
 | `PANEL_LOGIN_WINDOW_SECONDS` | `300` | Zeitfenster für Login-Ratenbegrenzung in Sekunden. |

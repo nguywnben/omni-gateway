@@ -162,7 +162,7 @@ Open the control panel at:
 http://YOUR_SERVER_IP:4283
 ```
 
-On first run, create the console password on the setup screen. No default password is shipped. A remote browser must also enter the bootstrap token printed by `docker logs omni-gateway`; direct localhost setup does not require it. Set `SETUP_TOKEN` before startup when deployment automation needs a stable bootstrap token.
+On first run, the setup screen checks persistent storage, console address, transport/cookie safety, and installation state before it enables owner creation. No default password is shipped. Direct localhost setup needs no token. Before exposing an unconfigured instance through another host name, set a unique `SETUP_TOKEN` of at least 24 characters and restart the service; the application never generates or prints this secret. Owner passwords must be unique passphrases between 12 and 256 characters. A completed preflight is stored without secrets so an interrupted setup can resume safely.
 
 Passwords managed by the application are stored as salted scrypt hashes, control-panel sessions use HttpOnly cookies, and public SDK requests authenticate with the generated `sk-ogw-` API key. For a non-interactive deployment, preconfigure `PANEL_PASSWORD` and skip the setup screen entirely.
 
@@ -284,7 +284,7 @@ name; likely misspelled `OMNI_*` variables produce a warning.
 | `CORS_ORIGIN_REGEX` | empty | Optional regex for managed dynamic browser origins. |
 | `API_KEY` | generated automatically | Preferred key for public client API requests. Must start with `sk-ogw-`. |
 | `PANEL_PASSWORD` | empty until setup | Password for the web control panel. |
-| `SETUP_TOKEN` | generated per process | Optional fixed bootstrap token required for remote first-run setup. When omitted, read the generated token from application or container logs. |
+| `SETUP_TOKEN` | empty | Required before remote first-run setup; use a unique value of at least 24 characters. It is never generated or printed by the application. Direct localhost setup does not require it. |
 | `PANEL_SESSION_TTL_SECONDS` | `86400` | Web console session lifetime in seconds. |
 | `PANEL_COOKIE_SECURE` | automatic | Set `true` to require HTTPS-only panel cookies. Leave empty to detect HTTPS through `X-Forwarded-Proto`. |
 | `PANEL_LOGIN_WINDOW_SECONDS` | `300` | Login rate-limit window in seconds. |
@@ -476,7 +476,7 @@ Virtual API keys let one gateway serve multiple clients under separate limits. E
 
 1. Start Omni Gateway.
 2. Open `http://YOUR_SERVER_IP:4283` on a VPS, or `http://127.0.0.1:4283` for local development.
-3. Create the console password on the first-run setup screen. For remote setup, enter the bootstrap token from the application logs; alternatively preconfigure `PANEL_PASSWORD`.
+3. Complete the first-run checks and create the console owner password. For remote setup, configure a unique `SETUP_TOKEN` of at least 24 characters before startup and enter it on the setup screen; alternatively preconfigure `PANEL_PASSWORD`.
 4. Add an account, API key, or Ollama connection from the Providers page.
 5. Verify credentials and watch cooldown/error state in the panel.
 6. Point your coding tool to one of the API surfaces above.

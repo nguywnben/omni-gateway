@@ -144,7 +144,7 @@ Aprire il pannello di controllo all'indirizzo:
 http://IP_DEL_VOSTRO_SERVER:4283
 ```
 
-Al primo avvio, creare la password della console nella schermata di configurazione. Non è presente alcuna password predefinita. L'accesso da browser remoto richiede inoltre l'inserimento del bootstrap token mostrato in `docker logs omni-gateway`; la configurazione diretta da localhost non lo richiede. È possibile impostare la variabile `SETUP_TOKEN` prima dell'avvio per l'automazione del deployment.
+Al primo avvio, la schermata di configurazione verifica storage, indirizzo della console, trasporto/cookie e stato dell’installazione prima di abilitare la creazione del proprietario. Non esiste una password predefinita. La configurazione diretta da localhost non richiede token. Prima della configurazione remota, impostare un `SETUP_TOKEN` univoco di almeno 24 caratteri e riavviare il servizio; l’applicazione non genera né registra questo segreto. La password del proprietario deve contenere 12–256 caratteri.
 
 Le password gestite dall'applicazione sono memorizzate come hash scrypt con salt, le sessioni della console usano cookie HttpOnly e le richieste SDK pubbliche si autenticano tramite chiavi API `sk-ogw-` generate automaticamente. Per distribuzioni non interattive, preconfigurare `PANEL_PASSWORD` per ignorare la schermata iniziale.
 
@@ -245,7 +245,7 @@ Omni Gateway assegna priorità alle variabili d'ambiente, seguite dalla configur
 | `CORS_ORIGIN_REGEX` | vuoto | Espressione regolare opzionale per origini browser dinamiche. |
 | `API_KEY` | autogenerata | Chiave preferita per richieste API client pubbliche. Deve iniziare con `sk-ogw-`. |
 | `PANEL_PASSWORD` | vuoto fino a setup | Password per l'accesso al pannello di controllo web. |
-| `SETUP_TOKEN` | generato per processo | Token di avvio fisso opzionale per configurazione remota iniziale. Se omesso, leggerlo dai log dell'applicazione o del container. |
+| `SETUP_TOKEN` | vuoto | Obbligatorio prima della configurazione remota iniziale; usare un valore univoco di almeno 24 caratteri. L’applicazione non lo genera né lo registra. Non serve su localhost diretto. |
 | `PANEL_SESSION_TTL_SECONDS` | `86400` | Durata della sessione della console web in secondi. |
 | `PANEL_COOKIE_SECURE` | auto | Impostare su `true` per forzare cookie solo su HTTPS. Lasciare vuoto per rilevamento automatico tramite `X-Forwarded-Proto`. |
 | `PANEL_LOGIN_WINDOW_SECONDS` | `300` | Finestra del limitatore di frequenza di login in secondi. |

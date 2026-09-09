@@ -144,7 +144,7 @@ sudo docker run -d \
 http://你的伺服器IP:4283
 ```
 
-首次執行時，在初始化頁面設定控制台密碼。專案未內建任何預設密碼。透過遠端瀏覽器造訪時，還必須輸入 `docker logs omni-gateway` 輸出的引導權杖（bootstrap token）；直接在本機 localhost 造訪則無需輸入。若需自動化部署，可在啟動前預先設定 `SETUP_TOKEN` 環境變數。
+首次執行時，設定頁面會先檢查儲存空間、主控台位址、傳輸/Cookie 與安裝狀態，才允許建立擁有者。專案沒有預設密碼。直接透過 localhost 設定不需要權杖。遠端設定前，請設定至少 24 個字元的唯一 `SETUP_TOKEN` 並重新啟動服務；應用程式不會產生或記錄此秘密。擁有者密碼必須為 12–256 個字元。
 
 系統管理的密碼均以加鹽 scrypt 雜湊安全儲存，控制台工作階段使用 HttpOnly Cookie，公共 SDK 請求則使用自動產生的 `sk-ogw-` API 金鑰進行鑑權。如需非互動式部署，可預先配置 `PANEL_PASSWORD` 直接略過初始化引導介面。
 
@@ -245,7 +245,7 @@ Omni Gateway 讀取配置的優先順序為：環境變數 > 已儲存配置 > �
 | `CORS_ORIGIN_REGEX` | 空 | 用於比對動態瀏覽器 Origin 的可選正規表示式。 |
 | `API_KEY` | 自動產生 | 供公共客戶端 API 請求使用的偏好金鑰。必須以 `sk-ogw-` 開頭。 |
 | `PANEL_PASSWORD` | 引導前為空 | Web 控制面板的造訪密碼。 |
-| `SETUP_TOKEN` | 行程隨機產生 | 用於遠端首次初始化設定的可選固定引導權杖。省略時可從應用或容器日誌中取得產生的權杖。 |
+| `SETUP_TOKEN` | 空白 | 遠端首次設定前必須設定；請使用至少 24 個字元的唯一值。應用程式不會產生或記錄它。直接 localhost 設定不需要。 |
 | `PANEL_SESSION_TTL_SECONDS` | `86400` | Web 控制台工作階段有效時間（秒）。 |
 | `PANEL_COOKIE_SECURE` | 自動偵測 | 設為 `true` 強制僅在 HTTPS 下傳輸 Cookie。留空時透過 `X-Forwarded-Proto` 自動偵測。 |
 | `PANEL_LOGIN_WINDOW_SECONDS` | `300` | 登入頻率限制時間窗口（秒）。 |

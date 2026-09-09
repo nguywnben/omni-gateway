@@ -139,7 +139,7 @@ sudo docker run -d \
 http://你的服务器IP:4283
 ```
 
-首次运行时，在初始化页面设置控制台密码。项目未内置任何默认密码。通过远程浏览器访问时，还必须输入 `docker logs omni-gateway` 输出的引导令牌（bootstrap token）；直接在本地 localhost 访问则无需输入。若需自动化部署，可在启动前预先设置 `SETUP_TOKEN` 环境变量。
+首次运行时，设置页面会先检查存储、控制台地址、传输/Cookie 和安装状态，然后才允许创建所有者。项目没有默认密码。直接通过 localhost 设置无需令牌。远程设置前，请配置至少 24 个字符的唯一 `SETUP_TOKEN` 并重启服务；应用不会生成或记录此秘密。所有者密码必须为 12–256 个字符。
 
 系统管理的密码均以加盐 scrypt 哈希安全存储，控制台会话使用 HttpOnly Cookie，公共 SDK 请求则使用自动生成的 `sk-ogw-` API 密钥进行鉴权。如需非交互式部署，可预先配置 `PANEL_PASSWORD` 直接跳过初始化引导界面。
 
@@ -241,7 +241,7 @@ Omni Gateway 读取配置的优先级为：环境变量 > 已保存配置 > 默�
 | `CORS_ORIGIN_REGEX` | 空 | 用于匹配动态浏览器 Origin 的可选正则表达式。 |
 | `API_KEY` | 自动生成 | 供公共客户端 API 请求使用的首选密钥。必须以 `sk-ogw-` 开头。 |
 | `PANEL_PASSWORD` | 引导前为空 | Web 控制面板的访问密码。 |
-| `SETUP_TOKEN` | 进程随机生成 | 用于远程首次初始化设置的可选固定引导令牌。省略时可从应用或容器日志中获取生成的令牌。 |
+| `SETUP_TOKEN` | 空 | 远程首次设置前必需；请使用至少 24 个字符的唯一值。应用不会生成或记录它。直接 localhost 设置不需要。 |
 | `PANEL_SESSION_TTL_SECONDS` | `86400` | Web 控制台会话有效期（秒）。 |
 | `PANEL_COOKIE_SECURE` | 自动检测 | 设为 `true` 强制仅在 HTTPS 下传输 Cookie。留空时通过 `X-Forwarded-Proto` 自动检测。 |
 | `PANEL_LOGIN_WINDOW_SECONDS` | `300` | 登录频率限制时间窗口（秒）。 |

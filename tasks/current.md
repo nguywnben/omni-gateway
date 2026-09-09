@@ -2,13 +2,13 @@
 
 ## Resume Here
 
-- Updated: 2026-09-08 (Asia/Saigon)
+- Updated: 2026-09-09 (Asia/Saigon)
 - Active plan: `PROD-SELFHOST-R1`
 - Target: production-quality self-hosting for one person or a trusted team, not enterprise service
   operation.
-- Progress: **8/36 implementation tasks**; Phase 1 is in progress (2/6).
-- Completed: **P1.2 — Minimal canonical Docker Compose profile**.
-- Next task: **P1.3 — First-run setup and preflight**.
+- Progress: **9/36 implementation tasks**; Phase 1 is in progress (3/6).
+- Completed: **P1.3 — First-run setup and preflight**.
+- Next task: **P1.4 — Versioned backup, validation, and restore**.
 - Supported runtime today: standalone, one worker, one replica.
 - Redis coordination, multi-replica HA, and Helm are experimental and no longer R1 release blockers.
 
@@ -48,6 +48,16 @@ Do not push unless the user requests it.
 
 ## Latest Evidence
 
+- `docs/evidence/p1.3-first-run-setup-preflight.md`
+- First-run setup now models fresh, resumed, configured, and invalid states with one next action;
+  preflight verifies durable writes, address, listener, transport/cookies, token policy, and owner
+  state before enabling owner creation.
+- Remote setup requires an operator-configured strong token that is never generated or logged;
+  resumability persists no secrets, owner creation is serialized, and 12–256 character passphrases
+  are enforced across API and console.
+- The task gate passed 76 selected tests and all fixed checks. A fresh isolated container completed
+  setup and authenticated smoke, passed again after recreate, and the 360/1440 keyboard browser
+  flow had no overflow or browser errors.
 - `docs/evidence/p1.2-minimal-compose-profile.md`
 - Default Compose now needs no external database or Redis, exposes only common production
   controls, and persists all application state in one named volume; advanced controls require an

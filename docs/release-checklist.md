@@ -44,7 +44,7 @@ Core provider behavior is release-blocking through deterministic contracts inste
 ## Deployment Checks
 
 - Test the exact `linux/amd64` image on a clean host with persistent credential and log mounts.
-- Confirm remote first-run setup rejects a missing token and accepts the token shown in container logs.
+- Confirm remote first-run setup rejects missing/weak tokens and accepts a strong operator-configured `SETUP_TOKEN` without printing it in application or container logs.
 - Put the service behind TLS and verify secure cookies and forwarded-header configuration.
 - Back up the persistent data directory before upgrading an existing instance.
 - Record the previous image digest for rollback.
