@@ -287,6 +287,17 @@ class PortableBackupTests(unittest.IsolatedAsyncioTestCase):
         with self.assertRaisesRegex(BackupArchiveError, "unknown table"):
             await self.source_service.create_backup(PASSPHRASE)
 
+    async def test_sqlite_view_or_trigger_fails_closed(self) -> None:
+        with closing(sqlite3.connect(self.source / "credentials.db")) as connection:
+            connection.execute("CREATE VIEW rogue_view AS SELECT 1 AS value")
+            connection.execute(
+                "CREATE TRIGGER rogue_trigger AFTER UPDATE ON config BEGIN SELECT 1; END"
+            )
+            connection.commit()
+
+        with self.assertRaisesRegex(BackupArchiveError, "unsupported schema object"):
+            await self.source_service.create_backup(PASSPHRASE)
+
     async def test_restore_rolls_back_database_when_runtime_reload_fails(self) -> None:
         artifact = await self.source_service.create_backup(PASSPHRASE)
         failing_service = PortableBackupService(

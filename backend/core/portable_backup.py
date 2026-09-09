@@ -301,6 +301,12 @@ def _inspect_database(path: Path) -> tuple[str, dict[str, int]]:
                 raise BackupArchiveError("Backup database schema is incomplete.")
             if not tables.issubset(_ALLOWED_TABLES):
                 raise BackupArchiveError("Backup database contains an unknown table.")
+            unsupported_objects = connection.execute(
+                "SELECT name FROM sqlite_master "
+                "WHERE name NOT LIKE 'sqlite_%' AND type IN ('view', 'trigger') LIMIT 1"
+            ).fetchone()
+            if unsupported_objects is not None:
+                raise BackupArchiveError("Backup database contains an unsupported schema object.")
             if any(not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", table) for table in tables):
                 raise BackupArchiveError("Backup database contains an unsafe table name.")
             counts = {

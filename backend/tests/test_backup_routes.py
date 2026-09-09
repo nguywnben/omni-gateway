@@ -246,6 +246,7 @@ class BackupRouteTests(unittest.IsolatedAsyncioTestCase):
             "core.virtual_keys.virtual_key_manager.reset_runtime_state": Mock(),
             "core.virtual_keys.virtual_key_manager.invalidate": Mock(),
             "core.model_pool.model_catalog_service.invalidate": AsyncMock(),
+            "core.response_cache.response_cache_coordinator.invalidate": AsyncMock(),
             "core.credential_manager.credential_manager.initialize": AsyncMock(),
             "core.audit_service.initialize_audit_service": AsyncMock(),
             "core.identity.initialize_session_service": AsyncMock(),
@@ -274,6 +275,7 @@ class BackupRouteTests(unittest.IsolatedAsyncioTestCase):
         mocks["core.usage_ledger_service.initialize_usage_ledger_service"].assert_awaited_once_with(
             storage
         )
+        mocks["core.response_cache.response_cache_coordinator.invalidate"].assert_awaited_once()
 
 
 if __name__ == "__main__":

@@ -67,6 +67,7 @@ async def _reload_restored_runtime(storage) -> None:
         close_request_trace_service,
         initialize_request_trace_service,
     )
+    from core.response_cache import response_cache_coordinator
     from core.usage_ledger_service import (
         close_usage_ledger_service,
         initialize_usage_ledger_service,
@@ -85,6 +86,7 @@ async def _reload_restored_runtime(storage) -> None:
     virtual_key_manager.reset_runtime_state()
     virtual_key_manager.invalidate()
     await model_catalog_service.invalidate()
+    await response_cache_coordinator.invalidate()
 
     await credential_manager.initialize()
     await initialize_audit_service(storage)

@@ -22,8 +22,9 @@ must not be treated as a recovery artifact.
 
 - `.ogb` uses AES-256-GCM authenticated encryption and an scrypt-derived key. Its manifest and
   ciphertext metadata are authenticated together.
-- A passphrase must contain 12–256 Unicode characters. It is accepted only in the request body,
-  held for the operation, and never stored or logged. Losing it makes the archive unrecoverable.
+- A passphrase must contain 12–256 Unicode characters after NFKC normalization. It is accepted only
+  in the request body, held for the operation, and never stored or logged. Losing it makes the
+  archive unrecoverable.
 - The decrypted archive is a closed two-member ZIP: `manifest.json` and
   `state/credentials.db`. Members are read without filesystem extraction.
 - The upload is limited to 64 MiB, SQLite state to 45 MiB, and expanded archive to 46 MiB.
@@ -92,3 +93,8 @@ side-effect-free and is not recorded as a mutation.
    policy, and recent usage totals.
 6. If verification fails, validate and restore the matching `pre-restore-<timestamp>-<id>.ogb`
    file with the same passphrase.
+
+After verification succeeds, inspect `backend/data/creds/backups/` and remove recovery snapshots
+that are no longer required, retaining at least the newest known-good rollback point outside the
+live volume. R1 does not prune snapshots automatically because it cannot know which operator
+recovery point is safe to delete; check free space before repeated restore rehearsals.
