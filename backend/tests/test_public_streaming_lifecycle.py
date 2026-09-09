@@ -11,6 +11,7 @@ BACKEND_DIR = Path(__file__).resolve().parents[1]
 if str(BACKEND_DIR) not in sys.path:
     sys.path.insert(0, str(BACKEND_DIR))
 
+from core.converter.anthropic_to_gemini import gemini_stream_to_anthropic_stream
 from core.model_pool import ModelResolution
 from core.models import ClaudeRequest, GeminiRequest, OpenAIChatCompletionRequest
 from core.router.primary import anthropic, gemini, openai
@@ -19,6 +20,24 @@ from core.router.vertex import openai as vertex_openai
 
 
 class PublicStreamingLifecycleTests(unittest.IsolatedAsyncioTestCase):
+    async def test_anthropic_midstream_error_stays_an_error_event(self):
+        async def source():
+            yield (
+                b'data: {"type":"error","error":{"type":"api_error",'
+                b'"message":"upstream failed"}}\n\n'
+            )
+
+        chunks = [
+            chunk
+            async for chunk in gemini_stream_to_anthropic_stream(
+                source(), "gemini-test", 200
+            )
+        ]
+
+        payload = b"".join(chunks)
+        self.assertIn(b"event: error", payload)
+        self.assertNotIn(b"event: message_stop", payload)
+
     async def _assert_heartbeat_and_close(self, invoke, *, resolve_target=None):
         closed = False
 

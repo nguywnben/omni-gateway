@@ -876,6 +876,10 @@ async def gemini_stream_to_anthropic_stream(
                 log.warning(f"[GEMINI_TO_ANTHROPIC] JSON parse error: {e}")
                 continue
 
+            if data.get("type") == "error" and isinstance(data.get("error"), dict):
+                yield _sse_event("error", data)
+                return
+
             if "response" in data:
                 response = data["response"]
             else:
