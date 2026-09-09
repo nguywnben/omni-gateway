@@ -14,6 +14,7 @@ from tools.compose_update import (
     RecoveryStore,
     RuntimeState,
     UpdateError,
+    validate_effective_configuration,
     validate_image_reference,
 )
 
@@ -94,6 +95,26 @@ class ComposeUpdateTests(unittest.TestCase):
         ):
             with self.subTest(value=value), self.assertRaises(UpdateError):
                 validate_image_reference(value)
+
+    def test_preflight_rejects_environment_or_port_drift_without_exposing_values(self) -> None:
+        service = {
+            "environment": {"PANEL_PASSWORD": "rendered-secret", "WORKERS": "1"},
+            "ports": [{"target": 4283, "published": "4297", "protocol": "tcp"}],
+        }
+        validate_effective_configuration(
+            service,
+            {"PANEL_PASSWORD": "rendered-secret", "WORKERS": "1"},
+            {"4297"},
+        )
+
+        for environment, ports in (
+            ({"PANEL_PASSWORD": "different-secret", "WORKERS": "1"}, {"4297"}),
+            ({"PANEL_PASSWORD": "rendered-secret", "WORKERS": "1"}, {"4283"}),
+        ):
+            with self.assertRaises(UpdateError) as raised:
+                validate_effective_configuration(service, environment, ports)
+            self.assertNotIn("rendered-secret", str(raised.exception))
+            self.assertNotIn("different-secret", str(raised.exception))
 
     def test_dry_run_is_read_only_and_does_not_request_a_passphrase(self) -> None:
         runtime = FakeRuntime()

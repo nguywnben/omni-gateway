@@ -136,6 +136,41 @@ def validate_image_reference(reference: str) -> None:
         )
 
 
+def validate_effective_configuration(
+    service: object,
+    container_environment: dict[str, str],
+    published_ports: set[str],
+) -> None:
+    """Fail before mutation when the current shell would recreate a different deployment."""
+
+    if not isinstance(service, dict) or not isinstance(service.get("environment"), dict):
+        raise UpdateError("Effective Compose app configuration is invalid.")
+    expected_environment = {
+        str(key): "" if value is None else str(value)
+        for key, value in service["environment"].items()
+    }
+    if any(container_environment.get(key) != value for key, value in expected_environment.items()):
+        raise UpdateError(
+            "Effective Compose environment differs from the active container; restore the same "
+            ".env or shell values before updating."
+        )
+    ports = service.get("ports")
+    if not isinstance(ports, list):
+        raise UpdateError("Effective Compose port configuration is invalid.")
+    expected_ports = {
+        str(port.get("published"))
+        for port in ports
+        if isinstance(port, dict)
+        and str(port.get("target")) == "4283"
+        and port.get("protocol", "tcp") == "tcp"
+    }
+    if not expected_ports or expected_ports != published_ports:
+        raise UpdateError(
+            "Effective Compose host port differs from the active container; restore the same "
+            "HOST_PORT before updating."
+        )
+
+
 def _encode_stdin_frame(passphrase: str, archive: bytes = b"") -> bytes:
     secret = passphrase.encode("utf-8")
     if not secret or len(secret) > 4096:
@@ -440,7 +475,14 @@ class DockerComposeRuntime:
                 raise UpdateError(f"Compose file is missing or unsafe: {path}")
         self._run(["docker", "version", "--format", "{{.Server.Version}}"])
         self._run(["docker", "compose", "version", "--short"])
-        self._run([*self._compose(), "config", "--quiet"], environment=self._environment())
+        rendered = self._run(
+            [*self._compose(), "config", "--format", "json"], environment=self._environment()
+        )
+        try:
+            compose = json.loads(rendered.stdout.decode("utf-8", errors="strict"))
+            service = compose["services"]["app"]
+        except (KeyError, TypeError, UnicodeError, json.JSONDecodeError) as exc:
+            raise UpdateError("Effective Compose app configuration is invalid.") from exc
         result = self._run([*self._compose(), "ps", "--quiet", "app"])
         containers = result.stdout.decode("utf-8", errors="strict").split()
         if len(containers) != 1:
@@ -452,14 +494,26 @@ class DockerComposeRuntime:
         health = self._inspect(container_id, "{{if .State.Health}}{{.State.Health.Status}}{{end}}")
         try:
             configured_environment = json.loads(self._inspect(container_id, "{{json .Config.Env}}"))
+            if not isinstance(configured_environment, list):
+                raise TypeError
             environment = {
                 key: value
                 for entry in configured_environment
                 if isinstance(entry, str) and "=" in entry
                 for key, value in [entry.split("=", 1)]
             }
-        except (TypeError, json.JSONDecodeError) as exc:
+            network_ports = json.loads(
+                self._inspect(container_id, "{{json .NetworkSettings.Ports}}")
+            )
+            bindings = network_ports.get("4283/tcp", [])
+            published_ports = {
+                str(binding["HostPort"])
+                for binding in bindings or []
+                if isinstance(binding, dict) and binding.get("HostPort")
+            }
+        except (KeyError, TypeError, json.JSONDecodeError) as exc:
             raise UpdateError("Active container environment metadata is invalid.") from exc
+        validate_effective_configuration(service, environment, published_ports)
         if environment.get("POSTGRESQL_URI") or environment.get("MONGODB_URI"):
             raise UpdateError("Compose update recovery supports the SQLite state backend only.")
         if (
