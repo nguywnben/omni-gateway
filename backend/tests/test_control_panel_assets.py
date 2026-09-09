@@ -454,13 +454,35 @@ class ControlPanelAssetTests(unittest.TestCase):
         self.assertIn("this.formatBatchResults(data)", credential_manager_script)
         self.assertIn("pool.batch.preview_stale", credential_manager_script)
 
-    def test_grok_build_oauth_uses_the_shared_quota_dialog(self):
+    def test_credential_cards_derive_provider_actions_from_the_catalog(self):
+        credential_manager_script = read_scripts("core/credential-manager.js")
+        card_script = read_scripts("ui/credential-cards.js")
+
+        self.assertIn(
+            "credentialSupportsOperation(credential, operation)", credential_manager_script
+        )
+        for operation in (
+            "disable",
+            "export",
+            "model_discovery",
+            "quota",
+            "verify",
+            "test",
+            "delete",
+        ):
+            self.assertIn(
+                f"manager.credentialSupportsOperation(credInfo, '{operation}')",
+                card_script,
+            )
+        self.assertNotIn("isAntigravity || isGrokOAuth || isCodexOAuth", card_script)
+
+    def test_quota_capability_uses_the_shared_quota_dialog(self):
         card_script = read_scripts("ui/credential-cards.js")
         dialog_script = read_scripts("ui/credential-dialogs.js")
 
-        self.assertIn("isGrokOAuth", card_script)
-        self.assertIn("isCodexOAuth", card_script)
-        self.assertIn("isAntigravity || isGrokOAuth || isCodexOAuth", card_script)
+        self.assertIn(
+            "manager.credentialSupportsOperation(credInfo, 'quota')", card_script
+        )
         self.assertIn("const quotaPreview = supportsQuotaPreview", card_script)
         self.assertIn("data?.quota_type === 'account_billing'", dialog_script)
         self.assertIn("t('modal.billing_periods')", dialog_script)

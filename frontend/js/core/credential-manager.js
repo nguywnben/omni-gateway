@@ -102,7 +102,7 @@ function createCredsManager(type) {
 
                         this.capabilityByVariant = Object.fromEntries(
 
-                            (catalog.credential_variants || []).map(variant => [variant.variant_id, variant.operations || []])
+                            (catalog.credential_variants || []).map(variant => [variant.variant_id, variant])
 
                         );
 
@@ -689,13 +689,23 @@ function createCredsManager(type) {
 
         },
 
+        credentialSupportsOperation(credential, operation) {
+
+            if (this.type !== 'primary') return true;
+
+            const variantId = String(credential?.provider_variant || '').trim();
+
+            return (this.capabilityByVariant[variantId]?.operations || []).includes(operation);
+
+        },
+
         selectedVariantsSupport(operation) {
 
             const variants = this.getSelectedVariantIds();
 
             return variants.length > 0 && variants.every((variantId) => (
 
-                (this.capabilityByVariant[variantId] || []).includes(operation)
+                (this.capabilityByVariant[variantId]?.operations || []).includes(operation)
 
             ));
 
@@ -753,9 +763,9 @@ function createCredsManager(type) {
 
                 const operationButtons = {
 
-                    Enable: 'toggle',
+                    Enable: 'disable',
 
-                    Disable: 'toggle',
+                    Disable: 'disable',
 
                     Delete: 'delete',
 
