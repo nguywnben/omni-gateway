@@ -15,6 +15,7 @@ BACKEND_DIR = Path(__file__).resolve().parents[1]
 if str(BACKEND_DIR) not in sys.path:
     sys.path.insert(0, str(BACKEND_DIR))
 
+from core.models import SetupRequest
 from core.panel.setup_security import (
     get_setup_access_policy,
     is_local_setup_request,
@@ -40,6 +41,22 @@ def build_request(*, client_host: str, hostname: str, forwarded_for: str = "") -
 
 
 class SetupSecurityTests(unittest.TestCase):
+    def test_setup_payload_keeps_r1_wire_schema_and_redacts_runtime_secrets(self):
+        password = "owner-passphrase-never-render"
+        token = "setup-token-never-render-2026"
+        payload = SetupRequest(
+            password=password,
+            confirm_password=password,
+            setup_token=token,
+        )
+
+        rendered = repr(payload)
+        self.assertNotIn(password, rendered)
+        self.assertNotIn(token, rendered)
+        properties = SetupRequest.model_json_schema()["properties"]
+        self.assertEqual(properties["password"], {"title": "Password", "type": "string"})
+        self.assertEqual(properties["setup_token"]["anyOf"][0], {"type": "string"})
+
     def test_direct_loopback_setup_does_not_require_a_token(self):
         request = build_request(client_host="127.0.0.1", hostname="localhost")
 
