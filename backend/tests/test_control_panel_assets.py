@@ -406,6 +406,22 @@ class ControlPanelAssetTests(unittest.TestCase):
         self.assertNotIn("./api/credentials/verify-project", credential_manager_script)
         self.assertNotIn("./api/credentials/verify-project", credential_script)
 
+    def test_model_connection_test_is_cancelable_and_renders_safe_diagnostics(self):
+        diagnostic_script = read_scripts("features/credential-diagnostics.js")
+        dialog_script = read_scripts("ui/dialogs.js")
+        content_script = read_scripts("ui/dialog-content.js")
+        credential_dialog_script = read_scripts("ui/credential-dialogs.js")
+
+        self.assertIn("new AbortController()", dialog_script)
+        self.assertIn("activeController?.abort()", dialog_script)
+        self.assertIn("options.onTest(model, activeController.signal)", dialog_script)
+        self.assertIn("signal", diagnostic_script)
+        self.assertIn("signal?.aborted", diagnostic_script)
+        self.assertIn("data?.diagnostic", content_script)
+        self.assertIn("diagnostic.remediation", content_script)
+        self.assertIn("diagnostic.provider_code", content_script)
+        self.assertIn("async (model, signal)", credential_dialog_script)
+
     def test_batch_client_previews_guarded_work_and_sends_idempotency_key(self):
         credential_manager_script = read_scripts("core/credential-manager.js")
 

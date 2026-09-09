@@ -302,6 +302,28 @@ for (const [locale, messages] of Object.entries(OPERATIONAL_UI_TRANSLATIONS)) {
     Object.assign(COMMON_UI_TRANSLATIONS[locale], OPERATIONAL_ACTION_TRANSLATIONS[locale]);
 }
 
+const CONNECTION_DIAGNOSTIC_UI_TRANSLATIONS = {
+    en: { credential_test_cancelled: 'Connection test cancelled', provider_diagnostic_category: 'Issue category', provider_diagnostic_provider_status: 'Provider HTTP status', provider_diagnostic_provider_code: 'Provider error code', provider_diagnostic_next_step: 'Next step' },
+    'zh-CN': { credential_test_cancelled: '连接测试已取消', provider_diagnostic_category: '问题类别', provider_diagnostic_provider_status: '提供商 HTTP 状态', provider_diagnostic_provider_code: '提供商错误代码', provider_diagnostic_next_step: '后续操作' },
+    'zh-TW': { credential_test_cancelled: '連線測試已取消', provider_diagnostic_category: '問題類別', provider_diagnostic_provider_status: '供應商 HTTP 狀態', provider_diagnostic_provider_code: '供應商錯誤代碼', provider_diagnostic_next_step: '後續操作' },
+    de: { credential_test_cancelled: 'Verbindungstest abgebrochen', provider_diagnostic_category: 'Fehlerkategorie', provider_diagnostic_provider_status: 'Provider-HTTP-Status', provider_diagnostic_provider_code: 'Provider-Fehlercode', provider_diagnostic_next_step: 'Nächster Schritt' },
+    es: { credential_test_cancelled: 'Prueba de conexión cancelada', provider_diagnostic_category: 'Categoría del problema', provider_diagnostic_provider_status: 'Estado HTTP del proveedor', provider_diagnostic_provider_code: 'Código de error del proveedor', provider_diagnostic_next_step: 'Siguiente paso' },
+    fr: { credential_test_cancelled: 'Test de connexion annulé', provider_diagnostic_category: 'Catégorie du problème', provider_diagnostic_provider_status: 'État HTTP du fournisseur', provider_diagnostic_provider_code: 'Code d’erreur du fournisseur', provider_diagnostic_next_step: 'Étape suivante' },
+    id: { credential_test_cancelled: 'Uji koneksi dibatalkan', provider_diagnostic_category: 'Kategori masalah', provider_diagnostic_provider_status: 'Status HTTP penyedia', provider_diagnostic_provider_code: 'Kode kesalahan penyedia', provider_diagnostic_next_step: 'Langkah berikutnya' },
+    it: { credential_test_cancelled: 'Test di connessione annullato', provider_diagnostic_category: 'Categoria del problema', provider_diagnostic_provider_status: 'Stato HTTP del provider', provider_diagnostic_provider_code: 'Codice errore del provider', provider_diagnostic_next_step: 'Passaggio successivo' },
+    ja: { credential_test_cancelled: '接続テストをキャンセルしました', provider_diagnostic_category: '問題のカテゴリ', provider_diagnostic_provider_status: 'プロバイダーの HTTP ステータス', provider_diagnostic_provider_code: 'プロバイダーのエラーコード', provider_diagnostic_next_step: '次の手順' },
+    ko: { credential_test_cancelled: '연결 테스트가 취소되었습니다', provider_diagnostic_category: '문제 범주', provider_diagnostic_provider_status: '공급자 HTTP 상태', provider_diagnostic_provider_code: '공급자 오류 코드', provider_diagnostic_next_step: '다음 단계' },
+    pt: { credential_test_cancelled: 'Teste de conexão cancelado', provider_diagnostic_category: 'Categoria do problema', provider_diagnostic_provider_status: 'Status HTTP do provedor', provider_diagnostic_provider_code: 'Código de erro do provedor', provider_diagnostic_next_step: 'Próximo passo' },
+    ru: { credential_test_cancelled: 'Проверка подключения отменена', provider_diagnostic_category: 'Категория проблемы', provider_diagnostic_provider_status: 'HTTP-статус провайдера', provider_diagnostic_provider_code: 'Код ошибки провайдера', provider_diagnostic_next_step: 'Следующий шаг' },
+    th: { credential_test_cancelled: 'ยกเลิกการทดสอบการเชื่อมต่อแล้ว', provider_diagnostic_category: 'หมวดหมู่ปัญหา', provider_diagnostic_provider_status: 'สถานะ HTTP ของผู้ให้บริการ', provider_diagnostic_provider_code: 'รหัสข้อผิดพลาดของผู้ให้บริการ', provider_diagnostic_next_step: 'ขั้นตอนถัดไป' },
+    tr: { credential_test_cancelled: 'Bağlantı testi iptal edildi', provider_diagnostic_category: 'Sorun kategorisi', provider_diagnostic_provider_status: 'Sağlayıcı HTTP durumu', provider_diagnostic_provider_code: 'Sağlayıcı hata kodu', provider_diagnostic_next_step: 'Sonraki adım' },
+    vi: { credential_test_cancelled: 'Đã hủy kiểm tra kết nối', provider_diagnostic_category: 'Nhóm sự cố', provider_diagnostic_provider_status: 'Trạng thái HTTP của nhà cung cấp', provider_diagnostic_provider_code: 'Mã lỗi nhà cung cấp', provider_diagnostic_next_step: 'Cách xử lý' }
+};
+
+for (const [locale, messages] of Object.entries(CONNECTION_DIAGNOSTIC_UI_TRANSLATIONS)) {
+    Object.assign(COMMON_UI_TRANSLATIONS[locale], messages);
+}
+
 const SETTINGS_LOCALE_TRANSLATIONS = {
     en: { language_region_title: 'Language and Region', language_region_description: 'Choose the language used by this browser for the console and its management messages.', display_language: 'Display language', language_browser_hint: 'Your choice is saved in this browser. New browsers start with the closest supported language for their region.' },
     'zh-CN': { language_region_title: '语言和地区', language_region_description: '选择此浏览器用于控制台及管理消息的语言。', display_language: '显示语言', language_browser_hint: '此选择仅保存在当前浏览器中。首次使用其他浏览器时，系统会根据所在地区选用最接近的受支持语言。' },

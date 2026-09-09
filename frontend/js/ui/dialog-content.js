@@ -193,6 +193,40 @@ function buildApiResultHtml(options = {}) {
 
 function buildCredentialTestErrorHtml(filename, data, response) {
 
+    const diagnostic = data?.diagnostic;
+    if (diagnostic && diagnostic.schema_version === 1 && diagnostic.message) {
+        const category = String(diagnostic.category || t('unknown_error')).replaceAll('_', ' ');
+        const providerStatus = diagnostic.provider_status || data.status_code || response.status;
+        const safeDetails = {
+            schema_version: diagnostic.schema_version,
+            code: diagnostic.code,
+            category: diagnostic.category,
+            retryable: diagnostic.retryable === true,
+            ...(diagnostic.provider_status ? {provider_status: diagnostic.provider_status} : {}),
+            ...(diagnostic.provider_code ? {provider_code: diagnostic.provider_code} : {}),
+        };
+
+        return buildApiResultHtml({
+            intro: diagnostic.message,
+            rows: [
+                [t('table_filename'), filename],
+                [t('provider_diagnostic_category'), category],
+                [t('provider_diagnostic_provider_status'), providerStatus],
+                diagnostic.provider_code
+                    ? [t('provider_diagnostic_provider_code'), diagnostic.provider_code]
+                    : null,
+                data.provider ? [t('provider'), getCredentialProviderMeta(data, 'usage').name] : null,
+                data.model ? [t('modal.model'), data.model] : null,
+            ].filter(Boolean),
+            summaryLabel: t('modal.error_summary'),
+            note: diagnostic.remediation
+                ? `${t('provider_diagnostic_next_step')}: ${diagnostic.remediation}`
+                : '',
+            detailsLabel: t('error_details'),
+            details: safeDetails,
+        });
+    }
+
     let parsedError = null;
     const rawErrorValue = data?.error || data?.detail || data?.message || '';
     if (rawErrorValue) {
@@ -247,6 +281,7 @@ function buildCredentialTestResultHtml(filename, data, response, options = {}) {
 
     const logicalStatus = data.status_code || response.status;
     const isRateLimited = logicalStatus === 429 && data.success === true;
+    const diagnostic = data?.diagnostic?.schema_version === 1 ? data.diagnostic : null;
     const statusMessage = isRateLimited
         ? t('credential_rate_limited')
         : (data.message || t('credential_available'));
@@ -263,8 +298,17 @@ function buildCredentialTestResultHtml(filename, data, response, options = {}) {
             data.provider ? [t('provider'), getCredentialProviderMeta(data, 'usage').name] : null,
             data.model ? [t('modal.model'), data.model] : null,
             options.mode ? [t('runtime.mode'), options.mode] : null,
+            diagnostic?.category
+                ? [t('provider_diagnostic_category'), String(diagnostic.category).replaceAll('_', ' ')]
+                : null,
+            diagnostic?.provider_code
+                ? [t('provider_diagnostic_provider_code'), diagnostic.provider_code]
+                : null,
         ].filter(Boolean),
         summaryLabel: t('modal.model_test_title'),
+        note: diagnostic?.remediation
+            ? `${t('provider_diagnostic_next_step')}: ${diagnostic.remediation}`
+            : '',
     });
 
 }

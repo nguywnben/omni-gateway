@@ -90,7 +90,7 @@ async function verifyProviderCredential(filename) {
 
 }
 
-async function testCredential(filename, model) {
+async function testCredential(filename, model, signal) {
 
     try {
 
@@ -102,7 +102,9 @@ async function testCredential(filename, model) {
 
             headers: getAuthHeaders(),
 
-            body: JSON.stringify({ model })
+            body: JSON.stringify({ model }),
+
+            signal
 
         });
 
@@ -130,7 +132,9 @@ async function testCredential(filename, model) {
 
             const errorDetails = buildCredentialTestErrorHtml(filename, data, response);
 
-            showStatus(`Test failed: ${data.message || `${t('http_code_prefix')} ${data.status_code || response.status}`}`, 'error');
+            const message = data?.diagnostic?.message || data.message || `${t('http_code_prefix')} ${data.status_code || response.status}`;
+
+            showStatus(t('credentials.test_failed', {error: message}), 'error');
 
             return {
                 html: errorDetails,
@@ -140,6 +144,14 @@ async function testCredential(filename, model) {
         }
 
     } catch (error) {
+
+        if (signal?.aborted || error?.name === 'AbortError') {
+
+            showStatus(t('credential_test_cancelled'), 'info');
+
+            return {type: 'info', html: ''};
+
+        }
 
         const errorMsg = t('test_failed_errormessage', {error_message: error.message});
 
@@ -163,7 +175,7 @@ async function testCredential(filename, model) {
 
 }
 
-async function testPrimaryCredential(filename, model) {
+async function testPrimaryCredential(filename, model, signal) {
 
     try {
 
@@ -175,7 +187,9 @@ async function testPrimaryCredential(filename, model) {
 
             headers: getAuthHeaders(),
 
-            body: JSON.stringify({ model })
+            body: JSON.stringify({ model }),
+
+            signal
 
         });
 
@@ -203,7 +217,9 @@ async function testPrimaryCredential(filename, model) {
 
             const errorDetails = buildCredentialTestErrorHtml(filename, data, response);
 
-            showStatus(`Test failed: ${data.message || `${t('http_code_prefix')} ${data.status_code || response.status}`}`, 'error');
+            const message = data?.diagnostic?.message || data.message || `${t('http_code_prefix')} ${data.status_code || response.status}`;
+
+            showStatus(t('credentials.test_failed', {error: message}), 'error');
 
             return {
                 html: errorDetails,
@@ -213,6 +229,14 @@ async function testPrimaryCredential(filename, model) {
         }
 
     } catch (error) {
+
+        if (signal?.aborted || error?.name === 'AbortError') {
+
+            showStatus(t('credential_test_cancelled'), 'info');
+
+            return {type: 'info', html: ''};
+
+        }
 
         const errorMsg = t('test_failed_errormessage', {error_message: error.message});
 

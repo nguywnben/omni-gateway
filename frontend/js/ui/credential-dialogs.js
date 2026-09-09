@@ -169,11 +169,11 @@ async function showCredentialModelTest(pathId) {
                 placeholder: t('modal.select_model'),
                 confirmLabel: t('modal.test'),
                 options: context.modelIds.map((modelId) => ({ value: modelId, label: modelId })),
-                onTest: async (model) => {
+                onTest: async (model, signal) => {
                     if (context.manager.type === 'primary') {
-                        return testPrimaryCredential(context.filename, model);
+                        return testPrimaryCredential(context.filename, model, signal);
                     }
-                    return testCredential(context.filename, model);
+                    return testCredential(context.filename, model, signal);
                 },
             }
         );
