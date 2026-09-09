@@ -13,6 +13,7 @@ BACKEND_DIR = Path(__file__).resolve().parents[1]
 if str(BACKEND_DIR) not in sys.path:
     sys.path.insert(0, str(BACKEND_DIR))
 
+from core.httpx_client import UpstreamStreamProtocolError, iter_bounded_lines
 from core.router.stream_passthrough import (
     ManagedStreamingResponse,
     build_streaming_response_or_error,
@@ -20,6 +21,35 @@ from core.router.stream_passthrough import (
 
 
 class StreamingLifecycleTests(unittest.IsolatedAsyncioTestCase):
+    async def test_bounded_line_reader_preserves_split_crlf_frames(self):
+        class FakeResponse:
+            async def aiter_bytes(self, chunk_size):
+                self.chunk_size = chunk_size
+                for chunk in (b"data: one\r", b"\ndata: two\n", b"tail"):
+                    yield chunk
+
+        response = FakeResponse()
+
+        lines = [line async for line in iter_bounded_lines(response, max_line_bytes=16)]
+
+        self.assertEqual(lines, ["data: one", "data: two", "tail"])
+        self.assertGreater(response.chunk_size, 0)
+
+    async def test_bounded_line_reader_rejects_oversized_frame(self):
+        class FakeResponse:
+            async def aiter_bytes(self, chunk_size):
+                del chunk_size
+                yield b"12345"
+                yield b"67890"
+
+        with self.assertRaisesRegex(UpstreamStreamProtocolError, "exceeds"):
+            _ = [
+                line
+                async for line in iter_bounded_lines(
+                    FakeResponse(), max_line_bytes=8
+                )
+            ]
+
     async def test_prefetched_error_closes_source_iterator(self):
         closed = False
 
