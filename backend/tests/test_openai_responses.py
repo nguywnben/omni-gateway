@@ -56,6 +56,19 @@ class OpenAIResponsesTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(emitted[-1].startswith(b":"))
         self.assertTrue(closed)
 
+    async def test_responses_stream_emits_error_when_chat_stream_has_no_done(self):
+        async def chunks():
+            yield b'data: {"choices":[{"delta":{"content":"partial"}}]}\n\n'
+
+        request = OpenAIResponsesRequest(
+            model="gemini-test", input="hello", stream=True
+        )
+        stream = _responses_stream(StreamingResponse(chunks()), request)
+        payload = b"".join([chunk async for chunk in stream])
+
+        self.assertIn(b"event: error", payload)
+        self.assertNotIn(b"event: response.completed", payload)
+
     def test_string_input_and_instructions_translate_to_chat_messages(self):
         request = OpenAIResponsesRequest(
             model="gemini-2.5-flash",

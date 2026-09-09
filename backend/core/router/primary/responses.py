@@ -13,6 +13,7 @@ from core.models import (
     OpenAIResponsesRequest,
     model_to_dict,
 )
+from core.request_trace_service import trace_decision
 from core.router.primary.openai import chat_completions
 from core.router.stream_passthrough import ManagedStreamingResponse, close_async_iterator
 from core.utils import authenticate_bearer
@@ -290,6 +291,7 @@ async def _iter_chat_events(
     body: AsyncIterator[Any],
 ) -> AsyncIterator[Dict[str, Any] | None]:
     buffer = bytearray()
+    terminal_received = False
     try:
         async for chunk in body:
             raw = chunk if isinstance(chunk, bytes) else str(chunk).encode("utf-8")
@@ -316,7 +318,9 @@ async def _iter_chat_events(
                     if not line.startswith(b"data:"):
                         continue
                     value = line[5:].strip()
-                    if value and value != b"[DONE]":
+                    if value == b"[DONE]":
+                        terminal_received = True
+                    elif value:
                         yield json.loads(value.decode("utf-8", errors="replace"))
                 if heartbeat:
                     yield None
@@ -324,6 +328,10 @@ async def _iter_chat_events(
                 raise UpstreamStreamProtocolError(
                     f"OpenAI SSE frame exceeds {_MAX_SSE_FRAME_BYTES} bytes"
                 )
+        if buffer.strip() or not terminal_received:
+            raise UpstreamStreamProtocolError(
+                "OpenAI chat stream ended before its terminal event"
+            )
     finally:
         await close_async_iterator(body)
 
@@ -396,6 +404,23 @@ async def _responses_stream(
                     delta=str(text),
                     logprobs=[],
                 )
+    except UpstreamStreamProtocolError:
+        trace_decision(
+            category="upstream",
+            action="failed",
+            result="failed",
+            reason="provider_error",
+            provider="responses_adapter",
+            model=request.model,
+            status_code=502,
+        )
+        yield event(
+            "error",
+            code="upstream_stream_incomplete",
+            message="The upstream streaming response ended unexpectedly.",
+            param=None,
+        )
+        return
     finally:
         await close_async_iterator(chat_body)
 
