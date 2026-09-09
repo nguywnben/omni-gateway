@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
+from contextlib import closing
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -46,7 +47,7 @@ def build_sanitized_inventory(database_path: Path, application_version: str) -> 
     selected_keys = sorted(set(safe_fields) | _INVENTORY_CONFIG_KEYS)
     placeholders = ",".join("?" for _ in selected_keys)
 
-    with sqlite3.connect(_database_uri(database_path), uri=True) as connection:
+    with closing(sqlite3.connect(_database_uri(database_path), uri=True)) as connection:
         raw_config = {
             str(key): json.loads(value)
             for key, value in connection.execute(

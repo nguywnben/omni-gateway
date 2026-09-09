@@ -1243,6 +1243,7 @@ class SQLiteManager:
 
     async def reload_config_cache(self):
         self._ensure_initialized()
+        self._config_cache = {}
         self._config_loaded = False
         await self._load_config_cache()
         log.info("Config cache reloaded from database")

@@ -12,6 +12,7 @@ import sys
 import unittest
 import uuid
 import zipfile
+from contextlib import closing
 from pathlib import Path
 from unittest.mock import patch
 
@@ -40,7 +41,6 @@ async def _initialize_state(root: Path, marker: str) -> None:
         await manager.initialize()
         await manager.create_audit_repository(cursor_signing_key=b"a" * 32)
         await manager.create_identity_repository()
-        await manager.create_migration_checkpoint_repository()
         await manager.create_request_trace_repository(cursor_signing_key=b"b" * 32)
         await manager.create_usage_ledger_repository()
         await manager.store_credential(
@@ -85,7 +85,7 @@ async def _initialize_state(root: Path, marker: str) -> None:
 
 
 def _read_config(database: Path, key: str) -> object:
-    with sqlite3.connect(database) as connection:
+    with closing(sqlite3.connect(database)) as connection:
         row = connection.execute("SELECT value FROM config WHERE key = ?", (key,)).fetchone()
     return json.loads(row[0]) if row else None
 
@@ -158,7 +158,7 @@ class PortableBackupTests(unittest.IsolatedAsyncioTestCase):
             _read_config(self.destination / "credentials.db", "api_key"),
             "sk-ogw-source-root-secret",
         )
-        with sqlite3.connect(self.destination / "credentials.db") as connection:
+        with closing(sqlite3.connect(self.destination / "credentials.db")) as connection:
             credential = connection.execute(
                 "SELECT credential_data FROM primary_credentials WHERE filename = ?",
                 ("source.json",),
@@ -314,6 +314,20 @@ class PortableBackupTests(unittest.IsolatedAsyncioTestCase):
             _read_config(self.destination / "credentials.db", "routing_strategy"),
             "source",
         )
+
+    async def test_sqlite_reload_discards_keys_absent_from_restored_database(self) -> None:
+        with patch.dict(os.environ, {"CREDENTIALS_DIR": str(self.destination)}):
+            manager = SQLiteManager()
+            await manager.initialize()
+            await manager.set_config("routing_strategy", "priority")
+            with closing(sqlite3.connect(self.destination / "credentials.db")) as connection:
+                connection.execute("DELETE FROM config WHERE key = ?", ("routing_strategy",))
+                connection.commit()
+
+            self.assertEqual(await manager.get_config("routing_strategy"), "priority")
+            await manager.reload_config_cache()
+            self.assertIsNone(await manager.get_config("routing_strategy"))
+            await manager.close()
 
     @staticmethod
     def _fail_reload_once():

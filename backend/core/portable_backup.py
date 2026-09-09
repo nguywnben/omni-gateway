@@ -21,7 +21,7 @@ import time
 import uuid
 import zipfile
 from collections.abc import Awaitable, Callable
-from contextlib import contextmanager
+from contextlib import closing, contextmanager
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from enum import StrEnum
@@ -58,7 +58,6 @@ _CORE_TABLES = frozenset(
         "audit_events",
         "config",
         "credentials",
-        "durable_migration_checkpoints",
         "durable_usage_ledger",
         "durable_usage_migrations",
         "identity_migrations",
@@ -256,8 +255,8 @@ def _safe_database_uri(path: Path) -> str:
 def _sqlite_backup(source_path: Path, destination_path: Path) -> None:
     destination_path.parent.mkdir(parents=True, exist_ok=True)
     with (
-        sqlite3.connect(_safe_database_uri(source_path), uri=True, timeout=30) as source,
-        sqlite3.connect(destination_path, timeout=30) as destination,
+        closing(sqlite3.connect(_safe_database_uri(source_path), uri=True, timeout=30)) as source,
+        closing(sqlite3.connect(destination_path, timeout=30)) as destination,
     ):
         source.backup(destination, pages=1024, sleep=0.01)
 
@@ -277,7 +276,7 @@ def _inspect_database(path: Path) -> tuple[str, dict[str, int]]:
     if size <= 0 or size > MAX_BACKUP_DATABASE_BYTES:
         raise BackupSizeError("Backup database size is invalid.")
     try:
-        with sqlite3.connect(_safe_database_uri(path), uri=True, timeout=30) as connection:
+        with closing(sqlite3.connect(_safe_database_uri(path), uri=True, timeout=30)) as connection:
             deadline = time.monotonic() + MAX_BACKUP_SQLITE_VALIDATION_SECONDS
             connection.set_progress_handler(lambda: int(time.monotonic() > deadline), 10_000)
             connection.execute("PRAGMA trusted_schema = OFF")
@@ -516,7 +515,9 @@ def _validate_zip(payload: bytes, work_dir: Path) -> _ValidatedArchive:
 
 
 def _is_configured(database_path: Path) -> bool:
-    with sqlite3.connect(_safe_database_uri(database_path), uri=True, timeout=30) as connection:
+    with closing(
+        sqlite3.connect(_safe_database_uri(database_path), uri=True, timeout=30)
+    ) as connection:
         credential_count = sum(
             int(connection.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0])
             for table in ("credentials", "primary_credentials")
