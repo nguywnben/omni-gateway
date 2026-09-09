@@ -84,6 +84,34 @@ class QuotaRequestCleanupTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(body, b"firstsecond")
         release.assert_awaited_once_with("reservation-stream")
 
+    async def test_stream_cancellation_releases_without_committing_reservation(self):
+        request = _request()
+
+        async def chunks():
+            yield b"first"
+            yield b"second"
+
+        async def next_handler(current_request):
+            current_request.state.virtual_key_reservation_id = "reservation-stream-cancelled"
+            return StreamingResponse(chunks())
+
+        commit = AsyncMock(return_value=QuotaCommitResult(True))
+        release = AsyncMock(return_value=True)
+        with (
+            patch(
+                "core.virtual_keys.virtual_key_manager.commit_reservation", commit
+            ),
+            patch(
+                "core.virtual_keys.virtual_key_manager.release_reservation", release
+            ),
+        ):
+            response = await add_security_headers(request, next_handler)
+            self.assertEqual(await anext(response.body_iterator), b"first")
+            await response.body_iterator.aclose()
+
+        commit.assert_not_awaited()
+        release.assert_awaited_once_with("reservation-stream-cancelled")
+
 
 class QuotaSuccessCommitTests(unittest.IsolatedAsyncioTestCase):
     async def test_success_persists_policy_cost_before_committing_actual_usage(self):

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import sys
 import unittest
 from pathlib import Path
@@ -14,6 +15,7 @@ BACKEND_DIR = Path(__file__).resolve().parents[1]
 if str(BACKEND_DIR) not in sys.path:
     sys.path.insert(0, str(BACKEND_DIR))
 
+from core.request_trace_service import trace_decision
 from main import add_security_headers
 
 
@@ -32,6 +34,21 @@ def _request(path: str, *, request_id="request-123") -> Request:
 
 
 class RequestTraceMiddlewareTests(unittest.IsolatedAsyncioTestCase):
+    async def test_cancellation_before_response_persists_one_cancelled_trace(self):
+        service = Mock(record=AsyncMock())
+
+        async def next_handler(_request):
+            raise asyncio.CancelledError()
+
+        with patch("main.get_request_trace_service", return_value=service):
+            with self.assertRaises(asyncio.CancelledError):
+                await add_security_headers(
+                    _request("/v1/chat/completions"), next_handler
+                )
+
+        service.record.assert_awaited_once()
+        self.assertEqual(service.record.await_args.args[0].outcome, "cancelled")
+
     async def test_supported_success_and_failure_share_public_request_id(self):
         for status_code, expected in ((200, "succeeded"), (502, "upstream_error")):
             with self.subTest(status_code=status_code):
@@ -71,6 +88,51 @@ class RequestTraceMiddlewareTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(chunks, [b"one", b"two"])
         service.record.assert_awaited_once()
         self.assertEqual(service.record.await_args.args[0].protocol, "gemini_stream")
+
+    async def test_cancelled_stream_persists_one_cancelled_trace(self):
+        service = Mock(record=AsyncMock())
+
+        async def body():
+            yield b"one"
+            yield b"two"
+
+        async def next_handler(_request):
+            return StreamingResponse(body(), status_code=200)
+
+        with patch("main.get_request_trace_service", return_value=service):
+            response = await add_security_headers(
+                _request("/v1/chat/completions"), next_handler
+            )
+            self.assertEqual(await anext(response.body_iterator), b"one")
+            await response.body_iterator.aclose()
+
+        service.record.assert_awaited_once()
+        self.assertEqual(service.record.await_args.args[0].outcome, "cancelled")
+
+    async def test_in_stream_upstream_failure_overrides_http_200_outcome(self):
+        service = Mock(record=AsyncMock())
+
+        async def body():
+            trace_decision(
+                category="upstream",
+                action="failed",
+                result="failed",
+                reason="provider_error",
+                status_code=502,
+            )
+            yield b"error event"
+
+        async def next_handler(_request):
+            return StreamingResponse(body(), status_code=200)
+
+        with patch("main.get_request_trace_service", return_value=service):
+            response = await add_security_headers(
+                _request("/v1/messages"), next_handler
+            )
+            _ = [chunk async for chunk in response.body_iterator]
+
+        service.record.assert_awaited_once()
+        self.assertEqual(service.record.await_args.args[0].outcome, "upstream_error")
 
     async def test_management_requests_are_not_written_to_trace_repository(self):
         service = Mock(record=AsyncMock())

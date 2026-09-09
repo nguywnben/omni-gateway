@@ -58,6 +58,7 @@ from core.router.primary.model_list import router as primary_model_list_router
 from core.router.primary.openai import router as primary_openai_router
 from core.router.primary.responses import router as primary_responses_router
 from core.router.protocol_errors import protocol_error_response, protocol_for_path
+from core.router.stream_passthrough import close_async_iterator
 from core.router.vertex.gemini import router as vertex_gemini_router
 from core.router.vertex.model_list import router as vertex_model_list_router
 from core.router.vertex.openai import router as vertex_openai_router
@@ -397,7 +398,7 @@ async def add_security_headers(request, call_next):
     ):
         try:
             response = await call_next(request)
-        except BaseException:
+        except BaseException as request_error:
             reservation_id = getattr(request.state, "virtual_key_reservation_id", "")
             if reservation_id:
                 request.state.virtual_key_reservation_id = ""
@@ -413,7 +414,12 @@ async def add_security_headers(request, call_next):
             if trace_collector is not None:
                 try:
                     await get_request_trace_service().record(
-                        trace_collector.complete(status_code=500)
+                        trace_collector.complete(
+                            status_code=500,
+                            cancelled=isinstance(
+                                request_error, (asyncio.CancelledError, GeneratorExit)
+                            ),
+                        )
                     )
                 except Exception as exc:
                     log.error(
@@ -483,7 +489,7 @@ async def add_security_headers(request, call_next):
     if reservation_id:
         released = False
 
-        async def release_reservation() -> None:
+        async def finalize_reservation(*, successful: bool) -> None:
             nonlocal released
             if released:
                 return
@@ -492,7 +498,11 @@ async def add_security_headers(request, call_next):
             from core.virtual_keys import virtual_key_manager
 
             try:
-                if response.status_code < 400:
+                upstream_failed = trace_collector is not None and any(
+                    decision.category == "upstream" and decision.result == "failed"
+                    for decision in trace_collector.decisions
+                )
+                if successful and response.status_code < 400 and not upstream_failed:
                     await virtual_key_manager.commit_reservation(
                         reservation_id,
                         actual_tokens=None,
@@ -516,11 +526,20 @@ async def add_security_headers(request, call_next):
         if body_iterator is not None:
 
             async def releasing_body_iterator():
+                completed = False
                 try:
                     async for chunk in body_iterator:
                         yield chunk
+                    completed = True
                 finally:
-                    await release_reservation()
+                    try:
+                        await close_async_iterator(body_iterator)
+                    except Exception as exc:
+                        log.error(
+                            "Failed to close streaming response during quota cleanup "
+                            f"(request_id={request_id}, error_type={type(exc).__name__})."
+                        )
+                    await finalize_reservation(successful=completed)
 
             response.body_iterator = releasing_body_iterator()
         else:
@@ -531,7 +550,7 @@ async def add_security_headers(request, call_next):
                     if existing_background is not None:
                         await existing_background()
                 finally:
-                    await release_reservation()
+                    await finalize_reservation(successful=True)
 
             response.background = BackgroundTask(finalize_response)
 
@@ -544,11 +563,29 @@ async def add_security_headers(request, call_next):
                 with bind_request_trace_collector(trace_collector):
                     async for chunk in trace_body_iterator:
                         yield chunk
-            except BaseException:
+            except (asyncio.CancelledError, GeneratorExit):
                 cancelled = True
                 raise
+            except BaseException:
+                with bind_request_trace_collector(trace_collector):
+                    trace_collector.record(
+                        category="upstream",
+                        action="failed",
+                        result="failed",
+                        reason="provider_error",
+                        status_code=500,
+                    )
+                raise
             finally:
-                await persist_request_trace(cancelled=cancelled)
+                try:
+                    await close_async_iterator(trace_body_iterator)
+                except Exception as exc:
+                    log.error(
+                        "Failed to close streaming response during trace cleanup "
+                        f"(request_id={request_id}, error_type={type(exc).__name__})."
+                    )
+                finally:
+                    await persist_request_trace(cancelled=cancelled)
 
         response.body_iterator = tracing_body_iterator()
     elif trace_collector is not None:
