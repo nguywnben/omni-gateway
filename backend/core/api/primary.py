@@ -1003,6 +1003,15 @@ async def _stream_request_upstream(
             # A disconnected client closes this async generator at its current
             # yield point. Release the active distributed lease explicitly;
             # normal success/error accounting may not get a chance to run.
+            trace_decision(
+                category="upstream",
+                action="failed",
+                result="failed",
+                reason="cancelled",
+                provider=provider_id,
+                model=model_name,
+                status_code=499,
+            )
             await credential_manager.release_credential(current_file, mode="primary")
             raise
         except CoordinationUnavailableError as exc:

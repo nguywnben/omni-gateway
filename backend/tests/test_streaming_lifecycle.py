@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import sys
 import unittest
 from pathlib import Path
@@ -15,6 +16,7 @@ BACKEND_DIR = Path(__file__).resolve().parents[1]
 if str(BACKEND_DIR) not in sys.path:
     sys.path.insert(0, str(BACKEND_DIR))
 
+from core.api import vertex
 from core.api.primary import ProviderRequestContext, stream_request
 from core.httpx_client import UpstreamStreamProtocolError, iter_bounded_lines
 from core.router.stream_passthrough import (
@@ -77,7 +79,153 @@ async def _collect_primary_stream(fake_stream_post_async, *, max_retries=3):
     return chunks, record_error, record_success
 
 
+class _FakeWreqStream:
+    def __init__(self, chunks, error=None):
+        self._chunks = chunks
+        self._error = error
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, *_args):
+        return False
+
+    def __aiter__(self):
+        return self._iterate()
+
+    async def _iterate(self):
+        for chunk in self._chunks:
+            yield chunk
+        if self._error is not None:
+            raise self._error
+
+
+class _FakeWreqResponse:
+    status = 200
+
+    def __init__(self, chunks, error=None):
+        self._stream = _FakeWreqStream(chunks, error)
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, *_args):
+        return False
+
+    def stream(self):
+        return self._stream
+
+
 class StreamingLifecycleTests(unittest.IsolatedAsyncioTestCase):
+    async def test_vertex_stream_does_not_succeed_or_retry_after_partial_failure(self):
+        envelope = json.dumps(
+            {
+                "results": [
+                    {
+                        "data": {
+                            "candidates": [
+                                {"content": {"parts": [{"text": "partial"}]}}
+                            ]
+                        }
+                    }
+                ]
+            }
+        ).encode()
+        post = AsyncMock(
+            return_value=_FakeWreqResponse(
+                [envelope], error=TimeoutError("upstream stalled")
+            )
+        )
+        success = AsyncMock()
+
+        with (
+            patch.object(vertex, "WREQ_AVAILABLE", True),
+            patch.object(
+                vertex, "get_upstream_timeout_seconds", AsyncMock(return_value=30)
+            ),
+            patch.object(vertex, "fetch_recaptcha_token", AsyncMock(return_value="token")),
+            patch.object(vertex, "_get_batch_graphql_url", return_value="https://invalid"),
+            patch.object(vertex.wreq, "post", post),
+            patch("core.api.utils.record_unassigned_api_call_success", success),
+        ):
+            chunks = [
+                chunk
+                async for chunk in vertex.stream_request(
+                    {"model": "gemini-test", "request": {}}
+                )
+            ]
+
+        post.assert_awaited_once()
+        self.assertEqual(post.await_args.kwargs["read_timeout"].total_seconds(), 30)
+        self.assertIsInstance(chunks[-1], Response)
+        self.assertEqual(chunks[-1].status_code, 504)
+        success.assert_not_awaited()
+
+    async def test_vertex_stream_records_success_only_after_terminal_event(self):
+        envelope = json.dumps(
+            {
+                "results": [
+                    {
+                        "data": {
+                            "candidates": [{"finishReason": "STOP"}],
+                            "usageMetadata": {"totalTokenCount": 4},
+                        }
+                    }
+                ]
+            }
+        ).encode()
+        post = AsyncMock(return_value=_FakeWreqResponse([envelope]))
+        success = AsyncMock()
+
+        with (
+            patch.object(vertex, "WREQ_AVAILABLE", True),
+            patch.object(
+                vertex, "get_upstream_timeout_seconds", AsyncMock(return_value=30)
+            ),
+            patch.object(vertex, "fetch_recaptcha_token", AsyncMock(return_value="token")),
+            patch.object(vertex, "_get_batch_graphql_url", return_value="https://invalid"),
+            patch.object(vertex.wreq, "post", post),
+            patch("core.api.utils.record_unassigned_api_call_success", success),
+        ):
+            chunks = [
+                chunk
+                async for chunk in vertex.stream_request(
+                    {"model": "gemini-test", "request": {}}
+                )
+            ]
+
+        self.assertEqual(len(chunks), 1)
+        self.assertNotIsInstance(chunks[0], Response)
+        success.assert_awaited_once()
+
+    async def test_vertex_stream_rejects_oversized_unframed_buffer(self):
+        post = AsyncMock(return_value=_FakeWreqResponse([b"x" * 17]))
+        success = AsyncMock()
+
+        with (
+            patch.object(vertex, "WREQ_AVAILABLE", True),
+            patch.object(
+                vertex, "get_upstream_timeout_seconds", AsyncMock(return_value=30)
+            ),
+            patch.object(vertex, "_MAX_VERTEX_STREAM_BUFFER_BYTES", 16),
+            patch.object(vertex, "fetch_recaptcha_token", AsyncMock(return_value="token")),
+            patch.object(vertex, "_get_batch_graphql_url", return_value="https://invalid"),
+            patch.object(vertex.wreq, "post", post),
+            patch.object(vertex.asyncio, "sleep", AsyncMock()),
+            patch("core.api.utils.record_unassigned_api_call_success", success),
+        ):
+            chunks = [
+                chunk
+                async for chunk in vertex.stream_request(
+                    {"model": "gemini-test", "request": {}}
+                )
+            ]
+
+        self.assertEqual(post.await_count, 4)
+        self.assertIsInstance(chunks[-1], Response)
+        self.assertEqual(chunks[-1].status_code, 502)
+        success.assert_not_awaited()
+
     async def test_primary_stream_does_not_retry_after_model_output(self):
         stream_calls = 0
 

@@ -20,6 +20,7 @@ from core.api.primary import (
 )
 from core.api.utils import record_model_route_miss
 from core.coordination import CoordinationReconciliationRequiredError
+from core.request_trace_service import request_trace_scope
 from fastapi import Response
 
 
@@ -109,6 +110,7 @@ class VirtualModelBlacklistRoutingTests(unittest.IsolatedAsyncioTestCase):
 
         release = AsyncMock()
         with (
+            request_trace_scope("request-cancelled", "openai_chat") as trace_collector,
             patch(
                 "core.api.primary.credential_manager.get_valid_model_credential",
                 AsyncMock(return_value=("model-a", "credential.json", credential)),
@@ -138,6 +140,13 @@ class VirtualModelBlacklistRoutingTests(unittest.IsolatedAsyncioTestCase):
             await stream.aclose()
 
         release.assert_awaited_once_with("credential.json", mode="primary")
+        self.assertTrue(
+            any(
+                decision.category == "upstream"
+                and decision.reason == "cancelled"
+                for decision in trace_collector.decisions
+            )
+        )
 
     async def test_model_route_miss_sets_a_credential_scoped_cooldown(self):
         manager = AsyncMock()
