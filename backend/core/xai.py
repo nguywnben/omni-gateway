@@ -657,12 +657,14 @@ def xai_response_to_gemini(payload: Dict[str, Any]) -> Dict[str, Any]:
     if usage:
         prompt_details = usage.get("prompt_tokens_details") or {}
         completion_details = usage.get("completion_tokens_details") or {}
+        completion_tokens = int(usage.get("completion_tokens") or 0)
+        reasoning_tokens = int(completion_details.get("reasoning_tokens") or 0)
         result["usageMetadata"] = {
             "promptTokenCount": int(usage.get("prompt_tokens") or 0),
-            "candidatesTokenCount": int(usage.get("completion_tokens") or 0),
+            "candidatesTokenCount": max(completion_tokens - reasoning_tokens, 0),
             "totalTokenCount": int(usage.get("total_tokens") or 0),
             "cachedContentTokenCount": int(prompt_details.get("cached_tokens") or 0),
-            "thoughtsTokenCount": int(completion_details.get("reasoning_tokens") or 0),
+            "thoughtsTokenCount": reasoning_tokens,
         }
     return result
 
@@ -742,11 +744,13 @@ def xai_stream_line_to_gemini(line: Any) -> Optional[str]:
     if usage:
         prompt_details = usage.get("prompt_tokens_details") or {}
         completion_details = usage.get("completion_tokens_details") or {}
+        completion_tokens = int(usage.get("completion_tokens") or 0)
+        reasoning_tokens = int(completion_details.get("reasoning_tokens") or 0)
         result["usageMetadata"] = {
             "promptTokenCount": int(usage.get("prompt_tokens") or 0),
-            "candidatesTokenCount": int(usage.get("completion_tokens") or 0),
+            "candidatesTokenCount": max(completion_tokens - reasoning_tokens, 0),
             "totalTokenCount": int(usage.get("total_tokens") or 0),
             "cachedContentTokenCount": int(prompt_details.get("cached_tokens") or 0),
-            "thoughtsTokenCount": int(completion_details.get("reasoning_tokens") or 0),
+            "thoughtsTokenCount": reasoning_tokens,
         }
     return f"data: {json.dumps(result)}"

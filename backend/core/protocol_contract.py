@@ -9,6 +9,34 @@ PROTOCOL_CONTRACT_SCHEMA_VERSION = 1
 
 FeatureDisposition = Literal["supported", "translated", "rejected"]
 
+
+class ProtocolTranslationError(ValueError):
+    """Raised when translation would otherwise discard response semantics."""
+
+
+def validate_gemini_response_part(part: Any) -> None:
+    """Reject response parts that cannot be represented by translated protocols."""
+    if not isinstance(part, dict):
+        raise ProtocolTranslationError("Gemini response parts must be objects.")
+
+    variants = (
+        ("text", {"text", "thought", "thoughtSignature"}),
+        ("functionCall", {"functionCall", "thoughtSignature"}),
+        ("inlineData", {"inlineData"}),
+        ("executableCode", {"executableCode"}),
+        ("codeExecutionResult", {"codeExecutionResult"}),
+    )
+    for discriminator, allowed in variants:
+        if discriminator in part:
+            unknown = set(part) - allowed
+            if unknown:
+                raise ProtocolTranslationError(
+                    f"Unsupported Gemini response part fields: {', '.join(sorted(unknown))}."
+                )
+            return
+    raise ProtocolTranslationError("Unsupported Gemini response part type.")
+
+
 PROTOCOL_FEATURE_VOCABULARY = (
     "text_input",
     "multimodal_input",

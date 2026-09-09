@@ -194,10 +194,10 @@ def _base_response(
         "output": output,
         "parallel_tool_calls": request.parallel_tool_calls,
         "previous_response_id": None,
-        "reasoning": None,
+        "reasoning": request.reasoning,
         "store": request.store,
         "temperature": request.temperature,
-        "text": {"format": {"type": "text"}},
+        "text": request.text or {"format": {"type": "text"}},
         "tool_choice": request.tool_choice or "auto",
         "tools": request.tools or [],
         "top_p": request.top_p,
@@ -214,14 +214,35 @@ def chat_to_responses_response(
     response_id = str(chat.get("id") or f"resp_{uuid.uuid4().hex}").replace("chatcmpl-", "resp_")
     choices = chat.get("choices") or []
     message = choices[0].get("message", {}) if choices else {}
+    finish_reason = choices[0].get("finish_reason") if choices else None
+    incomplete_reason = {
+        "length": "max_output_tokens",
+        "content_filter": "content_filter",
+    }.get(finish_reason)
+    status = "incomplete" if incomplete_reason else "completed"
     output: List[Dict[str, Any]] = []
+    reasoning_content = message.get("reasoning_content")
+    if reasoning_content:
+        output.append(
+            {
+                "id": f"rs_{uuid.uuid4().hex}",
+                "type": "reasoning",
+                "status": "completed",
+                "summary": [
+                    {
+                        "type": "summary_text",
+                        "text": str(reasoning_content),
+                    }
+                ],
+            }
+        )
     content = message.get("content")
     if content is not None:
         output.append(
             {
                 "id": f"msg_{uuid.uuid4().hex}",
                 "type": "message",
-                "status": "completed",
+                "status": status,
                 "role": "assistant",
                 "content": [
                     {
@@ -245,14 +266,17 @@ def chat_to_responses_response(
             }
         )
 
-    return _base_response(
+    response = _base_response(
         request,
         response_id=response_id,
         created_at=created_at,
-        status="completed",
+        status=status,
         output=output,
         usage=_response_usage(chat.get("usage") or {}),
     )
+    if incomplete_reason:
+        response["incomplete_details"] = {"reason": incomplete_reason}
+    return response
 
 
 def _sse(event_type: str, data: Dict[str, Any]) -> bytes:

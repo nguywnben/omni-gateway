@@ -39,6 +39,7 @@ from core.management_audit import (
 from core.metrics import router as metrics_router
 from core.otel_exporter import run_otel_export_loop
 from core.panel import router as panel_router
+from core.protocol_contract import ProtocolTranslationError
 from core.request_context import request_scope
 from core.request_limits import RequestBodyLimitMiddleware, get_max_request_body_bytes
 from core.request_trace import classify_request_protocol
@@ -330,6 +331,14 @@ async def handle_validation_exception(request: Request, exc: RequestValidationEr
     if protocol:
         return protocol_error_response(protocol, 400, message)
     return LocalizedJSONResponse({"detail": message}, status_code=422)
+
+
+@app.exception_handler(ProtocolTranslationError)
+async def handle_protocol_translation_exception(request: Request, exc: ProtocolTranslationError):
+    protocol = protocol_for_path(request.url.path)
+    if protocol:
+        return protocol_error_response(protocol, 502, str(exc))
+    return LocalizedJSONResponse({"detail": str(exc)}, status_code=502)
 
 
 cors_origins = _parse_csv_env("CORS_ORIGINS")

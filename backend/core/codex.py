@@ -633,10 +633,16 @@ def codex_response_to_gemini(payload: Dict[str, Any]) -> Dict[str, Any]:
         ]
     }
     if usage:
+        input_details = usage.get("input_tokens_details") or {}
+        output_tokens = int(usage.get("output_tokens") or 0)
+        output_details = usage.get("output_tokens_details") or {}
+        reasoning_tokens = int(output_details.get("reasoning_tokens") or 0)
         result["usageMetadata"] = {
             "promptTokenCount": int(usage.get("input_tokens") or 0),
-            "candidatesTokenCount": int(usage.get("output_tokens") or 0),
+            "candidatesTokenCount": max(output_tokens - reasoning_tokens, 0),
+            "thoughtsTokenCount": reasoning_tokens,
             "totalTokenCount": int(usage.get("total_tokens") or 0),
+            "cachedContentTokenCount": int(input_details.get("cached_tokens") or 0),
         }
     return result
 
@@ -727,10 +733,16 @@ def codex_stream_line_to_gemini(line: Any) -> Optional[str]:
             ]
         }
         if isinstance(usage, dict):
+            input_details = usage.get("input_tokens_details") or {}
+            output_tokens = int(usage.get("output_tokens") or 0)
+            output_details = usage.get("output_tokens_details") or {}
+            reasoning_tokens = int(output_details.get("reasoning_tokens") or 0)
             result["usageMetadata"] = {
                 "promptTokenCount": int(usage.get("input_tokens") or 0),
-                "candidatesTokenCount": int(usage.get("output_tokens") or 0),
+                "candidatesTokenCount": max(output_tokens - reasoning_tokens, 0),
+                "thoughtsTokenCount": reasoning_tokens,
                 "totalTokenCount": int(usage.get("total_tokens") or 0),
+                "cachedContentTokenCount": int(input_details.get("cached_tokens") or 0),
             }
         return "data: " + json.dumps(result)
     return None

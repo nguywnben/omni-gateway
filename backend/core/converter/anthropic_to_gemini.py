@@ -12,6 +12,7 @@ from core.converter.thought_signature import (
     is_skip_thought_signature_placeholder,
 )
 from core.converter.utils import merge_system_messages
+from core.protocol_contract import validate_gemini_response_part
 from fastapi import Response
 from log import log
 
@@ -164,9 +165,10 @@ def _anthropic_usage_from_metadata(usage_metadata: Any) -> Dict[str, int]:
 
     prompt_tokens_total = int(usage_metadata.get("promptTokenCount", 0) or 0)
     cached_tokens = _cached_content_token_count(usage_metadata)
+    reasoning_tokens = int(usage_metadata.get("thoughtsTokenCount", 0) or 0)
     usage = {
         "input_tokens": max(prompt_tokens_total - cached_tokens, 0),
-        "output_tokens": int(usage_metadata.get("candidatesTokenCount", 0) or 0),
+        "output_tokens": int(usage_metadata.get("candidatesTokenCount", 0) or 0) + reasoning_tokens,
     }
 
     if cached_tokens > 0:
@@ -715,8 +717,7 @@ def gemini_to_anthropic_response(
     has_tool_use = False
 
     for part in parts:
-        if not isinstance(part, dict):
-            continue
+        validate_gemini_response_part(part)
 
         if part.get("thought") is True:
             if is_skip_thought_signature_placeholder(part):
@@ -729,7 +730,7 @@ def gemini_to_anthropic_response(
 
             thoughtsignature = part.get("thoughtSignature")
             if thoughtsignature:
-                block["thoughtSignature"] = thoughtsignature
+                block["signature"] = thoughtsignature
 
             content.append(block)
             continue
@@ -775,6 +776,8 @@ def gemini_to_anthropic_response(
         stop_reason = "tool_use"
     elif finish_reason == "MAX_TOKENS":
         stop_reason = "max_tokens"
+    elif finish_reason in {"SAFETY", "RECITATION"}:
+        stop_reason = "refusal"
     else:
         stop_reason = "end_turn"
 

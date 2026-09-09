@@ -23,12 +23,14 @@ from core.models import (
     OpenAIResponsesRequest,
     model_to_dict,
 )
-from core.protocol_contract import list_protocol_conversions
+from core.protocol_contract import ProtocolTranslationError, list_protocol_conversions
 from core.provider_registry import INFERENCE_PROTOCOLS
 from core.router.primary.responses import responses_to_chat_request
+from core.router.protocol_errors import protocol_error_payload
 
 FIXTURE_PATH = Path(__file__).parent / "fixtures" / "protocol-contract-corpus-v1.json"
 REQUEST_FIXTURE_PATH = Path(__file__).parent / "fixtures" / "protocol-request-golden-v1.json"
+RESPONSE_FIXTURE_PATH = Path(__file__).parent / "fixtures" / "protocol-response-golden-v1.json"
 
 
 class ProtocolContractMatrixTests(unittest.TestCase):
@@ -175,6 +177,33 @@ class ProtocolContractBoundaryTests(unittest.IsolatedAsyncioTestCase):
                     self.assertEqual(response.status_code, 400)
                     self.assertIn(expected_error, payload.values())
                     self.assertIn("silent", payload["message"].lower())
+
+    async def test_translation_failures_use_the_endpoint_native_502_envelope(self):
+        from starlette.requests import Request
+
+        cases = (
+            ("/v1/chat/completions", "server_error"),
+            ("/v1/messages", "overloaded_error"),
+            ("/v1beta/models/fixture:generateContent", "UNAVAILABLE"),
+        )
+        for path, expected in cases:
+            with self.subTest(path=path):
+                request = Request(
+                    {
+                        "type": "http",
+                        "method": "POST",
+                        "path": path,
+                        "headers": [],
+                        "query_string": b"",
+                        "scheme": "http",
+                        "server": ("test", 80),
+                    }
+                )
+                response = await main.handle_protocol_translation_exception(
+                    request, ProtocolTranslationError("Unsupported upstream response part.")
+                )
+                self.assertEqual(response.status_code, 502)
+                self.assertIn(expected, response.body.decode())
 
 
 class ProtocolRequestGoldenTests(unittest.IsolatedAsyncioTestCase):
@@ -324,6 +353,183 @@ class ProtocolRequestGoldenTests(unittest.IsolatedAsyncioTestCase):
         for model, payload in cases:
             with self.subTest(model=model.__name__), self.assertRaises(ValidationError):
                 model.model_validate(payload)
+
+
+class ProtocolResponseGoldenTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.fixture = json.loads(RESPONSE_FIXTURE_PATH.read_text(encoding="utf-8"))
+
+    def test_gemini_response_translates_to_openai_chat_without_usage_loss(self):
+        from core.converter.openai_to_gemini import convert_gemini_to_openai_response
+
+        translated = convert_gemini_to_openai_response(
+            self.fixture["gemini_response"], "fixture-model"
+        )
+        expected = self.fixture["expected_openai_chat"]
+        choice = translated["choices"][0]
+        usage = translated["usage"]
+
+        self.assertEqual(choice["message"]["reasoning_content"], expected["reasoning_content"])
+        self.assertEqual(choice["message"]["content"], expected["content"])
+        self.assertEqual(
+            choice["message"]["tool_calls"][0]["function"]["name"], expected["tool_name"]
+        )
+        self.assertEqual(choice["finish_reason"], expected["finish_reason"])
+        self.assertEqual(usage["prompt_tokens"], expected["prompt_tokens"])
+        self.assertEqual(usage["prompt_tokens_details"]["cached_tokens"], expected["cached_tokens"])
+        self.assertEqual(usage["completion_tokens"], expected["completion_tokens"])
+        self.assertEqual(
+            usage["completion_tokens_details"]["reasoning_tokens"],
+            expected["reasoning_tokens"],
+        )
+        self.assertEqual(usage["total_tokens"], expected["total_tokens"])
+
+    def test_openai_chat_response_translates_to_responses_with_reasoning(self):
+        from core.converter.openai_to_gemini import convert_gemini_to_openai_response
+        from core.router.primary.responses import chat_to_responses_response
+
+        chat = convert_gemini_to_openai_response(self.fixture["gemini_response"], "fixture-model")
+        request = OpenAIResponsesRequest(model="fixture-model", input="Hello")
+        translated = chat_to_responses_response(chat, request)
+        expected = self.fixture["expected_openai_responses"]
+
+        self.assertEqual([item["type"] for item in translated["output"]], expected["output_types"])
+        self.assertEqual(translated["output"][0]["summary"][0]["text"], expected["reasoning_text"])
+        self.assertEqual(translated["output"][1]["content"][0]["text"], expected["output_text"])
+        self.assertEqual(translated["usage"]["input_tokens"], expected["input_tokens"])
+        self.assertEqual(translated["usage"]["output_tokens"], expected["output_tokens"])
+        self.assertEqual(translated["usage"]["total_tokens"], expected["total_tokens"])
+
+    def test_gemini_response_translates_to_official_anthropic_shape(self):
+        from core.converter.anthropic_to_gemini import gemini_to_anthropic_response
+
+        translated = gemini_to_anthropic_response(self.fixture["gemini_response"], "fixture-model")
+        expected = self.fixture["expected_anthropic"]
+        thinking, text_block, tool = translated["content"]
+
+        self.assertEqual(thinking["thinking"], expected["thinking"])
+        self.assertEqual(thinking["signature"], expected["signature"])
+        self.assertNotIn("thoughtSignature", thinking)
+        self.assertEqual(text_block["text"], expected["text"])
+        self.assertEqual(tool["name"], expected["tool_name"])
+        self.assertEqual(translated["stop_reason"], expected["stop_reason"])
+        self.assertEqual(translated["usage"]["input_tokens"], expected["input_tokens"])
+        self.assertEqual(
+            translated["usage"]["cache_read_input_tokens"], expected["cache_read_input_tokens"]
+        )
+        self.assertEqual(translated["usage"]["output_tokens"], expected["output_tokens"])
+
+    def test_normalized_error_envelopes_match_the_golden_corpus(self):
+        for case in self.fixture["errors"]:
+            with self.subTest(protocol=case["protocol"], status=case["status_code"]):
+                self.assertEqual(
+                    protocol_error_payload(
+                        case["protocol"], case["status_code"], "Invalid fixture input."
+                    ),
+                    case["expected"],
+                )
+
+    def test_finish_reasons_translate_without_claiming_normal_completion(self):
+        from core.converter.anthropic_to_gemini import gemini_to_anthropic_response
+        from core.converter.openai_to_gemini import convert_gemini_to_openai_response
+        from core.router.primary.responses import chat_to_responses_response
+
+        request = OpenAIResponsesRequest(model="fixture-model", input="Hello")
+        for case in self.fixture["finish_reasons"]:
+            with self.subTest(reason=case["gemini"]):
+                payload = {
+                    "candidates": [
+                        {
+                            "content": {"role": "model", "parts": [{"text": "Done"}]},
+                            "finishReason": case["gemini"],
+                        }
+                    ]
+                }
+                chat = convert_gemini_to_openai_response(payload, "fixture-model")
+                anthropic = gemini_to_anthropic_response(payload, "fixture-model")
+                responses = chat_to_responses_response(chat, request)
+
+                self.assertEqual(chat["choices"][0]["finish_reason"], case["openai"])
+                self.assertEqual(anthropic["stop_reason"], case["anthropic"])
+                if case["openai"] == "length":
+                    self.assertEqual(responses["status"], "incomplete")
+                    self.assertEqual(responses["incomplete_details"]["reason"], "max_output_tokens")
+                elif case["openai"] == "content_filter":
+                    self.assertEqual(responses["status"], "incomplete")
+                    self.assertEqual(responses["incomplete_details"]["reason"], "content_filter")
+                else:
+                    self.assertEqual(responses["status"], "completed")
+                    self.assertIsNone(responses["incomplete_details"])
+
+    def test_unknown_response_parts_fail_instead_of_disappearing(self):
+        from core.converter.anthropic_to_gemini import gemini_to_anthropic_response
+        from core.converter.openai_to_gemini import convert_gemini_to_openai_response
+
+        payload = {
+            "candidates": [
+                {
+                    "content": {"role": "model", "parts": [{"futurePart": {"value": 1}}]},
+                    "finishReason": "STOP",
+                }
+            ]
+        }
+        for converter in (
+            lambda: convert_gemini_to_openai_response(payload, "fixture-model"),
+            lambda: gemini_to_anthropic_response(payload, "fixture-model"),
+        ):
+            with self.subTest(converter=converter), self.assertRaises(ValueError):
+                converter()
+
+    def test_openai_usage_round_trips_through_provider_canonical_responses(self):
+        from core.codex import codex_response_to_gemini
+        from core.converter.openai_to_gemini import convert_gemini_to_openai_response
+        from core.xai import xai_response_to_gemini
+
+        usage = {
+            "prompt_tokens": 12,
+            "completion_tokens": 7,
+            "total_tokens": 19,
+            "prompt_tokens_details": {"cached_tokens": 3},
+            "completion_tokens_details": {"reasoning_tokens": 2},
+        }
+        responses_usage = {
+            "input_tokens": 12,
+            "output_tokens": 7,
+            "total_tokens": 19,
+            "input_tokens_details": {"cached_tokens": 3},
+            "output_tokens_details": {"reasoning_tokens": 2},
+        }
+        canonical_responses = (
+            xai_response_to_gemini(
+                {
+                    "choices": [
+                        {
+                            "index": 0,
+                            "finish_reason": "stop",
+                            "message": {"content": "Done"},
+                        }
+                    ],
+                    "usage": usage,
+                }
+            ),
+            codex_response_to_gemini(
+                {
+                    "output": [
+                        {
+                            "type": "message",
+                            "content": [{"type": "output_text", "text": "Done"}],
+                        }
+                    ],
+                    "usage": responses_usage,
+                }
+            ),
+        )
+
+        for canonical in canonical_responses:
+            with self.subTest(canonical=canonical):
+                translated = convert_gemini_to_openai_response(canonical, "fixture-model")
+                self.assertEqual(translated["usage"], usage)
 
 
 if __name__ == "__main__":
