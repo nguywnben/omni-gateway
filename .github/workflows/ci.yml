@@ -162,7 +162,7 @@ jobs:
       IMAGE: omni-gateway:ci
       HOST_PORT: "4283"
       DATA_VOLUME: omni-gateway-ci-data
-      SETUP_TOKEN: container-smoke-token
+      SETUP_TOKEN: container-smoke-token-2026-secure
     permissions:
       contents: read
 
@@ -192,7 +192,7 @@ jobs:
           trap 'docker compose -f deploy/docker-compose.yml logs app' ERR
           python backend/tests/runtime_smoke.py \
             --expect-fresh-setup \
-            --setup-token container-smoke-token
+            --setup-token container-smoke-token-2026-secure
           curl --fail --silent http://127.0.0.1:4283/frontend/assets/providers/google-antigravity-logo.png >/dev/null
           curl --fail --silent http://127.0.0.1:4283/frontend/assets/providers/google-ai-studio-logo.png >/dev/null
           curl --fail --silent http://127.0.0.1:4283/frontend/assets/providers/grok-build-logo.png >/dev/null

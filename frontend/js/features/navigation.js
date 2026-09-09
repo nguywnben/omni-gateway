@@ -237,6 +237,9 @@ function initStaticUiBindings() {
         event.preventDefault();
         completeInitialSetup();
     });
+    document.getElementById('setupPreflightButton')?.addEventListener('click', () => {
+        runSetupPreflight();
+    });
     document.getElementById('googleAiStudioCredentialForm')?.addEventListener('submit', addGoogleAIStudioCredential);
     document.getElementById('xaiCredentialForm')?.addEventListener('submit', addXaiApiKeyCredential);
     document.getElementById('openaiPlatformCredentialForm')?.addEventListener('submit', addOpenAIPlatformCredential);
