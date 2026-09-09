@@ -20,6 +20,7 @@ from core.models import (
     ClaudeRequest,
     GeminiRequest,
     OpenAIChatCompletionRequest,
+    OpenAIChatCompletionResponse,
     OpenAIResponsesRequest,
     model_to_dict,
 )
@@ -103,6 +104,44 @@ class ProtocolContractMatrixTests(unittest.TestCase):
                     "generationConfig": {"silentSemanticChange": True},
                 }
             )
+
+    def test_reasoning_content_is_output_only_for_chat_completions(self):
+        with self.assertRaises(ValidationError):
+            OpenAIChatCompletionRequest.model_validate(
+                {
+                    "model": "fixture-model",
+                    "messages": [
+                        {
+                            "role": "assistant",
+                            "content": "Previous answer",
+                            "reasoning_content": "private reasoning",
+                        }
+                    ],
+                }
+            )
+
+        response = OpenAIChatCompletionResponse.model_validate(
+            {
+                "id": "chatcmpl-fixture",
+                "created": 1,
+                "model": "fixture-model",
+                "choices": [
+                    {
+                        "index": 0,
+                        "message": {
+                            "role": "assistant",
+                            "content": "Answer",
+                            "reasoning_content": "preserved reasoning",
+                        },
+                        "finish_reason": "stop",
+                    }
+                ],
+            }
+        )
+        self.assertEqual(
+            response.choices[0].message.reasoning_content,
+            "preserved reasoning",
+        )
 
 
 class ProtocolContractBoundaryTests(unittest.IsolatedAsyncioTestCase):

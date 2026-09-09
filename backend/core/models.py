@@ -109,8 +109,6 @@ class OpenAIChatMessage(BaseModel):
     def validate_translatable_message(self) -> "OpenAIChatMessage":
         if self.role not in {"developer", "system", "user", "assistant", "tool"}:
             raise ValueError(f"Unsupported OpenAI message role: {self.role}.")
-        if self.reasoning_content is not None:
-            raise ValueError("reasoning_content cannot be translated safely in request history.")
         if self.name is not None and self.role != "tool":
             raise ValueError("OpenAI message name is supported only for tool results.")
         if self.tool_calls is not None and self.role != "assistant":
@@ -194,6 +192,8 @@ class OpenAIChatCompletionRequest(BaseModel):
             raise ValueError(
                 "reasoning_effort is not supported by the Chat Completions translation."
             )
+        if any(message.reasoning_content is not None for message in self.messages):
+            raise ValueError("reasoning_content cannot be translated safely in request history.")
         if self.response_format is not None:
             format_type = self.response_format.get("type")
             if format_type in {"text", "json_object"}:
