@@ -853,6 +853,9 @@ async def gemini_stream_to_anthropic_stream(
 
             log.debug(f"[GEMINI_TO_ANTHROPIC] Raw chunk: {chunk[:200] if chunk else b''}")
 
+            if chunk and chunk.lstrip().startswith(b":"):
+                yield chunk.strip() + b"\n\n"
+                continue
             if not chunk or not chunk.startswith(b"data: "):
                 log.debug("[GEMINI_TO_ANTHROPIC] Skipping chunk (not SSE format or empty)")
                 continue
@@ -1128,3 +1131,7 @@ async def gemini_stream_to_anthropic_stream(
             "error",
             {"type": "error", "error": {"type": "api_error", "message": str(e)}},
         )
+    finally:
+        from core.router.stream_passthrough import close_async_iterator
+
+        await close_async_iterator(gemini_stream)

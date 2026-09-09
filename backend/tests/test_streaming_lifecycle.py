@@ -22,6 +22,7 @@ from core.httpx_client import UpstreamStreamProtocolError, iter_bounded_lines
 from core.router.stream_passthrough import (
     ManagedStreamingResponse,
     build_streaming_response_or_error,
+    cascade_close_async_iterator,
 )
 
 
@@ -117,6 +118,29 @@ class _FakeWreqResponse:
 
 
 class StreamingLifecycleTests(unittest.IsolatedAsyncioTestCase):
+    async def test_cascade_closer_releases_nested_stream_on_outer_cancel(self):
+        closed = False
+
+        async def source():
+            nonlocal closed
+            try:
+                yield b"one"
+                yield b"two"
+            finally:
+                closed = True
+
+        source_iterator = source()
+
+        async def wrapper():
+            async for chunk in source_iterator:
+                yield chunk
+
+        stream = cascade_close_async_iterator(wrapper(), [source_iterator])
+        self.assertEqual(await anext(stream), b"one")
+        await stream.aclose()
+
+        self.assertTrue(closed)
+
     async def test_vertex_stream_does_not_succeed_or_retry_after_partial_failure(self):
         envelope = json.dumps(
             {

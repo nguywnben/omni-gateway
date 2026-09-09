@@ -25,6 +25,38 @@ class ManagedStreamingResponse(StreamingResponse):
             await close_async_iterator(self.body_iterator)
 
 
+def sse_heartbeat_bytes(item: Any) -> bytes | None:
+    """Normalize an upstream SSE comment without treating it as model output."""
+    if not isinstance(item, (str, bytes)):
+        return None
+    raw = item if isinstance(item, bytes) else item.encode("utf-8")
+    comment = raw.strip()
+    if not comment.startswith(b":"):
+        return None
+    return comment + b"\n\n"
+
+
+async def cascade_close_async_iterator(
+    iterator: AsyncIterator[Any], owned_iterators: list[AsyncIterator[Any]]
+):
+    """Ensure nested provider iterators close with their public wrapper."""
+    try:
+        async for item in iterator:
+            yield item
+    finally:
+        candidates = [iterator, *reversed(owned_iterators)]
+        seen: set[int] = set()
+        for candidate in candidates:
+            if id(candidate) in seen:
+                continue
+            seen.add(id(candidate))
+            try:
+                await close_async_iterator(candidate)
+            except Exception:
+                # Cleanup continues so one faulty wrapper cannot strand its provider stream.
+                continue
+
+
 async def prepend_async_item(first_item: Any, iterator: AsyncIterator[Any]):
     """Yield a prefetched item before continuing the original iterator."""
     try:
