@@ -87,6 +87,30 @@ class ProviderCostRankTests(unittest.TestCase):
 
 
 class RoutingStrategyTests(unittest.IsolatedAsyncioTestCase):
+    async def test_weighted_strategy_is_reproducible_with_seeded_routers(self):
+        states = {
+            "a.json": credential_state(weight=1.0),
+            "b.json": credential_state(weight=2.0),
+            "c.json": credential_state(weight=3.0),
+        }
+        first_router = SmartCredentialRouter(clock=lambda: 100.0, rng=random.Random(73))
+        second_router = SmartCredentialRouter(clock=lambda: 100.0, rng=random.Random(73))
+
+        first = await first_router.acquire(
+            FakeStorageAdapter(states),
+            mode="primary",
+            model_name="model-a",
+            routing_strategy="weighted",
+        )
+        second = await second_router.acquire(
+            FakeStorageAdapter(states),
+            mode="primary",
+            model_name="model-a",
+            routing_strategy="weighted",
+        )
+
+        self.assertEqual(first[0], second[0])
+
     async def test_least_latency_prefers_faster_credential(self):
         storage = FakeStorageAdapter(
             {

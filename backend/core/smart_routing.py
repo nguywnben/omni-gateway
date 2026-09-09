@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import random
 import secrets
 import time
 from collections import deque
@@ -57,6 +58,7 @@ class SmartCredentialRouter:
         auth_backoff_seconds: float = 300.0,
         model_backoff_seconds: float = 60.0,
         coordination: Optional[RoutingCoordinationAdapter] = None,
+        rng: Optional[random.Random] = None,
     ) -> None:
         self._clock = clock
         self._lease_ttl_seconds = max(1.0, float(lease_ttl_seconds))
@@ -85,6 +87,7 @@ class SmartCredentialRouter:
         self._recent_decisions: Deque[RouteDecision] = deque(maxlen=100)
         self._provider_variants: Dict[CredentialKey, str] = {}
         self._credential_generation = GovernanceGenerationObserver(GOVERNANCE_SCOPE_CREDENTIALS)
+        self._rng = rng
 
     async def _invalidate_credential_views(self) -> None:
         self._providers.clear()
@@ -410,7 +413,9 @@ class SmartCredentialRouter:
                 ]
                 ranked = [
                     ((position,), filename)
-                    for position, filename in enumerate(weighted_order(weighted_items))
+                    for position, filename in enumerate(
+                        weighted_order(weighted_items, rng=self._rng)
+                    )
                 ]
 
             supported_candidates = []
