@@ -46,6 +46,7 @@ from core.pool_import import (
     MAX_POOL_ENTRY_BYTES,
     MAX_POOL_UNCOMPRESSED_BYTES,
 )
+from core.provider_connection_diagnostics import connection_diagnostic
 from core.provider_registry import (
     ANTHROPIC,
     CLAUDE_CODE,
@@ -95,6 +96,7 @@ def reject_unsupported_credential_operation(
     inferred_variant = get_credential_provider_variant(credential_data)
     capabilities = get_credential_variant_capabilities(inferred_variant)
     variant_id = capabilities.variant_id if capabilities else "unknown"
+    diagnostic = connection_diagnostic("unsupported_operation")
     return JSONResponse(
         status_code=422,
         content={
@@ -103,7 +105,8 @@ def reject_unsupported_credential_operation(
                 "message": "This operation is not supported for the credential variant.",
                 "operation": operation,
                 "variant_id": variant_id,
-            }
+            },
+            "diagnostic": diagnostic.as_dict(),
         },
     )
 

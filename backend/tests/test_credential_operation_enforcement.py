@@ -42,16 +42,20 @@ class CredentialOperationEnforcementTests(unittest.IsolatedAsyncioTestCase):
         body = json.loads(response.body)
         self.assertEqual(response.status_code, 422)
         self.assertEqual(
-            body,
+            body["error"],
             {
-                "error": {
-                    "code": "credential_operation_unsupported",
-                    "message": "This operation is not supported for the credential variant.",
-                    "operation": "refresh",
-                    "variant_id": "openai_platform",
-                }
+                "code": "credential_operation_unsupported",
+                "message": "This operation is not supported for the credential variant.",
+                "operation": "refresh",
+                "variant_id": "openai_platform",
             },
         )
+        self.assertEqual(body["diagnostic"]["category"], "unsupported_operation")
+        self.assertEqual(
+            body["diagnostic"]["code"], "provider_connection_unsupported_operation"
+        )
+        self.assertFalse(body["diagnostic"]["retryable"])
+        self.assertTrue(body["diagnostic"]["remediation"])
 
     async def test_unknown_provider_cannot_reach_model_discovery(self):
         storage = AsyncMock()
