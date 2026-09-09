@@ -45,6 +45,20 @@ The initial conservative inventory is:
 | Claude Platform | API key | verify, test, toggle, delete, export |
 | Ollama | Connection | verify, test, toggle, delete, export |
 
+### Production R1 normalization (2026-09-09)
+
+P2.1 extends the same registry into the complete production matrix for `add`, `verify`, `test`,
+OAuth `refresh`, `quota`, `model_discovery`, normalized inference protocols, `disable`, `export`,
+and `delete`. `toggle` remains a v1 compatibility alias for the canonical `disable` capability.
+The exact matrix and operation meanings are maintained in `docs/provider-capabilities.md`.
+
+The v1 `GET /api/providers` schema and body remain unchanged. New clients consume the additive,
+versioned `GET /api/providers/capabilities` route. The credential console stores each returned
+variant contract and derives card actions and mixed-selection eligibility from it; it no longer
+uses provider-name checks for quota or credential actions. Missing catalogs, unknown variants, and
+undeclared operations fail closed. The server uses the same registry before model discovery,
+single-item mutations, export, quota, verification, tests, and batch planning.
+
 `refresh_identity` and `preview_channel` remain in the vocabulary for legacy compatibility but are
 not declared for the current shared provider pool. They cannot be invoked through the Wave 2 fleet
 service until a variant explicitly earns support through contract and failure-path tests.

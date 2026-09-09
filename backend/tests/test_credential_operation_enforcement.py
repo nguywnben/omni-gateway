@@ -15,7 +15,10 @@ if str(BACKEND_DIR) not in sys.path:
     sys.path.insert(0, str(BACKEND_DIR))
 
 from core.models import CredentialModelTestRequest, CredFileActionRequest
-from core.panel.credential_operations import verify_credential_common
+from core.panel.credential_operations import (
+    reject_unsupported_credential_operation,
+    verify_credential_common,
+)
 from core.panel.credentials import (
     creds_action,
     download_cred_file,
@@ -25,6 +28,31 @@ from core.panel.credentials import (
 
 
 class CredentialOperationEnforcementTests(unittest.IsolatedAsyncioTestCase):
+    def test_unsupported_variant_operation_has_a_stable_typed_error(self):
+        response = reject_unsupported_credential_operation(
+            {
+                "provider": "openai",
+                "credential_type": "api_key",
+                "api_key": "must-not-leak",
+            },
+            "refresh",
+            mode="primary",
+        )
+
+        body = json.loads(response.body)
+        self.assertEqual(response.status_code, 422)
+        self.assertEqual(
+            body,
+            {
+                "error": {
+                    "code": "credential_operation_unsupported",
+                    "message": "This operation is not supported for the credential variant.",
+                    "operation": "refresh",
+                    "variant_id": "openai_platform",
+                }
+            },
+        )
+
     async def test_unknown_provider_cannot_reach_model_discovery(self):
         storage = AsyncMock()
         storage.get_credential.return_value = {
