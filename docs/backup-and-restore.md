@@ -26,8 +26,8 @@ must not be treated as a recovery artifact.
   held for the operation, and never stored or logged. Losing it makes the archive unrecoverable.
 - The decrypted archive is a closed two-member ZIP: `manifest.json` and
   `state/credentials.db`. Members are read without filesystem extraction.
-- The upload is limited to 64 MiB, SQLite state to 120 MiB, and expanded archive to 121 MiB.
-  Member count, hashes, duplicate JSON fields, traversal/symlink flags, compression ratios,
+- The upload is limited to 64 MiB, SQLite state to 45 MiB, and expanded archive to 46 MiB.
+  Member count, hashes, duplicate JSON fields, traversal/symlink flags,
   SQLite integrity, foreign keys, table names, schema inventory, and validation time are bounded.
 - Archive format, state schema, and exact SQLite schema fingerprints must be compatible. R1 fails
   closed rather than attempting an implicit cross-schema migration; update Omni Gateway through
@@ -91,4 +91,3 @@ side-effect-free and is not recorded as a mutation.
    policy, and recent usage totals.
 6. If verification fails, validate and restore the matching `pre-restore-<timestamp>-<id>.ogb`
    file with the same passphrase.
-

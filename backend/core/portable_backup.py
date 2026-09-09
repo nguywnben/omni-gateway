@@ -44,10 +44,9 @@ SANITIZED_EXPORT_FORMAT = sanitized_backup_export.SANITIZED_EXPORT_FORMAT
 SANITIZED_EXPORT_VERSION = sanitized_backup_export.SANITIZED_EXPORT_VERSION
 BACKUP_EXTENSION = ".ogb"
 MAX_BACKUP_UPLOAD_BYTES = 64 * 1024 * 1024
-MAX_BACKUP_DATABASE_BYTES = 120 * 1024 * 1024
+MAX_BACKUP_DATABASE_BYTES = 45 * 1024 * 1024
 MAX_BACKUP_MANIFEST_BYTES = 64 * 1024
-MAX_BACKUP_UNCOMPRESSED_BYTES = 121 * 1024 * 1024
-MAX_BACKUP_COMPRESSION_RATIO = 200
+MAX_BACKUP_UNCOMPRESSED_BYTES = 46 * 1024 * 1024
 MAX_BACKUP_SQLITE_VALIDATION_SECONDS = 15
 
 _DATABASE_MEMBER = "state/credentials.db"
@@ -346,9 +345,12 @@ def _build_archive(
         "contents": records,
         "table_counts": table_counts,
     }
+    manifest_bytes = _canonical_json(manifest)
+    if len(manifest_bytes) > MAX_BACKUP_MANIFEST_BYTES:
+        raise BackupSizeError("Backup manifest exceeds the supported size.")
     output = io.BytesIO()
     with zipfile.ZipFile(output, "w", allowZip64=False) as archive:
-        archive.writestr(_zip_info(_MANIFEST_MEMBER), _canonical_json(manifest))
+        archive.writestr(_zip_info(_MANIFEST_MEMBER), manifest_bytes)
         archive.writestr(_zip_info(_DATABASE_MEMBER), database)
     payload = output.getvalue()
     if len(payload) > MAX_BACKUP_UNCOMPRESSED_BYTES:
@@ -468,11 +470,6 @@ def _validate_zip(payload: bytes, work_dir: Path) -> _ValidatedArchive:
             }[entry.filename]
             if entry.file_size <= 0 or entry.file_size > maximum:
                 raise BackupSizeError("Backup archive member size is invalid.")
-            if entry.file_size > 1024 * 1024 and (
-                entry.compress_size == 0
-                or entry.file_size > entry.compress_size * MAX_BACKUP_COMPRESSION_RATIO
-            ):
-                raise BackupSizeError("Backup archive compression ratio is unsafe.")
             total_size += entry.file_size
             by_name[entry.filename] = entry
         if total_size > MAX_BACKUP_UNCOMPRESSED_BYTES:
