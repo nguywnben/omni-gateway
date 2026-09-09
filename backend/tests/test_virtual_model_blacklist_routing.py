@@ -142,8 +142,7 @@ class VirtualModelBlacklistRoutingTests(unittest.IsolatedAsyncioTestCase):
         release.assert_awaited_once_with("credential.json", mode="primary")
         self.assertTrue(
             any(
-                decision.category == "upstream"
-                and decision.reason == "cancelled"
+                decision.category == "upstream" and decision.reason == "cancelled"
                 for decision in trace_collector.decisions
             )
         )
@@ -470,9 +469,7 @@ class VirtualModelBlacklistRoutingTests(unittest.IsolatedAsyncioTestCase):
                 )
             ]
 
-        self.assertEqual(
-            chunks, [b'data: {"candidates":[{"finishReason":"STOP"}]}\n\n']
-        )
+        self.assertEqual(chunks, [b'data: {"candidates":[{"finishReason":"STOP"}]}\n\n'])
         blacklist_mock.assert_awaited_once_with(
             "google_ai_studio",
             "gemini-retired",
@@ -584,9 +581,7 @@ class VirtualModelBlacklistRoutingTests(unittest.IsolatedAsyncioTestCase):
                 )
             ]
 
-        self.assertEqual(
-            chunks, [b'data: {"candidates":[{"finishReason":"STOP"}]}\n\n']
-        )
+        self.assertEqual(chunks, [b'data: {"candidates":[{"finishReason":"STOP"}]}\n\n'])
         blacklist_mock.assert_not_awaited()
         route_miss_mock.assert_awaited_once()
         self.assertEqual(route_mock.await_count, 2)

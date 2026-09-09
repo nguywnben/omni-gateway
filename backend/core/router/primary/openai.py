@@ -371,15 +371,11 @@ async def chat_completions(
     elif use_anti_truncation:
         log.info("Enabling anti-truncation streaming feature")
         return await build_streaming_response_or_error(
-            cascade_close_async_iterator(
-                anti_truncation_generator(), anti_owned_streams
-            ),
+            cascade_close_async_iterator(anti_truncation_generator(), anti_owned_streams),
             error_protocol="openai",
         )
     else:
         return await build_streaming_response_or_error(
-            cascade_close_async_iterator(
-                normal_stream_generator(), normal_owned_streams
-            ),
+            cascade_close_async_iterator(normal_stream_generator(), normal_owned_streams),
             error_protocol="openai",
         )

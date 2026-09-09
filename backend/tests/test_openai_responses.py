@@ -46,9 +46,7 @@ class OpenAIResponsesTests(unittest.IsolatedAsyncioTestCase):
             finally:
                 closed = True
 
-        request = OpenAIResponsesRequest(
-            model="gemini-test", input="hello", stream=True
-        )
+        request = OpenAIResponsesRequest(model="gemini-test", input="hello", stream=True)
         stream = _responses_stream(StreamingResponse(chunks()), request)
         emitted = [await anext(stream) for _ in range(4)]
         await stream.aclose()
@@ -60,9 +58,7 @@ class OpenAIResponsesTests(unittest.IsolatedAsyncioTestCase):
         async def chunks():
             yield b'data: {"choices":[{"delta":{"content":"partial"}}]}\n\n'
 
-        request = OpenAIResponsesRequest(
-            model="gemini-test", input="hello", stream=True
-        )
+        request = OpenAIResponsesRequest(model="gemini-test", input="hello", stream=True)
         stream = _responses_stream(StreamingResponse(chunks()), request)
         payload = b"".join([chunk async for chunk in stream])
 
@@ -75,17 +71,10 @@ class OpenAIResponsesTests(unittest.IsolatedAsyncioTestCase):
             yield b'data: {"choices":[{"delta":{"content":"67890"}}]}\n\n'
             yield b"data: [DONE]\n\n"
 
-        request = OpenAIResponsesRequest(
-            model="gemini-test", input="hello", stream=True
-        )
+        request = OpenAIResponsesRequest(model="gemini-test", input="hello", stream=True)
         with patch("core.router.primary.responses._MAX_RESPONSES_OUTPUT_BYTES", 8):
             payload = b"".join(
-                [
-                    chunk
-                    async for chunk in _responses_stream(
-                        StreamingResponse(chunks()), request
-                    )
-                ]
+                [chunk async for chunk in _responses_stream(StreamingResponse(chunks()), request)]
             )
 
         self.assertIn(b"event: error", payload)

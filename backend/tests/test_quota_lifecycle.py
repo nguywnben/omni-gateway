@@ -98,12 +98,8 @@ class QuotaRequestCleanupTests(unittest.IsolatedAsyncioTestCase):
         commit = AsyncMock(return_value=QuotaCommitResult(True))
         release = AsyncMock(return_value=True)
         with (
-            patch(
-                "core.virtual_keys.virtual_key_manager.commit_reservation", commit
-            ),
-            patch(
-                "core.virtual_keys.virtual_key_manager.release_reservation", release
-            ),
+            patch("core.virtual_keys.virtual_key_manager.commit_reservation", commit),
+            patch("core.virtual_keys.virtual_key_manager.release_reservation", release),
         ):
             response = await add_security_headers(request, next_handler)
             self.assertEqual(await anext(response.body_iterator), b"first")

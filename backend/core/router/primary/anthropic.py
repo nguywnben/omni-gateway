@@ -243,9 +243,7 @@ async def messages(claude_request: ClaudeRequest, _token: str = Depends(authenti
                 else:
                     yield chunk
 
-        anthropic_stream = gemini_stream_to_anthropic_stream(
-            bytes_wrapper(), response_model, 200
-        )
+        anthropic_stream = gemini_stream_to_anthropic_stream(bytes_wrapper(), response_model, 200)
         anti_owned_streams.append(anthropic_stream)
         async for anthropic_chunk in anthropic_stream:
             if anthropic_chunk:
@@ -315,16 +313,12 @@ async def messages(claude_request: ClaudeRequest, _token: str = Depends(authenti
     elif use_anti_truncation:
         log.info("Enabling anti-truncation streaming feature")
         return await build_streaming_response_or_error(
-            cascade_close_async_iterator(
-                anti_truncation_generator(), anti_owned_streams
-            ),
+            cascade_close_async_iterator(anti_truncation_generator(), anti_owned_streams),
             error_protocol="anthropic",
         )
     else:
         return await build_streaming_response_or_error(
-            cascade_close_async_iterator(
-                normal_stream_generator(), normal_owned_streams
-            ),
+            cascade_close_async_iterator(normal_stream_generator(), normal_owned_streams),
             error_protocol="anthropic",
         )
 

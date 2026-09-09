@@ -28,10 +28,7 @@ class PublicStreamingLifecycleTests(unittest.IsolatedAsyncioTestCase):
             )
 
         chunks = [
-            chunk
-            async for chunk in gemini_stream_to_anthropic_stream(
-                source(), "gemini-test", 200
-            )
+            chunk async for chunk in gemini_stream_to_anthropic_stream(source(), "gemini-test", 200)
         ]
 
         payload = b"".join(chunks)
@@ -87,13 +84,9 @@ class PublicStreamingLifecycleTests(unittest.IsolatedAsyncioTestCase):
         )
 
     async def test_gemini_stream_heartbeat_and_disconnect(self):
-        request = GeminiRequest(
-            contents=[{"role": "user", "parts": [{"text": "hello"}]}]
-        )
+        request = GeminiRequest(contents=[{"role": "user", "parts": [{"text": "hello"}]}])
         await self._assert_heartbeat_and_close(
-            lambda: gemini.stream_generate_content(
-                request, model="gemini-test", api_key="test"
-            ),
+            lambda: gemini.stream_generate_content(request, model="gemini-test", api_key="test"),
             resolve_target="core.router.primary.gemini.resolve_model_request",
         )
 
@@ -126,9 +119,7 @@ class PublicStreamingLifecycleTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(closed())
 
     async def test_vertex_gemini_stream_heartbeat_and_disconnect(self):
-        request = GeminiRequest(
-            contents=[{"role": "user", "parts": [{"text": "hello"}]}]
-        )
+        request = GeminiRequest(contents=[{"role": "user", "parts": [{"text": "hello"}]}])
         with patch("core.api.vertex.stream_request") as stream_request:
             stream_request.side_effect = self._vertex_source_factory()
             response = await vertex_gemini.stream_generate_content(

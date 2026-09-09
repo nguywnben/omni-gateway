@@ -1058,9 +1058,7 @@ async def _stream_request_upstream(
             return
         except Exception as e:
             is_timeout = isinstance(e, (TimeoutError, httpx.TimeoutException))
-            exception_status = int(
-                getattr(e, "status_code", 0) or (504 if is_timeout else 502)
-            )
+            exception_status = int(getattr(e, "status_code", 0) or (504 if is_timeout else 502))
             log.error(
                 f"[provider stream] Streaming Request Exception: {e}, Credentials: {current_file}"
             )

@@ -42,9 +42,7 @@ class RequestTraceMiddlewareTests(unittest.IsolatedAsyncioTestCase):
 
         with patch("main.get_request_trace_service", return_value=service):
             with self.assertRaises(asyncio.CancelledError):
-                await add_security_headers(
-                    _request("/v1/chat/completions"), next_handler
-                )
+                await add_security_headers(_request("/v1/chat/completions"), next_handler)
 
         service.record.assert_awaited_once()
         self.assertEqual(service.record.await_args.args[0].outcome, "cancelled")
@@ -100,9 +98,7 @@ class RequestTraceMiddlewareTests(unittest.IsolatedAsyncioTestCase):
             return StreamingResponse(body(), status_code=200)
 
         with patch("main.get_request_trace_service", return_value=service):
-            response = await add_security_headers(
-                _request("/v1/chat/completions"), next_handler
-            )
+            response = await add_security_headers(_request("/v1/chat/completions"), next_handler)
             self.assertEqual(await anext(response.body_iterator), b"one")
             await response.body_iterator.aclose()
 
@@ -126,9 +122,7 @@ class RequestTraceMiddlewareTests(unittest.IsolatedAsyncioTestCase):
             return StreamingResponse(body(), status_code=200)
 
         with patch("main.get_request_trace_service", return_value=service):
-            response = await add_security_headers(
-                _request("/v1/messages"), next_handler
-            )
+            response = await add_security_headers(_request("/v1/messages"), next_handler)
             _ = [chunk async for chunk in response.body_iterator]
 
         service.record.assert_awaited_once()

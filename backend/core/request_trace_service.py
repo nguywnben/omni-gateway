@@ -66,8 +66,7 @@ def _decode_retention(value: Any) -> RequestTraceRetentionPolicy:
 
 def _outcome_for_status(status_code: int, decisions: tuple[RequestDecision, ...]) -> str:
     if any(
-        decision.category == "upstream" and decision.result == "failed"
-        for decision in decisions
+        decision.category == "upstream" and decision.result == "failed" for decision in decisions
     ):
         return "upstream_error"
     if status_code < 400:
