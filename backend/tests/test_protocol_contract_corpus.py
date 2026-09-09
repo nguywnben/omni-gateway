@@ -325,6 +325,31 @@ class ProtocolRequestGoldenTests(unittest.IsolatedAsyncioTestCase):
                 },
             ),
             (
+                OpenAIChatCompletionRequest,
+                {
+                    "model": "fixture-model",
+                    "messages": [
+                        {
+                            "role": "user",
+                            "content": [
+                                {
+                                    "type": "image_url",
+                                    "image_url": {"url": "https://example.invalid/image.png"},
+                                }
+                            ],
+                        }
+                    ],
+                },
+            ),
+            (
+                OpenAIChatCompletionRequest,
+                {
+                    "model": "fixture-model",
+                    "messages": [{"role": "user", "content": "Hello"}],
+                    "response_format": {"type": "future_format"},
+                },
+            ),
+            (
                 OpenAIResponsesRequest,
                 {"model": "fixture-model", "input": "Hello", "reasoning": {"effort": "high"}},
             ),
@@ -333,6 +358,20 @@ class ProtocolRequestGoldenTests(unittest.IsolatedAsyncioTestCase):
                 {
                     "model": "fixture-model",
                     "input": [{"type": "unknown_item", "value": "lost"}],
+                },
+            ),
+            (
+                OpenAIResponsesRequest,
+                {
+                    "model": "fixture-model",
+                    "input": [
+                        {
+                            "type": "message",
+                            "role": "user",
+                            "content": "Hello",
+                            "future_semantic": "lost",
+                        }
+                    ],
                 },
             ),
             (
@@ -346,6 +385,18 @@ class ProtocolRequestGoldenTests(unittest.IsolatedAsyncioTestCase):
                             "content": [{"type": "unknown_block", "value": "lost"}],
                         }
                     ],
+                },
+            ),
+            (
+                ClaudeRequest,
+                {
+                    "model": "fixture-model",
+                    "max_tokens": 32,
+                    "messages": [{"role": "user", "content": "Hello"}],
+                    "output_config": {
+                        "format": {"type": "json_schema", "schema": {}},
+                        "future_semantic": "lost",
+                    },
                 },
             ),
         )

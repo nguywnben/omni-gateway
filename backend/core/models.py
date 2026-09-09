@@ -21,6 +21,14 @@ def _reject_unknown_input_keys(value: Any, allowed: set[str], label: str) -> Any
     return value
 
 
+def _validate_image_data_url(value: Any, label: str) -> None:
+    if not isinstance(value, str) or not value.startswith("data:image/"):
+        raise ValueError(f"Only image data URLs are supported for {label}.")
+    prefix, separator, payload = value.partition(";base64,")
+    if not separator or not prefix.removeprefix("data:") or not payload or ";" in prefix:
+        raise ValueError(f"Invalid base64 image data URL for {label}.")
+
+
 # Common Models
 class Model(BaseModel):
     id: str
@@ -67,9 +75,16 @@ class OpenAITool(BaseModel):
         if isinstance(value, dict) and isinstance(value.get("function"), dict):
             _reject_unknown_input_keys(
                 value["function"],
-                {"name", "description", "parameters", "strict"},
+                {"name", "description", "parameters"},
                 "OpenAI tool definition",
             )
+            function = value["function"]
+            if not isinstance(function.get("name"), str) or not function["name"].strip():
+                raise ValueError("OpenAI function tools require a name.")
+            if "parameters" in function and not isinstance(function["parameters"], dict):
+                raise ValueError("OpenAI function tool parameters must be an object.")
+        if isinstance(value, dict) and value.get("type", "function") != "function":
+            raise ValueError("Only OpenAI function tools are supported.")
         return value
 
 
@@ -94,6 +109,14 @@ class OpenAIChatMessage(BaseModel):
     def validate_translatable_message(self) -> "OpenAIChatMessage":
         if self.role not in {"developer", "system", "user", "assistant", "tool"}:
             raise ValueError(f"Unsupported OpenAI message role: {self.role}.")
+        if self.reasoning_content is not None:
+            raise ValueError("reasoning_content cannot be translated safely in request history.")
+        if self.name is not None and self.role != "tool":
+            raise ValueError("OpenAI message name is supported only for tool results.")
+        if self.tool_calls is not None and self.role != "assistant":
+            raise ValueError("OpenAI tool_calls are supported only for assistant messages.")
+        if self.tool_call_id is not None and self.role != "tool":
+            raise ValueError("OpenAI tool_call_id is supported only for tool messages.")
         if not isinstance(self.content, list):
             return self
         for part in self.content:
@@ -111,10 +134,7 @@ class OpenAIChatMessage(BaseModel):
                 if set(image) - {"url", "detail"}:
                     raise ValueError("Unknown OpenAI image_url field.")
                 url = image.get("url")
-                if not isinstance(url, str) or not url.startswith("data:"):
-                    raise ValueError(
-                        "Only data-URL OpenAI image inputs are supported by this gateway."
-                    )
+                _validate_image_data_url(url, "OpenAI image input")
                 continue
             raise ValueError(f"Unsupported OpenAI message content type: {part_type}.")
         return self
@@ -174,6 +194,38 @@ class OpenAIChatCompletionRequest(BaseModel):
             raise ValueError(
                 "reasoning_effort is not supported by the Chat Completions translation."
             )
+        if self.response_format is not None:
+            format_type = self.response_format.get("type")
+            if format_type in {"text", "json_object"}:
+                _reject_unknown_input_keys(self.response_format, {"type"}, "OpenAI response_format")
+            elif format_type == "json_schema":
+                _reject_unknown_input_keys(
+                    self.response_format, {"type", "json_schema"}, "OpenAI response_format"
+                )
+                schema = self.response_format.get("json_schema")
+                if not isinstance(schema, dict):
+                    raise ValueError("OpenAI json_schema response format requires an object.")
+                _reject_unknown_input_keys(
+                    schema,
+                    {"name", "description", "schema", "strict"},
+                    "OpenAI json_schema response format",
+                )
+                if not isinstance(schema.get("name"), str) or not isinstance(
+                    schema.get("schema"), dict
+                ):
+                    raise ValueError("OpenAI json_schema response format requires name and schema.")
+            else:
+                raise ValueError(f"Unsupported OpenAI response format: {format_type}.")
+        if isinstance(self.tool_choice, dict):
+            _reject_unknown_input_keys(self.tool_choice, {"type", "function"}, "OpenAI tool_choice")
+            function = self.tool_choice.get("function")
+            if self.tool_choice.get("type") != "function" or not isinstance(function, dict):
+                raise ValueError("OpenAI object tool_choice must select a function.")
+            _reject_unknown_input_keys(function, {"name"}, "OpenAI tool_choice function")
+            if not isinstance(function.get("name"), str) or not function["name"].strip():
+                raise ValueError("OpenAI tool_choice function requires a name.")
+        elif self.tool_choice not in {None, "none", "auto", "required"}:
+            raise ValueError(f"Unsupported OpenAI tool_choice: {self.tool_choice}.")
         return self
 
     class Config:
@@ -255,6 +307,28 @@ class OpenAIResponsesRequest(BaseModel):
         if isinstance(self.input, list):
             for item in self.input:
                 self._validate_input_item(item)
+        for tool in self.tools or []:
+            if not isinstance(tool, dict):
+                raise ValueError("Responses tools must be objects.")
+            if tool.get("type") != "function":
+                continue
+            _reject_unknown_input_keys(
+                tool,
+                {"type", "name", "description", "parameters"},
+                "Responses function tool",
+            )
+            if not isinstance(tool.get("name"), str):
+                raise ValueError("Responses function tools require a name.")
+            if "parameters" in tool and not isinstance(tool["parameters"], dict):
+                raise ValueError("Responses function tool parameters must be an object.")
+        if isinstance(self.tool_choice, dict):
+            _reject_unknown_input_keys(self.tool_choice, {"type", "name"}, "Responses tool_choice")
+            if self.tool_choice.get("type") != "function" or not isinstance(
+                self.tool_choice.get("name"), str
+            ):
+                raise ValueError("Responses object tool_choice must select a named function.")
+        elif self.tool_choice not in {None, "none", "auto", "required"}:
+            raise ValueError(f"Unsupported Responses tool_choice: {self.tool_choice}.")
         return self
 
     @staticmethod
@@ -268,6 +342,7 @@ class OpenAIResponsesRequest(BaseModel):
             "user",
             "assistant",
         }:
+            _reject_unknown_input_keys(item, {"type", "role", "content"}, "Responses message")
             content = item.get("content", "")
             if isinstance(content, str):
                 return
@@ -284,19 +359,25 @@ class OpenAIResponsesRequest(BaseModel):
                 if part_type == "input_image":
                     if set(part) - {"type", "image_url", "detail"}:
                         raise ValueError("Unknown Responses input_image field.")
-                    image_url = part.get("image_url")
-                    if not isinstance(image_url, str) or not image_url.startswith("data:"):
-                        raise ValueError(
-                            "Only data-URL Responses image inputs are supported by this gateway."
-                        )
+                    _validate_image_data_url(part.get("image_url"), "Responses image input")
                     continue
                 raise ValueError(f"Unsupported Responses content type: {part_type}.")
             return
         if item_type == "function_call":
+            _reject_unknown_input_keys(
+                item,
+                {"type", "id", "call_id", "name", "arguments"},
+                "Responses function_call",
+            )
             if not item.get("name") or not isinstance(item.get("arguments"), str):
                 raise ValueError("Responses function_call requires name and JSON arguments.")
             return
         if item_type == "function_call_output":
+            _reject_unknown_input_keys(
+                item,
+                {"type", "call_id", "output"},
+                "Responses function_call_output",
+            )
             if not item.get("call_id") or "output" not in item:
                 raise ValueError("Responses function_call_output requires call_id and output.")
             return
@@ -625,11 +706,12 @@ class ClaudeTool(BaseModel):
     @model_validator(mode="before")
     @classmethod
     def reject_unknown_fields(cls, value: Any) -> Any:
-        return _reject_unknown_input_keys(
+        value = _reject_unknown_input_keys(
             value,
-            {"name", "description", "input_schema", "strict"},
+            {"name", "description", "input_schema"},
             "Anthropic tool",
         )
+        return value
 
 
 class ClaudeMetadata(BaseModel):
@@ -682,6 +764,45 @@ class ClaudeRequest(BaseModel):
             },
             "Anthropic request",
         )
+
+    @model_validator(mode="after")
+    def validate_translatable_options(self) -> "ClaudeRequest":
+        if isinstance(self.system, list):
+            for block in self.system:
+                _reject_unknown_input_keys(block, {"type", "text"}, "Anthropic system block")
+                if block.get("type") != "text" or not isinstance(block.get("text"), str):
+                    raise ValueError("Anthropic system lists support text blocks only.")
+        if self.thinking is not None:
+            _reject_unknown_input_keys(
+                self.thinking, {"type", "budget_tokens"}, "Anthropic thinking config"
+            )
+            thinking_type = self.thinking.get("type")
+            budget = self.thinking.get("budget_tokens")
+            if thinking_type not in {"enabled", "disabled"}:
+                raise ValueError(f"Unsupported Anthropic thinking type: {thinking_type}.")
+            if budget is not None and (type(budget) is not int or budget < 1):
+                raise ValueError("Anthropic thinking budget_tokens must be a positive integer.")
+        if self.output_config is not None:
+            _reject_unknown_input_keys(self.output_config, {"format"}, "Anthropic output_config")
+            output_format = self.output_config.get("format")
+            if not isinstance(output_format, dict):
+                raise ValueError("Anthropic output_config requires a format object.")
+            _reject_unknown_input_keys(output_format, {"type", "schema"}, "Anthropic output format")
+            if output_format.get("type") != "json_schema" or not isinstance(
+                output_format.get("schema"), dict
+            ):
+                raise ValueError("Only Anthropic json_schema output format is supported.")
+        if isinstance(self.tool_choice, dict):
+            choice_type = self.tool_choice.get("type")
+            allowed = {"type", "name"} if choice_type == "tool" else {"type"}
+            _reject_unknown_input_keys(self.tool_choice, allowed, "Anthropic tool_choice")
+            if choice_type not in {"auto", "any", "tool"}:
+                raise ValueError(f"Unsupported Anthropic tool_choice type: {choice_type}.")
+            if choice_type == "tool" and not isinstance(self.tool_choice.get("name"), str):
+                raise ValueError("Anthropic tool_choice type tool requires a name.")
+        elif self.tool_choice is not None:
+            raise ValueError("Anthropic tool_choice must be an object.")
+        return self
 
     class Config:
         extra = "allow"
