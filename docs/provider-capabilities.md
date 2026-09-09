@@ -60,6 +60,14 @@ storage mutation work with HTTP 422:
     "message": "This operation is not supported for the credential variant.",
     "operation": "refresh",
     "variant_id": "openai_platform"
+  },
+  "diagnostic": {
+    "schema_version": 1,
+    "code": "provider_connection_unsupported_operation",
+    "category": "unsupported_operation",
+    "message": "This credential variant does not support the requested operation.",
+    "remediation": "Choose an operation supported by this credential variant.",
+    "retryable": false
   }
 }
 ```
@@ -67,6 +75,7 @@ storage mutation work with HTTP 422:
 Unknown variants use `variant_id: "unknown"` and fail closed. Batch previews and executions use
 the same registry, report the same code per unsupported item, and continue to evaluate
 authorization, current state, environment locks, preview requirements, and idempotency separately.
+The additive connection diagnostic is documented in `docs/provider-connection-diagnostics.md`.
 
 ## Adding or changing a provider
 

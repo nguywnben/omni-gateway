@@ -6,9 +6,9 @@
 - Active plan: `PROD-SELFHOST-R1`
 - Target: production-quality self-hosting for one person or a trusted team, not enterprise service
   operation.
-- Progress: **13/36 implementation tasks**; Phase 2 is in progress (1/6).
-- Completed: **P2.1 — Provider capability matrix**.
-- Next: **P2.2 — Connection tests and actionable provider errors**. Do not begin it until a new user
+- Progress: **14/36 implementation tasks**; Phase 2 is in progress (2/6).
+- Completed: **P2.2 — Connection tests and actionable provider errors**.
+- Next: **P2.3 — Cross-protocol contract corpus**. Do not begin it until a new user
   request to continue the fixed plan.
 - Supported runtime today: standalone, one worker, one replica.
 - Redis coordination, multi-replica HA, and Helm are experimental and no longer R1 release blockers.
@@ -49,6 +49,14 @@ Do not push unless the user requests it.
 
 ## Latest Evidence
 
+- `docs/evidence/p2.2-provider-connection-diagnostics.md`
+- Provider connection tests now expose one safe versioned diagnostic contract across all nine
+  advertised variants, with actionable categories, remediation, bounded provider status, and an
+  allowlisted provider code instead of raw upstream bodies or exception text.
+- A single 30-second deadline covers the complete operation, browser cancellation reaches the
+  provider coroutine, and the console renders limited/failure outcomes through complete 15-locale
+  labels. The fixed task gate passed its environment-only shell retry and 78 focused tests; the
+  final semantic correction passed another 21 affected tests.
 - `docs/evidence/p2.1-provider-capability-matrix.md`
 - All nine advertised provider/auth variants now share a versioned capability contract covering
   lifecycle operations, discovery, quota, OAuth refresh, and five normalized ingress protocol

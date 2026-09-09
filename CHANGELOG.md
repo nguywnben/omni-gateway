@@ -6,6 +6,9 @@ All notable user-facing changes are documented in this file. Omni Gateway follow
 
 ### Added
 
+- Added a versioned safe diagnostic contract for credential connection tests with consistent
+  categories, remediation, retry guidance, bounded provider status, and deterministic coverage for
+  all nine advertised provider/authentication variants.
 - Added a versioned provider/auth capability matrix for all nine advertised variants, including
   lifecycle actions, discovery, OAuth refresh, quota, and normalized ingress protocols; the
   credential console now derives valid card and mixed-selection actions from the same contract.
@@ -48,6 +51,9 @@ All notable user-facing changes are documented in this file. Omni Gateway follow
 
 ### Changed
 
+- Credential model tests now have one cancelable 30-second operation deadline; raw upstream bodies
+  and exception text are no longer returned or persisted, while the console presents actionable
+  limited/failure states through labels completed across all 15 locales.
 - Simplified the default Docker Compose deployment to common standalone controls and one durable
   named volume; optional storage, identity, routing, guardrail, cache, and telemetry controls now
   require the explicit advanced override, and CI verifies state across container recreation.
