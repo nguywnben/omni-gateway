@@ -1,6 +1,6 @@
 from typing import Annotated, Any, Dict, List, Literal, Optional, Union
 
-from pydantic import BaseModel, ConfigDict, Field, SecretStr, WithJsonSchema
+from pydantic import BaseModel, ConfigDict, Field, SecretStr, WithJsonSchema, model_validator
 
 
 def model_to_dict(model: BaseModel) -> Dict[str, Any]:
@@ -58,6 +58,35 @@ class OpenAIChatMessage(BaseModel):
     tool_calls: Optional[List[OpenAIToolCall]] = None
     tool_call_id: Optional[str] = None  # for role="tool"
 
+    @model_validator(mode="after")
+    def validate_translatable_message(self) -> "OpenAIChatMessage":
+        if self.role not in {"developer", "system", "user", "assistant", "tool"}:
+            raise ValueError(f"Unsupported OpenAI message role: {self.role}.")
+        if not isinstance(self.content, list):
+            return self
+        for part in self.content:
+            if not isinstance(part, dict):
+                raise ValueError("OpenAI message content parts must be objects.")
+            part_type = part.get("type")
+            if part_type == "text":
+                if set(part) - {"type", "text"} or not isinstance(part.get("text"), str):
+                    raise ValueError("Invalid OpenAI text content part.")
+                continue
+            if part_type == "image_url":
+                image = part.get("image_url")
+                if set(part) - {"type", "image_url"} or not isinstance(image, dict):
+                    raise ValueError("Invalid OpenAI image_url content part.")
+                if set(image) - {"url", "detail"}:
+                    raise ValueError("Unknown OpenAI image_url field.")
+                url = image.get("url")
+                if not isinstance(url, str) or not url.startswith("data:"):
+                    raise ValueError(
+                        "Only data-URL OpenAI image inputs are supported by this gateway."
+                    )
+                continue
+            raise ValueError(f"Unsupported OpenAI message content type: {part_type}.")
+        return self
+
 
 class OpenAIChatCompletionRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
@@ -80,6 +109,14 @@ class OpenAIChatCompletionRequest(BaseModel):
     tool_choice: Optional[Union[str, Dict[str, Any]]] = None
     reasoning_effort: Optional[str] = None
     size: Optional[str] = None
+
+    @model_validator(mode="after")
+    def reject_unsupported_reasoning_control(self) -> "OpenAIChatCompletionRequest":
+        if self.reasoning_effort is not None:
+            raise ValueError(
+                "reasoning_effort is not supported by the Chat Completions translation."
+            )
+        return self
 
 
 ChatCompletionRequest = OpenAIChatCompletionRequest
@@ -106,6 +143,79 @@ class OpenAIResponsesRequest(BaseModel):
     reasoning: Optional[Dict[str, Any]] = None
     previous_response_id: Optional[str] = None
     conversation: Optional[Union[str, Dict[str, Any]]] = None
+
+    @model_validator(mode="after")
+    def validate_translatable_responses_request(self) -> "OpenAIResponsesRequest":
+        if self.reasoning is not None:
+            raise ValueError("reasoning is not supported by the Responses translation.")
+        if self.text is not None:
+            if set(self.text) != {"format"} or not isinstance(self.text.get("format"), dict):
+                raise ValueError("Responses text must contain exactly one format object.")
+            output_format = self.text["format"]
+            format_type = output_format.get("type")
+            allowed = (
+                {"type"}
+                if format_type in {"text", "json_object"}
+                else {"type", "name", "description", "schema", "strict"}
+            )
+            if format_type not in {"text", "json_object", "json_schema"}:
+                raise ValueError(f"Unsupported Responses text format: {format_type}.")
+            if set(output_format) - allowed:
+                raise ValueError("Unknown Responses text format field.")
+            if format_type == "json_schema" and (
+                not isinstance(output_format.get("name"), str)
+                or not isinstance(output_format.get("schema"), dict)
+            ):
+                raise ValueError("Responses json_schema format requires name and schema.")
+        if isinstance(self.input, list):
+            for item in self.input:
+                self._validate_input_item(item)
+        return self
+
+    @staticmethod
+    def _validate_input_item(item: Dict[str, Any]) -> None:
+        if not isinstance(item, dict):
+            raise ValueError("Responses input items must be objects.")
+        item_type = item.get("type")
+        if item_type in {None, "message"} and item.get("role") in {
+            "developer",
+            "system",
+            "user",
+            "assistant",
+        }:
+            content = item.get("content", "")
+            if isinstance(content, str):
+                return
+            if not isinstance(content, list):
+                raise ValueError("Responses message content must be text or a list of parts.")
+            for part in content:
+                if not isinstance(part, dict):
+                    raise ValueError("Responses content parts must be objects.")
+                part_type = part.get("type")
+                if part_type in {"input_text", "output_text", "text"}:
+                    if set(part) - {"type", "text"} or not isinstance(part.get("text"), str):
+                        raise ValueError("Invalid Responses text content part.")
+                    continue
+                if part_type == "input_image":
+                    if set(part) - {"type", "image_url", "detail"}:
+                        raise ValueError("Unknown Responses input_image field.")
+                    image_url = part.get("image_url")
+                    if not isinstance(image_url, str) or not image_url.startswith("data:"):
+                        raise ValueError(
+                            "Only data-URL Responses image inputs are supported by this gateway."
+                        )
+                    continue
+                raise ValueError(f"Unsupported Responses content type: {part_type}.")
+            return
+        if item_type == "function_call":
+            if not item.get("name") or not isinstance(item.get("arguments"), str):
+                raise ValueError("Responses function_call requires name and JSON arguments.")
+            return
+        if item_type == "function_call_output":
+            if not item.get("call_id") or "output" not in item:
+                raise ValueError("Responses function_call_output requires call_id and output.")
+            return
+        raise ValueError(f"Unsupported Responses input item type: {item_type}.")
 
 
 class OpenAIChatCompletionChoice(BaseModel):
@@ -263,6 +373,47 @@ class ClaudeContentBlock(BaseModel):
     signature: Optional[str] = None
     thoughtSignature: Optional[str] = None
     data: Optional[str] = None
+
+    @model_validator(mode="after")
+    def validate_translatable_block(self) -> "ClaudeContentBlock":
+        if self.type == "text":
+            if self.text is None:
+                raise ValueError("Anthropic text blocks require text.")
+            return self
+        if self.type == "image":
+            source = self.source
+            if not isinstance(source, dict) or set(source) - {"type", "media_type", "data"}:
+                raise ValueError("Invalid Anthropic image source.")
+            if source.get("type") != "base64" or not isinstance(source.get("data"), str):
+                raise ValueError("Only base64 Anthropic image inputs are supported.")
+            return self
+        if self.type == "tool_use":
+            if not self.id or not self.name or not isinstance(self.input, dict):
+                raise ValueError("Anthropic tool_use blocks require id, name, and input.")
+            return self
+        if self.type == "tool_result":
+            if not self.tool_use_id:
+                raise ValueError("Anthropic tool_result blocks require tool_use_id.")
+            if isinstance(self.content, list):
+                for part in self.content:
+                    if (
+                        not isinstance(part, dict)
+                        or set(part) - {"type", "text"}
+                        or part.get("type") != "text"
+                        or not isinstance(part.get("text"), str)
+                    ):
+                        raise ValueError("Anthropic tool_result lists support text blocks only.")
+            return self
+        if self.type == "thinking":
+            signature = self.signature or self.thoughtSignature
+            if self.thinking is None or not signature:
+                raise ValueError("Anthropic thinking blocks require thinking and signature.")
+            return self
+        if self.type == "redacted_thinking":
+            raise ValueError(
+                "Anthropic redacted_thinking request blocks cannot be translated safely."
+            )
+        raise ValueError(f"Unsupported Anthropic content block type: {self.type}.")
 
 
 class ClaudeMessage(BaseModel):

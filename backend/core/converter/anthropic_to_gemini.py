@@ -35,7 +35,7 @@ def has_valid_thought_signature(block: Dict[str, Any]) -> bool:
         return True
 
     thinking = block.get("thinking", "")
-    thoughtsignature = block.get("thoughtSignature")
+    thoughtsignature = block.get("signature") or block.get("thoughtSignature")
 
     if not thinking and thoughtsignature is not None:
         return True
@@ -60,9 +60,9 @@ def sanitize_thinking_block(block: Dict[str, Any]) -> Dict[str, Any]:
 
     sanitized: Dict[str, Any] = {"type": block_type, "thinking": block.get("thinking", "")}
 
-    thoughtsignature = block.get("thoughtSignature")
+    thoughtsignature = block.get("signature") or block.get("thoughtSignature")
     if thoughtsignature:
-        sanitized["thoughtSignature"] = thoughtsignature
+        sanitized["signature"] = thoughtsignature
 
     return sanitized
 
@@ -355,12 +355,11 @@ def convert_tools(
 
 def _extract_tool_result_output(content: Any) -> str:
     if isinstance(content, list):
-        if not content:
-            return ""
-        first = content[0]
-        if isinstance(first, dict) and first.get("type") == "text":
-            return str(first.get("text", ""))
-        return str(first)
+        return "\n".join(
+            str(item.get("text", ""))
+            for item in content
+            if isinstance(item, dict) and item.get("type") == "text"
+        )
     if content is None:
         return ""
     return str(content)
@@ -408,9 +407,19 @@ def convert_messages_to_contents(
 
                 item_type = item.get("type")
                 if item_type == "thinking":
-                    continue
+                    if include_thinking:
+                        signature = item.get("signature") or item.get("thoughtSignature")
+                        parts.append(
+                            {
+                                "text": str(item.get("thinking") or ""),
+                                "thought": True,
+                                "thoughtSignature": signature,
+                            }
+                        )
                 elif item_type == "redacted_thinking":
-                    continue
+                    raise ValueError(
+                        "Anthropic redacted_thinking blocks cannot be translated safely."
+                    )
                 elif item_type == "text":
                     text = item.get("text", "")
                     if _is_non_whitespace_text(text):
@@ -426,6 +435,8 @@ def convert_messages_to_contents(
                                 }
                             }
                         )
+                    else:
+                        raise ValueError("Only base64 Anthropic image inputs are supported.")
                 elif item_type == "tool_use":
                     encoded_id = item.get("id") or ""
                     original_id, _ = decode_tool_id_and_signature(encoded_id)
@@ -465,7 +476,7 @@ def convert_messages_to_contents(
                         }
                     )
                 else:
-                    parts.append({"text": json.dumps(item, ensure_ascii=False)})
+                    raise ValueError(f"Unsupported Anthropic content block type: {item_type}.")
         else:
             if _is_non_whitespace_text(raw_content):
                 parts = [{"text": str(raw_content)}]
@@ -635,6 +646,14 @@ async def anthropic_to_gemini_request(payload: Dict[str, Any]) -> Dict[str, Any]
     filter_invalid_thinking_blocks(messages)
 
     generation_config = build_generation_config(payload)
+    output_format = (payload.get("output_config") or {}).get("format")
+    if output_format:
+        if output_format.get("type") != "json_schema" or not isinstance(
+            output_format.get("schema"), dict
+        ):
+            raise ValueError("Unsupported Anthropic structured output format.")
+        generation_config["responseMimeType"] = "application/json"
+        generation_config["responseSchema"] = clean_json_schema(output_format["schema"])
 
     contents = convert_messages_to_contents(messages, include_thinking=True)
 

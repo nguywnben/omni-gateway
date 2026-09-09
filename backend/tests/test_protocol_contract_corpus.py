@@ -21,11 +21,14 @@ from core.models import (
     GeminiRequest,
     OpenAIChatCompletionRequest,
     OpenAIResponsesRequest,
+    model_to_dict,
 )
 from core.protocol_contract import list_protocol_conversions
 from core.provider_registry import INFERENCE_PROTOCOLS
+from core.router.primary.responses import responses_to_chat_request
 
 FIXTURE_PATH = Path(__file__).parent / "fixtures" / "protocol-contract-corpus-v1.json"
+REQUEST_FIXTURE_PATH = Path(__file__).parent / "fixtures" / "protocol-request-golden-v1.json"
 
 
 class ProtocolContractMatrixTests(unittest.TestCase):
@@ -172,6 +175,155 @@ class ProtocolContractBoundaryTests(unittest.IsolatedAsyncioTestCase):
                     self.assertEqual(response.status_code, 400)
                     self.assertIn(expected_error, payload.values())
                     self.assertIn("silent", payload["message"].lower())
+
+
+class ProtocolRequestGoldenTests(unittest.IsolatedAsyncioTestCase):
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.fixture = json.loads(REQUEST_FIXTURE_PATH.read_text(encoding="utf-8"))
+
+    async def test_openai_chat_and_vertex_openai_translate_the_golden_request(self):
+        from core.converter.openai_to_gemini import convert_openai_to_gemini_request
+
+        case = self.fixture["openai_chat"]
+        request = OpenAIChatCompletionRequest.model_validate(case["request"])
+        with patch("config.get_compatibility_mode_enabled", new=AsyncMock(return_value=False)):
+            translated = await convert_openai_to_gemini_request(model_to_dict(request))
+
+        expected = case["expected"]
+        self.assertEqual(
+            translated["systemInstruction"]["parts"][0]["text"], expected["system_text"]
+        )
+        self.assertEqual(translated["contents"][0]["parts"][0]["text"], expected["user_text"])
+        inline_data = translated["contents"][0]["parts"][1]["inlineData"]
+        self.assertEqual(inline_data["mimeType"], expected["image_mime_type"])
+        self.assertEqual(inline_data["data"], expected["image_data"])
+        self.assertEqual(
+            translated["generationConfig"]["maxOutputTokens"], expected["max_output_tokens"]
+        )
+        self.assertEqual(
+            translated["generationConfig"]["responseMimeType"],
+            expected["response_mime_type"],
+        )
+        self.assertEqual(
+            translated["tools"][0]["functionDeclarations"][0]["name"],
+            expected["tool_name"],
+        )
+
+    def test_openai_responses_translates_the_golden_request_without_loss(self):
+        case = self.fixture["openai_responses"]
+        request = OpenAIResponsesRequest.model_validate(case["request"])
+        translated = model_to_dict(responses_to_chat_request(request))
+        expected = case["expected"]
+
+        self.assertEqual(
+            [item["role"] for item in translated["messages"]], expected["message_roles"]
+        )
+        self.assertEqual(translated["tools"][0]["function"]["name"], expected["tool_name"])
+        self.assertEqual(translated["response_format"]["type"], expected["response_format_type"])
+        self.assertEqual(
+            translated["response_format"]["json_schema"]["name"],
+            expected["response_format_name"],
+        )
+
+    async def test_anthropic_translates_the_golden_request_without_loss(self):
+        from core.converter.anthropic_to_gemini import anthropic_to_gemini_request
+
+        case = self.fixture["anthropic"]
+        request = ClaudeRequest.model_validate(case["request"])
+        with patch("config.get_compatibility_mode_enabled", new=AsyncMock(return_value=False)):
+            translated = await anthropic_to_gemini_request(model_to_dict(request))
+
+        expected = case["expected"]
+        self.assertEqual(
+            translated["systemInstruction"]["parts"][0]["text"], expected["system_text"]
+        )
+        thinking_part = next(
+            part
+            for content in translated["contents"]
+            for part in content["parts"]
+            if part.get("thought") is True
+        )
+        self.assertEqual(thinking_part["text"], expected["thinking_text"])
+        self.assertEqual(thinking_part["thoughtSignature"], expected["thinking_signature"])
+        self.assertEqual(
+            translated["generationConfig"]["thinkingConfig"]["thinkingBudget"],
+            expected["thinking_budget"],
+        )
+        self.assertEqual(
+            translated["generationConfig"]["responseMimeType"],
+            expected["response_mime_type"],
+        )
+        self.assertEqual(
+            translated["tools"][0]["functionDeclarations"][0]["name"],
+            expected["tool_name"],
+        )
+
+    def test_gemini_and_vertex_gemini_preserve_the_native_golden_request(self):
+        from core.anthropic import gemini_request_to_anthropic
+
+        request = self.fixture["gemini"]["request"]
+        self.assertEqual(model_to_dict(GeminiRequest.model_validate(request)), request)
+        translated = gemini_request_to_anthropic(request, "fixture-model", False)
+        self.assertEqual(
+            translated["output_config"]["format"],
+            {
+                "type": "json_schema",
+                "schema": request["generationConfig"]["responseSchema"],
+            },
+        )
+
+    def test_unsupported_or_unknown_semantics_fail_closed(self):
+        cases = (
+            (
+                OpenAIChatCompletionRequest,
+                {
+                    "model": "fixture-model",
+                    "messages": [{"role": "user", "content": "Hello"}],
+                    "reasoning_effort": "high",
+                },
+            ),
+            (
+                OpenAIChatCompletionRequest,
+                {
+                    "model": "fixture-model",
+                    "messages": [
+                        {
+                            "role": "user",
+                            "content": [{"type": "unknown_part", "value": "lost"}],
+                        }
+                    ],
+                },
+            ),
+            (
+                OpenAIResponsesRequest,
+                {"model": "fixture-model", "input": "Hello", "reasoning": {"effort": "high"}},
+            ),
+            (
+                OpenAIResponsesRequest,
+                {
+                    "model": "fixture-model",
+                    "input": [{"type": "unknown_item", "value": "lost"}],
+                },
+            ),
+            (
+                ClaudeRequest,
+                {
+                    "model": "fixture-model",
+                    "max_tokens": 32,
+                    "messages": [
+                        {
+                            "role": "user",
+                            "content": [{"type": "unknown_block", "value": "lost"}],
+                        }
+                    ],
+                },
+            ),
+        )
+
+        for model, payload in cases:
+            with self.subTest(model=model.__name__), self.assertRaises(ValidationError):
+                model.model_validate(payload)
 
 
 if __name__ == "__main__":

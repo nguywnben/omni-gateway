@@ -474,6 +474,15 @@ def gemini_request_to_anthropic(
     for source, target in mapping.items():
         if config.get(source) is not None:
             request[target] = config[source]
+    if config.get("responseMimeType") == "application/json" and isinstance(
+        config.get("responseSchema"), dict
+    ):
+        request["output_config"] = {
+            "format": {
+                "type": "json_schema",
+                "schema": config["responseSchema"],
+            }
+        }
     tools: List[Dict[str, Any]] = []
     for group in payload.get("tools") or []:
         if not isinstance(group, dict):

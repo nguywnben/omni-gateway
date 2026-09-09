@@ -121,6 +121,22 @@ def responses_to_chat_request(request: OpenAIResponsesRequest) -> OpenAIChatComp
             "function": {"name": str(tool_choice.get("name") or "")},
         }
 
+    response_format = None
+    if request.text:
+        output_format = request.text["format"]
+        format_type = output_format["type"]
+        if format_type == "json_schema":
+            response_format = {
+                "type": "json_schema",
+                "json_schema": {
+                    key: output_format[key]
+                    for key in ("name", "description", "schema", "strict")
+                    if key in output_format
+                },
+            }
+        else:
+            response_format = {"type": format_type}
+
     payload: Dict[str, Any] = {
         "model": request.model,
         "messages": messages,
@@ -130,6 +146,7 @@ def responses_to_chat_request(request: OpenAIResponsesRequest) -> OpenAIChatComp
         "max_tokens": request.max_output_tokens,
         "tools": tools or None,
         "tool_choice": tool_choice,
+        "response_format": response_format,
     }
     return OpenAIChatCompletionRequest(**payload)
 
