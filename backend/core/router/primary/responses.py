@@ -7,17 +7,20 @@ import time
 import uuid
 from typing import Any, AsyncIterator, Dict, List
 
+from core.httpx_client import MAX_STREAM_LINE_BYTES, UpstreamStreamProtocolError
 from core.models import (
     OpenAIChatCompletionRequest,
     OpenAIResponsesRequest,
     model_to_dict,
 )
 from core.router.primary.openai import chat_completions
+from core.router.stream_passthrough import ManagedStreamingResponse, close_async_iterator
 from core.utils import authenticate_bearer
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import JSONResponse, StreamingResponse
 
 router = APIRouter()
+_MAX_SSE_FRAME_BYTES = MAX_STREAM_LINE_BYTES
 
 
 def _content_to_chat(content: Any) -> Any:
@@ -283,18 +286,46 @@ def _sse(event_type: str, data: Dict[str, Any]) -> bytes:
     return f"event: {event_type}\ndata: {json.dumps(data, separators=(',', ':'))}\n\n".encode()
 
 
-async def _iter_chat_events(body: AsyncIterator[Any]) -> AsyncIterator[Dict[str, Any]]:
-    buffer = ""
-    async for chunk in body:
-        buffer += chunk.decode() if isinstance(chunk, bytes) else str(chunk)
-        while "\n\n" in buffer:
-            frame, buffer = buffer.split("\n\n", 1)
-            for line in frame.splitlines():
-                if not line.startswith("data: "):
-                    continue
-                value = line[6:].strip()
-                if value and value != "[DONE]":
-                    yield json.loads(value)
+async def _iter_chat_events(
+    body: AsyncIterator[Any],
+) -> AsyncIterator[Dict[str, Any] | None]:
+    buffer = bytearray()
+    try:
+        async for chunk in body:
+            raw = chunk if isinstance(chunk, bytes) else str(chunk).encode("utf-8")
+            buffer.extend(raw)
+            while True:
+                lf_index = buffer.find(b"\n\n")
+                crlf_index = buffer.find(b"\r\n\r\n")
+                candidates = [index for index in (lf_index, crlf_index) if index >= 0]
+                if not candidates:
+                    break
+                frame_end = min(candidates)
+                delimiter_size = 4 if frame_end == crlf_index else 2
+                if frame_end > _MAX_SSE_FRAME_BYTES:
+                    raise UpstreamStreamProtocolError(
+                        f"OpenAI SSE frame exceeds {_MAX_SSE_FRAME_BYTES} bytes"
+                    )
+                frame = bytes(buffer[:frame_end])
+                del buffer[: frame_end + delimiter_size]
+                heartbeat = False
+                for line in frame.splitlines():
+                    if line.startswith(b":"):
+                        heartbeat = True
+                        continue
+                    if not line.startswith(b"data:"):
+                        continue
+                    value = line[5:].strip()
+                    if value and value != b"[DONE]":
+                        yield json.loads(value.decode("utf-8", errors="replace"))
+                if heartbeat:
+                    yield None
+            if len(buffer) > _MAX_SSE_FRAME_BYTES:
+                raise UpstreamStreamProtocolError(
+                    f"OpenAI SSE frame exceeds {_MAX_SSE_FRAME_BYTES} bytes"
+                )
+    finally:
+        await close_async_iterator(body)
 
 
 async def _responses_stream(
@@ -337,29 +368,36 @@ async def _responses_stream(
         part={"type": "output_text", "text": "", "annotations": []},
     )
 
-    async for chat_event in _iter_chat_events(chat_response.body_iterator):
-        if chat_event.get("error"):
-            error = chat_event["error"]
-            yield event(
-                "error",
-                code=str(error.get("code") or "upstream_error"),
-                message=str(error.get("message") or "The upstream request failed."),
-                param=None,
-            )
-            return
-        choices = chat_event.get("choices") or []
-        delta = choices[0].get("delta", {}) if choices else {}
-        text = delta.get("content")
-        if text:
-            output_text += str(text)
-            yield event(
-                "response.output_text.delta",
-                item_id=message_id,
-                output_index=0,
-                content_index=0,
-                delta=str(text),
-                logprobs=[],
-            )
+    chat_body = chat_response.body_iterator
+    try:
+        async for chat_event in _iter_chat_events(chat_body):
+            if chat_event is None:
+                yield b": keep-alive\n\n"
+                continue
+            if chat_event.get("error"):
+                error = chat_event["error"]
+                yield event(
+                    "error",
+                    code=str(error.get("code") or "upstream_error"),
+                    message=str(error.get("message") or "The upstream request failed."),
+                    param=None,
+                )
+                return
+            choices = chat_event.get("choices") or []
+            delta = choices[0].get("delta", {}) if choices else {}
+            text = delta.get("content")
+            if text:
+                output_text += str(text)
+                yield event(
+                    "response.output_text.delta",
+                    item_id=message_id,
+                    output_index=0,
+                    content_index=0,
+                    delta=str(text),
+                    logprobs=[],
+                )
+    finally:
+        await close_async_iterator(chat_body)
 
     content_part = {"type": "output_text", "text": output_text, "annotations": []}
     output_item = {**output_item, "status": "completed", "content": [content_part]}
@@ -418,7 +456,7 @@ async def create_response(
     if request.stream:
         if not isinstance(chat_response, StreamingResponse):
             return chat_response
-        return StreamingResponse(
+        return ManagedStreamingResponse(
             _responses_stream(chat_response, request),
             media_type="text/event-stream",
             headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
