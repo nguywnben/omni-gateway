@@ -6,6 +6,8 @@ All notable user-facing changes are documented in this file. Omni Gateway follow
 
 ### Added
 
+- Added authenticated, bounded routing-health diagnostics with actionable eligibility, capacity,
+  cooldown, and recovery reasons while excluding credential filenames and request identifiers.
 - Added a versioned cross-protocol contract and shared golden corpora for OpenAI Chat, OpenAI
   Responses, Anthropic Messages, Gemini, and Vertex text, images, system instructions, tools,
   structured output, reasoning, usage, finish reasons, and native errors.
@@ -54,6 +56,9 @@ All notable user-facing changes are documented in this file. Omni Gateway follow
 
 ### Changed
 
+- Unified balanced, priority, weighted, least-latency, and lowest-cost selection under the runtime
+  smart router; seeded fixtures are reproducible, repeated failures use bounded increasing
+  cooldowns, and unused conflicting legacy selectors were removed.
 - Public streaming now closes nested provider resources on disconnect, suppresses retries after
   model output begins, requires terminal events before success accounting, preserves heartbeat and
   split UTF-8 framing, bounds frame/aggregation memory, and settles quota and request traces once.

@@ -6,9 +6,9 @@
 - Active plan: `PROD-SELFHOST-R1`
 - Target: production-quality self-hosting for one person or a trusted team, not enterprise service
   operation.
-- Progress: **16/36 implementation tasks**; Phase 2 is in progress (4/6).
-- Completed: **P2.4 — Streaming, cancellation, timeout, and retry semantics**.
-- Next: **P2.5 — Routing, fallback, cooldown, and health**. Do not begin it until a
+- Progress: **17/36 implementation tasks**; Phase 2 is in progress (5/6).
+- Completed: **P2.5 — Routing, fallback, cooldown, and health**.
+- Next: **P2.6 — Compression and quality-policy hardening**. Do not begin it until a
   new user request to continue the fixed plan.
 - Supported runtime today: standalone, one worker, one replica.
 - Redis coordination, multi-replica HA, and Helm are experimental and no longer R1 release blockers.
@@ -49,6 +49,14 @@ Do not push unless the user requests it.
 
 ## Latest Evidence
 
+- `docs/evidence/p2.5-routing-fallback-health.md`
+- All five routing strategies now share the production smart router and a deterministic scenario
+  matrix; repeated failures grow bounded cooldowns, success resets route health, and unsupported,
+  disabled, busy, oversized, and cooling pools produce actionable reasons.
+- Authenticated routing diagnostics expose only provider/model context, stable reason/count
+  vocabulary, and rounded recovery time. Credential filenames, request IDs, payloads, content, and
+  raw upstream errors remain excluded. The fixed task gate passed 125 affected tests and all fixed
+  static checks.
 - `docs/evidence/p2.4-streaming-lifecycle.md`
 - All six public streaming surfaces now close nested provider resources on disconnect, suppress
   retry after model output, require terminal events before success, preserve heartbeat/UTF-8/SSE

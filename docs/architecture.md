@@ -75,6 +75,9 @@ Dependencies should flow inward from HTTP adapters to orchestration and domain p
 
 Model eligibility is evaluated before a request is sent. A declared model catalog on a credential is authoritative; provider-prefix inference is used only when no catalog has been stored. A provider model-not-found response creates a credential-scoped negative route cache, so a missing entitlement on one account does not disable the same model for other accounts.
 
+The maintained eligibility, strategy, fallback, cooldown, recovery, and secret-free diagnostics
+contract is documented in [Routing, Fallback, Cooldown, and Health](routing-policy.md).
+
 ## State and Scaling
 
 The default single-instance mode stores credentials, configuration, and usage data under `backend/data/creds`, with logs under `backend/data/logs`. Both locations must be persisted in containers.
@@ -277,3 +280,7 @@ Current decisions:
 - [ADR-007: Use Explicit Management Principals, RBAC, and OIDC](decisions/007-explicit-rbac-and-oidc-identity.md)
 - [ADR-008: Gate High Availability on Coordinated State and Failure Evidence](decisions/008-gated-high-availability-activation.md)
 - [ADR-009: Use One Encrypted SQLite Artifact for Portable Recovery](decisions/009-encrypted-portable-sqlite-recovery.md)
+- [ADR-010: Return One Safe Provider Connection Diagnostic](decisions/010-safe-provider-connection-diagnostics.md)
+- [ADR-011: Use One Explicit Cross-Protocol Translation Contract](decisions/011-explicit-protocol-translation-contract.md)
+- [ADR-012: Use One Bounded, Output-Aware Stream Lifecycle](decisions/012-bounded-stream-lifecycle.md)
+- [ADR-013: Use One Canonical Standalone Routing Policy](decisions/013-canonical-standalone-routing.md)
