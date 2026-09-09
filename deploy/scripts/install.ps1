@@ -1,3 +1,4 @@
+# Compatibility path for native Python installs. Canonical production: docs/installation.md.
 $ErrorActionPreference = "Stop"
 
 function Write-Info {

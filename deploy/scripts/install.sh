@@ -1,4 +1,5 @@
 #!/bin/bash
+# Compatibility path for native Python installs. Canonical production: docs/installation.md.
 set -e  # Exit on error
 set -u  # Exit on undefined variable
 set -o pipefail  # Exit on pipe failure

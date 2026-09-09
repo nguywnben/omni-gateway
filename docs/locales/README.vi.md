@@ -118,93 +118,20 @@ Xem [Kiến trúc](../architecture.md) để biết thêm về ranh giới các 
 ## <a id="trien-khai"></a>Triển khai
 
 Docker Compose là cách triển khai production chuẩn cho profile một máy, một worker được hỗ trợ.
-Quy trình `docker run` trực tiếp vẫn phù hợp cho các cài đặt đơn giản.
+Hãy đi theo [Hướng dẫn cài đặt chuẩn](../installation.md) từ bước kiểm tra máy chủ đến Dashboard đã
+xác thực. [Ma trận hỗ trợ cài đặt](../installation.md#support-matrix) ghi rõ bằng chứng cho Windows,
+Linux, macOS và kiến trúc CPU; tài liệu không ngầm tuyên bố hỗ trợ ARM64.
 
-Omni Gateway được thiết kế cho các môi trường triển khai thực tế. Docker là giải pháp được khuyến nghị cho môi trường VPS và máy chủ vì nó giữ runtime cô lập trong khi vẫn lưu trữ bền vững thông tin xác thực và log trên máy chủ host.
+Profile mặc định không cần cơ sở dữ liệu ngoài hoặc Redis, đồng thời lưu toàn bộ dữ liệu ứng dụng
+trong volume `omni-gateway-data`. Mẫu môi trường tối thiểu ghim bản phát hành `1.4.0`; việc cập nhật
+production phải theo [quy trình cập nhật và rollback Compose](../updating.md). Chỉ bật lưu trữ ngoài,
+Team access, proxy, guardrail, cache hoặc telemetry qua `deploy/compose.advanced.yml` sau khi bản cài
+đặt cơ bản đã hoạt động tốt.
 
-### Docker trên VPS
-
-Trước tiên, hãy tạo các thư mục lưu trữ bền vững trên máy chủ host:
-
-```bash
-sudo mkdir -p /opt/omni-gateway/creds /opt/omni-gateway/logs
-```
-
-Khởi chạy dịch vụ:
-
-```bash
-sudo docker run -d \
-  --name omni-gateway \
-  --pull always \
-  --restart unless-stopped \
-  -p 4283:4283 \
-  -v /opt/omni-gateway/creds:/app/backend/data/creds \
-  -v /opt/omni-gateway/logs:/app/backend/data/logs \
-  nguywnben/omni-gateway:1.4.0
-```
-
-Bản phát hành tương tự cũng được xuất bản lên GitHub Packages với định danh `ghcr.io/nguywnben/omni-gateway:1.4.0`. Thẻ `latest` đại diện cho bản phát hành ổn định mới nhất; thẻ `edge` đại diện cho các bản dựng đã xác minh nhưng chưa phát hành từ nhánh `main`. Hãy ghim thẻ phiên bản hoặc digest cụ thể khi cần đảm bảo tính tái lập trong triển khai.
-
-Mở bảng điều khiển tại địa chỉ:
-
-```text
-http://IP_SERVER_CUA_BAN:4283
-```
-
-Trong lần chạy đầu tiên, màn hình thiết lập sẽ kiểm tra quyền ghi dữ liệu, địa chỉ bảng điều khiển, kết nối/cookie và trạng thái cài đặt trước khi cho phép tạo chủ sở hữu. Dự án không có mật khẩu mặc định. Thiết lập trực tiếp trên localhost không cần mã. Trước khi mở một bản cài đặt chưa cấu hình qua tên máy từ xa, hãy đặt `SETUP_TOKEN` riêng, dài ít nhất 24 ký tự rồi khởi động lại dịch vụ; ứng dụng không tự sinh hoặc ghi bí mật này vào log. Mật khẩu chủ sở hữu phải là cụm mật khẩu riêng dài từ 12 đến 256 ký tự.
-
-Mật khẩu quản lý bởi ứng dụng được lưu trữ dưới dạng băm scrypt có thêm muối (salted hash), phiên bảng điều khiển sử dụng cookie HttpOnly và các request SDK công khai xác thực thông qua API key định dạng `sk-ogw-` được tạo tự động. Đối với triển khai không tương tác, hãy cấu hình sẵn `PANEL_PASSWORD` để bỏ qua hoàn toàn màn hình thiết lập.
-
-Container `1.4.0` được phát hành cho kiến trúc `linux/amd64`. Việc xuất bản phiên bản ARM64 tạm thời hoãn lại cho đến khi mọi phụ thuộc của nhà cung cấp, bao gồm stack giao vận Vertex, được xây dựng và kiểm thử hoàn chỉnh với cùng tiêu chuẩn.
-
-Nếu tường lửa của máy chủ đang bật, hãy mở cổng của gateway:
-
-```bash
-sudo ufw allow 4283/tcp
-```
-
-Xem log:
-
-```bash
-sudo docker logs -f omni-gateway
-```
-
-Cập nhật lên image ổn định mới nhất:
-
-```bash
-sudo docker pull nguywnben/omni-gateway:latest
-sudo docker stop omni-gateway
-sudo docker rm omni-gateway
-```
-
-Sau đó khởi động lại container bằng chính lệnh `docker run` ở trên. Các thư mục gắn kết `/opt/omni-gateway` sẽ giữ nguyên thông tin xác thực, cấu hình, dữ liệu sử dụng và log qua các lần cập nhật container.
-
-### Docker Compose
-
-Đối với triển khai dựa trên kho mã nguồn:
-
-```bash
-git clone https://github.com/nguywnben/omni-gateway.git
-cd omni-gateway
-docker compose -f deploy/docker-compose.yml up -d
-```
-
-Profile mặc định không cần cơ sở dữ liệu ngoài hoặc Redis. Compose mặc định sử dụng image
-`nguywnben/omni-gateway:latest` và lưu toàn bộ thư mục dữ liệu ứng dụng trong volume có tên
-`omni-gateway-data`. Đặt `IMAGE=nguywnben/omni-gateway:1.4.0` để ghim bản phát hành
-và `DATA_VOLUME=ten-volume-tuy-chinh` để dùng lại một volume có tên khác. Lệnh
-`docker compose down` thông thường giữ nguyên volume; `docker compose down --volumes` sẽ xóa nó.
-
-Profile mặc định chỉ nhận các thiết lập phổ biến `API_KEY`, `PANEL_PASSWORD`, `SETUP_TOKEN`,
-`LOG_LEVEL` và `HOST_PORT` từ shell hoặc file `.env` ở thư mục gốc. Để trống các giá trị xác thực
-nếu muốn giữ cơ chế tự tạo key và thiết lập trong lần chạy đầu.
-
-Lưu trữ ngoài, OIDC, proxy, chính sách định tuyến, guardrail, cache và telemetry là các thiết lập
-nâng cao có chủ đích. Sau khi chỉ khai báo những giá trị cần dùng trong `.env`, bật lớp này bằng:
-
-```bash
-docker compose -f deploy/docker-compose.yml -f deploy/compose.advanced.yml up -d
-```
+Các script Python native trong `deploy/scripts`, `docker run` trực tiếp, Render và Zeabur chỉ thuộc
+tầng tương thích, không có đầy đủ bằng chứng cài đặt/cập nhật/rollback của đường chuẩn. Image
+production hiện chỉ phát hành cho `linux/amd64`; bản native `linux/arm64` chưa được phát hành vì
+toàn bộ stack phụ thuộc đã khóa chưa có bằng chứng build và runtime tương đương.
 
 ### Kubernetes / Helm (thử nghiệm)
 

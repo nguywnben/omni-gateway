@@ -1,4 +1,5 @@
 @echo off
+REM Compatibility path for native Python installs. Canonical production: docs/installation.md.
 setlocal
 
 set "SCRIPT_DIR=%~dp0"

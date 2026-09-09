@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# Compatibility path for native Python installs. Canonical production: docs/installation.md.
 set -euo pipefail
 
 log() {

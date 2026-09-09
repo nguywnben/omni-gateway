@@ -129,101 +129,21 @@ See [Architecture](docs/architecture.md) for module boundaries, request flow, st
 ## Deployment
 
 Docker Compose is the canonical production deployment path for the supported single-machine,
-single-worker profile. The direct `docker run` workflow remains available for simple installations.
+single-worker profile. Follow the [Canonical installation guide](docs/installation.md) from host
+checks through the first authenticated Dashboard; its
+[Installation support matrix](docs/installation.md#support-matrix) records the verified Windows,
+Linux, macOS, and architecture status without implying unsupported ARM64 coverage.
 
-Omni Gateway is intended for real deployments. Docker is the recommended path for VPS and server environments because it keeps the runtime isolated while preserving credentials and logs on the host.
+The default profile needs no external database or Redis and stores all application data in the
+`omni-gateway-data` named volume. Its minimal environment template pins release `1.4.0`; production
+updates use the encrypted, health-checked [Compose update and rollback guide](docs/updating.md).
+External storage, Team access, proxy, guardrails, cache, and telemetry remain opt-in through
+`deploy/compose.advanced.yml` after the base installation is healthy.
 
-### Docker on a VPS
-
-Create persistent host directories first:
-
-```bash
-sudo mkdir -p /opt/omni-gateway/creds /opt/omni-gateway/logs
-```
-
-Start the service:
-
-```bash
-sudo docker run -d \
-  --name omni-gateway \
-  --pull always \
-  --restart unless-stopped \
-  -p 4283:4283 \
-  -v /opt/omni-gateway/creds:/app/backend/data/creds \
-  -v /opt/omni-gateway/logs:/app/backend/data/logs \
-  nguywnben/omni-gateway:1.4.0
-```
-
-The same release is published to GitHub Packages as `ghcr.io/nguywnben/omni-gateway:1.4.0`. The `latest` tag tracks the newest stable release; `edge` tracks verified but unreleased builds from `main`. Pin a version tag or digest when reproducible deployment matters.
-
-Open the control panel at:
-
-```text
-http://YOUR_SERVER_IP:4283
-```
-
-On first run, the setup screen checks persistent storage, console address, transport/cookie safety, and installation state before it enables owner creation. No default password is shipped. Direct localhost setup needs no token. Before exposing an unconfigured instance through another host name, set a unique `SETUP_TOKEN` of at least 24 characters and restart the service; the application never generates or prints this secret. Owner passwords must be unique passphrases between 12 and 256 characters. A completed preflight is stored without secrets so an interrupted setup can resume safely.
-
-Passwords managed by the application are stored as salted scrypt hashes, control-panel sessions use HttpOnly cookies, and public SDK requests authenticate with the generated `sk-ogw-` API key. For a non-interactive deployment, preconfigure `PANEL_PASSWORD` and skip the setup screen entirely.
-
-The `1.4.0` container is published for `linux/amd64`. ARM64 publication is intentionally paused until every provider dependency, including the Vertex transport stack, can be built and tested with the same contract.
-
-If the server firewall is enabled, allow the gateway port:
-
-```bash
-sudo ufw allow 4283/tcp
-```
-
-View logs:
-
-```bash
-sudo docker logs -f omni-gateway
-```
-
-For a direct `docker run` deployment, first create an encrypted backup and pull an exact release
-rather than a floating tag:
-
-```bash
-sudo docker pull nguywnben/omni-gateway:<version>
-sudo docker stop omni-gateway
-sudo docker rm omni-gateway
-```
-
-Then start the container again with the same mounts and the exact version. The mounted
-`/opt/omni-gateway` directories preserve credentials, configuration, usage data, and logs. The
-automated health-checked rollback workflow applies to the canonical Compose deployment below.
-
-### Docker Compose
-
-For repository-based deployments:
-
-```bash
-git clone https://github.com/nguywnben/omni-gateway.git
-cd omni-gateway
-docker compose -f deploy/docker-compose.yml up -d
-```
-
-The default profile needs no database or Redis. It uses `nguywnben/omni-gateway:latest` by default
-and stores the complete application data directory in the named volume `omni-gateway-data`. Set
-`IMAGE=nguywnben/omni-gateway:1.4.0` to pin this release and
-`DATA_VOLUME=custom-volume-name` to reuse a differently named volume. A normal
-`docker compose down` preserves the volume; `docker compose down --volumes` deletes it.
-
-The default profile accepts only the common controls `API_KEY`, `PANEL_PASSWORD`, `SETUP_TOKEN`,
-`LOG_LEVEL`, and `HOST_PORT` from the shell or a root `.env` file. Leave the authentication values
-empty to retain automatic key generation and first-run setup.
-
-Updates use one dry-run-first command that pins the resolved image ID, creates an encrypted backup,
-checks `/ready`, and automatically restores the previous image and state on failure. Follow the
-[Compose update and rollback guide](docs/updating.md); never replace its version argument with
-`latest` or `edge`.
-
-External storage, OIDC, proxy, routing policy, guardrails, cache, and telemetry are explicit
-advanced controls. After configuring only the values you need in `.env`, enable that layer with:
-
-```bash
-docker compose -f deploy/docker-compose.yml -f deploy/compose.advanced.yml up -d
-```
+Compatibility-only native scripts under `deploy/scripts`, direct `docker run`, Render, and Zeabur
+do not carry the full install/update/rollback evidence of the canonical path. The production image
+is published for `linux/amd64`; native `linux/arm64` publication remains paused until the complete
+locked dependency stack has equivalent build and runtime evidence.
 
 ### Kubernetes / Helm (experimental)
 
