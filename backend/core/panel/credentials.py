@@ -50,6 +50,16 @@ from core.models import (
 )
 from core.ollama import OllamaError
 from core.pool_import import PoolImportError, restore_pool_archive
+from core.provider_connection_diagnostics import (
+    CONNECTION_TEST_TIMEOUT_SECONDS,
+    ConnectionTestDisconnected,
+    ConnectionTestTimedOut,
+    build_connection_test_failure,
+    classify_provider_exception,
+    classify_provider_response,
+    connection_diagnostic,
+    run_bounded_connection_test,
+)
 from core.provider_registry import (
     ANTHROPIC,
     GOOGLE_AI_STUDIO,
@@ -65,7 +75,7 @@ from core.storage_adapter import get_storage_adapter
 from core.utils import CODE_ASSIST_USER_AGENT, verify_panel_token
 from core.xai import XaiError, refresh_xai_oauth_credential
 from core.xai_billing import fetch_xai_billing_usage
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
 from log import log
 
 from .credential_operations import (
@@ -99,6 +109,28 @@ async def _get_available_credential_models(credential_data: dict) -> list[str]:
     provider_id = get_credential_provider(credential_data)
     catalog = await model_catalog_service.get_catalog()
     return [entry.model_id for entry in catalog if provider_id in entry.providers]
+
+
+def _credential_test_failure_response(
+    diagnostic,
+    *,
+    status_code: int,
+    filename: str,
+    provider: str = "",
+    credential_type: object = None,
+    model: str = "",
+) -> JSONResponse:
+    return JSONResponse(
+        status_code=status_code,
+        content=build_connection_test_failure(
+            diagnostic,
+            filename=filename,
+            provider=provider,
+            credential_type=credential_type,
+            model=model,
+            status_code=status_code,
+        ),
+    )
 
 
 @router.post("/upload")
@@ -1317,7 +1349,41 @@ async def test_credential(
     request: CredentialModelTestRequest,
     mode: str = "code_assist",
     _token: str = Depends(verify_panel_token),
+    http_request: Request = None,
 ):
+    """Run one bounded model test and stop provider work after client disconnect."""
+    disconnect_check = http_request.is_disconnected if http_request is not None else None
+    try:
+        return await run_bounded_connection_test(
+            _test_credential_unbounded(filename, request, mode=mode),
+            is_disconnected=disconnect_check,
+            timeout_seconds=CONNECTION_TEST_TIMEOUT_SECONDS,
+        )
+    except ConnectionTestTimedOut:
+        return _credential_test_failure_response(
+            connection_diagnostic("timeout"),
+            status_code=504,
+            filename=filename,
+            model=request.model,
+        )
+    except ConnectionTestDisconnected:
+        return _credential_test_failure_response(
+            connection_diagnostic("cancelled"),
+            status_code=499,
+            filename=filename,
+            model=request.model,
+        )
+
+
+async def _test_credential_unbounded(
+    filename: str,
+    request: CredentialModelTestRequest,
+    *,
+    mode: str,
+):
+    provider_id = ""
+    credential_data: dict = {}
+    test_model = request.model
     try:
         mode = validate_mode(mode)
 
@@ -1342,19 +1408,34 @@ async def test_credential(
         provider_id = get_credential_provider(credential_data)
         try:
             test_model = normalize_model_id(request.model)
-        except ModelPoolError as exc:
-            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        except ModelPoolError:
+            return _credential_test_failure_response(
+                connection_diagnostic("invalid_model"),
+                status_code=400,
+                filename=filename,
+                provider=provider_id,
+                credential_type=credential_data.get("credential_type"),
+                model=request.model,
+            )
 
         available_models = await _get_available_credential_models(credential_data)
         if not available_models:
-            raise HTTPException(
+            return _credential_test_failure_response(
+                connection_diagnostic("invalid_model"),
                 status_code=409,
-                detail="No models are currently available for this credential.",
+                filename=filename,
+                provider=provider_id,
+                credential_type=credential_data.get("credential_type"),
+                model=test_model,
             )
         if test_model not in available_models:
-            raise HTTPException(
+            return _credential_test_failure_response(
+                connection_diagnostic("invalid_model"),
                 status_code=400,
-                detail="The selected model is not available for this credential.",
+                filename=filename,
+                provider=provider_id,
+                credential_type=credential_data.get("credential_type"),
+                model=test_model,
             )
 
         test_request = {
@@ -1565,6 +1646,14 @@ async def test_credential(
                 if status_code == 429
                 else "Model test completed successfully."
             )
+            diagnostic = (
+                classify_provider_response(
+                    status_code,
+                    response.text if hasattr(response, "text") else None,
+                )
+                if status_code == 429
+                else None
+            )
             return JSONResponse(
                 status_code=200,
                 content={
@@ -1575,22 +1664,26 @@ async def test_credential(
                     "provider": provider_id,
                     "credential_type": credential_data.get("credential_type"),
                     "model": test_model,
+                    **({"diagnostic": diagnostic.as_dict()} if diagnostic else {}),
                 },
             )
         else:
             log.warning(f"Credential test failed: {filename} (mode={mode}, status={status_code})")
+            diagnostic = classify_provider_response(
+                status_code,
+                response.text if hasattr(response, "text") else None,
+            )
 
             try:
-                error_text = public_error_detail(response.text if hasattr(response, "text") else "")
-
                 log.error(
-                    f"Credential test error details - file: {filename}, mode: {mode}, status code: {status_code}, error: {error_text}"
+                    "Credential test failed with a normalized provider diagnostic - "
+                    f"file: {filename}, mode: {mode}, status code: {status_code}, "
+                    f"category: {diagnostic.category}, provider code: "
+                    f"{diagnostic.provider_code or 'unavailable'}"
                 )
 
                 error_codes = [status_code]
-                error_messages = {
-                    str(status_code): error_text if error_text else f"HTTP {status_code}"
-                }
+                error_messages = {str(status_code): diagnostic.message}
 
                 await storage_adapter.update_credential_state(
                     filename,
@@ -1602,58 +1695,34 @@ async def test_credential(
             except Exception as e:
                 log.error(f"Failed to save test error message: {e}")
 
-        error_text = public_error_detail(response.text if hasattr(response, "text") else "")
-
-        return JSONResponse(
+        return _credential_test_failure_response(
+            diagnostic,
             status_code=status_code,
-            content={
-                "success": False,
-                "status_code": status_code,
-                "message": f"Model test failed with HTTP {status_code}.",
-                "error": error_text,
-                "filename": filename,
-                "provider": provider_id,
-                "credential_type": credential_data.get("credential_type"),
-                "model": test_model,
-            },
+            filename=filename,
+            provider=provider_id,
+            credential_type=credential_data.get("credential_type"),
+            model=test_model,
         )
 
     except HTTPException:
         raise
-    except (AnthropicError, CodexError, OllamaError, XaiError) as e:
-        return JSONResponse(
-            status_code=e.status_code,
-            content={
-                "success": False,
-                "status_code": e.status_code,
-                "message": "Model test failed.",
-                "error": public_error_detail(e, "Credential model testing failed."),
-                "detail": public_error_detail(e, "Credential model testing failed."),
-                "filename": filename,
-            },
-        )
-    except ValueError as e:
-        return JSONResponse(
-            status_code=400,
-            content={
-                "success": False,
-                "status_code": 400,
-                "message": "Model test failed.",
-                "error": public_error_detail(e, "Credential model testing failed."),
-                "detail": public_error_detail(e, "Credential model testing failed."),
-                "filename": filename,
-            },
-        )
+    except asyncio.CancelledError:
+        raise
     except Exception as e:
-        log.error(f"Failed to test credential {filename}: {e}")
-        return JSONResponse(
-            status_code=500,
-            content={
-                "success": False,
-                "status_code": 500,
-                "message": "Model test failed.",
-                "error": public_error_detail(e, "Credential model testing failed."),
-                "detail": public_error_detail(e, "Credential model testing failed."),
-                "filename": filename,
-            },
+        diagnostic = classify_provider_exception(e)
+        status_code = diagnostic.provider_status or (
+            500 if diagnostic.category == "internal" else 504 if diagnostic.category == "timeout" else 502
+        )
+        log.error(
+            "Credential test raised a normalized exception - "
+            f"file: {filename}, category: {diagnostic.category}, "
+            f"exception: {type(e).__name__}"
+        )
+        return _credential_test_failure_response(
+            diagnostic,
+            status_code=status_code,
+            filename=filename,
+            provider=provider_id,
+            credential_type=credential_data.get("credential_type"),
+            model=test_model,
         )
