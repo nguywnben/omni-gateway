@@ -1,6 +1,7 @@
 from typing import Annotated, Any, Dict, List, Literal, Optional, Union
 
 from pydantic import BaseModel, ConfigDict, Field, SecretStr, WithJsonSchema, model_validator
+from pydantic.json_schema import SkipJsonSchema
 
 
 def model_to_dict(model: BaseModel) -> Dict[str, Any]:
@@ -10,6 +11,14 @@ def model_to_dict(model: BaseModel) -> Dict[str, Any]:
     else:
         # Pydantic v1
         return model.dict(exclude_none=True)
+
+
+def _reject_unknown_input_keys(value: Any, allowed: set[str], label: str) -> Any:
+    if isinstance(value, dict):
+        unknown = set(value) - allowed
+        if unknown:
+            raise ValueError(f"Unknown {label} fields: {', '.join(sorted(unknown))}.")
+    return value
 
 
 # Common Models
@@ -27,36 +36,59 @@ class ModelList(BaseModel):
 
 # OpenAI Models
 class OpenAIToolFunction(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
     name: str
     arguments: str  # JSON string
 
+    @model_validator(mode="before")
+    @classmethod
+    def reject_unknown_fields(cls, value: Any) -> Any:
+        return _reject_unknown_input_keys(value, {"name", "arguments"}, "OpenAI tool function")
+
 
 class OpenAIToolCall(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
     id: str
     type: str = "function"
     function: OpenAIToolFunction
 
+    @model_validator(mode="before")
+    @classmethod
+    def reject_unknown_fields(cls, value: Any) -> Any:
+        return _reject_unknown_input_keys(value, {"id", "type", "function"}, "OpenAI tool call")
+
 
 class OpenAITool(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
     type: str = "function"
     function: Dict[str, Any]
 
+    @model_validator(mode="before")
+    @classmethod
+    def reject_unknown_fields(cls, value: Any) -> Any:
+        value = _reject_unknown_input_keys(value, {"type", "function"}, "OpenAI tool")
+        if isinstance(value, dict) and isinstance(value.get("function"), dict):
+            _reject_unknown_input_keys(
+                value["function"],
+                {"name", "description", "parameters", "strict"},
+                "OpenAI tool definition",
+            )
+        return value
+
 
 class OpenAIChatMessage(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
     role: str
     content: Union[str, List[Dict[str, Any]], None] = None
     reasoning_content: Optional[str] = None
     name: Optional[str] = None
     tool_calls: Optional[List[OpenAIToolCall]] = None
     tool_call_id: Optional[str] = None  # for role="tool"
+
+    @model_validator(mode="before")
+    @classmethod
+    def reject_unknown_fields(cls, value: Any) -> Any:
+        return _reject_unknown_input_keys(
+            value,
+            {"role", "content", "reasoning_content", "name", "tool_calls", "tool_call_id"},
+            "OpenAI message",
+        )
 
     @model_validator(mode="after")
     def validate_translatable_message(self) -> "OpenAIChatMessage":
@@ -89,15 +121,13 @@ class OpenAIChatMessage(BaseModel):
 
 
 class OpenAIChatCompletionRequest(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
     model: str
     messages: List[OpenAIChatMessage]
     stream: bool = False
     temperature: Optional[float] = Field(None, ge=0.0, le=2.0)
     top_p: Optional[float] = Field(None, ge=0.0, le=1.0)
     max_tokens: Optional[int] = Field(None, ge=1)
-    max_completion_tokens: Optional[int] = Field(None, ge=1)
+    max_completion_tokens: SkipJsonSchema[Optional[int]] = Field(None, ge=1)
     stop: Optional[Union[str, List[str]]] = None
     frequency_penalty: Optional[float] = Field(None, ge=-2.0, le=2.0)
     presence_penalty: Optional[float] = Field(None, ge=-2.0, le=2.0)
@@ -107,8 +137,36 @@ class OpenAIChatCompletionRequest(BaseModel):
     top_k: Optional[int] = Field(None, ge=1)
     tools: Optional[List[OpenAITool]] = None
     tool_choice: Optional[Union[str, Dict[str, Any]]] = None
-    reasoning_effort: Optional[str] = None
-    size: Optional[str] = None
+    reasoning_effort: SkipJsonSchema[Optional[str]] = None
+    size: SkipJsonSchema[Optional[str]] = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def reject_unknown_fields(cls, value: Any) -> Any:
+        return _reject_unknown_input_keys(
+            value,
+            {
+                "model",
+                "messages",
+                "stream",
+                "temperature",
+                "top_p",
+                "max_tokens",
+                "max_completion_tokens",
+                "stop",
+                "frequency_penalty",
+                "presence_penalty",
+                "n",
+                "seed",
+                "response_format",
+                "top_k",
+                "tools",
+                "tool_choice",
+                "reasoning_effort",
+                "size",
+            },
+            "OpenAI Chat request",
+        )
 
     @model_validator(mode="after")
     def reject_unsupported_reasoning_control(self) -> "OpenAIChatCompletionRequest":
@@ -118,14 +176,15 @@ class OpenAIChatCompletionRequest(BaseModel):
             )
         return self
 
+    class Config:
+        extra = "allow"
+
 
 ChatCompletionRequest = OpenAIChatCompletionRequest
 
 
 class OpenAIResponsesRequest(BaseModel):
     """Supported subset of the OpenAI Responses create contract."""
-
-    model_config = ConfigDict(extra="forbid")
 
     model: str
     input: Union[str, List[Dict[str, Any]]]
@@ -139,10 +198,36 @@ class OpenAIResponsesRequest(BaseModel):
     parallel_tool_calls: bool = True
     metadata: Optional[Dict[str, str]] = None
     store: bool = False
-    text: Optional[Dict[str, Any]] = None
-    reasoning: Optional[Dict[str, Any]] = None
-    previous_response_id: Optional[str] = None
-    conversation: Optional[Union[str, Dict[str, Any]]] = None
+    text: SkipJsonSchema[Optional[Dict[str, Any]]] = None
+    reasoning: SkipJsonSchema[Optional[Dict[str, Any]]] = None
+    previous_response_id: SkipJsonSchema[Optional[str]] = None
+    conversation: SkipJsonSchema[Optional[Union[str, Dict[str, Any]]]] = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def reject_unknown_fields(cls, value: Any) -> Any:
+        return _reject_unknown_input_keys(
+            value,
+            {
+                "model",
+                "input",
+                "instructions",
+                "stream",
+                "temperature",
+                "top_p",
+                "max_output_tokens",
+                "tools",
+                "tool_choice",
+                "parallel_tool_calls",
+                "metadata",
+                "store",
+                "text",
+                "reasoning",
+                "previous_response_id",
+                "conversation",
+            },
+            "OpenAI Responses request",
+        )
 
     @model_validator(mode="after")
     def validate_translatable_responses_request(self) -> "OpenAIResponsesRequest":
@@ -217,6 +302,9 @@ class OpenAIResponsesRequest(BaseModel):
             return
         raise ValueError(f"Unsupported Responses input item type: {item_type}.")
 
+    class Config:
+        extra = "allow"
+
 
 class OpenAIChatCompletionChoice(BaseModel):
     index: int
@@ -259,45 +347,78 @@ class OpenAIChatCompletionStreamResponse(BaseModel):
 
 # Gemini Models
 class GeminiPart(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
     text: Optional[str] = None
     inlineData: Optional[Dict[str, Any]] = None
     fileData: Optional[Dict[str, Any]] = None
     thought: Optional[bool] = None
-    thoughtSignature: Optional[str] = None
-    functionCall: Optional[Dict[str, Any]] = None
-    functionResponse: Optional[Dict[str, Any]] = None
-    executableCode: Optional[Dict[str, Any]] = None
-    codeExecutionResult: Optional[Dict[str, Any]] = None
+    thoughtSignature: SkipJsonSchema[Optional[str]] = None
+    functionCall: SkipJsonSchema[Optional[Dict[str, Any]]] = None
+    functionResponse: SkipJsonSchema[Optional[Dict[str, Any]]] = None
+    executableCode: SkipJsonSchema[Optional[Dict[str, Any]]] = None
+    codeExecutionResult: SkipJsonSchema[Optional[Dict[str, Any]]] = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def reject_unknown_fields(cls, value: Any) -> Any:
+        return _reject_unknown_input_keys(
+            value,
+            {
+                "text",
+                "inlineData",
+                "fileData",
+                "thought",
+                "thoughtSignature",
+                "functionCall",
+                "functionResponse",
+                "executableCode",
+                "codeExecutionResult",
+            },
+            "Gemini part",
+        )
+
+    class Config:
+        extra = "allow"
 
 
 class GeminiContent(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
     role: str
     parts: List[GeminiPart]
 
+    @model_validator(mode="before")
+    @classmethod
+    def reject_unknown_fields(cls, value: Any) -> Any:
+        return _reject_unknown_input_keys(value, {"role", "parts"}, "Gemini content")
+
 
 class GeminiSystemInstruction(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    role: Optional[str] = None
+    role: SkipJsonSchema[Optional[str]] = None
     parts: List[GeminiPart]
+
+    @model_validator(mode="before")
+    @classmethod
+    def reject_unknown_fields(cls, value: Any) -> Any:
+        return _reject_unknown_input_keys(value, {"role", "parts"}, "Gemini system instruction")
 
 
 class GeminiImageConfig(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    aspectRatio: Optional[str] = (
+    aspect_ratio: Optional[str] = (
         None  # "1:1", "2:3", "3:2", "3:4", "4:3", "4:5", "5:4", "9:16", "16:9", "21:9"
     )
-    imageSize: Optional[str] = None  # "1K", "2K", "4K"
+    image_size: Optional[str] = None  # "1K", "2K", "4K"
+    aspectRatio: SkipJsonSchema[Optional[str]] = None
+    imageSize: SkipJsonSchema[Optional[str]] = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def reject_unknown_fields(cls, value: Any) -> Any:
+        return _reject_unknown_input_keys(
+            value,
+            {"aspect_ratio", "image_size", "aspectRatio", "imageSize"},
+            "Gemini image config",
+        )
 
 
 class GeminiGenerationConfig(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
     temperature: Optional[float] = Field(None, ge=0.0, le=2.0)
     topP: Optional[float] = Field(None, ge=0.0, le=1.0)
     topK: Optional[int] = Field(None, ge=1)
@@ -311,20 +432,49 @@ class GeminiGenerationConfig(BaseModel):
     presencePenalty: Optional[float] = Field(None, ge=-2.0, le=2.0)
     thinkingConfig: Optional[Dict[str, Any]] = None
 
-    responseModalities: Optional[List[str]] = None  # ["TEXT", "IMAGE"]
-    imageConfig: Optional[GeminiImageConfig] = None
+    response_modalities: Optional[List[str]] = None  # ["TEXT", "IMAGE"]
+    image_config: Optional[GeminiImageConfig] = None
+    responseModalities: SkipJsonSchema[Optional[List[str]]] = None
+    imageConfig: SkipJsonSchema[Optional[GeminiImageConfig]] = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def reject_unknown_fields(cls, value: Any) -> Any:
+        return _reject_unknown_input_keys(
+            value,
+            {
+                "temperature",
+                "topP",
+                "topK",
+                "candidateCount",
+                "maxOutputTokens",
+                "stopSequences",
+                "responseMimeType",
+                "responseSchema",
+                "seed",
+                "frequencyPenalty",
+                "presencePenalty",
+                "thinkingConfig",
+                "response_modalities",
+                "image_config",
+                "responseModalities",
+                "imageConfig",
+            },
+            "Gemini generation config",
+        )
 
 
 class GeminiSafetySetting(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
     category: str
     threshold: str
 
+    @model_validator(mode="before")
+    @classmethod
+    def reject_unknown_fields(cls, value: Any) -> Any:
+        return _reject_unknown_input_keys(value, {"category", "threshold"}, "Gemini safety")
+
 
 class GeminiRequest(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
     contents: List[GeminiContent]
     systemInstruction: Optional[GeminiSystemInstruction] = None
     generationConfig: Optional[GeminiGenerationConfig] = None
@@ -332,6 +482,26 @@ class GeminiRequest(BaseModel):
     tools: Optional[List[Dict[str, Any]]] = None
     toolConfig: Optional[Dict[str, Any]] = None
     cachedContent: Optional[str] = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def reject_unknown_fields(cls, value: Any) -> Any:
+        return _reject_unknown_input_keys(
+            value,
+            {
+                "contents",
+                "systemInstruction",
+                "generationConfig",
+                "safetySettings",
+                "tools",
+                "toolConfig",
+                "cachedContent",
+            },
+            "Gemini request",
+        )
+
+    class Config:
+        extra = "allow"
 
 
 class GeminiCandidate(BaseModel):
@@ -359,8 +529,6 @@ class GeminiResponse(BaseModel):
 
 # Claude Models
 class ClaudeContentBlock(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
     type: str  # "text", "image", "tool_use", "tool_result"
     text: Optional[str] = None
     source: Optional[Dict[str, Any]] = None  # for image type
@@ -369,10 +537,32 @@ class ClaudeContentBlock(BaseModel):
     input: Optional[Dict[str, Any]] = None  # for tool_use
     tool_use_id: Optional[str] = None  # for tool_result
     content: Optional[Union[str, List[Dict[str, Any]]]] = None  # for tool_result
-    thinking: Optional[str] = None
-    signature: Optional[str] = None
-    thoughtSignature: Optional[str] = None
-    data: Optional[str] = None
+    thinking: SkipJsonSchema[Optional[str]] = None
+    signature: SkipJsonSchema[Optional[str]] = None
+    thoughtSignature: SkipJsonSchema[Optional[str]] = None
+    data: SkipJsonSchema[Optional[str]] = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def reject_unknown_fields(cls, value: Any) -> Any:
+        return _reject_unknown_input_keys(
+            value,
+            {
+                "type",
+                "text",
+                "source",
+                "id",
+                "name",
+                "input",
+                "tool_use_id",
+                "content",
+                "thinking",
+                "signature",
+                "thoughtSignature",
+                "data",
+            },
+            "Anthropic content block",
+        )
 
     @model_validator(mode="after")
     def validate_translatable_block(self) -> "ClaudeContentBlock":
@@ -417,30 +607,41 @@ class ClaudeContentBlock(BaseModel):
 
 
 class ClaudeMessage(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
     role: str  # "user" or "assistant"
     content: Union[str, List[ClaudeContentBlock]]
 
+    @model_validator(mode="before")
+    @classmethod
+    def reject_unknown_fields(cls, value: Any) -> Any:
+        return _reject_unknown_input_keys(value, {"role", "content"}, "Anthropic message")
+
 
 class ClaudeTool(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
     name: str
     description: Optional[str] = None
     input_schema: Optional[Dict[str, Any]] = None
-    strict: Optional[bool] = None
+    strict: SkipJsonSchema[Optional[bool]] = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def reject_unknown_fields(cls, value: Any) -> Any:
+        return _reject_unknown_input_keys(
+            value,
+            {"name", "description", "input_schema", "strict"},
+            "Anthropic tool",
+        )
 
 
 class ClaudeMetadata(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
     user_id: Optional[str] = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def reject_unknown_fields(cls, value: Any) -> Any:
+        return _reject_unknown_input_keys(value, {"user_id"}, "Anthropic metadata")
 
 
 class ClaudeRequest(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
     model: str
     messages: List[ClaudeMessage]
     max_tokens: int = Field(..., ge=1)
@@ -453,9 +654,37 @@ class ClaudeRequest(BaseModel):
     metadata: Optional[ClaudeMetadata] = None
     tools: Optional[List[ClaudeTool]] = None
     tool_choice: Optional[Union[str, Dict[str, Any]]] = None
-    thinking: Optional[Dict[str, Any]] = None
-    output_config: Optional[Dict[str, Any]] = None
-    size: Optional[str] = None
+    thinking: SkipJsonSchema[Optional[Dict[str, Any]]] = None
+    output_config: SkipJsonSchema[Optional[Dict[str, Any]]] = None
+    size: SkipJsonSchema[Optional[str]] = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def reject_unknown_fields(cls, value: Any) -> Any:
+        return _reject_unknown_input_keys(
+            value,
+            {
+                "model",
+                "messages",
+                "max_tokens",
+                "system",
+                "temperature",
+                "top_p",
+                "top_k",
+                "stop_sequences",
+                "stream",
+                "metadata",
+                "tools",
+                "tool_choice",
+                "thinking",
+                "output_config",
+                "size",
+            },
+            "Anthropic request",
+        )
+
+    class Config:
+        extra = "allow"
 
 
 class ClaudeUsage(BaseModel):
