@@ -1,3 +1,4 @@
+import asyncio
 import os
 
 import config
@@ -17,6 +18,7 @@ from core.models import (
     AuthStartRequest,
     LoginRequest,
     RecoveryRequest,
+    SetupPreflightRequest,
     SetupRequest,
 )
 from core.passwords import hash_password
@@ -42,10 +44,12 @@ from .auth_support import (
     _clear_recovery_failures,
     _client_identity,
 )
-from .setup_security import get_setup_access_policy, verify_setup_access
+from .setup_preflight import SETUP_CHECKPOINT_KEY, build_setup_status, run_setup_preflight
+from .setup_security import validate_owner_password
 from .utils import internal_server_error, validate_mode
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
+_SETUP_CREATION_LOCK = asyncio.Lock()
 
 
 def _management_auth_reference(request: Request) -> str:
@@ -119,10 +123,9 @@ async def recover_local_owner(payload: RecoveryRequest, request: Request):
 
 @router.get("/setup/status")
 async def setup_status(request: Request):
-    """Return whether the control panel still needs first-run setup."""
+    """Return a secret-free first-run state and one next action."""
     try:
         setup_required = not await config.has_password_configured()
-        policy = get_setup_access_policy(request)
         authenticated = False
         session_token = request.cookies.get(PANEL_SESSION_COOKIE)
         if session_token and not setup_required:
@@ -131,12 +134,14 @@ async def setup_status(request: Request):
                 authenticated = True
             except HTTPException:
                 authenticated = False
+        storage = await get_storage_adapter() if setup_required else None
         return JSONResponse(
-            content={
-                "setup_required": setup_required,
-                "setup_token_required": setup_required and policy.token_required,
-                "authenticated": authenticated,
-            }
+            content=await build_setup_status(
+                request,
+                storage,
+                setup_required=setup_required,
+                authenticated=authenticated,
+            )
         )
     except Exception as e:
         log.error(f"Failed to determine setup status: {e}")
@@ -146,33 +151,93 @@ async def setup_status(request: Request):
         ) from e
 
 
+@router.post("/setup/preflight")
+async def setup_preflight(payload: SetupPreflightRequest, request: Request):
+    """Validate first-run deployment inputs and persist a resumable checkpoint."""
+    try:
+        setup_required = not await config.has_password_configured()
+        if not setup_required:
+            return JSONResponse(
+                content=await build_setup_status(
+                    request,
+                    None,
+                    setup_required=False,
+                    authenticated=False,
+                )
+            )
+        storage = await get_storage_adapter()
+        supplied_token = (
+            payload.setup_token.get_secret_value() if payload.setup_token is not None else None
+        )
+        result = await run_setup_preflight(
+            request,
+            storage,
+            supplied_token=supplied_token,
+        )
+        return JSONResponse(
+            status_code=200 if result["state"] != "invalid" else 409, content=result
+        )
+    except HTTPException:
+        raise
+    except Exception as exc:
+        log.error(f"Initial setup preflight failed: {type(exc).__name__}")
+        raise HTTPException(
+            status_code=500,
+            detail="Unable to verify the initial setup environment.",
+        ) from exc
+
+
 @router.post("/setup")
 async def complete_setup(payload: SetupRequest, request: Request):
     """Create the first control-panel password when no password exists yet."""
     try:
-        if await config.has_password_configured():
-            raise HTTPException(status_code=409, detail="Initial setup has already been completed.")
+        async with _SETUP_CREATION_LOCK:
+            if await config.has_password_configured():
+                raise HTTPException(
+                    status_code=409, detail="Initial setup has already been completed."
+                )
 
-        verify_setup_access(request, payload.setup_token)
+            password = payload.password.get_secret_value()
+            confirm_password = (
+                payload.confirm_password.get_secret_value()
+                if payload.confirm_password is not None
+                else password
+            )
+            if password != confirm_password:
+                raise HTTPException(status_code=400, detail="Passwords do not match.")
+            validate_owner_password(password)
 
-        password = payload.password.strip()
-        confirm_password = (payload.confirm_password or payload.password).strip()
+            storage_adapter = await get_storage_adapter()
+            supplied_token = (
+                payload.setup_token.get_secret_value() if payload.setup_token is not None else None
+            )
+            preflight = await run_setup_preflight(
+                request,
+                storage_adapter,
+                supplied_token=supplied_token,
+            )
+            if preflight["state"] == "invalid":
+                status_code = 503 if preflight["next_action"] == "fix_data_permissions" else 409
+                raise HTTPException(
+                    status_code=status_code,
+                    detail="Initial setup preflight failed. Correct the reported issue and retry.",
+                )
 
-        if len(password) < 8:
-            raise HTTPException(status_code=400, detail="Password must be at least 8 characters.")
-
-        if password != confirm_password:
-            raise HTTPException(status_code=400, detail="Passwords do not match.")
-
-        storage_adapter = await get_storage_adapter()
-        await storage_adapter.set_config("panel_password", hash_password(password))
-
-        await config.reload_config()
+            stored = await storage_adapter.set_config("panel_password", hash_password(password))
+            if not stored:
+                raise HTTPException(
+                    status_code=503,
+                    detail="Unable to store the console owner securely. Check data permissions and retry.",
+                )
+            await storage_adapter.delete_config(SETUP_CHECKPOINT_KEY)
+            await config.reload_config()
 
         response = JSONResponse(
             content={
                 "message": "Initial setup completed.",
                 "setup_required": False,
+                "state": "configured",
+                "next_action": "open_dashboard",
             },
         )
         set_panel_session_cookie(
@@ -184,7 +249,7 @@ async def complete_setup(payload: SetupRequest, request: Request):
     except HTTPException:
         raise
     except Exception as e:
-        log.error(f"Initial setup failed: {e}")
+        log.error(f"Initial setup failed: {type(e).__name__}")
         raise HTTPException(
             status_code=500,
             detail="Unable to complete initial setup because of an internal service error.",

@@ -379,9 +379,13 @@ class RecoveryRequest(BaseModel):
 
 
 class SetupRequest(BaseModel):
-    password: str
-    confirm_password: Optional[str] = None
-    setup_token: Optional[str] = None
+    password: SecretStr
+    confirm_password: Optional[SecretStr] = None
+    setup_token: Optional[SecretStr] = None
+
+
+class SetupPreflightRequest(BaseModel):
+    setup_token: Optional[SecretStr] = None
 
 
 class AuthStartRequest(BaseModel):

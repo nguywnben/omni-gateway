@@ -39,7 +39,6 @@ from core.management_audit import (
 from core.metrics import router as metrics_router
 from core.otel_exporter import run_otel_export_loop
 from core.panel import router as panel_router
-from core.panel.setup_security import get_setup_bootstrap_token
 from core.request_context import request_scope
 from core.request_limits import RequestBodyLimitMiddleware, get_max_request_body_bytes
 from core.request_trace import classify_request_protocol
@@ -118,11 +117,6 @@ async def lifespan(app: FastAPI):
             log_config["backup_count"],
         )
         log.info("Configuration cache initialized.")
-        if not await config.has_password_configured() and not os.getenv("SETUP_TOKEN", "").strip():
-            print(
-                "Remote initial setup token: " + get_setup_bootstrap_token(),
-                flush=True,
-            )
     except Exception as e:
         log.critical(f"Failed to initialize the configuration cache: {e}")
         raise RuntimeError("Configuration initialization failed.") from e

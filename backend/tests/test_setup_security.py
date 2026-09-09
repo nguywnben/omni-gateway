@@ -51,13 +51,14 @@ class SetupSecurityTests(unittest.TestCase):
 
     def test_remote_setup_requires_the_configured_token(self):
         request = build_request(client_host="198.51.100.20", hostname="gateway.example.com")
+        configured_token = "one-time-token-with-strong-entropy-123"
 
-        with patch.dict(os.environ, {"SETUP_TOKEN": "one-time-token"}):
+        with patch.dict(os.environ, {"SETUP_TOKEN": configured_token}):
             with self.assertRaises(HTTPException) as context:
                 verify_setup_access(request, "incorrect-token")
 
             self.assertEqual(context.exception.status_code, 403)
-            verify_setup_access(request, "one-time-token")
+            verify_setup_access(request, configured_token)
 
     def test_external_host_through_a_local_proxy_is_not_treated_as_local(self):
         request = build_request(client_host="127.0.0.1", hostname="gateway.example.com")
@@ -66,6 +67,25 @@ class SetupSecurityTests(unittest.TestCase):
             os.environ.pop("SETUP_TOKEN", None)
             self.assertFalse(is_local_setup_request(request))
             self.assertTrue(get_setup_access_policy(request).token_required)
+
+    def test_remote_setup_without_operator_configured_token_fails_closed(self):
+        request = build_request(client_host="198.51.100.20", hostname="gateway.example.com")
+
+        with patch.dict(os.environ, {}, clear=False):
+            os.environ.pop("SETUP_TOKEN", None)
+            with self.assertRaises(HTTPException) as context:
+                verify_setup_access(request, None)
+
+        self.assertEqual(context.exception.status_code, 503)
+
+    def test_remote_setup_rejects_a_weak_operator_token(self):
+        request = build_request(client_host="198.51.100.20", hostname="gateway.example.com")
+
+        with patch.dict(os.environ, {"SETUP_TOKEN": "weak-token"}):
+            with self.assertRaises(HTTPException) as context:
+                verify_setup_access(request, "weak-token")
+
+        self.assertEqual(context.exception.status_code, 503)
 
     def test_trusted_forwarded_client_address_controls_loopback_detection(self):
         request = build_request(
