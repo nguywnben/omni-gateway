@@ -67,8 +67,8 @@ When a protocol field or content type changes:
 4. verify both the direct converter and the public protocol error envelope; and
 5. preserve the immutable R1 compatibility fixture or use the accepted change-control process.
 
-Streaming frame lifecycle, disconnect propagation, timeout ownership, and retry eligibility are
-not defined here; they remain the fixed scope of P2.4.
+Streaming frame lifecycle, disconnect propagation, timeout ownership, retry eligibility, and
+bounded aggregation are defined by the separate [streaming lifecycle contract](streaming-lifecycle.md).
 
 ## Authoritative references
 

@@ -6,9 +6,9 @@
 - Active plan: `PROD-SELFHOST-R1`
 - Target: production-quality self-hosting for one person or a trusted team, not enterprise service
   operation.
-- Progress: **15/36 implementation tasks**; Phase 2 is in progress (3/6).
-- Completed: **P2.3 — Cross-protocol contract corpus**.
-- Next: **P2.4 — Streaming, cancellation, timeout, and retry semantics**. Do not begin it until a
+- Progress: **16/36 implementation tasks**; Phase 2 is in progress (4/6).
+- Completed: **P2.4 — Streaming, cancellation, timeout, and retry semantics**.
+- Next: **P2.5 — Routing, fallback, cooldown, and health**. Do not begin it until a
   new user request to continue the fixed plan.
 - Supported runtime today: standalone, one worker, one replica.
 - Redis coordination, multi-replica HA, and Helm are experimental and no longer R1 release blockers.
@@ -49,6 +49,13 @@ Do not push unless the user requests it.
 
 ## Latest Evidence
 
+- `docs/evidence/p2.4-streaming-lifecycle.md`
+- All six public streaming surfaces now close nested provider resources on disconnect, suppress
+  retry after model output, require terminal events before success, preserve heartbeat/UTF-8/SSE
+  framing, and enforce 1 MiB frame plus 8 MiB aggregation ceilings.
+- Cancelled and failed HTTP 200 streams now release quota reservations without fallback commit and
+  persist one truthful trace outcome. Focused fault injection covers timeout, partial EOF,
+  midstream errors, anti-truncation, and each protocol adapter.
 - `docs/evidence/p2.3-cross-protocol-contract-corpus.md`
 - Five advertised ingress families now share one versioned feature matrix and request/response
   golden corpora for text, images, system instructions, tools, structured output, reasoning,

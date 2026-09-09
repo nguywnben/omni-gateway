@@ -54,6 +54,9 @@ All notable user-facing changes are documented in this file. Omni Gateway follow
 
 ### Changed
 
+- Public streaming now closes nested provider resources on disconnect, suppresses retries after
+  model output begins, requires terminal events before success accounting, preserves heartbeat and
+  split UTF-8 framing, bounds frame/aggregation memory, and settles quota and request traces once.
 - Public inference request models now reject unknown or untranslatable semantics with native
   protocol errors instead of silently dropping fields; translated responses preserve signed
   reasoning, cached/reasoning token accounting, and incomplete/safety finish states.
