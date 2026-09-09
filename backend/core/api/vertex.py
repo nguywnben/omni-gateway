@@ -623,9 +623,7 @@ def _vertex_stream_error_response(status_code: int, message: str) -> Response:
         504: "DEADLINE_EXCEEDED",
     }.get(status_code, "BAD_GATEWAY")
     return Response(
-        content=json.dumps(
-            {"error": {"code": status_code, "message": message, "status": status}}
-        ),
+        content=json.dumps({"error": {"code": status_code, "message": message, "status": status}}),
         status_code=status_code,
         media_type="application/json",
     )
@@ -679,9 +677,7 @@ async def stream_request(
         if not recaptcha_token:
             if attempt >= max_retries:
                 _trace_vertex_stream_failure(model, 401)
-                yield _vertex_stream_error_response(
-                    401, "Could not fetch reCAPTCHA token"
-                )
+                yield _vertex_stream_error_response(401, "Could not fetch reCAPTCHA token")
                 return
             await asyncio.sleep(1)
             continue
@@ -772,16 +768,23 @@ async def stream_request(
                     buffer = b""
                     async for raw_chunk in streamer:
                         if raw_chunk:
-                            if (
-                                len(buffer) + len(raw_chunk)
-                                > _MAX_VERTEX_STREAM_BUFFER_BYTES
-                            ):
+                            if len(buffer) + len(raw_chunk) > _MAX_VERTEX_STREAM_BUFFER_BYTES:
                                 raise UpstreamStreamProtocolError(
                                     "Vertex upstream stream frame exceeds "
                                     f"{_MAX_VERTEX_STREAM_BUFFER_BYTES} bytes"
                                 )
                             buffer += raw_chunk
-                            text = buffer.decode("utf-8", errors="replace")
+                            try:
+                                text = buffer.decode("utf-8")
+                            except UnicodeDecodeError as exc:
+                                if (
+                                    exc.end == len(buffer)
+                                    and exc.reason == "unexpected end of data"
+                                ):
+                                    continue
+                                raise UpstreamStreamProtocolError(
+                                    "Vertex upstream stream contains invalid UTF-8"
+                                ) from exc
                             log.debug(f"[VERTEX STREAM] raw buffer: {text[:500]}")
                             last_end = 0
                             for obj, end_pos in _parse_json_objects(text):

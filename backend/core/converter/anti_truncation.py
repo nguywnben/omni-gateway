@@ -244,9 +244,7 @@ class AntiTruncationStreamProcessor:
                             if content:
                                 content_bytes = len(content.encode("utf-8"))
                                 if (
-                                    self.collected_bytes
-                                    + chunk_buffer_bytes
-                                    + content_bytes
+                                    self.collected_bytes + chunk_buffer_bytes + content_bytes
                                     > MAX_ANTI_TRUNCATION_BUFFER_BYTES
                                 ):
                                     raise RuntimeError(

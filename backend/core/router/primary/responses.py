@@ -330,9 +330,7 @@ async def _iter_chat_events(
                     f"OpenAI SSE frame exceeds {_MAX_SSE_FRAME_BYTES} bytes"
                 )
         if buffer.strip() or not terminal_received:
-            raise UpstreamStreamProtocolError(
-                "OpenAI chat stream ended before its terminal event"
-            )
+            raise UpstreamStreamProtocolError("OpenAI chat stream ended before its terminal event")
     finally:
         await close_async_iterator(body)
 

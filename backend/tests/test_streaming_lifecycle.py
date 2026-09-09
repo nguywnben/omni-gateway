@@ -143,30 +143,16 @@ class StreamingLifecycleTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_vertex_stream_does_not_succeed_or_retry_after_partial_failure(self):
         envelope = json.dumps(
-            {
-                "results": [
-                    {
-                        "data": {
-                            "candidates": [
-                                {"content": {"parts": [{"text": "partial"}]}}
-                            ]
-                        }
-                    }
-                ]
-            }
+            {"results": [{"data": {"candidates": [{"content": {"parts": [{"text": "partial"}]}}]}}]}
         ).encode()
         post = AsyncMock(
-            return_value=_FakeWreqResponse(
-                [envelope], error=TimeoutError("upstream stalled")
-            )
+            return_value=_FakeWreqResponse([envelope], error=TimeoutError("upstream stalled"))
         )
         success = AsyncMock()
 
         with (
             patch.object(vertex, "WREQ_AVAILABLE", True),
-            patch.object(
-                vertex, "get_upstream_timeout_seconds", AsyncMock(return_value=30)
-            ),
+            patch.object(vertex, "get_upstream_timeout_seconds", AsyncMock(return_value=30)),
             patch.object(vertex, "fetch_recaptcha_token", AsyncMock(return_value="token")),
             patch.object(vertex, "_get_batch_graphql_url", return_value="https://invalid"),
             patch.object(vertex.wreq, "post", post),
@@ -174,9 +160,7 @@ class StreamingLifecycleTests(unittest.IsolatedAsyncioTestCase):
         ):
             chunks = [
                 chunk
-                async for chunk in vertex.stream_request(
-                    {"model": "gemini-test", "request": {}}
-                )
+                async for chunk in vertex.stream_request({"model": "gemini-test", "request": {}})
             ]
 
         post.assert_awaited_once()
@@ -203,9 +187,7 @@ class StreamingLifecycleTests(unittest.IsolatedAsyncioTestCase):
 
         with (
             patch.object(vertex, "WREQ_AVAILABLE", True),
-            patch.object(
-                vertex, "get_upstream_timeout_seconds", AsyncMock(return_value=30)
-            ),
+            patch.object(vertex, "get_upstream_timeout_seconds", AsyncMock(return_value=30)),
             patch.object(vertex, "fetch_recaptcha_token", AsyncMock(return_value="token")),
             patch.object(vertex, "_get_batch_graphql_url", return_value="https://invalid"),
             patch.object(vertex.wreq, "post", post),
@@ -213,14 +195,49 @@ class StreamingLifecycleTests(unittest.IsolatedAsyncioTestCase):
         ):
             chunks = [
                 chunk
-                async for chunk in vertex.stream_request(
-                    {"model": "gemini-test", "request": {}}
-                )
+                async for chunk in vertex.stream_request({"model": "gemini-test", "request": {}})
             ]
 
         self.assertEqual(len(chunks), 1)
         self.assertNotIsInstance(chunks[0], Response)
         success.assert_awaited_once()
+
+    async def test_vertex_stream_preserves_utf8_split_between_transport_chunks(self):
+        envelope = json.dumps(
+            {
+                "results": [
+                    {
+                        "data": {
+                            "candidates": [
+                                {
+                                    "content": {"parts": [{"text": "Tiếng Việt"}]},
+                                    "finishReason": "STOP",
+                                }
+                            ]
+                        }
+                    }
+                ]
+            },
+            ensure_ascii=False,
+        ).encode("utf-8")
+        split_at = envelope.index("ế".encode("utf-8")) + 1
+        post = AsyncMock(return_value=_FakeWreqResponse([envelope[:split_at], envelope[split_at:]]))
+
+        with (
+            patch.object(vertex, "WREQ_AVAILABLE", True),
+            patch.object(vertex, "get_upstream_timeout_seconds", AsyncMock(return_value=30)),
+            patch.object(vertex, "fetch_recaptcha_token", AsyncMock(return_value="token")),
+            patch.object(vertex, "_get_batch_graphql_url", return_value="https://invalid"),
+            patch.object(vertex.wreq, "post", post),
+            patch("core.api.utils.record_unassigned_api_call_success", AsyncMock()),
+        ):
+            chunks = [
+                chunk
+                async for chunk in vertex.stream_request({"model": "gemini-test", "request": {}})
+            ]
+
+        self.assertEqual(len(chunks), 1)
+        self.assertIn("Tiếng Việt", chunks[0])
 
     async def test_vertex_stream_rejects_oversized_unframed_buffer(self):
         post = AsyncMock(return_value=_FakeWreqResponse([b"x" * 17]))
@@ -228,9 +245,7 @@ class StreamingLifecycleTests(unittest.IsolatedAsyncioTestCase):
 
         with (
             patch.object(vertex, "WREQ_AVAILABLE", True),
-            patch.object(
-                vertex, "get_upstream_timeout_seconds", AsyncMock(return_value=30)
-            ),
+            patch.object(vertex, "get_upstream_timeout_seconds", AsyncMock(return_value=30)),
             patch.object(vertex, "_MAX_VERTEX_STREAM_BUFFER_BYTES", 16),
             patch.object(vertex, "fetch_recaptcha_token", AsyncMock(return_value="token")),
             patch.object(vertex, "_get_batch_graphql_url", return_value="https://invalid"),
@@ -240,9 +255,7 @@ class StreamingLifecycleTests(unittest.IsolatedAsyncioTestCase):
         ):
             chunks = [
                 chunk
-                async for chunk in vertex.stream_request(
-                    {"model": "gemini-test", "request": {}}
-                )
+                async for chunk in vertex.stream_request({"model": "gemini-test", "request": {}})
             ]
 
         self.assertEqual(post.await_count, 4)
@@ -263,9 +276,7 @@ class StreamingLifecycleTests(unittest.IsolatedAsyncioTestCase):
 
             return chunks()
 
-        chunks, record_error, record_success = await _collect_primary_stream(
-            fake_stream_post_async
-        )
+        chunks, record_error, record_success = await _collect_primary_stream(fake_stream_post_async)
 
         self.assertEqual(stream_calls, 1)
         self.assertEqual(chunks[0][:5], "data:")
@@ -303,9 +314,7 @@ class StreamingLifecycleTests(unittest.IsolatedAsyncioTestCase):
 
             return chunks()
 
-        chunks, record_error, record_success = await _collect_primary_stream(
-            fake_stream_post_async
-        )
+        chunks, record_error, record_success = await _collect_primary_stream(fake_stream_post_async)
 
         self.assertEqual(stream_calls, 1)
         self.assertIsInstance(chunks[-1], Response)
@@ -328,9 +337,7 @@ class StreamingLifecycleTests(unittest.IsolatedAsyncioTestCase):
 
             return chunks()
 
-        chunks, record_error, record_success = await _collect_primary_stream(
-            fake_stream_post_async
-        )
+        chunks, record_error, record_success = await _collect_primary_stream(fake_stream_post_async)
 
         self.assertEqual(stream_calls, 2)
         self.assertEqual(
@@ -365,12 +372,7 @@ class StreamingLifecycleTests(unittest.IsolatedAsyncioTestCase):
                 yield b"67890"
 
         with self.assertRaisesRegex(UpstreamStreamProtocolError, "exceeds"):
-            _ = [
-                line
-                async for line in iter_bounded_lines(
-                    FakeResponse(), max_line_bytes=8
-                )
-            ]
+            _ = [line async for line in iter_bounded_lines(FakeResponse(), max_line_bytes=8)]
 
     async def test_prefetched_error_closes_source_iterator(self):
         closed = False
