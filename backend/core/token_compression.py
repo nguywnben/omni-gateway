@@ -140,7 +140,10 @@ def compress_gemini_request(
     request: Dict[str, Any], settings: CompressionSettings
 ) -> CompressionResult:
     """Prune an old conversation prefix while preserving recent complete turns."""
-    original_estimate = estimate_input_tokens(request)
+    try:
+        original_estimate = estimate_input_tokens(request)
+    except Exception:
+        return _unchanged_result(request, 0, "estimation_failed", settings)
     if not settings.enabled:
         return _unchanged_result(request, original_estimate, "disabled", settings)
     if original_estimate <= settings.threshold_tokens:
@@ -170,27 +173,47 @@ def compress_gemini_request(
             estimate_cache[cut_index] = estimate_input_tokens(candidate)
         return estimate_cache[cut_index]
 
-    selected_cut = cut_candidates[-1]
-    selected_estimate = estimate_after_cut(selected_cut)
-    low = 0
-    high = len(cut_candidates) - 1
-    while low <= high:
-        middle = (low + high) // 2
-        cut_index = cut_candidates[middle]
-        candidate_estimate = estimate_after_cut(cut_index)
-        if candidate_estimate <= settings.target_tokens:
-            selected_cut = cut_index
-            selected_estimate = candidate_estimate
-            high = middle - 1
-        else:
-            low = middle + 1
+    try:
+        selected_cut = cut_candidates[-1]
+        selected_estimate = estimate_after_cut(selected_cut)
+        low = 0
+        high = len(cut_candidates) - 1
+        while low <= high:
+            middle = (low + high) // 2
+            cut_index = cut_candidates[middle]
+            candidate_estimate = estimate_after_cut(cut_index)
+            if candidate_estimate <= settings.target_tokens:
+                selected_cut = cut_index
+                selected_estimate = candidate_estimate
+                high = middle - 1
+            else:
+                low = middle + 1
+    except Exception:
+        return _unchanged_result(request, original_estimate, "estimation_failed", settings)
 
     if selected_estimate >= original_estimate:
         return _unchanged_result(request, original_estimate, "no_savings", settings)
 
     selected_source = dict(request)
     selected_source["contents"] = contents[selected_cut:]
-    selected_request = copy.deepcopy(selected_source)
+    try:
+        selected_request = copy.deepcopy(selected_source)
+        selected_contents = selected_request.get("contents")
+        preserved_fields = {
+            key: value for key, value in selected_request.items() if key != "contents"
+        }
+        original_fields = {key: value for key, value in request.items() if key != "contents"}
+        invariants_hold = (
+            selected_request.keys() == request.keys()
+            and preserved_fields == original_fields
+            and selected_contents == contents[selected_cut:]
+            and bool(selected_contents)
+            and selected_contents[-1] == contents[-1]
+        )
+    except Exception:
+        invariants_hold = False
+    if not invariants_hold:
+        return _unchanged_result(request, original_estimate, "invariant_failed", settings)
 
     return CompressionResult(
         request=selected_request,

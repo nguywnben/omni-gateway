@@ -5,6 +5,7 @@ from __future__ import annotations
 import sys
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 BACKEND_DIR = Path(__file__).resolve().parents[1]
 if str(BACKEND_DIR) not in sys.path:
@@ -177,6 +178,65 @@ class TokenCompressionTests(unittest.TestCase):
         }
 
         self.assertGreater(estimate_input_tokens(structured), estimate_input_tokens(plain))
+
+    def test_estimator_handles_deep_json_without_recursion_failure(self):
+        nested: dict[str, object] = {"text": "leaf"}
+        for _ in range(2_000):
+            nested = {"nested": nested}
+
+        self.assertGreater(estimate_input_tokens(nested), 2_000)
+
+    def test_estimation_failure_preserves_the_original_request(self):
+        payload: dict[str, object] = {"contents": []}
+        payload["cycle"] = payload
+
+        result = compress_gemini_request(
+            payload,
+            CompressionSettings(
+                enabled=True,
+                threshold_tokens=128,
+                target_tokens=64,
+                min_recent_turns=1,
+            ),
+        )
+
+        self.assertFalse(result.applied)
+        self.assertIs(result.request, payload)
+        self.assertEqual(result.reason, "estimation_failed")
+        self.assertEqual(result.original_estimated_tokens, 0)
+        self.assertEqual(result.final_estimated_tokens, 0)
+
+    def test_candidate_estimation_failure_falls_back_to_uncompressed_history(self):
+        contents = [
+            text_content("user", "old request " + "x" * 300),
+            text_content("model", "old answer " + "y" * 300),
+            text_content("user", "current request " + "z" * 300),
+        ]
+        payload = {
+            "systemInstruction": {"parts": [{"text": "Never remove this."}]},
+            "contents": contents,
+            "tools": [{"functionDeclarations": [{"name": "lookup"}]}],
+        }
+
+        with patch(
+            "core.token_compression.estimate_input_tokens",
+            side_effect=[1_000, RuntimeError("synthetic estimator failure")],
+        ):
+            result = compress_gemini_request(
+                payload,
+                CompressionSettings(
+                    enabled=True,
+                    threshold_tokens=128,
+                    target_tokens=64,
+                    min_recent_turns=1,
+                ),
+            )
+
+        self.assertFalse(result.applied)
+        self.assertIs(result.request, payload)
+        self.assertEqual(result.reason, "estimation_failed")
+        self.assertEqual(result.original_estimated_tokens, 1_000)
+        self.assertEqual(result.final_estimated_tokens, 1_000)
 
 
 if __name__ == "__main__":

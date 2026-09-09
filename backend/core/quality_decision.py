@@ -16,6 +16,8 @@ COMPRESSION_REASONS = frozenset(
         "minimum_history",
         "no_safe_boundary",
         "no_savings",
+        "estimation_failed",
+        "invariant_failed",
         "target_reached",
         "minimum_history_reached",
     }

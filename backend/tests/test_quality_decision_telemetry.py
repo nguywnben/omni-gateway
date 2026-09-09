@@ -49,6 +49,18 @@ class QualityDecisionTelemetryTests(unittest.TestCase):
         self.assertEqual(decision["quality_profile"], "unavailable")
         self.assertEqual(decision["compression_reason"], "unknown")
 
+    def test_fail_open_compression_reasons_are_allowlisted(self):
+        for reason in ("estimation_failed", "invariant_failed"):
+            with self.subTest(reason=reason):
+                decision = normalize_quality_decision(
+                    {
+                        "quality_profile": "balanced",
+                        "compression_reason": reason,
+                    }
+                )
+
+                self.assertEqual(decision["compression_reason"], reason)
+
     def test_generation_trace_metadata_is_allowlisted_and_prompt_free(self):
         metadata = _generation_trace_metadata(
             provider="google_ai_studio",
