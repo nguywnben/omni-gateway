@@ -512,6 +512,17 @@ def _stream_event_is_heartbeat(chunk: Any) -> bool:
     return text.lstrip().startswith(":")
 
 
+def _normalize_sse_frame(chunk: Any) -> Any:
+    if not isinstance(chunk, (str, bytes)):
+        return chunk
+    marker = chunk.lstrip()
+    prefixes = (b"data:", b":") if isinstance(chunk, bytes) else ("data:", ":")
+    if not marker.startswith(prefixes):
+        return chunk
+    newline = b"\n\n" if isinstance(chunk, bytes) else "\n\n"
+    return chunk.rstrip() + newline
+
+
 def _normalize_model_candidates(
     body: Dict[str, Any],
     model_candidates: Optional[List[str]],
@@ -859,7 +870,7 @@ async def _stream_request_upstream(
                         return
                 else:
                     if _stream_event_is_heartbeat(chunk):
-                        yield chunk
+                        yield _normalize_sse_frame(chunk)
                         continue
                     if isinstance(chunk, (str, bytes)) and not chunk.strip():
                         continue
@@ -884,6 +895,8 @@ async def _stream_request_upstream(
                         chunk = ollama_stream_line_to_gemini(chunk)
                         if not chunk:
                             continue
+
+                    chunk = _normalize_sse_frame(chunk)
 
                     if not received_content:
                         received_content = True

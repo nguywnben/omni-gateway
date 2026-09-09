@@ -310,7 +310,13 @@ class StreamingLifecycleTests(unittest.IsolatedAsyncioTestCase):
         )
 
         self.assertEqual(stream_calls, 2)
-        self.assertEqual(chunks, [": keep-alive", 'data: {"candidates":[{"finishReason":"STOP"}]}'])
+        self.assertEqual(
+            chunks,
+            [
+                ": keep-alive\n\n",
+                'data: {"candidates":[{"finishReason":"STOP"}]}\n\n',
+            ],
+        )
         record_error.assert_awaited_once()
         record_success.assert_awaited_once()
 
