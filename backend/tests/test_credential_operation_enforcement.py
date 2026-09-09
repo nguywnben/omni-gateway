@@ -16,10 +16,43 @@ if str(BACKEND_DIR) not in sys.path:
 
 from core.models import CredentialModelTestRequest, CredFileActionRequest
 from core.panel.credential_operations import verify_credential_common
-from core.panel.credentials import creds_action, download_cred_file, test_credential
+from core.panel.credentials import (
+    creds_action,
+    download_cred_file,
+    get_credential_models,
+    test_credential,
+)
 
 
 class CredentialOperationEnforcementTests(unittest.IsolatedAsyncioTestCase):
+    async def test_unknown_provider_cannot_reach_model_discovery(self):
+        storage = AsyncMock()
+        storage.get_credential.return_value = {
+            "provider": "must-not-leak-provider",
+            "credential_type": "api_key",
+            "api_key": "must-not-leak",
+        }
+
+        with (
+            patch(
+                "core.panel.credentials.get_storage_adapter",
+                AsyncMock(return_value=storage),
+            ),
+            patch(
+                "core.panel.credentials._get_available_credential_models",
+                AsyncMock(),
+            ) as discover,
+        ):
+            response = await get_credential_models("unknown.json", token="session", mode="provider")
+
+        body = json.loads(response.body)
+        self.assertEqual(response.status_code, 422)
+        self.assertEqual(body["error"]["code"], "credential_operation_unsupported")
+        self.assertEqual(body["error"]["operation"], "model_discovery")
+        self.assertEqual(body["error"]["variant_id"], "unknown")
+        self.assertNotIn("must-not-leak", response.body.decode())
+        discover.assert_not_awaited()
+
     async def test_unknown_provider_cannot_be_deleted_by_a_crafted_request(self):
         storage = AsyncMock()
         storage.get_credential.return_value = {

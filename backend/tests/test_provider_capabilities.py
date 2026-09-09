@@ -19,6 +19,7 @@ from core.provider_registry import (
     GOOGLE_AI_STUDIO,
     GOOGLE_ANTIGRAVITY,
     GROK,
+    INFERENCE_PROTOCOLS,
     MODEL_SUPPORT_DECLARED,
     MODEL_SUPPORT_INFERRED,
     MODEL_SUPPORT_UNSUPPORTED,
@@ -41,6 +42,41 @@ from core.provider_registry import (
 
 
 class ProviderCapabilityTests(unittest.TestCase):
+    def test_every_advertised_variant_matches_the_production_capability_matrix(self):
+        common = {
+            "add",
+            "verify",
+            "test",
+            "model_discovery",
+            "disable",
+            "export",
+            "delete",
+            "toggle",
+        }
+        oauth = common | {"refresh"}
+        expected_operations = {
+            GOOGLE_ANTIGRAVITY: oauth | {"quota", "credit_mode"},
+            GOOGLE_AI_STUDIO: common,
+            GROK: oauth | {"quota"},
+            XAI_CONSOLE: common,
+            CODEX: oauth | {"quota"},
+            OPENAI_PLATFORM: common,
+            CLAUDE_CODE: oauth,
+            CLAUDE_PLATFORM: common,
+            OLLAMA: common,
+        }
+
+        variants = list_credential_variant_capabilities()
+
+        self.assertEqual(len(variants), len(expected_operations))
+        for variant in variants:
+            with self.subTest(variant=variant["variant_id"]):
+                self.assertEqual(
+                    set(variant["operations"]),
+                    expected_operations[variant["variant_id"]],
+                )
+                self.assertEqual(set(variant["inference_protocols"]), INFERENCE_PROTOCOLS)
+
     def test_every_console_credential_variant_declares_operations(self):
         variants = list_credential_variant_capabilities()
 
@@ -64,15 +100,25 @@ class ProviderCapabilityTests(unittest.TestCase):
         )
 
     def test_common_operations_are_conservative_and_variant_specific(self):
-        common = {"verify", "test", "toggle", "delete", "export"}
+        common = {
+            "add",
+            "verify",
+            "test",
+            "model_discovery",
+            "disable",
+            "toggle",
+            "delete",
+            "export",
+        }
+        oauth = common | {"refresh"}
         expected = {
-            GOOGLE_ANTIGRAVITY: common | {"quota", "credit_mode"},
+            GOOGLE_ANTIGRAVITY: oauth | {"quota", "credit_mode"},
             GOOGLE_AI_STUDIO: common,
-            GROK: common | {"quota"},
+            GROK: oauth | {"quota"},
             XAI_CONSOLE: common,
-            CODEX: common | {"quota"},
+            CODEX: oauth | {"quota"},
             OPENAI_PLATFORM: common,
-            CLAUDE_CODE: common,
+            CLAUDE_CODE: oauth,
             CLAUDE_PLATFORM: common,
             OLLAMA: common,
         }

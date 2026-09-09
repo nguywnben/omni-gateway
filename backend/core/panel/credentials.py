@@ -175,6 +175,14 @@ async def get_credential_models(
         if not credential_data:
             raise HTTPException(status_code=404, detail="Credential does not exist.")
 
+        rejection = reject_unsupported_credential_operation(
+            credential_data,
+            "model_discovery",
+            mode=mode,
+        )
+        if rejection:
+            return rejection
+
         model_ids = await _get_available_credential_models(credential_data)
         return JSONResponse(
             content={

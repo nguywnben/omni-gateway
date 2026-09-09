@@ -14,6 +14,7 @@ if str(BACKEND_DIR) not in sys.path:
 from core.panel.providers.catalog import get_provider_catalog, router
 from core.provider_registry import (
     CREDENTIAL_OPERATIONS,
+    INFERENCE_PROTOCOLS,
     list_credential_variant_capabilities,
     list_provider_capabilities,
 )
@@ -28,6 +29,8 @@ class ProviderCatalogRouteTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(body["providers"], list_provider_capabilities())
         self.assertEqual(body["credential_variants"], list_credential_variant_capabilities())
         self.assertEqual(body["operation_vocabulary"], sorted(CREDENTIAL_OPERATIONS))
+        self.assertEqual(body["inference_protocol_vocabulary"], sorted(INFERENCE_PROTOCOLS))
+        self.assertEqual(body["schema_version"], 2)
 
     async def test_catalog_route_remains_authenticated_and_typed(self):
         route = next(route for route in router.routes if route.path == "/api/providers")

@@ -25,9 +25,13 @@ MODEL_SUPPORT_INFERRED = 1
 MODEL_SUPPORT_DECLARED = 2
 CREDENTIAL_OPERATIONS = frozenset(
     {
+        "add",
         "verify",
         "test",
+        "refresh",
         "quota",
+        "model_discovery",
+        "disable",
         "refresh_identity",
         "toggle",
         "delete",
@@ -36,7 +40,26 @@ CREDENTIAL_OPERATIONS = frozenset(
         "preview_channel",
     }
 )
-_COMMON_CREDENTIAL_OPERATIONS = ("verify", "test", "toggle", "delete", "export")
+INFERENCE_PROTOCOLS = frozenset(
+    {
+        "anthropic_messages",
+        "gemini_native",
+        "openai_chat_completions",
+        "openai_responses",
+        "vertex",
+    }
+)
+_COMMON_CREDENTIAL_OPERATIONS = (
+    "add",
+    "verify",
+    "test",
+    "model_discovery",
+    "disable",
+    "export",
+    "delete",
+    "toggle",
+)
+_COMMON_INFERENCE_PROTOCOLS = tuple(sorted(INFERENCE_PROTOCOLS))
 
 _PROVIDER_ALIASES = {
     "primary": GOOGLE_ANTIGRAVITY,
@@ -134,6 +157,7 @@ class CredentialVariantCapabilities:
     display_name: str
     credential_type: str
     operations: tuple[str, ...]
+    inference_protocols: tuple[str, ...] = _COMMON_INFERENCE_PROTOCOLS
 
     def supports_operation(self, operation: Any) -> bool:
         return isinstance(operation, str) and operation in self.operations
@@ -141,6 +165,7 @@ class CredentialVariantCapabilities:
     def to_dict(self) -> Dict[str, Any]:
         value = asdict(self)
         value["operations"] = list(self.operations)
+        value["inference_protocols"] = list(self.inference_protocols)
         return value
 
 
@@ -189,7 +214,7 @@ _CREDENTIAL_VARIANT_CAPABILITIES = {
         provider_id=GOOGLE_ANTIGRAVITY,
         display_name=_PROVIDER_NAMES[GOOGLE_ANTIGRAVITY],
         credential_type="oauth",
-        operations=(*_COMMON_CREDENTIAL_OPERATIONS, "quota", "credit_mode"),
+        operations=(*_COMMON_CREDENTIAL_OPERATIONS, "refresh", "quota", "credit_mode"),
     ),
     GOOGLE_AI_STUDIO: CredentialVariantCapabilities(
         variant_id=GOOGLE_AI_STUDIO,
@@ -203,7 +228,7 @@ _CREDENTIAL_VARIANT_CAPABILITIES = {
         provider_id=XAI,
         display_name=_CREDENTIAL_PROVIDER_NAMES[GROK],
         credential_type="oauth",
-        operations=(*_COMMON_CREDENTIAL_OPERATIONS, "quota"),
+        operations=(*_COMMON_CREDENTIAL_OPERATIONS, "refresh", "quota"),
     ),
     XAI_CONSOLE: CredentialVariantCapabilities(
         variant_id=XAI_CONSOLE,
@@ -217,7 +242,7 @@ _CREDENTIAL_VARIANT_CAPABILITIES = {
         provider_id=OPENAI,
         display_name=_CREDENTIAL_PROVIDER_NAMES[CODEX],
         credential_type="oauth",
-        operations=(*_COMMON_CREDENTIAL_OPERATIONS, "quota"),
+        operations=(*_COMMON_CREDENTIAL_OPERATIONS, "refresh", "quota"),
     ),
     OPENAI_PLATFORM: CredentialVariantCapabilities(
         variant_id=OPENAI_PLATFORM,
@@ -231,7 +256,7 @@ _CREDENTIAL_VARIANT_CAPABILITIES = {
         provider_id=ANTHROPIC,
         display_name=_CREDENTIAL_PROVIDER_NAMES[CLAUDE_CODE],
         credential_type="oauth",
-        operations=_COMMON_CREDENTIAL_OPERATIONS,
+        operations=(*_COMMON_CREDENTIAL_OPERATIONS, "refresh"),
     ),
     CLAUDE_PLATFORM: CredentialVariantCapabilities(
         variant_id=CLAUDE_PLATFORM,

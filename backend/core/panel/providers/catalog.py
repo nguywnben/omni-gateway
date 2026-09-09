@@ -3,6 +3,7 @@
 from core.i18n import LocalizedJSONResponse as JSONResponse
 from core.provider_registry import (
     CREDENTIAL_OPERATIONS,
+    INFERENCE_PROTOCOLS,
     list_credential_variant_capabilities,
     list_provider_capabilities,
 )
@@ -28,12 +29,15 @@ class CredentialVariantCapabilityContract(BaseModel):
     display_name: str
     credential_type: str
     operations: list[str]
+    inference_protocols: list[str]
 
 
 class ProviderCatalogContract(BaseModel):
+    schema_version: int
     providers: list[ProviderCapabilityContract]
     credential_variants: list[CredentialVariantCapabilityContract]
     operation_vocabulary: list[str]
+    inference_protocol_vocabulary: list[str]
 
 
 @router.get("/api/providers", response_model=ProviderCatalogContract)
@@ -41,8 +45,10 @@ async def get_provider_catalog(token: str = Depends(verify_panel_token)):
     """Return provider capabilities without exposing stored credentials."""
     return JSONResponse(
         content={
+            "schema_version": 2,
             "providers": list_provider_capabilities(),
             "credential_variants": list_credential_variant_capabilities(),
             "operation_vocabulary": sorted(CREDENTIAL_OPERATIONS),
+            "inference_protocol_vocabulary": sorted(INFERENCE_PROTOCOLS),
         }
     )
