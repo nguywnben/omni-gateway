@@ -1,6 +1,6 @@
-from typing import Any, Dict, List, Literal, Optional, Union
+from typing import Annotated, Any, Dict, List, Literal, Optional, Union
 
-from pydantic import BaseModel, Field, SecretStr
+from pydantic import BaseModel, Field, SecretStr, WithJsonSchema
 
 
 def model_to_dict(model: BaseModel) -> Dict[str, Any]:
@@ -378,10 +378,15 @@ class RecoveryRequest(BaseModel):
     password: SecretStr
 
 
+_SetupSecret = Annotated[SecretStr, WithJsonSchema({"type": "string"})]
+
+
 class SetupRequest(BaseModel):
-    password: SecretStr
-    confirm_password: Optional[SecretStr] = None
-    setup_token: Optional[SecretStr] = None
+    # r1-v1 exposed plain JSON strings here. Keep that wire schema while retaining
+    # SecretStr's redacted representation inside the process.
+    password: _SetupSecret
+    confirm_password: Optional[_SetupSecret] = None
+    setup_token: Optional[_SetupSecret] = None
 
 
 class SetupPreflightRequest(BaseModel):

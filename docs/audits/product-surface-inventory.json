@@ -18,6 +18,9 @@
   "active_documents": [
     "README.md",
     "docs/locales/README.vi.md",
+    "docs/installation.md",
+    "docs/backup-and-restore.md",
+    "docs/updating.md",
     "CONSTRAINTS.md",
     "docs/specs/production-self-hosted.md",
     "tasks/plan.md",
@@ -43,6 +46,7 @@
     {"id": "inference", "pattern": "^/(?:v1|v1beta|vertex/v1|vertex/v1beta)(?:/.*)?$", "tier": "core", "journey": "inference"},
     {"id": "audit_api", "pattern": "^/api/audit(?:/.*)?$", "tier": "core", "journey": "activity"},
     {"id": "authentication_api", "pattern": "^/api/auth(?:/.*)?$", "tier": "core", "journey": "access"},
+    {"id": "backups_api", "pattern": "^/api/backups(?:/.*)?$", "tier": "core", "journey": "install_configure"},
     {"id": "capabilities_api", "pattern": "^/api/capabilities$", "tier": "core", "journey": "support"},
     {"id": "configuration_api", "pattern": "^/api/config(?:/.*)?$", "tier": "core", "journey": "install_configure"},
     {"id": "credentials_api", "pattern": "^/api/credentials(?:/.*)?$", "tier": "core", "journey": "credential_operations"},
@@ -105,6 +109,7 @@
   ],
   "advertised_claims": [
     {"id": "docker_compose", "source": "README.md#deployment", "tier": "core", "journey": "install_configure"},
+    {"id": "supported_install_matrix", "source": "docs/installation.md#support-matrix", "tier": "core", "journey": "install_configure"},
     {"id": "standalone_runtime", "source": "README.md#deployment", "tier": "core", "journey": "install_configure"},
     {"id": "multi_provider_routing", "source": "README.md#core-capabilities", "tier": "core", "journey": "model_routing"},
     {"id": "credential_pool", "source": "README.md#credential-workflow", "tier": "core", "journey": "credential_operations"},
