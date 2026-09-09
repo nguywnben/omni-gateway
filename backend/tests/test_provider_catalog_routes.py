@@ -17,9 +17,18 @@ from core.panel.providers.catalog import (
     router,
 )
 from core.provider_registry import (
+    CLAUDE_CODE,
+    CLAUDE_PLATFORM,
+    CODEX,
     CREDENTIAL_OPERATIONS,
+    GOOGLE_AI_STUDIO,
+    GOOGLE_ANTIGRAVITY,
+    GROK,
     INFERENCE_PROTOCOLS,
     LEGACY_CREDENTIAL_OPERATIONS,
+    OLLAMA,
+    OPENAI_PLATFORM,
+    XAI_CONSOLE,
     list_credential_variant_capabilities,
     list_legacy_credential_variant_capabilities,
     list_provider_capabilities,
@@ -35,6 +44,24 @@ class ProviderCatalogRouteTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(body["providers"], list_provider_capabilities())
         self.assertEqual(body["credential_variants"], list_legacy_credential_variant_capabilities())
         self.assertEqual(body["operation_vocabulary"], sorted(LEGACY_CREDENTIAL_OPERATIONS))
+        common = ["verify", "test", "toggle", "delete", "export"]
+        self.assertEqual(
+            {
+                variant["variant_id"]: variant["operations"]
+                for variant in body["credential_variants"]
+            },
+            {
+                GOOGLE_ANTIGRAVITY: [*common, "quota", "credit_mode"],
+                GOOGLE_AI_STUDIO: common,
+                GROK: [*common, "quota"],
+                XAI_CONSOLE: common,
+                CODEX: [*common, "quota"],
+                OPENAI_PLATFORM: common,
+                CLAUDE_CODE: common,
+                CLAUDE_PLATFORM: common,
+                OLLAMA: common,
+            },
+        )
 
         self.assertNotIn("schema_version", body)
         self.assertNotIn("inference_protocol_vocabulary", body)

@@ -40,19 +40,18 @@ CREDENTIAL_OPERATIONS = frozenset(
         "preview_channel",
     }
 )
-LEGACY_CREDENTIAL_OPERATIONS = frozenset(
-    {
-        "verify",
-        "test",
-        "quota",
-        "refresh_identity",
-        "toggle",
-        "delete",
-        "export",
-        "credit_mode",
-        "preview_channel",
-    }
+_LEGACY_OPERATION_ORDER = (
+    "verify",
+    "test",
+    "toggle",
+    "delete",
+    "export",
+    "quota",
+    "credit_mode",
+    "refresh_identity",
+    "preview_channel",
 )
+LEGACY_CREDENTIAL_OPERATIONS = frozenset(_LEGACY_OPERATION_ORDER)
 INFERENCE_PROTOCOLS = frozenset(
     {
         "anthropic_messages",
@@ -485,8 +484,8 @@ def list_legacy_credential_variant_capabilities() -> list[Dict[str, Any]]:
                 "credential_type": item["credential_type"],
                 "operations": [
                     operation
-                    for operation in item["operations"]
-                    if operation in LEGACY_CREDENTIAL_OPERATIONS
+                    for operation in _LEGACY_OPERATION_ORDER
+                    if operation in item["operations"]
                 ],
             }
         )
