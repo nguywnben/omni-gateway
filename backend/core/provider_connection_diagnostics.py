@@ -106,7 +106,7 @@ _CATEGORY_COPY: dict[DiagnosticCategory, tuple[str, str, bool]] = {
         False,
     ),
     "unsupported_operation": (
-        "This credential variant does not support model connection tests.",
+        "This credential variant does not support the requested operation.",
         "Choose an operation supported by this credential variant.",
         False,
     ),
