@@ -6,10 +6,10 @@
 - Active plan: `PROD-SELFHOST-R1`
 - Target: production-quality self-hosting for one person or a trusted team, not enterprise service
   operation.
-- Progress: **10/36 implementation tasks**; Phase 1 is in progress (4/6).
-- Active: **P1.5 — Update and rollback workflow**.
-- Fixed contract: `docs/specs/compose-update-rollback.md`. Implement the host tool and offline
-  recovery entry point, then run one two-version update and one forced-failure rollback rehearsal.
+- Progress: **11/36 implementation tasks**; Phase 1 is in progress (5/6).
+- Completed: **P1.5 — Update and rollback workflow**.
+- Next: **P1.6 — Supported install matrix**. Do not begin it until a new user request to continue
+  the fixed plan.
 - Supported runtime today: standalone, one worker, one replica.
 - Redis coordination, multi-replica HA, and Helm are experimental and no longer R1 release blockers.
 
@@ -49,6 +49,13 @@ Do not push unless the user requests it.
 
 ## Latest Evidence
 
+- `docs/evidence/p1.5-compose-update-rollback.md`
+- Compose updates now require a version/digest, deploy the resolved immutable ID, preserve a
+  checksum-bound encrypted host recovery point, detect `.env`/port drift, and automatically restore
+  both state and the previous image after target failure.
+- The P1.5 task gate passed all fixed steps and 30 affected tests. Isolated 1.4.0 → 1.5.0 update,
+  explicit rollback, and a target-mutates-SQLite-then-fails-health rehearsal all recovered healthy
+  authenticated operation; the failed target's marker was absent after rollback.
 - `docs/evidence/p1.4-versioned-backup-restore.md`
 - `docs/reviews/p1.4-cross-model-review-reconciliation.md`
 - Candidate `a38ca74` provides one encrypted SQLite recovery artifact, strict dry-run/conflict/schema

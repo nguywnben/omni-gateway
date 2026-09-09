@@ -1,6 +1,6 @@
 # Compose Update and Rollback Contract
 
-Status: P1.5 implementation contract
+Status: implemented and verified
 Target: Production Self-Hosted R1 standalone Compose deployment
 
 ## Supported Boundary
