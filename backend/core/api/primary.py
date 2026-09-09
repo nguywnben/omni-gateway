@@ -776,6 +776,28 @@ async def _stream_request_upstream(
                     except Exception:
                         error_body = ""
 
+                    if received_content:
+                        await record_api_call_error(
+                            credential_manager,
+                            current_file,
+                            status_code,
+                            None,
+                            mode="primary",
+                            model_name=model_name,
+                            error_message=error_body,
+                            provider=provider_id,
+                        )
+                        trace_decision(
+                            category="retry",
+                            action="skipped",
+                            result="skipped",
+                            reason="not_eligible",
+                            attempt=attempt + 1,
+                            status_code=status_code,
+                        )
+                        yield chunk
+                        return
+
                     if status_code == 404:
                         credential_route_exclusions.add((current_file, model_name))
                         if model_routing:

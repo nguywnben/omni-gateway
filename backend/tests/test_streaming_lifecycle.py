@@ -290,6 +290,29 @@ class StreamingLifecycleTests(unittest.IsolatedAsyncioTestCase):
         record_error.assert_awaited_once()
         record_success.assert_not_awaited()
 
+    async def test_primary_stream_does_not_retry_midstream_error_response(self):
+        stream_calls = 0
+
+        def fake_stream_post_async(**_kwargs):
+            nonlocal stream_calls
+            stream_calls += 1
+
+            async def chunks():
+                yield 'data: {"candidates":[{"content":{"parts":[{"text":"partial"}]}}]}'
+                yield Response(content=b'{"error":"overloaded"}', status_code=503)
+
+            return chunks()
+
+        chunks, record_error, record_success = await _collect_primary_stream(
+            fake_stream_post_async
+        )
+
+        self.assertEqual(stream_calls, 1)
+        self.assertIsInstance(chunks[-1], Response)
+        self.assertEqual(chunks[-1].status_code, 503)
+        record_error.assert_awaited_once()
+        record_success.assert_not_awaited()
+
     async def test_primary_stream_heartbeat_does_not_suppress_safe_retry(self):
         stream_calls = 0
 
