@@ -407,7 +407,7 @@ class VirtualModelBlacklistRoutingTests(unittest.IsolatedAsyncioTestCase):
                         media_type="application/json",
                     )
                 else:
-                    yield b'data: {"response":"ok"}\n\n'
+                    yield b'data: {"candidates":[{"finishReason":"STOP"}]}\n\n'
 
             return chunks()
 
@@ -461,7 +461,9 @@ class VirtualModelBlacklistRoutingTests(unittest.IsolatedAsyncioTestCase):
                 )
             ]
 
-        self.assertEqual(chunks, [b'data: {"response":"ok"}\n\n'])
+        self.assertEqual(
+            chunks, [b'data: {"candidates":[{"finishReason":"STOP"}]}\n\n']
+        )
         blacklist_mock.assert_awaited_once_with(
             "google_ai_studio",
             "gemini-retired",
@@ -520,7 +522,7 @@ class VirtualModelBlacklistRoutingTests(unittest.IsolatedAsyncioTestCase):
                         media_type="application/json",
                     )
                 else:
-                    yield b'data: {"response":"ok"}\n\n'
+                    yield b'data: {"candidates":[{"finishReason":"STOP"}]}\n\n'
 
             return chunks()
 
@@ -573,7 +575,9 @@ class VirtualModelBlacklistRoutingTests(unittest.IsolatedAsyncioTestCase):
                 )
             ]
 
-        self.assertEqual(chunks, [b'data: {"response":"ok"}\n\n'])
+        self.assertEqual(
+            chunks, [b'data: {"candidates":[{"finishReason":"STOP"}]}\n\n']
+        )
         blacklist_mock.assert_not_awaited()
         route_miss_mock.assert_awaited_once()
         self.assertEqual(route_mock.await_count, 2)

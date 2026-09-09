@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Tuple
 
+import httpx
 from config import (
     get_anthropic_api_url,
     get_antigravity_api_url,
@@ -476,6 +477,41 @@ def _is_retryable_status(status_code: int, disable_error_codes: List[int]) -> bo
     return status_code in RETRYABLE_UPSTREAM_STATUS_CODES or status_code in disable_error_codes
 
 
+def _stream_event_is_terminal(chunk: Any) -> bool:
+    """Return whether a canonical Gemini SSE chunk closes model generation."""
+    if not isinstance(chunk, (str, bytes)):
+        return False
+    text = chunk.decode("utf-8", errors="replace") if isinstance(chunk, bytes) else chunk
+    payload_text = text.strip()
+    if payload_text.startswith("data:"):
+        payload_text = payload_text[5:].strip()
+    if payload_text == "[DONE]":
+        return True
+    try:
+        payload = json.loads(payload_text)
+    except (TypeError, json.JSONDecodeError):
+        return False
+    if not isinstance(payload, dict):
+        return False
+    if isinstance(payload.get("response"), dict):
+        payload = payload["response"]
+    prompt_feedback = payload.get("promptFeedback")
+    if isinstance(prompt_feedback, dict) and prompt_feedback.get("blockReason"):
+        return True
+    candidates = payload.get("candidates")
+    return isinstance(candidates, list) and any(
+        isinstance(candidate, dict) and bool(candidate.get("finishReason"))
+        for candidate in candidates
+    )
+
+
+def _stream_event_is_heartbeat(chunk: Any) -> bool:
+    if not isinstance(chunk, (str, bytes)):
+        return False
+    text = chunk.decode("utf-8", errors="replace") if isinstance(chunk, bytes) else chunk
+    return text.lstrip().startswith(":")
+
+
 def _normalize_model_candidates(
     body: Dict[str, Any],
     model_candidates: Optional[List[str]],
@@ -702,6 +738,7 @@ async def _stream_request_upstream(
     attempt_limit = max_retries + MAX_MODEL_ROUTE_ATTEMPTS
     for attempt in range(attempt_limit + 1):
         received_content = False
+        terminal_received = False
         stream_token_usage: Dict[str, int] = {}
         need_retry = False
         model_route_retry = False
@@ -821,6 +858,11 @@ async def _stream_request_upstream(
                         yield chunk
                         return
                 else:
+                    if _stream_event_is_heartbeat(chunk):
+                        yield chunk
+                        continue
+                    if isinstance(chunk, (str, bytes)) and not chunk.strip():
+                        continue
                     if provider_id == XAI:
                         chunk = xai_stream_line_to_gemini(chunk)
                         if not chunk:
@@ -849,6 +891,8 @@ async def _stream_request_upstream(
                             f"[provider stream] started receiving streaming responses, model: {model_name}"
                         )
 
+                    terminal_received = terminal_received or _stream_event_is_terminal(chunk)
+
                     chunk_token_usage = extract_token_usage_from_stream_chunk(chunk)
                     if any(chunk_token_usage.values()):
                         stream_token_usage = chunk_token_usage
@@ -860,7 +904,7 @@ async def _stream_request_upstream(
 
                     yield chunk
 
-            if received_content:
+            if received_content and terminal_received:
                 await record_api_call_success(
                     credential_manager,
                     current_file,
@@ -875,6 +919,29 @@ async def _stream_request_upstream(
                     provider=provider_id,
                 )
                 log.debug(f"[provider stream] Streaming response completed, model: {model_name}")
+                return
+            elif received_content:
+                log.warning(
+                    "[provider stream] upstream closed before a terminal stream event "
+                    f"(credential={current_file}, model={model_name})"
+                )
+                await record_api_call_error(
+                    credential_manager,
+                    current_file,
+                    502,
+                    None,
+                    mode="primary",
+                    model_name=model_name,
+                    error_message="Upstream stream ended before a terminal event",
+                    provider=provider_id,
+                )
+                yield Response(
+                    content=json.dumps(
+                        {"error": "The upstream streaming response ended unexpectedly."}
+                    ),
+                    status_code=502,
+                    media_type="application/json",
+                )
                 return
             elif not need_retry:
                 log.warning(
@@ -946,10 +1013,46 @@ async def _stream_request_upstream(
             )
             return
         except Exception as e:
-            exception_status = int(getattr(e, "status_code", 500) or 500)
+            is_timeout = isinstance(e, (TimeoutError, httpx.TimeoutException))
+            exception_status = int(
+                getattr(e, "status_code", 0) or (504 if is_timeout else 502)
+            )
             log.error(
                 f"[provider stream] Streaming Request Exception: {e}, Credentials: {current_file}"
             )
+            if received_content:
+                await record_api_call_error(
+                    credential_manager,
+                    current_file,
+                    exception_status,
+                    None,
+                    mode="primary",
+                    model_name=model_name,
+                    error_message=str(e),
+                    provider=provider_id,
+                )
+                trace_decision(
+                    category="retry",
+                    action="skipped",
+                    result="skipped",
+                    reason="not_eligible",
+                    attempt=attempt + 1,
+                    status_code=exception_status,
+                )
+                yield Response(
+                    content=json.dumps(
+                        {
+                            "error": (
+                                "The upstream streaming request timed out after output began."
+                                if is_timeout
+                                else "The upstream streaming request failed after output began."
+                            )
+                        }
+                    ),
+                    status_code=exception_status,
+                    media_type="application/json",
+                )
+                return
             if exception_status == 404:
                 credential_route_exclusions.add((current_file, model_name))
                 if model_routing:
