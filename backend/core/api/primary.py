@@ -541,8 +541,13 @@ def _normalize_model_candidates(
 def _no_credential_error_message(model_name: str) -> str:
     normalized_model = str(model_name or "").strip()
     if normalized_model:
-        return f"No enabled credential supports model '{normalized_model}'."
-    return "No credentials are available."
+        return (
+            f"No route is currently available for model '{normalized_model}'. "
+            "Check enabled credentials, model support, cooldowns, and routing settings."
+        )
+    return (
+        "No credential route is currently available. Check credential health and routing settings."
+    )
 
 
 async def _coordination_unavailable_response(

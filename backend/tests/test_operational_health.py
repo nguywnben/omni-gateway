@@ -16,6 +16,7 @@ if str(BACKEND_DIR) not in sys.path:
 from core.operational_health import build_operational_health_snapshot
 from core.request_trace import REQUEST_TRACE_SCHEMA_VERSION, RequestDecision, RequestTrace
 from core.request_trace_service import RequestTraceService
+from core.routing_decision import RouteCandidate, RouteDecision
 
 
 def _run(coro):
@@ -132,6 +133,42 @@ class OperationalHealthTests(unittest.TestCase):
         self.assertNotIn(b"request-1", response.body)
         self.assertIn(b"customer-model-name", response.body)
         self.assertIn(b'"telemetry"', response.body)
+
+    def test_authenticated_routing_health_is_bounded_and_secret_free(self):
+        from core.panel import observability_routes
+
+        decision = RouteDecision(
+            mode="primary",
+            requested_model="model-a",
+            required_provider="",
+            routing_strategy="balanced",
+            selected_filename=None,
+            selected_provider=None,
+            candidates=(
+                RouteCandidate(
+                    filename="owner@example.com.json",
+                    provider_id="google_ai_studio",
+                    state="rejected",
+                    reason="backoff_rate_limited",
+                    retry_after_seconds=4.2,
+                ),
+            ),
+            created_at=100.0,
+            request_id="request-secret",
+            reason="cooldown_active",
+            retry_after_seconds=4.2,
+        )
+        manager = AsyncMock()
+        manager.get_recent_routing_decisions.return_value = (decision,)
+
+        with patch.object(observability_routes, "credential_manager", manager):
+            response = _run(observability_routes.get_routing_health(limit=20, token="panel"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(b'"reason":"cooldown_active"', response.body)
+        self.assertIn(b'"retry_after_seconds":5', response.body)
+        self.assertNotIn(b"owner@example.com.json", response.body)
+        self.assertNotIn(b"request-secret", response.body)
 
 
 class TelemetryPolicyTests(unittest.TestCase):

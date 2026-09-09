@@ -87,3 +87,29 @@ class RouteDecision:
             "retry_after_seconds": self.retry_after_seconds,
             "message": self.message,
         }
+
+    def to_public_dict(self) -> dict[str, Any]:
+        """Return bounded routing metadata without credential or request identifiers."""
+        candidate_states: dict[str, int] = {}
+        candidate_reasons: dict[str, int] = {}
+        for candidate in self.candidates:
+            candidate_states[candidate.state] = candidate_states.get(candidate.state, 0) + 1
+            if candidate.reason:
+                candidate_reasons[candidate.reason] = candidate_reasons.get(candidate.reason, 0) + 1
+        return {
+            "mode": self.mode,
+            "requested_model": self.requested_model,
+            "required_provider": self.required_provider,
+            "routing_strategy": self.routing_strategy,
+            "selected": self.selected,
+            "selected_provider": self.selected_provider,
+            "reason": self.reason,
+            "retry_after_seconds": (
+                max(1, math.ceil(self.retry_after_seconds)) if self.retry_after_seconds > 0 else 0
+            ),
+            "message": self.message,
+            "candidate_count": len(self.candidates),
+            "candidate_states": dict(sorted(candidate_states.items())),
+            "candidate_reasons": dict(sorted(candidate_reasons.items())),
+            "created_at": self.created_at,
+        }

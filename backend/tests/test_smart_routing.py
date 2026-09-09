@@ -191,6 +191,11 @@ class SmartCredentialRouterTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(decision.candidates[0].retry_after_seconds, 5.0)
         self.assertIn("Retry in 5 seconds", decision.message)
 
+        public = decision.to_public_dict()
+        self.assertEqual(public["candidate_reasons"], {"backoff_rate_limited": 1})
+        self.assertNotIn("cooldown.json", repr(public))
+        self.assertNotIn("request_id", public)
+
     async def test_failure_backoff_is_bounded_and_success_resets_health(self):
         now = [100.0]
         storage = FakeStorageAdapter({"route.json": credential_state()})
