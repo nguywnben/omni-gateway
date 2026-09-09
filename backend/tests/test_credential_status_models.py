@@ -592,6 +592,30 @@ class CredentialStatusModelTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(response.status_code, 504)
         self.assertEqual(payload["diagnostic"]["category"], "timeout")
 
+    async def test_client_disconnect_cancels_the_complete_connection_test(self):
+        cancelled = asyncio.Event()
+
+        async def blocked_storage():
+            try:
+                await asyncio.Event().wait()
+            finally:
+                cancelled.set()
+
+        http_request = SimpleNamespace(is_disconnected=AsyncMock(return_value=True))
+        with patch("core.panel.credentials.get_storage_adapter", blocked_storage):
+            response = await test_credential(
+                "google-ai-studio-example.json",
+                request=CredentialModelTestRequest(model="gemini-2.5-pro"),
+                mode="primary",
+                _token="test-session",
+                http_request=http_request,
+            )
+
+        payload = json.loads(response.body)
+        self.assertEqual(response.status_code, 499)
+        self.assertEqual(payload["diagnostic"]["category"], "cancelled")
+        self.assertTrue(cancelled.is_set())
+
     async def test_antigravity_verification_persists_the_credential_model_catalog(self):
         storage = FakeAntigravityStorage()
 

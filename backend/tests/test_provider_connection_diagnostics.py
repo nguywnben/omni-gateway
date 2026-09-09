@@ -23,9 +23,31 @@ from core.provider_connection_diagnostics import (
     classify_provider_response,
     run_bounded_connection_test,
 )
+from core.provider_registry import list_credential_variant_capabilities
+
+FIXTURE_PATH = BACKEND_DIR / "tests" / "fixtures" / "provider-connection-errors-v1.json"
 
 
 class ProviderConnectionDiagnosticContractTests(unittest.TestCase):
+    def test_versioned_adapter_fixtures_cover_every_advertised_variant(self) -> None:
+        contract = json.loads(FIXTURE_PATH.read_text(encoding="utf-8"))
+        self.assertEqual(contract["schema_version"], 1)
+        fixtures = contract["fixtures"]
+        self.assertEqual(
+            {fixture["variant_id"] for fixture in fixtures},
+            {item["variant_id"] for item in list_credential_variant_capabilities()},
+        )
+
+        for fixture in fixtures:
+            with self.subTest(variant_id=fixture["variant_id"]):
+                diagnostic = classify_provider_response(
+                    fixture["status_code"],
+                    fixture["body"],
+                )
+                self.assertEqual(diagnostic.category, fixture["category"])
+                self.assertEqual(diagnostic.provider_code, fixture["provider_code"])
+                self.assertEqual(diagnostic.retryable, fixture["retryable"])
+
     def test_http_outcomes_use_stable_categories_and_safe_provider_codes(self) -> None:
         cases = (
             (401, "invalid_api_key", "credential", False),
