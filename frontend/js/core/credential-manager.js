@@ -92,7 +92,7 @@ function createCredsManager(type) {
 
             if (!this.capabilityCatalogPromise) {
 
-                this.capabilityCatalogPromise = fetch('./api/providers', { headers: getAuthHeaders() })
+                this.capabilityCatalogPromise = fetch('./api/providers/capabilities', { headers: getAuthHeaders() })
 
                     .then(async (response) => {
 

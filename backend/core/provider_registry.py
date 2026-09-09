@@ -40,6 +40,19 @@ CREDENTIAL_OPERATIONS = frozenset(
         "preview_channel",
     }
 )
+LEGACY_CREDENTIAL_OPERATIONS = frozenset(
+    {
+        "verify",
+        "test",
+        "quota",
+        "refresh_identity",
+        "toggle",
+        "delete",
+        "export",
+        "credit_mode",
+        "preview_channel",
+    }
+)
 INFERENCE_PROTOCOLS = frozenset(
     {
         "anthropic_messages",
@@ -458,6 +471,26 @@ def list_credential_variant_capabilities() -> list[Dict[str, Any]]:
         _CREDENTIAL_VARIANT_CAPABILITIES[variant_id].to_dict()
         for variant_id in sorted(_CREDENTIAL_VARIANT_CAPABILITIES)
     ]
+
+
+def list_legacy_credential_variant_capabilities() -> list[Dict[str, Any]]:
+    """Project the pre-R1 catalog shape for clients pinned to ``/api/providers``."""
+    variants = []
+    for item in list_credential_variant_capabilities():
+        variants.append(
+            {
+                "variant_id": item["variant_id"],
+                "provider_id": item["provider_id"],
+                "display_name": item["display_name"],
+                "credential_type": item["credential_type"],
+                "operations": [
+                    operation
+                    for operation in item["operations"]
+                    if operation in LEGACY_CREDENTIAL_OPERATIONS
+                ],
+            }
+        )
+    return variants
 
 
 def credential_supports_operation(

@@ -440,7 +440,7 @@ class ControlPanelAssetTests(unittest.TestCase):
     def test_pool_toolbar_uses_capability_intersection_and_preview_results(self):
         credential_manager_script = read_scripts("core/credential-manager.js")
 
-        self.assertIn("fetch('./api/providers'", credential_manager_script)
+        self.assertIn("fetch('./api/providers/capabilities'", credential_manager_script)
         self.assertIn("selectedVariantsSupport(operation)", credential_manager_script)
         self.assertIn(
             "selection_token: this.allMatchingSelection?.token", credential_manager_script
@@ -480,9 +480,7 @@ class ControlPanelAssetTests(unittest.TestCase):
         card_script = read_scripts("ui/credential-cards.js")
         dialog_script = read_scripts("ui/credential-dialogs.js")
 
-        self.assertIn(
-            "manager.credentialSupportsOperation(credInfo, 'quota')", card_script
-        )
+        self.assertIn("manager.credentialSupportsOperation(credInfo, 'quota')", card_script)
         self.assertIn("const quotaPreview = supportsQuotaPreview", card_script)
         self.assertIn("data?.quota_type === 'account_billing'", dialog_script)
         self.assertIn("t('modal.billing_periods')", dialog_script)
