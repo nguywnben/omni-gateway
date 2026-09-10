@@ -48,12 +48,12 @@ Phase 3 candidate verification passed. The raw dirty-workspace compatibility che
 unrelated unstaged request-schema edit in `backend/core/models.py`; see the P3.6 evidence before
 including that edit in a release candidate.
 
-## Phase 4 — Complete Product Workflows (3/6)
+## Phase 4 — Complete Product Workflows (4/6)
 
 - [x] P4.1 AI Quality console completion
 - [x] P4.2 Playground backend boundary
 - [x] P4.3 Playground interface
-- [ ] P4.4 Access lifecycle completion
+- [x] P4.4 Access lifecycle completion
 - [ ] P4.5 Unified Activity
 - [ ] P4.6 Settings, Team access, About, and localization
 

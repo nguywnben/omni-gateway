@@ -6,11 +6,11 @@
 - Active plan: `PROD-SELFHOST-R1`
 - Target: production-quality self-hosting for one person or a trusted team, not enterprise service
   operation.
-- Progress: **27/36 implementation tasks**; Phase 4 is in progress (3/6).
-- Completed: **P4.3 — Playground interface**.
-- Gate caveat: P4.3 task checks pass; the unrelated unstaged request-schema change in
+- Progress: **28/36 implementation tasks**; Phase 4 is in progress (4/6).
+- Completed: **P4.4 — Access lifecycle completion**.
+- Gate caveat: P4.4 task checks pass; the unrelated unstaged request-schema change in
   `backend/core/models.py` remains outside this task and still affects raw candidate compatibility.
-- Next: **P4.4 — Access lifecycle completion**. Do not begin it until a
+- Next: **P4.5 — Unified Activity**. Do not begin it until a
   new user request to continue the fixed plan.
 - Supported runtime today: standalone, one worker, one replica.
 - Redis coordination, multi-replica HA, and Helm are experimental and no longer R1 release blockers.

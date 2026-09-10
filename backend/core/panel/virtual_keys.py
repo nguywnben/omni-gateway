@@ -67,7 +67,7 @@ class CreateVirtualKeyRequest(BaseModel):
 
 
 class UpdateVirtualKeyRequest(BaseModel):
-    expected_revision: Optional[int] = Field(default=None, ge=1)
+    expected_revision: int = Field(ge=1)
     name: Optional[str] = Field(default=None, max_length=128)
     enabled: Optional[bool] = None
     budget_daily_usd: Optional[float] = Field(default=None, ge=0)

@@ -2,6 +2,50 @@
     margin-top: 24px;
 }
 
+.access-client-card {
+    display: grid;
+    align-content: start;
+    gap: 16px;
+}
+
+.access-client-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 16px;
+}
+
+.access-client-protocol {
+    display: grid;
+    flex: 0 0 min(180px, 42%);
+    gap: 6px;
+    color: var(--text-muted);
+    font-size: 12px;
+    font-weight: 650;
+}
+
+.access-client-example {
+    display: grid;
+    gap: 12px;
+}
+
+.access-client-example pre {
+    min-height: 188px;
+    padding: 14px;
+    margin: 0;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--bg-subtle);
+    color: var(--text);
+    font: 12px/1.55 ui-monospace, SFMono-Regular, Consolas, monospace;
+    overflow: auto;
+    white-space: pre;
+}
+
+.access-client-example .btn {
+    justify-self: end;
+}
+
 .virtual-key-header {
     display: flex;
     align-items: flex-start;
@@ -298,6 +342,14 @@
 }
 
 @media (max-width: 600px) {
+    .access-client-header {
+        display: grid;
+    }
+
+    .access-client-protocol {
+        width: 100%;
+    }
+
     .virtual-key-header,
     .virtual-key-card-heading {
         display: grid;

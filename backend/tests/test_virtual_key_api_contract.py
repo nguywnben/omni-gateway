@@ -72,7 +72,10 @@ class VirtualKeyRequestModelTests(unittest.TestCase):
 
     def test_update_contract_rejects_unsafe_model_pattern(self):
         with self.assertRaises(ValidationError):
-            UpdateVirtualKeyRequest(allowed_models=["gpt-[0-9]*"])
+            UpdateVirtualKeyRequest(
+                expected_revision=1,
+                allowed_models=["gpt-[0-9]*"],
+            )
 
 
 class VirtualKeyRouteContractTests(unittest.IsolatedAsyncioTestCase):
@@ -83,7 +86,10 @@ class VirtualKeyRouteContractTests(unittest.IsolatedAsyncioTestCase):
         ):
             response = await update_virtual_key(
                 "vk_example",
-                UpdateVirtualKeyRequest(scopes=["inference:openai"]),
+                UpdateVirtualKeyRequest(
+                    expected_revision=3,
+                    scopes=["inference:openai"],
+                ),
                 token="panel-session",
             )
 

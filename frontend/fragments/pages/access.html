@@ -3,14 +3,14 @@
                         <div>
                             <div class="page-kicker" data-i18n="access.label">Access</div>
                             <h1 class="page-title" data-i18n="access.title">API Access</h1>
-                            <p class="page-description" data-i18n="access.description">Connect SDK clients with the root integration key and protocol-specific base URLs.</p>
+                            <p class="page-description" data-i18n="access.description">Issue restricted virtual keys for clients and copy a protocol-ready example.</p>
                         </div>
                     </header>
 
                     <div class="dashboard-grid">
                         <section class="card span-6">
                             <h2 class="card-title" data-i18n="access.root_key">Root integration key</h2>
-                            <p class="card-copy card-title-copy" data-i18n="access.root_key_description">This deployment-wide key has unrestricted inference access. Rotate it deliberately and update every connected client.</p>
+                            <p class="card-copy card-title-copy" data-i18n="access.root_key_description">Keep this unrestricted deployment key for owner recovery. Use virtual keys for normal clients and automation.</p>
                             <div class="metric-row">
                                 <div class="copy-field">
                                     <label for="apiKey" data-i18n="api_key">API key</label>
@@ -39,30 +39,24 @@
                             </div>
                         </section>
 
-                        <section class="card span-6 client-setup-card">
-                            <input class="setup-language-radio" type="radio" id="setupLangPython" name="setupLanguage" checked>
-                            <input class="setup-language-radio" type="radio" id="setupLangNode" name="setupLanguage">
-                            <div class="setup-card-header">
+                        <section class="card span-6 access-client-card" aria-labelledby="accessClientHeading">
+                            <div class="access-client-header">
                                 <div>
-                                    <h2 class="card-title" data-i18n="dashboard.sdk_setup">SDK Setup</h2>
-                                    <p class="setup-card-copy" data-i18n="dashboard.sdk_setup_description">Select a language to view the client configuration for each supported SDK.</p>
+                                    <h2 class="card-title" id="accessClientHeading" data-i18n="playground.client_example">Client example</h2>
+                                    <p class="card-copy card-title-copy" data-i18n="playground.example_hint">Uses a visible placeholder, never your console session or a stored key.</p>
                                 </div>
-                                <div class="setup-language-switch" role="radiogroup" data-i18n-aria-label="dashboard.client_language" aria-label="Client language">
-                                    <label for="setupLangPython" class="setup-language-option" data-i18n-technical>Python</label>
-                                    <label for="setupLangNode" class="setup-language-option" data-i18n-technical>Node.js</label>
-                                </div>
+                                <label class="access-client-protocol" for="accessProtocol">
+                                    <span data-i18n="playground.protocol">Protocol</span>
+                                    <select id="accessProtocol" data-ui-change="access-client-protocol">
+                                        <option value="openai" data-i18n-technical>OpenAI</option>
+                                        <option value="anthropic" data-i18n-technical>Anthropic</option>
+                                        <option value="gemini" data-i18n-technical>Google GenAI</option>
+                                    </select>
+                                </label>
                             </div>
-                            <div class="client-setup-panels">
-                                <div class="client-setup-panel setup-python">
-                                    <div class="client-route-card" data-i18n-auto><div class="client-route-header"><div><strong>OpenAI</strong></div><span>openai</span></div><dl class="client-route-details"><div><dt>Initialize</dt><dd>OpenAI(base_url, api_key)</dd></div><div><dt>Request</dt><dd>client.chat.completions.create(model, messages)</dd></div></dl></div>
-                                    <div class="client-route-card" data-i18n-auto><div class="client-route-header"><div><strong>Anthropic</strong></div><span>anthropic</span></div><dl class="client-route-details"><div><dt>Initialize</dt><dd>Anthropic(base_url, api_key)</dd></div><div><dt>Request</dt><dd>client.messages.create(model, max_tokens, messages)</dd></div></dl></div>
-                                    <div class="client-route-card" data-i18n-auto><div class="client-route-header"><div><strong>Google GenAI</strong></div><span>google-genai</span></div><dl class="client-route-details"><div><dt>Initialize</dt><dd>genai.Client(api_key, http_options)</dd></div><div><dt>Request</dt><dd>client.models.generate_content(model, contents)</dd></div></dl></div>
-                                </div>
-                                <div class="client-setup-panel setup-node">
-                                    <div class="client-route-card" data-i18n-auto><div class="client-route-header"><div><strong>OpenAI</strong></div><span>openai</span></div><dl class="client-route-details"><div><dt>Initialize</dt><dd>new OpenAI({ baseURL, apiKey })</dd></div><div><dt>Request</dt><dd>client.chat.completions.create({ model, messages })</dd></div></dl></div>
-                                    <div class="client-route-card" data-i18n-auto><div class="client-route-header"><div><strong>Anthropic</strong></div><span>@anthropic-ai/sdk</span></div><dl class="client-route-details"><div><dt>Initialize</dt><dd>new Anthropic({ baseURL, apiKey })</dd></div><div><dt>Request</dt><dd>client.messages.create({ model, max_tokens, messages })</dd></div></dl></div>
-                                    <div class="client-route-card" data-i18n-auto><div class="client-route-header"><div><strong>Google GenAI</strong></div><span>@google/genai</span></div><dl class="client-route-details"><div><dt>Initialize</dt><dd>new GoogleGenAI({ apiKey, httpOptions })</dd></div><div><dt>Request</dt><dd>ai.models.generateContent({ model, contents })</dd></div></dl></div>
-                                </div>
+                            <div class="access-client-example">
+                                <pre tabindex="0"><code id="accessClientExample"></code></pre>
+                                <button type="button" class="btn btn-secondary" id="copyAccessClientExample" data-ui-action="copy-access-client-example" data-i18n="playground.copy_example">Copy example</button>
                             </div>
                         </section>
                     </div>

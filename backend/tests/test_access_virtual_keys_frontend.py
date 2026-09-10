@@ -44,6 +44,12 @@ class AccessVirtualKeyFrontendTests(unittest.TestCase):
         ):
             self.assertIn(field, self.feature)
 
+    def test_zero_budget_and_fallback_price_are_visible(self):
+        self.assertIn("record.budget_daily_usd !== null", self.feature)
+        self.assertIn("record.budget_monthly_usd !== null", self.feature)
+        self.assertIn("formatVirtualKeyPricingPolicy(record)", self.feature)
+        self.assertIn("record.fallback_price_usd_per_million", self.feature)
+
     def test_secret_is_ephemeral_and_never_uses_browser_storage(self):
         self.assertIn("clearVirtualKeySecret", self.feature)
         self.assertIn("showVirtualKeySecret", self.feature)
@@ -61,6 +67,30 @@ class AccessVirtualKeyFrontendTests(unittest.TestCase):
         self.assertIn("/${encodeURIComponent(record.id)}/rotate", self.feature)
         self.assertIn("/${encodeURIComponent(record.id)}/revoke", self.feature)
         self.assertIn("error.status === 409", self.feature)
+
+    def test_client_quickstart_tracks_selected_protocol_without_root_secret(self):
+        for control_id in (
+            "accessProtocol",
+            "accessClientExample",
+            "copyAccessClientExample",
+        ):
+            self.assertIn(f'id="{control_id}"', self.fragment)
+        self.assertIn("renderAccessClientExample", self.feature)
+        self.assertIn("YOUR_OMNI_VIRTUAL_KEY", self.feature)
+        self.assertNotIn("document.getElementById('apiKey').value", self.feature)
+        self.assertNotIn("client-route-card", self.fragment)
+
+    def test_secret_cleanup_clears_value_and_removes_secret_node(self):
+        self.assertIn("secretInput.value = ''", self.feature)
+        self.assertIn("secretInput.removeAttribute('value')", self.feature)
+        self.assertIn("modal.replaceChildren()", self.feature)
+        self.assertIn("pagehide", self.feature)
+
+    def test_destructive_lifecycle_actions_require_explicit_confirmation(self):
+        self.assertIn("showConfirmModal(t('access.rotate_confirm'", self.feature)
+        self.assertIn("showConfirmModal(t('access.revoke_confirm'", self.feature)
+        self.assertIn("confirmLabel: t('access.rotate_key')", self.feature)
+        self.assertIn("confirmLabel: t('access.revoke_key')", self.feature)
 
 
 if __name__ == "__main__":

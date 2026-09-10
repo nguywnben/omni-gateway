@@ -13,7 +13,11 @@ if str(BACKEND_DIR) not in sys.path:
     sys.path.insert(0, str(BACKEND_DIR))
 
 from core.management_audit import classify_management_mutation
-from core.panel.virtual_keys import RevokeVirtualKeyRequest, RotateVirtualKeyRequest
+from core.panel.virtual_keys import (
+    RevokeVirtualKeyRequest,
+    RotateVirtualKeyRequest,
+    UpdateVirtualKeyRequest,
+)
 from core.virtual_keys import VirtualKeyConflictError, VirtualKeyManager
 from main import app
 
@@ -132,12 +136,15 @@ class VirtualKeyLifecycleTests(unittest.IsolatedAsyncioTestCase):
 
 
 class VirtualKeyLifecycleContractTests(unittest.TestCase):
-    def test_openapi_requires_revision_for_rotate_and_revoke(self):
+    def test_openapi_requires_revision_for_update_rotate_and_revoke(self):
         schema = app.openapi()
         paths = schema["paths"]
 
         self.assertIn("/api/virtual-keys/{key_id}/rotate", paths)
         self.assertIn("/api/virtual-keys/{key_id}/revoke", paths)
+        self.assertEqual(
+            UpdateVirtualKeyRequest.model_fields["expected_revision"].is_required(), True
+        )
         self.assertEqual(
             RotateVirtualKeyRequest.model_fields["expected_revision"].is_required(), True
         )

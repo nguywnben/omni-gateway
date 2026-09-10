@@ -65,6 +65,7 @@ function initStaticUiBindings() {
         'virtual-key-usage': (element) => showVirtualKeyUsage(element.dataset.keyId),
         'virtual-key-rotate': (element) => rotateVirtualKey(element.dataset.keyId),
         'virtual-key-revoke': (element) => revokeVirtualKey(element.dataset.keyId),
+        'copy-access-client-example': () => copyAccessClientExample(),
         'identity-refresh': () => loadIdentityConsole({ announce: true }),
         'identity-create': () => openIdentityCreateDialog(),
         'identity-create-close': () => closeIdentityCreateDialog(),
@@ -212,6 +213,7 @@ function initStaticUiBindings() {
         'virtual-key-status': (element) => updateVirtualKeyStatus(element.value),
         'virtual-key-pricing': (element) => syncVirtualKeyPricingControl(element.form),
         'virtual-key-scope': (element) => syncVirtualKeyScopeControl(element),
+        'access-client-protocol': (element) => renderAccessClientExample(element.value),
         'log-level': () => filterLogs()
     };
 

@@ -6,8 +6,44 @@ const VirtualKeyAccessState = {
     status: ''
 };
 
+const ACCESS_CLIENT_KEY_PLACEHOLDER = 'YOUR_OMNI_VIRTUAL_KEY';
+
 function loadAccessPage() {
+    renderAccessClientExample();
     return Promise.all([updateEndpointUrls(), loadVirtualKeys()]);
+}
+
+function buildAccessClientExample(protocol, origin = window.location.origin) {
+    const baseUrl = String(origin || '').replace(/\/$/, '');
+    const examples = {
+        openai: `curl "${baseUrl}/v1/chat/completions" \\
+  -H "Authorization: Bearer ${ACCESS_CLIENT_KEY_PLACEHOLDER}" \\
+  -H "Content-Type: application/json" \\
+  -d '{"model":"omway","messages":[{"role":"user","content":"Hello"}]}'`,
+        anthropic: `curl "${baseUrl}/v1/messages" \\
+  -H "x-api-key: ${ACCESS_CLIENT_KEY_PLACEHOLDER}" \\
+  -H "anthropic-version: 2023-06-01" \\
+  -H "content-type: application/json" \\
+  -d '{"model":"omway","max_tokens":256,"messages":[{"role":"user","content":"Hello"}]}'`,
+        gemini: `curl "${baseUrl}/v1beta/models/omway:generateContent" \\
+  -H "x-goog-api-key: ${ACCESS_CLIENT_KEY_PLACEHOLDER}" \\
+  -H "Content-Type: application/json" \\
+  -d '{"contents":[{"role":"user","parts":[{"text":"Hello"}]}]}'`
+    };
+    return examples[protocol] || examples.openai;
+}
+
+function renderAccessClientExample(protocol = document.getElementById('accessProtocol')?.value) {
+    const output = document.getElementById('accessClientExample');
+    if (!output) return '';
+    const example = buildAccessClientExample(protocol || 'openai');
+    output.textContent = example;
+    return example;
+}
+
+function copyAccessClientExample() {
+    const example = renderAccessClientExample();
+    if (example) void copyTextWithStatus(example);
 }
 
 async function virtualKeyApi(path = '', options = {}) {
@@ -82,13 +118,21 @@ function formatVirtualKeyLimits(record) {
     const limits = [];
     if (record.rpm_limit) limits.push(`${formatVirtualKeyNumber(record.rpm_limit)} RPM`);
     if (record.tpm_limit) limits.push(`${formatVirtualKeyNumber(record.tpm_limit)} TPM`);
-    if (record.budget_daily_usd) {
+    if (record.budget_daily_usd !== null && record.budget_daily_usd !== undefined) {
         limits.push(t('access.daily_budget_value', { value: formatVirtualKeyNumber(record.budget_daily_usd) }));
     }
-    if (record.budget_monthly_usd) {
+    if (record.budget_monthly_usd !== null && record.budget_monthly_usd !== undefined) {
         limits.push(t('access.monthly_budget_value', { value: formatVirtualKeyNumber(record.budget_monthly_usd) }));
     }
     return limits.length ? limits.join(' · ') : t('access.no_limits');
+}
+
+function formatVirtualKeyPricingPolicy(record) {
+    const policy = record.unknown_pricing_policy || 'deny';
+    const label = t(`access.pricing_${policy}`);
+    const fallback = Number(record.fallback_price_usd_per_million);
+    if (policy !== 'fallback' || !Number.isFinite(fallback) || fallback <= 0) return label;
+    return `${label} ($${formatVirtualKeyNumber(fallback)}/1M)`;
 }
 
 function virtualKeyStatusLabel(status) {
@@ -138,7 +182,7 @@ function renderVirtualKeyCard(record) {
             <div><dt>${escapeHtml(t('access.last_used'))}</dt><dd>${escapeHtml(formatVirtualKeyDate(record.last_used_at))}</dd></div>
             <div><dt>${escapeHtml(t('access.expires'))}</dt><dd>${escapeHtml(formatVirtualKeyDate(record.expires_at))}</dd></div>
             <div><dt>${escapeHtml(t('access.limits'))}</dt><dd>${escapeHtml(formatVirtualKeyLimits(record))}</dd></div>
-            <div><dt>${escapeHtml(t('access.pricing_policy'))}</dt><dd>${escapeHtml(t(`access.pricing_${record.unknown_pricing_policy || 'deny'}`))}</dd></div>
+            <div><dt>${escapeHtml(t('access.pricing_policy'))}</dt><dd>${escapeHtml(formatVirtualKeyPricingPolicy(record))}</dd></div>
         </dl>
         <div class="virtual-key-policy-row">
             <div><span class="virtual-key-policy-label">${escapeHtml(t('access.scopes'))}</span><div class="virtual-key-chips">${scopes.map((scope) => `<code>${escapeHtml(scope)}</code>`).join('')}</div></div>
@@ -360,12 +404,17 @@ function showVirtualKeySecret(secret, titleKey) {
     secretInput.value = ephemeralSecret;
     const clearVirtualKeySecret = () => {
         secretInput.value = '';
+        secretInput.removeAttribute('value');
         ephemeralSecret = '';
     };
+    let closed = false;
     const close = () => {
+        if (closed) return;
+        closed = true;
         clearVirtualKeySecret();
         document.removeEventListener('keydown', onEscape);
-        void unmountModal(modal);
+        window.removeEventListener('pagehide', close);
+        void unmountModal(modal).then(() => modal.replaceChildren());
     };
     const onEscape = (event) => {
         if (event.key === 'Escape') close();
@@ -378,6 +427,7 @@ function showVirtualKeySecret(secret, titleKey) {
         if (event.target === modal || event.target.closest('[data-virtual-key-secret-close]')) close();
     });
     document.addEventListener('keydown', onEscape);
+    window.addEventListener('pagehide', close, { once: true });
     void mountModal(modal).then(() => secretInput.focus());
 }
 
