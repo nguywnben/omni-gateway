@@ -29,7 +29,7 @@ async function loadXaiSettings(options = {}) {
     try {
         const response = await fetch('./api/providers/xai/config', { headers: getAuthHeaders() });
         const data = await response.json().catch(() => ({}));
-        if (!response.ok) throw new Error(data.detail || data.error || t('unknown_error'));
+        if (!response.ok) throw createProviderRequestError(response, data);
         Object.entries(XAI_CONFIG_FIELDS).forEach(([fieldId, configKey]) => {
             const field = document.getElementById(fieldId);
             if (!field) return;
@@ -65,7 +65,7 @@ async function saveXaiSettings(scope) {
             body: JSON.stringify({ config })
         });
         const data = await response.json().catch(() => ({}));
-        if (!response.ok) throw new Error(data.detail || data.error || t('unknown_error'));
+        if (!response.ok) throw createProviderRequestError(response, data);
         showStatus(t('provider.settings_saved', {provider: group.label}), 'success');
         await loadXaiSettings();
     } catch (error) {
@@ -90,7 +90,7 @@ async function resetXaiSettings(scope) {
             headers: getAuthHeaders()
         });
         const data = await response.json().catch(() => ({}));
-        if (!response.ok) throw new Error(data.detail || data.error || t('unknown_error'));
+        if (!response.ok) throw createProviderRequestError(response, data);
         showStatus(data.message || t('provider.settings_reset', {provider: group.label}), 'success');
         await loadXaiSettings();
     } catch (error) {
@@ -132,7 +132,7 @@ async function addXaiApiKeyCredential(event) {
             body: JSON.stringify({ api_key: apiKey })
         });
         const data = await response.json().catch(() => ({}));
-        if (!response.ok) throw new Error(data.detail || data.error || t('unknown_error'));
+        if (!response.ok) throw createProviderRequestError(response, data);
         resetProviderTransientSecrets('xai.credential');
         showXaiCredentialSaveResult('api-key', data);
         showStatus(data.message, 'success');
@@ -140,7 +140,9 @@ async function addXaiApiKeyCredential(event) {
         await loadModelCatalog(true);
         await refreshUsageStats();
     } catch (error) {
-        showStatus(t('provider.api_key_add_failed', {provider: 'SpaceXAI Console', error: error.message}), 'error');
+        showStatus(t('provider.api_key_add_failed', {
+            provider: 'SpaceXAI Console', error: formatProviderRequestError(error)
+        }), 'error');
     } finally {
         button.disabled = false;
         button.textContent = t('runtime.validate_add');
@@ -158,7 +160,7 @@ async function startXaiOauth() {
             headers: getAuthHeaders()
         });
         const data = await response.json().catch(() => ({}));
-        if (!response.ok) throw new Error(data.detail || data.error || t('unknown_error'));
+        if (!response.ok) throw createProviderRequestError(response, data);
         const authorizationLink = document.getElementById('xaiAuthorizationUrl');
         authorizationLink.href = data.auth_url || '#';
         authorizationLink.textContent = data.auth_url || t('runtime.authorization_unavailable');
@@ -170,7 +172,9 @@ async function startXaiOauth() {
         }
         showStatus(t('provider.auth_ready', {provider: 'Grok Build'}), 'success');
     } catch (error) {
-        showStatus(t('provider.auth_start_failed', {provider: 'Grok Build', error: error.message}), 'error');
+        showStatus(t('provider.auth_start_failed', {
+            provider: 'Grok Build', error: formatProviderRequestError(error)
+        }), 'error');
     } finally {
         button.disabled = false;
         button.textContent = t('runtime.get_provider_auth');
@@ -197,7 +201,7 @@ async function saveXaiOauth() {
             body: JSON.stringify({ code, state })
         });
         const data = await response.json().catch(() => ({}));
-        if (!response.ok) throw new Error(data.detail || data.error || t('unknown_error'));
+        if (!response.ok) throw createProviderRequestError(response, data);
         resetProviderTransientSecrets('grok.oauth');
         delete oauthFields.dataset.state;
         showXaiCredentialSaveResult('oauth', data);
@@ -206,7 +210,9 @@ async function saveXaiOauth() {
         await loadModelCatalog(true);
         await refreshUsageStats();
     } catch (error) {
-        showStatus(t('provider.credential_save_failed', {provider: 'Grok Build', error: error.message}), 'error');
+        showStatus(t('provider.credential_save_failed', {
+            provider: 'Grok Build', error: formatProviderRequestError(error)
+        }), 'error');
     } finally {
         button.disabled = false;
         button.textContent = t('runtime.save_credential');

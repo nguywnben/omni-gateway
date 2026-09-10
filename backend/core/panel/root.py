@@ -89,6 +89,7 @@ CONSOLE_SCRIPT_ASSETS = (
     "js/features/logs.js",
     "js/features/environment-credentials.js",
     "js/features/provider-settings-shared.js",
+    "js/features/provider-onboarding.js",
     "js/features/google-ai-studio-settings.js",
     "js/features/xai-settings.js",
     "js/features/openai-settings.js",

@@ -31,7 +31,7 @@ async function loadAnthropicSettings(options = {}) {
     try {
         const response = await fetch('./api/providers/anthropic/config', { headers: getAuthHeaders() });
         const data = await response.json().catch(() => ({}));
-        if (!response.ok) throw new Error(data.detail || data.error || t('unknown_error'));
+        if (!response.ok) throw createProviderRequestError(response, data);
         Object.entries(ANTHROPIC_CONFIG_FIELDS).forEach(([fieldId, configKey]) => {
             const field = document.getElementById(fieldId);
             if (!field) return;
@@ -66,7 +66,7 @@ async function saveAnthropicSettings(scope) {
             method: 'POST', headers: getAuthHeaders(), body: JSON.stringify({ config })
         });
         const data = await response.json().catch(() => ({}));
-        if (!response.ok) throw new Error(data.detail || data.error || t('unknown_error'));
+        if (!response.ok) throw createProviderRequestError(response, data);
         showStatus(t('provider.settings_saved', {provider: group.label}), 'success');
         await loadAnthropicSettings();
     } catch (error) {
@@ -91,7 +91,7 @@ async function resetAnthropicSettings(scope) {
             { method: 'POST', headers: getAuthHeaders() }
         );
         const data = await response.json().catch(() => ({}));
-        if (!response.ok) throw new Error(data.detail || data.error || t('unknown_error'));
+        if (!response.ok) throw createProviderRequestError(response, data);
         showStatus(data.message || t('provider.settings_reset', {provider: group.label}), 'success');
         await loadAnthropicSettings();
     } catch (error) {
@@ -128,7 +128,7 @@ async function addClaudePlatformCredential(event) {
             method: 'POST', headers: getAuthHeaders(), body: JSON.stringify({ api_key: apiKey })
         });
         const data = await response.json().catch(() => ({}));
-        if (!response.ok) throw new Error(data.detail || data.error || t('unknown_error'));
+        if (!response.ok) throw createProviderRequestError(response, data);
         resetProviderTransientSecrets('claude-platform.credential');
         showAnthropicCredentialSaveResult('platform', data);
         showStatus(data.message, 'success');
@@ -136,7 +136,9 @@ async function addClaudePlatformCredential(event) {
         await loadModelCatalog(true);
         await refreshUsageStats();
     } catch (error) {
-        showStatus(t('provider.api_key_add_failed', {provider: 'Claude Platform', error: error.message}), 'error');
+        showStatus(t('provider.api_key_add_failed', {
+            provider: 'Claude Platform', error: formatProviderRequestError(error)
+        }), 'error');
     } finally {
         button.disabled = false;
         button.textContent = t('runtime.validate_add');
@@ -153,7 +155,7 @@ async function startClaudeOauth() {
             method: 'POST', headers: getAuthHeaders()
         });
         const data = await response.json().catch(() => ({}));
-        if (!response.ok) throw new Error(data.detail || data.error || t('unknown_error'));
+        if (!response.ok) throw createProviderRequestError(response, data);
         const fields = document.getElementById('claudeOauthFields');
         const link = document.getElementById('claudeAuthorizationUrl');
         if (fields) {
@@ -167,7 +169,9 @@ async function startClaudeOauth() {
         document.getElementById('claudeAuthorizationCode').value = '';
         showStatus(t('provider.auth_ready', {provider: 'Claude Code'}), 'success');
     } catch (error) {
-        showStatus(t('provider.auth_start_failed', {provider: 'Claude Code', error: error.message}), 'error');
+        showStatus(t('provider.auth_start_failed', {
+            provider: 'Claude Code', error: formatProviderRequestError(error)
+        }), 'error');
     } finally {
         button.disabled = false;
         button.textContent = t('runtime.get_provider_auth');
@@ -192,7 +196,7 @@ async function saveClaudeOauth() {
             method: 'POST', headers: getAuthHeaders(), body: JSON.stringify({ code, state })
         });
         const data = await response.json().catch(() => ({}));
-        if (!response.ok) throw new Error(data.detail || data.error || t('unknown_error'));
+        if (!response.ok) throw createProviderRequestError(response, data);
         delete fields.dataset.oauthState;
         resetProviderTransientSecrets('claude-code.oauth');
         showAnthropicCredentialSaveResult('code', data);
@@ -201,7 +205,9 @@ async function saveClaudeOauth() {
         await loadModelCatalog(true);
         await refreshUsageStats();
     } catch (error) {
-        showStatus(t('provider.credential_save_failed', {provider: 'Claude Code', error: error.message}), 'error');
+        showStatus(t('provider.credential_save_failed', {
+            provider: 'Claude Code', error: formatProviderRequestError(error)
+        }), 'error');
     } finally {
         button.disabled = false;
         button.textContent = t('runtime.save_credential');

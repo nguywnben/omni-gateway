@@ -17,7 +17,7 @@ async function loadGoogleAIStudioSettings(options = {}) {
         });
         const data = await response.json().catch(() => ({}));
         if (!response.ok) {
-            throw new Error(data.detail || data.error || t('unknown_error'));
+            throw createProviderRequestError(response, data);
         }
         field.value = data.config?.google_ai_studio_api_url || '';
         field.dataset.loaded = 'true';
@@ -49,7 +49,7 @@ async function saveGoogleAIStudioSettings() {
         });
         const data = await response.json().catch(() => ({}));
         if (!response.ok) {
-            throw new Error(data.detail || data.error || t('unknown_error'));
+            throw createProviderRequestError(response, data);
         }
         showStatus(data.message || t('provider.settings_saved', {provider: 'Google AI Studio'}), 'success');
         await loadGoogleAIStudioSettings();
@@ -75,7 +75,7 @@ async function resetGoogleAIStudioSettings() {
         });
         const data = await response.json().catch(() => ({}));
         if (!response.ok) {
-            throw new Error(data.detail || data.error || t('unknown_error'));
+            throw createProviderRequestError(response, data);
         }
         showStatus(data.message || t('provider.settings_reset', {provider: 'Google AI Studio'}), 'success');
         await loadGoogleAIStudioSettings();
@@ -104,7 +104,7 @@ async function addGoogleAIStudioCredential(event) {
         });
         const data = await response.json().catch(() => ({}));
         if (!response.ok) {
-            throw new Error(data.detail || data.error || t('unknown_error'));
+            throw createProviderRequestError(response, data);
         }
 
         const result = document.getElementById('googleAiStudioSaveResult');
@@ -124,7 +124,9 @@ async function addGoogleAIStudioCredential(event) {
         await AppState.primaryCreds.refresh();
         await refreshUsageStats();
     } catch (error) {
-        showStatus(t('provider.api_key_add_failed', {provider: 'Google AI Studio', error: error.message}), 'error');
+        showStatus(t('provider.api_key_add_failed', {
+            provider: 'Google AI Studio', error: formatProviderRequestError(error)
+        }), 'error');
     } finally {
         button.disabled = false;
         button.textContent = t('runtime.validate_add');

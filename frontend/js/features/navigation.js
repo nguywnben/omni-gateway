@@ -94,6 +94,7 @@ function initStaticUiBindings() {
         'clear-model-blacklist': () => clearModelBlacklist(),
         'select-provider': (element) => selectProviderWorkspace(element.dataset.provider),
         'change-provider-catalog-page': (element) => changeProviderCatalogPage(Number(element.dataset.pageDelta)),
+        'retry-provider-capabilities': () => retryProviderCapabilities(),
         'select-ai-studio-files': () => document.getElementById('googleAiStudioFileInput')?.click(),
         'upload-ai-studio-files': () => uploadGoogleAiStudioFiles(),
         'clear-ai-studio-files': () => clearGoogleAiStudioFiles(),
@@ -299,39 +300,48 @@ function switchTab(tabName) {
 const PROVIDER_WORKSPACES = {
     google_antigravity: {
         selectorId: 'providerSelectorGoogleAntigravity',
-        panelId: 'providerWorkspaceGoogleAntigravity'
+        panelId: 'providerWorkspaceGoogleAntigravity',
+        settingsFamily: 'antigravity'
     },
     google_ai_studio: {
         selectorId: 'providerSelectorGoogleAiStudio',
-        panelId: 'providerWorkspaceGoogleAiStudio'
+        panelId: 'providerWorkspaceGoogleAiStudio',
+        settingsFamily: 'google-ai-studio'
     },
     grok: {
         selectorId: 'providerSelectorGrok',
-        panelId: 'providerWorkspaceGrok'
+        panelId: 'providerWorkspaceGrok',
+        settingsFamily: 'xai'
     },
     xai_console: {
         selectorId: 'providerSelectorXaiConsole',
-        panelId: 'providerWorkspaceXaiConsole'
+        panelId: 'providerWorkspaceXaiConsole',
+        settingsFamily: 'xai'
     },
     codex: {
         selectorId: 'providerSelectorCodex',
-        panelId: 'providerWorkspaceCodex'
+        panelId: 'providerWorkspaceCodex',
+        settingsFamily: 'openai'
     },
     openai_platform: {
         selectorId: 'providerSelectorOpenAiPlatform',
-        panelId: 'providerWorkspaceOpenAiPlatform'
+        panelId: 'providerWorkspaceOpenAiPlatform',
+        settingsFamily: 'openai'
     },
     claude_code: {
         selectorId: 'providerSelectorClaudeCode',
-        panelId: 'providerWorkspaceClaudeCode'
+        panelId: 'providerWorkspaceClaudeCode',
+        settingsFamily: 'anthropic'
     },
     claude_platform: {
         selectorId: 'providerSelectorClaudePlatform',
-        panelId: 'providerWorkspaceClaudePlatform'
+        panelId: 'providerWorkspaceClaudePlatform',
+        settingsFamily: 'anthropic'
     },
     ollama: {
         selectorId: 'providerSelectorOllama',
-        panelId: 'providerWorkspaceOllama'
+        panelId: 'providerWorkspaceOllama',
+        settingsFamily: null
     }
 };
 
@@ -446,13 +456,6 @@ function selectProviderWorkspace(providerId, focusSelector = false) {
         if (selector) selector.tabIndex = isActive ? 0 : -1;
         panel?.classList.toggle('hidden', !isActive);
     });
-
-    const activePanel = document.getElementById(selected.panelId);
-    const header = activePanel?.querySelector('.provider-workspace-header');
-    const pagination = document.getElementById('providerCatalogPagination');
-    if (header && pagination && pagination.parentElement !== header) {
-        header.appendChild(pagination);
-    }
 
     if (focusSelector) {
         const selector = document.getElementById(selected.selectorId);

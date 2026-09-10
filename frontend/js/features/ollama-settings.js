@@ -19,7 +19,7 @@ async function addOllamaCredential(event) {
             body: JSON.stringify({ base_url: baseUrl, api_key: apiKey })
         });
         const data = await response.json().catch(() => ({}));
-        if (!response.ok) throw new Error(data.detail || data.error || t('unknown_error'));
+        if (!response.ok) throw createProviderRequestError(response, data);
 
         const title = document.getElementById('ollamaSaveResultTitle');
         const text = document.getElementById('ollamaSaveResultText');
@@ -39,7 +39,9 @@ async function addOllamaCredential(event) {
         await loadModelCatalog(true);
         await refreshUsageStats();
     } catch (error) {
-        showStatus(t('provider.connection_add_failed', {provider: 'Ollama', error: error.message}), 'error');
+        showStatus(t('provider.connection_add_failed', {
+            provider: 'Ollama', error: formatProviderRequestError(error)
+        }), 'error');
     } finally {
         button.disabled = false;
         button.textContent = t('runtime.validate_add');

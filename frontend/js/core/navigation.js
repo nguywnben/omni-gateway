@@ -245,19 +245,7 @@ function getTabDataLoader(tabName) {
 
         models: () => loadModelCatalog(),
 
-        providers: () => Promise.all([
-
-            loadAntigravitySettings(),
-
-            loadGoogleAIStudioSettings(),
-
-            loadXaiSettings(),
-
-            loadOpenAISettings(),
-
-            loadAnthropicSettings()
-
-        ]),
+        providers: () => loadProviderOnboarding(),
 
         config: () => loadConfig(),
 

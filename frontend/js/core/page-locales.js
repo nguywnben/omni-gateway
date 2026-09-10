@@ -501,6 +501,64 @@ for (const [locale, values] of Object.entries(PROVIDER_CATALOG_VALUES)) {
     Object.assign(PAGE_LOCALE_TRANSLATIONS[locale], Object.fromEntries(PROVIDER_CATALOG_KEYS.map((key, index) => [key, values[index]])));
 }
 
+const PROVIDER_WORKFLOW_KEYS = [
+    'providers.capabilities_loading', 'providers.capabilities_ready',
+    'providers.capabilities_failed', 'providers.retry',
+    'providers.import_credentials', 'providers.advanced_settings',
+    'providers.connection_test', 'providers.model_discovery'
+];
+
+const PROVIDER_WORKFLOW_VALUES = {
+    en: ['Loading supported connection capabilities...', '{count} provider connections are ready.', 'Provider capabilities could not be refreshed. Built-in options remain available.', 'Retry', 'Import existing credentials', 'Advanced settings', 'Connection test', 'Model discovery'],
+    'zh-CN': ['正在加载支持的连接能力…', '已有 {count} 个提供商连接可用。', '无法刷新提供商能力。内置选项仍可使用。', '重试', '导入现有凭据', '高级设置', '连接测试', '模型发现'],
+    'zh-TW': ['正在載入支援的連線能力…', '已有 {count} 個供應商連線可用。', '無法重新整理供應商能力。內建選項仍可使用。', '重試', '匯入現有憑證', '進階設定', '連線測試', '模型探索'],
+    de: ['Unterstützte Verbindungsfunktionen werden geladen ...', '{count} Provider-Verbindungen sind bereit.', 'Die Provider-Funktionen konnten nicht aktualisiert werden. Die integrierten Optionen bleiben verfügbar.', 'Erneut versuchen', 'Vorhandene Zugangsdaten importieren', 'Erweiterte Einstellungen', 'Verbindungstest', 'Modellerkennung'],
+    es: ['Cargando capacidades de conexión compatibles...', 'Hay {count} conexiones de proveedor listas.', 'No se pudieron actualizar las capacidades de los proveedores. Las opciones integradas siguen disponibles.', 'Reintentar', 'Importar credenciales existentes', 'Configuración avanzada', 'Prueba de conexión', 'Detección de modelos'],
+    fr: ['Chargement des capacités de connexion prises en charge…', '{count} connexions fournisseur sont prêtes.', 'Impossible d’actualiser les capacités des fournisseurs. Les options intégrées restent disponibles.', 'Réessayer', 'Importer des identifiants existants', 'Paramètres avancés', 'Test de connexion', 'Détection des modèles'],
+    id: ['Memuat kemampuan koneksi yang didukung...', '{count} koneksi penyedia siap digunakan.', 'Kemampuan penyedia tidak dapat diperbarui. Opsi bawaan tetap tersedia.', 'Coba lagi', 'Impor kredensial yang ada', 'Pengaturan lanjutan', 'Uji koneksi', 'Penemuan model'],
+    it: ['Caricamento delle funzionalità di connessione supportate…', '{count} connessioni provider sono pronte.', 'Impossibile aggiornare le funzionalità dei provider. Le opzioni integrate restano disponibili.', 'Riprova', 'Importa credenziali esistenti', 'Impostazioni avanzate', 'Test della connessione', 'Rilevamento modelli'],
+    ja: ['対応している接続機能を読み込んでいます…', '{count} 件のプロバイダー接続を利用できます。', 'プロバイダー機能を更新できませんでした。組み込みの選択肢は引き続き利用できます。', '再試行', '既存の認証情報をインポート', '詳細設定', '接続テスト', 'モデル検出'],
+    ko: ['지원되는 연결 기능을 불러오는 중입니다…', '{count}개의 공급자 연결을 사용할 수 있습니다.', '공급자 기능을 새로 고치지 못했습니다. 기본 옵션은 계속 사용할 수 있습니다.', '다시 시도', '기존 자격 증명 가져오기', '고급 설정', '연결 테스트', '모델 검색'],
+    pt: ['Carregando recursos de conexão compatíveis...', 'Há {count} conexões de provedor prontas.', 'Não foi possível atualizar os recursos dos provedores. As opções integradas continuam disponíveis.', 'Tentar novamente', 'Importar credenciais existentes', 'Configurações avançadas', 'Teste de conexão', 'Descoberta de modelos'],
+    ru: ['Загрузка поддерживаемых возможностей подключения…', 'Готово подключений к провайдерам: {count}.', 'Не удалось обновить возможности провайдеров. Встроенные варианты остаются доступны.', 'Повторить', 'Импортировать существующие учётные данные', 'Расширенные настройки', 'Проверка подключения', 'Обнаружение моделей'],
+    th: ['กำลังโหลดความสามารถการเชื่อมต่อที่รองรับ…', 'การเชื่อมต่อผู้ให้บริการ {count} รายการพร้อมใช้งาน', 'ไม่สามารถรีเฟรชความสามารถของผู้ให้บริการได้ ตัวเลือกในระบบยังคงใช้งานได้', 'ลองอีกครั้ง', 'นำเข้าข้อมูลรับรองที่มีอยู่', 'การตั้งค่าขั้นสูง', 'ทดสอบการเชื่อมต่อ', 'ค้นหาโมเดล'],
+    tr: ['Desteklenen bağlantı özellikleri yükleniyor...', '{count} sağlayıcı bağlantısı hazır.', 'Sağlayıcı özellikleri yenilenemedi. Yerleşik seçenekler kullanılabilir durumda.', 'Yeniden dene', 'Mevcut kimlik bilgilerini içe aktar', 'Gelişmiş ayarlar', 'Bağlantı testi', 'Model keşfi'],
+    vi: ['Đang tải các khả năng kết nối được hỗ trợ...', '{count} kết nối nhà cung cấp đã sẵn sàng.', 'Không thể làm mới khả năng của nhà cung cấp. Các lựa chọn tích hợp vẫn có thể sử dụng.', 'Thử lại', 'Nhập thông tin xác thực hiện có', 'Cài đặt nâng cao', 'Kiểm tra kết nối', 'Khám phá mô hình']
+};
+
+for (const [locale, values] of Object.entries(PROVIDER_WORKFLOW_VALUES)) {
+    Object.assign(PAGE_LOCALE_TRANSLATIONS[locale], Object.fromEntries(PROVIDER_WORKFLOW_KEYS.map((key, index) => [key, values[index]])));
+}
+
+const PROVIDER_REMEDIATION_VALUES = {
+    en: ['Check or refresh the credential, then try again.', 'Review the provider account, project, and model permissions.', 'Review billing or quota for the provider account.', 'Wait for the provider limit to reset or use another credential.', 'Refresh the available models and choose one exposed by this credential.', 'Check DNS, outbound connectivity, proxy settings, and the provider endpoint.', 'Check provider status and account settings, then try again.'],
+    'zh-CN': ['检查或刷新凭据，然后重试。', '检查提供商账户、项目和模型权限。', '检查提供商账户的账单或配额。', '等待提供商限制重置，或使用其他凭据。', '刷新可用模型，并选择此凭据提供的模型。', '检查 DNS、出站连接、代理设置和提供商 endpoint。', '检查提供商状态和账户设置，然后重试。'],
+    'zh-TW': ['檢查或重新整理憑證，然後再試一次。', '檢查供應商帳戶、專案與模型權限。', '檢查供應商帳戶的帳務或配額。', '等待供應商限制重設，或使用其他憑證。', '重新整理可用模型，並選擇此憑證提供的模型。', '檢查 DNS、對外連線、Proxy 設定與供應商 endpoint。', '檢查供應商狀態與帳戶設定，然後再試一次。'],
+    de: ['Prüfen oder aktualisieren Sie die Zugangsdaten und versuchen Sie es erneut.', 'Prüfen Sie die Konto-, Projekt- und Modellberechtigungen beim Provider.', 'Prüfen Sie Abrechnung oder Kontingent des Provider-Kontos.', 'Warten Sie auf das Zurücksetzen des Limits oder verwenden Sie andere Zugangsdaten.', 'Aktualisieren Sie die Modelle und wählen Sie ein für diese Zugangsdaten verfügbares Modell.', 'Prüfen Sie DNS, ausgehende Verbindung, Proxy und Provider-Endpunkt.', 'Prüfen Sie Provider-Status und Kontoeinstellungen und versuchen Sie es erneut.'],
+    es: ['Comprueba o actualiza la credencial y vuelve a intentarlo.', 'Revisa los permisos de cuenta, proyecto y modelo del proveedor.', 'Revisa la facturación o la cuota de la cuenta del proveedor.', 'Espera a que se restablezca el límite o usa otra credencial.', 'Actualiza los modelos disponibles y elige uno expuesto por esta credencial.', 'Comprueba DNS, conectividad saliente, proxy y endpoint del proveedor.', 'Comprueba el estado del proveedor y la configuración de la cuenta y vuelve a intentarlo.'],
+    fr: ['Vérifiez ou actualisez l’identifiant, puis réessayez.', 'Vérifiez les autorisations du compte, du projet et des modèles chez le fournisseur.', 'Vérifiez la facturation ou le quota du compte fournisseur.', 'Attendez la réinitialisation de la limite ou utilisez un autre identifiant.', 'Actualisez les modèles disponibles et choisissez-en un exposé par cet identifiant.', 'Vérifiez le DNS, la connectivité sortante, le proxy et l’endpoint fournisseur.', 'Vérifiez l’état du fournisseur et les paramètres du compte, puis réessayez.'],
+    id: ['Periksa atau perbarui kredensial, lalu coba lagi.', 'Tinjau izin akun, proyek, dan model di penyedia.', 'Tinjau penagihan atau kuota akun penyedia.', 'Tunggu batas penyedia direset atau gunakan kredensial lain.', 'Segarkan model yang tersedia dan pilih model yang disediakan kredensial ini.', 'Periksa DNS, konektivitas keluar, proxy, dan endpoint penyedia.', 'Periksa status penyedia dan pengaturan akun, lalu coba lagi.'],
+    it: ['Controlla o aggiorna la credenziale, quindi riprova.', 'Controlla le autorizzazioni di account, progetto e modello del provider.', 'Controlla la fatturazione o la quota dell’account provider.', 'Attendi il ripristino del limite o usa un’altra credenziale.', 'Aggiorna i modelli disponibili e scegline uno esposto da questa credenziale.', 'Controlla DNS, connettività in uscita, proxy ed endpoint del provider.', 'Controlla lo stato del provider e le impostazioni dell’account, quindi riprova.'],
+    ja: ['認証情報を確認または更新して、もう一度お試しください。', 'プロバイダーのアカウント、プロジェクト、モデルの権限を確認してください。', 'プロバイダーアカウントの請求またはクォータを確認してください。', '制限のリセットを待つか、別の認証情報を使用してください。', '利用可能なモデルを更新し、この認証情報で公開されているモデルを選択してください。', 'DNS、外向き接続、プロキシ設定、プロバイダー endpoint を確認してください。', 'プロバイダーの状態とアカウント設定を確認して、もう一度お試しください。'],
+    ko: ['자격 증명을 확인하거나 새로 고친 후 다시 시도하세요.', '공급자 계정, 프로젝트 및 모델 권한을 검토하세요.', '공급자 계정의 결제 또는 할당량을 검토하세요.', '공급자 제한이 재설정될 때까지 기다리거나 다른 자격 증명을 사용하세요.', '사용 가능한 모델을 새로 고치고 이 자격 증명이 제공하는 모델을 선택하세요.', 'DNS, 아웃바운드 연결, 프록시 설정 및 공급자 endpoint를 확인하세요.', '공급자 상태와 계정 설정을 확인한 후 다시 시도하세요.'],
+    pt: ['Verifique ou atualize a credencial e tente novamente.', 'Revise as permissões de conta, projeto e modelo no provedor.', 'Revise o faturamento ou a cota da conta do provedor.', 'Aguarde a redefinição do limite ou use outra credencial.', 'Atualize os modelos disponíveis e escolha um exposto por esta credencial.', 'Verifique DNS, conectividade de saída, proxy e endpoint do provedor.', 'Verifique o status do provedor e as configurações da conta e tente novamente.'],
+    ru: ['Проверьте или обновите учётные данные и повторите попытку.', 'Проверьте разрешения учётной записи, проекта и моделей у провайдера.', 'Проверьте оплату или квоту учётной записи провайдера.', 'Дождитесь сброса лимита или используйте другие учётные данные.', 'Обновите доступные модели и выберите модель, доступную этим учётным данным.', 'Проверьте DNS, исходящее соединение, прокси и endpoint провайдера.', 'Проверьте состояние провайдера и настройки учётной записи, затем повторите попытку.'],
+    th: ['ตรวจสอบหรือรีเฟรชข้อมูลรับรอง แล้วลองอีกครั้ง', 'ตรวจสอบสิทธิ์ของบัญชี โปรเจกต์ และโมเดลกับผู้ให้บริการ', 'ตรวจสอบการเรียกเก็บเงินหรือโควตาของบัญชีผู้ให้บริการ', 'รอให้ขีดจำกัดรีเซ็ตหรือใช้ข้อมูลรับรองอื่น', 'รีเฟรชโมเดลที่มีและเลือกโมเดลที่ข้อมูลรับรองนี้เข้าถึงได้', 'ตรวจสอบ DNS การเชื่อมต่อขาออก พร็อกซี และ endpoint ของผู้ให้บริการ', 'ตรวจสอบสถานะผู้ให้บริการและการตั้งค่าบัญชี แล้วลองอีกครั้ง'],
+    tr: ['Kimlik bilgisini kontrol edin veya yenileyin ve tekrar deneyin.', 'Sağlayıcıdaki hesap, proje ve model izinlerini inceleyin.', 'Sağlayıcı hesabının faturalandırmasını veya kotasını inceleyin.', 'Sağlayıcı sınırının sıfırlanmasını bekleyin veya başka kimlik bilgisi kullanın.', 'Kullanılabilir modelleri yenileyin ve bu kimlik bilgisinin sunduğu bir modeli seçin.', 'DNS, dış bağlantı, proxy ayarları ve sağlayıcı endpoint değerini kontrol edin.', 'Sağlayıcı durumunu ve hesap ayarlarını kontrol edip tekrar deneyin.'],
+    vi: ['Kiểm tra hoặc làm mới thông tin xác thực rồi thử lại.', 'Kiểm tra quyền của tài khoản, dự án và mô hình ở nhà cung cấp.', 'Kiểm tra thanh toán hoặc hạn mức của tài khoản nhà cung cấp.', 'Chờ giới hạn được đặt lại hoặc dùng thông tin xác thực khác.', 'Làm mới danh sách mô hình và chọn mô hình mà thông tin xác thực này được phép dùng.', 'Kiểm tra DNS, kết nối ra ngoài, proxy và endpoint của nhà cung cấp.', 'Kiểm tra trạng thái nhà cung cấp và cài đặt tài khoản rồi thử lại.']
+};
+
+const PROVIDER_REMEDIATION_LOCALE_KEYS = [
+    'providers.remediation_credential', 'providers.remediation_permission',
+    'providers.remediation_quota', 'providers.remediation_rate_limit',
+    'providers.remediation_invalid_model', 'providers.remediation_network',
+    'providers.remediation_upstream'
+];
+
+for (const [locale, values] of Object.entries(PROVIDER_REMEDIATION_VALUES)) {
+    Object.assign(PAGE_LOCALE_TRANSLATIONS[locale], Object.fromEntries(PROVIDER_REMEDIATION_LOCALE_KEYS.map((key, index) => [key, values[index]])));
+}
+
 const CONSOLE_CHROME_KEYS = [
     'site_footer', 'open_navigation', 'primary_navigation', 'console', 'loading_version',
     'loading', 'loading_api_key', 'copy_api_key', 'show_api_key', 'regenerate_api_key',

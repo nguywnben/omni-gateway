@@ -319,6 +319,8 @@ class FrontendLocaleContractTests(unittest.TestCase):
         for variable in (
             "SETTINGS_PAGE_KEYS",
             "PROVIDER_CATALOG_KEYS",
+            "PROVIDER_WORKFLOW_KEYS",
+            "PROVIDER_REMEDIATION_LOCALE_KEYS",
             "CONSOLE_CHROME_KEYS",
             "RUNTIME_UI_KEYS",
             "PROVIDER_ACTION_KEYS",

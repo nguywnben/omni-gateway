@@ -333,5 +333,48 @@ function setProviderSettingsLoading(loadingIds, formIds, isLoading, preserveCont
     });
 }
 
+const PROVIDER_REQUEST_REMEDIATION_KEYS = Object.freeze({
+    credential: 'providers.remediation_credential',
+    permission: 'providers.remediation_permission',
+    quota: 'providers.remediation_quota',
+    rate_limit: 'providers.remediation_rate_limit',
+    invalid_model: 'providers.remediation_invalid_model',
+    network: 'providers.remediation_network',
+    upstream: 'providers.remediation_upstream'
+});
+
+function classifyProviderRequestFailure(response, data) {
+    const diagnosticCategory = data?.diagnostic?.category;
+    if (PROVIDER_REQUEST_REMEDIATION_KEYS[diagnosticCategory]) return diagnosticCategory;
+    const status = Number(response?.status || 0);
+    if (!status) return 'network';
+    if (status === 401 || status === 400) return 'credential';
+    if (status === 403) return 'permission';
+    if (status === 402) return 'quota';
+    if (status === 429) return 'rate_limit';
+    if (status === 404) return 'invalid_model';
+    return 'upstream';
+}
+
+function createProviderRequestError(response, data) {
+    const message = data?.detail || data?.error || data?.message || t('unknown_error');
+    const error = new Error(message);
+    error.providerCategory = classifyProviderRequestFailure(response, data);
+    error.providerDiagnostic = data?.diagnostic || null;
+    return error;
+}
+
+function formatProviderRequestError(error) {
+    const category = PROVIDER_REQUEST_REMEDIATION_KEYS[error?.providerCategory]
+        ? error.providerCategory
+        : (error instanceof TypeError ? 'network' : 'upstream');
+    const remediation = error?.providerDiagnostic?.remediation
+        || t(PROVIDER_REQUEST_REMEDIATION_KEYS[category]);
+    const message = String(error?.message || t('unknown_error')).trim();
+    return remediation && !message.includes(remediation)
+        ? `${message} ${remediation}`
+        : message;
+}
+
 document.addEventListener('DOMContentLoaded', applyProviderFormContract, {once: true});
 document.addEventListener('omni:locale-change', applyProviderFormCopy);

@@ -6,9 +6,9 @@
 - Active plan: `PROD-SELFHOST-R1`
 - Target: production-quality self-hosting for one person or a trusted team, not enterprise service
   operation.
-- Progress: **21/36 implementation tasks**; Phase 3 is in progress (3/6).
-- Completed: **P3.3 — Production dashboard**.
-- Next: **P3.4 — Provider onboarding**. Do not begin it until a
+- Progress: **22/36 implementation tasks**; Phase 3 is in progress (4/6).
+- Completed: **P3.4 — Provider onboarding**.
+- Next: **P3.5 — Credential fleet operations**. Do not begin it until a
   new user request to continue the fixed plan.
 - Supported runtime today: standalone, one worker, one replica.
 - Redis coordination, multi-replica HA, and Helm are experimental and no longer R1 release blockers.
@@ -49,6 +49,14 @@ Do not push unless the user requests it.
 
 ## Latest Evidence
 
+- `docs/evidence/p3.4-provider-onboarding.md`
+- Providers now consumes the versioned capability catalog for all nine advertised connection
+  variants, keeps the primary add path visible, and progressively discloses import and advanced
+  settings. Provider-family settings load only when opened instead of all five families loading on
+  page entry; failures retain the built-in catalog and offer retry plus bounded remediation.
+- The 68-test task gate and authenticated browser smoke passed. Both catalog pages, every provider
+  workspace, keyboard selection, disclosure behavior, lazy request boundary, and a clean browser
+  console were verified.
 - `docs/evidence/p3.3-production-dashboard.md`
 - Dashboard now prioritizes one readiness decision, clear next actions, provider/credential
   incidents, current request health, recent content-free activity, actual recorded cost, latency,

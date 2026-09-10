@@ -37,7 +37,7 @@ async function loadOpenAISettings(options = {}) {
             headers: getAuthHeaders()
         });
         const data = await response.json().catch(() => ({}));
-        if (!response.ok) throw new Error(data.detail || data.error || t('unknown_error'));
+        if (!response.ok) throw createProviderRequestError(response, data);
 
         Object.entries(OPENAI_CONFIG_FIELDS).forEach(([fieldId, configKey]) => {
             const field = document.getElementById(fieldId);
@@ -75,7 +75,7 @@ async function saveOpenAISettings(scope) {
             body: JSON.stringify({ config })
         });
         const data = await response.json().catch(() => ({}));
-        if (!response.ok) throw new Error(data.detail || data.error || t('unknown_error'));
+        if (!response.ok) throw createProviderRequestError(response, data);
         showStatus(t('provider.settings_saved', {provider: group.label}), 'success');
         await loadOpenAISettings();
     } catch (error) {
@@ -101,7 +101,7 @@ async function resetOpenAISettings(scope) {
             { method: 'POST', headers: getAuthHeaders() }
         );
         const data = await response.json().catch(() => ({}));
-        if (!response.ok) throw new Error(data.detail || data.error || t('unknown_error'));
+        if (!response.ok) throw createProviderRequestError(response, data);
         showStatus(data.message || t('provider.settings_reset', {provider: group.label}), 'success');
         await loadOpenAISettings();
     } catch (error) {
@@ -144,7 +144,7 @@ async function addOpenAIPlatformCredential(event) {
             body: JSON.stringify({ api_key: apiKey })
         });
         const data = await response.json().catch(() => ({}));
-        if (!response.ok) throw new Error(data.detail || data.error || t('unknown_error'));
+        if (!response.ok) throw createProviderRequestError(response, data);
         resetProviderTransientSecrets('openai-platform.credential');
         showOpenAICredentialSaveResult('platform', data);
         showStatus(data.message, 'success');
@@ -152,7 +152,9 @@ async function addOpenAIPlatformCredential(event) {
         await loadModelCatalog(true);
         await refreshUsageStats();
     } catch (error) {
-        showStatus(t('provider.api_key_add_failed', {provider: 'OpenAI Platform', error: error.message}), 'error');
+        showStatus(t('provider.api_key_add_failed', {
+            provider: 'OpenAI Platform', error: formatProviderRequestError(error)
+        }), 'error');
     } finally {
         button.disabled = false;
         button.textContent = t('runtime.validate_add');
@@ -170,7 +172,7 @@ async function startCodexOauth() {
             headers: getAuthHeaders()
         });
         const data = await response.json().catch(() => ({}));
-        if (!response.ok) throw new Error(data.detail || data.error || t('unknown_error'));
+        if (!response.ok) throw createProviderRequestError(response, data);
 
         const fields = document.getElementById('codexOauthFields');
         const code = document.getElementById('codexUserCode');
@@ -187,7 +189,9 @@ async function startCodexOauth() {
         }
         showStatus(t('provider.device_code_ready', {provider: 'Codex'}), 'success');
     } catch (error) {
-        showStatus(t('provider.auth_start_failed', {provider: 'Codex', error: error.message}), 'error');
+        showStatus(t('provider.auth_start_failed', {
+            provider: 'Codex', error: formatProviderRequestError(error)
+        }), 'error');
     } finally {
         button.disabled = false;
         button.textContent = t('runtime.get_authorization_code');
@@ -216,7 +220,7 @@ async function completeCodexOauth() {
             showStatus(data.message || t('provider.authorization_pending', {provider: 'Codex'}), 'info');
             return;
         }
-        if (!response.ok) throw new Error(data.detail || data.error || t('unknown_error'));
+        if (!response.ok) throw createProviderRequestError(response, data);
 
         delete fields.dataset.flowId;
         showOpenAICredentialSaveResult('codex', data);
@@ -225,7 +229,9 @@ async function completeCodexOauth() {
         await loadModelCatalog(true);
         await refreshUsageStats();
     } catch (error) {
-        showStatus(t('provider.credential_save_failed', {provider: 'Codex', error: error.message}), 'error');
+        showStatus(t('provider.credential_save_failed', {
+            provider: 'Codex', error: formatProviderRequestError(error)
+        }), 'error');
     } finally {
         button.disabled = false;
         button.textContent = t('runtime.check_authorization');
