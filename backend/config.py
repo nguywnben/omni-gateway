@@ -386,9 +386,9 @@ async def get_legacy_token_compression_config() -> dict[str, Any]:
 async def get_token_compression_config() -> dict[str, Any]:
     """Return effective compression settings; disable compression on policy failure."""
     try:
-        from core.quality_policy_runtime import resolve_quality_policy
+        from core.quality_policy_runtime import resolve_request_quality_policy
 
-        resolved = await resolve_quality_policy()
+        resolved = await resolve_request_quality_policy()
         compression = resolved["effective_settings"]["compression"]
         return {
             "enabled": compression["enabled"],

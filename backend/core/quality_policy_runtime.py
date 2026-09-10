@@ -10,9 +10,55 @@ import config
 from core.quality_policy import (
     LOCKED_SETTING_PATHS,
     POLICY_STORAGE_KEY,
+    QualityPolicyError,
     load_policy_document,
     settings_from_legacy,
+    validate_settings,
 )
+
+COMPRESSION_POLICY_INHERIT = "inherit"
+COMPRESSION_POLICY_DISABLED = "disabled"
+COMPRESSION_POLICIES = frozenset({COMPRESSION_POLICY_INHERIT, COMPRESSION_POLICY_DISABLED})
+
+
+def normalize_compression_policy(value: Any, *, layer: str) -> str:
+    """Validate the intentionally small restrictive compression policy surface."""
+    normalized = str(value or COMPRESSION_POLICY_INHERIT).strip().lower()
+    if normalized not in COMPRESSION_POLICIES:
+        raise QualityPolicyError(
+            f"{layer} compression policy must be inherit or disabled.",
+            code="quality_policy_override_invalid",
+        )
+    return normalized
+
+
+def compression_policy_from_request_header(value: Any) -> str:
+    normalized = str(value or "").strip().lower()
+    if not normalized or normalized == "inherit":
+        return COMPRESSION_POLICY_INHERIT
+    if normalized == "off":
+        return COMPRESSION_POLICY_DISABLED
+    raise QualityPolicyError(
+        "x-omni-compression must be off or inherit.",
+        code="quality_policy_override_invalid",
+    )
+
+
+def resolve_request_quality_settings(
+    global_settings: dict[str, Any],
+    *,
+    key_compression_policy: str = COMPRESSION_POLICY_INHERIT,
+    request_compression_policy: str = COMPRESSION_POLICY_INHERIT,
+) -> dict[str, Any]:
+    """Apply key then request restrictions without allowing either to weaken global policy."""
+    effective = validate_settings(global_settings)
+    for layer, policy in (
+        ("virtual-key", key_compression_policy),
+        ("request", request_compression_policy),
+    ):
+        if normalize_compression_policy(policy, layer=layer) == COMPRESSION_POLICY_DISABLED:
+            effective["compression"]["enabled"] = False
+    return effective
 
 
 async def read_legacy_quality_settings() -> dict[str, Any]:
@@ -95,3 +141,25 @@ async def resolve_quality_policy() -> dict[str, Any]:
 
 async def get_effective_quality_settings() -> dict[str, Any]:
     return (await resolve_quality_policy())["effective_settings"]
+
+
+async def resolve_request_quality_policy() -> dict[str, Any]:
+    """Return the global policy constrained by the authenticated request context."""
+    from core.request_context import (
+        get_key_compression_policy,
+        get_request_compression_policy,
+    )
+
+    resolved = await resolve_quality_policy()
+    global_effective = resolved["effective_settings"]
+    resolved["global_effective_settings"] = global_effective
+    resolved["effective_settings"] = resolve_request_quality_settings(
+        global_effective,
+        key_compression_policy=get_key_compression_policy(),
+        request_compression_policy=get_request_compression_policy(),
+    )
+    resolved["compression_restrictions"] = {
+        "virtual_key": get_key_compression_policy(),
+        "request": get_request_compression_policy(),
+    }
+    return resolved

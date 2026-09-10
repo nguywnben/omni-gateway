@@ -166,6 +166,22 @@ class VirtualKeyCrudTests(unittest.TestCase):
         self.assertIsNotNone(record)
         self.assertEqual(record.name, "persisted")
 
+    def test_compression_restriction_round_trips_storage(self):
+        async def scenario():
+            created, plaintext = await self.manager.create_key("quality-restricted")
+            updated = await self.manager.update_key(
+                created["id"],
+                {"compression_policy": "disabled"},
+                expected_revision=created["revision"],
+            )
+            fresh_manager = _patched_manager(self.storage)
+            reloaded = await fresh_manager.verify(plaintext)
+            return updated, reloaded
+
+        updated, reloaded = _run(scenario())
+        self.assertEqual(updated["compression_policy"], "disabled")
+        self.assertEqual(reloaded.compression_policy, "disabled")
+
     def test_cache_miss_forces_generation_refresh_before_rejecting_key(self):
         plaintext = "synthetic-cross-replica-token"
         record = VirtualKey(

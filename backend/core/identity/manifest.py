@@ -121,6 +121,7 @@ _MANAGEMENT_ROUTE_MANIFEST = (
         ManagementPermission.ACCESS_MANAGE,
         ("POST", "/api/virtual-keys"),
         ("PATCH", "/api/virtual-keys/{key_id}"),
+        ("PATCH", "/api/virtual-keys/{key_id}/quality-policy"),
         ("DELETE", "/api/virtual-keys/{key_id}"),
         ("POST", "/api/virtual-keys/{key_id}/rotate"),
         ("POST", "/api/virtual-keys/{key_id}/revoke"),

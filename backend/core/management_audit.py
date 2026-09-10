@@ -88,6 +88,9 @@ MANAGEMENT_MUTATIONS: dict[tuple[str, str], ManagementMutation] = {
     ("PATCH", "/api/virtual-keys/{key_id}"): _mutation(
         "virtual_key.update", "virtual_key", "updated"
     ),
+    ("PATCH", "/api/virtual-keys/{key_id}/quality-policy"): _mutation(
+        "virtual_key.update", "virtual_key", "settings_changed"
+    ),
     ("DELETE", "/api/virtual-keys/{key_id}"): _mutation(
         "virtual_key.revoke", "virtual_key", "revoked"
     ),

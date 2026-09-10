@@ -205,6 +205,16 @@ async def authenticate_flexible(
         )
 
     from config import API_KEY_PREFIX, get_api_key
+    from core.quality_policy_runtime import compression_policy_from_request_header
+    from core.request_context import set_request_compression_policy
+
+    try:
+        request_compression_policy = compression_policy_from_request_header(
+            request.headers.get("x-omni-compression")
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    set_request_compression_policy(request_compression_policy)
 
     api_key = await get_api_key()
 
@@ -223,6 +233,7 @@ async def authenticate_flexible(
     # Fall back to virtual API keys (per-key budgets, rate limits, scopes).
     from core.request_context import (
         set_api_key_id,
+        set_key_compression_policy,
         set_operation_replay_required,
         set_virtual_key_reservation_id,
     )
@@ -282,6 +293,7 @@ async def authenticate_flexible(
         raise
     replayed = bool(getattr(reservation_id, "replayed", False))
     set_api_key_id(record.id)
+    set_key_compression_policy(record.compression_policy)
     set_operation_replay_required(replayed)
     set_virtual_key_reservation_id("" if replayed else reservation_id or "")
     if reservation_id and not replayed:

@@ -100,6 +100,7 @@ MANAGEMENT_SCOPES = ("management:read", "management:write")
 VIRTUAL_KEY_SCOPES = INFERENCE_SCOPES + MANAGEMENT_SCOPES
 DEFAULT_INFERENCE_SCOPES = INFERENCE_SCOPES
 UNKNOWN_PRICING_POLICIES = ("deny", "warn", "fallback")
+COMPRESSION_POLICIES = ("inherit", "disabled")
 
 _GEMINI_MODEL_PATH_RE = re.compile(r"/models/([^/:?]+)")
 _MODEL_PATTERN_RE = re.compile(r"^(?=.{1,128}$)(?=.*[A-Za-z0-9])[A-Za-z0-9._:/+*?-]+$")
@@ -209,6 +210,13 @@ def normalize_unknown_pricing_policy(policy: Any, fallback: Any) -> Tuple[str, O
     return normalized_policy, normalized_fallback
 
 
+def normalize_compression_policy(policy: Any) -> str:
+    normalized = str(policy or "inherit").strip().lower()
+    if normalized not in COMPRESSION_POLICIES:
+        raise ValueError("Compression policy must be inherit or disabled.")
+    return normalized
+
+
 @dataclass
 class VirtualKey:
     """A single virtual API key record (secret stored as SHA-256 hash)."""
@@ -229,6 +237,7 @@ class VirtualKey:
     scopes: Tuple[str, ...] = DEFAULT_INFERENCE_SCOPES
     unknown_pricing_policy: str = "deny"
     fallback_price_usd_per_million: Optional[float] = None
+    compression_policy: str = "inherit"
     last_used_at: Optional[float] = None
     revision: int = 1
     revoked_at: Optional[float] = None
@@ -260,6 +269,7 @@ class VirtualKey:
             "scopes": list(self.scopes),
             "unknown_pricing_policy": self.unknown_pricing_policy,
             "fallback_price_usd_per_million": self.fallback_price_usd_per_million,
+            "compression_policy": self.compression_policy,
             "last_used_at": self.last_used_at,
             "revision": self.revision,
             "revoked_at": self.revoked_at,
@@ -308,6 +318,7 @@ class VirtualKey:
                 scopes=scopes,
                 unknown_pricing_policy=pricing_policy,
                 fallback_price_usd_per_million=fallback_price,
+                compression_policy=normalize_compression_policy(raw.get("compression_policy")),
                 last_used_at=_float_or_none(raw.get("last_used_at")),
                 revision=max(1, int(raw.get("revision") or 1)),
                 revoked_at=_float_or_none(raw.get("revoked_at")),
@@ -507,6 +518,11 @@ class VirtualKeyManager:
                 if "allowed_models" in patch
                 else None
             )
+            compression_policy = (
+                normalize_compression_policy(patch.get("compression_policy"))
+                if "compression_policy" in patch
+                else record.compression_policy
+            )
             pricing_policy = record.unknown_pricing_policy
             fallback_price = record.fallback_price_usd_per_million
             if "unknown_pricing_policy" in patch or "fallback_price_usd_per_million" in patch:
@@ -547,6 +563,7 @@ class VirtualKeyManager:
                 record.scopes = normalized_scopes
             record.unknown_pricing_policy = pricing_policy
             record.fallback_price_usd_per_million = fallback_price
+            record.compression_policy = compression_policy
             record.revision += 1
             await self._persist()
             return record.to_public_dict()

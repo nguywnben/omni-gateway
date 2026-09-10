@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Literal, Optional
 
 from core.i18n import LocalizedJSONResponse as JSONResponse
 from core.utils import verify_panel_token
@@ -120,6 +120,11 @@ class RevokeVirtualKeyRequest(BaseModel):
     expected_revision: int = Field(ge=1)
 
 
+class VirtualKeyQualityPolicyRequest(BaseModel):
+    expected_revision: int = Field(ge=1)
+    compression: Literal["inherit", "disabled"]
+
+
 @router.get("")
 async def list_virtual_keys(token: str = Depends(verify_panel_token)):
     try:
@@ -188,6 +193,36 @@ async def update_virtual_key(
         return JSONResponse(status_code=400, content={"success": False, "detail": str(exc)})
     except Exception as exc:
         log.error(f"Failed to update virtual key {key_id}: {exc}")
+        return JSONResponse(
+            status_code=500,
+            content={"success": False, "detail": INTERNAL_SERVER_ERROR_DETAIL},
+        )
+
+
+@router.patch("/{key_id}/quality-policy")
+async def update_virtual_key_quality_policy(
+    key_id: str,
+    payload: VirtualKeyQualityPolicyRequest,
+    token: str = Depends(verify_panel_token),
+):
+    try:
+        record = await virtual_key_manager.update_key(
+            key_id,
+            {"compression_policy": payload.compression},
+            expected_revision=payload.expected_revision,
+        )
+        if record is None:
+            return JSONResponse(
+                status_code=404,
+                content={"success": False, "detail": "Virtual key not found."},
+            )
+        return {"success": True, "data": record}
+    except VirtualKeyConflictError as exc:
+        return JSONResponse(status_code=409, content={"success": False, "detail": str(exc)})
+    except ValueError as exc:
+        return JSONResponse(status_code=400, content={"success": False, "detail": str(exc)})
+    except Exception as exc:
+        log.error(f"Failed to update virtual key quality policy {key_id}: {exc}")
         return JSONResponse(
             status_code=500,
             content={"success": False, "detail": INTERNAL_SERVER_ERROR_DETAIL},

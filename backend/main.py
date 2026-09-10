@@ -361,6 +361,7 @@ app.add_middleware(
         "x-anthropic-auth-token",
         "anthropic-auth-token",
         "access_token",
+        "x-omni-compression",
     ],
     expose_headers=["X-Request-ID", "Retry-After"],
 )

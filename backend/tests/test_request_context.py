@@ -12,11 +12,15 @@ if str(BACKEND_DIR) not in sys.path:
 
 from core.request_context import (
     get_api_key_id,
+    get_key_compression_policy,
+    get_request_compression_policy,
     get_request_elapsed_ms,
     get_request_id,
     get_virtual_key_reservation_id,
     request_scope,
     set_api_key_id,
+    set_key_compression_policy,
+    set_request_compression_policy,
     set_virtual_key_reservation_id,
 )
 
@@ -29,11 +33,17 @@ class RequestContextTests(unittest.TestCase):
         with request_scope("request-virtual-key"):
             set_api_key_id("vk_example")
             set_virtual_key_reservation_id("reservation-example")
+            set_key_compression_policy("disabled")
+            set_request_compression_policy("disabled")
             self.assertEqual(get_api_key_id(), "vk_example")
             self.assertEqual(get_virtual_key_reservation_id(), "reservation-example")
+            self.assertEqual(get_key_compression_policy(), "disabled")
+            self.assertEqual(get_request_compression_policy(), "disabled")
 
         self.assertEqual(get_api_key_id(), "")
         self.assertEqual(get_virtual_key_reservation_id(), "")
+        self.assertEqual(get_key_compression_policy(), "inherit")
+        self.assertEqual(get_request_compression_policy(), "inherit")
         with request_scope("request-123"):
             self.assertEqual(get_request_id(), "request-123")
             self.assertGreaterEqual(get_request_elapsed_ms(), 0)
