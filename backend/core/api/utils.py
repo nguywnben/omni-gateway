@@ -435,6 +435,7 @@ async def record_unassigned_api_call_success(
     model_name: str,
     token_usage: Optional[Dict[str, Any]],
     status_code: int = 200,
+    request_metrics: Optional[Dict[str, Any]] = None,
 ) -> None:
     """Persist unattributed success usage and settle any virtual-key reservation."""
     await _record_success_usage(
@@ -443,7 +444,7 @@ async def record_unassigned_api_call_success(
         provider=mode,
         status_code=status_code,
         token_usage=token_usage,
-        request_metrics=None,
+        request_metrics=request_metrics,
     )
     trace_decision(
         category="upstream",

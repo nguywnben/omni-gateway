@@ -215,13 +215,15 @@ async def wrap_cli_request(
     model: str,
     project_id: str,
     enable_credit: bool = False,
+    compression_result: CompressionResult | None = None,
 ) -> Tuple[Dict[str, Any], str, CompressionResult]:
     original_inner = dict(gemini_request)
     state = await _get_session_state(original_inner, model)
-    compression_result = compress_gemini_request(
-        original_inner,
-        CompressionSettings(**await get_token_compression_config()),
-    )
+    if compression_result is None:
+        compression_result = compress_gemini_request(
+            original_inner,
+            CompressionSettings(**await get_token_compression_config()),
+        )
     inner = dict(compression_result.request)
 
     if compression_result.applied:
@@ -276,14 +278,15 @@ async def prepare_provider_request(
     provider_id = get_credential_provider(credential_data)
     model_name = str(body.get("model") or "").strip()
     inner_request = body.get("request", body)
+    compression_result = compress_gemini_request(
+        dict(inner_request),
+        CompressionSettings(**await get_token_compression_config()),
+    )
+    compressed_request = dict(compression_result.request)
 
     if provider_id == GOOGLE_AI_STUDIO:
         api_key = str(credential_data.get("api_key") or "").strip()
-        compression_result = compress_gemini_request(
-            dict(inner_request),
-            CompressionSettings(**await get_token_compression_config()),
-        )
-        payload = dict(compression_result.request)
+        payload = dict(compressed_request)
         for internal_key in ("model", "sessionId", "labels", "enabledCreditTypes"):
             payload.pop(internal_key, None)
         target_url = build_generation_url(
@@ -298,11 +301,7 @@ async def prepare_provider_request(
         )
         if not access_token:
             raise ValueError("Provider credential does not contain an access token or API key.")
-        compression_result = compress_gemini_request(
-            dict(inner_request),
-            CompressionSettings(**await get_token_compression_config()),
-        )
-        payload = gemini_request_to_xai(dict(compression_result.request), model_name, streaming)
+        payload = gemini_request_to_xai(dict(compressed_request), model_name, streaming)
         is_oauth = (
             get_credential_provider_variant(credential_data) == GROK
             or str(credential_data.get("credential_type") or "").strip().lower() == "oauth"
@@ -325,20 +324,12 @@ async def prepare_provider_request(
         )
         if not access_token:
             raise ValueError("OpenAI credential does not contain an API key or access token.")
-        compression_result = compress_gemini_request(
-            dict(inner_request),
-            CompressionSettings(**await get_token_compression_config()),
-        )
         if credential_variant == OPENAI_PLATFORM:
-            payload = gemini_request_to_openai(
-                dict(compression_result.request), model_name, streaming
-            )
+            payload = gemini_request_to_openai(dict(compressed_request), model_name, streaming)
             target_url = f"{(await get_openai_api_url()).rstrip('/')}/chat/completions"
             auth_headers = build_openai_headers(str(access_token))
         else:
-            payload = gemini_request_to_codex(
-                dict(compression_result.request), model_name, streaming
-            )
+            payload = gemini_request_to_codex(dict(compressed_request), model_name, streaming)
             target_url = f"{(await get_codex_api_url()).rstrip('/')}/responses"
             auth_headers = build_codex_headers(
                 str(access_token),
@@ -349,24 +340,14 @@ async def prepare_provider_request(
                 user_agent=await get_codex_user_agent(),
             )
     elif provider_id == ANTHROPIC:
-        compression_result = compress_gemini_request(
-            dict(inner_request),
-            CompressionSettings(**await get_token_compression_config()),
-        )
-        payload = gemini_request_to_anthropic(
-            dict(compression_result.request), model_name, streaming
-        )
+        payload = gemini_request_to_anthropic(dict(compressed_request), model_name, streaming)
         target_url = f"{(await get_anthropic_api_url()).rstrip('/')}/messages"
         auth_headers = build_anthropic_headers(
             credential_data,
             user_agent=await get_claude_user_agent(),
         )
     elif provider_id == OLLAMA:
-        compression_result = compress_gemini_request(
-            dict(inner_request),
-            CompressionSettings(**await get_token_compression_config()),
-        )
-        payload = gemini_request_to_ollama(dict(compression_result.request), model_name, streaming)
+        payload = gemini_request_to_ollama(dict(compressed_request), model_name, streaming)
         base_url = normalize_ollama_base_url(str(credential_data.get("base_url") or ""))
         target_url = f"{base_url}/api/chat"
         auth_headers = build_ollama_headers(str(credential_data.get("api_key") or ""))
@@ -386,10 +367,11 @@ async def prepare_provider_request(
         target_url = f"{primary_url.rstrip('/')}/{operation}"
         auth_headers = await build_primary_headers(str(access_token))
         payload, _, compression_result = await wrap_cli_request(
-            inner_request,
+            compressed_request,
             model_name,
             project_id,
             enable_credit=bool(credential_data.get("enable_credit", False)),
+            compression_result=compression_result,
         )
 
     if extra_headers:

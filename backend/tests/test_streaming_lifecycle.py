@@ -202,6 +202,70 @@ class StreamingLifecycleTests(unittest.IsolatedAsyncioTestCase):
         self.assertNotIsInstance(chunks[0], Response)
         success.assert_awaited_once()
 
+    async def test_vertex_stream_applies_compression_once_and_records_its_decision(self):
+        envelope = json.dumps(
+            {
+                "results": [
+                    {
+                        "data": {
+                            "candidates": [{"finishReason": "STOP"}],
+                            "usageMetadata": {"totalTokenCount": 4},
+                        }
+                    }
+                ]
+            }
+        ).encode()
+        post = AsyncMock(return_value=_FakeWreqResponse([envelope]))
+        success = AsyncMock()
+        contents = []
+        for turn in range(5):
+            contents.extend(
+                (
+                    {"role": "user", "parts": [{"text": f"old-{turn}-" + "u" * 240}]},
+                    {"role": "model", "parts": [{"text": f"answer-{turn}-" + "m" * 240}]},
+                )
+            )
+        contents.append({"role": "user", "parts": [{"text": "CURRENT-VERTEX"}]})
+
+        with (
+            patch.object(vertex, "WREQ_AVAILABLE", True),
+            patch.object(vertex, "get_upstream_timeout_seconds", AsyncMock(return_value=30)),
+            patch.object(
+                vertex,
+                "get_token_compression_config",
+                AsyncMock(
+                    return_value={
+                        "enabled": True,
+                        "threshold_tokens": 128,
+                        "target_tokens": 64,
+                        "min_recent_turns": 1,
+                        "quality_profile": "balanced",
+                        "quality_policy_revision": 7,
+                    }
+                ),
+            ) as get_compression,
+            patch.object(vertex, "fetch_recaptcha_token", AsyncMock(return_value="token")),
+            patch.object(vertex, "_get_batch_graphql_url", return_value="https://invalid"),
+            patch.object(vertex.wreq, "post", post),
+            patch("core.api.utils.record_unassigned_api_call_success", success),
+        ):
+            chunks = [
+                chunk
+                async for chunk in vertex.stream_request(
+                    {"model": "gemini-test", "request": {"contents": contents}}
+                )
+            ]
+
+        self.assertEqual(len(chunks), 1)
+        get_compression.assert_awaited_once()
+        forwarded = post.await_args.kwargs["json"]["variables"]["contents"]
+        self.assertLess(len(forwarded), len(contents))
+        self.assertIn("CURRENT-VERTEX", json.dumps(forwarded))
+        metrics = success.await_args.kwargs["request_metrics"]
+        self.assertEqual(metrics["quality_profile"], "balanced")
+        self.assertEqual(metrics["quality_policy_revision"], 7)
+        self.assertGreater(metrics["estimated_tokens_saved"], 0)
+
     async def test_vertex_stream_preserves_utf8_split_between_transport_chunks(self):
         envelope = json.dumps(
             {

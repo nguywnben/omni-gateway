@@ -8,10 +8,11 @@ import string
 from datetime import timedelta
 from typing import Any, Dict, Optional, Tuple
 
-from config import get_upstream_timeout_seconds
+from config import get_token_compression_config, get_upstream_timeout_seconds
 from core.converter.thought_signature import decode_tool_id_and_signature
 from core.httpx_client import MAX_STREAM_LINE_BYTES, UpstreamStreamProtocolError
 from core.request_trace_service import trace_decision
+from core.token_compression import CompressionResult, CompressionSettings, compress_gemini_request
 from fastapi import Response
 from log import log
 
@@ -80,6 +81,37 @@ _SUPPORTED_VAR_FIELDS = [
     "safetySettings",
     "generationConfig",
 ]
+
+
+def _trace_compression(model: str, result: CompressionResult) -> None:
+    trace_decision(
+        category="compression",
+        action="applied" if result.applied else "skipped",
+        result="succeeded" if result.applied else "skipped",
+        reason=(
+            "token_budget"
+            if result.applied
+            else "feature_disabled"
+            if result.reason == "disabled"
+            else "history_within_limit"
+            if result.reason == "below_threshold"
+            else "content_limit"
+        ),
+        provider="vertex",
+        model=model,
+        original_tokens=result.original_estimated_tokens,
+        final_tokens=result.final_estimated_tokens,
+    )
+
+
+async def _compress_request(model: str, request: Any) -> CompressionResult:
+    candidate = request if isinstance(request, dict) else {}
+    result = compress_gemini_request(
+        dict(candidate),
+        CompressionSettings(**await get_token_compression_config()),
+    )
+    _trace_compression(model, result)
+    return result
 
 
 def _random_string(n: int) -> str:
@@ -659,7 +691,8 @@ async def stream_request(
         )
         return
 
-    gemini_payload = body.get("request", {})
+    compression_result = await _compress_request(model, body.get("request", {}))
+    gemini_payload = dict(compression_result.request)
 
     max_retries = 3
     recaptcha_token: Optional[str] = None
@@ -820,6 +853,7 @@ async def stream_request(
                                             mode="vertex",
                                             model_name=model,
                                             token_usage=usage_metadata,
+                                            request_metrics=compression_result.as_metrics(),
                                         )
                                         return
 
@@ -909,7 +943,8 @@ async def non_stream_request(
             media_type="application/json",
         )
 
-    gemini_payload = body.get("request", {})
+    compression_result = await _compress_request(model, body.get("request", {}))
+    gemini_payload = dict(compression_result.request)
 
     max_retries = 3
 
@@ -1050,6 +1085,7 @@ async def non_stream_request(
             mode="vertex",
             model_name=model,
             token_usage=result.get("usageMetadata") if isinstance(result, dict) else None,
+            request_metrics=compression_result.as_metrics(),
         )
         return Response(
             content=json.dumps(result, ensure_ascii=False).encode("utf-8"),
