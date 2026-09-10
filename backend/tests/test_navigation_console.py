@@ -45,6 +45,7 @@ class NavigationConsoleContractTests(unittest.TestCase):
             tabs,
             [
                 "dashboard",
+                "playground",
                 "providers",
                 "pool",
                 "models",

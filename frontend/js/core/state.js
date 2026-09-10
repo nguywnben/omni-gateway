@@ -170,6 +170,28 @@ const AppState = {
 
     modelRoutingPolicy: { strategy: 'balanced', preferred_provider: '' },
 
+    playground: {
+
+        initialized: false,
+
+        messages: [{role: 'user', content: ''}],
+
+        controller: null,
+
+        running: false,
+
+        cancelReason: '',
+
+        hasRun: false,
+
+        outcomeKey: 'playground.not_run',
+
+        outcomeType: 'muted',
+
+        runStateKey: 'playground.ready'
+
+    },
+
     logWebSocket: null,
 
     allLogs: [],

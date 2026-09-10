@@ -6,11 +6,11 @@
 - Active plan: `PROD-SELFHOST-R1`
 - Target: production-quality self-hosting for one person or a trusted team, not enterprise service
   operation.
-- Progress: **26/36 implementation tasks**; Phase 4 is in progress (2/6).
-- Completed: **P4.2 — Playground backend boundary**.
-- Gate caveat: P4.2 task checks pass; the unrelated unstaged request-schema change in
+- Progress: **27/36 implementation tasks**; Phase 4 is in progress (3/6).
+- Completed: **P4.3 — Playground interface**.
+- Gate caveat: P4.3 task checks pass; the unrelated unstaged request-schema change in
   `backend/core/models.py` remains outside this task and still affects raw candidate compatibility.
-- Next: **P4.3 — Playground interface**. Do not begin it until a
+- Next: **P4.4 — Access lifecycle completion**. Do not begin it until a
   new user request to continue the fixed plan.
 - Supported runtime today: standalone, one worker, one replica.
 - Redis coordination, multi-replica HA, and Helm are experimental and no longer R1 release blockers.
@@ -51,6 +51,13 @@ Do not push unless the user requests it.
 
 ## Latest Evidence
 
+- `docs/evidence/p4.3-playground-interface.md`
+- Playground is now a complete core console page for all four supported request shapes, with a
+  bounded memory-only editor, native response/stream/error rendering, cancellation, route and AI
+  Quality metadata, and placeholder-only cURL/Python SDK examples.
+- The final task gate passed 68 affected tests and all static checks. Authenticated deterministic
+  Chrome flows passed success, stream, error, cancel, XSS, live locale switching, and 1440/360 px
+  responsive checks with no runtime exception or horizontal overflow.
 - `docs/evidence/p4.2-playground-backend-boundary.md`
 - The authenticated, 1 MiB/20-per-minute/1–120-second bounded Playground API now reuses all four
   real public protocol handlers, preserves native success/error/stream semantics, propagates
@@ -69,7 +76,7 @@ Do not push unless the user requests it.
 - `docs/evidence/p3.6-models-routing-workflow.md`
 - Models now supports create/validate/edit/delete, fallback ordering, global credential strategy,
   revision conflicts, unavailable-model explanations, unsaved-change guards, and a secret-free
-  Playground handoff. Playground inference remains P4.2/P4.3; the UI states that no request was sent.
+  handoff into the completed Playground workflow.
 - The final 52-test task gate and 48-case responsive/theme matrix passed. The affected Phase 3 slice
   passed 141 tests; all localization audits passed. Phase exit also repaired P3.3 usage API
   compatibility and P3.4 pagination localization. Candidate compatibility/inventory passed 14 tests

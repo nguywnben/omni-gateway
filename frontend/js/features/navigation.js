@@ -94,6 +94,12 @@ function initStaticUiBindings() {
         'save-model-pool': () => saveModelPool(),
         'validate-model-route': () => validateModelRoute({ announce: true }),
         'test-model-route': () => testModelRouteInPlayground(),
+        'playground-add-message': () => addPlaygroundMessage(),
+        'playground-remove-message': (element) => removePlaygroundMessage(element.dataset.messageIndex),
+        'playground-clear': () => clearPlaygroundSession(),
+        'playground-open-quality': () => navigate('/ai-quality'),
+        'playground-cancel': () => cancelPlayground(),
+        'playground-copy-example': () => copyPlaygroundExample(),
         'delete-model-route': () => deleteModelRoute(),
         'clear-model-blacklist': () => clearModelBlacklist(),
         'select-provider': (element) => selectProviderWorkspace(element.dataset.provider),
@@ -184,6 +190,9 @@ function initStaticUiBindings() {
     };
     const changeHandlers = {
         'model-routing-strategy': () => syncModelRoutingPolicyControls(),
+        'playground-protocol': () => syncPlaygroundProtocol(),
+        'playground-draft': () => updatePlaygroundExample(),
+        'playground-example-format': () => updatePlaygroundExample(),
         'usage-period': (element) => setUsagePeriod(element.value),
         'pool-archive': (_element, event) => handlePoolImportArchive(event),
         'select-all-primary': () => toggleSelectAllPrimary(),
@@ -225,6 +234,10 @@ function initStaticUiBindings() {
             syncQualityPolicyControls();
             document.getElementById('qualityPreviewResult')?.classList.add('hidden');
         }
+        if (event.target.matches('[data-playground-input], #playgroundForm input')) {
+            syncPlaygroundMessagesFromDom();
+            updatePlaygroundExample();
+        }
         if (event.target.matches('[data-ui-input="model-catalog-search"]')) {
             renderModelCatalog();
         }
@@ -255,6 +268,10 @@ function initStaticUiBindings() {
     document.getElementById('accessPasswordForm')?.addEventListener('submit', (event) => {
         event.preventDefault();
         saveAccessCredentials();
+    });
+    document.getElementById('playgroundForm')?.addEventListener('submit', (event) => {
+        event.preventDefault();
+        runPlayground();
     });
 
     document.getElementById('apiKey')?.addEventListener('mousedown', (event) => event.preventDefault());

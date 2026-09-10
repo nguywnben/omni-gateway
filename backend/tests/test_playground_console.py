@@ -1,0 +1,217 @@
+"""Browser-side contracts for the production Playground workflow."""
+
+from __future__ import annotations
+
+import json
+import shutil
+import subprocess
+import unittest
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[2]
+SCRIPT = ROOT / "frontend/js/features/playground.js"
+FRAGMENT = ROOT / "frontend/fragments/pages/playground.html"
+STYLES = ROOT / "frontend/css/playground.css"
+
+
+class PlaygroundConsoleTests(unittest.TestCase):
+    def _run_contract(self, assertions: str) -> None:
+        node = shutil.which("node")
+        self.assertIsNotNone(node, "Node.js is required for the Playground UI contract.")
+        harness = f"""
+const fs = require('fs');
+const vm = require('vm');
+const source = fs.readFileSync({json.dumps(str(SCRIPT))}, 'utf8');
+vm.runInThisContext(source + `\n;globalThis.__playgroundContract = {{
+    buildPlaygroundRequest, buildPlaygroundExample, decodePlaygroundMetadataHeader,
+    splitPlaygroundStream, replacePlaygroundText, readBoundedPlaygroundResponse,
+    playgroundRuntimeState
+}};`);
+const {{buildPlaygroundRequest: build, buildPlaygroundExample: example,
+    decodePlaygroundMetadataHeader: decode, splitPlaygroundStream: split,
+    replacePlaygroundText: replaceText,
+    readBoundedPlaygroundResponse: readBounded,
+    playgroundRuntimeState: runtimeState}} = globalThis.__playgroundContract;
+function assert(condition, message) {{ if (!condition) throw new Error(message); }}
+{assertions}
+"""
+        result = subprocess.run(
+            [node, "-e", harness],
+            cwd=ROOT,
+            capture_output=True,
+            text=True,
+            timeout=15,
+            check=False,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr or result.stdout)
+
+    def test_page_exposes_complete_bounded_workflow(self) -> None:
+        fragment = FRAGMENT.read_text(encoding="utf-8")
+        for element_id in (
+            "playgroundTab",
+            "playgroundForm",
+            "playgroundProtocol",
+            "playgroundModel",
+            "playgroundStream",
+            "playgroundTimeout",
+            "playgroundSystem",
+            "playgroundMessages",
+            "playgroundAddMessage",
+            "playgroundTemperature",
+            "playgroundTopP",
+            "playgroundMaxTokens",
+            "playgroundRun",
+            "playgroundCancel",
+            "playgroundOutput",
+            "playgroundError",
+            "playgroundMetadata",
+            "playgroundExample",
+            "playgroundCopyExample",
+            "playgroundQualityLink",
+        ):
+            self.assertIn(f'id="{element_id}"', fragment)
+        self.assertIn('maxlength="65536"', fragment)
+        self.assertIn('aria-live="polite"', fragment)
+        self.assertIn('data-ui-action="playground-run"', fragment)
+        self.assertIn('data-ui-action="playground-cancel"', fragment)
+
+    def test_protocol_payloads_use_one_normalized_draft(self) -> None:
+        self._run_contract(
+            """
+const draft = {
+    model: 'omway', stream: true, timeoutSeconds: 30, system: 'Be concise.',
+    messages: [{role: 'user', content: 'Hello'}, {role: 'assistant', content: 'Hi'}],
+    temperature: 0.4, topP: 0.8, maxTokens: 512
+};
+const chat = build({...draft, protocol: 'openai_chat'});
+assert(chat.request.messages[0].role === 'system', 'chat system message');
+assert(chat.request.max_tokens === 512 && chat.stream === true, 'chat parameters');
+const responses = build({...draft, protocol: 'openai_responses'});
+assert(responses.request.instructions === 'Be concise.', 'responses instructions');
+assert(responses.request.max_output_tokens === 512, 'responses max tokens');
+const anthropic = build({...draft, protocol: 'anthropic_messages'});
+assert(anthropic.request.system === 'Be concise.', 'anthropic system');
+assert(anthropic.request.max_tokens === 512, 'anthropic max tokens');
+const gemini = build({...draft, protocol: 'gemini'});
+assert(gemini.request.systemInstruction.parts[0].text === 'Be concise.', 'gemini system');
+assert(gemini.request.contents[1].role === 'model', 'gemini assistant role');
+assert(gemini.request.generationConfig.maxOutputTokens === 512, 'gemini max tokens');
+let emptyMessageError = '';
+try { build({...draft, protocol: 'openai_chat', messages: [{role: 'user', content: '   '}]}); }
+catch (error) { emptyMessageError = error.message; }
+assert(emptyMessageError === 'playground.error_empty_message', 'empty messages must fail locally');
+"""
+        )
+
+    def test_copy_examples_are_protocol_accurate_and_never_contain_a_real_key(self) -> None:
+        self._run_contract(
+            """
+const draft = {protocol: 'openai_chat', model: 'omway', stream: false,
+    timeoutSeconds: 30, system: '', messages: [{role: 'user', content: "What's new?"}],
+    temperature: null, topP: null, maxTokens: 256};
+for (const format of ['curl', 'python']) {
+    const text = example(draft, format, 'http://127.0.0.1:4283');
+    assert(text.includes('<YOUR_OMNI_GATEWAY_KEY>'), `missing placeholder in ${format}`);
+    assert(!text.includes('session-token') && !text.includes('AIza'), `secret in ${format}`);
+}
+assert(example(draft, 'curl', 'http://127.0.0.1:4283').includes('/v1/chat/completions'), 'chat URL');
+assert(example({...draft, protocol: 'openai_responses'}, 'python', 'http://localhost').includes('client.responses.create'), 'Responses SDK');
+assert(example({...draft, protocol: 'anthropic_messages'}, 'python', 'http://localhost').includes('Anthropic('), 'Anthropic SDK');
+const gemini = example({...draft, protocol: 'gemini', system: 'Be concise.'}, 'python', 'http://localhost');
+assert(gemini.includes('genai.Client') && gemini.includes('types.GenerateContentConfig'), 'Gemini SDK');
+assert(gemini.includes('system_instruction'), 'Gemini system instruction');
+"""
+        )
+
+    def test_stream_metadata_is_separated_and_untrusted_output_stays_text(self) -> None:
+        self._run_contract(
+            """
+const metadata = {schema_version: 'playground-metadata.v1', status_code: 200};
+const encoded = Buffer.from(JSON.stringify(metadata), 'utf8').toString('base64url');
+assert(decode(encoded).status_code === 200, 'metadata header decode');
+const hostile = '<img src=x onerror=globalThis.pwned=true>';
+const stream = `data: ${JSON.stringify({choices: [{delta: {content: hostile}}]})}\n\nevent: omni.playground.metadata\ndata: ${JSON.stringify(metadata)}\n\n`;
+const result = split(stream);
+assert(result.output.includes(hostile) && !result.output.includes('omni.playground.metadata'), 'native stream split');
+assert(result.metadata.status_code === 200, 'stream metadata');
+const element = {textContent: '', innerHTML: 'unchanged'};
+replaceText(element, hostile);
+assert(element.textContent === hostile, 'output text retained');
+assert(element.innerHTML === 'unchanged' && globalThis.pwned !== true, 'output must not execute');
+"""
+        )
+
+    def test_runtime_state_is_memory_only_and_one_request_is_cancelable(self) -> None:
+        source = SCRIPT.read_text(encoding="utf-8")
+        self.assertIn("new AbortController()", source)
+        self.assertIn("AppState.playground.controller.abort()", source)
+        self.assertIn("PLAYGROUND_MAX_MESSAGES = 32", source)
+        self.assertIn("PLAYGROUND_MAX_TOTAL_CHARS = 524288", source)
+        self.assertIn("PLAYGROUND_MAX_OUTPUT_BYTES = 2 * 1024 * 1024", source)
+        self.assertIn("PLAYGROUND_RENDER_INTERVAL_MS = 50", source)
+        self.assertIn("omni:locale-change", source)
+        self.assertIn("hasRun: false", source)
+        self.assertNotIn("localStorage", source)
+        self.assertNotIn("sessionStorage.setItem", source)
+        self.assertIn("sessionStorage.removeItem", source)
+        self.assertNotIn(".innerHTML", source)
+
+    def test_runtime_state_has_safe_first_visit_defaults(self) -> None:
+        self._run_contract(
+            """
+globalThis.AppState = {};
+const state = runtimeState();
+assert(state.messages.length === 1 && state.messages[0].role === 'user', 'first message');
+assert(state.hasRun === false, 'first visit output state');
+assert(state.outcomeKey === 'playground.not_run', 'first visit outcome');
+assert(state.runStateKey === 'playground.ready', 'first visit status');
+"""
+        )
+
+    def test_response_display_limit_is_byte_bounded_and_cancels_the_run(self) -> None:
+        self._run_contract(
+            """
+(async () => {
+    let limitCalled = false;
+    let errorKey = '';
+    const response = new Response(new ReadableStream({
+        start(controller) {
+            controller.enqueue(new Uint8Array(1500000));
+            controller.enqueue(new Uint8Array(700000));
+        }
+    }));
+    try {
+        await readBounded(response, () => {}, () => { limitCalled = true; });
+    } catch (error) {
+        errorKey = error.message;
+    }
+    assert(limitCalled, 'display limit must cancel the active request');
+    assert(errorKey === 'playground.error_output_limit', 'display limit error key');
+})().catch(error => { console.error(error.stack); process.exitCode = 1; });
+"""
+        )
+
+    def test_page_is_registered_and_responsive(self) -> None:
+        index = (ROOT / "frontend/index.html").read_text(encoding="utf-8")
+        sidebar = (ROOT / "frontend/fragments/layout/sidebar.html").read_text(encoding="utf-8")
+        navigation = (ROOT / "frontend/js/core/navigation.js").read_text(encoding="utf-8")
+        root = (ROOT / "backend/core/panel/root.py").read_text(encoding="utf-8")
+        styles = STYLES.read_text(encoding="utf-8")
+
+        self.assertIn("include:fragments/pages/playground.html", index)
+        self.assertIn('data-tab="playground"', sidebar)
+        self.assertIn("'/playground': 'playground'", navigation)
+        self.assertIn("playground: '/playground'", navigation)
+        self.assertIn("playground: () => initializePlayground()", navigation)
+        self.assertIn('@router.get("/playground"', root)
+        self.assertIn('"pages/playground.html"', root)
+        self.assertIn('"css/playground.css"', root)
+        self.assertIn('"js/features/playground.js"', root)
+        self.assertRegex(
+            styles,
+            r"(?s)@media \(max-width: 860px\).*?\.playground-workspace.*?grid-template-columns: minmax\(0, 1fr\)",
+        )
+
+
+if __name__ == "__main__":
+    unittest.main()

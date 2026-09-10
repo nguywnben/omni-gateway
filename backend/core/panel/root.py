@@ -26,6 +26,7 @@ CONSOLE_FRAGMENT_PATHS = (
     "pages/identity.html",
     "pages/pool.html",
     "pages/models.html",
+    "pages/playground.html",
     "pages/providers.html",
     "pages/settings.html",
     "pages/activity.html",
@@ -41,6 +42,7 @@ CONSOLE_STYLE_ASSETS = (
     "css/providers-and-models.css",
     "css/forms-and-data.css",
     "css/quality-policy.css",
+    "css/playground.css",
     "css/access.css",
     "css/identity.css",
     "css/audit.css",
@@ -81,6 +83,7 @@ CONSOLE_SCRIPT_ASSETS = (
     "js/features/activity.js",
     "js/features/navigation.js",
     "js/features/model-pool.js",
+    "js/features/playground.js",
     "js/features/code-assist-authentication.js",
     "js/features/antigravity-authentication.js",
     "js/features/credential-pool.js",
@@ -361,6 +364,7 @@ async def serve_oauth_callback(request: Request):
 @router.get("/code_assist", response_class=HTMLResponse, include_in_schema=False)
 @router.get("/pool", response_class=HTMLResponse, include_in_schema=False)
 @router.get("/models", response_class=HTMLResponse, include_in_schema=False)
+@router.get("/playground", response_class=HTMLResponse, include_in_schema=False)
 @router.get("/providers", response_class=HTMLResponse, include_in_schema=False)
 @router.get("/provider", response_class=HTMLResponse, include_in_schema=False)
 @router.get("/oauth", response_class=HTMLResponse, include_in_schema=False)

@@ -16,6 +16,8 @@ const ROUTE_MAP = {
 
     '/models': 'models',
 
+    '/playground': 'playground',
+
     '/provider': 'pool',
 
     '/providers': 'providers',
@@ -43,6 +45,7 @@ const TAB_MAP = {
     identity: '/identity',
     pool: '/pool',
     models: '/models',
+    playground: '/playground',
     providers: '/providers',
     config: '/config',
     activity: '/activity',
@@ -244,6 +247,8 @@ function getTabDataLoader(tabName) {
         pool: () => AppState.primaryCreds.refresh(),
 
         models: () => loadModelCatalog(),
+
+        playground: () => initializePlayground(),
 
         providers: () => loadProviderOnboarding(),
 
