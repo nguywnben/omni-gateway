@@ -101,10 +101,12 @@ class AuditConsoleContractTests(unittest.TestCase):
         source = AUDIT_SCRIPT_PATH.read_text(encoding="utf-8")
         persistence_block = source.split("const AUDIT_PERSISTED_FILTERS", 1)[1].split("];", 1)[0]
 
-        for safe_field in ("actor_types", "actions", "target_types", "outcomes", "page_size"):
+        for safe_field in ("actions", "target_types", "page_size"):
             self.assertIn(f"'{safe_field}'", persistence_block)
         for transient_field in (
             "request_id",
+            "actor_types",
+            "outcomes",
             "actor_fingerprints",
             "target_fingerprints",
             "occurred_after",

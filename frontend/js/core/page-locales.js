@@ -2380,7 +2380,24 @@ const NAVIGATION_ACTIVITY_MESSAGES = {
         'activity.views': 'Activity views',
         'activity.requests': 'Request traces',
         'activity.audit_security': 'Audit & security',
-        'activity.runtime_logs': 'Runtime logs'
+        'activity.runtime_logs': 'Runtime logs',
+        'activity.shared_filters': 'Shared investigation filters',
+        'activity.shared_filters_description': 'Set the correlation once, then move between request, security, and runtime evidence.',
+        'activity.outcome_succeeded': 'Succeeded',
+        'activity.outcome_failed': 'Failed',
+        'activity.outcome_denied': 'Denied or rate limited',
+        'activity.outcome_cancelled': 'Cancelled',
+        'activity.apply_filters': 'Apply to Activity',
+        'activity.filter_scope': 'Time, outcome, and request ID follow every view. Provider applies to request traces; actor applies to audit events. Runtime logs use bounded text matching.',
+        'activity.filters_applied': 'Activity filters applied.',
+        'activity.invalid_filters': 'Check the request ID and time range.',
+        'activity.related_audit': 'Related audit events',
+        'activity.related_trace': 'Related request trace',
+        'activity.investigate_request': 'Investigate',
+        'activity.trace_filters_description': 'Refine request traces by protocol and model after applying the shared investigation filters.',
+        'activity.trace_filter_hint': 'Protocol and page size are remembered. Model and shared investigation values remain session-only.',
+        'activity.audit_filters_description': 'Refine audit evidence by action, target, and fingerprints after applying the shared investigation filters.',
+        'activity.audit_filter_hint': 'Action, target, and page size are remembered. Fingerprints and shared investigation values remain session-only.'
     },
     vi: {
         'navigation.skip_to_content': 'Bỏ qua để đến nội dung',
@@ -2396,7 +2413,24 @@ const NAVIGATION_ACTIVITY_MESSAGES = {
         'activity.views': 'Các chế độ xem hoạt động',
         'activity.requests': 'Dấu vết yêu cầu',
         'activity.audit_security': 'Kiểm toán và bảo mật',
-        'activity.runtime_logs': 'Nhật ký runtime'
+        'activity.runtime_logs': 'Nhật ký runtime',
+        'activity.shared_filters': 'Bộ lọc điều tra dùng chung',
+        'activity.shared_filters_description': 'Đặt thông tin tương quan một lần rồi chuyển giữa bằng chứng yêu cầu, bảo mật và runtime.',
+        'activity.outcome_succeeded': 'Thành công',
+        'activity.outcome_failed': 'Thất bại',
+        'activity.outcome_denied': 'Bị từ chối hoặc giới hạn tần suất',
+        'activity.outcome_cancelled': 'Đã hủy',
+        'activity.apply_filters': 'Áp dụng cho Hoạt động',
+        'activity.filter_scope': 'Thời gian, kết quả và ID yêu cầu áp dụng cho mọi chế độ xem. Nhà cung cấp áp dụng cho dấu vết yêu cầu; tác nhân áp dụng cho sự kiện kiểm toán. Nhật ký runtime dùng đối sánh văn bản có giới hạn.',
+        'activity.filters_applied': 'Đã áp dụng bộ lọc Hoạt động.',
+        'activity.invalid_filters': 'Hãy kiểm tra ID yêu cầu và khoảng thời gian.',
+        'activity.related_audit': 'Sự kiện kiểm toán liên quan',
+        'activity.related_trace': 'Dấu vết yêu cầu liên quan',
+        'activity.investigate_request': 'Điều tra',
+        'activity.trace_filters_description': 'Thu hẹp dấu vết theo giao thức và mô hình sau khi áp dụng bộ lọc điều tra dùng chung.',
+        'activity.trace_filter_hint': 'Giao thức và kích thước trang được ghi nhớ. Mô hình và giá trị điều tra dùng chung chỉ tồn tại trong phiên.',
+        'activity.audit_filters_description': 'Thu hẹp bằng chứng kiểm toán theo thao tác, đối tượng và dấu vân tay sau khi áp dụng bộ lọc điều tra dùng chung.',
+        'activity.audit_filter_hint': 'Thao tác, đối tượng và kích thước trang được ghi nhớ. Dấu vân tay và giá trị điều tra dùng chung chỉ tồn tại trong phiên.'
     }
 };
 

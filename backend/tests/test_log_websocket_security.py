@@ -8,6 +8,8 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
+from starlette.websockets import WebSocketState
+
 BACKEND_DIR = Path(__file__).resolve().parents[1]
 if str(BACKEND_DIR) not in sys.path:
     sys.path.insert(0, str(BACKEND_DIR))
@@ -35,10 +37,18 @@ class FakeWebSocket:
         self.query_params = {"token": query_token} if query_token else {}
         self.headers = {"origin": origin, "host": host}
         self.close_calls = []
+        self.sent_text = []
+        self.client_state = WebSocketState.CONNECTED
         self.state = SimpleNamespace()
 
     async def close(self, **kwargs):
         self.close_calls.append(kwargs)
+
+    async def send_text(self, value):
+        self.sent_text.append(value)
+
+    async def receive_text(self):
+        raise RuntimeError("test disconnect")
 
 
 class LogWebSocketSecurityTests(unittest.IsolatedAsyncioTestCase):
@@ -113,6 +123,27 @@ class LogWebSocketSecurityTests(unittest.IsolatedAsyncioTestCase):
             [{"code": 4403, "reason": "Management permission denied"}],
         )
         connect.assert_not_awaited()
+
+    async def test_runtime_read_failure_does_not_expose_exception_detail(self):
+        websocket = FakeWebSocket(cookie_token="session-token")
+
+        with (
+            patch(
+                "core.panel.logs.verify_panel_token_value",
+                new=AsyncMock(return_value="session-token"),
+            ),
+            patch("core.panel.logs.require_management_route"),
+            patch("core.panel.logs.manager.connect", new=AsyncMock(return_value=True)),
+            patch("core.panel.logs.manager.disconnect"),
+            patch(
+                "core.panel.logs.asyncio.to_thread",
+                new=AsyncMock(side_effect=[RuntimeError("password=do-not-expose"), 0]),
+            ),
+        ):
+            await websocket_logs(websocket)
+
+        self.assertEqual(websocket.sent_text, ["Error reading log file."])
+        self.assertNotIn("do-not-expose", "".join(websocket.sent_text))
 
 
 if __name__ == "__main__":

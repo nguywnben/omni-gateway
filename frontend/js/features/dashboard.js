@@ -414,6 +414,7 @@ function renderRecentActivity(traces = []) {
         const safeOutcome = outcome.replace(/[^a-z0-9_-]/gi, '').toLowerCase() || 'unknown';
         const provider = trace.selected_provider || '—';
         const model = trace.requested_model || '—';
+        const requestId = String(trace.request_id || trace.trace_id || '');
         const startedAt = trace.started_at
             ? new Date(trace.started_at).toLocaleString(getActiveLocale(), {dateStyle: 'short', timeStyle: 'short'})
             : '—';
@@ -425,7 +426,7 @@ function renderRecentActivity(traces = []) {
                 </div>
                 <strong>${escapeHtml(model)}</strong>
                 <span>${escapeHtml(provider)} · ${formatUsageNumber(trace.duration_ms)} ms · ${escapeHtml(formatUsageCost(trace.cost_usd))}</span>
-                <code>${escapeHtml(trace.request_id || trace.trace_id || '')}</code>
+                <div class="dashboard-activity-correlation"><code>${escapeHtml(requestId)}</code><button type="button" class="btn btn-secondary btn-small" data-ui-action="investigate-activity-request" data-request-id="${escapeAttribute(requestId)}">${escapeHtml(t('activity.investigate_request'))}</button></div>
             </li>
         `;
     }).join('');

@@ -80,16 +80,21 @@ The response includes `X-Audit-Event-Count`, `X-Audit-Byte-Count`, `X-Audit-Max-
 
 ## Audit operations console
 
-The authenticated `/audit` route owns the operator workflow under the Observability navigation
-group. The browser treats API responses as untrusted: it accepts only the documented event fields,
-schema version, vocabularies, identifier formats, page bounds, and retention bounds before
-rendering values through `textContent`. Payloads with unknown or missing event fields are rejected,
-so an API-shape expansion cannot silently reach the DOM.
+The authenticated `/audit` compatibility route opens the **Audit & security** tab in Activity.
+Activity owns the common time, outcome, actor type, and public request-ID investigation values;
+selecting related trace evidence carries the request ID to the request-trace tab without persisting
+it. Audit-specific action, target, fingerprints, paging, retention, and export controls remain next
+to the event list.
 
-Category filters (`actor_types`, `actions`, `target_types`, `outcomes`) and `page_size` may be
-remembered locally. Request IDs, actor/target fingerprints, time bounds, cursors, event records,
-and export payloads are never persisted by the console. A newer event query aborts and supersedes
-an older one to prevent stale responses from replacing current evidence. Export always uses the
-last applied filter snapshot and accepts only the server-generated `omni-audit-<UTC>.<format>`
-filename pattern. Retention updates require an explicit confirmation that records outside either
-bound may be removed immediately.
+The browser treats API responses as untrusted: it accepts only the documented event fields, schema
+version, vocabularies, identifier formats, page bounds, and retention bounds before rendering
+values through `textContent`. Payloads with unknown or missing event fields are rejected, so an
+API-shape expansion cannot silently reach the DOM.
+
+Only `actions`, `target_types`, and `page_size` may be remembered locally. Outcomes, actor types,
+request IDs, actor/target fingerprints, time bounds, cursors, event records, and export payloads
+are never persisted by the console. A newer event query aborts and supersedes an older one to
+prevent stale responses from replacing current evidence. Export always uses the last applied
+filter snapshot and accepts only the server-generated `omni-audit-<UTC>.<format>` filename pattern.
+Retention updates require an explicit confirmation that records outside either bound may be
+removed immediately.

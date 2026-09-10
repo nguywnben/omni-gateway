@@ -6,11 +6,11 @@
 - Active plan: `PROD-SELFHOST-R1`
 - Target: production-quality self-hosting for one person or a trusted team, not enterprise service
   operation.
-- Progress: **28/36 implementation tasks**; Phase 4 is in progress (4/6).
-- Completed: **P4.4 — Access lifecycle completion**.
-- Gate caveat: P4.4 task checks pass; the unrelated unstaged request-schema change in
+- Progress: **29/36 implementation tasks**; Phase 4 is in progress (5/6).
+- Completed: **P4.5 — Unified Activity**.
+- Gate caveat: P4.5 task checks pass; the unrelated unstaged request-schema change in
   `backend/core/models.py` remains outside this task and still affects raw candidate compatibility.
-- Next: **P4.5 — Unified Activity**. Do not begin it until a
+- Next: **P4.6 — Settings, Team access, About, and localization**. Do not begin it until a
   new user request to continue the fixed plan.
 - Supported runtime today: standalone, one worker, one replica.
 - Redis coordination, multi-replica HA, and Helm are experimental and no longer R1 release blockers.
@@ -51,6 +51,13 @@ Do not push unless the user requests it.
 
 ## Latest Evidence
 
+- `docs/evidence/p4.5-unified-activity.md`
+- Activity now applies one session-only correlation filter across request traces, audit/security
+  events, and bounded runtime logs. Dashboard and both detail views pivot by request ID; `/logs`
+  correctly opens runtime evidence, and raw-log downloads are redacted and capped at 16 MiB.
+- The fixed task gate passed 83 affected tests and all static checks. An authenticated 520 px
+  browser flow retained correlation across views, selected the correct compatibility route, had no
+  horizontal overflow, and produced no browser-console entries.
 - `docs/evidence/p4.3-playground-interface.md`
 - Playground is now a complete core console page for all four supported request shapes, with a
   bounded memory-only editor, native response/stream/error rendering, cancellation, route and AI

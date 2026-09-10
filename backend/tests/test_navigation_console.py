@@ -142,7 +142,7 @@ function assert(condition, message) {{ if (!condition) throw new Error(message);
     assert(elements.get('activityAuditPanel').hidden === false, 'audit panel hidden');
     assert(elements.get('activityTracesPanel').hidden === true, 'traces panel visible');
     assert(activityViewFromLocation('/audit', '') === 'audit', 'audit URL alias failed');
-    assert(activityViewFromLocation('/logs', '') === 'traces', 'logs URL alias failed');
+    assert(activityViewFromLocation('/logs', '') === 'runtime', 'logs URL alias failed');
     await refreshTeamAccessNavigation();
     assert(teamAccess.hidden === true, 'disabled Team access must be hidden');
     identityApi = async () => ({{enabled: true}});

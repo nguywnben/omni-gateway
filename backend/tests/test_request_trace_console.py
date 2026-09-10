@@ -74,10 +74,11 @@ class RequestTraceConsoleContractTests(unittest.TestCase):
         block = TRACE_SCRIPT.split("function persistTraceSafeFilters", 1)[1].split(
             "function restoreTraceSafeFilters", 1
         )[0]
-        for safe in ("protocols", "outcomes", "page_size"):
+        for safe in ("protocols", "page_size"):
             self.assertIn(safe, block)
         for transient in (
             "providers",
+            "outcomes",
             "models",
             "request_id",
             "started_after",

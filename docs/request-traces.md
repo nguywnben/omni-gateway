@@ -50,17 +50,24 @@ routes.
 
 ## Operations console
 
-The stable `/logs` deep link now opens **Request traces** under Observability. Operators can search,
-page, inspect the ordered decision timeline, pivot on the public request ID, export the active
-filter, and manage trace retention. Only protocol, outcome, and page size preferences may persist
-in browser storage; provider/model dimensions, correlation IDs, and time bounds remain
-session-only. Untrusted API records are checked against the closed schema before text-only DOM
-rendering.
+The **Activity** destination combines request traces, audit/security events, and bounded runtime
+logs as three accessible tabs. Its shared investigation form applies time, canonical outcome, and
+public request-ID filters across all three views; provider narrows request traces and runtime text,
+while actor type narrows audit events and runtime text. A trace detail can open related audit
+evidence without re-entering the request ID, and the Dashboard's recent-request action opens the
+same correlated trace workflow.
 
-The bounded raw-log WebSocket viewer remains on the same page in a visually and semantically
-separate **Diagnostic only** section. It retains its own server-side redaction, authentication,
-same-origin, download, clear, and retention controls. Raw logs are a low-level fallback; request
-traces are the primary source for routing and failure investigation.
+Trace-specific protocol, model, paging, retention, and export controls remain next to the trace
+list. Only protocol and page-size preferences may persist in browser storage; model and every
+shared investigation value remain session-only. Untrusted API records are checked against the
+closed schema before text-only DOM rendering.
+
+The stable `/logs` deep link now opens the **Runtime logs** Activity tab, while `/activity` opens
+request traces. The raw-log WebSocket viewer remains a visually and semantically separate
+**Diagnostic only** surface with server-side redaction, authentication, same-origin enforcement,
+clear, and retention controls. Downloads contain only the newest complete redacted lines, are
+bounded to 16 MiB, and report byte-limit and truncation headers. Raw logs are a low-level fallback;
+request traces are the primary source for routing and failure investigation.
 
 Trace retention is independent from audit and raw-log retention. Its separate persisted default is
 7 days or 100,000 traces, whichever limit is reached first; supported policy bounds are 1–90 days

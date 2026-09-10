@@ -258,6 +258,12 @@ function filterLogs() {
 
     }
 
+    if (typeof activityLogLineMatches === 'function') {
+
+        AppState.filteredLogs = AppState.filteredLogs.filter(log => activityLogLineMatches(log));
+
+    }
+
     displayLogs();
 
 }

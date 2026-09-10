@@ -6,6 +6,9 @@ All notable user-facing changes are documented in this file. Omni Gateway follow
 
 ### Added
 
+- Added one shared Activity investigation workflow for request traces, audit/security events, and
+  bounded runtime logs, including common filters, request-ID pivots from Dashboard and detail
+  views, session-only correlation state, and a 16 MiB redacted raw-log download ceiling.
 - Added restrictive per-virtual-key and per-request compression controls. Keys can inherit or
   disable the global policy through an additive revision-checked management endpoint, while
   authenticated requests can use `x-omni-compression: off`; neither can weaken global policy.
@@ -61,6 +64,9 @@ All notable user-facing changes are documented in this file. Omni Gateway follow
 
 ### Changed
 
+- The legacy `/logs` route now opens Runtime logs instead of Request traces, matching its name;
+  `/activity` remains the primary request-trace entry and `/audit` remains an audit compatibility
+  link.
 - Reorganized the self-hosted console around one daily workflow: request traces, audit/security
   events, and runtime logs now share an accessible Activity page; Team access is conditional,
   advanced and compatibility settings are collapsed, legacy `/audit` and `/logs` URLs continue to

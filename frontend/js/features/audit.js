@@ -1,9 +1,7 @@
 const AUDIT_SAFE_FILTER_STORAGE_KEY = 'omni_gateway_audit_safe_filters_v1';
 const AUDIT_PERSISTED_FILTERS = [
-    'actor_types',
     'actions',
     'target_types',
-    'outcomes',
     'page_size'
 ];
 const AUDIT_EVENT_FIELDS = [
@@ -145,27 +143,25 @@ function normalizeAuditRetention(payload) {
 
 function readAuditFilters() {
     const action = auditElement('auditAction')?.value.trim() || '';
-    const outcome = auditElement('auditOutcome')?.value || '';
-    const actorType = auditElement('auditActorType')?.value || '';
     const targetType = auditElement('auditTargetType')?.value || '';
-    const requestId = auditElement('auditRequestId')?.value.trim() || '';
     const actorFingerprint = auditElement('auditActorFingerprint')?.value.trim() || '';
     const targetFingerprint = auditElement('auditTargetFingerprint')?.value.trim() || '';
-    const occurredAfter = auditElement('auditOccurredAfter')?.value || '';
-    const occurredBefore = auditElement('auditOccurredBefore')?.value || '';
     const pageSize = Number(auditElement('auditPageSize')?.value || 25);
-    return {
+    const filters = {
         actions: action ? [action] : [],
-        outcomes: outcome ? [outcome] : [],
-        actor_types: actorType ? [actorType] : [],
+        outcomes: [],
+        actor_types: [],
         target_types: targetType ? [targetType] : [],
-        request_id: requestId,
+        request_id: '',
         actor_fingerprints: actorFingerprint ? [actorFingerprint] : [],
         target_fingerprints: targetFingerprint ? [targetFingerprint] : [],
-        occurred_after: occurredAfter ? new Date(occurredAfter).toISOString() : '',
-        occurred_before: occurredBefore ? new Date(occurredBefore).toISOString() : '',
+        occurred_after: '',
+        occurred_before: '',
         page_size: pageSize
     };
+    return typeof mergeActivityAuditFilters === 'function'
+        ? mergeActivityAuditFilters(filters)
+        : filters;
 }
 
 function auditFiltersAreValid(filters) {
@@ -219,8 +215,6 @@ function restoreAuditSafeFilters() {
     if (!stored || typeof stored !== 'object' || Array.isArray(stored)) return;
     const values = {
         auditAction: Array.isArray(stored.actions) ? stored.actions[0] : '',
-        auditOutcome: Array.isArray(stored.outcomes) ? stored.outcomes[0] : '',
-        auditActorType: Array.isArray(stored.actor_types) ? stored.actor_types[0] : '',
         auditTargetType: Array.isArray(stored.target_types) ? stored.target_types[0] : '',
         auditPageSize: stored.page_size
     };
@@ -475,11 +469,16 @@ function selectedAuditEvent() {
 
 function pivotAuditRequest() {
     const event = selectedAuditEvent();
-    const input = auditElement('auditRequestId');
-    if (!event || !input) return;
-    input.value = event.request_id;
+    if (!event) return;
     closeAuditDetail();
-    void applyAuditFilters();
+    investigateActivityRequest(event.request_id, 'audit');
+}
+
+function openRelatedTraceRequest() {
+    const event = selectedAuditEvent();
+    if (!event) return;
+    closeAuditDetail();
+    investigateActivityRequest(event.request_id, 'traces');
 }
 
 async function copyAuditRequest() {

@@ -100,19 +100,16 @@ function normalizeTraceRetention(payload) {
 
 function readTraceFilters() {
     const protocol = traceElement('traceProtocol')?.value || '';
-    const outcome = traceElement('traceOutcome')?.value || '';
-    const provider = traceElement('traceProvider')?.value.trim() || '';
     const model = traceElement('traceModel')?.value.trim() || '';
-    const requestId = traceElement('traceRequestId')?.value.trim() || '';
-    const after = traceElement('traceStartedAfter')?.value || '';
-    const before = traceElement('traceStartedBefore')?.value || '';
-    return {
-        protocols: protocol ? [protocol] : [], outcomes: outcome ? [outcome] : [],
-        providers: provider ? [provider] : [], models: model ? [model] : [], request_id: requestId,
-        started_after: after ? new Date(after).toISOString() : '',
-        started_before: before ? new Date(before).toISOString() : '',
+    const filters = {
+        protocols: protocol ? [protocol] : [], outcomes: [],
+        providers: [], models: model ? [model] : [], request_id: '',
+        started_after: '', started_before: '',
         page_size: Number(traceElement('tracePageSize')?.value || 25)
     };
+    return typeof mergeActivityTraceFilters === 'function'
+        ? mergeActivityTraceFilters(filters)
+        : filters;
 }
 
 function traceFiltersAreValid(filters) {
@@ -142,7 +139,7 @@ function buildTraceParams(filters, { includePaging = true } = {}) {
 
 function persistTraceSafeFilters(filters) {
     try {
-        localStorage.setItem(TRACE_SAFE_FILTER_STORAGE_KEY, JSON.stringify({ protocols: filters.protocols, outcomes: filters.outcomes, page_size: filters.page_size }));
+        localStorage.setItem(TRACE_SAFE_FILTER_STORAGE_KEY, JSON.stringify({ protocols: filters.protocols, page_size: filters.page_size }));
     } catch (_error) { /* Optional preference storage. */ }
 }
 
@@ -150,7 +147,7 @@ function restoreTraceSafeFilters() {
     let stored;
     try { stored = JSON.parse(localStorage.getItem(TRACE_SAFE_FILTER_STORAGE_KEY) || 'null'); } catch (_error) { stored = null; }
     if (!stored || typeof stored !== 'object' || Array.isArray(stored)) return;
-    const values = { traceProtocol: stored.protocols?.[0], traceOutcome: stored.outcomes?.[0], tracePageSize: stored.page_size };
+    const values = { traceProtocol: stored.protocols?.[0], tracePageSize: stored.page_size };
     for (const [id, value] of Object.entries(values)) if (traceElement(id) && value !== undefined) traceElement(id).value = String(value);
     if (!traceFiltersAreValid(readTraceFilters())) clearTraceFilters({ reload: false });
 }
@@ -315,8 +312,16 @@ function closeTraceDetail() {
     const dialog = traceElement('traceDetailDialog'); if (dialog?.open) dialog.close();
 }
 function pivotTraceRequest() {
-    const input = traceElement('traceRequestId'); if (!TraceConsoleState.selectedTrace || !input) return;
-    input.value = TraceConsoleState.selectedTrace.request_id; closeTraceDetail(); void applyTraceFilters();
+    const trace = TraceConsoleState.selectedTrace;
+    if (!trace) return;
+    closeTraceDetail();
+    investigateActivityRequest(trace.request_id, 'traces');
+}
+function openRelatedAuditRequest() {
+    const trace = TraceConsoleState.selectedTrace;
+    if (!trace) return;
+    closeTraceDetail();
+    investigateActivityRequest(trace.request_id, 'audit');
 }
 async function copyTraceRequest() {
     const status = traceElement('traceDetailStatus'); if (!TraceConsoleState.selectedTrace || !status) return;
