@@ -15,7 +15,7 @@ BACKEND_DIR = Path(__file__).resolve().parents[1]
 if str(BACKEND_DIR) not in sys.path:
     sys.path.insert(0, str(BACKEND_DIR))
 
-from core.panel.usage_routes import get_usage_stats
+from core.panel.usage_routes import get_usage_stats, get_usage_stats_page
 
 ROOT = BACKEND_DIR.parent
 DASHBOARD_FRAGMENT = ROOT / "frontend/fragments/pages/dashboard.html"
@@ -97,7 +97,7 @@ for (const [aggregate, health, expectedState, expectedTab] of fixtures) {
         source = self._source(DASHBOARD_SCRIPT)
 
         self.assertEqual(len(re.findall(r"\bfetch\(", source)), 4)
-        self.assertIn("./api/usage/stats?", source)
+        self.assertIn("./api/usage/stats/page?", source)
         self.assertIn("page_size=100", source)
         self.assertIn("./api/traces?page_size=5", source)
         self.assertIn("routes.slice(0, 10)", source)
@@ -137,7 +137,10 @@ class BoundedUsageDashboardApiTests(unittest.IsolatedAsyncioTestCase):
             "core.panel.usage_routes.get_stats_for_period",
             new=AsyncMock(return_value=rows),
         ):
-            response = await get_usage_stats(period="1d", page_size=2, token="panel")
+            response = await get_usage_stats_page(period="1d", page_size=2, token="panel")
+            legacy = await get_usage_stats(period="1d", token="panel")
+
+        self.assertEqual(legacy["data"], rows)
 
         self.assertEqual(list(response["data"]), ["high.json", "middle.json"])
         self.assertEqual(response["page_size"], 2)

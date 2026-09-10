@@ -92,6 +92,9 @@ function initStaticUiBindings() {
         'change-historical-usage-page': (element) => changeHistoricalUsagePage(Number(element.dataset.pageDelta)),
         'refresh-model-catalog': () => loadModelCatalog(true),
         'save-model-pool': () => saveModelPool(),
+        'validate-model-route': () => validateModelRoute({ announce: true }),
+        'test-model-route': () => testModelRouteInPlayground(),
+        'delete-model-route': () => deleteModelRoute(),
         'clear-model-blacklist': () => clearModelBlacklist(),
         'select-provider': (element) => selectProviderWorkspace(element.dataset.provider),
         'change-provider-catalog-page': (element) => changeProviderCatalogPage(Number(element.dataset.pageDelta)),
@@ -180,6 +183,7 @@ function initStaticUiBindings() {
         'check-updates': () => checkForUpdates()
     };
     const changeHandlers = {
+        'model-routing-strategy': () => syncModelRoutingPolicyControls(),
         'usage-period': (element) => setUsagePeriod(element.value),
         'pool-archive': (_element, event) => handlePoolImportArchive(event),
         'select-all-primary': () => toggleSelectAllPrimary(),

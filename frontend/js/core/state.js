@@ -159,6 +159,17 @@ const AppState = {
 
     modelPoolEnabled: true,
 
+    modelPoolConfigured: false,
+
+    modelPoolRevision: '',
+    savedModelSelection: [],
+
+    modelRouteValidation: null,
+
+    modelProviderCatalogs: [],
+
+    modelRoutingPolicy: { strategy: 'balanced', preferred_provider: '' },
+
     logWebSocket: null,
 
     allLogs: [],

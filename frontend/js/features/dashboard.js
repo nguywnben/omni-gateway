@@ -225,7 +225,7 @@ async function refreshUsageStats(options = {}) {
 
         const [statsResponse, aggregatedResponse] = await Promise.all([
 
-            fetch(`./api/usage/stats?${usagePeriodQuery}&page_size=100`, { headers: getAuthHeaders() }),
+            fetch(`./api/usage/stats/page?${usagePeriodQuery}&page_size=100`, { headers: getAuthHeaders() }),
 
             fetch(`./api/usage/aggregated?${usagePeriodQuery}`, { headers: getAuthHeaders() })
 

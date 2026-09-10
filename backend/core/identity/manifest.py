@@ -108,6 +108,7 @@ _MANAGEMENT_ROUTE_MANIFEST = (
     *_http(
         ManagementPermission.DASHBOARD_READ,
         ("GET", "/api/usage/stats"),
+        ("GET", "/api/usage/stats/page"),
         ("GET", "/api/usage/aggregated"),
         ("GET", "/api/observability/health"),
         ("GET", "/api/observability/routing"),
@@ -176,6 +177,10 @@ _MANAGEMENT_ROUTE_MANIFEST = (
         ("DELETE", "/api/model-blacklist"),
         ("DELETE", "/api/model-blacklist/{provider_id}/models/{model_id}"),
         ("PUT", "/api/model-pools/omway"),
+        ("POST", "/api/model-routes/omway"),
+        ("PATCH", "/api/model-routes/omway"),
+        ("DELETE", "/api/model-routes/omway"),
+        ("POST", "/api/model-routes/omway/validate"),
     ),
     *_http(ManagementPermission.QUALITY_READ, ("GET", "/api/quality-policy")),
     *_http(

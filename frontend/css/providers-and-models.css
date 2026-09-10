@@ -429,6 +429,94 @@
     line-height: 1.5;
 }
 
+.model-route-validation {
+    display: grid;
+    gap: 6px;
+    margin: 14px 0;
+    padding: 12px 14px;
+    color: var(--text-muted);
+    background: var(--bg-subtle);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    font-size: 12px;
+    line-height: 1.45;
+}
+
+.model-route-validation[hidden] {
+    display: none;
+}
+
+.model-route-validation.ready {
+    background: var(--success-bg);
+    border-color: #cce8d2;
+}
+
+.model-route-validation.degraded {
+    background: var(--warning-bg);
+    border-color: #f0dfaa;
+}
+
+.model-route-validation.unavailable,
+.model-route-validation.draft {
+    background: var(--danger-bg);
+    border-color: #f0c9c6;
+}
+
+.model-route-validation strong {
+    color: var(--text);
+    font-size: 13px;
+}
+
+.model-route-validation p,
+.model-route-validation ul {
+    margin: 0;
+}
+
+.model-route-validation ul {
+    display: grid;
+    gap: 4px;
+    padding-left: 18px;
+}
+
+.model-routing-policy {
+    min-width: 0;
+    margin: 0 0 18px;
+    padding: 14px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+}
+
+.model-routing-policy legend {
+    padding: 0 6px;
+    color: var(--text);
+    font-size: 13px;
+    font-weight: 680;
+}
+
+.model-routing-policy-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+}
+
+.model-routing-policy .form-group {
+    min-width: 0;
+    margin: 0;
+}
+
+.model-route-actions {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 16px;
+}
+
+.model-route-actions .btn-danger {
+    margin-right: auto;
+}
+
 .model-section-heading {
     align-items: center;
     margin-bottom: 12px;
@@ -618,6 +706,21 @@
 }
 
 @media (max-width: 640px) {
+    .model-routing-policy-grid {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    .model-route-actions {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .model-route-actions .btn,
+    .model-route-actions .btn-danger {
+        width: 100%;
+        margin: 0;
+    }
+
     .model-blacklist-heading {
         display: grid;
     }

@@ -176,6 +176,9 @@ MANAGEMENT_MUTATIONS: dict[tuple[str, str], ManagementMutation] = {
         "model_blacklist.clear", "model_blacklist", "deleted"
     ),
     ("PUT", "/api/model-pools/omway"): _mutation("model_pool.update", "model_pool", "updated"),
+    ("POST", "/api/model-routes/omway"): _mutation("model_pool.update", "model_pool", "created"),
+    ("PATCH", "/api/model-routes/omway"): _mutation("model_pool.update", "model_pool", "updated"),
+    ("DELETE", "/api/model-routes/omway"): _mutation("model_pool.update", "model_pool", "deleted"),
     ("PUT", "/api/quality-policy"): _mutation(
         "quality_policy.update", "quality_policy", "policy_changed"
     ),
@@ -203,6 +206,7 @@ MANAGEMENT_AUDIT_EXCLUSIONS: dict[tuple[str, str], str] = {
     ("POST", "/api/providers/openai/codex/oauth/start"): "OAuth handshake only.",
     ("POST", "/api/providers/anthropic/claude-code/oauth/start"): "OAuth handshake only.",
     ("POST", "/api/quality-policy/preview"): "Side-effect-free policy preview.",
+    ("POST", "/api/model-routes/omway/validate"): ("Side-effect-free model route validation."),
     ("POST", "/api/backups/validate"): "Side-effect-free backup validation.",
     ("POST", "/api/credentials/action"): "Bridged from per-target credential evidence.",
     ("POST", "/api/credentials/batch-action"): "Bridged from per-target credential evidence.",

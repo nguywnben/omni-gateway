@@ -53,7 +53,7 @@
     {"id": "credentials_api", "pattern": "^/api/credentials(?:/.*)?$", "tier": "core", "journey": "credential_operations"},
     {"id": "identity_api", "pattern": "^/api/identity(?:/.*)?$", "tier": "advanced", "journey": "team_access"},
     {"id": "logs_api", "pattern": "^/api/logs(?:/.*)?$", "tier": "core", "journey": "activity"},
-    {"id": "models_api", "pattern": "^/api/(?:model-blacklist|model-catalog|model-pools)(?:/.*)?$", "tier": "core", "journey": "model_routing"},
+    {"id": "models_api", "pattern": "^/api/(?:model-blacklist|model-catalog|model-pools|model-routes)(?:/.*)?$", "tier": "core", "journey": "model_routing"},
     {"id": "observability_api", "pattern": "^/api/observability(?:/.*)?$", "tier": "core", "journey": "activity"},
     {"id": "providers_api", "pattern": "^/api/providers(?:/.*)?$", "tier": "core", "journey": "provider_onboarding"},
     {"id": "quality_api", "pattern": "^/api/quality-policy(?:/.*)?$", "tier": "core", "journey": "ai_quality"},

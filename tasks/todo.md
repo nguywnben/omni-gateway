@@ -1,6 +1,6 @@
 # Omni Gateway Production Self-Hosted R1 — Fixed Checklist
 
-Progress denominator: **23/36** implementation tasks. Planning artifacts do not count as completed
+Progress denominator: **24/36** implementation tasks. Planning artifacts do not count as completed
 implementation. The denominator cannot change without an approved `CR-###` in `tasks/plan.md`.
 
 ## Approval Gate
@@ -35,14 +35,18 @@ implementation. The denominator cannot change without an approved `CR-###` in `t
 - [x] P2.5 Routing, fallback, cooldown, and health
 - [x] P2.6 Compression and quality-policy hardening
 
-## Phase 3 — Coherent Core Console (5/6)
+## Phase 3 — Coherent Core Console (6/6)
 
 - [x] P3.1 Navigation and conditional complexity
 - [x] P3.2 Shared page states and accessible interaction
 - [x] P3.3 Production dashboard
 - [x] P3.4 Provider onboarding
 - [x] P3.5 Credential fleet operations
-- [ ] P3.6 Models and routing workflow
+- [x] P3.6 Models and routing workflow
+
+Phase 3 candidate verification passed. The raw dirty-workspace compatibility check still flags the
+unrelated unstaged request-schema edit in `backend/core/models.py`; see the P3.6 evidence before
+including that edit in a release candidate.
 
 ## Phase 4 — Complete Product Workflows (0/6)
 

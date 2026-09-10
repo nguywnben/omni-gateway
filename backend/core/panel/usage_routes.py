@@ -17,26 +17,14 @@ router = APIRouter(prefix="/api/usage", tags=["usage"])
 
 
 @router.get("/stats")
-async def get_usage_stats(
-    period: str = Query("1d"),
-    page_size: int = Query(100, ge=1, le=200),
-    token: str = Depends(verify_panel_token),
-):
+async def get_usage_stats(period: str = Query("1d"), token: str = Depends(verify_panel_token)):
     try:
         normalized_period = normalize_usage_period(period)
         data = await get_stats_for_period(normalized_period)
-        ordered = sorted(
-            data.items(),
-            key=lambda item: (-int(item[1].get("calls", 0)), item[0]),
-        )
-        bounded_data = dict(ordered[:page_size])
         return {
             "success": True,
             "period": get_usage_period_metadata(normalized_period),
-            "data": bounded_data,
-            "page_size": page_size,
-            "total_items": len(ordered),
-            "has_more": len(ordered) > page_size,
+            "data": data,
         }
     except Exception as exc:
         log.error(f"Failed to retrieve usage statistics: {exc}")
@@ -44,6 +32,28 @@ async def get_usage_stats(
             status_code=500,
             content={"success": False, "detail": INTERNAL_SERVER_ERROR_DETAIL},
         )
+
+
+@router.get("/stats/page")
+async def get_usage_stats_page(
+    period: str = Query("1d"),
+    page_size: int = Query(100, ge=1, le=200),
+    token: str = Depends(verify_panel_token),
+):
+    result = await get_usage_stats(period=period, token=token)
+    if isinstance(result, JSONResponse):
+        return result
+    ordered = sorted(
+        result["data"].items(),
+        key=lambda item: (-int(item[1].get("calls", 0)), item[0]),
+    )
+    return {
+        **result,
+        "data": dict(ordered[:page_size]),
+        "page_size": page_size,
+        "total_items": len(ordered),
+        "has_more": len(ordered) > page_size,
+    }
 
 
 @router.get("/aggregated")

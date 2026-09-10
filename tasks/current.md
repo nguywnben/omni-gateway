@@ -6,9 +6,11 @@
 - Active plan: `PROD-SELFHOST-R1`
 - Target: production-quality self-hosting for one person or a trusted team, not enterprise service
   operation.
-- Progress: **23/36 implementation tasks**; Phase 3 is in progress (5/6).
-- Completed: **P3.5 — Credential fleet operations**.
-- Next: **P3.6 — Models and routing workflow**. Do not begin it until a
+- Progress: **24/36 implementation tasks**; Phase 3 implementation is complete (6/6).
+- Completed: **P3.6 — Models and routing workflow**.
+- Gate caveat: P3.6 candidate checks pass; the unrelated unstaged request-schema change in
+  `backend/core/models.py` still makes the dirty workspace fail the immutable compatibility check.
+- Next: **P4.1 — AI Quality console completion**. Do not begin it until a
   new user request to continue the fixed plan.
 - Supported runtime today: standalone, one worker, one replica.
 - Redis coordination, multi-replica HA, and Helm are experimental and no longer R1 release blockers.
@@ -49,6 +51,14 @@ Do not push unless the user requests it.
 
 ## Latest Evidence
 
+- `docs/evidence/p3.6-models-routing-workflow.md`
+- Models now supports create/validate/edit/delete, fallback ordering, global credential strategy,
+  revision conflicts, unavailable-model explanations, unsaved-change guards, and a secret-free
+  Playground handoff. Playground inference remains P4.2/P4.3; the UI states that no request was sent.
+- The final 52-test task gate and 48-case responsive/theme matrix passed. The affected Phase 3 slice
+  passed 141 tests; all localization audits passed. Phase exit also repaired P3.3 usage API
+  compatibility and P3.4 pagination localization. Candidate compatibility/inventory passed 14 tests
+  with the committed models schema loaded in memory; the unrelated user edit remains untouched.
 - `docs/evidence/p3.5-credential-fleet-operations.md`
 - Credentials now exposes four common filters first and progressively discloses six diagnostic
   filters, with immediate active-count/reset behavior and bounded URL/session persistence. Refresh

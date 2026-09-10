@@ -2364,6 +2364,79 @@ for (const locale of Object.keys(PAGE_LOCALE_TRANSLATIONS)) {
     );
 }
 
+const MODEL_ROUTING_WORKFLOW_MESSAGES = {
+    en: {
+        'models.credential_strategy': 'Credential strategy',
+        'models.strategy_hint': 'This global strategy applies to all requests. It ranks healthy compatible credentials within each model; weighted routing uses stored credential weights (default 1). Model fallback always follows the order below.',
+        'models.priority_fallback_description': 'Each model uses the selected credential strategy before the request falls back to the next model.',
+        'models.unsaved_changes': 'Save the route before testing the changed selection.',
+        'models.policy_save_failed': 'The route was saved, but the global credential strategy could not be saved: {error}. Review the strategy and save again.',
+        'models.validate_route': 'Validate route',
+        'models.test_playground': 'Test in Playground',
+        'models.delete_route': 'Delete route',
+        'models.create_route': 'Create route',
+        'models.save_route': 'Save route',
+        'models.degraded': 'Degraded',
+        'models.validation_summary': '{available} of {selected} selected models are available across {routes} provider routes.',
+        'models.issue_invalid_selection': 'The model selection is invalid.',
+        'models.issue_not_discovered': '{model} is not in the current discovered catalog. Refresh or remove it.',
+        'models.issue_temporarily_unavailable': '{model} has no enabled provider credential available right now.',
+        'models.issue_no_models': 'Select at least one discovered provider model.',
+        'models.issue_no_available_model': 'Keep at least one model with an available provider route.',
+        'models.catalog_unavailable_reason': 'Temporarily unavailable across enabled credentials',
+        'models.preferred_provider_unavailable': '{provider} (not currently discovered)',
+        'models.validation_passed': 'Route validation passed.',
+        'models.validation_failed': 'Resolve the route validation issues before saving or testing.',
+        'models.validation_request_failed': 'Could not validate the route: {error}',
+        'models.route_conflict': 'This route changed in another session. The latest version has been loaded.',
+        'models.route_created': 'The omway route was created.',
+        'models.route_saved': 'The omway route was saved.',
+        'models.delete_confirm': 'Delete the omway route? Provider credentials and discovered models will not be removed.',
+        'models.route_deleted': 'The omway route was deleted.',
+        'models.route_delete_failed': 'Could not delete the route: {error}',
+        'models.playground_handoff_ready': 'Route checked and prepared. Playground is not available in this version yet; no inference request was sent.'
+    },
+    vi: {
+        'models.credential_strategy': 'Chiến lược chọn thông tin xác thực',
+        'models.strategy_hint': 'Chiến lược chung này áp dụng cho mọi yêu cầu, xếp hạng thông tin xác thực tương thích đang hoạt động trong từng mô hình. Chế độ trọng số dùng trọng số đã lưu (mặc định 1). Mô hình dự phòng luôn được thử theo thứ tự bên dưới.',
+        'models.priority_fallback_description': 'Trong mỗi mô hình, gateway chọn thông tin xác thực theo chiến lược đã đặt trước khi thử mô hình tiếp theo.',
+        'models.unsaved_changes': 'Hãy lưu tuyến trước khi thử danh sách mô hình vừa thay đổi.',
+        'models.policy_save_failed': 'Đã lưu tuyến nhưng chưa lưu được chiến lược chọn thông tin xác thực chung: {error}. Hãy kiểm tra chiến lược và lưu lại.',
+        'models.validate_route': 'Kiểm tra tuyến',
+        'models.test_playground': 'Thử trong Playground',
+        'models.delete_route': 'Xóa tuyến',
+        'models.create_route': 'Tạo tuyến',
+        'models.save_route': 'Lưu tuyến',
+        'models.degraded': 'Suy giảm',
+        'models.validation_summary': '{available}/{selected} mô hình đã chọn đang khả dụng qua {routes} tuyến nhà cung cấp.',
+        'models.issue_invalid_selection': 'Danh sách mô hình đã chọn không hợp lệ.',
+        'models.issue_not_discovered': '{model} không có trong danh mục vừa phát hiện. Hãy làm mới hoặc loại bỏ mô hình này.',
+        'models.issue_temporarily_unavailable': '{model} hiện không có thông tin xác thực nhà cung cấp nào đang bật và khả dụng.',
+        'models.issue_no_models': 'Hãy chọn ít nhất một mô hình đã được phát hiện từ nhà cung cấp.',
+        'models.issue_no_available_model': 'Hãy giữ lại ít nhất một mô hình có tuyến nhà cung cấp khả dụng.',
+        'models.catalog_unavailable_reason': 'Tạm thời không khả dụng trên các thông tin xác thực đang bật',
+        'models.preferred_provider_unavailable': '{provider} (hiện chưa được phát hiện)',
+        'models.validation_passed': 'Cấu hình tuyến hợp lệ.',
+        'models.validation_failed': 'Hãy xử lý các vấn đề của tuyến trước khi lưu hoặc thử.',
+        'models.validation_request_failed': 'Không thể kiểm tra tuyến: {error}',
+        'models.route_conflict': 'Tuyến này đã thay đổi trong một phiên khác. Phiên bản mới nhất đã được tải lại.',
+        'models.route_created': 'Đã tạo tuyến omway.',
+        'models.route_saved': 'Đã lưu tuyến omway.',
+        'models.delete_confirm': 'Xóa tuyến omway? Thông tin xác thực và các mô hình đã phát hiện sẽ không bị xóa.',
+        'models.route_deleted': 'Đã xóa tuyến omway.',
+        'models.route_delete_failed': 'Không thể xóa tuyến: {error}',
+        'models.playground_handoff_ready': 'Đã kiểm tra và chuẩn bị tuyến. Phiên bản này chưa có Playground; chưa gửi yêu cầu suy luận nào.'
+    }
+};
+
+for (const locale of Object.keys(PAGE_LOCALE_TRANSLATIONS)) {
+    Object.assign(
+        PAGE_LOCALE_TRANSLATIONS[locale],
+        MODEL_ROUTING_WORKFLOW_MESSAGES.en,
+        MODEL_ROUTING_WORKFLOW_MESSAGES[locale] || {}
+    );
+}
+
 const PRODUCTION_DASHBOARD_MESSAGES = {
     en: {
         'dashboard.metrics': 'Gateway metrics',

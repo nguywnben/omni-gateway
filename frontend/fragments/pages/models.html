@@ -7,7 +7,6 @@
                         </div>
                         <div class="page-actions">
                             <button type="button" class="btn btn-secondary" id="refreshModelCatalogBtn" data-ui-action="refresh-model-catalog" data-i18n="refresh">Refresh</button>
-                            <button type="button" class="btn" id="saveModelPoolBtn" data-ui-action="save-model-pool" data-i18n="save">Save</button>
                         </div>
                     </header>
 
@@ -34,10 +33,36 @@
                                 <span class="status-badge muted" id="modelPoolStatus" data-i18n="models.not_configured">Not configured</span>
                             </div>
                             <p class="card-copy card-title-copy" data-i18n="models.virtual_model_description">Use omway in OpenAI, Anthropic, or Google GenAI clients. Requests try the selected models from top to bottom.</p>
+                            <div id="modelRouteValidation" class="model-route-validation" role="status" aria-live="polite" hidden>
+                                <strong id="modelRouteValidationTitle"></strong>
+                                <p id="modelRouteValidationSummary"></p>
+                                <ul id="modelRouteValidationIssues"></ul>
+                            </div>
                             <div class="model-policy-note">
                                 <strong data-i18n="models.priority_fallback">Priority fallback</strong>
                                 <span data-i18n="models.priority_fallback_description">Credentials are balanced within each model before routing continues to the next model.</span>
                             </div>
+                            <fieldset class="model-routing-policy">
+                                <legend data-i18n="models.credential_strategy">Credential strategy</legend>
+                                <div class="model-routing-policy-grid">
+                                    <label class="form-group" for="modelRoutingStrategy">
+                                        <span data-i18n="settings.credential_selection">Credential selection</span>
+                                        <select id="modelRoutingStrategy" data-ui-change="model-routing-strategy">
+                                            <option value="balanced" data-i18n="settings.balanced">Balanced</option>
+                                            <option value="priority" data-i18n="settings.provider_priority">Provider priority</option>
+                                            <option value="weighted" data-i18n="settings.weighted">Weighted random</option>
+                                            <option value="least_latency" data-i18n="settings.least_latency">Least latency</option>
+                                            <option value="lowest_cost" data-i18n="settings.lowest_cost">Lowest cost</option>
+                                        </select>
+                                    </label>
+                                    <label class="form-group" for="modelPreferredProvider" id="modelPreferredProviderGroup">
+                                        <span data-i18n="settings.preferred_provider">Preferred provider</span>
+                                        <select id="modelPreferredProvider" data-ui-change="model-routing-strategy"><option value="" data-i18n="settings.automatic">Automatic</option></select>
+                                    </label>
+                                </div>
+                                <p class="field-hint" id="modelRoutingStrategyHint" data-i18n="models.strategy_hint">The strategy ranks compatible healthy credentials; weighted routing uses each credential's configured weight.</p>
+                                <p class="field-hint hidden" id="modelRoutingLockNotice" data-i18n="quality.environment_managed">Managed by the runtime environment.</p>
+                            </fieldset>
                             <div class="model-section-heading">
                                 <div>
                                     <h3 data-i18n="models.fallback_order">Fallback Order</h3>
@@ -45,6 +70,13 @@
                                 </div>
                             </div>
                             <div id="selectedModelList" class="selected-model-list"></div>
+                            <p id="modelRouteUnsavedNotice" class="field-hint hidden" data-i18n="models.unsaved_changes">Save the route before testing the changed selection.</p>
+                            <div class="model-route-actions">
+                                <button type="button" class="btn btn-secondary" id="validateModelRouteBtn" data-ui-action="validate-model-route" data-i18n="models.validate_route">Validate route</button>
+                                <button type="button" class="btn btn-secondary" id="testModelRouteBtn" data-ui-action="test-model-route" data-i18n="models.test_playground">Test in Playground</button>
+                                <button type="button" class="btn btn-danger hidden" id="deleteModelRouteBtn" data-ui-action="delete-model-route" data-i18n="models.delete_route">Delete route</button>
+                                <button type="button" class="btn" id="saveModelPoolBtn" data-ui-action="save-model-pool" data-i18n="models.create_route">Create route</button>
+                            </div>
                         </section>
 
                         <section class="card model-catalog-card">
@@ -53,7 +85,7 @@
                                     <h2 class="card-title" data-i18n="models.provider_models">Provider Models</h2>
                                     <p data-i18n="models.selection_description">Select models discovered from enabled provider credentials.</p>
                                 </div>
-                                <input type="search" id="modelCatalogSearch" class="model-catalog-search" data-i18n-placeholder="models.search_models" placeholder="Search models" autocomplete="off" data-ui-input="model-catalog-search">
+                                <input type="search" id="modelCatalogSearch" class="model-catalog-search" data-i18n-placeholder="models.search_models" data-i18n-aria-label="models.search_models" aria-label="Search models" placeholder="Search models" autocomplete="off" data-ui-input="model-catalog-search">
                             </div>
                             <div id="modelCatalogList" class="model-catalog-list"></div>
                         </section>
