@@ -121,7 +121,8 @@
     }
 
     .dashboard-sidebar .tab,
-    .dashboard-sidebar .btn {
+    .dashboard-sidebar .btn,
+    .sidebar-navigation-group > summary {
         min-height: 44px;
     }
 
@@ -462,12 +463,12 @@
         min-width: 0;
     }
 
-    #logsTab .filter-container {
+    #activityRuntimePanel .filter-container {
         grid-template-columns: minmax(0, 1fr) auto;
         align-items: end;
     }
 
-    #logsTab .switch-row {
+    #activityRuntimePanel .switch-row {
         min-height: 44px;
         align-items: center;
     }

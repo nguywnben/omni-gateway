@@ -54,6 +54,7 @@ function initStaticUiBindings() {
     const clickHandlers = {
         'toggle-mobile-menu': () => toggleMobileMenu(),
         'switch-tab': (element) => switchTab(element.dataset.tab),
+        'switch-activity-view': (element) => switchActivityView(element.dataset.activityView),
         logout: () => logout(),
         'copy-api-key': () => copyInputValue('apiKey'),
         'toggle-api-key': () => toggleApiKeyVisibility(),
@@ -283,7 +284,7 @@ window.addEventListener('resize', () => {
 
     if (activeTab) updateTabSlider(activeTab, false);
 
-    if (window.innerWidth > 960) setMobileMenuState(false);
+    syncMobileNavigationState();
 
 });
 

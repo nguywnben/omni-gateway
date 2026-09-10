@@ -269,6 +269,24 @@
     overflow-x: hidden;
 }
 
+.skip-link {
+    position: fixed;
+    top: 8px;
+    left: 8px;
+    z-index: 100;
+    padding: 10px 14px;
+    border: 2px solid var(--accent);
+    border-radius: var(--radius);
+    background: var(--surface);
+    color: var(--text);
+    font-weight: 650;
+    transform: translateY(calc(-100% - 16px));
+}
+
+.skip-link:focus {
+    transform: translateY(0);
+}
+
 .dashboard-sidebar {
     position: fixed;
     inset: 0 auto 0 0;
@@ -301,6 +319,35 @@
 .sidebar-menu {
     display: grid;
     gap: 3px;
+}
+
+.sidebar-navigation-group {
+    margin-top: 6px;
+    border-top: 1px solid var(--border);
+    padding-top: 8px;
+}
+
+.sidebar-navigation-group > summary {
+    min-height: 36px;
+    display: flex;
+    align-items: center;
+    padding: 0 10px;
+    border-radius: var(--radius);
+    color: var(--text-soft);
+    cursor: pointer;
+    font-size: 12px;
+    font-weight: 650;
+}
+
+.sidebar-navigation-group > summary:hover {
+    background: var(--control-hover);
+    color: var(--text);
+}
+
+.sidebar-navigation-group-items {
+    display: grid;
+    gap: 3px;
+    padding-top: 3px;
 }
 
 .tab {

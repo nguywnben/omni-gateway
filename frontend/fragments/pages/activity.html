@@ -1,0 +1,18 @@
+                <div id="activityTab" class="tab-content">
+                    <header class="page-header">
+                        <div>
+                            <div class="page-kicker" data-i18n="activity.operations">Operations</div>
+                            <h1 class="page-title" data-i18n="activity.title">Activity</h1>
+                            <p class="page-description" data-i18n="activity.description">Investigate requests, management changes, security events, and runtime diagnostics from one workspace.</p>
+                        </div>
+                    </header>
+
+                    <div class="activity-tabs" role="tablist" data-i18n-aria-label="activity.views" aria-label="Activity views">
+                        <button id="activityTracesTab" type="button" role="tab" aria-controls="activityTracesPanel" aria-selected="true" tabindex="0" data-ui-action="switch-activity-view" data-activity-view="traces" data-i18n="activity.requests">Request traces</button>
+                        <button id="activityAuditTab" type="button" role="tab" aria-controls="activityAuditPanel" aria-selected="false" tabindex="-1" data-ui-action="switch-activity-view" data-activity-view="audit" data-i18n="activity.audit_security">Audit &amp; security</button>
+                        <button id="activityRuntimeTab" type="button" role="tab" aria-controls="activityRuntimePanel" aria-selected="false" tabindex="-1" data-ui-action="switch-activity-view" data-activity-view="runtime" data-i18n="activity.runtime_logs">Runtime logs</button>
+                    </div>
+
+                    <!-- include:fragments/pages/audit.html -->
+                    <!-- include:fragments/pages/logs.html -->
+                </div>

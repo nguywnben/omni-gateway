@@ -6,9 +6,9 @@
 - Active plan: `PROD-SELFHOST-R1`
 - Target: production-quality self-hosting for one person or a trusted team, not enterprise service
   operation.
-- Progress: **18/36 implementation tasks**; Phase 2 is complete (6/6).
-- Completed: **P2.6 — Compression and quality-policy hardening**.
-- Next: **P3.1 — Navigation and conditional complexity**. Do not begin it until a
+- Progress: **19/36 implementation tasks**; Phase 3 is in progress (1/6).
+- Completed: **P3.1 — Navigation and conditional complexity**.
+- Next: **P3.2 — Shared page states and accessible interaction**. Do not begin it until a
   new user request to continue the fixed plan.
 - Supported runtime today: standalone, one worker, one replica.
 - Redis coordination, multi-replica HA, and Helm are experimental and no longer R1 release blockers.
@@ -49,6 +49,13 @@ Do not push unless the user requests it.
 
 ## Latest Evidence
 
+- `docs/evidence/p3.1-navigation-conditional-complexity.md`
+- The console now follows the fixed self-hosted information architecture. Request traces, audit and
+  security events, and runtime logs share one accessible Activity destination; `/audit` and `/logs`
+  remain compatible.
+- Team access is conditional on enabled OIDC state or direct configuration, advanced/compatibility
+  settings are collapsed, and mobile drawer plus page-heading focus behavior is explicit. The task
+  gate passed 73 affected tests, all translation audits, and authenticated 360/1440 Chrome smoke.
 - `docs/evidence/p2.6-compression-quality-hardening.md`
 - Compression now fails open to the unchanged request on bounded estimation/copy/invariant failure,
   preserves system/tool/current-request structures, and applies one policy decision across Primary

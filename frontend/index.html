@@ -16,6 +16,7 @@
 </head>
 
 <body>
+    <a class="skip-link" href="#mainContent" data-i18n="navigation.skip_to_content">Skip to content</a>
     <div id="mobileNavigationOverlay" class="sidebar-overlay" aria-hidden="true" data-ui-action="toggle-mobile-menu"></div>
 
     <!-- include:fragments/auth/login.html -->
@@ -25,7 +26,7 @@
         <!-- include:fragments/layout/sidebar.html -->
         <!-- include:fragments/layout/mobile-header.html -->
 
-        <main class="dashboard-main">
+        <main id="mainContent" class="dashboard-main" tabindex="-1">
             <div class="dashboard-content-container">
                 <!-- include:fragments/pages/dashboard.html -->
                 <!-- include:fragments/pages/ai-quality.html -->
@@ -35,8 +36,7 @@
                 <!-- include:fragments/pages/models.html -->
                 <!-- include:fragments/pages/providers.html -->
                 <!-- include:fragments/pages/settings.html -->
-                <!-- include:fragments/pages/audit.html -->
-                <!-- include:fragments/pages/logs.html -->
+                <!-- include:fragments/pages/activity.html -->
                 <!-- include:fragments/pages/about.html -->
                 <!-- include:fragments/layout/footer.html -->
             </div>

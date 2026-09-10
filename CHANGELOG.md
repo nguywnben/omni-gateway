@@ -61,6 +61,10 @@ All notable user-facing changes are documented in this file. Omni Gateway follow
 
 ### Changed
 
+- Reorganized the self-hosted console around one daily workflow: request traces, audit/security
+  events, and runtime logs now share an accessible Activity page; Team access is conditional,
+  advanced and compatibility settings are collapsed, legacy `/audit` and `/logs` URLs continue to
+  work, and mobile navigation now traps no hidden focus and restores focus on Escape.
 - Context compression now estimates deeply nested payloads without recursion, fails open to the
   original request on estimation or invariant failure, preserves protected structures, and records
   bounded before/after estimates and reasons. Primary providers resolve compression once and Vertex

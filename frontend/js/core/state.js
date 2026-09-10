@@ -167,6 +167,10 @@ const AppState = {
 
     currentLogFilter: 'all',
 
+    activeActivityView: 'traces',
+
+    teamAccessEnabled: null,
+
     usageStatsData: {},
 
     usageStatsLoaded: false,

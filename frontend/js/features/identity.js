@@ -445,6 +445,8 @@ async function loadIdentityOidc({
         const payload = await identityApi('/oidc-policy', { signal });
         if (!identityLoadIsCurrent(generation, signal)) return;
         IdentityConsoleState.oidcPolicy = identityValidateOidcPolicy(payload);
+        AppState.teamAccessEnabled = IdentityConsoleState.oidcPolicy?.enabled === true;
+        updateTeamAccessNavigation();
     } catch (error) {
         if (error?.name === 'AbortError' || !identityLoadIsCurrent(generation, signal)) return;
         IdentityConsoleState.oidcPolicy = null;

@@ -27,6 +27,7 @@ CONSOLE_FRAGMENT_PATHS = (
     "pages/models.html",
     "pages/providers.html",
     "pages/settings.html",
+    "pages/activity.html",
     "pages/audit.html",
     "pages/logs.html",
     "pages/about.html",
@@ -72,8 +73,10 @@ CONSOLE_SCRIPT_ASSETS = (
     "js/features/authentication.js",
     "js/features/virtual-keys.js",
     "js/features/identity.js",
+    "js/features/conditional-navigation.js",
     "js/features/audit.js",
     "js/features/traces.js",
+    "js/features/activity.js",
     "js/features/navigation.js",
     "js/features/model-pool.js",
     "js/features/code-assist-authentication.js",
@@ -356,6 +359,7 @@ async def serve_oauth_callback(request: Request):
 @router.get("/oauth", response_class=HTMLResponse, include_in_schema=False)
 @router.get("/upload", response_class=HTMLResponse, include_in_schema=False)
 @router.get("/config", response_class=HTMLResponse, include_in_schema=False)
+@router.get("/activity", response_class=HTMLResponse, include_in_schema=False)
 @router.get("/audit", response_class=HTMLResponse, include_in_schema=False)
 @router.get("/logs", response_class=HTMLResponse, include_in_schema=False)
 @router.get("/about", response_class=HTMLResponse, include_in_schema=False)

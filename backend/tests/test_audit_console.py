@@ -22,7 +22,8 @@ class AuditConsoleContractTests(unittest.TestCase):
         body = serve_control_panel().body.decode("utf-8")
 
         for element_id in (
-            "auditTab",
+            "activityTab",
+            "activityAuditPanel",
             "auditFilterForm",
             "auditEventList",
             "auditEventStatus",
@@ -32,8 +33,9 @@ class AuditConsoleContractTests(unittest.TestCase):
             "auditRetentionForm",
         ):
             self.assertIn(f'id="{element_id}"', body)
-        self.assertIn('data-tab="audit"', body)
-        self.assertIn('data-i18n="audit.observability"', body)
+        self.assertIn('data-tab="activity"', body)
+        self.assertIn('data-activity-view="audit"', body)
+        self.assertIn('data-i18n="activity.title"', body)
         self.assertIn('aria-live="polite"', body)
         self.assertIn('<dialog id="auditDetailDialog"', body)
 

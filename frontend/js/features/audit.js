@@ -371,7 +371,7 @@ async function loadAuditRetention() {
 }
 
 async function loadAuditConsole(force = false) {
-    if (!auditElement('auditTab')) return;
+    if (!auditElement('activityAuditPanel')) return;
     if (!AuditConsoleState.loaded || force) {
         AuditConsoleState.filters = readAuditFilters();
         await Promise.all([loadAuditEvents(), loadAuditRetention()]);

@@ -223,7 +223,7 @@ async function loadTraceRetention() {
 }
 
 async function loadTraceConsole(force = false) {
-    if (!traceElement('logsTab')) return;
+    if (!traceElement('activityTracesPanel')) return;
     if (!TraceConsoleState.loaded || force) { TraceConsoleState.filters = readTraceFilters(); await Promise.all([loadTraces(), loadTraceRetention()]); }
     else { renderTraces(); renderTraceRetention(); }
 }

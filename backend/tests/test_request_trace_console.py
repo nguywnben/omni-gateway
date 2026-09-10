@@ -29,7 +29,9 @@ class RequestTraceConsoleContractTests(unittest.TestCase):
             "logContainer",
         ):
             self.assertIn(f'id="{element_id}"', body)
-        self.assertLess(body.index('id="traceList"'), body.index('class="raw-log-section"'))
+        self.assertLess(body.index('id="traceList"'), body.index('id="activityRuntimePanel"'))
+        self.assertIn('data-activity-view="traces"', body)
+        self.assertIn('data-activity-view="runtime"', body)
         self.assertIn('data-i18n="trace.content_free"', body)
         self.assertIn('data-i18n="trace.diagnostic_only"', body)
 

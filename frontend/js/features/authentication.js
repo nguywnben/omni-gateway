@@ -70,7 +70,10 @@ function renderSetupStatus(data) {
 
     if (AppState.setupRequired) AppState.authenticated = false;
 
-    if (!AppState.authenticated) resetIdentityConsoleState();
+    if (!AppState.authenticated) {
+        resetIdentityConsoleState();
+        resetConditionalNavigation();
+    }
 
 }
 
@@ -270,6 +273,8 @@ async function completeInitialSetup() {
 
             navigate('/dashboard');
 
+            await refreshTeamAccessNavigation();
+
             await fetchAndDisplayVersion();
 
         } else {
@@ -332,6 +337,8 @@ async function login() {
 
             navigate('/dashboard');
 
+            await refreshTeamAccessNavigation();
+
             await fetchAndDisplayVersion();
 
         } else {
@@ -380,6 +387,8 @@ async function autoLogin() {
 
         navigate(window.location.pathname, false);
 
+        await refreshTeamAccessNavigation();
+
         return true;
 
     }
@@ -405,6 +414,8 @@ async function logout() {
     AppState.authenticated = false;
 
     resetIdentityConsoleState();
+
+    resetConditionalNavigation();
 
     showStatus(t('logged_out'), 'info');
 

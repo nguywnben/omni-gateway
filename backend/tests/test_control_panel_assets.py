@@ -149,7 +149,7 @@ class ControlPanelAssetTests(unittest.TestCase):
             "models",
             "providers",
             "config",
-            "logs",
+            "activity",
             "about",
         ):
             self.assertIn(

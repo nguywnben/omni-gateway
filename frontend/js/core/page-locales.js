@@ -2263,3 +2263,45 @@ for (const [locale, values] of Object.entries(ACCESS_VIRTUAL_KEY_LOCALE_VALUES))
 for (const [locale, messages] of Object.entries(ACCESS_VIRTUAL_KEY_MESSAGES)) {
     Object.assign(PAGE_LOCALE_TRANSLATIONS[locale], messages);
 }
+
+const NAVIGATION_ACTIVITY_MESSAGES = {
+    en: {
+        'navigation.skip_to_content': 'Skip to content',
+        'navigation.overview': 'Overview',
+        'navigation.credentials': 'Credentials',
+        'navigation.models_routing': 'Models & Routing',
+        'navigation.activity': 'Activity',
+        'navigation.advanced': 'Advanced',
+        'navigation.team_access': 'Team access',
+        'activity.operations': 'Operations',
+        'activity.title': 'Activity',
+        'activity.description': 'Investigate requests, management changes, security events, and runtime diagnostics from one workspace.',
+        'activity.views': 'Activity views',
+        'activity.requests': 'Request traces',
+        'activity.audit_security': 'Audit & security',
+        'activity.runtime_logs': 'Runtime logs'
+    },
+    vi: {
+        'navigation.skip_to_content': 'Bỏ qua để đến nội dung',
+        'navigation.overview': 'Tổng quan',
+        'navigation.credentials': 'Thông tin xác thực',
+        'navigation.models_routing': 'Mô hình và định tuyến',
+        'navigation.activity': 'Hoạt động',
+        'navigation.advanced': 'Nâng cao',
+        'navigation.team_access': 'Truy cập nhóm',
+        'activity.operations': 'Vận hành',
+        'activity.title': 'Hoạt động',
+        'activity.description': 'Điều tra yêu cầu, thay đổi quản trị, sự kiện bảo mật và chẩn đoán runtime trong cùng một khu vực làm việc.',
+        'activity.views': 'Các chế độ xem hoạt động',
+        'activity.requests': 'Dấu vết yêu cầu',
+        'activity.audit_security': 'Kiểm toán và bảo mật',
+        'activity.runtime_logs': 'Nhật ký runtime'
+    }
+};
+
+for (const locale of Object.keys(PAGE_LOCALE_TRANSLATIONS)) {
+    Object.assign(
+        PAGE_LOCALE_TRANSLATIONS[locale],
+        NAVIGATION_ACTIVITY_MESSAGES[locale] || NAVIGATION_ACTIVITY_MESSAGES.en
+    );
+}

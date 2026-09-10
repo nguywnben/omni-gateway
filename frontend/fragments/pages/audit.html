@@ -1,8 +1,7 @@
-                <div id="auditTab" class="tab-content">
-                    <header class="page-header">
+                <section id="activityAuditPanel" class="activity-panel" role="tabpanel" aria-labelledby="activityAuditTab" data-activity-panel="audit" hidden>
+                    <header class="activity-view-header">
                         <div>
-                            <div class="page-kicker" data-i18n="audit.observability">Observability</div>
-                            <h1 class="page-title" data-i18n="audit.title">Audit events</h1>
+                            <h2 class="activity-view-title" data-i18n="audit.title">Audit events</h2>
                             <p class="page-description" data-i18n="audit.description">Investigate every management mutation through redacted, durable evidence.</p>
                         </div>
                         <div class="page-actions">
@@ -126,4 +125,4 @@
                         <div class="audit-detail-actions"><button type="button" class="btn btn-secondary" data-ui-action="copy-audit-request" data-i18n="audit.copy_request">Copy request ID</button><button type="button" class="btn" data-ui-action="pivot-audit-request" data-i18n="audit.pivot_request">Filter by request ID</button></div>
                         <p id="auditDetailStatus" role="status" aria-live="polite"></p>
                     </dialog>
-                </div>
+                </section>
