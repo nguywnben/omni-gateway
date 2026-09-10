@@ -14,12 +14,28 @@ from typing import Any, Mapping
 POLICY_SCHEMA_VERSION = 1
 POLICY_STORAGE_KEY = "quality_policy_document"
 SUPPORTED_PROFILES = {"quality", "balanced", "capacity", "custom"}
+COMPRESSION_RESTRICTION_INHERIT = "inherit"
+COMPRESSION_RESTRICTION_DISABLED = "disabled"
+COMPRESSION_RESTRICTIONS = frozenset(
+    {COMPRESSION_RESTRICTION_INHERIT, COMPRESSION_RESTRICTION_DISABLED}
+)
 
 
 class QualityPolicyError(ValueError):
     def __init__(self, message: str, code: str = "quality_policy_invalid"):
         super().__init__(message)
         self.code = code
+
+
+def normalize_compression_restriction(value: Any, *, layer: str) -> str:
+    """Validate the intentionally small lower-layer compression policy surface."""
+    normalized = str(value or COMPRESSION_RESTRICTION_INHERIT).strip().lower()
+    if normalized not in COMPRESSION_RESTRICTIONS:
+        raise QualityPolicyError(
+            f"{layer} compression policy must be inherit or disabled.",
+            code="quality_policy_override_invalid",
+        )
+    return normalized
 
 
 BALANCED_SETTINGS: dict[str, Any] = {

@@ -113,6 +113,7 @@ from core.token_compression import (
     CompressionResult,
     CompressionSettings,
     compress_gemini_request,
+    compression_trace_reason,
 )
 from core.usage_stats import (
     extract_token_usage_from_response,
@@ -418,20 +419,11 @@ async def prepare_provider_request(
             access_token = credential_data.get("access_token") or credential_data.get("token")
             auth_headers["Authorization"] = f"Bearer {access_token}"
 
-    compression_reason = (
-        "token_budget"
-        if compression_result.applied
-        else "feature_disabled"
-        if compression_result.reason == "disabled"
-        else "history_within_limit"
-        if compression_result.reason == "below_threshold"
-        else "content_limit"
-    )
     trace_decision(
         category="compression",
         action="applied" if compression_result.applied else "skipped",
         result="succeeded" if compression_result.applied else "skipped",
-        reason=compression_reason,
+        reason=compression_trace_reason(compression_result),
         provider=provider_id,
         model=model_name,
         original_tokens=compression_result.original_estimated_tokens,

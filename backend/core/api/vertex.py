@@ -12,7 +12,12 @@ from config import get_token_compression_config, get_upstream_timeout_seconds
 from core.converter.thought_signature import decode_tool_id_and_signature
 from core.httpx_client import MAX_STREAM_LINE_BYTES, UpstreamStreamProtocolError
 from core.request_trace_service import trace_decision
-from core.token_compression import CompressionResult, CompressionSettings, compress_gemini_request
+from core.token_compression import (
+    CompressionResult,
+    CompressionSettings,
+    compress_gemini_request,
+    compression_trace_reason,
+)
 from fastapi import Response
 from log import log
 
@@ -88,15 +93,7 @@ def _trace_compression(model: str, result: CompressionResult) -> None:
         category="compression",
         action="applied" if result.applied else "skipped",
         result="succeeded" if result.applied else "skipped",
-        reason=(
-            "token_budget"
-            if result.applied
-            else "feature_disabled"
-            if result.reason == "disabled"
-            else "history_within_limit"
-            if result.reason == "below_threshold"
-            else "content_limit"
-        ),
+        reason=compression_trace_reason(result),
         provider="vertex",
         model=model,
         original_tokens=result.original_estimated_tokens,

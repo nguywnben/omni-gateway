@@ -27,6 +27,7 @@ from typing import Any, Dict, List, Optional, Sequence, Tuple
 from core.coordination import validate_epoch
 from core.governance_coordination import GovernanceGenerationObserver
 from core.pricing import ZERO_COST_PROVIDERS, calculate_cost_usd, find_model_pricing
+from core.quality_policy import normalize_compression_restriction
 from core.request_trace_service import trace_decision
 from core.routing_coordination import GOVERNANCE_SCOPE_VIRTUAL_KEYS
 from core.state_store import (
@@ -100,7 +101,6 @@ MANAGEMENT_SCOPES = ("management:read", "management:write")
 VIRTUAL_KEY_SCOPES = INFERENCE_SCOPES + MANAGEMENT_SCOPES
 DEFAULT_INFERENCE_SCOPES = INFERENCE_SCOPES
 UNKNOWN_PRICING_POLICIES = ("deny", "warn", "fallback")
-COMPRESSION_POLICIES = ("inherit", "disabled")
 
 _GEMINI_MODEL_PATH_RE = re.compile(r"/models/([^/:?]+)")
 _MODEL_PATTERN_RE = re.compile(r"^(?=.{1,128}$)(?=.*[A-Za-z0-9])[A-Za-z0-9._:/+*?-]+$")
@@ -210,13 +210,6 @@ def normalize_unknown_pricing_policy(policy: Any, fallback: Any) -> Tuple[str, O
     return normalized_policy, normalized_fallback
 
 
-def normalize_compression_policy(policy: Any) -> str:
-    normalized = str(policy or "inherit").strip().lower()
-    if normalized not in COMPRESSION_POLICIES:
-        raise ValueError("Compression policy must be inherit or disabled.")
-    return normalized
-
-
 @dataclass
 class VirtualKey:
     """A single virtual API key record (secret stored as SHA-256 hash)."""
@@ -318,7 +311,9 @@ class VirtualKey:
                 scopes=scopes,
                 unknown_pricing_policy=pricing_policy,
                 fallback_price_usd_per_million=fallback_price,
-                compression_policy=normalize_compression_policy(raw.get("compression_policy")),
+                compression_policy=normalize_compression_restriction(
+                    raw.get("compression_policy"), layer="virtual-key"
+                ),
                 last_used_at=_float_or_none(raw.get("last_used_at")),
                 revision=max(1, int(raw.get("revision") or 1)),
                 revoked_at=_float_or_none(raw.get("revoked_at")),
@@ -519,7 +514,9 @@ class VirtualKeyManager:
                 else None
             )
             compression_policy = (
-                normalize_compression_policy(patch.get("compression_policy"))
+                normalize_compression_restriction(
+                    patch.get("compression_policy"), layer="virtual-key"
+                )
                 if "compression_policy" in patch
                 else record.compression_policy
             )

@@ -8,36 +8,24 @@ from typing import Any
 
 import config
 from core.quality_policy import (
+    COMPRESSION_RESTRICTION_DISABLED,
+    COMPRESSION_RESTRICTION_INHERIT,
     LOCKED_SETTING_PATHS,
     POLICY_STORAGE_KEY,
     QualityPolicyError,
     load_policy_document,
+    normalize_compression_restriction,
     settings_from_legacy,
     validate_settings,
 )
-
-COMPRESSION_POLICY_INHERIT = "inherit"
-COMPRESSION_POLICY_DISABLED = "disabled"
-COMPRESSION_POLICIES = frozenset({COMPRESSION_POLICY_INHERIT, COMPRESSION_POLICY_DISABLED})
-
-
-def normalize_compression_policy(value: Any, *, layer: str) -> str:
-    """Validate the intentionally small restrictive compression policy surface."""
-    normalized = str(value or COMPRESSION_POLICY_INHERIT).strip().lower()
-    if normalized not in COMPRESSION_POLICIES:
-        raise QualityPolicyError(
-            f"{layer} compression policy must be inherit or disabled.",
-            code="quality_policy_override_invalid",
-        )
-    return normalized
 
 
 def compression_policy_from_request_header(value: Any) -> str:
     normalized = str(value or "").strip().lower()
     if not normalized or normalized == "inherit":
-        return COMPRESSION_POLICY_INHERIT
+        return COMPRESSION_RESTRICTION_INHERIT
     if normalized == "off":
-        return COMPRESSION_POLICY_DISABLED
+        return COMPRESSION_RESTRICTION_DISABLED
     raise QualityPolicyError(
         "x-omni-compression must be off or inherit.",
         code="quality_policy_override_invalid",
@@ -47,8 +35,8 @@ def compression_policy_from_request_header(value: Any) -> str:
 def resolve_request_quality_settings(
     global_settings: dict[str, Any],
     *,
-    key_compression_policy: str = COMPRESSION_POLICY_INHERIT,
-    request_compression_policy: str = COMPRESSION_POLICY_INHERIT,
+    key_compression_policy: str = COMPRESSION_RESTRICTION_INHERIT,
+    request_compression_policy: str = COMPRESSION_RESTRICTION_INHERIT,
 ) -> dict[str, Any]:
     """Apply key then request restrictions without allowing either to weaken global policy."""
     effective = validate_settings(global_settings)
@@ -56,7 +44,10 @@ def resolve_request_quality_settings(
         ("virtual-key", key_compression_policy),
         ("request", request_compression_policy),
     ):
-        if normalize_compression_policy(policy, layer=layer) == COMPRESSION_POLICY_DISABLED:
+        if (
+            normalize_compression_restriction(policy, layer=layer)
+            == COMPRESSION_RESTRICTION_DISABLED
+        ):
             effective["compression"]["enabled"] = False
     return effective
 

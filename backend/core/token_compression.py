@@ -57,6 +57,16 @@ class CompressionResult:
         }
 
 
+def compression_trace_reason(result: CompressionResult) -> str:
+    if result.applied:
+        return "token_budget"
+    if result.reason == "disabled":
+        return "feature_disabled"
+    if result.reason == "below_threshold":
+        return "history_within_limit"
+    return "content_limit"
+
+
 def _contains_function_response(content: Any) -> bool:
     if not isinstance(content, dict):
         return False
