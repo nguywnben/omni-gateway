@@ -207,6 +207,9 @@ MANAGEMENT_AUDIT_EXCLUSIONS: dict[tuple[str, str], str] = {
     ("POST", "/api/providers/anthropic/claude-code/oauth/start"): "OAuth handshake only.",
     ("POST", "/api/quality-policy/preview"): "Side-effect-free policy preview.",
     ("POST", "/api/model-routes/omway/validate"): ("Side-effect-free model route validation."),
+    ("POST", "/api/playground/runs"): (
+        "Ephemeral inference run; the route records its final streamed outcome explicitly."
+    ),
     ("POST", "/api/backups/validate"): "Side-effect-free backup validation.",
     ("POST", "/api/credentials/action"): "Bridged from per-target credential evidence.",
     ("POST", "/api/credentials/batch-action"): "Bridged from per-target credential evidence.",

@@ -39,6 +39,7 @@ from core.management_audit import (
 from core.metrics import router as metrics_router
 from core.otel_exporter import run_otel_export_loop
 from core.panel import router as panel_router
+from core.panel.playground import PLAYGROUND_MAX_BODY_BYTES
 from core.protocol_contract import ProtocolTranslationError
 from core.request_context import request_scope
 from core.request_limits import RequestBodyLimitMiddleware, get_max_request_body_bytes
@@ -369,6 +370,7 @@ app.add_middleware(GZipMiddleware, minimum_size=1024, compresslevel=5)
 app.add_middleware(
     RequestBodyLimitMiddleware,
     max_body_bytes=get_max_request_body_bytes(),
+    path_limits={"/api/playground/runs": PLAYGROUND_MAX_BODY_BYTES},
 )
 
 

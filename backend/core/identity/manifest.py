@@ -182,6 +182,10 @@ _MANAGEMENT_ROUTE_MANIFEST = (
         ("DELETE", "/api/model-routes/omway"),
         ("POST", "/api/model-routes/omway/validate"),
     ),
+    *_http(
+        ManagementPermission.CREDENTIALS_OPERATE,
+        ("POST", "/api/playground/runs"),
+    ),
     *_http(ManagementPermission.QUALITY_READ, ("GET", "/api/quality-policy")),
     *_http(
         ManagementPermission.QUALITY_MANAGE,

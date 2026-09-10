@@ -55,6 +55,7 @@
     {"id": "logs_api", "pattern": "^/api/logs(?:/.*)?$", "tier": "core", "journey": "activity"},
     {"id": "models_api", "pattern": "^/api/(?:model-blacklist|model-catalog|model-pools|model-routes)(?:/.*)?$", "tier": "core", "journey": "model_routing"},
     {"id": "observability_api", "pattern": "^/api/observability(?:/.*)?$", "tier": "core", "journey": "activity"},
+    {"id": "playground_api", "pattern": "^/api/playground(?:/.*)?$", "tier": "core", "journey": "inference"},
     {"id": "providers_api", "pattern": "^/api/providers(?:/.*)?$", "tier": "core", "journey": "provider_onboarding"},
     {"id": "quality_api", "pattern": "^/api/quality-policy(?:/.*)?$", "tier": "core", "journey": "ai_quality"},
     {"id": "traces_api", "pattern": "^/api/traces(?:/.*)?$", "tier": "core", "journey": "activity"},

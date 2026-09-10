@@ -6,11 +6,11 @@
 - Active plan: `PROD-SELFHOST-R1`
 - Target: production-quality self-hosting for one person or a trusted team, not enterprise service
   operation.
-- Progress: **25/36 implementation tasks**; Phase 4 is in progress (1/6).
-- Completed: **P4.1 — AI Quality console completion**.
-- Gate caveat: P4.1 task checks pass; the unrelated unstaged request-schema change in
+- Progress: **26/36 implementation tasks**; Phase 4 is in progress (2/6).
+- Completed: **P4.2 — Playground backend boundary**.
+- Gate caveat: P4.2 task checks pass; the unrelated unstaged request-schema change in
   `backend/core/models.py` remains outside this task and still affects raw candidate compatibility.
-- Next: **P4.2 — Playground backend boundary**. Do not begin it until a
+- Next: **P4.3 — Playground interface**. Do not begin it until a
   new user request to continue the fixed plan.
 - Supported runtime today: standalone, one worker, one replica.
 - Redis coordination, multi-replica HA, and Helm are experimental and no longer R1 release blockers.
@@ -51,6 +51,13 @@ Do not push unless the user requests it.
 
 ## Latest Evidence
 
+- `docs/evidence/p4.2-playground-backend-boundary.md`
+- The authenticated, 1 MiB/20-per-minute/1–120-second bounded Playground API now reuses all four
+  real public protocol handlers, preserves native success/error/stream semantics, propagates
+  cancellation, and returns content-free route/quality/usage metadata without accepting provider
+  credentials or adding raw-content persistence.
+- Explicit audit, structured completion logs, and fixed-cardinality RED metrics cover final run
+  outcomes. The fixed task gate passed 72 affected tests and all static checks.
 - `docs/evidence/p4.1-ai-quality-console.md`
 - AI Quality now explains live/no-restart application, environment-to-request precedence,
   unambiguous compression disable behavior, thresholds, protected structures, and cache/guardrail

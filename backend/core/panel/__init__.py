@@ -13,6 +13,7 @@ from . import (
     logs,
     model_pools,
     observability_routes,
+    playground,
     providers,
     quality_policy,
     root,
@@ -46,6 +47,7 @@ def create_router() -> APIRouter:
     router.include_router(audit_routes.router)
     router.include_router(trace_routes.router)
     router.include_router(observability_routes.router)
+    router.include_router(playground.router)
 
     return router
 

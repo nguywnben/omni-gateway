@@ -11,6 +11,7 @@ from core.credential_operation_evidence import render_credential_operation_metri
 from core.ha_runtime import render_ha_runtime_metrics
 from core.identity import render_management_session_metrics
 from core.operational_health import get_operational_health_snapshot
+from core.playground_metrics import render_playground_metrics
 from core.provider_registry import (
     ANTHROPIC,
     CLAUDE_CODE,
@@ -155,6 +156,7 @@ def render_prometheus_metrics(
     lines.extend(render_management_session_metrics().rstrip().splitlines())
     lines.extend(render_virtual_key_quota_metrics().rstrip().splitlines())
     lines.extend(render_usage_ledger_metrics().rstrip().splitlines())
+    lines.extend(render_playground_metrics().rstrip().splitlines())
     emit("omni_storage_ready", "gauge", "Whether the configured durable storage is reachable.")
     lines.append(f"omni_storage_ready {int(storage_ready)}")
 
