@@ -1957,6 +1957,49 @@ for (const [locale, messages] of Object.entries(QUALITY_POLICY_EXTENDED_MESSAGES
     Object.assign(PAGE_LOCALE_TRANSLATIONS[locale], messages);
 }
 
+const QUALITY_POLICY_COMPLETION_MESSAGES = {
+    en: {
+        'quality.application_mode': 'Application', 'quality.apply_live': 'Live · no restart', 'quality.apply_restart': 'Restart required',
+        'quality.effect_title': 'What happens to a request', 'quality.apply_live_copy': 'A saved policy applies to new requests immediately. No gateway restart is required.',
+        'quality.precedence_title': 'Effective precedence', 'quality.precedence_environment': 'Environment ceiling', 'quality.precedence_global': 'Saved global policy', 'quality.precedence_key': 'Virtual-key restriction', 'quality.precedence_request': 'Request header restriction',
+        'quality.precedence_copy': 'A virtual key or request may only inherit or disable compression; neither can re-enable it or change thresholds.',
+        'quality.warnings_title': 'Review before saving', 'quality.compression_off_copy': 'When off, the gateway does not prune or rewrite prompt context. Threshold fields have no effect.',
+        'quality.transform_disabled': 'Compression is off. Requests are forwarded without context pruning or rewriting.',
+        'quality.transform_threshold': 'At or below {threshold} estimated tokens, context is unchanged. Above it, only a complete history prefix may be pruned toward {target} tokens.',
+        'quality.warning_compatibility_changes_instruction_shape': 'Compatibility mode flattens system instructions and can change their effective priority.',
+        'quality.warning_low_recent_turn_retention': 'Keeping fewer than 3 recent turns can remove context that is still relevant to the current answer.',
+        'quality.warning_guardrails_without_checks': 'Guardrails are enabled, but masking, injection detection, and blocked keywords are all inactive.',
+        'quality.warning_cache_with_reasoning': 'Exact-response caching with returned reasoning may replay reasoning content from process memory until the cache entry expires.',
+        'quality.warning_high_recovery_attempts': 'More than 5 recovery attempts can substantially increase latency and provider usage.',
+        'quality.preview_removed': 'Estimated removed messages', 'quality.preview_scope': 'Transformation scope',
+        'quality.scope_none': 'None', 'quality.scope_history_prefix_only': 'Complete history prefix only'
+    },
+    vi: {
+        'quality.application_mode': 'Cách áp dụng', 'quality.apply_live': 'Trực tiếp · không khởi động lại', 'quality.apply_restart': 'Cần khởi động lại',
+        'quality.effect_title': 'Điều gì xảy ra với yêu cầu', 'quality.apply_live_copy': 'Chính sách đã lưu áp dụng ngay cho các yêu cầu mới. Không cần khởi động lại gateway.',
+        'quality.precedence_title': 'Thứ tự ưu tiên thực tế', 'quality.precedence_environment': 'Giới hạn của môi trường', 'quality.precedence_global': 'Chính sách toàn cục đã lưu', 'quality.precedence_key': 'Giới hạn của khóa ảo', 'quality.precedence_request': 'Giới hạn từ header yêu cầu',
+        'quality.precedence_copy': 'Khóa ảo hoặc yêu cầu chỉ có thể kế thừa hoặc tắt nén; không thể bật lại nén hay thay đổi ngưỡng.',
+        'quality.warnings_title': 'Cần xem lại trước khi lưu', 'quality.compression_off_copy': 'Khi tắt, gateway không cắt bỏ hoặc viết lại ngữ cảnh prompt. Các trường ngưỡng không còn tác dụng.',
+        'quality.transform_disabled': 'Nén đang tắt. Yêu cầu được chuyển tiếp mà không cắt bỏ hay viết lại ngữ cảnh.',
+        'quality.transform_threshold': 'Ở mức không vượt quá {threshold} token ước tính, ngữ cảnh được giữ nguyên. Khi vượt ngưỡng, hệ thống chỉ có thể cắt một tiền tố lịch sử hoàn chỉnh để tiến về {target} token.',
+        'quality.warning_compatibility_changes_instruction_shape': 'Chế độ tương thích làm phẳng chỉ dẫn hệ thống và có thể thay đổi mức ưu tiên thực tế của chúng.',
+        'quality.warning_low_recent_turn_retention': 'Giữ dưới 3 lượt gần nhất có thể loại bỏ ngữ cảnh vẫn còn cần cho câu trả lời hiện tại.',
+        'quality.warning_guardrails_without_checks': 'Hàng rào bảo vệ đang bật nhưng che dữ liệu cá nhân, phát hiện prompt injection và từ khóa chặn đều không hoạt động.',
+        'quality.warning_cache_with_reasoning': 'Bộ nhớ đệm phản hồi chính xác cùng nội dung lập luận có thể phát lại lập luận từ bộ nhớ tiến trình cho đến khi mục đệm hết hạn.',
+        'quality.warning_high_recovery_attempts': 'Trên 5 lần thử khôi phục có thể làm tăng đáng kể độ trễ và mức sử dụng provider.',
+        'quality.preview_removed': 'Số tin nhắn ước tính bị loại bỏ', 'quality.preview_scope': 'Phạm vi biến đổi',
+        'quality.scope_none': 'Không có', 'quality.scope_history_prefix_only': 'Chỉ tiền tố lịch sử hoàn chỉnh'
+    }
+};
+
+for (const locale of Object.keys(PAGE_LOCALE_TRANSLATIONS)) {
+    Object.assign(
+        PAGE_LOCALE_TRANSLATIONS[locale],
+        QUALITY_POLICY_COMPLETION_MESSAGES.en,
+        QUALITY_POLICY_COMPLETION_MESSAGES[locale] || {}
+    );
+}
+
 const RUNTIME_COPY_MESSAGES = {
     en: { close_navigation: 'Close navigation', 'dashboard.peak_requests': 'Peak interval: {count} requests', 'runtime.details': 'Details', 'runtime.summary': 'Summary', 'runtime.permission': 'Permission', 'runtime.resource': 'Resource', 'runtime.mode': 'Mode', 'runtime.rate_limited': 'Rate limited', 'import.action_skipped': 'Skipped', 'import.action_renewed': 'Renewed', 'import.action_updated': 'Updated', 'import.action_added': 'Added', 'import.archive_intro': 'The archive was inspected. Each credential passed provider-specific validation and duplicate checks.' },
     'zh-CN': { close_navigation: '关闭导航', 'dashboard.peak_requests': '峰值时段：{count} 个请求', 'runtime.details': '详细信息', 'runtime.summary': '摘要', 'runtime.permission': '权限', 'runtime.resource': '资源', 'runtime.mode': '模式', 'runtime.rate_limited': '受到速率限制', 'import.action_skipped': '已跳过', 'import.action_renewed': '已续期', 'import.action_updated': '已更新', 'import.action_added': '已添加', 'import.archive_intro': '归档已完成检查。每份凭据都经过了对应提供商的验证和重复项检查。' },

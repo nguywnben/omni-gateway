@@ -2,8 +2,8 @@
 
 ## Status
 
-Implemented for the Production Self-Hosted R1 core in P2.6. Console presentation remains scheduled
-for P4.1 and P4.4.
+Implemented for the Production Self-Hosted R1 core in P2.6. The global console was completed in
+P4.1; virtual-key lifecycle presentation remains scheduled for P4.4.
 
 ## Context
 

@@ -1,6 +1,6 @@
 # Omni Gateway Production Self-Hosted R1 — Fixed Checklist
 
-Progress denominator: **24/36** implementation tasks. Planning artifacts do not count as completed
+Progress denominator: **25/36** implementation tasks. Planning artifacts do not count as completed
 implementation. The denominator cannot change without an approved `CR-###` in `tasks/plan.md`.
 
 ## Approval Gate
@@ -48,9 +48,9 @@ Phase 3 candidate verification passed. The raw dirty-workspace compatibility che
 unrelated unstaged request-schema edit in `backend/core/models.py`; see the P3.6 evidence before
 including that edit in a release candidate.
 
-## Phase 4 — Complete Product Workflows (0/6)
+## Phase 4 — Complete Product Workflows (1/6)
 
-- [ ] P4.1 AI Quality console completion
+- [x] P4.1 AI Quality console completion
 - [ ] P4.2 Playground backend boundary
 - [ ] P4.3 Playground interface
 - [ ] P4.4 Access lifecycle completion

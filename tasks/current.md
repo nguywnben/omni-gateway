@@ -6,11 +6,11 @@
 - Active plan: `PROD-SELFHOST-R1`
 - Target: production-quality self-hosting for one person or a trusted team, not enterprise service
   operation.
-- Progress: **24/36 implementation tasks**; Phase 3 implementation is complete (6/6).
-- Completed: **P3.6 — Models and routing workflow**.
-- Gate caveat: P3.6 candidate checks pass; the unrelated unstaged request-schema change in
-  `backend/core/models.py` still makes the dirty workspace fail the immutable compatibility check.
-- Next: **P4.1 — AI Quality console completion**. Do not begin it until a
+- Progress: **25/36 implementation tasks**; Phase 4 is in progress (1/6).
+- Completed: **P4.1 — AI Quality console completion**.
+- Gate caveat: P4.1 task checks pass; the unrelated unstaged request-schema change in
+  `backend/core/models.py` remains outside this task and still affects raw candidate compatibility.
+- Next: **P4.2 — Playground backend boundary**. Do not begin it until a
   new user request to continue the fixed plan.
 - Supported runtime today: standalone, one worker, one replica.
 - Redis coordination, multi-replica HA, and Helm are experimental and no longer R1 release blockers.
@@ -51,6 +51,14 @@ Do not push unless the user requests it.
 
 ## Latest Evidence
 
+- `docs/evidence/p4.1-ai-quality-console.md`
+- AI Quality now explains live/no-restart application, environment-to-request precedence,
+  unambiguous compression disable behavior, thresholds, protected structures, and cache/guardrail
+  tradeoffs. Synthetic preview reports transform scope and estimated removed messages without
+  receiving prompt content, persisting data, or calling a provider.
+- Five stable warnings identify risky custom combinations. The fixed task gate passed 87 affected
+  tests, all 1,209-key localization audits, and an authenticated 535 px browser flow without
+  horizontal overflow.
 - `docs/evidence/p3.6-models-routing-workflow.md`
 - Models now supports create/validate/edit/delete, fallback ordering, global credential strategy,
   revision conflicts, unavailable-model explanations, unsaved-change guards, and a secret-free

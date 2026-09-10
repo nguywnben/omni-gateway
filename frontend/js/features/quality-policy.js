@@ -29,6 +29,38 @@ function setQualityFieldValue(settings, path, value) {
     target[path[path.length - 1]] = value;
 }
 
+function deriveQualityTransformationSummary(settings) {
+    const compression = settings?.compression || {};
+    if (!compression.enabled) {
+        return {code: 'compression_disabled', willTransform: false};
+    }
+    return {
+        code: 'compression_above_threshold',
+        willTransform: null,
+        threshold: compression.threshold_tokens,
+        target: compression.target_tokens
+    };
+}
+
+function deriveQualityWarnings(settings) {
+    if (!settings) return [];
+    const warnings = [];
+    const compression = settings.compression || {};
+    const guardrails = settings.guardrails || {};
+    const cache = settings.response_cache || {};
+    if (settings.compatibility_mode) warnings.push('compatibility_changes_instruction_shape');
+    if (compression.enabled && compression.min_recent_turns < 3) {
+        warnings.push('low_recent_turn_retention');
+    }
+    if (guardrails.enabled && !guardrails.pii_masking_enabled
+        && !guardrails.injection_detection_enabled && !(guardrails.blocked_keywords || []).length) {
+        warnings.push('guardrails_without_checks');
+    }
+    if (cache.enabled && settings.return_reasoning) warnings.push('cache_with_reasoning');
+    if (settings.anti_truncation_max_attempts > 5) warnings.push('high_recovery_attempts');
+    return warnings;
+}
+
 function selectedQualityProfile() {
     return document.querySelector('input[name="qualityProfile"]:checked')?.value || 'balanced';
 }
@@ -109,11 +141,41 @@ function renderQualityPolicyMetadata(data) {
     document.getElementById('qualityRuntimeStatus').textContent = data.runtime_active
         ? t('quality.runtime_active')
         : t('quality.runtime_inactive');
+    document.getElementById('qualityApplicationMode').textContent = data.application?.restart_required
+        ? t('quality.apply_restart')
+        : t('quality.apply_live');
     document.getElementById('qualityRevision').textContent = formatter.format(policy.revision);
     document.getElementById('qualitySource').textContent = qualitySourceLabel(data.runtime_source);
     document.getElementById('qualityEnvironmentOverrides').textContent = data.environment_overrides?.length
         ? formatter.format(data.environment_overrides.length)
         : t('quality.none');
+}
+
+function renderQualityDraftGuidance() {
+    const settings = getQualityDraftSettings();
+    const summary = deriveQualityTransformationSummary(settings);
+    const formatter = new Intl.NumberFormat(getActiveLocale());
+    const summaryElement = document.getElementById('qualityTransformationSummary');
+    if (summaryElement) {
+        summaryElement.textContent = summary.code === 'compression_disabled'
+            ? t('quality.transform_disabled')
+            : t('quality.transform_threshold', {
+                threshold: formatter.format(summary.threshold),
+                target: formatter.format(summary.target)
+            });
+    }
+
+    const warningPanel = document.getElementById('qualityPolicyWarnings');
+    const warningList = document.getElementById('qualityPolicyWarningList');
+    const warnings = deriveQualityWarnings(settings);
+    if (warningList) {
+        warningList.replaceChildren(...warnings.map(code => {
+            const item = document.createElement('li');
+            item.textContent = t(`quality.warning_${code}`);
+            return item;
+        }));
+    }
+    warningPanel?.classList.toggle('hidden', warnings.length === 0);
 }
 
 function applyQualityPolicyResponse(data) {
@@ -185,6 +247,7 @@ function syncQualityPolicyControls() {
         control.closest('.switch-row')?.classList.toggle('env-locked', locked);
         control.title = locked ? t('quality.environment_managed') : '';
     });
+    renderQualityDraftGuidance();
 }
 
 function validateQualityDraft() {
@@ -270,7 +333,13 @@ function renderQualityPreview(data) {
     document.getElementById('qualityPreviewBefore').textContent = formatter.format(decision.estimated_tokens_before);
     document.getElementById('qualityPreviewAfter').textContent = formatter.format(decision.estimated_tokens_after);
     document.getElementById('qualityPreviewSaved').textContent = formatter.format(decision.estimated_tokens_saved);
+    document.getElementById('qualityPreviewRemoved').textContent = formatter.format(
+        data.preview.transformation?.estimated_removed_messages || 0
+    );
     document.getElementById('qualityPreviewDecision').textContent = t(`quality.decision_${decision.reason}`);
+    document.getElementById('qualityPreviewScope').textContent = t(
+        `quality.scope_${data.preview.transformation?.scope || 'none'}`
+    );
     const protectedLabels = decision.protected_structures.map(item => t(`quality.protected_${item}`));
     document.getElementById('qualityPreviewProtection').textContent = protectedLabels.length
         ? t('quality.protected_summary', {items: protectedLabels.join(', ')})

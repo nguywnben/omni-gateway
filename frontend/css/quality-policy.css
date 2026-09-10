@@ -1,12 +1,70 @@
 .quality-runtime-bar {
     display: grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-template-columns: repeat(5, minmax(0, 1fr));
     gap: 1px;
     margin-bottom: 16px;
     overflow: hidden;
     border: 1px solid var(--border);
     border-radius: var(--radius);
     background: var(--border);
+}
+
+.quality-explanation-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+    margin: 16px 0;
+}
+
+.quality-explanation-card {
+    min-width: 0;
+    padding: 15px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--bg-subtle);
+}
+
+.quality-explanation-card h2,
+.quality-warning-panel h2 {
+    margin: 0 0 8px;
+    color: var(--text);
+    font-size: 13px;
+}
+
+.quality-explanation-card p,
+.quality-precedence-list,
+.quality-warning-panel ul {
+    color: var(--text-muted);
+    font-size: 12px;
+    line-height: 1.55;
+}
+
+.quality-explanation-card p {
+    margin: 0;
+}
+
+.quality-explanation-card .quality-live-copy {
+    margin-top: 8px;
+}
+
+.quality-precedence-list {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 6px;
+    margin: 0 0 9px;
+    padding: 0;
+    list-style-position: inside;
+}
+
+.quality-warning-panel {
+    margin: 0 0 16px;
+}
+
+.quality-warning-panel ul {
+    display: grid;
+    gap: 5px;
+    margin: 0;
+    padding-left: 20px;
 }
 
 .quality-runtime-bar > div {
@@ -124,6 +182,21 @@
     margin-top: 12px;
 }
 
+.quality-policy-grid .switch-row span {
+    display: grid;
+    gap: 3px;
+}
+
+.quality-policy-grid .switch-row strong {
+    font-weight: 400;
+}
+
+.quality-policy-grid .switch-row small {
+    color: var(--text-muted);
+    font-size: 11px;
+    line-height: 1.45;
+}
+
 .quality-dependent-controls {
     display: grid;
     gap: 12px;
@@ -176,7 +249,7 @@
 
 .quality-preview-result {
     display: grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 12px;
     margin-top: 18px;
     padding: 16px;
@@ -221,8 +294,13 @@
     .quality-policy-grid,
     .quality-profile-grid,
     .quality-runtime-bar,
+    .quality-explanation-grid,
     .quality-preview-inputs,
     .quality-preview-result {
+        grid-template-columns: 1fr;
+    }
+
+    .quality-precedence-list {
         grid-template-columns: 1fr;
     }
 

@@ -10,6 +10,7 @@ if str(BACKEND_DIR) not in sys.path:
 
 from core.quality_policy import (
     QualityPolicyError,
+    assess_policy_warnings,
     build_policy_document,
     get_profile_defaults,
     load_policy_document,
@@ -136,6 +137,52 @@ class QualityPolicyDomainTests(unittest.TestCase):
         self.assertEqual(result["decision"]["reason"], "below_compression_threshold")
         self.assertEqual(result["decision"]["estimated_tokens_before"], 32_000)
         self.assertEqual(result["decision"]["estimated_tokens_after"], 32_000)
+
+    def test_policy_warnings_name_risky_combinations_without_flagging_balanced(self):
+        balanced = build_policy_document(profile="balanced", revision=1)["settings"]
+        self.assertEqual(assess_policy_warnings(balanced), [])
+
+        risky = build_policy_document(profile="balanced", revision=1)["settings"]
+        risky["compatibility_mode"] = True
+        risky["anti_truncation_max_attempts"] = 7
+        risky["compression"]["min_recent_turns"] = 1
+        risky["guardrails"].update(
+            enabled=True,
+            pii_masking_enabled=False,
+            injection_detection_enabled=False,
+        )
+        risky["response_cache"]["enabled"] = True
+
+        self.assertEqual(
+            assess_policy_warnings(risky),
+            [
+                "compatibility_changes_instruction_shape",
+                "low_recent_turn_retention",
+                "guardrails_without_checks",
+                "cache_with_reasoning",
+                "high_recovery_attempts",
+            ],
+        )
+
+    def test_preview_reports_transform_scope_and_estimated_removed_messages(self):
+        policy = build_policy_document(profile="balanced", revision=2)
+
+        result = preview_policy(
+            policy,
+            {
+                "estimated_input_tokens": 48_000,
+                "message_count": 24,
+                "tool_count": 2,
+                "has_system_instruction": True,
+                "has_tool_pairs": True,
+            },
+        )
+
+        self.assertTrue(result["transformation"]["will_transform"])
+        self.assertEqual(result["transformation"]["scope"], "history_prefix_only")
+        self.assertEqual(result["transformation"]["failure_behavior"], "forward_unchanged")
+        self.assertEqual(result["transformation"]["estimated_removed_messages"], 12)
+        self.assertFalse(result["provider_call"])
 
 
 if __name__ == "__main__":

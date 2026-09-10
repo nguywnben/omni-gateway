@@ -81,6 +81,13 @@ class QualityPolicyRouteTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(body["effective_settings"], body["policy"]["settings"])
         self.assertEqual(set(body["profile_defaults"]), {"quality", "balanced", "capacity"})
         self.assertFalse(body["profile_defaults"]["quality"]["compression"]["enabled"])
+        self.assertEqual(body["application"]["mode"], "live")
+        self.assertFalse(body["application"]["restart_required"])
+        self.assertEqual(
+            body["application"]["precedence"],
+            ["environment", "global_policy", "virtual_key", "request"],
+        )
+        self.assertEqual(body["warnings"], [])
         self.assertEqual(storage.values, {})
 
     async def test_update_uses_optimistic_revision_and_preserves_legacy_keys(self):
@@ -206,6 +213,8 @@ class QualityPolicyRouteTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(body["preview"]["decision"]["reason"], "structural_compression_candidate")
         self.assertTrue(body["can_apply"])
         self.assertEqual(body["environment_conflicts"], [])
+        self.assertTrue(body["preview"]["transformation"]["will_transform"])
+        self.assertEqual(body["preview"]["warnings"], [])
         self.assertEqual(storage.values, {})
 
     async def test_preview_reports_environment_locked_conflicts_without_writing(self):

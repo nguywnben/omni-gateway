@@ -22,6 +22,7 @@
                         <div id="qualityForm" class="hidden">
                             <div class="quality-runtime-bar" aria-live="polite">
                                 <div><span data-i18n="quality.runtime_status">Runtime status</span><strong id="qualityRuntimeStatus">—</strong></div>
+                                <div><span data-i18n="quality.application_mode">Application</span><strong id="qualityApplicationMode">—</strong></div>
                                 <div><span data-i18n="quality.revision">Revision</span><strong id="qualityRevision">—</strong></div>
                                 <div><span data-i18n="quality.source">Source</span><strong id="qualitySource">—</strong></div>
                                 <div><span data-i18n="quality.environment_overrides">Environment overrides</span><strong id="qualityEnvironmentOverrides">—</strong></div>
@@ -30,6 +31,29 @@
                             <div class="config-note" data-i18n="quality.impact_note">
                                 Policy changes apply globally. Structural compression never rewrites prompts and protects system instructions, tool definitions, tool-call/result pairs, and recent complete turns.
                             </div>
+
+                            <div class="quality-explanation-grid">
+                                <section class="quality-explanation-card" aria-labelledby="qualityEffectHeading">
+                                    <h2 id="qualityEffectHeading" data-i18n="quality.effect_title">What happens to a request</h2>
+                                    <p id="qualityTransformationSummary">—</p>
+                                    <p class="quality-live-copy" data-i18n="quality.apply_live_copy">A saved policy applies to new requests immediately. No gateway restart is required.</p>
+                                </section>
+                                <section class="quality-explanation-card" aria-labelledby="qualityPrecedenceHeading">
+                                    <h2 id="qualityPrecedenceHeading" data-i18n="quality.precedence_title">Effective precedence</h2>
+                                    <ol id="qualityPrecedence" class="quality-precedence-list">
+                                        <li data-i18n="quality.precedence_environment">Environment ceiling</li>
+                                        <li data-i18n="quality.precedence_global">Saved global policy</li>
+                                        <li data-i18n="quality.precedence_key">Virtual-key restriction</li>
+                                        <li data-i18n="quality.precedence_request">Request header restriction</li>
+                                    </ol>
+                                    <p data-i18n="quality.precedence_copy">A virtual key or request may only inherit or disable compression; neither can re-enable it or change thresholds.</p>
+                                </section>
+                            </div>
+
+                            <section id="qualityPolicyWarnings" class="status warning quality-warning-panel hidden" role="status" aria-live="polite" aria-labelledby="qualityWarningsHeading">
+                                <h2 id="qualityWarningsHeading" data-i18n="quality.warnings_title">Review before saving</h2>
+                                <ul id="qualityPolicyWarningList"></ul>
+                            </section>
 
                             <fieldset class="quality-profile-section">
                                 <legend data-i18n="quality.choose_profile">Choose an operating profile</legend>
@@ -53,7 +77,7 @@
                                 <section class="config-group">
                                     <h2 class="card-title" data-i18n="settings.context_optimization">Context optimization</h2>
                                     <p class="card-copy card-title-copy" data-i18n="quality.compression_copy">Prune only complete history prefixes when the estimated context exceeds the threshold.</p>
-                                    <label class="switch-row"><input type="checkbox" id="tokenCompressionEnabled" class="config-checkbox" data-quality-control data-policy-field="token_compression_enabled"><span data-i18n="settings.compress_history">Compress oversized conversation history</span></label>
+                                    <label class="switch-row"><input type="checkbox" id="tokenCompressionEnabled" class="config-checkbox" data-quality-control data-policy-field="token_compression_enabled"><span><strong data-i18n="settings.compress_history">Compress oversized conversation history</strong><small id="qualityCompressionOffMeaning" data-i18n="quality.compression_off_copy">When off, the gateway does not prune or rewrite prompt context. Threshold fields have no effect.</small></span></label>
                                     <div class="quality-dependent-controls" data-quality-dependency="tokenCompressionEnabled">
                                         <div class="form-group"><label for="tokenCompressionThreshold" data-i18n="settings.compression_threshold">Compression threshold in tokens</label><input type="number" id="tokenCompressionThreshold" min="128" max="2000000" required data-quality-control data-policy-field="token_compression_threshold"></div>
                                         <div class="form-group"><label for="tokenCompressionTarget" data-i18n="settings.compression_target">Target size in tokens</label><input type="number" id="tokenCompressionTarget" min="64" max="1999999" required data-quality-control data-policy-field="token_compression_target"></div>
@@ -101,7 +125,9 @@
                                     <div><span data-i18n="quality.preview_before">Before</span><strong id="qualityPreviewBefore">—</strong></div>
                                     <div><span data-i18n="quality.preview_after">After</span><strong id="qualityPreviewAfter">—</strong></div>
                                     <div><span data-i18n="quality.preview_saved">Estimated saved</span><strong id="qualityPreviewSaved">—</strong></div>
+                                    <div><span data-i18n="quality.preview_removed">Estimated removed messages</span><strong id="qualityPreviewRemoved">—</strong></div>
                                     <div><span data-i18n="quality.preview_decision">Decision</span><strong id="qualityPreviewDecision">—</strong></div>
+                                    <div><span data-i18n="quality.preview_scope">Transformation scope</span><strong id="qualityPreviewScope">—</strong></div>
                                     <p id="qualityPreviewProtection"></p>
                                 </div>
                             </section>

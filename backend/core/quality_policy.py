@@ -357,6 +357,32 @@ def changed_locked_fields(
     return changed
 
 
+def assess_policy_warnings(raw_settings: Mapping[str, Any]) -> list[str]:
+    """Return stable operator-facing warning codes for risky policy combinations."""
+    settings = validate_settings(raw_settings)
+    warnings: list[str] = []
+    compression = settings["compression"]
+    guardrails = settings["guardrails"]
+    response_cache = settings["response_cache"]
+
+    if settings["compatibility_mode"]:
+        warnings.append("compatibility_changes_instruction_shape")
+    if compression["enabled"] and compression["min_recent_turns"] < 3:
+        warnings.append("low_recent_turn_retention")
+    if (
+        guardrails["enabled"]
+        and not guardrails["pii_masking_enabled"]
+        and not guardrails["injection_detection_enabled"]
+        and not guardrails["blocked_keywords"]
+    ):
+        warnings.append("guardrails_without_checks")
+    if response_cache["enabled"] and settings["return_reasoning"]:
+        warnings.append("cache_with_reasoning")
+    if settings["anti_truncation_max_attempts"] > 5:
+        warnings.append("high_recovery_attempts")
+    return warnings
+
+
 def preview_policy(policy: Mapping[str, Any], descriptor: Mapping[str, Any]) -> dict[str, Any]:
     estimated_tokens = _bounded_int(
         descriptor.get("estimated_input_tokens"), "estimated_input_tokens", 0, 2_000_000
@@ -378,6 +404,14 @@ def preview_policy(policy: Mapping[str, Any], descriptor: Mapping[str, Any]) -> 
         reason = "structural_compression_candidate"
         estimated_after = min(estimated_tokens, compression["target_tokens"])
 
+    estimated_saved = estimated_tokens - estimated_after
+    estimated_removed_messages = (
+        min(message_count, (message_count * estimated_saved) // estimated_tokens)
+        if estimated_tokens and estimated_saved
+        else 0
+    )
+    will_transform = reason == "structural_compression_candidate"
+
     return {
         "policy": {
             "schema_version": policy["schema_version"],
@@ -396,7 +430,7 @@ def preview_policy(policy: Mapping[str, Any], descriptor: Mapping[str, Any]) -> 
             "reason": reason,
             "estimated_tokens_before": estimated_tokens,
             "estimated_tokens_after": estimated_after,
-            "estimated_tokens_saved": estimated_tokens - estimated_after,
+            "estimated_tokens_saved": estimated_saved,
             "protected_structures": [
                 name
                 for name, present in (
@@ -407,6 +441,13 @@ def preview_policy(policy: Mapping[str, Any], descriptor: Mapping[str, Any]) -> 
                 if present
             ],
         },
+        "transformation": {
+            "will_transform": will_transform,
+            "scope": "history_prefix_only" if will_transform else "none",
+            "estimated_removed_messages": estimated_removed_messages,
+            "failure_behavior": "forward_unchanged",
+        },
+        "warnings": assess_policy_warnings(settings),
         "provider_call": False,
         "persisted": False,
     }

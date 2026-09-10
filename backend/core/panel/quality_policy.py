@@ -11,6 +11,7 @@ from core.quality_policy import (
     LOCKED_SETTING_PATHS,
     POLICY_STORAGE_KEY,
     QualityPolicyError,
+    assess_policy_warnings,
     build_policy_document,
     changed_locked_fields,
     get_profile_defaults,
@@ -87,6 +88,16 @@ def _policy_response(
         "env_locked": sorted(env_locked & set(LOCKED_SETTING_PATHS)),
         "environment_overrides": overrides,
         "profile_defaults": get_profile_defaults(),
+        "application": {
+            "mode": "live",
+            "restart_required": False,
+            "precedence": ["environment", "global_policy", "virtual_key", "request"],
+            "compression_restrictions": {
+                "virtual_key": ["inherit", "disabled"],
+                "request": ["inherit", "disabled"],
+            },
+        },
+        "warnings": assess_policy_warnings(effective_settings),
         "runtime_active": True,
         "runtime_source": (
             "versioned_policy" if policy["source"] == "stored" else "legacy_projection"
