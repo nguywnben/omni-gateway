@@ -238,6 +238,32 @@ class TokenCompressionTests(unittest.TestCase):
         self.assertEqual(result.original_estimated_tokens, 1_000)
         self.assertEqual(result.final_estimated_tokens, 1_000)
 
+    def test_failed_post_compression_invariant_returns_the_original_request(self):
+        payload = {
+            "systemInstruction": {"parts": [{"text": "Never remove this."}]},
+            "contents": [
+                text_content("user", "old request " + "x" * 300),
+                text_content("model", "old answer " + "y" * 300),
+                text_content("user", "current request " + "z" * 300),
+            ],
+        }
+
+        with patch("core.token_compression.copy.deepcopy", return_value={"contents": []}):
+            result = compress_gemini_request(
+                payload,
+                CompressionSettings(
+                    enabled=True,
+                    threshold_tokens=128,
+                    target_tokens=64,
+                    min_recent_turns=1,
+                ),
+            )
+
+        self.assertFalse(result.applied)
+        self.assertIs(result.request, payload)
+        self.assertEqual(result.reason, "invariant_failed")
+        self.assertEqual(result.original_estimated_tokens, result.final_estimated_tokens)
+
 
 if __name__ == "__main__":
     unittest.main()

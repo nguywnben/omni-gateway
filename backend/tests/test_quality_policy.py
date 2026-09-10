@@ -11,6 +11,7 @@ if str(BACKEND_DIR) not in sys.path:
 from core.quality_policy import (
     QualityPolicyError,
     build_policy_document,
+    get_profile_defaults,
     load_policy_document,
     preview_policy,
     project_legacy_policy,
@@ -37,6 +38,24 @@ def balanced_legacy() -> dict:
 
 
 class QualityPolicyDomainTests(unittest.TestCase):
+    def test_safe_presets_have_bounded_compression_and_anti_truncation(self):
+        presets = get_profile_defaults()
+
+        self.assertEqual(
+            {
+                profile: settings["anti_truncation_max_attempts"]
+                for profile, settings in presets.items()
+            },
+            {"quality": 5, "balanced": 3, "capacity": 2},
+        )
+        self.assertFalse(presets["quality"]["compression"]["enabled"])
+        for profile, settings in presets.items():
+            with self.subTest(profile=profile):
+                compression = settings["compression"]
+                self.assertEqual(compression["mode"], "structural")
+                self.assertLess(compression["target_tokens"], compression["threshold_tokens"])
+                self.assertGreaterEqual(compression["min_recent_turns"], 3)
+
     def test_default_legacy_settings_project_to_balanced_without_persistence(self):
         policy = project_legacy_policy(balanced_legacy())
 
@@ -99,6 +118,24 @@ class QualityPolicyDomainTests(unittest.TestCase):
         self.assertFalse(result["provider_call"])
         self.assertFalse(result["persisted"])
         self.assertNotIn("prompt", str(result).lower())
+
+    def test_preview_and_runtime_agree_that_threshold_is_not_exceeded_at_equality(self):
+        policy = build_policy_document(profile="balanced", revision=2)
+
+        result = preview_policy(
+            policy,
+            {
+                "estimated_input_tokens": 32_000,
+                "message_count": 40,
+                "tool_count": 0,
+                "has_system_instruction": False,
+                "has_tool_pairs": False,
+            },
+        )
+
+        self.assertEqual(result["decision"]["reason"], "below_compression_threshold")
+        self.assertEqual(result["decision"]["estimated_tokens_before"], 32_000)
+        self.assertEqual(result["decision"]["estimated_tokens_after"], 32_000)
 
 
 if __name__ == "__main__":

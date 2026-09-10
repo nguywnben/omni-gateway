@@ -355,7 +355,7 @@ def preview_policy(policy: Mapping[str, Any], descriptor: Mapping[str, Any]) -> 
     if not compression["enabled"]:
         reason = "compression_disabled"
         estimated_after = estimated_tokens
-    elif estimated_tokens < compression["threshold_tokens"]:
+    elif estimated_tokens <= compression["threshold_tokens"]:
         reason = "below_compression_threshold"
         estimated_after = estimated_tokens
     else:

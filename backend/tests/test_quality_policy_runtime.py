@@ -10,6 +10,7 @@ BACKEND_DIR = Path(__file__).resolve().parents[1]
 if str(BACKEND_DIR) not in sys.path:
     sys.path.insert(0, str(BACKEND_DIR))
 
+import config
 from core.quality_policy import POLICY_STORAGE_KEY, QualityPolicyError, build_policy_document
 from core.quality_policy_runtime import (
     get_quality_env_locked_keys,
@@ -38,6 +39,16 @@ def balanced_legacy() -> dict:
 
 
 class QualityPolicyRuntimeTests(unittest.IsolatedAsyncioTestCase):
+    async def test_anti_truncation_uses_the_effective_profile_bound(self):
+        capacity = build_policy_document(profile="capacity", revision=2)["settings"]
+        with patch(
+            "core.quality_policy_runtime.get_effective_quality_settings",
+            new=AsyncMock(return_value=capacity),
+        ):
+            attempts = await config.get_anti_truncation_max_attempts()
+
+        self.assertEqual(attempts, 2)
+
     def test_request_precedence_only_allows_compression_to_be_restricted(self):
         global_settings = build_policy_document(profile="balanced", revision=1)["settings"]
 
