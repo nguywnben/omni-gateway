@@ -1,5 +1,78 @@
 // Omni Gateway management console: dashboard.
 
+const DASHBOARD_RECENT_ACTIVITY_PAGE_SIZE = 5;
+
+function formatUsageCost(value) {
+    const amount = Number(value || 0);
+    if (!Number.isFinite(amount) || amount < 0) return '$0.00';
+    return amount.toLocaleString(getActiveLocale(), {
+        style: 'currency',
+        currency: 'USD',
+        minimumFractionDigits: 2,
+        maximumFractionDigits: amount > 0 && amount < 0.01 ? 4 : 2,
+    });
+}
+
+function deriveDashboardState(aggregate = {}, health = null) {
+    const totalCredentials = Number(aggregate.total_files || 0);
+    const activeCredentials = Number(aggregate.active_files || 0);
+    const totalCalls = Number(aggregate.total_calls ?? aggregate.total_calls_24h ?? 0);
+    const failedCalls = Number(aggregate.failed_calls ?? aggregate.failed_calls_24h ?? 0);
+    const healthStatus = String(health?.status || 'no_data');
+
+    if (totalCredentials === 0 && totalCalls === 0) {
+        return {
+            state: 'first_time',
+            titleKey: 'dashboard.state_first_time_title',
+            descriptionKey: 'dashboard.state_first_time_description',
+            actionKey: 'dashboard.action_add_provider',
+            actionTab: 'providers',
+        };
+    }
+    if (activeCredentials === 0) {
+        return {
+            state: 'no_provider',
+            titleKey: 'dashboard.state_no_provider_title',
+            descriptionKey: 'dashboard.state_no_provider_description',
+            actionKey: 'dashboard.action_review_credentials',
+            actionTab: totalCredentials > 0 ? 'pool' : 'providers',
+        };
+    }
+    const errorRate = totalCalls > 0 ? failedCalls / totalCalls : 0;
+    const currentHealthNeedsAttention = ['warning', 'critical'].includes(healthStatus);
+    const historyIsOnlySignal = (!healthStatus || healthStatus === 'no_data') && errorRate >= 0.05;
+    if (currentHealthNeedsAttention || historyIsOnlySignal) {
+        return {
+            state: 'degraded',
+            titleKey: 'dashboard.state_degraded_title',
+            descriptionKey: 'dashboard.state_degraded_description',
+            actionKey: 'dashboard.action_investigate',
+            actionTab: 'activity',
+        };
+    }
+    return {
+        state: 'healthy',
+        titleKey: totalCalls > 0 ? 'dashboard.state_healthy_title' : 'dashboard.state_ready_title',
+        descriptionKey: totalCalls > 0 ? 'dashboard.state_healthy_description' : 'dashboard.state_ready_description',
+        actionKey: 'dashboard.action_activity',
+        actionTab: 'activity',
+    };
+}
+
+function renderDashboardReadiness() {
+    const container = document.getElementById('dashboardReadiness');
+    if (!container || !AppState.dashboardAggregate) return;
+    const guidance = deriveDashboardState(AppState.dashboardAggregate, AppState.operationalHealth);
+    container.dataset.state = guidance.state;
+    container.setAttribute('aria-busy', 'false');
+    document.getElementById('dashboardReadinessStatus').textContent = t(`dashboard.state_${guidance.state}`);
+    document.getElementById('dashboardReadinessTitle').textContent = t(guidance.titleKey);
+    document.getElementById('dashboardReadinessDescription').textContent = t(guidance.descriptionKey);
+    const action = document.getElementById('dashboardReadinessAction');
+    action.textContent = t(guidance.actionKey);
+    action.dataset.tab = guidance.actionTab;
+}
+
 function formatUsageNumber(value, options = {}) {
 
     const number = Number(value || 0);
@@ -62,6 +135,10 @@ function updateUsagePeriodLabels() {
 
     if (totalTokensLabel) totalTokensLabel.textContent = t('dashboard.tokens_period', {period: periodConfig.metricLabel});
 
+    const totalCostLabel = document.getElementById('totalCostLabel');
+
+    if (totalCostLabel) totalCostLabel.textContent = t('dashboard.cost_period', {period: periodConfig.metricLabel});
+
     const breakdownTitle = document.getElementById('usageBreakdownTitle');
 
     if (breakdownTitle) breakdownTitle.textContent = periodConfig.title;
@@ -95,6 +172,8 @@ function setUsagePeriod(period) {
 async function refreshUsageStats(options = {}) {
 
     void refreshOperationalHealth();
+
+    void refreshRecentActivity();
 
     const loading = document.getElementById('usageLoading');
 
@@ -146,7 +225,7 @@ async function refreshUsageStats(options = {}) {
 
         const [statsResponse, aggregatedResponse] = await Promise.all([
 
-            fetch(`./api/usage/stats?${usagePeriodQuery}`, { headers: getAuthHeaders() }),
+            fetch(`./api/usage/stats?${usagePeriodQuery}&page_size=100`, { headers: getAuthHeaders() }),
 
             fetch(`./api/usage/aggregated?${usagePeriodQuery}`, { headers: getAuthHeaders() })
 
@@ -176,6 +255,8 @@ async function refreshUsageStats(options = {}) {
 
             const aggData = aggregatedData.success ? aggregatedData.data : aggregatedData;
 
+            AppState.dashboardAggregate = aggData;
+
             const totalCalls = Number(aggData.total_calls ?? aggData.total_calls_24h ?? 0);
 
             const successfulCalls = Number(aggData.successful_calls ?? aggData.successful_calls_24h ?? 0);
@@ -203,12 +284,7 @@ async function refreshUsageStats(options = {}) {
 
             document.getElementById('disabledCredentialsDetail').textContent = t('dashboard.disabled_count', {count: formatUsageNumber(aggData.disabled_files)});
 
-            document.getElementById('avgCallsPerFile').textContent = formatUsageNumber(
-                aggData.avg_calls_per_file,
-                { decimals: 1 }
-            );
-
-            document.getElementById('assignedRequestsDetail').textContent = t('dashboard.assigned_requests', {count: formatUsageNumber(aggData.assigned_calls ?? aggData.assigned_calls_24h)});
+            document.getElementById('totalCostUsd').textContent = formatUsageCost(aggData.total_cost_usd);
 
             document.getElementById('totalTokens24h').textContent = formatUsageNumber(aggData.total_tokens ?? aggData.total_tokens_24h);
 
@@ -217,19 +293,10 @@ async function refreshUsageStats(options = {}) {
                 output: formatUsageNumber(aggData.output_tokens ?? aggData.output_tokens_24h)
             });
 
-            document.getElementById('avgTokensPerRequest').textContent = formatUsageNumber(
-                aggData.avg_tokens_per_successful_request,
-                { decimals: 1 }
-            );
-
-            document.getElementById('cacheSavingsDetail').textContent = t('dashboard.cache_savings', {
-                cached: formatUsageNumber(aggData.cached_tokens ?? aggData.cached_tokens_24h),
-                savings: formatUsageNumber(aggData.estimated_tokens_saved ?? aggData.estimated_tokens_saved_24h)
-            });
-
             renderTokenDistribution(aggData);
             renderProviderHealthMatrix();
             renderUsageList();
+            renderDashboardReadiness();
 
             // showStatus(t('loaded_usage_statistics_for_aggdata', {aggData_total_files____Object_keys_AppState_usageStatsData__length: aggData.total_files || Object.keys(AppState.usageStatsData).length}), 'success');
 
@@ -288,6 +355,7 @@ async function refreshOperationalHealth() {
         document.getElementById('sloErrorRate').textContent = `${(Number(red.error_rate || 0) * 100).toFixed(1)}%`;
         document.getElementById('sloErrorCount').textContent = t('slo.errors_of_requests', {errors: formatUsageNumber(red.errors), requests: formatUsageNumber(red.requests)});
         document.getElementById('sloP95').textContent = `${formatUsageNumber(red.p95_duration_ms)} ms`;
+        document.getElementById('dashboardP95Latency').textContent = `${formatUsageNumber(red.p95_duration_ms)} ms`;
         const exhaustion = Object.values(snapshot.exhaustion || {}).reduce((total, value) => total + Number(value || 0), 0);
         document.getElementById('sloExhaustion').textContent = formatUsageNumber(exhaustion);
         setOperationalHealthStatus(snapshot.status);
@@ -298,7 +366,9 @@ async function refreshOperationalHealth() {
         const notice = document.getElementById('sloSampleNotice');
         notice.hidden = !snapshot.sample_truncated;
         notice.textContent = snapshot.sample_truncated ? t('slo.sample_truncated', {count: formatUsageNumber(snapshot.sample_size)}) : '';
+        renderDashboardReadiness();
     } catch (error) {
+        AppState.operationalHealth = {status: 'critical', unavailable: true};
         setOperationalHealthStatus('critical');
         const rows = document.getElementById('sloRouteRows');
         if (rows) {
@@ -308,9 +378,57 @@ async function refreshOperationalHealth() {
             cell.colSpan = 4;
             cell.textContent = t('slo.load_failed');
         }
+        renderDashboardReadiness();
     } finally {
         card.setAttribute('aria-busy', 'false');
     }
+}
+
+async function refreshRecentActivity() {
+    const card = document.getElementById('recentActivityCard');
+    if (!card) return;
+    card.setAttribute('aria-busy', 'true');
+    try {
+        const response = await fetch('./api/traces?page_size=5', {headers: getAuthHeaders()});
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        const payload = await response.json();
+        renderRecentActivity(Array.isArray(payload.traces) ? payload.traces : []);
+    } catch (_error) {
+        const list = document.getElementById('recentActivityList');
+        if (list) list.innerHTML = `<li class="dashboard-activity-empty">${escapeHtml(t('dashboard.recent_failed'))}</li>`;
+    } finally {
+        card.setAttribute('aria-busy', 'false');
+    }
+}
+
+function renderRecentActivity(traces = []) {
+    const list = document.getElementById('recentActivityList');
+    if (!list) return;
+    const boundedTraces = traces.slice(0, DASHBOARD_RECENT_ACTIVITY_PAGE_SIZE);
+    if (!boundedTraces.length) {
+        list.innerHTML = `<li class="dashboard-activity-empty">${escapeHtml(t('dashboard.recent_empty'))}</li>`;
+        return;
+    }
+    list.innerHTML = boundedTraces.map((trace) => {
+        const outcome = String(trace.outcome || 'unknown');
+        const safeOutcome = outcome.replace(/[^a-z0-9_-]/gi, '').toLowerCase() || 'unknown';
+        const provider = trace.selected_provider || '—';
+        const model = trace.requested_model || '—';
+        const startedAt = trace.started_at
+            ? new Date(trace.started_at).toLocaleString(getActiveLocale(), {dateStyle: 'short', timeStyle: 'short'})
+            : '—';
+        return `
+            <li class="dashboard-activity-item">
+                <div class="dashboard-activity-heading">
+                    <span class="trace-outcome trace-outcome-${escapeAttribute(safeOutcome)}">${escapeHtml(outcome)}</span>
+                    <time datetime="${escapeAttribute(trace.started_at || '')}">${escapeHtml(startedAt)}</time>
+                </div>
+                <strong>${escapeHtml(model)}</strong>
+                <span>${escapeHtml(provider)} · ${formatUsageNumber(trace.duration_ms)} ms · ${escapeHtml(formatUsageCost(trace.cost_usd))}</span>
+                <code>${escapeHtml(trace.request_id || trace.trace_id || '')}</code>
+            </li>
+        `;
+    }).join('');
 }
 
 function renderOperationalRoutes(routes) {
@@ -724,7 +842,8 @@ function renderTimelineChart(timeline = []) {
         return;
     }
 
-    const maxRequests = Math.max(...timeline.map(slot => slot.requests || 0), 1);
+    const maxRequests = Math.max(...timeline.map(slot => slot.requests || 0));
+    const chartScale = Math.max(maxRequests, 1);
     if (maxInfo) {
         maxInfo.textContent = t('dashboard.peak_requests', {count: formatUsageNumber(maxRequests)});
     }
@@ -734,7 +853,7 @@ function renderTimelineChart(timeline = []) {
         const success = slot.successful_requests || 0;
         const failed = slot.failed_requests || 0;
         const tokens = slot.tokens || 0;
-        const heightPct = Math.max(reqs > 0 ? (reqs / maxRequests) * 100 : 0, 4);
+        const heightPct = Math.max(reqs > 0 ? (reqs / chartScale) * 100 : 0, 4);
 
         const timeStr = slot.timestamp ? new Date(slot.timestamp * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
 

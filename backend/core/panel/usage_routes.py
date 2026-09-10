@@ -17,14 +17,26 @@ router = APIRouter(prefix="/api/usage", tags=["usage"])
 
 
 @router.get("/stats")
-async def get_usage_stats(period: str = Query("1d"), token: str = Depends(verify_panel_token)):
+async def get_usage_stats(
+    period: str = Query("1d"),
+    page_size: int = Query(100, ge=1, le=200),
+    token: str = Depends(verify_panel_token),
+):
     try:
         normalized_period = normalize_usage_period(period)
         data = await get_stats_for_period(normalized_period)
+        ordered = sorted(
+            data.items(),
+            key=lambda item: (-int(item[1].get("calls", 0)), item[0]),
+        )
+        bounded_data = dict(ordered[:page_size])
         return {
             "success": True,
             "period": get_usage_period_metadata(normalized_period),
-            "data": data,
+            "data": bounded_data,
+            "page_size": page_size,
+            "total_items": len(ordered),
+            "has_more": len(ordered) > page_size,
         }
     except Exception as exc:
         log.error(f"Failed to retrieve usage statistics: {exc}")

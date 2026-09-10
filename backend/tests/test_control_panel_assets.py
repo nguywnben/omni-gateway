@@ -36,9 +36,9 @@ class ControlPanelAssetTests(unittest.TestCase):
         body = response.body.decode("utf-8")
 
         self.assertEqual(response.status_code, 200)
-        self.assertRegex(body, r"/frontend/theme\.js\?v=\d+")
-        self.assertRegex(body, r"/frontend/console\.css\?v=\d+")
-        self.assertRegex(body, r"/frontend/console\.js\?v=\d+")
+        self.assertRegex(body, r"/frontend/theme\.js\?v=[0-9a-f]{20}")
+        self.assertRegex(body, r"/frontend/console\.css\?v=[0-9a-f]{20}")
+        self.assertRegex(body, r"/frontend/console\.js\?v=[0-9a-f]{20}")
         self.assertLess(
             body.index("/frontend/theme.js"),
             body.index("/frontend/console.css"),

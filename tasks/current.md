@@ -6,9 +6,9 @@
 - Active plan: `PROD-SELFHOST-R1`
 - Target: production-quality self-hosting for one person or a trusted team, not enterprise service
   operation.
-- Progress: **20/36 implementation tasks**; Phase 3 is in progress (2/6).
-- Completed: **P3.2 — Shared page states and accessible interaction**.
-- Next: **P3.3 — Production dashboard**. Do not begin it until a
+- Progress: **21/36 implementation tasks**; Phase 3 is in progress (3/6).
+- Completed: **P3.3 — Production dashboard**.
+- Next: **P3.4 — Provider onboarding**. Do not begin it until a
   new user request to continue the fixed plan.
 - Supported runtime today: standalone, one worker, one replica.
 - Redis coordination, multi-replica HA, and Helm are experimental and no longer R1 release blockers.
@@ -49,6 +49,14 @@ Do not push unless the user requests it.
 
 ## Latest Evidence
 
+- `docs/evidence/p3.3-production-dashboard.md`
+- Dashboard now prioritizes one readiness decision, clear next actions, provider/credential
+  incidents, current request health, recent content-free activity, actual recorded cost, latency,
+  and usage trends. Low-value per-credential/per-request cards were removed and advanced telemetry
+  was demoted to a collapsed disclosure.
+- All list reads are bounded and startup is fixed at four API requests. State fixtures, the 52-test
+  task gate, and authenticated 360/768/1024/1440 browser evidence passed without overflow or browser
+  errors.
 - `docs/evidence/p3.2-shared-page-states-accessibility.md`
 - Core asynchronous pages now share persistent error/remediation and stale-data states instead of
   becoming blank, while existing content survives refresh failures. Toasts are live-region aware,

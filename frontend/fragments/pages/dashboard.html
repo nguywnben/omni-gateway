@@ -3,7 +3,7 @@
                         <div>
                             <div class="page-kicker" data-i18n="dashboard">Overview</div>
                             <h1 class="page-title" data-i18n="dashboard_title">Omni Gateway Dashboard</h1>
-                            <p class="page-description" data-i18n="dashboard_description">Monitor request flow, provider capacity, and integration details for coding-tool traffic.</p>
+                            <p class="page-description" data-i18n="dashboard_description">See whether the gateway is ready, what needs attention, and how traffic is performing.</p>
                         </div>
                         <div class="page-actions">
                             <label class="dashboard-range-control" for="usagePeriodSelect">
@@ -20,7 +20,25 @@
 
                     <div id="dashboardUsageState" data-page-state-host hidden></div>
 
-                    <div class="stats-container" id="dashboardStats" data-i18n-aria-label="dashboard_title" aria-label="Dashboard metrics" aria-busy="true">
+                    <section class="dashboard-readiness" id="dashboardReadiness" data-state="loading" aria-busy="true" aria-live="polite">
+                        <div class="dashboard-readiness-main">
+                            <span class="dashboard-readiness-status" id="dashboardReadinessStatus" data-i18n="dashboard.readiness_checking">Checking readiness</span>
+                            <h2 id="dashboardReadinessTitle" data-i18n="dashboard.readiness_checking_title">Checking your gateway</h2>
+                            <p id="dashboardReadinessDescription" data-i18n="dashboard.readiness_checking_description">Loading credentials, traffic, and request health.</p>
+                            <button type="button" class="btn btn-primary" id="dashboardReadinessAction" data-ui-action="switch-tab" data-tab="providers" data-i18n="dashboard.action_add_provider">Add a provider</button>
+                        </div>
+                        <nav class="dashboard-quick-actions" id="dashboardQuickActions" data-i18n-aria-label="dashboard.quick_actions" aria-label="Quick actions">
+                            <span data-i18n="dashboard.quick_actions">Quick actions</span>
+                            <div>
+                                <button type="button" class="btn btn-secondary btn-small" data-ui-action="switch-tab" data-tab="providers" data-i18n="dashboard.action_add_provider">Add provider</button>
+                                <button type="button" class="btn btn-secondary btn-small" data-ui-action="switch-tab" data-tab="pool" data-i18n="dashboard.action_credentials">Credentials</button>
+                                <button type="button" class="btn btn-secondary btn-small" data-ui-action="switch-tab" data-tab="models" data-i18n="dashboard.action_routes">Model routes</button>
+                                <button type="button" class="btn btn-secondary btn-small" data-ui-action="switch-tab" data-tab="activity" data-i18n="dashboard.action_activity">Activity</button>
+                            </div>
+                        </nav>
+                    </section>
+
+                    <div class="stats-container" id="dashboardStats" data-i18n-aria-label="dashboard.metrics" aria-label="Gateway metrics" aria-busy="true">
                         <div class="stat-item">
                             <span class="stat-number" id="totalApiCalls">0</span>
                             <span class="stat-label"><span id="totalApiCallsLabel" data-i18n-runtime>Requests in the last 24 hours</span><span class="stat-detail" id="requestOutcomeDetail" data-i18n-runtime>0 successful / 0 failed</span></span>
@@ -34,78 +52,75 @@
                             <span class="stat-label"><span data-i18n="dashboard.active_total_credentials">Active / total credentials</span><span class="stat-detail" id="disabledCredentialsDetail" data-i18n-runtime>0 disabled</span></span>
                         </div>
                         <div class="stat-item">
-                            <span class="stat-number" id="avgCallsPerFile">0.0</span>
-                            <span class="stat-label"><span data-i18n="dashboard.requests_per_credential">Requests per active credential</span><span class="stat-detail" id="assignedRequestsDetail" data-i18n-runtime>0 assigned requests</span></span>
+                            <span class="stat-number" id="totalCostUsd">$0.00</span>
+                            <span class="stat-label"><span id="totalCostLabel" data-i18n-runtime>Recorded cost in the last 24 hours</span><span class="stat-detail" data-i18n="dashboard.cost_recorded_hint">Based on recorded provider pricing</span></span>
                         </div>
                         <div class="stat-item">
                             <span class="stat-number" id="totalTokens24h">0</span>
                             <span class="stat-label"><span id="totalTokensLabel" data-i18n-runtime>Tokens in the last 24 hours</span><span class="stat-detail" id="inputOutputDetail" data-i18n-runtime>Input 0 / output 0</span></span>
                         </div>
                         <div class="stat-item">
-                            <span class="stat-number" id="avgTokensPerRequest">0</span>
-                            <span class="stat-label"><span data-i18n="dashboard.tokens_per_request">Tokens per successful request</span><span class="stat-detail" id="cacheSavingsDetail" data-i18n-runtime>Cached 0 / estimated savings 0</span></span>
+                            <span class="stat-number" id="dashboardP95Latency">—</span>
+                            <span class="stat-label"><span data-i18n="dashboard.p95_latency">P95 latency</span><span class="stat-detail" data-i18n="dashboard.last_15_minutes">Last 15 minutes</span></span>
                         </div>
                     </div>
-
-                    <section class="card operational-health-card" id="operationalHealthCard" aria-busy="true">
-                        <div class="operational-health-header">
-                            <div>
-                                <div class="page-kicker" data-i18n="slo.kicker">Service objectives</div>
-                                <h2 class="card-title" data-i18n="slo.title">Operational health</h2>
-                                <p class="card-copy card-title-copy" data-i18n="slo.description">Rate, errors, duration, route health, and capacity pressure from content-free request traces.</p>
-                            </div>
-                            <span class="health-pill warning" id="sloOverallStatus" role="status"><span class="status-dot"></span><span data-i18n="slo.loading">Loading</span></span>
-                        </div>
-                        <div class="slo-red-grid" aria-live="polite">
-                            <div class="slo-metric"><span data-i18n="slo.rate">Request rate</span><strong id="sloRequestRate">—</strong><small data-i18n="slo.per_minute">per minute</small></div>
-                            <div class="slo-metric"><span data-i18n="slo.error_rate">Error rate</span><strong id="sloErrorRate">—</strong><small id="sloErrorCount">—</small></div>
-                            <div class="slo-metric"><span data-i18n="slo.p95">P95 duration</span><strong id="sloP95">—</strong><small data-i18n="slo.last_15_minutes">last 15 minutes</small></div>
-                            <div class="slo-metric"><span data-i18n="slo.exhaustion">Exhaustion signals</span><strong id="sloExhaustion">—</strong><small data-i18n="slo.bounded_sample">bounded sample</small></div>
-                        </div>
-                        <div class="slo-detail-grid">
-                            <div>
-                                <h3 data-i18n="slo.route_health">Model-route health</h3>
-                                <div class="usage-table-wrapper">
-                                    <table class="usage-table">
-                                        <thead><tr><th scope="col" data-i18n="slo.route">Route</th><th scope="col" data-i18n="requests">Requests</th><th scope="col" data-i18n="slo.error_rate">Error rate</th><th scope="col" data-i18n="slo.p95">P95 duration</th></tr></thead>
-                                        <tbody id="sloRouteRows"><tr><td colspan="4" data-i18n="slo.loading">Loading</td></tr></tbody>
-                                    </table>
-                                </div>
-                            </div>
-                            <aside class="slo-export-status">
-                                <h3 data-i18n="slo.export_controls">External telemetry</h3>
-                                <p data-i18n="slo.export_description">Exporters are disabled by default and never export prompt or response content.</p>
-                                <dl><div><dt>Prometheus</dt><dd id="sloPrometheusStatus">—</dd></div><div><dt>OpenTelemetry</dt><dd id="sloOtelStatus">—</dd></div></dl>
-                                <a href="https://github.com/nguywnben/omni-gateway/blob/main/docs/observability.md" target="_blank" rel="noopener noreferrer" data-i18n="slo.runbooks">Configuration and runbooks</a>
-                            </aside>
-                        </div>
-                        <p class="trace-status" id="sloSampleNotice" hidden></p>
-                    </section>
 
                     <div class="dashboard-grid">
                         <section class="card span-12 health-matrix-card" id="providerHealthCard">
                             <div class="health-matrix-header">
                                 <div>
-                                    <h2 class="card-title" data-i18n="dashboard.health_matrix_title">Provider Health & Status Matrix</h2>
-                                    <p class="card-copy card-title-copy" data-i18n="dashboard.health_matrix_description">Real-time status, active credentials, and traffic health across all supported AI providers.</p>
+                                    <h2 class="card-title" data-i18n="dashboard.health_matrix_title">Provider and credential status</h2>
+                                    <p class="card-copy card-title-copy" data-i18n="dashboard.health_matrix_description">Find unavailable credentials, cooldowns, and providers that need attention.</p>
                                 </div>
                                 <div class="health-matrix-legend" aria-hidden="true">
                                     <span class="health-pill healthy"><span class="status-dot"></span><span data-i18n="dashboard.status_healthy">Operational</span></span>
                                     <span class="health-pill warning"><span class="status-dot"></span><span data-i18n="dashboard.status_idle">Idle / Ready</span></span>
-                                    <span class="health-pill error"><span class="status-dot"></span><span data-i18n="dashboard.status_issues">Issues / Cooldown</span></span>
+                                    <span class="health-pill error"><span class="status-dot"></span><span data-i18n="dashboard.status_issues">Needs attention</span></span>
                                 </div>
                             </div>
-                            <div class="provider-health-grid" id="providerHealthGrid">
-                                <div class="health-grid-loading skeleton-row"><div class="skeleton-cell"></div></div>
+                            <div class="provider-health-grid" id="providerHealthGrid"><div class="health-grid-loading skeleton-row"><div class="skeleton-cell"></div></div></div>
+                        </section>
+
+                        <section class="card span-7 operational-health-card" id="operationalHealthCard" aria-busy="true">
+                            <div class="operational-health-header">
+                                <div>
+                                    <div class="page-kicker" data-i18n="dashboard.request_health_kicker">Last 15 minutes</div>
+                                    <h2 class="card-title" data-i18n="dashboard.request_health_title">Request health</h2>
+                                    <p class="card-copy card-title-copy" data-i18n="dashboard.request_health_description">Requests, errors, latency, route failures, and capacity warnings.</p>
+                                </div>
+                                <span class="health-pill warning" id="sloOverallStatus" role="status"><span class="status-dot"></span><span data-i18n="slo.loading">Loading</span></span>
                             </div>
+                            <div class="slo-red-grid" aria-live="polite">
+                                <div class="slo-metric"><span data-i18n="slo.rate">Request rate</span><strong id="sloRequestRate">—</strong><small data-i18n="slo.per_minute">per minute</small></div>
+                                <div class="slo-metric"><span data-i18n="slo.error_rate">Error rate</span><strong id="sloErrorRate">—</strong><small id="sloErrorCount">—</small></div>
+                                <div class="slo-metric"><span data-i18n="dashboard.p95_latency">P95 latency</span><strong id="sloP95">—</strong><small data-i18n="dashboard.last_15_minutes">Last 15 minutes</small></div>
+                                <div class="slo-metric"><span data-i18n="dashboard.capacity_alerts">Capacity alerts</span><strong id="sloExhaustion">—</strong><small data-i18n="dashboard.bounded_health_sample">Bounded health sample</small></div>
+                            </div>
+                            <div class="slo-route-health">
+                                <h3 data-i18n="slo.route_health">Model-route health</h3>
+                                <div class="usage-table-wrapper"><table class="usage-table"><thead><tr><th scope="col" data-i18n="slo.route">Route</th><th scope="col" data-i18n="requests">Requests</th><th scope="col" data-i18n="slo.error_rate">Error rate</th><th scope="col" data-i18n="dashboard.p95_latency">P95 latency</th></tr></thead><tbody id="sloRouteRows"><tr><td colspan="4" data-i18n="slo.loading">Loading</td></tr></tbody></table></div>
+                            </div>
+                            <details class="slo-export-status">
+                                <summary data-i18n="dashboard.advanced_monitoring">Advanced monitoring integrations</summary>
+                                <p data-i18n="slo.export_description">Exporters are disabled by default and never export prompt or response content.</p>
+                                <dl><div><dt>Prometheus</dt><dd id="sloPrometheusStatus">—</dd></div><div><dt>OpenTelemetry</dt><dd id="sloOtelStatus">—</dd></div></dl>
+                                <a href="https://github.com/nguywnben/omni-gateway/blob/main/docs/observability.md" target="_blank" rel="noopener noreferrer" data-i18n="slo.runbooks">Configuration and runbooks</a>
+                            </details>
+                            <p class="trace-status" id="sloSampleNotice" hidden></p>
+                        </section>
+
+                        <section class="card span-5 recent-activity-card" id="recentActivityCard" aria-busy="true">
+                            <div class="recent-activity-header">
+                                <div><div class="page-kicker" data-i18n="dashboard.recent_kicker">Latest requests</div><h2 class="card-title" data-i18n="dashboard.recent_title">Recent activity</h2></div>
+                                <button type="button" class="btn btn-secondary btn-small" data-ui-action="switch-tab" data-tab="activity" data-i18n="dashboard.view_all_activity">View all</button>
+                            </div>
+                            <p class="card-copy card-title-copy" data-i18n="dashboard.recent_description">Inspect the latest outcomes without retaining prompt or response content.</p>
+                            <ol class="dashboard-activity-list" id="recentActivityList" aria-live="polite"><li class="dashboard-activity-empty" data-i18n="dashboard.recent_loading">Loading recent activity…</li></ol>
                         </section>
 
                         <section class="card span-12 chart-card" id="trafficChartCard">
                             <div class="chart-card-header">
-                                <div>
-                                    <h2 class="card-title" data-i18n="dashboard.token_distribution_title">Token Consumption & Traffic Distribution</h2>
-                                    <p class="card-copy card-title-copy" data-i18n="dashboard.token_distribution_description">Visual breakdown of input, output, cached, and reasoning tokens with estimated cost savings.</p>
-                                </div>
+                                <div><h2 class="card-title" data-i18n="dashboard.token_distribution_title">Usage and request trend</h2><p class="card-copy card-title-copy" data-i18n="dashboard.token_distribution_description">Compare request volume with input, output, cached, and reasoning tokens.</p></div>
                                 <div class="chart-legend" id="tokenChartLegend">
                                     <span class="legend-item"><span class="legend-bullet input-bullet"></span><span data-i18n="dashboard.input_tokens">Input</span></span>
                                     <span class="legend-item"><span class="legend-bullet output-bullet"></span><span data-i18n="dashboard.output_tokens">Output</span></span>
@@ -114,46 +129,9 @@
                                 </div>
                             </div>
                             <div class="token-distribution-container" id="tokenDistributionContainer">
-                                <div class="token-distribution-bar" id="tokenDistributionBar" role="progressbar" data-i18n-aria-label="dashboard.token_distribution_title" aria-label="Token breakdown">
-                                    <div class="bar-segment input-segment" style="width: 0%" data-i18n-title="dashboard.input_tokens" title="Input"></div>
-                                    <div class="bar-segment output-segment" style="width: 0%" data-i18n-title="dashboard.output_tokens" title="Output"></div>
-                                    <div class="bar-segment cached-segment" style="width: 0%" data-i18n-title="dashboard.cached_tokens" title="Cached"></div>
-                                    <div class="bar-segment reasoning-segment" style="width: 0%" data-i18n-title="dashboard.reasoning_tokens" title="Reasoning"></div>
-                                </div>
-                                 <div class="token-distribution-metrics" id="tokenDistributionMetrics">
-                                    <div class="dist-metric-box">
-                                        <span class="dist-metric-label" data-i18n="dashboard.input_tokens">Input</span>
-                                        <span class="dist-metric-value" id="distInputTokens">0</span>
-                                        <span class="dist-metric-pct" id="distInputPct">0%</span>
-                                    </div>
-                                    <div class="dist-metric-box">
-                                        <span class="dist-metric-label" data-i18n="dashboard.output_tokens">Output</span>
-                                        <span class="dist-metric-value" id="distOutputTokens">0</span>
-                                        <span class="dist-metric-pct" id="distOutputPct">0%</span>
-                                    </div>
-                                    <div class="dist-metric-box">
-                                        <span class="dist-metric-label" data-i18n="dashboard.cached_tokens">Cached</span>
-                                        <span class="dist-metric-value" id="distCachedTokens">0</span>
-                                        <span class="dist-metric-pct" id="distCachedPct">0%</span>
-                                    </div>
-                                    <div class="dist-metric-box">
-                                        <span class="dist-metric-label" data-i18n="dashboard.reasoning_tokens">Reasoning</span>
-                                        <span class="dist-metric-value" id="distReasoningTokens">0</span>
-                                        <span class="dist-metric-pct" id="distReasoningPct">0%</span>
-                                    </div>
-                                </div>
-                                <div class="traffic-timeline-chart" id="trafficTimelineChart">
-                                    <div class="timeline-chart-header">
-                                        <span data-i18n="dashboard.timeline_traffic">Hourly Traffic Volume</span>
-                                        <span id="timelineChartMaxInfo" data-i18n-runtime>Peak: 0 req/h</span>
-                                    </div>
-                                    <div class="timeline-bars-wrapper" id="timelineBarsWrapper"></div>
-                                    <div class="timeline-labels-row">
-                                        <span id="timelineStartLabel" data-i18n-runtime>-24h</span>
-                                        <span id="timelineMidLabel" data-i18n-runtime>-12h</span>
-                                        <span id="timelineNowLabel" data-i18n="now">Now</span>
-                                    </div>
-                                </div>
+                                <div class="token-distribution-bar" id="tokenDistributionBar" role="progressbar" data-i18n-aria-label="dashboard.token_distribution_title" aria-label="Token breakdown"><div class="bar-segment input-segment" style="width: 0%" data-i18n-title="dashboard.input_tokens" title="Input"></div><div class="bar-segment output-segment" style="width: 0%" data-i18n-title="dashboard.output_tokens" title="Output"></div><div class="bar-segment cached-segment" style="width: 0%" data-i18n-title="dashboard.cached_tokens" title="Cached"></div><div class="bar-segment reasoning-segment" style="width: 0%" data-i18n-title="dashboard.reasoning_tokens" title="Reasoning"></div></div>
+                                <div class="token-distribution-metrics" id="tokenDistributionMetrics"><div class="dist-metric-box"><span class="dist-metric-label" data-i18n="dashboard.input_tokens">Input</span><span class="dist-metric-value" id="distInputTokens">0</span><span class="dist-metric-pct" id="distInputPct">0%</span></div><div class="dist-metric-box"><span class="dist-metric-label" data-i18n="dashboard.output_tokens">Output</span><span class="dist-metric-value" id="distOutputTokens">0</span><span class="dist-metric-pct" id="distOutputPct">0%</span></div><div class="dist-metric-box"><span class="dist-metric-label" data-i18n="dashboard.cached_tokens">Cached</span><span class="dist-metric-value" id="distCachedTokens">0</span><span class="dist-metric-pct" id="distCachedPct">0%</span></div><div class="dist-metric-box"><span class="dist-metric-label" data-i18n="dashboard.reasoning_tokens">Reasoning</span><span class="dist-metric-value" id="distReasoningTokens">0</span><span class="dist-metric-pct" id="distReasoningPct">0%</span></div></div>
+                                <div class="traffic-timeline-chart" id="trafficTimelineChart"><div class="timeline-chart-header"><span data-i18n="dashboard.timeline_traffic">Request volume over time</span><span id="timelineChartMaxInfo" data-i18n-runtime>Peak: 0 req/h</span></div><div class="timeline-bars-wrapper" id="timelineBarsWrapper"></div><div class="timeline-labels-row"><span id="timelineStartLabel" data-i18n-runtime>-24h</span><span id="timelineMidLabel" data-i18n-runtime>-12h</span><span id="timelineNowLabel" data-i18n="now">Now</span></div></div>
                             </div>
                         </section>
 
@@ -161,52 +139,16 @@
                             <h2 class="card-title" id="usageBreakdownTitle" data-i18n-runtime>24-Hour Request Breakdown</h2>
                             <p class="card-copy card-title-copy" id="usageBreakdownDescription" data-i18n-runtime>Review provider and credential traffic for the last 24 hours.</p>
                             <div class="usage-provider-summary" id="usageProviderSummary" data-i18n-aria-label="provider_activity" aria-label="Provider activity"></div>
-                            <div id="usageLoading" class="skeleton-table" role="status" data-i18n-aria-label="loading_request_breakdown" aria-label="Loading request breakdown" aria-busy="true">
-                                <div class="skeleton-row header"><div class="skeleton-cell"></div><div class="skeleton-cell"></div><div class="skeleton-cell"></div><div class="skeleton-cell"></div></div>
-                                <div class="skeleton-row"><div class="skeleton-cell"></div><div class="skeleton-cell"></div><div class="skeleton-cell"></div><div class="skeleton-cell"></div></div>
-                            </div>
-                            <div class="usage-table-wrapper">
-                                <table class="usage-table">
-                                    <thead>
-                                        <tr>
-                                            <th scope="col" data-i18n="credential">Credential</th>
-                                            <th scope="col" data-i18n="requests">Requests</th>
-                                            <th scope="col" data-i18n="success">Success</th>
-                                            <th scope="col" data-i18n="tokens">Tokens</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody id="usageList"></tbody>
-                                </table>
-                            </div>
-                            <div class="pagination-container" id="usagePaginationContainer" role="navigation" aria-labelledby="usageBreakdownTitle" style="display: none;">
-                                <button type="button" class="pagination-btn" id="usagePrevPageBtn" data-ui-action="change-usage-page" data-page-delta="-1" data-i18n="previous">Previous</button>
-                                <div class="pagination-info" id="usagePaginationInfo" role="status" aria-live="polite" data-i18n-runtime>Page 1 of 1</div>
-                                <button type="button" class="pagination-btn" id="usageNextPageBtn" data-ui-action="change-usage-page" data-page-delta="1" data-i18n="next">Next</button>
-                            </div>
+                            <div id="usageLoading" class="skeleton-table" role="status" data-i18n-aria-label="loading_request_breakdown" aria-label="Loading request breakdown" aria-busy="true"><div class="skeleton-row header"><div class="skeleton-cell"></div><div class="skeleton-cell"></div><div class="skeleton-cell"></div><div class="skeleton-cell"></div></div><div class="skeleton-row"><div class="skeleton-cell"></div><div class="skeleton-cell"></div><div class="skeleton-cell"></div><div class="skeleton-cell"></div></div></div>
+                            <div class="usage-table-wrapper"><table class="usage-table"><thead><tr><th scope="col" data-i18n="credential">Credential</th><th scope="col" data-i18n="requests">Requests</th><th scope="col" data-i18n="success">Success</th><th scope="col" data-i18n="tokens">Tokens</th></tr></thead><tbody id="usageList"></tbody></table></div>
+                            <div class="pagination-container" id="usagePaginationContainer" role="navigation" aria-labelledby="usageBreakdownTitle" style="display: none;"><button type="button" class="pagination-btn" id="usagePrevPageBtn" data-ui-action="change-usage-page" data-page-delta="-1" data-i18n="previous">Previous</button><div class="pagination-info" id="usagePaginationInfo" role="status" aria-live="polite" data-i18n-runtime>Page 1 of 1</div><button type="button" class="pagination-btn" id="usageNextPageBtn" data-ui-action="change-usage-page" data-page-delta="1" data-i18n="next">Next</button></div>
                         </section>
 
                         <section class="card span-12" id="historicalUsageSection" hidden>
                             <h2 class="card-title" id="historicalUsageTitle" data-i18n="dashboard.historical_usage">Historical Credential Usage</h2>
                             <p class="card-copy card-title-copy" data-i18n="dashboard.historical_usage_description">Review retained, anonymized traffic from credentials that are no longer available in the pool.</p>
-                            <div class="usage-table-wrapper">
-                                <table class="usage-table">
-                                    <thead>
-                                        <tr>
-                                            <th scope="col" data-i18n="credential">Credential</th>
-                                            <th scope="col" data-i18n="requests">Requests</th>
-                                            <th scope="col" data-i18n="success">Success</th>
-                                            <th scope="col" data-i18n="tokens">Tokens</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody id="historicalUsageList"></tbody>
-                                </table>
-                            </div>
-                            <div class="pagination-container" id="historicalUsagePaginationContainer" role="navigation" aria-labelledby="historicalUsageTitle" style="display: none;">
-                                <button type="button" class="pagination-btn" id="historicalUsagePrevPageBtn" data-ui-action="change-historical-usage-page" data-page-delta="-1" data-i18n="previous">Previous</button>
-                                <div class="pagination-info" id="historicalUsagePaginationInfo" role="status" aria-live="polite" data-i18n-runtime>Page 1 of 1</div>
-                                <button type="button" class="pagination-btn" id="historicalUsageNextPageBtn" data-ui-action="change-historical-usage-page" data-page-delta="1" data-i18n="next">Next</button>
-                            </div>
+                            <div class="usage-table-wrapper"><table class="usage-table"><thead><tr><th scope="col" data-i18n="credential">Credential</th><th scope="col" data-i18n="requests">Requests</th><th scope="col" data-i18n="success">Success</th><th scope="col" data-i18n="tokens">Tokens</th></tr></thead><tbody id="historicalUsageList"></tbody></table></div>
+                            <div class="pagination-container" id="historicalUsagePaginationContainer" role="navigation" aria-labelledby="historicalUsageTitle" style="display: none;"><button type="button" class="pagination-btn" id="historicalUsagePrevPageBtn" data-ui-action="change-historical-usage-page" data-page-delta="-1" data-i18n="previous">Previous</button><div class="pagination-info" id="historicalUsagePaginationInfo" role="status" aria-live="polite" data-i18n-runtime>Page 1 of 1</div><button type="button" class="pagination-btn" id="historicalUsageNextPageBtn" data-ui-action="change-historical-usage-page" data-page-delta="1" data-i18n="next">Next</button></div>
                         </section>
                     </div>
-
                 </div>

@@ -177,6 +177,8 @@ const AppState = {
 
     operationalHealth: null,
 
+    dashboardAggregate: null,
+
     usagePeriod: '1d',
 
     usagePage: 1,
