@@ -263,6 +263,7 @@ function createCredCard(credInfo, manager) {
     const managerType = manager.type;
     const providerMeta = getCredentialProviderMeta(credInfo, managerType);
     const isAntigravity = providerMeta.id === 'google_antigravity';
+    const isCodexOAuth = providerMeta.id === 'codex' && credInfo.credential_type === 'oauth';
     const pathId = (managerType === 'primary' ? 'primary_' : '') + btoa(encodeURIComponent(filename)).replace(/[+/=]/g, '_');
     const supportsQuotaPreview = managerType === 'primary'
         && manager.credentialSupportsOperation(credInfo, 'quota');
@@ -331,7 +332,7 @@ function createCredCard(credInfo, manager) {
             'plan'
         );
 
-    } else if (!isStaticProvider) {
+    } else if (managerType !== 'primary') {
 
         const tier = (credInfo.tier || 'pro').toString().toLowerCase();
 

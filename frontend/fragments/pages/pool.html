@@ -21,8 +21,8 @@
 
                     <div class="batch-controls">
                         <div class="batch-label">
-                            <input type="checkbox" id="selectAllPrimaryCheckbox" class="select-all-checkbox" data-ui-change="select-all-primary">
-                            <label for="selectAllPrimaryCheckbox" data-i18n="pool.selection.page">Select this page</label>
+                            <input type="checkbox" id="primarySelectAllCheckbox" class="select-all-checkbox" data-ui-change="select-all-primary">
+                            <label for="primarySelectAllCheckbox" data-i18n="pool.selection.page">Select this page</label>
                             <span class="selected-count" id="primarySelectedCount" data-i18n-runtime>0</span>
                             <button type="button" class="selection-link" id="primarySelectAllMatchingBtn" data-ui-action="select-all-matching-primary" data-i18n-runtime hidden>Select all matching</button>
                             <button type="button" class="selection-link" id="primaryClearSelectionBtn" data-ui-action="clear-primary-selection" data-i18n="pool.selection.clear" hidden>Clear selection</button>
@@ -37,7 +37,15 @@
                         </div>
                     </div>
 
-                    <div class="filter-container">
+                    <section class="credential-filter-panel" aria-labelledby="primaryFiltersTitle">
+                        <div class="credential-filter-header">
+                            <div>
+                                <h2 id="primaryFiltersTitle" data-i18n="pool.filters.title">Filters</h2>
+                                <span id="primaryActiveFilterCount" class="filter-summary" aria-live="polite" data-i18n-runtime>No active filters</span>
+                            </div>
+                            <button type="button" class="btn btn-secondary btn-compact" data-ui-action="reset-primary-filters" data-i18n="pool.filters.reset">Reset filters</button>
+                        </div>
+                        <div class="filter-container" data-credential-filter-tier="primary">
                         <div class="filter-group">
                             <label for="primaryProviderFilter" data-i18n="pool.filter.provider_variant">Provider type</label>
                             <select id="primaryProviderFilter" class="filter-select" data-ui-change="primary-filter">
@@ -51,15 +59,6 @@
                                 <option value="claude_code">Claude Code</option>
                                 <option value="claude_platform">Claude Platform</option>
                                 <option value="ollama">Ollama</option>
-                            </select>
-                        </div>
-                        <div class="filter-group">
-                            <label for="primaryCredentialKindFilter" data-i18n="pool.filter.credential_kind">Credential kind</label>
-                            <select id="primaryCredentialKindFilter" class="filter-select" data-ui-change="primary-filter">
-                                <option value="all" data-i18n="pool.filter.all_kinds">All kinds</option>
-                                <option value="oauth" data-i18n-technical>OAuth</option>
-                                <option value="api_key" data-i18n-technical>API key</option>
-                                <option value="connection" data-i18n="pool.kind.connection">Connection</option>
                             </select>
                         </div>
                         <div class="filter-group">
@@ -81,56 +80,6 @@
                             </select>
                         </div>
                         <div class="filter-group">
-                            <label for="primaryErrorCodeFilter" data-i18n="error">Error</label>
-                            <select id="primaryErrorCodeFilter" class="filter-select" data-ui-change="primary-filter">
-                                <option value="all" data-i18n="all">All</option>
-                                <option value="none" data-i18n="none">None</option>
-                                <option value="400">400</option>
-                                <option value="401">401</option>
-                                <option value="403">403</option>
-                                <option value="429">429</option>
-                                <option value="500">500</option>
-                                <option value="502">502</option>
-                                <option value="503">503</option>
-                            </select>
-                        </div>
-                        <div class="filter-group">
-                            <label for="primaryCooldownFilter" data-i18n="cooldown">Cooldown</label>
-                            <select id="primaryCooldownFilter" class="filter-select" data-ui-change="primary-filter">
-                                <option value="all" data-i18n="all">All</option>
-                                <option value="in_cooldown" data-i18n="in_cooldown">In cooldown</option>
-                                <option value="no_cooldown" data-i18n="no_cooldown">No cooldown</option>
-                            </select>
-                        </div>
-                        <div class="filter-group">
-                            <label for="primaryTierFilter" data-i18n="tier">Tier</label>
-                            <select id="primaryTierFilter" class="filter-select" data-ui-change="primary-filter">
-                                <option value="all" data-i18n="all">All</option>
-                                <option value="free" data-i18n="free">Free</option>
-                                <option value="pro" data-i18n-technical>Pro</option>
-                                <option value="ultra" data-i18n-technical>Ultra</option>
-                                <option value="not_applicable" data-i18n="pool.tier.not_applicable">Not applicable</option>
-                            </select>
-                        </div>
-                        <div class="filter-group">
-                            <label for="primaryQuotaStateFilter" data-i18n="pool.filter.quota_state">Quota state</label>
-                            <select id="primaryQuotaStateFilter" class="filter-select" data-ui-change="primary-filter">
-                                <option value="all" data-i18n="pool.filter.all_quota">All quota states</option>
-                                <option value="available" data-i18n="pool.quota.available">Available</option>
-                                <option value="limited" data-i18n="pool.quota.limited">Limited</option>
-                                <option value="exhausted" data-i18n="pool.quota.exhausted">Exhausted</option>
-                                <option value="unsupported" data-i18n="pool.quota.unsupported">Not supported</option>
-                            </select>
-                        </div>
-                        <div class="filter-group">
-                            <label for="primarySourceFilter" data-i18n="pool.filter.source">Source</label>
-                            <select id="primarySourceFilter" class="filter-select" data-ui-change="primary-filter">
-                                <option value="all" data-i18n="pool.filter.all_sources">All sources</option>
-                                <option value="managed" data-i18n="pool.source.managed">Managed</option>
-                                <option value="environment" data-i18n="pool.source.environment">Environment</option>
-                            </select>
-                        </div>
-                        <div class="filter-group">
                             <label for="primaryPageSizeSelect" data-i18n="per_page">Per page</label>
                             <select id="primaryPageSizeSelect" class="page-size-select" data-ui-change="primary-page-size">
                                 <option value="20">20</option>
@@ -139,7 +88,74 @@
                                 <option value="200">200</option>
                             </select>
                         </div>
-                    </div>
+                        </div>
+                        <details class="credential-filter-disclosure" id="primaryAdvancedFilters" data-credential-filter-tier="advanced">
+                            <summary>
+                                <span data-i18n="pool.filters.more">More filters</span>
+                            </summary>
+                            <div class="filter-container credential-filter-advanced-grid">
+                                <div class="filter-group">
+                                    <label for="primaryCredentialKindFilter" data-i18n="pool.filter.credential_kind">Credential kind</label>
+                                    <select id="primaryCredentialKindFilter" class="filter-select" data-ui-change="primary-filter">
+                                        <option value="all" data-i18n="pool.filter.all_kinds">All kinds</option>
+                                        <option value="oauth" data-i18n-technical>OAuth</option>
+                                        <option value="api_key" data-i18n-technical>API key</option>
+                                        <option value="connection" data-i18n="pool.kind.connection">Connection</option>
+                                    </select>
+                                </div>
+                                <div class="filter-group">
+                                    <label for="primaryErrorCodeFilter" data-i18n="error">Error</label>
+                                    <select id="primaryErrorCodeFilter" class="filter-select" data-ui-change="primary-filter">
+                                        <option value="all" data-i18n="all">All</option>
+                                        <option value="none" data-i18n="none">None</option>
+                                        <option value="400">400</option>
+                                        <option value="401">401</option>
+                                        <option value="403">403</option>
+                                        <option value="429">429</option>
+                                        <option value="500">500</option>
+                                        <option value="502">502</option>
+                                        <option value="503">503</option>
+                                    </select>
+                                </div>
+                                <div class="filter-group">
+                                    <label for="primaryCooldownFilter" data-i18n="cooldown">Cooldown</label>
+                                    <select id="primaryCooldownFilter" class="filter-select" data-ui-change="primary-filter">
+                                        <option value="all" data-i18n="all">All</option>
+                                        <option value="in_cooldown" data-i18n="in_cooldown">In cooldown</option>
+                                        <option value="no_cooldown" data-i18n="no_cooldown">No cooldown</option>
+                                    </select>
+                                </div>
+                                <div class="filter-group">
+                                    <label for="primaryTierFilter" data-i18n="tier">Tier</label>
+                                    <select id="primaryTierFilter" class="filter-select" data-ui-change="primary-filter">
+                                        <option value="all" data-i18n="all">All</option>
+                                        <option value="free" data-i18n="free">Free</option>
+                                        <option value="pro" data-i18n-technical>Pro</option>
+                                        <option value="ultra" data-i18n-technical>Ultra</option>
+                                        <option value="not_applicable" data-i18n="pool.tier.not_applicable">Not applicable</option>
+                                    </select>
+                                </div>
+                                <div class="filter-group">
+                                    <label for="primaryQuotaStateFilter" data-i18n="pool.filter.quota_state">Quota state</label>
+                                    <select id="primaryQuotaStateFilter" class="filter-select" data-ui-change="primary-filter">
+                                        <option value="all" data-i18n="pool.filter.all_quota">All quota states</option>
+                                        <option value="available" data-i18n="pool.quota.available">Available</option>
+                                        <option value="limited" data-i18n="pool.quota.limited">Limited</option>
+                                        <option value="exhausted" data-i18n="pool.quota.exhausted">Exhausted</option>
+                                        <option value="unsupported" data-i18n="pool.quota.unsupported">Not supported</option>
+                                    </select>
+                                </div>
+                                <div class="filter-group">
+                                    <label for="primarySourceFilter" data-i18n="pool.filter.source">Source</label>
+                                    <select id="primarySourceFilter" class="filter-select" data-ui-change="primary-filter">
+                                        <option value="all" data-i18n="pool.filter.all_sources">All sources</option>
+                                        <option value="managed" data-i18n="pool.source.managed">Managed</option>
+                                        <option value="environment" data-i18n="pool.source.environment">Environment</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </details>
+                    </section>
 
                     <div id="primaryCredsListSection">
                         <div id="primaryCredsState" data-page-state-host hidden></div>

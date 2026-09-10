@@ -86,6 +86,7 @@ function initStaticUiBindings() {
         'batch-verify-primary': () => batchVerifyProviderCredentials(),
         'select-all-matching-primary': () => selectAllMatchingPrimary(),
         'clear-primary-selection': () => clearPrimarySelection(),
+        'reset-primary-filters': () => AppState.primaryCreds.resetFilters(),
         'change-primary-page': (element) => changePrimaryPage(Number(element.dataset.pageDelta)),
         'change-usage-page': (element) => changeUsagePage(Number(element.dataset.pageDelta)),
         'change-historical-usage-page': (element) => changeHistoricalUsagePage(Number(element.dataset.pageDelta)),

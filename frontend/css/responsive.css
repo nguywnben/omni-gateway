@@ -185,6 +185,10 @@
         grid-template-columns: repeat(2, minmax(0, 1fr));
     }
 
+    .credential-filter-header {
+        align-items: flex-start;
+    }
+
     .mobile-topbar {
         min-height: 58px;
         min-height: calc(58px + env(safe-area-inset-top));

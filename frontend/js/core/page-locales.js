@@ -2474,3 +2474,36 @@ for (const locale of Object.keys(PAGE_LOCALE_TRANSLATIONS)) {
         PRODUCTION_DASHBOARD_MESSAGES[locale] || {}
     );
 }
+
+const CREDENTIAL_FLEET_WORKFLOW_MESSAGES = {
+    en: {
+        'pool.filters.title': 'Filters',
+        'pool.filters.more': 'More filters',
+        'pool.filters.reset': 'Reset filters',
+        'pool.filters.none': 'No active filters',
+        'pool.filters.active': '{count} active filters',
+        'pool.batch.query_all': 'All credentials',
+        'pool.batch.query_filters': 'Exact query: {filters}',
+        'pool.batch.query_fingerprint': 'Query ID: {fingerprint}',
+        'pool.batch.query_fingerprint_unavailable': 'unavailable'
+    },
+    vi: {
+        'pool.filters.title': 'Bộ lọc',
+        'pool.filters.more': 'Thêm bộ lọc',
+        'pool.filters.reset': 'Đặt lại bộ lọc',
+        'pool.filters.none': 'Không có bộ lọc đang áp dụng',
+        'pool.filters.active': '{count} bộ lọc đang áp dụng',
+        'pool.batch.query_all': 'Toàn bộ thông tin xác thực',
+        'pool.batch.query_filters': 'Truy vấn chính xác: {filters}',
+        'pool.batch.query_fingerprint': 'Mã truy vấn: {fingerprint}',
+        'pool.batch.query_fingerprint_unavailable': 'không khả dụng'
+    }
+};
+
+for (const locale of Object.keys(PAGE_LOCALE_TRANSLATIONS)) {
+    Object.assign(
+        PAGE_LOCALE_TRANSLATIONS[locale],
+        CREDENTIAL_FLEET_WORKFLOW_MESSAGES.en,
+        CREDENTIAL_FLEET_WORKFLOW_MESSAGES[locale] || {}
+    );
+}

@@ -6,9 +6,9 @@
 - Active plan: `PROD-SELFHOST-R1`
 - Target: production-quality self-hosting for one person or a trusted team, not enterprise service
   operation.
-- Progress: **22/36 implementation tasks**; Phase 3 is in progress (4/6).
-- Completed: **P3.4 — Provider onboarding**.
-- Next: **P3.5 — Credential fleet operations**. Do not begin it until a
+- Progress: **23/36 implementation tasks**; Phase 3 is in progress (5/6).
+- Completed: **P3.5 — Credential fleet operations**.
+- Next: **P3.6 — Models and routing workflow**. Do not begin it until a
   new user request to continue the fixed plan.
 - Supported runtime today: standalone, one worker, one replica.
 - Redis coordination, multi-replica HA, and Helm are experimental and no longer R1 release blockers.
@@ -49,6 +49,14 @@ Do not push unless the user requests it.
 
 ## Latest Evidence
 
+- `docs/evidence/p3.5-credential-fleet-operations.md`
+- Credentials now exposes four common filters first and progressively discloses six diagnostic
+  filters, with immediate active-count/reset behavior and bounded URL/session persistence. Refresh
+  retains valid page context and page-scoped selection.
+- Mixed-provider selection offers only the capability intersection; both explicit and all-matching
+  batches stop at 100 targets. All-matching confirmation names the exact filter query, server
+  fingerprint, and eligible/skipped/total impact before the existing preview-bound idempotent
+  execution. The fixed 105-test task gate and authenticated responsive browser smoke passed.
 - `docs/evidence/p3.4-provider-onboarding.md`
 - Providers now consumes the versioned capability catalog for all nine advertised connection
   variants, keeps the primary add path visible, and progressively discloses import and advanced

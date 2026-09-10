@@ -136,19 +136,19 @@ function createCredsManager(type) {
 
                 status: { state: 'currentStatusFilter', suffix: 'StatusFilter', values: ['all', 'enabled', 'disabled'] },
 
-                error: { state: 'currentErrorCodeFilter', suffix: 'ErrorCodeFilter', values: ['all', 'none', '400', '401', '403', '429', '500', '502', '503'] },
+                error: { state: 'currentErrorCodeFilter', suffix: 'ErrorCodeFilter', values: ['all', 'none', '400', '401', '403', '429', '500', '502', '503'], advanced: true },
 
-                cooldown: { state: 'currentCooldownFilter', suffix: 'CooldownFilter', values: ['all', 'in_cooldown', 'no_cooldown'] },
+                cooldown: { state: 'currentCooldownFilter', suffix: 'CooldownFilter', values: ['all', 'in_cooldown', 'no_cooldown'], advanced: true },
 
-                tier: { state: 'currentTierFilter', suffix: 'TierFilter', values: ['all', 'free', 'pro', 'ultra', 'not_applicable'] },
+                tier: { state: 'currentTierFilter', suffix: 'TierFilter', values: ['all', 'free', 'pro', 'ultra', 'not_applicable'], advanced: true },
 
-                kind: { state: 'currentCredentialKindFilter', suffix: 'CredentialKindFilter', values: ['all', 'oauth', 'api_key', 'connection'] },
+                kind: { state: 'currentCredentialKindFilter', suffix: 'CredentialKindFilter', values: ['all', 'oauth', 'api_key', 'connection'], advanced: true },
 
                 health: { state: 'currentHealthFilter', suffix: 'HealthFilter', values: ['all', 'healthy', 'degraded', 'unhealthy', 'disabled'] },
 
-                quota: { state: 'currentQuotaStateFilter', suffix: 'QuotaStateFilter', values: ['all', 'available', 'limited', 'exhausted', 'unsupported'] },
+                quota: { state: 'currentQuotaStateFilter', suffix: 'QuotaStateFilter', values: ['all', 'available', 'limited', 'exhausted', 'unsupported'], advanced: true },
 
-                source: { state: 'currentSourceFilter', suffix: 'SourceFilter', values: ['all', 'managed', 'environment'] }
+                source: { state: 'currentSourceFilter', suffix: 'SourceFilter', values: ['all', 'managed', 'environment'], advanced: true }
 
             };
 
@@ -194,9 +194,15 @@ function createCredsManager(type) {
 
             if ([20, 50, 100, 200].includes(pageSize)) this.pageSize = pageSize;
 
+            const page = Number(params.get('pool_page') || stored.page);
+
+            if (Number.isInteger(page) && page >= 1 && page <= 10000) this.currentPage = page;
+
             const pageSizeElement = document.getElementById(this.getElementId('PageSizeSelect'));
 
             if (pageSizeElement) pageSizeElement.value = String(this.pageSize);
+
+            this.updateActiveFilterSummary();
 
         },
 
@@ -222,9 +228,15 @@ function createCredsManager(type) {
 
             state.pageSize = this.pageSize;
 
+            state.page = this.currentPage;
+
             if (this.pageSize === 20) url.searchParams.delete('pool_page_size');
 
             else url.searchParams.set('pool_page_size', String(this.pageSize));
+
+            if (this.currentPage === 1) url.searchParams.delete('pool_page');
+
+            else url.searchParams.set('pool_page', String(this.currentPage));
 
             try {
 
@@ -338,6 +350,20 @@ function createCredsManager(type) {
 
                 if (response.ok) {
 
+                    const totalPages = Math.max(1, Math.ceil(Number(data.total || 0) / this.pageSize));
+
+                    if (this.currentPage > totalPages) {
+
+                        this.currentPage = totalPages;
+
+                        this.persistFilterState();
+
+                        await this.refresh({ preserveContent });
+
+                        return;
+
+                    }
+
                     clearPageState(stateHost);
 
                     this.data = {};
@@ -395,6 +421,8 @@ function createCredsManager(type) {
                     this.facets = data.facets || {};
 
                     this.allMatchingSelection = data.selection || null;
+
+                    this.retainVisibleSelection();
 
                     this.hasLoaded = true;
 
@@ -595,6 +623,8 @@ function createCredsManager(type) {
 
                 this.currentPage = newPage;
 
+                this.persistFilterState();
+
                 this.refresh();
 
             }
@@ -611,7 +641,83 @@ function createCredsManager(type) {
 
             this.persistFilterState();
 
+            this.updateActiveFilterSummary();
+
             this.refresh();
+
+        },
+
+        resetFilters() {
+
+            Object.values(this.getFilterDefinitions()).forEach((definition) => {
+
+                this[definition.state] = 'all';
+
+                const element = document.getElementById(this.getElementId(definition.suffix));
+
+                if (element) element.value = 'all';
+
+            });
+
+            this.currentPage = 1;
+
+            this.clearSelection();
+
+            const disclosure = document.getElementById('primaryAdvancedFilters');
+
+            if (disclosure) disclosure.open = false;
+
+            this.persistFilterState();
+
+            this.updateActiveFilterSummary();
+
+            this.refresh();
+
+        },
+
+        updateActiveFilterSummary() {
+
+            if (this.type !== 'primary') return;
+
+            const activeCount = Object.values(this.getFilterDefinitions())
+
+                .filter((definition) => this[definition.state] !== 'all').length;
+
+            const countElement = document.getElementById('primaryActiveFilterCount');
+
+            if (countElement) {
+
+                countElement.textContent = activeCount > 0
+
+                    ? t('pool.filters.active', { count: activeCount })
+
+                    : t('pool.filters.none');
+
+            }
+
+            const disclosure = document.getElementById('primaryAdvancedFilters');
+
+            const hasAdvancedFilter = Object.values(this.getFilterDefinitions()).some(
+
+                (definition) => definition.advanced && this[definition.state] !== 'all'
+
+            );
+
+            if (disclosure && hasAdvancedFilter) disclosure.open = true;
+
+        },
+
+        retainVisibleSelection() {
+
+            if (this.selectionScope !== 'page') return;
+
+            const visibleFiles = new Set(Object.keys(this.data));
+
+            this.selectedFiles = new Set(
+
+                Array.from(this.selectedFiles).filter(filename => visibleFiles.has(filename))
+
+            );
 
         },
 
@@ -634,6 +740,8 @@ function createCredsManager(type) {
             this.currentPage = 1;
 
             this.persistFilterState();
+
+            this.updateActiveFilterSummary();
 
             this.refresh();
 
@@ -781,13 +889,13 @@ function createCredsManager(type) {
 
             if (this.type === 'primary') {
 
-                const targetLimitExceeded = allMatching && selectedCount > 100;
+                const targetLimitExceeded = selectedCount > 100;
 
                 const operationButtons = {
 
-                    Enable: 'disable',
+                    Enable: 'toggle',
 
-                    Disable: 'disable',
+                    Disable: 'toggle',
 
                     Delete: 'delete',
 
@@ -805,6 +913,8 @@ function createCredsManager(type) {
 
                     const supported = this.selectedVariantsSupport(operation);
 
+                    button.hidden = selectedCount > 0 && !supported;
+
                     button.disabled = selectedCount === 0 || targetLimitExceeded || !supported;
 
                     button.title = targetLimitExceeded
@@ -821,7 +931,9 @@ function createCredsManager(type) {
 
                     const supported = this.selectedVariantsSupport('verify');
 
-                    verifyButton.disabled = selectedCount === 0 || allMatching || !supported;
+                    verifyButton.hidden = selectedCount > 0 && (allMatching || !supported);
+
+                    verifyButton.disabled = selectedCount === 0 || targetLimitExceeded || allMatching || !supported;
 
                     verifyButton.title = allMatching
 
@@ -894,6 +1006,38 @@ function createCredsManager(type) {
                 selectAllMatchingButton.textContent = t('pool.selection.select_all_matching', {count: this.totalCount});
 
             }
+
+        },
+
+        describeSelectionQuery() {
+
+            if (this.selectionScope !== 'all_matching') return '';
+
+            const filters = Object.values(this.getFilterDefinitions()).flatMap((definition) => {
+
+                if (this[definition.state] === 'all') return [];
+
+                const element = document.getElementById(this.getElementId(definition.suffix));
+
+                const label = document.querySelector(`label[for="${this.getElementId(definition.suffix)}"]`)?.textContent?.trim();
+
+                const value = element?.selectedOptions?.[0]?.textContent?.trim() || this[definition.state];
+
+                return [`${label || definition.suffix}: ${value}`];
+
+            });
+
+            const filterSummary = filters.length > 0 ? filters.join(', ') : t('pool.batch.query_all');
+
+            const fingerprint = this.allMatchingSelection?.query_fingerprint || t('pool.batch.query_fingerprint_unavailable');
+
+            return [
+
+                t('pool.batch.query_filters', { filters: filterSummary }),
+
+                t('pool.batch.query_fingerprint', { fingerprint })
+
+            ].join('\n');
 
         },
 
@@ -1103,7 +1247,13 @@ function createCredsManager(type) {
 
                 });
 
-                const confirmMsg = `${previewSummary}\n\n${confirmationMessages[action] || actionLabel}`;
+                const selectionQuery = this.describeSelectionQuery();
+
+                const confirmMsg = [selectionQuery, previewSummary, confirmationMessages[action] || actionLabel]
+
+                    .filter(Boolean)
+
+                    .join('\n\n');
 
                 if (!(await showConfirmModal(confirmMsg, confirmOptions))) return;
 

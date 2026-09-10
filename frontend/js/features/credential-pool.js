@@ -102,9 +102,9 @@ function togglePrimaryFileSelection(filename) {
 
 function toggleSelectAllPrimary() {
 
-    const checkbox = document.getElementById('selectAllPrimaryCheckbox');
+    const checkbox = document.getElementById('primarySelectAllCheckbox');
 
-    AppState.primaryCreds.toggleVisibleSelection(checkbox.checked);
+    if (checkbox) AppState.primaryCreds.toggleVisibleSelection(checkbox.checked);
 
 }
 

@@ -185,6 +185,66 @@
     grid-template-columns: repeat(5, minmax(0, 1fr));
 }
 
+.credential-filter-panel {
+    margin: 16px 0;
+    overflow: hidden;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--bg-subtle);
+}
+
+.credential-filter-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 12px;
+}
+
+.credential-filter-header h2 {
+    margin: 0;
+    font-size: 14px;
+}
+
+.filter-summary {
+    display: block;
+    margin-top: 3px;
+    color: var(--text-muted);
+    font-size: 12px;
+}
+
+#poolTab .credential-filter-panel .filter-container {
+    margin: 0;
+    border: 0;
+    border-radius: 0;
+}
+
+.credential-filter-disclosure {
+    border-top: 1px solid var(--border);
+}
+
+.credential-filter-disclosure > summary {
+    padding: 10px 12px;
+    color: var(--text-muted);
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 680;
+}
+
+.credential-filter-disclosure > summary:hover {
+    color: var(--text);
+}
+
+.credential-filter-disclosure > summary:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: -2px;
+}
+
+.btn-compact {
+    min-height: 32px;
+    padding: 5px 10px;
+}
+
 #poolTab .filter-group {
     display: grid;
     align-items: stretch;
