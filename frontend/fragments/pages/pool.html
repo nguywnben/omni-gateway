@@ -2,7 +2,7 @@
                     <header class="page-header">
                             <div>
                                 <div class="page-kicker" data-i18n="pool">Pool</div>
-                                <h1 class="page-title" data-i18n="pool_title">Provider Credential Pool</h1>
+                                <h1 class="page-title" id="poolPageTitle" data-i18n="pool_title">Provider Credential Pool</h1>
                                 <p class="page-description" data-i18n="pool_description">Manage accounts and API keys from every connected provider. Monitor credential health, routing capacity, and pool backups from one place.</p>
                             </div>
                             <div class="page-actions">
@@ -142,15 +142,16 @@
                     </div>
 
                     <div id="primaryCredsListSection">
+                        <div id="primaryCredsState" data-page-state-host hidden></div>
                         <div id="primaryCredsLoading" class="skeleton-list" role="status" data-i18n-aria-label="loading_provider_credentials" aria-label="Loading provider credentials" aria-busy="true">
                             <div class="skeleton-item"><div class="skeleton-line title"></div><div class="skeleton-line content"></div><div class="skeleton-line buttons"></div></div>
                             <div class="skeleton-item"><div class="skeleton-line title"></div><div class="skeleton-line content"></div><div class="skeleton-line buttons"></div></div>
                             <div class="skeleton-item"><div class="skeleton-line title"></div><div class="skeleton-line content"></div><div class="skeleton-line buttons"></div></div>
                         </div>
                         <div class="credential-provider-groups" id="primaryCredsList"></div>
-                        <div class="pagination-container" id="primaryPaginationContainer" style="display: none;">
+                        <div class="pagination-container" id="primaryPaginationContainer" role="navigation" aria-labelledby="poolPageTitle" style="display: none;">
                             <button type="button" class="pagination-btn" id="primaryPrevPageBtn" data-ui-action="change-primary-page" data-page-delta="-1" data-i18n="previous">Previous</button>
-                            <div class="pagination-info" id="primaryPaginationInfo" data-i18n-runtime>Page 1 of 1</div>
+                            <div class="pagination-info" id="primaryPaginationInfo" role="status" aria-live="polite" data-i18n-runtime>Page 1 of 1</div>
                             <button type="button" class="pagination-btn" id="primaryNextPageBtn" data-ui-action="change-primary-page" data-page-delta="1" data-i18n="next">Next</button>
                         </div>
                     </div>

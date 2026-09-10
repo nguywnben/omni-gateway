@@ -1,5 +1,6 @@
 const VirtualKeyAccessState = {
     records: [],
+    loaded: false,
     loading: false,
     query: '',
     status: ''
@@ -32,17 +33,31 @@ async function virtualKeyApi(path = '', options = {}) {
 async function loadVirtualKeys({ announce = false } = {}) {
     if (VirtualKeyAccessState.loading) return;
     const list = document.getElementById('virtualKeyList');
+    const preserveContent = VirtualKeyAccessState.loaded;
     VirtualKeyAccessState.loading = true;
+    clearPageState('virtualKeyState');
     if (list) list.setAttribute('aria-busy', 'true');
     try {
         const payload = await virtualKeyApi('', { headers: getAuthHeaders(false) });
         VirtualKeyAccessState.records = Array.isArray(payload.data) ? payload.data : [];
+        VirtualKeyAccessState.loaded = true;
+        clearPageState('virtualKeyState');
         renderVirtualKeys();
         if (announce) showStatus(t('access.keys_refreshed'), 'success');
     } catch (error) {
-        VirtualKeyAccessState.records = [];
-        renderVirtualKeys();
-        showStatus(t('access.keys_load_failed', { error: error.message }), 'error');
+        if (!preserveContent) {
+            VirtualKeyAccessState.records = [];
+            document.getElementById('virtualKeyEmptyState')?.classList.add('hidden');
+        }
+        const message = t('access.keys_load_failed', { error: error.message });
+        showPageState('virtualKeyState', {
+            kind: preserveContent ? 'stale' : 'error',
+            title: t(preserveContent ? 'warning' : 'error'),
+            message,
+            actionLabel: t('refresh'),
+            onAction: () => loadVirtualKeys({announce: true})
+        });
+        showStatus(message, 'error');
     } finally {
         VirtualKeyAccessState.loading = false;
         if (list) list.setAttribute('aria-busy', 'false');

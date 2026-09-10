@@ -684,6 +684,51 @@
     width: min(420px, calc(100vw - 44px));
 }
 
+.page-state {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px 12px;
+    margin: 0 0 18px;
+    padding: 14px 16px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--surface);
+    color: var(--text);
+}
+
+.page-state-error {
+    border-color: #f0c9c6;
+    background: var(--danger-bg);
+    color: var(--danger);
+}
+
+.page-state-stale {
+    border-color: #f0dfaa;
+    background: var(--warning-bg);
+    color: var(--warning);
+}
+
+.page-state-success {
+    border-color: #cce8d2;
+    background: var(--success-bg);
+    color: var(--success);
+}
+
+.page-state-title {
+    font-weight: 700;
+}
+
+.page-state-message {
+    flex: 1 1 280px;
+    margin: 0;
+    line-height: 1.5;
+}
+
+.page-state-action {
+    flex: 0 0 auto;
+}
+
 #logContainer {
     height: 520px;
     overflow: auto;
@@ -829,6 +874,20 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
+    html:focus-within {
+        scroll-behavior: auto;
+        transition-duration: 0.01ms;
+    }
+
+    *,
+    *::before,
+    *::after {
+        scroll-behavior: auto !important;
+        transition-duration: 0.01ms !important;
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+    }
+
     .skeleton,
     .skeleton-line,
     .skeleton-cell,

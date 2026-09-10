@@ -626,12 +626,12 @@
                             <div class="provider-workspace-heading">
                                 <div class="provider-workspace-logo"><img src="/frontend/assets/providers/google-antigravity-logo.png" alt=""></div>
                                 <div>
-                                    <h2>Google Antigravity</h2>
+                                    <h2 id="providerCatalogPaginationTitle">Google Antigravity</h2>
                                     <p>Authorize accounts, import credential archives, and manage provider-specific behavior.</p>
                                     <a class="provider-site-link" href="https://antigravity.google/" target="_blank" rel="noreferrer">https://antigravity.google/</a>
                                 </div>
                             </div>
-                            <div class="pagination-container provider-catalog-pagination" id="providerCatalogPagination" style="display: none;">
+                            <div class="pagination-container provider-catalog-pagination" id="providerCatalogPagination" role="navigation" aria-labelledby="providerCatalogPaginationTitle" style="display: none;">
                                 <button type="button" class="pagination-btn" id="providerCatalogPrevBtn" data-ui-action="change-provider-catalog-page" data-page-delta="-1" title="Previous page" aria-label="Previous page">Previous</button>
                                 <div class="pagination-info" id="providerCatalogPaginationInfo" aria-live="polite">Page 1 of 2</div>
                                 <button type="button" class="pagination-btn" id="providerCatalogNextBtn" data-ui-action="change-provider-catalog-page" data-page-delta="1" title="Next page" aria-label="Next page">Next</button>

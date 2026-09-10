@@ -331,6 +331,7 @@ async function loadModelCatalog(forceRefresh = false, options = {}) {
     const workspace = document.getElementById('modelPoolWorkspace');
     const refreshButton = document.getElementById('refreshModelCatalogBtn');
     const preserveContent = options.preserveContent ?? AppState.modelCatalogLoaded;
+    clearPageState('modelCatalogState');
     if (loading && !preserveContent) loading.classList.remove('hidden');
     if (workspace && !preserveContent) workspace.classList.add('hidden');
     if (refreshButton) refreshButton.disabled = true;
@@ -347,13 +348,22 @@ async function loadModelCatalog(forceRefresh = false, options = {}) {
             ? [...data.pool.selected_models]
             : [];
         AppState.modelPoolEnabled = data.pool?.enabled !== false;
+        clearPageState('modelCatalogState');
         renderSelectedModels();
         renderModelCatalog();
         renderModelBlacklist();
         if (workspace) workspace.classList.remove('hidden');
         if (forceRefresh) showStatus(t('models.catalog_refreshed'), 'success');
     } catch (error) {
-        showStatus(t('models.catalog_load_failed', {error: error.message}), 'error');
+        const message = t('models.catalog_load_failed', {error: error.message});
+        showPageState('modelCatalogState', {
+            kind: preserveContent ? 'stale' : 'error',
+            title: t(preserveContent ? 'warning' : 'error'),
+            message,
+            actionLabel: t('refresh'),
+            onAction: () => loadModelCatalog(forceRefresh, {preserveContent: AppState.modelCatalogLoaded})
+        });
+        showStatus(message, 'error');
     } finally {
         if (loading && !preserveContent) loading.classList.add('hidden');
         if (refreshButton) refreshButton.disabled = false;

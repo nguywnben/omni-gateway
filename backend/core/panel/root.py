@@ -1,5 +1,6 @@
 """Root routes for the management console."""
 
+import hashlib
 import re
 from functools import lru_cache
 from html import escape
@@ -65,6 +66,7 @@ CONSOLE_SCRIPT_ASSETS = (
     "js/core/upload-manager.js",
     "js/core/state.js",
     "js/ui/notifications.js",
+    "js/ui/page-states.js",
     "js/ui/api-integration.js",
     "js/ui/dialog-content.js",
     "js/ui/dialogs.js",
@@ -112,12 +114,16 @@ def _console_asset_paths():
     )
 
 
-def _console_asset_version() -> int:
-    return max(path.stat().st_mtime_ns for path in _console_asset_paths())
+def _console_asset_version() -> str:
+    digest = hashlib.blake2s(digest_size=10)
+    for path in _console_asset_paths():
+        metadata = path.stat()
+        digest.update(f"{path}\0{metadata.st_mtime_ns}\0{metadata.st_size}\0".encode("utf-8"))
+    return digest.hexdigest()
 
 
 @lru_cache(maxsize=4)
-def _read_console_bundle(asset_paths: tuple[str, ...], asset_version: int, separator: str) -> str:
+def _read_console_bundle(asset_paths: tuple[str, ...], asset_version: str, separator: str) -> str:
     """Read a versioned bundle while keeping source files independently editable."""
     del asset_version
     return (

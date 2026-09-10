@@ -6,9 +6,9 @@
 - Active plan: `PROD-SELFHOST-R1`
 - Target: production-quality self-hosting for one person or a trusted team, not enterprise service
   operation.
-- Progress: **19/36 implementation tasks**; Phase 3 is in progress (1/6).
-- Completed: **P3.1 — Navigation and conditional complexity**.
-- Next: **P3.2 — Shared page states and accessible interaction**. Do not begin it until a
+- Progress: **20/36 implementation tasks**; Phase 3 is in progress (2/6).
+- Completed: **P3.2 — Shared page states and accessible interaction**.
+- Next: **P3.3 — Production dashboard**. Do not begin it until a
   new user request to continue the fixed plan.
 - Supported runtime today: standalone, one worker, one replica.
 - Redis coordination, multi-replica HA, and Helm are experimental and no longer R1 release blockers.
@@ -48,6 +48,15 @@ Do not push unless the user requests it.
   unless the user explicitly requests another.
 
 ## Latest Evidence
+
+- `docs/evidence/p3.2-shared-page-states-accessibility.md`
+- Core asynchronous pages now share persistent error/remediation and stale-data states instead of
+  becoming blank, while existing content survives refresh failures. Toasts are live-region aware,
+  modal focus is contained and restored, tables/pagination expose consistent semantics, and reduced
+  motion suppresses nonessential movement.
+- A manifest-sensitive asset digest prevents immutable browser caches from retaining a bundle that
+  omits newly registered modules. The task gate passed 45 affected tests and a clean authenticated
+  browser session reported no errors or warnings.
 
 - `docs/evidence/p3.1-navigation-conditional-complexity.md`
 - The console now follows the fixed self-hosted information architecture. Request traces, audit and

@@ -18,6 +18,8 @@
                         </div>
                     </header>
 
+                    <div id="dashboardUsageState" data-page-state-host hidden></div>
+
                     <div class="stats-container" id="dashboardStats" data-i18n-aria-label="dashboard_title" aria-label="Dashboard metrics" aria-busy="true">
                         <div class="stat-item">
                             <span class="stat-number" id="totalApiCalls">0</span>
@@ -65,7 +67,7 @@
                                 <h3 data-i18n="slo.route_health">Model-route health</h3>
                                 <div class="usage-table-wrapper">
                                     <table class="usage-table">
-                                        <thead><tr><th data-i18n="slo.route">Route</th><th data-i18n="requests">Requests</th><th data-i18n="slo.error_rate">Error rate</th><th data-i18n="slo.p95">P95 duration</th></tr></thead>
+                                        <thead><tr><th scope="col" data-i18n="slo.route">Route</th><th scope="col" data-i18n="requests">Requests</th><th scope="col" data-i18n="slo.error_rate">Error rate</th><th scope="col" data-i18n="slo.p95">P95 duration</th></tr></thead>
                                         <tbody id="sloRouteRows"><tr><td colspan="4" data-i18n="slo.loading">Loading</td></tr></tbody>
                                     </table>
                                 </div>
@@ -167,41 +169,41 @@
                                 <table class="usage-table">
                                     <thead>
                                         <tr>
-                                            <th data-i18n="credential">Credential</th>
-                                            <th data-i18n="requests">Requests</th>
-                                            <th data-i18n="success">Success</th>
-                                            <th data-i18n="tokens">Tokens</th>
+                                            <th scope="col" data-i18n="credential">Credential</th>
+                                            <th scope="col" data-i18n="requests">Requests</th>
+                                            <th scope="col" data-i18n="success">Success</th>
+                                            <th scope="col" data-i18n="tokens">Tokens</th>
                                         </tr>
                                     </thead>
                                     <tbody id="usageList"></tbody>
                                 </table>
                             </div>
-                            <div class="pagination-container" id="usagePaginationContainer" style="display: none;">
+                            <div class="pagination-container" id="usagePaginationContainer" role="navigation" aria-labelledby="usageBreakdownTitle" style="display: none;">
                                 <button type="button" class="pagination-btn" id="usagePrevPageBtn" data-ui-action="change-usage-page" data-page-delta="-1" data-i18n="previous">Previous</button>
-                                <div class="pagination-info" id="usagePaginationInfo" data-i18n-runtime>Page 1 of 1</div>
+                                <div class="pagination-info" id="usagePaginationInfo" role="status" aria-live="polite" data-i18n-runtime>Page 1 of 1</div>
                                 <button type="button" class="pagination-btn" id="usageNextPageBtn" data-ui-action="change-usage-page" data-page-delta="1" data-i18n="next">Next</button>
                             </div>
                         </section>
 
                         <section class="card span-12" id="historicalUsageSection" hidden>
-                            <h2 class="card-title" data-i18n="dashboard.historical_usage">Historical Credential Usage</h2>
+                            <h2 class="card-title" id="historicalUsageTitle" data-i18n="dashboard.historical_usage">Historical Credential Usage</h2>
                             <p class="card-copy card-title-copy" data-i18n="dashboard.historical_usage_description">Review retained, anonymized traffic from credentials that are no longer available in the pool.</p>
                             <div class="usage-table-wrapper">
                                 <table class="usage-table">
                                     <thead>
                                         <tr>
-                                            <th data-i18n="credential">Credential</th>
-                                            <th data-i18n="requests">Requests</th>
-                                            <th data-i18n="success">Success</th>
-                                            <th data-i18n="tokens">Tokens</th>
+                                            <th scope="col" data-i18n="credential">Credential</th>
+                                            <th scope="col" data-i18n="requests">Requests</th>
+                                            <th scope="col" data-i18n="success">Success</th>
+                                            <th scope="col" data-i18n="tokens">Tokens</th>
                                         </tr>
                                     </thead>
                                     <tbody id="historicalUsageList"></tbody>
                                 </table>
                             </div>
-                            <div class="pagination-container" id="historicalUsagePaginationContainer" style="display: none;">
+                            <div class="pagination-container" id="historicalUsagePaginationContainer" role="navigation" aria-labelledby="historicalUsageTitle" style="display: none;">
                                 <button type="button" class="pagination-btn" id="historicalUsagePrevPageBtn" data-ui-action="change-historical-usage-page" data-page-delta="-1" data-i18n="previous">Previous</button>
-                                <div class="pagination-info" id="historicalUsagePaginationInfo" data-i18n-runtime>Page 1 of 1</div>
+                                <div class="pagination-info" id="historicalUsagePaginationInfo" role="status" aria-live="polite" data-i18n-runtime>Page 1 of 1</div>
                                 <button type="button" class="pagination-btn" id="historicalUsageNextPageBtn" data-ui-action="change-historical-usage-page" data-page-delta="1" data-i18n="next">Next</button>
                             </div>
                         </section>

@@ -9,6 +9,7 @@ async function loadConfig(options = {}) {
         .filter(Boolean);
 
     const preserveContent = options.preserveContent ?? AppState.configLoaded;
+    clearPageState('configState');
 
     try {
 
@@ -31,18 +32,25 @@ async function loadConfig(options = {}) {
             populateConfigForm();
 
             formElements.forEach(element => element.classList.remove('hidden'));
+            clearPageState('configState');
 
             // showStatus(t('configuration_loaded_successfully'), 'success');
 
         } else {
-
-            showStatus(t('failed_to_load_configuration_datade', {data_detail____data_error: data.detail || data.error || t('unknown_error')}), 'error');
-
+            throw new Error(t('failed_to_load_configuration_datade', {data_detail____data_error: data.detail || data.error || t('unknown_error')}));
         }
 
     } catch (error) {
 
-        showStatus(t('status_net_error', {error: error.message}), 'error');
+        const message = error.message || t('status_net_error', {error: t('unknown_error')});
+        showPageState('configState', {
+            kind: preserveContent ? 'stale' : 'error',
+            title: t(preserveContent ? 'warning' : 'error'),
+            message,
+            actionLabel: t('refresh'),
+            onAction: () => loadConfig({preserveContent: AppState.configLoaded})
+        });
+        showStatus(message, 'error');
 
     } finally {
 

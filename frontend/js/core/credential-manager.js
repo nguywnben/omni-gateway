@@ -260,7 +260,11 @@ function createCredsManager(type) {
 
             const list = document.getElementById(this.getElementId('CredsList'));
 
+            const stateHost = this.getElementId('CredsState');
+
             const preserveContent = options.preserveContent ?? this.hasLoaded;
+
+            clearPageState(stateHost);
 
             try {
 
@@ -333,6 +337,8 @@ function createCredsManager(type) {
                 const data = await response.json();
 
                 if (response.ok) {
+
+                    clearPageState(stateHost);
 
                     this.data = {};
 
@@ -423,13 +429,29 @@ function createCredsManager(type) {
 
                 } else {
 
-                    showStatus(t('status_load_failed', {error: data.detail || data.error || t('unknown_error')}), 'error');
+                    throw new Error(data.detail || data.error || t('unknown_error'));
 
                 }
 
             } catch (error) {
 
-                showStatus(t('status_net_error', {error: error.message}), 'error');
+                const message = t('status_load_failed', {error: error.message || t('unknown_error')});
+
+                showPageState(stateHost, {
+
+                    kind: preserveContent ? 'stale' : 'error',
+
+                    title: t(preserveContent ? 'warning' : 'error'),
+
+                    message,
+
+                    actionLabel: t('refresh'),
+
+                    onAction: () => this.refresh({preserveContent: this.hasLoaded})
+
+                });
+
+                showStatus(message, 'error');
 
             } finally {
 

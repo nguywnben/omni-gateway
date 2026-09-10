@@ -112,6 +112,8 @@ async function refreshUsageStats(options = {}) {
 
     const preserveContent = options.preserveContent ?? AppState.usageStatsLoaded;
 
+    clearPageState('dashboardUsageState');
+
     updateUsagePeriodLabels();
 
     try {
@@ -165,6 +167,8 @@ async function refreshUsageStats(options = {}) {
         const aggregatedData = await aggregatedResponse.json();
 
         if (statsResponse.ok && aggregatedResponse.ok) {
+
+            clearPageState('dashboardUsageState');
 
             AppState.usageStatsData = statsData.success ? statsData.data : statsData;
 
@@ -233,13 +237,21 @@ async function refreshUsageStats(options = {}) {
 
             const errorMsg = statsData.detail || aggregatedData.detail || t('failed_to_load_usage_statistics');
 
-            showStatus(t('error_errormsg', {errorMsg: errorMsg}), 'error');
+            throw new Error(errorMsg);
 
         }
 
     } catch (error) {
 
-        showStatus(t('status_net_error', {error: error.message}), 'error');
+        const message = t('status_net_error', {error: error.message});
+        showPageState('dashboardUsageState', {
+            kind: preserveContent ? 'stale' : 'error',
+            title: t(preserveContent ? 'warning' : 'error'),
+            message,
+            actionLabel: t('refresh'),
+            onAction: () => refreshUsageStats({preserveContent: AppState.usageStatsLoaded})
+        });
+        showStatus(message, 'error');
 
     } finally {
 

@@ -1,6 +1,6 @@
 # Omni Gateway Production Self-Hosted R1 — Fixed Checklist
 
-Progress denominator: **19/36** implementation tasks. Planning artifacts do not count as completed
+Progress denominator: **20/36** implementation tasks. Planning artifacts do not count as completed
 implementation. The denominator cannot change without an approved `CR-###` in `tasks/plan.md`.
 
 ## Approval Gate
@@ -35,10 +35,10 @@ implementation. The denominator cannot change without an approved `CR-###` in `t
 - [x] P2.5 Routing, fallback, cooldown, and health
 - [x] P2.6 Compression and quality-policy hardening
 
-## Phase 3 — Coherent Core Console (1/6)
+## Phase 3 — Coherent Core Console (2/6)
 
 - [x] P3.1 Navigation and conditional complexity
-- [ ] P3.2 Shared page states and accessible interaction
+- [x] P3.2 Shared page states and accessible interaction
 - [ ] P3.3 Production dashboard
 - [ ] P3.4 Provider onboarding
 - [ ] P3.5 Credential fleet operations

@@ -134,6 +134,7 @@ async function loadQualityPolicy(options = {}) {
     const loading = document.getElementById('qualityLoading');
     const form = document.getElementById('qualityForm');
     const preserveContent = options.preserveContent ?? AppState.qualityPolicyLoaded;
+    clearPageState('qualityState');
     if (!preserveContent) {
         if (loading) loading.hidden = false;
         form?.classList.add('hidden');
@@ -143,9 +144,18 @@ async function loadQualityPolicy(options = {}) {
         const data = await response.json().catch(() => ({}));
         if (!response.ok) throw new Error(qualityErrorMessage(data, 'quality.error_load'));
         applyQualityPolicyResponse(data);
+        clearPageState('qualityState');
         form?.classList.remove('hidden');
     } catch (error) {
-        showStatus(error.message || t('quality.error_load'), 'error');
+        const message = error.message || t('quality.error_load');
+        showPageState('qualityState', {
+            kind: preserveContent ? 'stale' : 'error',
+            title: t(preserveContent ? 'warning' : 'error'),
+            message,
+            actionLabel: t('refresh'),
+            onAction: () => loadQualityPolicy({preserveContent: AppState.qualityPolicyLoaded})
+        });
+        showStatus(message, 'error');
     } finally {
         if (loading) loading.hidden = true;
     }
