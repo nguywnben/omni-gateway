@@ -6,6 +6,11 @@ All notable user-facing changes are documented in this file. Omni Gateway follow
 
 ### Added
 
+- Added restrictive per-virtual-key and per-request compression controls. Keys can inherit or
+  disable the global policy through an additive revision-checked management endpoint, while
+  authenticated requests can use `x-omni-compression: off`; neither can weaken global policy.
+- Added a versioned adversarial AI Quality corpus, deterministic property matrix, and one successful
+  HTTP request for every advertised public protocol against bounded deterministic upstreams.
 - Added authenticated, bounded routing-health diagnostics with actionable eligibility, capacity,
   cooldown, and recovery reasons while excluding credential filenames and request identifiers.
 - Added a versioned cross-protocol contract and shared golden corpora for OpenAI Chat, OpenAI
@@ -56,6 +61,12 @@ All notable user-facing changes are documented in this file. Omni Gateway follow
 
 ### Changed
 
+- Context compression now estimates deeply nested payloads without recursion, fails open to the
+  original request on estimation or invariant failure, preserves protected structures, and records
+  bounded before/after estimates and reasons. Primary providers resolve compression once and Vertex
+  anonymous now follows the same policy for streaming and non-streaming requests.
+- Quality preview and runtime now agree that compression begins only after the configured threshold
+  is exceeded, and weak-password guidance is localized across all supported console languages.
 - Unified balanced, priority, weighted, least-latency, and lowest-cost selection under the runtime
   smart router; seeded fixtures are reproducible, repeated failures use bounded increasing
   cooldowns, and unused conflicting legacy selectors were removed.

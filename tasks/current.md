@@ -2,13 +2,13 @@
 
 ## Resume Here
 
-- Updated: 2026-09-09 (Asia/Saigon)
+- Updated: 2026-09-10 (Asia/Saigon)
 - Active plan: `PROD-SELFHOST-R1`
 - Target: production-quality self-hosting for one person or a trusted team, not enterprise service
   operation.
-- Progress: **17/36 implementation tasks**; Phase 2 is in progress (5/6).
-- Completed: **P2.5 — Routing, fallback, cooldown, and health**.
-- Next: **P2.6 — Compression and quality-policy hardening**. Do not begin it until a
+- Progress: **18/36 implementation tasks**; Phase 2 is complete (6/6).
+- Completed: **P2.6 — Compression and quality-policy hardening**.
+- Next: **P3.1 — Navigation and conditional complexity**. Do not begin it until a
   new user request to continue the fixed plan.
 - Supported runtime today: standalone, one worker, one replica.
 - Redis coordination, multi-replica HA, and Helm are experimental and no longer R1 release blockers.
@@ -49,6 +49,13 @@ Do not push unless the user requests it.
 
 ## Latest Evidence
 
+- `docs/evidence/p2.6-compression-quality-hardening.md`
+- Compression now fails open to the unchanged request on bounded estimation/copy/invariant failure,
+  preserves system/tool/current-request structures, and applies one policy decision across Primary
+  and Vertex paths. Virtual keys and requests may only inherit or disable the global policy.
+- A fixed adversarial corpus, 96-case deterministic property matrix, safe preset/anti-truncation
+  checks, provider/protocol/stream/routing matrices, and one HTTP success per advertised protocol
+  passed the P2.6 task and Phase 2 gates.
 - `docs/evidence/p2.5-routing-fallback-health.md`
 - All five routing strategies now share the production smart router and a deterministic scenario
   matrix; repeated failures grow bounded cooldowns, success resets route health, and unsupported,

@@ -285,6 +285,22 @@ name; likely misspelled `OMNI_*` variables produce a warning.
 | `LOG_BACKUP_COUNT` | `3` | Number of rotated log files retained. |
 | `LOG_FILE` | `./backend/data/logs/omni-gateway.log` | File log destination. In Docker, persist `/app/backend/data/logs` with a host volume. |
 
+### Compression controls
+
+The global AI Quality policy is authoritative. A virtual key may only inherit it or disable
+compression through `PATCH /api/virtual-keys/{key_id}/quality-policy` with its current revision:
+
+```json
+{"expected_revision": 3, "compression": "disabled"}
+```
+
+Use `"inherit"` to remove that restriction. A single authenticated inference request can also set
+`x-omni-compression: off`; omit the header or use `inherit` for the effective global/key behavior.
+Neither a key nor a request can re-enable globally disabled compression or make compression more
+aggressive. Compression only removes a safe history prefix and fails open to the uncompressed
+payload when token estimation or structural invariants cannot be proven. Token counts are estimates;
+the provider tokenizer remains authoritative.
+
 ## SDK Surfaces
 
 Omni Gateway is designed around the standard URL behavior of the official Python SDKs. Configure each client exactly as shown below; the gateway does not require non-standard duplicated path prefixes.

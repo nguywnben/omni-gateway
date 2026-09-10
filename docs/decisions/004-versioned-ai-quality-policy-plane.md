@@ -2,7 +2,8 @@
 
 ## Status
 
-Accepted for incremental delivery after the 1.x console foundation.
+Implemented for the Production Self-Hosted R1 core in P2.6. Console presentation remains scheduled
+for P4.1 and P4.4.
 
 ## Context
 
@@ -21,7 +22,7 @@ during the 1.x compatibility window.
 Resolve policy in this order:
 
 ```text
-enterprise safety ceiling
+deployment safety ceiling
   -> stored global policy
     -> virtual-key restriction
       -> allowlisted per-request override
@@ -31,10 +32,20 @@ Each layer may make behavior stricter but cannot weaken an earlier safety constr
 unavailable enabled security policy fails closed. Compression itself fails safe by leaving the
 request unchanged when its invariants cannot be proven.
 
+For R1, the lower-layer allowlist is intentionally small: a virtual key and a request may only
+`inherit` compression or disable it. A virtual-key restriction is managed through
+`PATCH /api/virtual-keys/{key_id}/quality-policy`; a caller may set `x-omni-compression: off` for
+one request. Neither surface can enable globally disabled compression or change thresholds. Invalid
+request values return HTTP 400 instead of being ignored.
+
 The first production compression mode remains structural history-prefix pruning. It preserves
 system instructions, tool definitions, recent complete turns, tool-call/result pairs, structured
 payloads, and the original request object. Semantic summarization, filler removal, code thinning,
 and tool-output rewriting require a separate accepted decision backed by an evaluation corpus.
+
+Token estimation is iterative and bounded. Estimation, copy, or post-compression invariant failure
+returns the original payload with a bounded reason (`estimation_failed` or `invariant_failed`). The
+same decision runs once before provider translation for Primary providers and Vertex anonymous.
 
 Every request records the policy version, selected and effective profile, applied/skipped reason,
 estimated input tokens before and after, guardrail result, cache result, and latency. Prompt,

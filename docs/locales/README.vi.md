@@ -267,6 +267,22 @@ Omni Gateway đọc cấu hình ưu tiên từ các biến môi trường trư�
 | `LOG_BACKUP_COUNT` | `3` | Số lượng file log xoay vòng được giữ lại. |
 | `LOG_FILE` | `./backend/data/logs/omni-gateway.log` | Đường dẫn file lưu trữ log. Trong Docker, lưu giữ bền vững `/app/backend/data/logs` bằng volume máy chủ. |
 
+### Điều khiển nén ngữ cảnh
+
+Policy AI Quality toàn cục luôn có quyền ưu tiên cao nhất. Mỗi khóa ảo chỉ có thể kế thừa policy đó
+hoặc tắt nén qua `PATCH /api/virtual-keys/{key_id}/quality-policy` với revision hiện tại:
+
+```json
+{"expected_revision": 3, "compression": "disabled"}
+```
+
+Dùng `"inherit"` để bỏ giới hạn riêng của khóa. Một request suy luận đã xác thực cũng có thể gửi
+`x-omni-compression: off`; bỏ header hoặc dùng `inherit` để áp dụng kết quả global/key. Khóa và
+request không thể bật lại tính năng đã bị tắt toàn cục hoặc làm cơ chế nén mạnh tay hơn. Cơ chế này
+chỉ loại bỏ tiền tố lịch sử tại ranh giới an toàn và giữ nguyên payload chưa nén nếu không thể xác
+nhận kết quả ước tính token hoặc các bất biến cấu trúc. Số token chỉ là ước tính; tokenizer của
+provider mới là căn cứ cuối cùng.
+
 ## <a id="khoi-dong-nhanh-tich-hop-sdk"></a>Giao diện SDK
 
 Omni Gateway được thiết kế dựa trên hành vi chuẩn về URL của các SDK Python chính thức. Hãy cấu hình từng client chính xác như hướng dẫn dưới đây; gateway không yêu cầu các tiền tố đường dẫn lặp lại phi tiêu chuẩn.
