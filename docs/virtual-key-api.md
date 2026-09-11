@@ -67,13 +67,19 @@ Every key declares one of these policies:
 | Policy | Contract |
 | --- | --- |
 | `deny` | With a hard budget, fail closed when any eligible model has no enforceable price; default for new and migrated keys |
-| `warn` | Permit an unpriced hard-budget request with explicit bounded telemetry |
+| `warn` | With a hard budget, emit bounded warning telemetry and fail closed when any eligible model is unpriced |
 | `fallback` | Reserve unknown models at the positive configured price per one million estimated tokens |
 
 Fallback prices are valid only with `fallback`, must be positive, and cannot exceed 100,000 USD per
 one million tokens. A key without a daily or monthly hard budget does not invent a monetary cost
 for unknown models. The durable ledger stores the fallback cost used by a budgeted request so a
 restart cannot erase that spend.
+
+The bundled table is a reviewed snapshot, not a live provider-price feed. Its review date and the
+presence/UTC modification time of `model_pricing.json` are exposed as the `pricing` object in
+`GET /api/usage/aggregated`; local file paths are never returned. The current bundled snapshot was
+reviewed on 2026-08-21. Operators should compare it with provider billing before relying on cost
+reports or hard budgets, and use the hot-reloaded override file for later prices.
 
 ## Reservation and settlement semantics
 

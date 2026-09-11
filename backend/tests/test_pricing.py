@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import sys
 import unittest
+from datetime import date, datetime, timezone
 from pathlib import Path
 from unittest.mock import patch
 
@@ -22,6 +23,20 @@ from support import workspace_temp_directory
 
 
 class ModelPricingLookupTests(unittest.TestCase):
+    def test_pricing_status_exposes_snapshot_freshness_without_local_path(self):
+        with workspace_temp_directory() as temp_dir:
+            overrides_path = Path(temp_dir) / pricing.PRICING_OVERRIDES_FILENAME
+            overrides_path.write_text("{}", encoding="utf-8")
+            with patch.object(pricing, "_pricing_overrides_path", return_value=overrides_path):
+                status = pricing.get_pricing_table_status()
+
+        reviewed_at = date.fromisoformat(status["built_in_reviewed_at"])
+        override_updated_at = datetime.fromisoformat(status["override_updated_at"])
+        self.assertLessEqual(reviewed_at, date.today())
+        self.assertEqual(override_updated_at.tzinfo, timezone.utc)
+        self.assertTrue(status["override_file_present"])
+        self.assertNotIn(str(overrides_path), repr(status))
+
     def test_exact_match_returns_pricing(self):
         entry = pricing.find_model_pricing("gemini-2.5-pro")
         self.assertIsNotNone(entry)
@@ -115,6 +130,16 @@ class PricingOverridesTests(unittest.TestCase):
                 entry = table.lookup("gpt-4o")
             # Falls back to the built-in table.
             self.assertEqual(entry.input_per_million, 2.50)
+
+    def test_non_finite_or_negative_override_prices_are_ignored(self):
+        for entry in (
+            {"input": -1, "output": 2},
+            {"input": "NaN", "output": 2},
+            {"input": 1, "output": "Infinity"},
+            {"input": 1, "output": 2, "cache_read": -0.5},
+        ):
+            with self.subTest(entry=entry):
+                self.assertIsNone(pricing._parse_override_entry(entry))
 
 
 class CostLedgerIntegrationTests(unittest.IsolatedAsyncioTestCase):

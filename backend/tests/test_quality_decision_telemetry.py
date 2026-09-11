@@ -90,6 +90,32 @@ class QualityDecisionTelemetryTests(unittest.TestCase):
 
 
 class QualityDecisionTraceWiringTests(unittest.IsolatedAsyncioTestCase):
+    async def test_disabled_langfuse_export_never_constructs_exporter(self):
+        with (
+            patch(
+                "config.get_telemetry_config",
+                new=AsyncMock(
+                    return_value={
+                        "enabled": False,
+                        "langfuse_public_key": "",
+                        "langfuse_secret_key": "",
+                        "langfuse_host": "https://cloud.langfuse.com",
+                    }
+                ),
+            ),
+            patch("core.telemetry_exporter.TelemetryExporter") as exporter,
+        ):
+            _schedule_trace_export(
+                model_name="model-a",
+                provider="google_ai_studio",
+                token_usage={"input_tokens": 10, "output_tokens": 5},
+                latency_ms=80,
+            )
+            await asyncio.sleep(0)
+            await asyncio.sleep(0)
+
+        exporter.assert_not_called()
+
     async def test_scheduled_export_uses_prompt_free_quality_metadata(self):
         export = AsyncMock(return_value=True)
         exporter = Mock(export_trace_to_langfuse=export)

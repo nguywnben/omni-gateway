@@ -1,4 +1,5 @@
 from core.i18n import LocalizedJSONResponse as JSONResponse
+from core.pricing import get_pricing_table_status
 from core.usage_stats import (
     UNASSIGNED_USAGE_FILENAME,
     get_credential_counts,
@@ -126,6 +127,7 @@ async def get_aggregated_stats(period: str = Query("1d"), token: str = Depends(v
                 "compressed_messages_24h": compressed_messages,
                 "avg_tokens_per_successful_request": avg_tokens,
                 "total_cost_usd": total_cost_usd,
+                "pricing": get_pricing_table_status(),
                 "timeline": await get_time_series_stats(normalized_period, points=24),
             },
         }

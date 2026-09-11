@@ -180,6 +180,19 @@ class TelemetryPolicyTests(unittest.TestCase):
         self.assertFalse(policy.prometheus_enabled)
         self.assertFalse(policy.otel_enabled)
 
+    def test_disabled_otel_exporter_never_constructs_network_client(self):
+        from core import otel_exporter
+        from core.telemetry_policy import get_telemetry_policy
+
+        with (
+            patch.dict("os.environ", {}, clear=True),
+            patch.object(otel_exporter.httpx, "AsyncClient") as client,
+        ):
+            result = _run(otel_exporter.export_operational_metrics(get_telemetry_policy()))
+
+        self.assertFalse(result)
+        client.assert_not_called()
+
     def test_prometheus_requires_a_strong_token_when_enabled(self):
         from core.telemetry_policy import TelemetryConfigurationError, get_telemetry_policy
 

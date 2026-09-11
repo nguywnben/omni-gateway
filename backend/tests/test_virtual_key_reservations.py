@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import asyncio
-import re
 import sys
 import time
 import unittest
@@ -184,24 +183,21 @@ class VirtualKeyReservationTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(raised.exception.status_code, 429)
         self.assertIn("pricing", raised.exception.detail.lower())
 
-    async def test_warn_unknown_pricing_allows_bounded_reservation(self):
+    async def test_warn_unknown_pricing_warns_and_fails_closed_for_hard_budget(self):
         record = self._key(budget_daily_usd=1.0, unknown_pricing_policy="warn")
-        reservation_id = await self.manager.enforce(
-            record,
-            requested_model="unpriced-enterprise-model",
-            candidate_models=["unpriced-enterprise-model"],
-            request_body=self._body(model="unpriced-enterprise-model"),
-            reservation_id="unpriced-warning",
-            now=1000.0,
-        )
+        with self.assertRaises(HTTPException) as raised:
+            await self.manager.enforce(
+                record,
+                requested_model="unpriced-enterprise-model",
+                candidate_models=["unpriced-enterprise-model"],
+                request_body=self._body(model="unpriced-enterprise-model"),
+                reservation_id="unpriced-warning",
+                now=1000.0,
+            )
 
-        self.assertRegex(reservation_id, re.compile(r"qrs_[0-9a-f]{32}"))
-        durable_request = self.ledger.reserve_budget.await_args.args[0]
-        self.assertEqual(durable_request.reservation_id, reservation_id)
-        state_request = self.manager._state_store._quota_records[reservation_id].request
-        self.assertIsNone(state_request.daily_budget_usd)
-        self.assertIsNone(state_request.monthly_budget_usd)
-        self.assertEqual(state_request.estimated_cost_usd, 0.0)
+        self.assertEqual(raised.exception.status_code, 429)
+        self.assertIn("pricing", raised.exception.detail.lower())
+        self.ledger.reserve_budget.assert_not_awaited()
 
     async def test_rate_coordination_never_receives_cost_authority(self):
         record = self._key(rpm_limit=100)

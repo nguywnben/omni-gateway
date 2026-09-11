@@ -1094,19 +1094,20 @@ class VirtualKeyManager:
             )
 
         if unknown_models and self._has_hard_budget(record):
-            if record.unknown_pricing_policy == "deny":
-                _increment_quota_metric("pricing_denied")
+            if record.unknown_pricing_policy in {"deny", "warn"}:
+                if record.unknown_pricing_policy == "warn":
+                    _increment_quota_metric("pricing_warned")
+                    log.warning(
+                        "[virtual-keys] denying an unpriced hard-budget request under warn policy"
+                    )
+                else:
+                    _increment_quota_metric("pricing_denied")
                 raise HTTPException(
                     status_code=status.HTTP_429_TOO_MANY_REQUESTS,
                     detail=(
                         "Budget enforcement denied this request because pricing is unavailable "
                         "for one or more candidate models."
                     ),
-                )
-            if record.unknown_pricing_policy == "warn":
-                _increment_quota_metric("pricing_warned")
-                log.warning(
-                    "[virtual-keys] allowing an unpriced budget reservation under warn policy"
                 )
             if record.unknown_pricing_policy == "fallback":
                 _increment_quota_metric("pricing_fallback")

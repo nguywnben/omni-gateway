@@ -19,9 +19,11 @@ and Langfuse's provided-vs-computed cost model):
 from __future__ import annotations
 
 import json
+import math
 import os
 import threading
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, Optional
 
@@ -29,6 +31,7 @@ from log import log
 from paths import DEFAULT_CREDENTIALS_DIR
 
 PRICING_OVERRIDES_FILENAME = "model_pricing.json"
+BUILTIN_PRICING_REVIEWED_AT = "2026-08-21"
 
 # Providers whose inference is local/self-hosted and therefore free.
 ZERO_COST_PROVIDERS = frozenset({"ollama"})
@@ -156,7 +159,7 @@ def _parse_override_entry(entry: Any) -> Optional[ModelPricing]:
     if not isinstance(entry, dict):
         return None
     try:
-        return ModelPricing(
+        parsed = ModelPricing(
             input_per_million=float(entry.get("input", 0.0)),
             output_per_million=float(entry.get("output", 0.0)),
             cache_read_per_million=(
@@ -166,6 +169,15 @@ def _parse_override_entry(entry: Any) -> Optional[ModelPricing]:
                 float(entry["reasoning"]) if entry.get("reasoning") is not None else None
             ),
         )
+        prices = (
+            parsed.input_per_million,
+            parsed.output_per_million,
+            parsed.cache_read_per_million,
+            parsed.reasoning_per_million,
+        )
+        if any(value is not None and (not math.isfinite(value) or value < 0) for value in prices):
+            return None
+        return parsed
     except (TypeError, ValueError):
         return None
 
@@ -186,6 +198,24 @@ _pricing_table = _PricingTable()
 def find_model_pricing(model: str) -> Optional[ModelPricing]:
     """Return the pricing entry for ``model`` or ``None`` when unpriced."""
     return _pricing_table.lookup(model)
+
+
+def get_pricing_table_status() -> Dict[str, Any]:
+    """Return path-free freshness metadata for operator-facing status APIs."""
+    path = _pricing_overrides_path()
+    try:
+        modified_at = path.stat().st_mtime if path.exists() else None
+    except OSError:
+        modified_at = None
+    return {
+        "built_in_reviewed_at": BUILTIN_PRICING_REVIEWED_AT,
+        "override_file_present": modified_at is not None,
+        "override_updated_at": (
+            datetime.fromtimestamp(modified_at, tz=timezone.utc).isoformat()
+            if modified_at is not None
+            else None
+        ),
+    }
 
 
 def calculate_cost_usd(
