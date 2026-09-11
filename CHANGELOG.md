@@ -6,6 +6,8 @@ All notable user-facing changes are documented in this file. Omni Gateway follow
 
 ### Added
 
+- Added a canonical storage support/recovery contract that distinguishes SQLite Core, PostgreSQL
+  Advanced, and MongoDB Compatibility operation, including explicit outage and migration limits.
 - Added schema-derived Settings state, validated About build/support facts, permanent update and
   recovery entry points, optional Team-access guidance, and complete English/Vietnamese product
   copy with compatibility-locale fallbacks.
@@ -68,6 +70,9 @@ All notable user-facing changes are documented in this file. Omni Gateway follow
   cursors, v1 disposal checks, and authoritative readiness confirmation.
 
 ### Changed
+
+- Standardized every application SQLite connection on foreign-key enforcement and a bounded
+  five-second writer wait while keeping the production topology at one worker and one replica.
 
 - System configuration responses now redact every reusable schema secret and report only configured
   state; blank secret fields preserve stored values, environment-owned controls are not submitted,
@@ -132,6 +137,8 @@ All notable user-facing changes are documented in this file. Omni Gateway follow
 
 ### Fixed
 
+- Rejected corrupt SQLite state before startup writes and made additive startup migration atomic so
+  a later initialization failure cannot leave a partially upgraded database.
 - Preserved upgrades from populated pre-R1 SQLite credential stores by adding timestamp columns in
   an SQLite-compatible additive step, backfilling existing rows, and timestamping new writes
   explicitly. A versioned compatibility guard now detects accidental SDK, console, config, or

@@ -6,12 +6,13 @@
 - Active plan: `PROD-SELFHOST-R1`
 - Target: production-quality self-hosting for one person or a trusted team, not enterprise service
   operation.
-- Progress: **30/36 implementation tasks**; Phase 4 is complete (6/6).
-- Completed: **P4.6 — Settings, Team access, About, and localization**.
-- Gate caveat: the P4.6 candidate passes all five compatibility tests with the committed model
-  request schema loaded in memory. The unrelated unstaged change in `backend/core/models.py`
-  remains outside this task and is the sole raw dirty-workspace compatibility difference.
-- Next: **P5.1 — Storage tiers and migrations**. Do not begin it until a new user request to
+- Progress: **31/36 implementation tasks**; Phase 5 is in progress (1/6).
+- Completed: **P5.1 — Storage tiers and migrations**.
+- SQLite now fails before migration on corrupt state, rolls back an interrupted additive startup
+  migration atomically, and applies one foreign-key/five-second lock policy across storage paths.
+  PostgreSQL passed 12 live contract cases against version 17; MongoDB remains Compatibility and
+  passed its required driver-boundary smoke without becoming an R1 live dependency.
+- Next: **P5.2 — Authentication and security closure**. Do not begin it until a new user request to
   continue the fixed plan.
 - Supported runtime today: standalone, one worker, one replica.
 - Redis coordination, multi-replica HA, and Helm are experimental and no longer R1 release blockers.
@@ -52,6 +53,13 @@ Do not push unless the user requests it.
 
 ## Latest Evidence
 
+- `docs/evidence/p5.1-storage-tiers-migrations.md`
+- SQLite is the documented Core authority, PostgreSQL is Advanced, and MongoDB is Compatibility.
+  R1 exposes no production cross-backend migration command and experimental durable/HA parity does
+  not block the release.
+- The affected gate passed 157 tests with two optional live skips; 31 MongoDB compatibility/tier
+  tests passed, while all 12 PostgreSQL live cases plus three SQLite migration cases passed against
+  a disposable PostgreSQL 17 instance.
 - `docs/evidence/p4.6-settings-team-about-localization.md`
 - Settings now maps all 20 controls to authoritative typed metadata, never returns the reusable
   Code Assist secret, preserves blank secrets and environment locks, and explains live/restart

@@ -14,6 +14,7 @@ from pathlib import Path
 
 import aiosqlite
 from core.quality_decision import normalize_quality_decision
+from core.storage.sqlite_runtime import open_sqlite
 from core.usage_ledger import (
     DAILY_WINDOW_SECONDS,
     MAX_COST_NANOS,
@@ -963,13 +964,9 @@ class SQLiteUsageLedgerRepository:
     @asynccontextmanager
     async def _connection(self, *, allow_initializing: bool = False):
         self._ensure_initialized(allow_initializing=allow_initializing)
-        connection = await aiosqlite.connect(self._database_path, isolation_level=None)
-        connection.row_factory = aiosqlite.Row
-        await connection.execute("PRAGMA busy_timeout=5000")
-        try:
+        async with open_sqlite(self._database_path, isolation_level=None) as connection:
+            connection.row_factory = aiosqlite.Row
             yield connection
-        finally:
-            await connection.close()
 
     def _ensure_initialized(self, *, allow_initializing: bool = False) -> None:
         if not self._initialized and not allow_initializing:

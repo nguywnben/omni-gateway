@@ -130,7 +130,7 @@ without double counting, and a budget-ledger outage fails closed. The same state
 cover primary and Vertex surfaces; Redis implementations deliberately reject quota coordination
 until the separate HA activation phase is approved.
 
-`WORKERS=1` and one application replica are the supported process model for the 1.x series. MongoDB and PostgreSQL can replace local SQLite storage, but shared storage alone does not coordinate reservations, cooldowns, sessions, or usage aggregation across workers. The service rejects `WORKERS` values other than `1` instead of presenting an unsafe scale-out configuration as supported.
+`WORKERS=1` and one application replica are the supported process model for the 1.x series. SQLite is the Core authority, PostgreSQL is an Advanced option, and MongoDB is retained for Compatibility. Shared storage alone does not coordinate reservations, cooldowns, sessions, or usage aggregation across workers. The service rejects `WORKERS` values other than `1` instead of presenting an unsafe scale-out configuration as supported.
 
 The accepted [Phase 6 specification](specs/enterprise-identity-and-ha.md),
 [ADR-007](decisions/007-explicit-rbac-and-oidc-identity.md), and

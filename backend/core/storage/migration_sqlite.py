@@ -17,6 +17,7 @@ from core.storage.migration_checkpoint_codec import (
     require_checkpoint,
     require_plan_id,
 )
+from core.storage.sqlite_runtime import open_sqlite
 
 
 class SQLiteMigrationCheckpointRepository:
@@ -31,7 +32,7 @@ class SQLiteMigrationCheckpointRepository:
         async with self._initialize_lock:
             self._initialized = False
             try:
-                async with aiosqlite.connect(self._database_path) as db:
+                async with open_sqlite(self._database_path) as db:
                     await db.execute("PRAGMA journal_mode=WAL")
                     await db.execute("BEGIN IMMEDIATE")
                     try:
@@ -62,7 +63,7 @@ class SQLiteMigrationCheckpointRepository:
             raise ValueError("A new migration checkpoint must start at revision one.")
         encoded = encode_checkpoint(checkpoint)
         try:
-            async with aiosqlite.connect(self._database_path) as db:
+            async with open_sqlite(self._database_path) as db:
                 await db.execute("BEGIN IMMEDIATE")
                 try:
                     await db.execute(
@@ -84,7 +85,7 @@ class SQLiteMigrationCheckpointRepository:
         self._ensure_initialized()
         require_plan_id(plan_id)
         try:
-            async with aiosqlite.connect(self._database_path) as db:
+            async with open_sqlite(self._database_path) as db:
                 async with db.execute(
                     """
                     SELECT revision, record_json
@@ -114,7 +115,7 @@ class SQLiteMigrationCheckpointRepository:
             raise ValueError("Migration checkpoint revision must advance by one.")
         encoded = encode_checkpoint(checkpoint)
         try:
-            async with aiosqlite.connect(self._database_path) as db:
+            async with open_sqlite(self._database_path) as db:
                 await db.execute("BEGIN IMMEDIATE")
                 try:
                     cursor = await db.execute(

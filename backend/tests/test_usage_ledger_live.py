@@ -123,7 +123,7 @@ class UsageLedgerLiveParityMixin:
         first_reservation = _reservation("d", daily_budget_nanos=usd_to_nanos("2.00"))
         second_reservation = _reservation("f", daily_budget_nanos=usd_to_nanos("2.00"))
         self.assertTrue((await self.repository.reserve_budget(first_reservation)).accepted)
-        await self.repository.append_entry(_usage("e"))
+        await self.repository.append_usage(_usage("e"))
         self.assertTrue((await self.repository.reserve_budget(second_reservation)).accepted)
 
         first = await self.repository.reconciliation_page(after=None, limit=1)

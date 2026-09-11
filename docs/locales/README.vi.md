@@ -228,8 +228,8 @@ Omni Gateway đọc cấu hình ưu tiên từ các biến môi trường trư�
 | `TOKEN_COMPRESSION_MIN_RECENT_TURNS` | `4` | Số lượt trò chuyện gần nhất của người dùng tối thiểu được giữ lại khi nén. |
 | `COMPATIBILITY_MODE` | `false` | Chuyển đổi system message cho các client/mô hình không hỗ trợ chúng. |
 | `RETURN_THOUGHTS_TO_FRONTEND` | `true` | Trả về trường suy nghĩ/lập luận của mô hình (reasoning) khi có sẵn. |
-| `MONGODB_URI` | trống | Bật lưu trữ MongoDB khi được thiết lập. |
-| `POSTGRESQL_URI` | trống | Bật lưu trữ PostgreSQL khi được thiết lập. |
+| `MONGODB_URI` | trống | Chọn đường lưu trữ MongoDB chỉ thuộc tier Compatibility. |
+| `POSTGRESQL_URI` | trống | Chọn lưu trữ PostgreSQL tùy chọn thuộc tier Advanced. |
 | `REDIS_URL` | trống | Phụ thuộc điều phối thử nghiệm. Biến này không bật chế độ nhiều replica; profile production R1 vẫn chặn chế độ coordinated. |
 | `CODE_ASSIST_CLIENT_ID` | tích hợp sẵn | Ghi đè tùy chọn cho Client ID OAuth của Code Assist. |
 | `CODE_ASSIST_CLIENT_SECRET` | tích hợp sẵn | Ghi đè tùy chọn cho Client Secret OAuth của Code Assist. |
@@ -452,7 +452,9 @@ lưu toàn bộ `/app/backend/data` trong volume có tên `omni-gateway-data`. K
 `docker run`, hãy gắn `/app/backend/data/creds` và `/app/backend/data/logs` vào các đường dẫn bền
 vững trên máy chủ như `/opt/omni-gateway/creds` và `/opt/omni-gateway/logs`.
 
-MongoDB hoặc PostgreSQL có thể thay thế SQLite cục bộ theo nhu cầu vận hành hoặc kiểm thử di chuyển dữ liệu:
+SQLite là nguồn lưu trữ Core và là lựa chọn production được khuyến nghị. PostgreSQL là tùy chọn
+Advanced dành cho người vận hành tự quản lý vòng đời cơ sở dữ liệu. MongoDB chỉ được giữ ở tier
+Compatibility cho các bản triển khai hiện có; R1 không tiếp tục mở rộng tính năng ngang hàng:
 
 ```bash
 MONGODB_URI=mongodb://localhost:27017
@@ -472,6 +474,9 @@ REDIS_URL=redis://127.0.0.1:6379/0
 Bộ lưu trữ bên ngoài hoặc Redis không làm cho runtime R1 có thể mở rộng theo chiều ngang. Môi trường
 production phải chạy một worker và một replica. Chỉ cấu hình một trong hai: MongoDB hoặc PostgreSQL;
 lỗi khởi tạo cơ sở dữ liệu bên ngoài sẽ dừng quá trình khởi động thay vì âm thầm quay về SQLite.
+Quy trình backup/restore mã hóa di động chỉ hỗ trợ SQLite và R1 không cung cấp lệnh chuyển đổi trực
+tiếp giữa các backend đang chạy. Hãy đọc [hỗ trợ lưu trữ và khôi phục](../storage.md) trước khi chọn
+cơ sở dữ liệu bên ngoài.
 
 Khả năng nhập thông tin xác thực từ môi trường có sẵn từ bảng điều khiển. Đặt một trong các biến sau thành chuỗi JSON thô hoặc sử dụng biến thể `_B64` tương ứng cho chuỗi JSON mã hóa base64:
 

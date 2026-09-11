@@ -1,6 +1,6 @@
 # Omni Gateway Production Self-Hosted R1 — Fixed Checklist
 
-Progress denominator: **30/36** implementation tasks. Planning artifacts do not count as completed
+Progress denominator: **31/36** implementation tasks. Planning artifacts do not count as completed
 implementation. The denominator cannot change without an approved `CR-###` in `tasks/plan.md`.
 
 ## Approval Gate
@@ -57,9 +57,9 @@ including that edit in a release candidate.
 - [x] P4.5 Unified Activity
 - [x] P4.6 Settings, Team access, About, and localization
 
-## Phase 5 — Operational Hardening and Release (0/6)
+## Phase 5 — Operational Hardening and Release (1/6)
 
-- [ ] P5.1 Storage tiers and migrations
+- [x] P5.1 Storage tiers and migrations
 - [ ] P5.2 Authentication and security closure
 - [ ] P5.3 Usage, cost, and observability closure
 - [ ] P5.4 Browser test harness and CI balance

@@ -32,6 +32,7 @@ from core.identity.repository import (
     oidc_policy_revision_from_record,
     role_binding_from_record,
 )
+from core.storage.sqlite_runtime import open_sqlite
 
 _IDENTITY_COLUMNS = (
     "schema_version",
@@ -75,10 +76,9 @@ class SQLiteIdentityRepository:
         async with self._initialize_lock:
             self._initialized = False
             try:
-                async with aiosqlite.connect(self._database_path) as db:
+                async with open_sqlite(self._database_path) as db:
                     db.row_factory = aiosqlite.Row
                     await db.execute("PRAGMA journal_mode=WAL")
-                    await db.execute("PRAGMA foreign_keys=ON")
                     await db.execute("BEGIN IMMEDIATE")
                     try:
                         await self._create_schema(db)
@@ -229,19 +229,18 @@ class SQLiteIdentityRepository:
     @staticmethod
     async def _prepare_connection(db: aiosqlite.Connection) -> None:
         db.row_factory = aiosqlite.Row
-        await db.execute("PRAGMA foreign_keys=ON")
 
     async def get_identity(self, identity_id: str) -> ManagedIdentity | None:
         self._ensure_initialized()
         self._validate_lookup_id(identity_id)
-        async with aiosqlite.connect(self._database_path) as db:
+        async with open_sqlite(self._database_path) as db:
             await self._prepare_connection(db)
             return await self._get_identity(db, identity_id)
 
     async def get_identity_by_oidc(self, *, issuer: str, subject: str) -> ManagedIdentity | None:
         self._ensure_initialized()
         self._validate_oidc_pair(issuer, subject)
-        async with aiosqlite.connect(self._database_path) as db:
+        async with open_sqlite(self._database_path) as db:
             await self._prepare_connection(db)
             async with db.execute(
                 f"SELECT {self._joined_columns()} FROM management_identities AS i "
@@ -268,7 +267,7 @@ class SQLiteIdentityRepository:
                 "(i.created_at = ? COLLATE BINARY AND i.identity_id > ? COLLATE BINARY)) "
             )
             parameters = (after.created_at, after.created_at, after.identity_id, limit)
-        async with aiosqlite.connect(self._database_path) as db:
+        async with open_sqlite(self._database_path) as db:
             await self._prepare_connection(db)
             async with db.execute(
                 f"SELECT {self._joined_columns()} FROM management_identities AS i "
@@ -303,7 +302,7 @@ class SQLiteIdentityRepository:
             now=now,
         )
         try:
-            async with aiosqlite.connect(self._database_path) as db:
+            async with open_sqlite(self._database_path) as db:
                 await self._prepare_connection(db)
                 await db.execute("BEGIN IMMEDIATE")
                 try:
@@ -327,7 +326,7 @@ class SQLiteIdentityRepository:
             raise ValueError("Identity enabled state is invalid.")
         if identity_id == LOCAL_OWNER_ID and not enabled:
             raise IdentityOwnerInvariant("The local owner must remain enabled.")
-        async with aiosqlite.connect(self._database_path) as db:
+        async with open_sqlite(self._database_path) as db:
             await self._prepare_connection(db)
             await db.execute("BEGIN IMMEDIATE")
             try:
@@ -366,7 +365,7 @@ class SQLiteIdentityRepository:
             raise ValueError("Role binding is invalid.")
         if identity_id == LOCAL_OWNER_ID:
             raise IdentityOwnerInvariant("The local-owner role binding is immutable.")
-        async with aiosqlite.connect(self._database_path) as db:
+        async with open_sqlite(self._database_path) as db:
             await self._prepare_connection(db)
             await db.execute("BEGIN IMMEDIATE")
             try:
@@ -407,7 +406,7 @@ class SQLiteIdentityRepository:
 
     async def get_oidc_policy_revision(self) -> OidcPolicyRevisionRecord:
         self._ensure_initialized()
-        async with aiosqlite.connect(self._database_path) as db:
+        async with open_sqlite(self._database_path) as db:
             await self._prepare_connection(db)
             return await self._policy_from_db(db)
 
@@ -416,7 +415,7 @@ class SQLiteIdentityRepository:
     ) -> OidcPolicyRevisionRecord:
         self._ensure_initialized()
         self._validate_revision(expected_revision)
-        async with aiosqlite.connect(self._database_path) as db:
+        async with open_sqlite(self._database_path) as db:
             await self._prepare_connection(db)
             await db.execute("BEGIN IMMEDIATE")
             try:
@@ -441,7 +440,7 @@ class SQLiteIdentityRepository:
 
     async def get_migration(self) -> IdentityMigrationRecord:
         self._ensure_initialized()
-        async with aiosqlite.connect(self._database_path) as db:
+        async with open_sqlite(self._database_path) as db:
             await self._prepare_connection(db)
             return await self._migration_from_db(db)
 

@@ -25,6 +25,7 @@ from core.durable_migration_runner import (
     MigrationError,
     MigrationRecordPage,
 )
+from core.storage.sqlite_runtime import open_sqlite
 
 _CREDENTIAL_COLUMNS = (
     "filename",
@@ -254,7 +255,7 @@ class SQLiteDurableFamilyAdapter:
             f"ORDER BY {order} LIMIT ? OFFSET ?"
         )
         try:
-            async with aiosqlite.connect(self._database_path) as db:
+            async with open_sqlite(self._database_path) as db:
                 db.row_factory = aiosqlite.Row
                 rows = await (await db.execute(query, (limit + 1, offset))).fetchall()
         except Exception as exc:
@@ -276,7 +277,7 @@ class SQLiteDurableFamilyAdapter:
         key_where = " AND ".join(f"{column} = ?" for column in spec.key_columns)
         keys = tuple(payload[column] for column in spec.key_columns)
         try:
-            async with aiosqlite.connect(self._database_path) as db:
+            async with open_sqlite(self._database_path) as db:
                 db.row_factory = aiosqlite.Row
                 await db.execute("BEGIN IMMEDIATE")
                 await db.execute(

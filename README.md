@@ -246,8 +246,8 @@ name; likely misspelled `OMNI_*` variables produce a warning.
 | `TOKEN_COMPRESSION_MIN_RECENT_TURNS` | `4` | Minimum number of recent user turns retained during compression. |
 | `COMPATIBILITY_MODE` | `false` | Converts system messages for clients/models that reject them. |
 | `RETURN_THOUGHTS_TO_FRONTEND` | `true` | Include model reasoning fields when available. |
-| `MONGODB_URI` | empty | Enables MongoDB storage when set. |
-| `POSTGRESQL_URI` | empty | Enables PostgreSQL storage when set. |
+| `MONGODB_URI` | empty | Selects the compatibility-only MongoDB storage path. |
+| `POSTGRESQL_URI` | empty | Selects optional Advanced PostgreSQL storage. |
 | `REDIS_URL` | empty | Experimental coordination dependency. It does not enable multi-replica operation; the R1 production profile leaves coordinated mode blocked. |
 | `CODE_ASSIST_CLIENT_ID` | bundled desktop client | Optional override for the Code Assist OAuth client ID. |
 | `CODE_ASSIST_CLIENT_SECRET` | bundled desktop client | Optional override for the Code Assist OAuth client secret. |
@@ -469,7 +469,9 @@ Compose persists all of `/app/backend/data` in the `omni-gateway-data` named vol
 `docker run` deployments must mount `/app/backend/data/creds` and `/app/backend/data/logs` to
 durable host paths such as `/opt/omni-gateway/creds` and `/opt/omni-gateway/logs`.
 
-MongoDB or PostgreSQL can replace local SQLite for operational preference or migration testing:
+SQLite is the Core storage authority and the recommended production default. PostgreSQL is an
+Advanced option for operators who manage their own database lifecycle. MongoDB is retained as a
+Compatibility path for existing deployments; R1 does not expand its feature parity:
 
 ```bash
 MONGODB_URI=mongodb://localhost:27017
@@ -489,6 +491,9 @@ REDIS_URL=redis://127.0.0.1:6379/0
 External storage or Redis does not make the R1 runtime horizontally scalable. Production deployments
 must run one worker and one replica. Configure either MongoDB or PostgreSQL, not both; an explicit
 external-database initialization failure stops startup rather than silently falling back to SQLite.
+Portable encrypted backup/restore supports SQLite only, and R1 does not provide a supported live
+cross-backend migration command. See [Storage support and recovery](docs/storage.md) before selecting
+an external backend.
 
 Environment credential import is available from the control panel. Set one of the following variables to raw JSON or use the matching `_B64` variant for base64-encoded JSON:
 

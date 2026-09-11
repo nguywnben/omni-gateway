@@ -19,6 +19,7 @@ from core.request_trace import (
     encode_request_trace_cursor,
     request_trace_from_record,
 )
+from core.storage.sqlite_runtime import open_sqlite
 
 _COLUMNS = (
     "schema_version",
@@ -50,7 +51,7 @@ class SQLiteRequestTraceRepository:
 
     async def initialize(self) -> None:
         async with self._initialize_lock:
-            async with aiosqlite.connect(self._database_path) as db:
+            async with open_sqlite(self._database_path) as db:
                 await db.execute("PRAGMA journal_mode=WAL")
                 await db.execute("""
                     CREATE TABLE IF NOT EXISTS request_traces (
@@ -109,7 +110,7 @@ class SQLiteRequestTraceRepository:
             for column in _COLUMNS
         ]
         try:
-            async with aiosqlite.connect(self._database_path) as db:
+            async with open_sqlite(self._database_path) as db:
                 await db.execute(
                     f"INSERT INTO request_traces ({', '.join(_COLUMNS)}) "
                     f"VALUES ({', '.join('?' for _ in _COLUMNS)})",
@@ -150,7 +151,7 @@ class SQLiteRequestTraceRepository:
             parameters.extend((cursor_time, cursor_time, cursor_id))
         where = f" WHERE {' AND '.join(clauses)}" if clauses else ""
         parameters.append(query.page_size + 1)
-        async with aiosqlite.connect(self._database_path) as db:
+        async with open_sqlite(self._database_path) as db:
             db.row_factory = aiosqlite.Row
             async with db.execute(
                 f"SELECT {', '.join(_COLUMNS)} FROM request_traces{where} "
@@ -185,7 +186,7 @@ class SQLiteRequestTraceRepository:
         if not isinstance(now, datetime) or now.tzinfo is None:
             raise ValueError("Request trace prune timestamp must be timezone-aware.")
         cutoff = (now.astimezone(timezone.utc) - timedelta(days=policy.retention_days)).isoformat()
-        async with aiosqlite.connect(self._database_path) as db:
+        async with open_sqlite(self._database_path) as db:
             await db.execute("BEGIN IMMEDIATE")
             before = await self._count(db)
             await db.execute("DELETE FROM request_traces WHERE started_at < ?", (cutoff,))

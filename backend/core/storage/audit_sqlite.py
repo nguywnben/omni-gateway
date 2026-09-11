@@ -19,6 +19,7 @@ from core.audit import (
     decode_audit_cursor,
     encode_audit_cursor,
 )
+from core.storage.sqlite_runtime import open_sqlite
 
 _EVENT_COLUMNS = (
     "schema_version",
@@ -46,7 +47,7 @@ class SQLiteAuditRepository:
 
     async def initialize(self) -> None:
         async with self._initialize_lock:
-            async with aiosqlite.connect(self._database_path) as db:
+            async with open_sqlite(self._database_path) as db:
                 await db.execute("PRAGMA journal_mode=WAL")
                 await db.execute("""
                     CREATE TABLE IF NOT EXISTS audit_events (
@@ -98,7 +99,7 @@ class SQLiteAuditRepository:
         ]
         placeholders = ", ".join("?" for _ in _EVENT_COLUMNS)
         try:
-            async with aiosqlite.connect(self._database_path) as db:
+            async with open_sqlite(self._database_path) as db:
                 await db.execute(
                     f"INSERT INTO audit_events ({', '.join(_EVENT_COLUMNS)}) "
                     f"VALUES ({placeholders})",
@@ -136,7 +137,7 @@ class SQLiteAuditRepository:
             f"SELECT {', '.join(_EVENT_COLUMNS)} FROM audit_events"
             f"{where_clause} ORDER BY occurred_at DESC, event_id DESC LIMIT ?"
         )
-        async with aiosqlite.connect(self._database_path) as db:
+        async with open_sqlite(self._database_path) as db:
             db.row_factory = aiosqlite.Row
             async with db.execute(sql, parameters) as cursor:
                 rows = await cursor.fetchall()
@@ -188,7 +189,7 @@ class SQLiteAuditRepository:
         if not isinstance(now, datetime) or now.tzinfo is None:
             raise ValueError("Audit prune timestamp must be timezone-aware.")
         cutoff = (now.astimezone(timezone.utc) - timedelta(days=policy.retention_days)).isoformat()
-        async with aiosqlite.connect(self._database_path) as db:
+        async with open_sqlite(self._database_path) as db:
             await db.execute("BEGIN IMMEDIATE")
             before = await self._count_events(db)
             await db.execute("DELETE FROM audit_events WHERE occurred_at < ?", (cutoff,))

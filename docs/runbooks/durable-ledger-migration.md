@@ -2,15 +2,15 @@
 
 ## Current availability
 
-W4.13 provides the versioned inventory, migration state machine, bounded copy/verification runner,
-and durable checkpoint repositories for SQLite, PostgreSQL, and MongoDB. It deliberately does
-**not** expose an operator command, management API, background job, automatic backend selection,
-or authority switch. Do not attempt a live migration from this revision.
+The repository retains a versioned inventory, migration state machine, bounded copy/verification
+runner, and durable checkpoint repositories from experimental HA research. R1 deliberately exposes
+no production operator command, management API, background job, automatic backend selection, or
+supported authority switch. Do not attempt a live backend migration with these components.
 
 The supported topology remains standalone with one worker and one application replica. Setting
-`POSTGRESQL_URI`, `MONGODB_URI`, `REDIS_URL`, or a higher worker/replica count does not complete a
-migration and does not earn an HA claim. W4.14 must first close usage-ledger and hard-budget journal
-parity; W4.18 will supply the executable operator workflow and readiness gate.
+`POSTGRESQL_URI`, `MONGODB_URI`, `REDIS_URL`, or a higher worker/replica count neither migrates data
+nor earns an HA claim. This document preserves implementation invariants for future evaluation; the
+R1 operator boundary is [Storage support and recovery](../storage.md).
 
 ## Invariants an operator must preserve
 
@@ -32,7 +32,7 @@ parity; W4.18 will supply the executable operator workflow and readiness gate.
 
 ## Intended staged procedure
 
-This is the contract W4.18 tooling must implement; it is not a manual command sequence for W4.13.
+This is a historical design contract for any future migration tooling, not an R1 command sequence.
 
 1. Drain to one worker and one replica and confirm standalone readiness.
 2. Back up the authoritative backend and verify restore evidence outside the application process.

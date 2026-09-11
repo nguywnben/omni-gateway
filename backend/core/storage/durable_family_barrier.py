@@ -11,6 +11,7 @@ import aiosqlite
 from core.durable_migration import DurableFamily
 from core.durable_migration_runner import MigrationError
 from core.storage.durable_family_sqlite import SQLITE_DURABLE_FAMILY_ADAPTERS
+from core.storage.sqlite_runtime import open_sqlite
 
 _PLAN_ID = re.compile(r"dmg_[0-9a-f]{32}")
 _BARRIER_ID = re.compile(r"bar_[0-9a-f]{32}")
@@ -30,7 +31,7 @@ class SQLiteSourceMutationBarrier:
 
     async def activate(self, *, plan_id: str, barrier_id: str, source_instance_id: str) -> None:
         record = self._record(plan_id, barrier_id, source_instance_id)
-        async with aiosqlite.connect(self._database_path) as db:
+        async with open_sqlite(self._database_path) as db:
             await db.execute("BEGIN IMMEDIATE")
             try:
                 row = await (
@@ -53,7 +54,7 @@ class SQLiteSourceMutationBarrier:
     ) -> None:
         expected = self._record(plan_id, barrier_id, source_instance_id)
         try:
-            async with aiosqlite.connect(self._database_path) as db:
+            async with open_sqlite(self._database_path) as db:
                 row = await (
                     await db.execute("SELECT value FROM config WHERE key = ?", (_BARRIER_KEY,))
                 ).fetchone()
@@ -78,7 +79,7 @@ class SQLiteSourceMutationBarrier:
             barrier_id=barrier_id,
             source_instance_id=source_instance_id,
         )
-        async with aiosqlite.connect(self._database_path) as db:
+        async with open_sqlite(self._database_path) as db:
             await db.execute("BEGIN IMMEDIATE")
             try:
                 for name in self._trigger_names():

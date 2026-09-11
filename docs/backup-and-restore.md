@@ -34,8 +34,8 @@ must not be treated as a recovery artifact.
   Known inert compatibility tables may be carried without changing the core fingerprint. R1 fails
   closed rather than attempting an implicit cross-schema migration; update Omni Gateway through
   the supported version path before restoring an older schema.
-- Portable restore is unavailable for PostgreSQL and MongoDB. Their platform-native backup tools
-  remain an advanced operator responsibility.
+- Portable restore is unavailable for PostgreSQL and MongoDB. PostgreSQL operators and existing
+  MongoDB compatibility deployments must own and verify database-native recovery separately.
 
 Store backup files away from the Omni Gateway data volume and apply the same access controls as
 provider credentials. A strong, unique passphrase and an encrypted operator password manager are
