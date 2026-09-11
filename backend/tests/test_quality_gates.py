@@ -71,8 +71,12 @@ class QualityGatePlanTests(unittest.TestCase):
             "whitespace",
         }
         self.assertTrue(expected.issubset(steps))
-        self.assertEqual(steps["browser-smoke"].status, "pending")
+        self.assertEqual(steps["browser-smoke"].status, "active")
         self.assertEqual(steps["browser-smoke"].owner, "P5.4")
+        self.assertEqual(
+            steps["browser-smoke"].commands,
+            (("{python}", "tools/browser_smoke.py"),),
+        )
         self.assertEqual(steps["container-smoke"].status, "ci")
         self.assertTrue(set(OPTIONAL_SUITES).isdisjoint(steps))
 
@@ -104,7 +108,7 @@ class QualityGatePlanTests(unittest.TestCase):
         )
 
         self.assertEqual(dry_run.returncode, 0, dry_run.stderr)
-        self.assertIn("browser-smoke [pending; owner=P5.4]", dry_run.stdout)
+        self.assertIn("browser-smoke [active; owner=P5.4]", dry_run.stdout)
         self.assertIn("container-smoke [ci]", dry_run.stdout)
         self.assertNotIn("experimental-ha", dry_run.stdout)
         self.assertEqual(suites.returncode, 0, suites.stderr)
@@ -141,10 +145,21 @@ class QualityGateDocumentationTests(unittest.TestCase):
 
         self.assertIn("Required: fast gate", workflow)
         self.assertIn("Required: production core tests", workflow)
+        self.assertIn("Required: browser smoke", workflow)
         self.assertIn("Required: container smoke", workflow)
+        self.assertIn("requirements-browser.txt", workflow)
+        self.assertIn("python -m playwright install --with-deps chromium", workflow)
+        self.assertIn("python tools/browser_smoke.py", workflow)
         self.assertNotIn("--suite experimental-ha", workflow)
+        self.assertNotIn("playwright install firefox", workflow)
+        self.assertNotIn("playwright install webkit", workflow)
         self.assertIn("python tools/quality_gate.py task --test-module", contributing)
         self.assertIn("python tools/quality_gate.py release", checklist)
+
+    def test_browser_dependency_is_isolated_and_exactly_pinned(self) -> None:
+        browser_requirements = (ROOT / "requirements-browser.txt").read_text(encoding="utf-8")
+
+        self.assertEqual(browser_requirements.strip(), "playwright==1.62.0")
 
 
 if __name__ == "__main__":

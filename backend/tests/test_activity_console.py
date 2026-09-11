@@ -83,6 +83,7 @@ function assert(condition, message) {{ if (!condition) throw new Error(message);
             "auditOccurredBefore",
         ):
             self.assertNotIn(f'id="{obsolete_id}"', audit)
+        self.assertIn('pattern="[A-Za-z0-9._:\\-]{1,128}"', activity)
 
     def test_common_outcomes_map_to_each_bounded_backend_contract(self) -> None:
         self._run_javascript_contract(

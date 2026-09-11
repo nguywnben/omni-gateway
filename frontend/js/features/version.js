@@ -172,7 +172,7 @@ async function checkForUpdates() {
 
 // =====================================================================
 
-window.onload = async function () {
+async function initializeConsole() {
 
     updatePrimaryCallbackUrlPlaceholder();
 
@@ -212,7 +212,17 @@ window.onload = async function () {
 
     }
 
-};
+}
+
+if (document.readyState === 'loading') {
+
+    document.addEventListener('DOMContentLoaded', initializeConsole, { once: true });
+
+} else {
+
+    void initializeConsole();
+
+}
 
 document.addEventListener('DOMContentLoaded', function () {
 

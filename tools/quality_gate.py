@@ -116,7 +116,7 @@ APPLICATION_SMOKE = GateStep(
 BROWSER_SMOKE = GateStep(
     "browser-smoke",
     "Critical-journey browser smoke",
-    status="pending",
+    ((PYTHON, "tools/browser_smoke.py"),),
     owner="P5.4",
 )
 CONTAINER_SMOKE = GateStep(

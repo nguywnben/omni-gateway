@@ -37,6 +37,9 @@ class SetupConsoleTests(unittest.TestCase):
         cls.client = (ROOT / "frontend" / "js" / "features" / "authentication.js").read_text(
             encoding="utf-8"
         )
+        cls.bootstrap = (ROOT / "frontend" / "js" / "features" / "version.js").read_text(
+            encoding="utf-8"
+        )
         cls.styles = (ROOT / "frontend" / "css" / "shell.css").read_text(encoding="utf-8")
         cls.locales = (ROOT / "frontend" / "js" / "core" / "locales.js").read_text(encoding="utf-8")
 
@@ -74,6 +77,16 @@ class SetupConsoleTests(unittest.TestCase):
         self.assertIn(".setup-card", self.styles)
         self.assertIn("width: min(100%, 560px)", self.styles)
         self.assertIn("overflow-wrap: anywhere", self.styles)
+
+    def test_setup_bootstrap_does_not_wait_for_external_assets(self):
+        self.assertIn("async function initializeConsole()", self.bootstrap)
+        self.assertIn(
+            "document.addEventListener('DOMContentLoaded', initializeConsole",
+            self.bootstrap,
+        )
+        self.assertIn("document.readyState === 'loading'", self.bootstrap)
+        self.assertIn("void initializeConsole()", self.bootstrap)
+        self.assertNotIn("window.onload", self.bootstrap)
 
 
 if __name__ == "__main__":
