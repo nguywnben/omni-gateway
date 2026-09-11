@@ -6,16 +6,16 @@
 - Active plan: `PROD-SELFHOST-R1`
 - Target: production-quality self-hosting for one person or a trusted team, not enterprise service
   operation.
-- Progress: **31/36 implementation tasks**; Phase 5 is in progress (1/6).
-- Active: **P5.2 — Authentication and security closure**; candidate `68c9392` is awaiting its one
-  independent cross-model review.
-- The internal pass fixed cross-session OAuth flow selection/status disclosure, incorrect
-  local-owner substitution on the log WebSocket, raw OAuth exception responses, PostgreSQL backend
-  misclassification, and unsafe backend metadata/DSN exposure. The 362-test adversarial matrix,
-  87-test task gate, dependency audit, and isolated non-root candidate image all passed.
-- Next action: run `docs/reviews/p5.2-cross-model-review-prompt.md`, save the report at the requested
-  Downloads path, then reconcile it. Do not start P5.3 or change the 31/36 denominator before this
-  security gate closes.
+- Progress: **32/36 implementation tasks**; Phase 5 is in progress (2/6).
+- Completed: **P5.2 — Authentication and security closure** through candidate `68c9392` and review
+  reconciliation fix `8bbc883`.
+- The independent review returned PASS WITH FINDINGS: zero Critical/High/Medium, one Low, and two
+  Informational findings. The valid Low finding was fixed by binding pasted OAuth callbacks to the
+  initiating management session. Gemini query-key logging and process-local OAuth flow state are
+  documented bounded compatibility/topology risks for the fixed self-host target.
+- Verification: the original 362-test adversarial matrix, 87-test candidate gate, dependency audit,
+  isolated UID-10001 image, and the post-review 21-test task gate all passed.
+- Next planned task: **P5.3 — Usage, cost, and observability closure**. It has not begun.
 - Supported runtime today: standalone, one worker, one replica.
 - Redis coordination, multi-replica HA, and Helm are experimental and no longer R1 release blockers.
 

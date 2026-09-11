@@ -96,6 +96,11 @@ when prompted. The application never generates or prints that token.
 The setup flow creates the public API key once and displays it for the operator. Store it in a
 password manager; do not put it in source control or screenshots.
 
+Gemini-compatible clients may send that key as the `key` query parameter on `/v1beta/*`. Prefer
+`x-goog-api-key` or `Authorization: Bearer` whenever the client supports headers. If a reverse
+proxy is present, configure its access log to omit query strings on these routes so the
+compatibility credential is not retained in URLs.
+
 ## 6. Verify authenticated operation
 
 Sign in with the owner passphrase and open `http://127.0.0.1:4283/dashboard`. A completed install

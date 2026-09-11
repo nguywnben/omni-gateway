@@ -57,10 +57,10 @@ including that edit in a release candidate.
 - [x] P4.5 Unified Activity
 - [x] P4.6 Settings, Team access, About, and localization
 
-## Phase 5 — Operational Hardening and Release (1/6)
+## Phase 5 — Operational Hardening and Release (2/6)
 
 - [x] P5.1 Storage tiers and migrations
-- [ ] P5.2 Authentication and security closure
+- [x] P5.2 Authentication and security closure
 - [ ] P5.3 Usage, cost, and observability closure
 - [ ] P5.4 Browser test harness and CI balance
 - [ ] P5.5 Fixed reliability and performance evidence
