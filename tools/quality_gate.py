@@ -119,6 +119,12 @@ BROWSER_SMOKE = GateStep(
     ((PYTHON, "tools/browser_smoke.py"),),
     owner="P5.4",
 )
+RELIABILITY_PROFILE = GateStep(
+    "reliability-profile",
+    "Fixed 10-minute reliability and performance profile",
+    ((PYTHON, "tools/reliability_profile.py", "--verify"),),
+    owner="P5.5",
+)
 CONTAINER_SMOKE = GateStep(
     "container-smoke",
     "Fresh image and container runtime smoke",
@@ -214,6 +220,7 @@ def build_gate_plan(
                 CORE_SUITE,
                 APPLICATION_SMOKE,
                 BROWSER_SMOKE,
+                RELIABILITY_PROFILE,
                 CONTAINER_SMOKE,
             )
         )
