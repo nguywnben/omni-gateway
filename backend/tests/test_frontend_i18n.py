@@ -36,6 +36,10 @@ def _frontend_sources() -> list[Path]:
 
 
 class FrontendLocaleContractTests(unittest.TestCase):
+    def test_javascript_audit_accepts_namespaced_translation_keys(self):
+        audit = (ROOT / "tools/i18n-js-audit.py").read_text(encoding="utf-8")
+        self.assertIn(r"(?:\.[a-z][a-z0-9_-]*)*", audit)
+
     def test_identity_aliases_resolve_to_localized_copy(self):
         node = shutil.which("node")
         if node is None:

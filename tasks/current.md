@@ -2,16 +2,17 @@
 
 ## Resume Here
 
-- Updated: 2026-09-10 (Asia/Saigon)
+- Updated: 2026-09-11 (Asia/Saigon)
 - Active plan: `PROD-SELFHOST-R1`
 - Target: production-quality self-hosting for one person or a trusted team, not enterprise service
   operation.
-- Progress: **29/36 implementation tasks**; Phase 4 is in progress (5/6).
-- Completed: **P4.5 — Unified Activity**.
-- Gate caveat: P4.5 task checks pass; the unrelated unstaged request-schema change in
-  `backend/core/models.py` remains outside this task and still affects raw candidate compatibility.
-- Next: **P4.6 — Settings, Team access, About, and localization**. Do not begin it until a
-  new user request to continue the fixed plan.
+- Progress: **30/36 implementation tasks**; Phase 4 is complete (6/6).
+- Completed: **P4.6 — Settings, Team access, About, and localization**.
+- Gate caveat: the P4.6 candidate passes all five compatibility tests with the committed model
+  request schema loaded in memory. The unrelated unstaged change in `backend/core/models.py`
+  remains outside this task and is the sole raw dirty-workspace compatibility difference.
+- Next: **P5.1 — Storage tiers and migrations**. Do not begin it until a new user request to
+  continue the fixed plan.
 - Supported runtime today: standalone, one worker, one replica.
 - Redis coordination, multi-replica HA, and Helm are experimental and no longer R1 release blockers.
 
@@ -51,6 +52,14 @@ Do not push unless the user requests it.
 
 ## Latest Evidence
 
+- `docs/evidence/p4.6-settings-team-about-localization.md`
+- Settings now maps all 20 controls to authoritative typed metadata, never returns the reusable
+  Code Assist secret, preserves blank secrets and environment locks, and explains live/restart
+  state. About reports validated build/support facts and permanent recovery/update entry points;
+  optional Team access keeps local-owner recovery visible when OIDC is disabled.
+- The Phase 4 exit trace covers all nine required journeys. The focused gate passed 101 tests, the
+  candidate compatibility projection passed all five tests, all 1,285 locale keys resolved, and
+  authenticated browser smoke had no overflow or browser-console entries.
 - `docs/evidence/p4.5-unified-activity.md`
 - Activity now applies one session-only correlation filter across request traces, audit/security
   events, and bounded runtime logs. Dashboard and both detail views pivot by request ID; `/logs`

@@ -252,33 +252,3 @@ async function resetAntigravitySettings() {
 // =====================================================================
 
 // =====================================================================
-
-const CONFIG_FIELD_KEYS = {
-    host: 'host',
-    port: 'port',
-    credentialsDir: 'credentials_dir',
-    proxy: 'proxy',
-    codeAssistClientId: 'code_assist_client_id',
-    codeAssistClientSecret: 'code_assist_client_secret',
-    codeAssistEndpoint: 'code_assist_endpoint',
-    autoBanEnabled: 'auto_disable_enabled',
-    autoBanErrorCodes: 'auto_disable_error_codes',
-    retry429Enabled: 'retry_429_enabled',
-    retry429MaxRetries: 'retry_429_max_retries',
-    retry429Interval: 'retry_429_interval',
-    compatibilityModeEnabled: 'compatibility_mode_enabled',
-    returnThoughtsToFrontend: 'return_thoughts_to_frontend',
-    antiTruncationMaxAttempts: 'anti_truncation_max_attempts',
-    tokenCompressionEnabled: 'token_compression_enabled',
-    tokenCompressionThreshold: 'token_compression_threshold',
-    tokenCompressionTarget: 'token_compression_target',
-    tokenCompressionMinRecentTurns: 'token_compression_min_recent_turns',
-    routingStrategy: 'routing_strategy',
-    preferredProvider: 'preferred_provider',
-    upstreamTimeoutSeconds: 'upstream_timeout_seconds',
-    runtimeLogLevel: 'log_level',
-    runtimeLogMaxMb: 'log_max_mb',
-    runtimeLogBackupCount: 'log_backup_count',
-    keepaliveUrl: 'keepalive_url',
-    keepaliveInterval: 'keepalive_interval'
-};

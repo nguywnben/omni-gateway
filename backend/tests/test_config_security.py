@@ -89,17 +89,21 @@ class ConfigResponseSecurityTests(unittest.TestCase):
             "api_password": "api-secret-value",
             "panel_password": "panel-secret-value",
             "password": "legacy-secret-value",
+            "code_assist_client_secret": "code-assist-secret-value",
         }
 
         public_config = _redact_access_secrets(config)
 
         self.assertEqual(public_config["host"], "0.0.0.0")
         self.assertTrue(public_config["panel_password_configured"])
+        self.assertTrue(public_config["code_assist_client_secret_configured"])
         self.assertNotIn("api_password", public_config)
         self.assertNotIn("panel_password", public_config)
         self.assertNotIn("password", public_config)
+        self.assertNotIn("code_assist_client_secret", public_config)
         self.assertNotIn("api-secret-value", json.dumps(public_config))
         self.assertNotIn("panel-secret-value", json.dumps(public_config))
+        self.assertNotIn("code-assist-secret-value", json.dumps(public_config))
 
     def test_classifies_listener_and_storage_changes_as_restart_required(self):
         classification = _classify_config_updates(

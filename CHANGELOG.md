@@ -6,6 +6,11 @@ All notable user-facing changes are documented in this file. Omni Gateway follow
 
 ### Added
 
+- Added schema-derived Settings state, validated About build/support facts, permanent update and
+  recovery entry points, optional Team-access guidance, and complete English/Vietnamese product
+  copy with compatibility-locale fallbacks.
+- Added selectable cURL, Python SDK, and Node.js SDK quickstarts for every supported Access protocol,
+  using visible virtual-key placeholders only.
 - Added one shared Activity investigation workflow for request traces, audit/security events, and
   bounded runtime logs, including common filters, request-ID pivots from Dashboard and detail
   views, session-only correlation state, and a 16 MiB redacted raw-log download ceiling.
@@ -64,6 +69,12 @@ All notable user-facing changes are documented in this file. Omni Gateway follow
 
 ### Changed
 
+- System configuration responses now redact every reusable schema secret and report only configured
+  state; blank secret fields preserve stored values, environment-owned controls are not submitted,
+  and all 20 controls expose their live/restart/read-only behavior.
+- Preserved the pre-R1 virtual-key edit contract while retaining optimistic concurrency: the console
+  sends `expected_revision`, legacy PATCH clients may omit it, and new rotate/revoke operations
+  continue to require it.
 - The legacy `/logs` route now opens Runtime logs instead of Request traces, matching its name;
   `/activity` remains the primary request-trace entry and `/audit` remains an audit compatibility
   link.

@@ -42,6 +42,7 @@ class VersionInfoTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(body["version"], "1.0.0")
         self.assertEqual(body["full_hash"], "abcdef1234567890")
         self.assertEqual(body["date"], "2026-07-11T10:00:00Z")
+        self.assertEqual(body["source"], "container")
 
     async def test_update_check_uses_the_latest_public_release(self):
         remote = FakeResponse(

@@ -13,24 +13,41 @@ function loadAccessPage() {
     return Promise.all([updateEndpointUrls(), loadVirtualKeys()]);
 }
 
-function buildAccessClientExample(protocol, origin = window.location.origin) {
+function buildAccessClientExample(
+    protocol,
+    origin = window.location.origin,
+    format = document.getElementById('accessClientFormat')?.value || 'curl'
+) {
     const baseUrl = String(origin || '').replace(/\/$/, '');
     const examples = {
-        openai: `curl "${baseUrl}/v1/chat/completions" \\
+        curl: {
+            openai: `curl "${baseUrl}/v1/chat/completions" \\
   -H "Authorization: Bearer ${ACCESS_CLIENT_KEY_PLACEHOLDER}" \\
   -H "Content-Type: application/json" \\
   -d '{"model":"omway","messages":[{"role":"user","content":"Hello"}]}'`,
-        anthropic: `curl "${baseUrl}/v1/messages" \\
+            anthropic: `curl "${baseUrl}/v1/messages" \\
   -H "x-api-key: ${ACCESS_CLIENT_KEY_PLACEHOLDER}" \\
   -H "anthropic-version: 2023-06-01" \\
   -H "content-type: application/json" \\
   -d '{"model":"omway","max_tokens":256,"messages":[{"role":"user","content":"Hello"}]}'`,
-        gemini: `curl "${baseUrl}/v1beta/models/omway:generateContent" \\
+            gemini: `curl "${baseUrl}/v1beta/models/omway:generateContent" \\
   -H "x-goog-api-key: ${ACCESS_CLIENT_KEY_PLACEHOLDER}" \\
   -H "Content-Type: application/json" \\
   -d '{"contents":[{"role":"user","parts":[{"text":"Hello"}]}]}'`
+        },
+        python: {
+            openai: `from openai import OpenAI\n\nclient = OpenAI(api_key="${ACCESS_CLIENT_KEY_PLACEHOLDER}", base_url="${baseUrl}/v1")\nresponse = client.chat.completions.create(model="omway", messages=[{"role": "user", "content": "Hello"}])\nprint(response)`,
+            anthropic: `from anthropic import Anthropic\n\nclient = Anthropic(api_key="${ACCESS_CLIENT_KEY_PLACEHOLDER}", base_url="${baseUrl}")\nresponse = client.messages.create(model="omway", max_tokens=256, messages=[{"role": "user", "content": "Hello"}])\nprint(response)`,
+            gemini: `from google import genai\nfrom google.genai import types\n\nclient = genai.Client(api_key="${ACCESS_CLIENT_KEY_PLACEHOLDER}", http_options=types.HttpOptions(base_url="${baseUrl}"))\nresponse = client.models.generate_content(model="omway", contents="Hello")\nprint(response)`
+        },
+        node: {
+            openai: `import OpenAI from "openai";\n\nconst client = new OpenAI({ apiKey: "${ACCESS_CLIENT_KEY_PLACEHOLDER}", baseURL: "${baseUrl}/v1" });\nconst response = await client.chat.completions.create({ model: "omway", messages: [{ role: "user", content: "Hello" }] });\nconsole.log(response);`,
+            anthropic: `import Anthropic from "@anthropic-ai/sdk";\n\nconst client = new Anthropic({ apiKey: "${ACCESS_CLIENT_KEY_PLACEHOLDER}", baseURL: "${baseUrl}" });\nconst response = await client.messages.create({ model: "omway", max_tokens: 256, messages: [{ role: "user", content: "Hello" }] });\nconsole.log(response);`,
+            gemini: `import { GoogleGenAI } from "@google/genai";\n\nconst client = new GoogleGenAI({ apiKey: "${ACCESS_CLIENT_KEY_PLACEHOLDER}", httpOptions: { baseUrl: "${baseUrl}" } });\nconst response = await client.models.generateContent({ model: "omway", contents: "Hello" });\nconsole.log(response);`
+        }
     };
-    return examples[protocol] || examples.openai;
+    const selected = examples[format] || examples.curl;
+    return selected[protocol] || selected.openai;
 }
 
 function renderAccessClientExample(protocol = document.getElementById('accessProtocol')?.value) {

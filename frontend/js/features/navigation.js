@@ -217,7 +217,8 @@ function initStaticUiBindings() {
         'virtual-key-status': (element) => updateVirtualKeyStatus(element.value),
         'virtual-key-pricing': (element) => syncVirtualKeyPricingControl(element.form),
         'virtual-key-scope': (element) => syncVirtualKeyScopeControl(element),
-        'access-client-protocol': (element) => renderAccessClientExample(element.value),
+        'access-client-protocol': () => renderAccessClientExample(),
+        'access-client-format': () => renderAccessClientExample(),
         'log-level': () => filterLogs()
     };
 

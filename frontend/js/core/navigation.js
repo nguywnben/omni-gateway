@@ -260,7 +260,9 @@ function getTabDataLoader(tabName) {
 
         traces: () => loadTraceConsole(),
 
-        runtime_logs: () => connectWebSocket()
+        runtime_logs: () => connectWebSocket(),
+
+        about: () => loadAboutPage()
 
     };
 

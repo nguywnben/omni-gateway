@@ -136,15 +136,13 @@ class VirtualKeyLifecycleTests(unittest.IsolatedAsyncioTestCase):
 
 
 class VirtualKeyLifecycleContractTests(unittest.TestCase):
-    def test_openapi_requires_revision_for_update_rotate_and_revoke(self):
+    def test_openapi_preserves_legacy_update_and_requires_revision_for_new_mutations(self):
         schema = app.openapi()
         paths = schema["paths"]
 
         self.assertIn("/api/virtual-keys/{key_id}/rotate", paths)
         self.assertIn("/api/virtual-keys/{key_id}/revoke", paths)
-        self.assertEqual(
-            UpdateVirtualKeyRequest.model_fields["expected_revision"].is_required(), True
-        )
+        self.assertFalse(UpdateVirtualKeyRequest.model_fields["expected_revision"].is_required())
         self.assertEqual(
             RotateVirtualKeyRequest.model_fields["expected_revision"].is_required(), True
         )

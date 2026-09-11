@@ -1121,3 +1121,122 @@
     display: grid;
     gap: 12px;
 }
+
+.settings-schema-legend {
+    margin: 0 0 16px;
+    padding: 10px 14px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--surface);
+    color: var(--text-muted);
+    font-size: 12px;
+    line-height: 1.5;
+}
+
+.settings-field-meta {
+    display: block;
+    margin-top: 6px;
+    color: var(--text-soft);
+    font-size: 11px;
+    line-height: 1.4;
+}
+
+.config-spaced-field {
+    margin-top: 14px;
+}
+
+.about-repository {
+    margin-top: 14px;
+}
+
+.about-fact-list,
+.support-tier-list,
+.maintenance-links {
+    display: grid;
+    gap: 10px;
+}
+
+.about-fact-list > div {
+    display: grid;
+    grid-template-columns: minmax(100px, .7fr) minmax(0, 1.3fr);
+    gap: 12px;
+    padding-block: 8px;
+    border-bottom: 1px solid var(--border);
+}
+
+.about-fact-list > div:last-child {
+    border-bottom: 0;
+}
+
+.about-fact-list dt,
+.about-fact-list dd,
+.support-tier h3,
+.support-tier p {
+    margin: 0;
+}
+
+.about-fact-list dt,
+.support-tier p {
+    color: var(--text-muted);
+}
+
+.about-fact-list dd {
+    min-width: 0;
+    overflow-wrap: anywhere;
+    text-align: right;
+}
+
+.support-tier {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 14px;
+    align-items: start;
+    padding: 12px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--bg-subtle);
+}
+
+.support-tier h3 {
+    font-size: 13px;
+}
+
+.support-tier p {
+    margin-top: 4px;
+    font-size: 12px;
+    line-height: 1.45;
+}
+
+.support-tier .support-tier-status {
+    margin-top: 0;
+    color: var(--text);
+    text-align: right;
+    white-space: nowrap;
+}
+
+.maintenance-links a {
+    padding: 11px 12px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--bg-subtle);
+    font-size: 13px;
+    font-weight: 650;
+    text-decoration: none;
+}
+
+.maintenance-links a:hover {
+    border-color: var(--border-strong);
+}
+
+@media (max-width: 760px) {
+    .about-fact-list > div,
+    .support-tier {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    .about-fact-list dd,
+    .support-tier .support-tier-status {
+        text-align: left;
+        white-space: normal;
+    }
+}

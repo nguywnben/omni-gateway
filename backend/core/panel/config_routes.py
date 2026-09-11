@@ -38,6 +38,11 @@ ACCESS_SECRET_KEYS = {
         if field.config_key and field.surface == "access" and field.secret
     ),
 }
+CONFIGURATION_SECRET_KEYS = {
+    "api_password",
+    "password",
+    *(field.config_key for field in CONFIGURATION_FIELDS if field.config_key and field.secret),
+}
 RESTART_REQUIRED_CONFIG_KEYS = {
     field.config_key
     for field in CONFIGURATION_FIELDS
@@ -70,10 +75,11 @@ PRESERVED_RESET_KEYS = {
 
 
 def _redact_access_secrets(current_config: dict) -> dict:
-    """Return control-panel configuration without reusable access secrets."""
+    """Return control-panel configuration without any reusable secret."""
     public_config = dict(current_config)
-    public_config["panel_password_configured"] = bool(public_config.get("panel_password"))
-    for key in ACCESS_SECRET_KEYS:
+    for key in CONFIGURATION_SECRET_KEYS:
+        if key in public_config:
+            public_config[f"{key}_configured"] = bool(public_config.get(key))
         public_config.pop(key, None)
     return public_config
 

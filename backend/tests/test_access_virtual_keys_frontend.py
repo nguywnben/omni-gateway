@@ -71,12 +71,15 @@ class AccessVirtualKeyFrontendTests(unittest.TestCase):
     def test_client_quickstart_tracks_selected_protocol_without_root_secret(self):
         for control_id in (
             "accessProtocol",
+            "accessClientFormat",
             "accessClientExample",
             "copyAccessClientExample",
         ):
             self.assertIn(f'id="{control_id}"', self.fragment)
         self.assertIn("renderAccessClientExample", self.feature)
         self.assertIn("YOUR_OMNI_VIRTUAL_KEY", self.feature)
+        for format_name in ("curl", "python", "node"):
+            self.assertIn(f"{format_name}:", self.feature)
         self.assertNotIn("document.getElementById('apiKey').value", self.feature)
         self.assertNotIn("client-route-card", self.fragment)
 

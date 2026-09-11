@@ -188,6 +188,29 @@
     outline-offset: 2px;
 }
 
+.identity-mode-notice {
+    margin: 0 0 16px;
+    padding: 12px 14px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--bg-subtle);
+    color: var(--text-muted);
+    font-size: 13px;
+    line-height: 1.5;
+}
+
+.identity-mode-notice[data-readiness="ready"] {
+    border-color: var(--success);
+    background: var(--success-bg);
+    color: var(--success);
+}
+
+.identity-mode-notice[data-readiness="invalid"] {
+    border-color: var(--danger);
+    background: var(--danger-bg);
+    color: var(--danger);
+}
+
 @media (max-width: 1080px) {
     .identity-summary-grid {
         grid-template-columns: 1fr;

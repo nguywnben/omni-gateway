@@ -144,11 +144,29 @@ function renderIdentityPrincipal() {
     identityStatusBadge('identityPrincipalBadge', 'identity.authorized', 'success');
 }
 
+function renderIdentityModeNotice() {
+    const notice = document.getElementById('identityModeNotice');
+    if (!notice) return;
+    const readiness = IdentityConsoleState.oidcPolicy?.readiness;
+    const key = readiness === 'ready'
+        ? 'identity.mode_ready'
+        : readiness === 'disabled'
+            ? 'identity.mode_disabled'
+            : readiness === 'invalid'
+                ? 'identity.mode_invalid'
+                : 'identity.mode_unavailable';
+    notice.textContent = t(key);
+    notice.dataset.readiness = readiness || 'unavailable';
+}
+
 function renderIdentityOidc() {
     const container = document.getElementById('identityOidcSummary');
     const policy = IdentityConsoleState.oidcPolicy;
     const advanceButton = document.getElementById('identityOidcAdvance');
-    advanceButton?.classList.toggle('hidden', !policy || !identityCan('oidc.manage'));
+    advanceButton?.classList.toggle(
+        'hidden', !policy || policy.readiness !== 'ready' || !identityCan('oidc.manage')
+    );
+    renderIdentityModeNotice();
     if (!container) return;
     if (!policy) {
         container.replaceChildren();

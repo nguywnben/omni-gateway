@@ -102,6 +102,7 @@ CONSOLE_SCRIPT_ASSETS = (
     "js/features/system-settings.js",
     "js/features/quality-policy.js",
     "js/features/dashboard.js",
+    "js/features/about.js",
     "js/features/version.js",
     "js/features/mobile-navigation.js",
 )
