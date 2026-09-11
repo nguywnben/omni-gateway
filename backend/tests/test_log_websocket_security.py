@@ -18,6 +18,7 @@ from core.identity import (
     AuthorizationDenied,
     ManagementPermission,
     ManagementPrincipal,
+    ManagementRole,
     evaluate_permission,
 )
 from core.panel.logs import _websocket_origin_matches_host, websocket_logs
@@ -52,6 +53,10 @@ class FakeWebSocket:
 
 
 class LogWebSocketSecurityTests(unittest.IsolatedAsyncioTestCase):
+    @staticmethod
+    def verified(principal: ManagementPrincipal | None = None) -> SimpleNamespace:
+        return SimpleNamespace(principal=principal or ManagementPrincipal.local_owner())
+
     def test_websocket_origin_must_match_the_console_host(self):
         self.assertTrue(_websocket_origin_matches_host(FakeWebSocket()))
         self.assertFalse(
@@ -81,11 +86,16 @@ class LogWebSocketSecurityTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_authenticated_websocket_is_authorized_before_connecting(self):
         websocket = FakeWebSocket(cookie_token="session-token")
+        principal = ManagementPrincipal.oidc_user(
+            issuer="https://identity.example.com/tenant",
+            subject="viewer-1",
+            role=ManagementRole.VIEWER,
+        )
 
         with (
             patch(
                 "core.panel.logs.verify_panel_token_value",
-                new=AsyncMock(return_value="session-token"),
+                new=AsyncMock(return_value=self.verified(principal)),
             ),
             patch("core.panel.logs.require_management_route") as authorize,
             patch("core.panel.logs.manager.connect", new=AsyncMock(return_value=False)),
@@ -96,7 +106,8 @@ class LogWebSocketSecurityTests(unittest.IsolatedAsyncioTestCase):
         call = authorize.call_args
         self.assertEqual(call.kwargs["method"], "WEBSOCKET")
         self.assertEqual(call.kwargs["path"], "/api/logs/stream")
-        self.assertEqual(websocket.state.management_principal.principal_id, "local-owner")
+        self.assertIs(call.args[0], principal)
+        self.assertIs(websocket.state.management_principal, principal)
 
     async def test_websocket_permission_denial_closes_before_connecting(self):
         websocket = FakeWebSocket(cookie_token="session-token")
@@ -108,7 +119,7 @@ class LogWebSocketSecurityTests(unittest.IsolatedAsyncioTestCase):
         with (
             patch(
                 "core.panel.logs.verify_panel_token_value",
-                new=AsyncMock(return_value="session-token"),
+                new=AsyncMock(return_value=self.verified()),
             ),
             patch(
                 "core.panel.logs.require_management_route",
@@ -130,7 +141,7 @@ class LogWebSocketSecurityTests(unittest.IsolatedAsyncioTestCase):
         with (
             patch(
                 "core.panel.logs.verify_panel_token_value",
-                new=AsyncMock(return_value="session-token"),
+                new=AsyncMock(return_value=self.verified()),
             ),
             patch("core.panel.logs.require_management_route"),
             patch("core.panel.logs.manager.connect", new=AsyncMock(return_value=True)),

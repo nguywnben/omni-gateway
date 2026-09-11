@@ -392,12 +392,16 @@ async def auth_callback_url(
 
 
 @router.get("/status/{project_id}")
-async def check_auth_status(project_id: str, token: str = Depends(verify_panel_token)):
+async def check_auth_status(
+    project_id: str,
+    request: Request,
+    token: str = Depends(verify_panel_token),
+):
     try:
         if not project_id:
             raise HTTPException(status_code=400, detail="Project ID cannot be empty.")
 
-        status = get_auth_status(project_id)
+        status = get_auth_status(project_id, _management_auth_reference(request))
         return JSONResponse(content=status)
 
     except Exception as e:

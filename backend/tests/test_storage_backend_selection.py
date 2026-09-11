@@ -15,7 +15,44 @@ if str(BACKEND_DIR) not in sys.path:
 from core.storage_adapter import StorageAdapter
 
 
+class PostgreSQLBackend:
+    def __init__(self) -> None:
+        self._dsn = "postgresql://owner:super-secret@database/omni"
+
+    async def get_database_info(self):
+        return {
+            "dsn": self._dsn,
+            "password": "super-secret",
+            "server_version": "test-only",
+        }
+
+
+class FailingPostgreSQLBackend(PostgreSQLBackend):
+    async def get_database_info(self):
+        raise RuntimeError(f"could not connect with {self._dsn}")
+
+
 class StorageBackendSelectionTests(unittest.IsolatedAsyncioTestCase):
+    async def test_backend_info_never_exposes_postgresql_connection_metadata(self):
+        adapter = StorageAdapter()
+        adapter._backend = PostgreSQLBackend()
+        adapter._initialized = True
+
+        info = await adapter.get_backend_info()
+
+        self.assertEqual(info, {"backend_type": "postgresql", "initialized": True})
+        self.assertNotIn("super-secret", repr(info))
+
+    async def test_backend_info_does_not_expose_database_error_details(self):
+        adapter = StorageAdapter()
+        adapter._backend = FailingPostgreSQLBackend()
+        adapter._initialized = True
+
+        info = await adapter.get_backend_info()
+
+        self.assertEqual(info, {"backend_type": "postgresql", "initialized": True})
+        self.assertNotIn("super-secret", repr(info))
+
     async def test_rejects_ambiguous_external_storage_configuration(self):
         adapter = StorageAdapter()
         with patch.dict(

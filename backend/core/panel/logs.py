@@ -183,7 +183,10 @@ async def websocket_logs(websocket: WebSocket):
         return
 
     try:
-        await verify_panel_token_value(token)
+        verified_token = await verify_panel_token_value(token)
+        principal = getattr(verified_token, "principal", None)
+        if type(principal) is not ManagementPrincipal:
+            raise HTTPException(status_code=503, detail="Session service is unavailable.")
     except HTTPException as e:
         close_code = 4401 if e.status_code in {401, 428} else 4403
         await websocket.close(code=close_code, reason=str(e.detail))
@@ -194,7 +197,6 @@ async def websocket_logs(websocket: WebSocket):
         log.error(f"WebSocket authentication failed ({type(e).__name__}).")
         return
 
-    principal = ManagementPrincipal.local_owner()
     try:
         require_management_route(
             principal,

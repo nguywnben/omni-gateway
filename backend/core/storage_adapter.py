@@ -366,15 +366,15 @@ class StorageAdapter:
         if not self._backend:
             return "none"
 
-        backend_class_name = self._backend.__class__.__name__
-        if "SQLite" in backend_class_name or "sqlite" in backend_class_name.lower():
+        backend_class_name = self._backend.__class__.__name__.lower()
+        if "sqlite" in backend_class_name:
             return "sqlite"
-        elif "MongoDB" in backend_class_name or "mongo" in backend_class_name.lower():
+        elif "mongodb" in backend_class_name or "mongo" in backend_class_name:
             return "mongodb"
         elif (
-            "PSQL" in backend_class_name
-            or "Postgres" in backend_class_name
-            or "psql" in backend_class_name.lower()
+            "postgresql" in backend_class_name
+            or "postgres" in backend_class_name
+            or "psql" in backend_class_name
         ):
             return "postgresql"
         else:
@@ -386,35 +386,21 @@ class StorageAdapter:
         backend_type = self.get_backend_type()
         info = {"backend_type": backend_type, "initialized": self._initialized}
 
-        if hasattr(self._backend, "get_database_info"):
-            try:
-                db_info = await self._backend.get_database_info()
-                info.update(db_info)
-            except Exception as e:
-                info["database_error"] = str(e)
-        else:
-            backend_type = self.get_backend_type()
-            if backend_type == "sqlite":
-                info.update(
-                    {
-                        "database_path": getattr(self._backend, "_db_path", None),
-                        "credentials_dir": getattr(self._backend, "_credentials_dir", None),
-                    }
-                )
-            elif backend_type == "mongodb":
-                info.update(
-                    {
-                        "database_name": getattr(self._backend, "_db", {}).name
-                        if hasattr(self._backend, "_db")
-                        else None,
-                    }
-                )
-            elif backend_type == "postgresql":
-                info.update(
-                    {
-                        "dsn": getattr(self._backend, "_dsn", None),
-                    }
-                )
+        if backend_type == "sqlite":
+            info.update(
+                {
+                    "database_path": getattr(self._backend, "_db_path", None),
+                    "credentials_dir": getattr(self._backend, "_credentials_dir", None),
+                }
+            )
+        elif backend_type == "mongodb":
+            info.update(
+                {
+                    "database_name": getattr(self._backend, "_db", {}).name
+                    if hasattr(self._backend, "_db")
+                    else None,
+                }
+            )
 
         return info
 
