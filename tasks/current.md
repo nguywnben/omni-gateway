@@ -6,16 +6,19 @@
 - Active plan: `PROD-SELFHOST-R1`
 - Target: production-quality self-hosting for one person or a trusted team, not enterprise service
   operation.
-- Progress: **33/36 implementation tasks**; Phase 5 is in progress (3/6).
-- Completed: **P5.3 — Usage, cost, and observability closure** in candidate `096b9f1`.
-- Hard-budget `deny` and `warn` policies now both fail closed for unknown pricing; `warn` also emits
-  bounded warning telemetry. Only an explicit positive `fallback` can price an unknown model.
-  Invalid negative/non-finite pricing overrides are ignored, and the usage API exposes path-free
-  built-in/override freshness metadata.
-- Verification: the fixed task gate passed all static checks and **175 focused tests** covering the
-  accounting lifecycle, durable ledger, pricing, metrics cardinality, request/audit retention,
-  prompt-free correlation, response cache, streaming/retry behavior, and disabled exporters.
-- Next planned task: **P5.4 — Browser test harness and CI balance**. It has not begun.
+- Progress: **34/36 implementation tasks**; Phase 5 is in progress (4/6).
+- Completed: **P5.4 — Browser test harness and CI balance** in candidate `593eed2`.
+- The required Chromium harness now starts a disposable loopback runtime and automates all nine
+  critical journeys without real provider I/O. It also checks accessible page structure and
+  horizontal overflow across all 11 routes at 360/768/1024/1440 px.
+- CI installs the pinned browser dependency in a separate required job, preserves container smoke,
+  gates publication on both, and still excludes experimental HA and multi-browser matrices.
+- Browser execution exposed and fixed two production frontend defects: console bootstrap no longer
+  waits for external asset load, and Activity's request-ID HTML pattern is valid in modern Chromium.
+- Verification: the fixed task gate passed all static checks and **18 focused tests**; the browser
+  harness passed **9/9 journeys and 44 responsive route-width checks** with a clean console. An
+  intentionally wrong dashboard assertion returned exit code 1.
+- Next planned task: **P5.5 — Fixed reliability and performance evidence**. It has not begun.
 - Supported runtime today: standalone, one worker, one replica.
 - Redis coordination, multi-replica HA, and Helm are experimental and no longer R1 release blockers.
 
@@ -55,6 +58,11 @@ Do not push unless the user requests it.
 
 ## Latest Evidence
 
+- `docs/evidence/p5.4-browser-harness-ci.md`
+- Required frontend evidence now uses a maintained Playwright/Chromium harness instead of syntax
+  checks and manual sessions alone. It covers fresh setup, provider/model routing, AI Quality,
+  Playground, virtual-key lifecycle, Activity correlation, operations guidance, and local recovery
+  with deterministic fixtures and disposable state.
 - `docs/evidence/p5.1-storage-tiers-migrations.md`
 - SQLite is the documented Core authority, PostgreSQL is Advanced, and MongoDB is Compatibility.
   R1 exposes no production cross-backend migration command and experimental durable/HA parity does

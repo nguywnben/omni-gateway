@@ -51,12 +51,20 @@ At a phase boundary, pass the affected integration/contract modules once:
 python tools/quality_gate.py phase --test-module backend.tests.test_product_surface_inventory
 ```
 
-Do not run the complete core suite after every edit. The single release command, its current
-pending prerequisites, and separately classified optional suites can be inspected with:
+Do not run the complete core suite after every edit. The single release command, its CI-owned
+prerequisites, and separately classified optional suites can be inspected with:
 
 ```bash
 python tools/quality_gate.py release --dry-run
 python tools/quality_gate.py --list-suites
+```
+
+For frontend journey changes, install the isolated browser harness once and run it directly:
+
+```bash
+python -m pip install -r requirements-browser.txt
+python -m playwright install chromium
+python tools/browser_smoke.py
 ```
 
 CI labels production-blocking jobs and steps as `Required`. Live storage/provider checks and
@@ -76,7 +84,8 @@ pip-compile \
   requirements.txt
 ```
 
-Container publication starts only after the full verification matrix and container smoke test succeed.
+Container publication starts only after the verification matrix, required Chromium browser smoke,
+and container smoke succeed.
 
 ## Architecture Rules
 

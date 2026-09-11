@@ -16,11 +16,17 @@ Repeat `--test-module` for every directly affected module. Task and phase comman
 test selections and reject modules assigned to the experimental HA suite. Use `--dry-run` or
 `--list` to inspect a gate without executing it.
 
-P5.4 owns the required real-browser harness. Until that task supplies it, the release plan labels
-`browser-smoke` as `pending` and the non-dry release command fails before running expensive checks.
-The application and container smokes are already implemented as required CI evidence; the release
-runner labels them as CI-owned instead of pretending to execute them locally. The release checklist
-requires both jobs to pass for the same candidate commit.
+The required Chromium harness is `python tools/browser_smoke.py`. Install its isolated dependency
+with `python -m pip install -r requirements-browser.txt` and its browser with
+`python -m playwright install chromium`. It starts a fresh loopback-only runtime, uses disposable
+SQLite state, blocks real provider traffic with deterministic in-browser fixtures, and exercises
+all nine critical journeys plus an 11-route accessibility/overflow sweep at 360, 768, 1024, and
+1440 pixels. The release runner executes it locally; CI installs Chromium with its Linux system
+dependencies in a dedicated required job.
+
+The application and container smokes remain required CI evidence; the release runner labels them
+as CI-owned instead of pretending to execute them locally. The release checklist requires the
+application, browser, and container jobs to pass for the same candidate commit.
 
 The phase/release configuration contracts also run the versioned R1 compatibility guard and load
 the pre-R1 SQLite upgrade fixture. See [Compatibility and deprecation](compatibility.md).

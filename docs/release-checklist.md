@@ -7,7 +7,8 @@ Use this checklist when preparing a tagged Omni Gateway release.
 - Inspect the immutable release plan with `python tools/quality_gate.py release --dry-run` and resolve
   every `pending` entry through its existing owner task.
 - Run the single local command `python tools/quality_gate.py release` on the candidate commit.
-- Confirm the required CI application and container smoke jobs passed for the same commit.
+- Confirm the required CI application, Chromium browser, and container smoke jobs passed for the
+  same commit.
 - Regenerate `requirements.lock` and confirm that `git diff --exit-code requirements.lock` is clean.
 - Confirm the CI container smoke test builds the image and completes setup, login, management API, and invalid-key checks.
 - Confirm public authentication, validation, upstream, and pre-stream errors match the OpenAI, Anthropic, and Google GenAI envelopes.
