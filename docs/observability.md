@@ -9,8 +9,10 @@ service error ratio so invalid traffic cannot create a false availability incide
 
 ## External export controls
 
-Both external exporters are disabled by default. Neither exporter transmits prompts, responses,
-request IDs, trace IDs, credential identifiers, exception text, or model-route dimensions.
+Prometheus, OpenTelemetry, and Langfuse are independent opt-in integrations. All are disabled by
+default. Prometheus is a local authenticated pull endpoint; OpenTelemetry exports only aggregate
+gauges and never sends prompts, responses, request/trace IDs, credential identifiers, exception
+text, or model-route dimensions.
 
 Prometheus requires both `PROMETHEUS_EXPORT_ENABLED=true` and a `METRICS_TOKEN` of at least 32
 UTF-8 bytes. Scrapes of `GET /metrics` must send `Authorization: Bearer <token>`. The endpoint
@@ -27,6 +29,12 @@ every `OTEL_EXPORT_INTERVAL_SECONDS` (15–300, default 60). Optional
 `OTEL_EXPORTER_OTLP_HEADERS` accepts at most eight comma-separated `authorization`, `api-key`, or
 `x-api-key` values. Credentials embedded in the endpoint, plaintext HTTP, arbitrary headers, and
 line breaks fail startup. Header values and full endpoint paths are never returned to the console.
+
+Langfuse is enabled only when both `LANGFUSE_PUBLIC_KEY` and `LANGFUSE_SECRET_KEY` are configured.
+It sends the request ID as a trace correlation ID plus model, provider, token counts, latency, and
+allowlisted quality-decision metadata. Prompt and response bodies, credential identifiers, API
+keys, and exception text are not sent. With either key absent, the request-completion path returns
+before constructing the exporter or an HTTP client.
 
 The reference rules are in `deploy/observability/prometheus-alerts.yml`. Tune thresholds only
 after establishing a traffic baseline; the supplied error and latency alerts require a minimum

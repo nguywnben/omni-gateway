@@ -6,16 +6,16 @@
 - Active plan: `PROD-SELFHOST-R1`
 - Target: production-quality self-hosting for one person or a trusted team, not enterprise service
   operation.
-- Progress: **32/36 implementation tasks**; Phase 5 is in progress (2/6).
-- Completed: **P5.2 — Authentication and security closure** through candidate `68c9392` and review
-  reconciliation fix `8bbc883`.
-- The independent review returned PASS WITH FINDINGS: zero Critical/High/Medium, one Low, and two
-  Informational findings. The valid Low finding was fixed by binding pasted OAuth callbacks to the
-  initiating management session. Gemini query-key logging and process-local OAuth flow state are
-  documented bounded compatibility/topology risks for the fixed self-host target.
-- Verification: the original 362-test adversarial matrix, 87-test candidate gate, dependency audit,
-  isolated UID-10001 image, and the post-review 21-test task gate all passed.
-- Next planned task: **P5.3 — Usage, cost, and observability closure**. It has not begun.
+- Progress: **33/36 implementation tasks**; Phase 5 is in progress (3/6).
+- Completed: **P5.3 — Usage, cost, and observability closure** in candidate `096b9f1`.
+- Hard-budget `deny` and `warn` policies now both fail closed for unknown pricing; `warn` also emits
+  bounded warning telemetry. Only an explicit positive `fallback` can price an unknown model.
+  Invalid negative/non-finite pricing overrides are ignored, and the usage API exposes path-free
+  built-in/override freshness metadata.
+- Verification: the fixed task gate passed all static checks and **175 focused tests** covering the
+  accounting lifecycle, durable ledger, pricing, metrics cardinality, request/audit retention,
+  prompt-free correlation, response cache, streaming/retry behavior, and disabled exporters.
+- Next planned task: **P5.4 — Browser test harness and CI balance**. It has not begun.
 - Supported runtime today: standalone, one worker, one replica.
 - Redis coordination, multi-replica HA, and Helm are experimental and no longer R1 release blockers.
 
