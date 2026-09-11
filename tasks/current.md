@@ -7,13 +7,15 @@
 - Target: production-quality self-hosting for one person or a trusted team, not enterprise service
   operation.
 - Progress: **31/36 implementation tasks**; Phase 5 is in progress (1/6).
-- Completed: **P5.1 — Storage tiers and migrations**.
-- SQLite now fails before migration on corrupt state, rolls back an interrupted additive startup
-  migration atomically, and applies one foreign-key/five-second lock policy across storage paths.
-  PostgreSQL passed 12 live contract cases against version 17; MongoDB remains Compatibility and
-  passed its required driver-boundary smoke without becoming an R1 live dependency.
-- Next: **P5.2 — Authentication and security closure**. Do not begin it until a new user request to
-  continue the fixed plan.
+- Active: **P5.2 — Authentication and security closure**; candidate `68c9392` is awaiting its one
+  independent cross-model review.
+- The internal pass fixed cross-session OAuth flow selection/status disclosure, incorrect
+  local-owner substitution on the log WebSocket, raw OAuth exception responses, PostgreSQL backend
+  misclassification, and unsafe backend metadata/DSN exposure. The 362-test adversarial matrix,
+  87-test task gate, dependency audit, and isolated non-root candidate image all passed.
+- Next action: run `docs/reviews/p5.2-cross-model-review-prompt.md`, save the report at the requested
+  Downloads path, then reconcile it. Do not start P5.3 or change the 31/36 denominator before this
+  security gate closes.
 - Supported runtime today: standalone, one worker, one replica.
 - Redis coordination, multi-replica HA, and Helm are experimental and no longer R1 release blockers.
 
