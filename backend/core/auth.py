@@ -681,7 +681,10 @@ async def asyncio_complete_auth_flow(
 
 
 async def complete_auth_flow_from_callback_url(
-    callback_url: str, project_id: Optional[str] = None, mode: str = "code_assist"
+    callback_url: str,
+    project_id: Optional[str] = None,
+    mode: str = "code_assist",
+    user_session: Optional[str] = None,
 ) -> Dict[str, Any]:
     try:
         log.info("Starting authentication from an OAuth callback URL.")
@@ -701,6 +704,11 @@ async def complete_auth_flow_from_callback_url(
                 "error": "The authentication flow was not found. Start authentication again.",
             }
         flow_data = auth_flows[state]
+        if user_session and flow_data.get("user_session") != user_session:
+            return {
+                "success": False,
+                "error": "The authentication flow was not found. Start authentication again.",
+            }
         flow = flow_data["flow"]
         redirect_uri = flow.redirect_uri
         log.debug(f"Using OAuth redirect URI: {redirect_uri}")

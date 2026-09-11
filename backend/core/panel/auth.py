@@ -354,14 +354,19 @@ async def auth_callback(
 
 @router.post("/callback-url")
 async def auth_callback_url(
-    request: AuthCallbackUrlRequest, token: str = Depends(verify_panel_token)
+    payload: AuthCallbackUrlRequest,
+    request: Request,
+    token: str = Depends(verify_panel_token),
 ):
     try:
-        if not request.callback_url or not request.callback_url.startswith(("http://", "https://")):
+        if not payload.callback_url or not payload.callback_url.startswith(("http://", "https://")):
             raise HTTPException(status_code=400, detail="Please provide a valid callback URL.")
 
         result = await complete_auth_flow_from_callback_url(
-            request.callback_url, request.project_id, mode=validate_mode(request.mode)
+            payload.callback_url,
+            payload.project_id,
+            mode=validate_mode(payload.mode),
+            user_session=_management_auth_reference(request),
         )
 
         if result["success"]:

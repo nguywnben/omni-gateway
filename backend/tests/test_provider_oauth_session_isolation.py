@@ -14,6 +14,7 @@ if str(BACKEND_DIR) not in sys.path:
 from core.auth import (
     asyncio_complete_auth_flow,
     auth_flows,
+    complete_auth_flow_from_callback_url,
     create_auth_url,
     get_auth_status,
 )
@@ -93,6 +94,35 @@ class ProviderOAuthSessionIsolationTests(unittest.IsolatedAsyncioTestCase):
             get_auth_status("shared-project", "owner-session-reference")["state"],
             "private-state",
         )
+
+    async def test_pasted_callback_cannot_consume_another_session_flow(self):
+        flow = MagicMock()
+        flow.redirect_uri = "http://localhost:4283/callback"
+        flow.exchange_code = AsyncMock()
+        auth_flows["private-state"] = {
+            "flow": flow,
+            "project_id": "shared-project",
+            "user_session": "owner-session-reference",
+            "callback_port": 4283,
+            "callback_url": "http://localhost:4283/callback",
+            "server": None,
+            "server_thread": None,
+            "code": None,
+            "completed": False,
+            "created_at": 1.0,
+            "auto_project_detection": False,
+            "mode": "primary",
+        }
+
+        result = await complete_auth_flow_from_callback_url(
+            "http://localhost:4283/callback?state=private-state&code=authorization-code",
+            mode="primary",
+            user_session="different-session-reference",
+        )
+
+        self.assertFalse(result["success"])
+        self.assertIn("not found", result["error"].lower())
+        flow.exchange_code.assert_not_awaited()
 
 
 if __name__ == "__main__":
