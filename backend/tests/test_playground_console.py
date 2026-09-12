@@ -247,6 +247,10 @@ assert(state.runStateKey === 'playground.ready', 'first visit status');
         self.assertIn("width: 100%", styles)
         self.assertRegex(
             styles,
+            r"(?s)\.playground-message \.playground-message-role select\s*\{.*?width: 122px.*?height: 30px",
+        )
+        self.assertRegex(
+            styles,
             r"(?s)@media \(max-width: 600px\).*?\.playground-message-header.*?display: grid",
         )
 

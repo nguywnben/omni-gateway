@@ -124,11 +124,6 @@
     margin: 0;
 }
 
-.playground-message-role select {
-    width: auto;
-    min-width: 132px;
-}
-
 .playground-message-label {
     display: block;
     margin-bottom: 6px;
@@ -143,6 +138,14 @@
     min-width: 0;
 }
 
+.playground-message .playground-message-role select {
+    width: 122px;
+    min-height: 30px;
+    height: 30px;
+    padding: 3px 32px 3px 11px;
+    background-position: right 11px center;
+}
+
 .playground-message-content {
     width: 100%;
 }
@@ -154,9 +157,9 @@
 
 .playground-message-remove {
     width: auto;
-    min-height: 36px;
+    min-height: 30px;
     margin: 0;
-    padding: 7px 10px;
+    padding: 3px 10px;
     border-color: transparent;
     background: transparent;
     color: var(--text-muted);
@@ -370,7 +373,7 @@
         flex: 1 1 auto;
     }
 
-    .playground-message-role select {
+    .playground-message .playground-message-role select {
         width: 100%;
     }
 
