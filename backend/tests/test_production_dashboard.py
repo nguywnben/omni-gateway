@@ -109,7 +109,11 @@ for (const [aggregate, health, expectedState, expectedTab] of fixtures) {
             "function setOperationalHealthStatus", 1
         )[0]
 
+        aggregate_fetch = refresh_body.index("const aggregatedResponse = await fetch")
         readiness = refresh_body.index("renderDashboardReadiness();")
+        detail_fetch = refresh_body.index("const statsResponse = await fetch")
+        self.assertLess(aggregate_fetch, readiness)
+        self.assertLess(readiness, detail_fetch)
         self.assertLess(readiness, refresh_body.index("void refreshOperationalHealth();"))
         self.assertLess(readiness, refresh_body.index("void refreshRecentActivity();"))
 

@@ -218,15 +218,12 @@ async function refreshUsageStats(options = {}) {
 
         const usagePeriodQuery = `period=${encodeURIComponent(usagePeriod)}`;
 
-        const [statsResponse, aggregatedResponse] = await Promise.all([
+        // The aggregate drives every above-the-fold readiness signal. Resolve it
+        // before the per-credential table so a populated ledger cannot hold the
+        // whole dashboard behind its slower bounded detail query.
+        const aggregatedResponse = await fetch(`./api/usage/aggregated?${usagePeriodQuery}`, { headers: getAuthHeaders() });
 
-            fetch(`./api/usage/stats/page?${usagePeriodQuery}&page_size=100`, { headers: getAuthHeaders() }),
-
-            fetch(`./api/usage/aggregated?${usagePeriodQuery}`, { headers: getAuthHeaders() })
-
-        ]);
-
-        if (statsResponse.status === 401 || aggregatedResponse.status === 401) {
+        if (aggregatedResponse.status === 401) {
 
             showStatus(t('authentication_failed_please_log_in'), 'error');
 
@@ -236,72 +233,59 @@ async function refreshUsageStats(options = {}) {
 
         }
 
-        const statsData = await statsResponse.json();
-
         const aggregatedData = await aggregatedResponse.json();
 
-        if (statsResponse.ok && aggregatedResponse.ok) {
-
-            clearPageState('dashboardUsageState');
-
-            AppState.usageStatsData = statsData.success ? statsData.data : statsData;
-
-            AppState.usageStatsLoaded = true;
-
-            const aggData = aggregatedData.success ? aggregatedData.data : aggregatedData;
-
-            AppState.dashboardAggregate = aggData;
-
-            const totalCalls = Number(aggData.total_calls ?? aggData.total_calls_24h ?? 0);
-
-            const successfulCalls = Number(aggData.successful_calls ?? aggData.successful_calls_24h ?? 0);
-
-            const failedCalls = Number(aggData.failed_calls ?? aggData.failed_calls_24h ?? 0);
-
-            const successRate = totalCalls > 0 ? Math.round((successfulCalls / totalCalls) * 100) : 0;
-
-            document.getElementById('totalApiCalls').textContent = formatUsageNumber(totalCalls);
-
-            document.getElementById('successRate24h').textContent = `${successRate}%`;
-
-            document.getElementById('requestOutcomeDetail').textContent = t('dashboard.successful_failed', {
-                successful: formatUsageNumber(successfulCalls),
-                failed: formatUsageNumber(failedCalls)
-            });
-
-            document.getElementById('successRateDetail').textContent = totalCalls > 0
-                ? t('dashboard.requests_succeeded', {successful: formatUsageNumber(successfulCalls), total: formatUsageNumber(totalCalls)})
-                : t('dashboard.no_traffic_yet');
-
-            document.getElementById('totalFiles').textContent = formatUsageNumber(aggData.total_files);
-
-            document.getElementById('activeFiles').textContent = formatUsageNumber(aggData.active_files);
-
-            document.getElementById('disabledCredentialsDetail').textContent = t('dashboard.disabled_count', {count: formatUsageNumber(aggData.disabled_files)});
-
-            document.getElementById('totalCostUsd').textContent = formatUsageCost(aggData.total_cost_usd);
-
-            document.getElementById('totalTokens24h').textContent = formatUsageNumber(aggData.total_tokens ?? aggData.total_tokens_24h);
-
-            document.getElementById('inputOutputDetail').textContent = t('dashboard.input_output', {
-                input: formatUsageNumber(aggData.input_tokens ?? aggData.input_tokens_24h),
-                output: formatUsageNumber(aggData.output_tokens ?? aggData.output_tokens_24h)
-            });
-
-            renderDashboardReadiness();
-            renderTokenDistribution(aggData);
-            renderProviderHealthMatrix();
-            renderUsageList();
-
-            // showStatus(t('loaded_usage_statistics_for_aggdata', {aggData_total_files____Object_keys_AppState_usageStatsData__length: aggData.total_files || Object.keys(AppState.usageStatsData).length}), 'success');
-
-        } else {
-
-            const errorMsg = statsData.detail || aggregatedData.detail || t('failed_to_load_usage_statistics');
-
-            throw new Error(errorMsg);
-
+        if (!aggregatedResponse.ok) {
+            throw new Error(aggregatedData.detail || t('failed_to_load_usage_statistics'));
         }
+
+        const aggData = aggregatedData.success ? aggregatedData.data : aggregatedData;
+        AppState.dashboardAggregate = aggData;
+
+        const totalCalls = Number(aggData.total_calls ?? aggData.total_calls_24h ?? 0);
+        const successfulCalls = Number(aggData.successful_calls ?? aggData.successful_calls_24h ?? 0);
+        const failedCalls = Number(aggData.failed_calls ?? aggData.failed_calls_24h ?? 0);
+        const successRate = totalCalls > 0 ? Math.round((successfulCalls / totalCalls) * 100) : 0;
+
+        document.getElementById('totalApiCalls').textContent = formatUsageNumber(totalCalls);
+        document.getElementById('successRate24h').textContent = `${successRate}%`;
+        document.getElementById('requestOutcomeDetail').textContent = t('dashboard.successful_failed', {
+            successful: formatUsageNumber(successfulCalls),
+            failed: formatUsageNumber(failedCalls)
+        });
+        document.getElementById('successRateDetail').textContent = totalCalls > 0
+            ? t('dashboard.requests_succeeded', {successful: formatUsageNumber(successfulCalls), total: formatUsageNumber(totalCalls)})
+            : t('dashboard.no_traffic_yet');
+        document.getElementById('totalFiles').textContent = formatUsageNumber(aggData.total_files);
+        document.getElementById('activeFiles').textContent = formatUsageNumber(aggData.active_files);
+        document.getElementById('disabledCredentialsDetail').textContent = t('dashboard.disabled_count', {count: formatUsageNumber(aggData.disabled_files)});
+        document.getElementById('totalCostUsd').textContent = formatUsageCost(aggData.total_cost_usd);
+        document.getElementById('totalTokens24h').textContent = formatUsageNumber(aggData.total_tokens ?? aggData.total_tokens_24h);
+        document.getElementById('inputOutputDetail').textContent = t('dashboard.input_output', {
+            input: formatUsageNumber(aggData.input_tokens ?? aggData.input_tokens_24h),
+            output: formatUsageNumber(aggData.output_tokens ?? aggData.output_tokens_24h)
+        });
+        renderDashboardReadiness();
+        renderTokenDistribution(aggData);
+
+        const statsResponse = await fetch(`./api/usage/stats/page?${usagePeriodQuery}&page_size=100`, { headers: getAuthHeaders() });
+
+        if (statsResponse.status === 401) {
+            showStatus(t('authentication_failed_please_log_in'), 'error');
+            setTimeout(() => location.reload(), 1500);
+            return;
+        }
+
+        const statsData = await statsResponse.json();
+        if (!statsResponse.ok) {
+            throw new Error(statsData.detail || t('failed_to_load_usage_statistics'));
+        }
+
+        clearPageState('dashboardUsageState');
+        AppState.usageStatsData = statsData.success ? statsData.data : statsData;
+        AppState.usageStatsLoaded = true;
+        renderProviderHealthMatrix();
+        renderUsageList();
 
     } catch (error) {
 
