@@ -212,6 +212,16 @@ assert(state.runStateKey === 'playground.ready', 'first visit status');
             r"(?s)@media \(max-width: 860px\).*?\.playground-workspace.*?grid-template-columns: minmax\(0, 1fr\)",
         )
 
+    def test_page_keeps_guidance_inline_and_statuses_compact(self) -> None:
+        fragment = (ROOT / "frontend/fragments/pages/playground.html").read_text(encoding="utf-8")
+        styles = STYLES.read_text(encoding="utf-8")
+
+        self.assertNotIn("playground-privacy-note", fragment)
+        self.assertIn('class="status-badge muted"', fragment)
+        self.assertIn("overflow-x: hidden", styles)
+        self.assertIn("white-space: pre-wrap", styles)
+        self.assertIn(".playground-stream-control small", styles)
+
 
 if __name__ == "__main__":
     unittest.main()
