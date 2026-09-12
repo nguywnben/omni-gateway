@@ -34,7 +34,7 @@ def _request(path: str, *, request_id="request-123") -> Request:
 
 
 class RequestTraceMiddlewareTests(unittest.IsolatedAsyncioTestCase):
-    async def test_inference_audit_and_trace_persist_concurrently(self):
+    async def test_inference_trace_and_audit_persist_without_competing_writes(self):
         trace_started = asyncio.Event()
         audit_started = asyncio.Event()
         release = asyncio.Event()
@@ -61,12 +61,12 @@ class RequestTraceMiddlewareTests(unittest.IsolatedAsyncioTestCase):
                 add_security_headers(_request("/v1/chat/completions"), next_handler)
             )
             try:
-                await asyncio.wait_for(
-                    asyncio.gather(trace_started.wait(), audit_started.wait()),
-                    timeout=0.25,
-                )
+                await asyncio.wait_for(trace_started.wait(), timeout=0.25)
+                with self.assertRaises(TimeoutError):
+                    await asyncio.wait_for(audit_started.wait(), timeout=0.05)
             finally:
                 release.set()
+                await asyncio.wait_for(audit_started.wait(), timeout=0.25)
                 await task
 
     async def test_cancellation_before_response_persists_one_cancelled_trace(self):

@@ -411,6 +411,69 @@ class SQLiteUsageLedgerTests(unittest.IsolatedAsyncioTestCase):
         retired = await self.repository.aggregate_credentials(since=NOW)
         self.assertEqual(retired[0].credential_ref, "__deleted_credential__openai.json")
 
+    async def test_dashboard_aggregates_execute_in_sql_without_materializing_ledger(self):
+        await self.repository.append_usage(_usage("a"))
+        request = _reservation("b", created_at=NOW + 20, expires_at=NOW + 90)
+        await self.repository.reserve_budget(request)
+        await self.repository.commit_reservation(
+            request.reservation_id,
+            _usage(
+                "b",
+                occurred_at=NOW + 30,
+                success=False,
+                status_code=503,
+                input_tokens=7,
+                output_tokens=2,
+                total_tokens=9,
+                cached_tokens=1,
+                reasoning_tokens=4,
+                estimated_input_tokens=8,
+                estimated_tokens_saved=1,
+                compressed_messages=1,
+                latency_ms=50,
+                retry_count=2,
+                cost_nanos=10,
+            ),
+            transitioned_at=NOW + 30,
+        )
+
+        with patch.object(
+            self.repository,
+            "_committed_entries",
+            side_effect=AssertionError("dashboard aggregation materialized the ledger"),
+        ):
+            credentials = await self.repository.aggregate_credentials(since=NOW)
+            buckets = await self.repository.aggregate_time_series(
+                since=NOW,
+                until=NOW + 60,
+                points=2,
+            )
+
+        self.assertEqual(len(credentials), 1)
+        self.assertEqual(
+            dataclasses.astuple(credentials[0]),
+            (
+                "account.json",
+                "openai",
+                2,
+                1,
+                1,
+                107,
+                22,
+                129,
+                6,
+                7,
+                118,
+                11,
+                3,
+                300,
+                3,
+                usd_to_nanos("0.25") + 10,
+            ),
+        )
+        self.assertEqual([bucket.requests for bucket in buckets], [1, 1])
+        self.assertEqual(sum(bucket.cached_tokens for bucket in buckets), 6)
+
     async def test_public_timestamps_are_strict_and_finite(self):
         for invalid in (True, float("nan"), float("inf"), -1):
             with self.subTest(invalid=invalid):

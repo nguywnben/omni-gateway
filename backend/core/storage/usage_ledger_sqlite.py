@@ -625,38 +625,72 @@ class SQLiteUsageLedgerRepository:
     async def aggregate_credentials(
         self, *, since: float | None = None
     ) -> list[CredentialUsageAggregate]:
-        entries = await self._committed_entries(since=since)
-        grouped: dict[str, list[int]] = {}
-        providers: dict[str, str] = {}
-        for entry in entries:
-            credential_ref = entry.credential_ref
-            totals = grouped.setdefault(credential_ref, [0] * 14)
-            providers[credential_ref] = max(providers.get(credential_ref, ""), entry.provider)
-            values = (
-                1,
-                1 if entry.success else 0,
-                0 if entry.success else 1,
-                entry.input_tokens,
-                entry.output_tokens,
-                entry.total_tokens,
-                entry.cached_tokens,
-                entry.reasoning_tokens,
-                entry.estimated_input_tokens,
-                entry.estimated_tokens_saved,
-                entry.compressed_messages,
-                entry.latency_ms,
-                entry.retry_count,
-                entry.cost_nanos,
-            )
-            for index, value in enumerate(values):
-                totals[index] = self._checked_sum(totals[index], value)
+        where = "occurred_at IS NOT NULL"
+        parameters: list[object] = []
+        if since is not None:
+            where += " AND occurred_at >= ?"
+            parameters.append(self._report_timestamp(since, "Usage aggregate start"))
+
+        detail_fields = (
+            "input_tokens",
+            "output_tokens",
+            "cached_tokens",
+            "reasoning_tokens",
+            "estimated_input_tokens",
+            "estimated_tokens_saved",
+            "compressed_messages",
+            "latency_ms",
+            "retry_count",
+        )
+        detail_columns = ",\n".join(
+            f"SUM({self._usage_payload_integer(field)}) AS {field}" for field in detail_fields
+        )
+        async with self._connection() as db:
+            rows = await (
+                await db.execute(
+                    f"""
+                    WITH committed AS (
+                        SELECT *, COUNT(*) OVER () AS source_rows
+                        FROM durable_usage_ledger
+                        WHERE {where}
+                    )
+                    SELECT credential_ref, MAX(provider) AS provider,
+                           COUNT(*) AS calls,
+                           SUM(success) AS successful_calls,
+                           COUNT(*) - SUM(success) AS failed_calls,
+                           {detail_columns},
+                           SUM(total_tokens) AS total_tokens,
+                           SUM(cost_nanos) AS cost_nanos,
+                           MAX(source_rows) AS source_rows
+                    FROM committed
+                    GROUP BY credential_ref
+                    ORDER BY credential_ref
+                    """,
+                    tuple(parameters),
+                )
+            ).fetchall()
+
+        self._ensure_report_row_bound(rows)
         return [
             CredentialUsageAggregate(
-                credential_ref,
-                providers[credential_ref],
-                *totals,
+                str(row["credential_ref"]),
+                str(row["provider"] or ""),
+                int(row["calls"]),
+                int(row["successful_calls"]),
+                int(row["failed_calls"]),
+                int(row["input_tokens"]),
+                int(row["output_tokens"]),
+                int(row["total_tokens"]),
+                int(row["cached_tokens"]),
+                int(row["reasoning_tokens"]),
+                int(row["estimated_input_tokens"]),
+                int(row["estimated_tokens_saved"]),
+                int(row["compressed_messages"]),
+                int(row["latency_ms"]),
+                int(row["retry_count"]),
+                int(row["cost_nanos"]),
             )
-            for credential_ref, totals in sorted(grouped.items())
+            for row in rows
         ]
 
     async def aggregate_providers(self) -> list[ProviderUsageAggregate]:
@@ -689,18 +723,41 @@ class SQLiteUsageLedgerRepository:
             raise ValueError("Usage time-series interval is invalid.")
         step = (until - since) / points
         totals = [[0] * 6 for _ in range(points)]
-        for entry in await self._committed_entries(since=since, until=until):
-            index = min(int((entry.occurred_at - since) / step), points - 1)
-            values = (
-                1,
-                1 if entry.success else 0,
-                0 if entry.success else 1,
-                entry.total_tokens,
-                entry.cached_tokens,
-                entry.cost_nanos,
-            )
-            for value_index, value in enumerate(values):
-                totals[index][value_index] = self._checked_sum(totals[index][value_index], value)
+        async with self._connection() as db:
+            rows = await (
+                await db.execute(
+                    f"""
+                    WITH committed AS (
+                        SELECT *, COUNT(*) OVER () AS source_rows
+                        FROM durable_usage_ledger
+                        WHERE occurred_at IS NOT NULL
+                          AND occurred_at >= ? AND occurred_at < ?
+                    )
+                    SELECT MIN(CAST((occurred_at - ?) / ? AS INTEGER), ?) AS bucket_index,
+                           COUNT(*) AS requests,
+                           SUM(success) AS successful_requests,
+                           COUNT(*) - SUM(success) AS failed_requests,
+                           SUM(total_tokens) AS tokens,
+                           SUM({self._usage_payload_integer("cached_tokens")}) AS cached_tokens,
+                           SUM(cost_nanos) AS cost_nanos,
+                           MAX(source_rows) AS source_rows
+                    FROM committed
+                    GROUP BY bucket_index
+                    ORDER BY bucket_index
+                    """,
+                    (since, until, since, step, points - 1),
+                )
+            ).fetchall()
+        self._ensure_report_row_bound(rows)
+        for row in rows:
+            totals[int(row["bucket_index"])] = [
+                int(row["requests"]),
+                int(row["successful_requests"]),
+                int(row["failed_requests"]),
+                int(row["tokens"]),
+                int(row["cached_tokens"]),
+                int(row["cost_nanos"]),
+            ]
         return [
             UsageTimeBucket(
                 since + (index * step),
@@ -709,6 +766,31 @@ class SQLiteUsageLedgerRepository:
             )
             for index, values in enumerate(totals)
         ]
+
+    @staticmethod
+    def _usage_payload_integer(field: str) -> str:
+        supported = {
+            "input_tokens",
+            "output_tokens",
+            "cached_tokens",
+            "reasoning_tokens",
+            "estimated_input_tokens",
+            "estimated_tokens_saved",
+            "compressed_messages",
+            "latency_ms",
+            "retry_count",
+        }
+        if field not in supported:
+            raise ValueError("Unsupported usage aggregate field.")
+        return (
+            "CAST(COALESCE(json_extract(payload, CASE kind "
+            f"WHEN 'usage' THEN '$.{field}' ELSE '$.usage.{field}' END), 0) AS INTEGER)"
+        )
+
+    @staticmethod
+    def _ensure_report_row_bound(rows: list[aiosqlite.Row]) -> None:
+        if rows and int(rows[0]["source_rows"]) > MAX_USAGE_REPORT_ROWS:
+            raise UsageLedgerCorrupt("Usage report exceeds the bounded row limit.")
 
     async def retire_credential(
         self,
