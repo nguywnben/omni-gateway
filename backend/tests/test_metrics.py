@@ -279,35 +279,38 @@ class ProviderMetricsLedgerTests(unittest.IsolatedAsyncioTestCase):
             repository = SQLiteUsageLedgerRepository(str(Path(temp_dir) / "credentials.db"))
             await repository.initialize()
             service = UsageLedgerService(repository)
-            with patch.object(usage_stats, "get_usage_ledger_service", return_value=service):
-                await usage_stats.record_call(
-                    "a.json",
-                    model="gpt-4o-mini",
-                    provider="openai_platform",
-                    token_usage={"prompt_tokens": 100, "completion_tokens": 10},
-                )
-                await usage_stats.record_call(
-                    "a.json",
-                    model="gpt-4o-mini",
-                    provider="openai_platform",
-                    status_code=500,
-                    success=False,
-                )
-                await usage_stats.record_call(
-                    "b.json",
-                    model="gemini-2.5-flash",
-                    provider="google_ai_studio",
-                    token_usage={"promptTokenCount": 50, "candidatesTokenCount": 5},
-                )
+            try:
+                with patch.object(usage_stats, "get_usage_ledger_service", return_value=service):
+                    await usage_stats.record_call(
+                        "a.json",
+                        model="gpt-4o-mini",
+                        provider="openai_platform",
+                        token_usage={"prompt_tokens": 100, "completion_tokens": 10},
+                    )
+                    await usage_stats.record_call(
+                        "a.json",
+                        model="gpt-4o-mini",
+                        provider="openai_platform",
+                        status_code=500,
+                        success=False,
+                    )
+                    await usage_stats.record_call(
+                        "b.json",
+                        model="gemini-2.5-flash",
+                        provider="google_ai_studio",
+                        token_usage={"promptTokenCount": 50, "candidatesTokenCount": 5},
+                    )
 
-                rows = await usage_stats.get_provider_metrics()
-                by_provider = {row["provider"]: row for row in rows}
+                    rows = await usage_stats.get_provider_metrics()
+                    by_provider = {row["provider"]: row for row in rows}
 
-                self.assertEqual(by_provider["openai_platform"]["calls"], 2)
-                self.assertEqual(by_provider["openai_platform"]["successful_calls"], 1)
-                self.assertEqual(by_provider["openai_platform"]["failed_calls"], 1)
-                self.assertEqual(by_provider["google_ai_studio"]["calls"], 1)
-                self.assertGreater(by_provider["google_ai_studio"]["total_tokens"], 0)
+                    self.assertEqual(by_provider["openai_platform"]["calls"], 2)
+                    self.assertEqual(by_provider["openai_platform"]["successful_calls"], 1)
+                    self.assertEqual(by_provider["openai_platform"]["failed_calls"], 1)
+                    self.assertEqual(by_provider["google_ai_studio"]["calls"], 1)
+                    self.assertGreater(by_provider["google_ai_studio"]["total_tokens"], 0)
+            finally:
+                await service.close()
 
 
 class TelemetryConfigTests(unittest.TestCase):

@@ -150,15 +150,17 @@ class CostLedgerIntegrationTests(unittest.IsolatedAsyncioTestCase):
         )
         await repository.initialize()
         self.repository = repository
+        self.service = UsageLedgerService(repository)
         self.service_patch = patch.object(
             usage_stats,
             "get_usage_ledger_service",
-            return_value=UsageLedgerService(repository),
+            return_value=self.service,
         )
         self.service_patch.start()
 
     async def asyncTearDown(self):
         self.service_patch.stop()
+        await self.service.close()
         self.temp_dir.__exit__(None, None, None)
 
     async def test_record_call_persists_cost_and_api_key_id(self):

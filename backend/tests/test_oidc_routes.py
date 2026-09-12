@@ -48,6 +48,12 @@ class OidcBrowserRoutesTests(unittest.IsolatedAsyncioTestCase):
         )
         self.patch.start()
         self.addCleanup(self.patch.stop)
+        self.admission_patch = patch(
+            "core.panel.identity_browser_routes._assert_and_record_oidc_start",
+            new=AsyncMock(return_value=None),
+        )
+        self.admission_patch.start()
+        self.addCleanup(self.admission_patch.stop)
         self.client = httpx.AsyncClient(
             transport=httpx.ASGITransport(app=_app()),
             base_url="https://gateway.example.com",

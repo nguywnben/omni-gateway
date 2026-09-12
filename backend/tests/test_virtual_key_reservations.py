@@ -479,6 +479,7 @@ class DurableVirtualKeyRuntimeTests(unittest.IsolatedAsyncioTestCase):
         repository = SQLiteUsageLedgerRepository(self.database_path)
         await repository.initialize()
         self.service = UsageLedgerService(repository)
+        self.services = [self.service]
         self.manager = VirtualKeyManager(
             state_store=InMemoryStateStore(),
             usage_ledger_service=self.service,
@@ -486,6 +487,8 @@ class DurableVirtualKeyRuntimeTests(unittest.IsolatedAsyncioTestCase):
         self.manager._loaded = True
 
     async def asyncTearDown(self):
+        for service in reversed(self.services):
+            await service.close()
         self.temp_dir.__exit__(None, None, None)
 
     async def test_committed_budget_survives_restart_without_double_counting(self):
@@ -528,6 +531,7 @@ class DurableVirtualKeyRuntimeTests(unittest.IsolatedAsyncioTestCase):
         restarted_repository = SQLiteUsageLedgerRepository(self.database_path)
         await restarted_repository.initialize()
         restarted_service = UsageLedgerService(restarted_repository)
+        self.services.append(restarted_service)
         restarted_manager = VirtualKeyManager(
             state_store=InMemoryStateStore(),
             usage_ledger_service=restarted_service,
@@ -576,6 +580,7 @@ class DurableVirtualKeyRuntimeTests(unittest.IsolatedAsyncioTestCase):
         restarted_repository = SQLiteUsageLedgerRepository(self.database_path)
         await restarted_repository.initialize()
         restarted_service = UsageLedgerService(restarted_repository)
+        self.services.append(restarted_service)
         restarted_manager = VirtualKeyManager(
             state_store=InMemoryStateStore(),
             usage_ledger_service=restarted_service,
