@@ -888,17 +888,6 @@
     margin: -6px 0 14px;
 }
 
-.config-note {
-    margin-bottom: 16px;
-    padding: 12px 14px;
-    background: var(--bg-subtle);
-    border: 1px solid var(--border);
-    border-radius: var(--radius);
-    color: var(--text-muted);
-    font-size: 13px;
-    line-height: 1.5;
-}
-
 .access-status-list {
     display: grid;
     margin-bottom: 16px;

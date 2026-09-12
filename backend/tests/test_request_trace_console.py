@@ -32,7 +32,7 @@ class RequestTraceConsoleContractTests(unittest.TestCase):
         self.assertLess(body.index('id="traceList"'), body.index('id="activityRuntimePanel"'))
         self.assertIn('data-activity-view="traces"', body)
         self.assertIn('data-activity-view="runtime"', body)
-        self.assertIn('data-i18n="trace.content_free"', body)
+        self.assertIn('data-i18n="trace.content_free_description"', body)
         self.assertIn('data-i18n="trace.diagnostic_only"', body)
 
     def test_client_uses_bounded_authenticated_server_contracts(self):

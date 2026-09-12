@@ -417,8 +417,9 @@
     .credentials,
     #logContainer {
         max-width: 100%;
-        overflow-x: auto;
-        word-break: normal;
+        overflow-x: hidden;
+        white-space: pre-wrap;
+        word-break: break-word;
         overflow-wrap: anywhere;
     }
 

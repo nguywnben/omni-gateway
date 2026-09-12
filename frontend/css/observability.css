@@ -1,9 +1,9 @@
 .activity-tabs {
     display: flex;
+    flex-wrap: wrap;
     gap: 4px;
     margin-bottom: 22px;
     padding: 4px;
-    overflow-x: auto;
     border: 1px solid var(--border);
     border-radius: var(--radius);
     background: var(--bg-subtle);
@@ -62,15 +62,13 @@
 .trace-pagination { margin-top: 16px; }
 .trace-retention { position: sticky; top: 20px; }
 .trace-retention form { display: grid; gap: 14px; margin-top: 18px; }
-.trace-privacy-note { display: grid; gap: 5px; margin-top: 16px; padding: 12px; border-left: 3px solid var(--success); border-radius: 0 var(--radius-sm) var(--radius-sm) 0; background: var(--bg-subtle); color: var(--text-muted); font-size: 12px; }
-.trace-privacy-note strong { color: var(--text); }
 .raw-log-section { margin-top: 22px; border-style: dashed; }
 #activityRuntimePanel { margin-top: 0; }
 .raw-log-header { align-items: flex-start; margin-bottom: 16px; }
 .raw-log-badge, .trace-detail-kicker { display: inline-block; margin-bottom: 6px; color: var(--warning); font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
 .raw-log-controls { margin-bottom: 14px; }
 .raw-log-section #logConnectionStatus { margin-bottom: 14px; }
-.trace-detail-dialog { width: min(820px, calc(100vw - 32px)); max-height: calc(100vh - 48px); padding: 0; overflow: auto; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); color: var(--text); box-shadow: var(--shadow-pop); }
+.trace-detail-dialog { width: min(820px, calc(100vw - 32px)); max-height: calc(100vh - 48px); padding: 0; overflow-x: hidden; overflow-y: auto; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); color: var(--text); box-shadow: var(--shadow-pop); }
 .trace-detail-dialog::backdrop { background: rgb(0 0 0 / .45); }
 .trace-detail-header, .trace-detail-actions, .trace-detail-dialog > p { padding: 18px 20px; }
 .trace-detail-header { border-bottom: 1px solid var(--border); }

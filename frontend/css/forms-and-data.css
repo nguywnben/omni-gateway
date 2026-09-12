@@ -56,7 +56,8 @@ button.endpoint-code-card:hover {
 
 .credentials {
     max-height: 280px;
-    overflow: auto;
+    overflow-x: hidden;
+    overflow-y: auto;
     padding: 12px;
 }
 
@@ -986,6 +987,11 @@ textarea[readonly] {
 
 .form-group:last-child {
     margin-bottom: 0;
+}
+
+label.form-group > span:first-child {
+    display: block;
+    margin-bottom: 8px;
 }
 
 .switch-row {

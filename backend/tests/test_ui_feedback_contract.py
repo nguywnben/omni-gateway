@@ -186,6 +186,35 @@ assert(host.hidden === true && host.children.length === 0, 'state did not clear'
         self.assertIn("transition-duration", reduced_motion.group("body"))
         self.assertIn("scroll-behavior", reduced_motion.group("body"))
 
+    def test_console_layout_uses_compact_badges_and_never_creates_horizontal_scrollers(self) -> None:
+        styles = "\n".join(
+            path.read_text(encoding="utf-8") for path in (FRONTEND / "css").glob("*.css")
+        )
+
+        self.assertNotRegex(styles, r"overflow-x:\s*auto")
+        badge_rule = re.search(r"\.status-badge\s*\{(?P<body>.*?)\}", styles, re.DOTALL)
+        self.assertIsNotNone(badge_rule)
+        self.assertIn("width: fit-content", badge_rule.group("body"))
+        self.assertIn("max-width: 100%", badge_rule.group("body"))
+
+    def test_wrapping_form_labels_keep_visible_space_before_controls(self) -> None:
+        styles = (FRONTEND / "css/forms-and-data.css").read_text(encoding="utf-8")
+
+        self.assertIn("label.form-group > span:first-child", styles)
+        self.assertRegex(
+            styles,
+            r"label\.form-group\s*>\s*span:first-child\s*\{[^}]*margin-bottom:\s*8px",
+        )
+
+    def test_pages_do_not_use_standalone_advisory_panels(self) -> None:
+        fragments = "\n".join(
+            path.read_text(encoding="utf-8") for path in (FRONTEND / "fragments/pages").glob("*.html")
+        )
+
+        self.assertNotIn('class="config-note', fragments)
+        self.assertNotIn("playground-privacy-note", fragments)
+        self.assertNotIn("trace-privacy-note", fragments)
+
 
 if __name__ == "__main__":
     unittest.main()

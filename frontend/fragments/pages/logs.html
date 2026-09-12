@@ -22,8 +22,7 @@
                             </section>
                         </div>
                         <aside class="trace-panel trace-retention" aria-labelledby="traceRetentionHeading">
-                            <h2 id="traceRetentionHeading" class="card-title" data-i18n="trace.retention">Trace retention</h2><p class="card-copy" data-i18n="trace.retention_description">Traces are pruned independently when either the age or count limit is exceeded.</p>
-                            <div class="trace-privacy-note"><strong data-i18n="trace.content_free">Content-free by design</strong><span data-i18n="trace.content_free_description">Only allowlisted decisions and numeric usage are stored—never prompts, responses, secrets, or exception text.</span></div>
+                            <h2 id="traceRetentionHeading" class="card-title" data-i18n="trace.retention">Trace retention</h2><p class="card-copy"><span data-i18n="trace.retention_description">Traces are pruned independently when either the age or count limit is exceeded.</span> <span data-i18n="trace.content_free_description">Only allowlisted decisions and numeric usage are stored—never prompts, responses, secrets, or exception text.</span></p>
                             <form id="traceRetentionForm"><div class="form-group"><label for="traceRetentionDays" data-i18n="trace.retention_days">Retention days</label><input type="number" id="traceRetentionDays" required></div><div class="form-group"><label for="traceMaxTraces" data-i18n="trace.max_traces">Maximum traces</label><input type="number" id="traceMaxTraces" required></div><button id="traceSaveRetention" type="submit" class="btn" data-i18n="trace.save_retention">Save retention</button><p id="traceRetentionStatus" class="field-hint" role="status" aria-live="polite"></p></form>
                         </aside>
                     </div>
