@@ -69,14 +69,14 @@ categories and exclude generated caches.
 | Surface | Baseline | Candidate | Change |
 | --- | ---: | ---: | ---: |
 | Backend runtime | 201 files / 74,292 lines | 193 files / 67,467 lines | -8 files / -6,825 lines |
-| Backend tests | 229 files / 49,295 lines | 205 files / 40,254 lines | -24 files / -9,041 lines |
+| Backend tests | 229 files / 49,295 lines | 205 files / 40,253 lines | -24 files / -9,042 lines |
 | Frontend JavaScript | 51 files / 21,501 lines | 51 files / 21,504 lines | 0 files / +3 lines |
 | Frontend CSS/HTML | 32 files / 7,938 lines | 32 files / 7,930 lines | 0 files / -8 lines |
 | Tooling | 26 files / 9,199 lines | 13 files / 3,505 lines | -13 files / -5,694 lines |
 | Documentation | 143 files / 17,949 lines | 129 files / 10,366 lines | -14 files / -7,583 lines |
 
-The authoritative Git range `8352941..candidate` changes 173 files with 2,011 insertions and
-33,055 deletions (-31,044 net lines). New code is limited to restoring compatibility, bounded
+The authoritative Git range `8352941..candidate` changes 176 files with 2,043 insertions and
+33,085 deletions (-31,042 net lines). New code is limited to restoring compatibility, bounded
 failure observability, UI consistency,
 right-sized verification, and the reconciliation contracts/evidence required by the seven-task
 plan. The large net deletion is the deliberate removal of inactive topology, tests, tooling, and

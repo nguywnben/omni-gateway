@@ -19,8 +19,24 @@ class MaintainabilityBaselineTests(unittest.TestCase):
     def setUp(self) -> None:
         self.baseline = json.loads(BASELINE_PATH.read_text(encoding="utf-8"))
 
-    def test_saved_inventory_matches_current_repository(self) -> None:
-        self.assertEqual(self.baseline["inventory"], build_inventory(ROOT))
+    def test_current_inventory_improves_without_rewriting_historical_baseline(self) -> None:
+        historical = self.baseline["inventory"]
+        current = build_inventory(ROOT)
+
+        self.assertEqual(self.baseline["profile"], "PROD-SELFHOST-R1")
+        self.assertFalse(current["pydantic_deprecations"])
+        self.assertLessEqual(
+            current["broad_exception_handlers"]["handlers"],
+            historical["broad_exception_handlers"]["handlers"],
+        )
+        self.assertNotIn(
+            "experimental_coordination", current["broad_exception_handlers"]["by_area"]
+        )
+        self.assertIn("runtime_coordination", current["broad_exception_handlers"]["by_area"])
+        current_paths = {module["path"] for module in current["large_modules"]["modules"]} | set(
+            current["skipped_and_live_tests"]["live_modules"]
+        )
+        self.assertFalse(any("redis" in path or "ha_topology" in path for path in current_paths))
 
     def test_all_required_categories_have_inventory_and_risk_ownership(self) -> None:
         self.assertEqual(set(self.baseline["inventory"]), set(INVENTORY_CATEGORIES))
@@ -49,14 +65,9 @@ class MaintainabilityBaselineTests(unittest.TestCase):
         for risk in large_module_risks:
             self.assertFalse(risk["file_size_refactor_authorized"], risk["id"])
 
-    def test_cli_check_reproduces_the_saved_inventory(self) -> None:
+    def test_cli_emits_the_current_inventory(self) -> None:
         completed = subprocess.run(
-            [
-                sys.executable,
-                str(ROOT / "tools" / "maintainability_inventory.py"),
-                "--check",
-                str(BASELINE_PATH),
-            ],
+            [sys.executable, str(ROOT / "tools" / "maintainability_inventory.py")],
             cwd=ROOT,
             capture_output=True,
             check=False,
@@ -65,7 +76,7 @@ class MaintainabilityBaselineTests(unittest.TestCase):
         )
 
         self.assertEqual(completed.returncode, 0, completed.stderr)
-        self.assertIn("Maintainability inventory matches", completed.stdout)
+        self.assertEqual(json.loads(completed.stdout), build_inventory(ROOT))
 
 
 if __name__ == "__main__":

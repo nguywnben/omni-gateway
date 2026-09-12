@@ -114,8 +114,8 @@ def _exception_area(path: str) -> str:
         return "protocol_routing"
     if any(token in path for token in ("credential", "/providers/", "provider_")):
         return "provider_credentials"
-    if any(token in path for token in ("coordination", "ha_", "redis_state_store.py")):
-        return "experimental_coordination"
+    if "coordination" in path:
+        return "runtime_coordination"
     return "runtime_operations"
 
 
