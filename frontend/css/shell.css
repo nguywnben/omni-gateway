@@ -396,7 +396,8 @@
 .sidebar-theme-control select {
     width: 100%;
     min-height: 32px;
-    padding: 4px 28px 4px 9px;
+    background-position: right 9px center;
+    padding: 4px 30px 4px 9px;
     border: 1px solid var(--border);
     border-radius: var(--radius);
     background-color: var(--surface);

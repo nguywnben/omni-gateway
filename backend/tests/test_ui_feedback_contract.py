@@ -206,6 +206,19 @@ assert(host.hidden === true && host.children.length === 0, 'state did not clear'
             r"label\.form-group\s*>\s*span:first-child\s*\{[^}]*margin-bottom:\s*8px",
         )
 
+    def test_select_controls_balance_text_and_chevron_spacing(self) -> None:
+        foundation = (FRONTEND / "css/foundation.css").read_text(encoding="utf-8")
+        styles = (FRONTEND / "css/forms-and-data.css").read_text(encoding="utf-8")
+
+        self.assertIn("--select-chevron:", foundation)
+        select_rule = re.search(r"select\s*\{(?P<body>.*?)\}", styles, re.DOTALL)
+        self.assertIsNotNone(select_rule)
+        body = select_rule.group("body")
+        self.assertIn("appearance: none", body)
+        self.assertIn("background-position: right 13px center", body)
+        self.assertIn("background-size: 12px 8px", body)
+        self.assertIn("padding: 8px 38px 8px 13px", body)
+
     def test_pages_do_not_use_standalone_advisory_panels(self) -> None:
         fragments = "\n".join(
             path.read_text(encoding="utf-8") for path in (FRONTEND / "fragments/pages").glob("*.html")
