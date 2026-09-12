@@ -62,11 +62,11 @@ class NavigationConsoleContractTests(unittest.TestCase):
             "navigation.credentials",
             "navigation.models_routing",
             "navigation.activity",
-            "navigation.advanced",
             "navigation.team_access",
         ):
             self.assertIn(f'data-i18n="{key}"', sidebar)
-        self.assertIn('id="advancedNavigation"', sidebar)
+        self.assertNotIn('id="advancedNavigation"', sidebar)
+        self.assertNotIn("<details", sidebar)
         self.assertRegex(
             sidebar,
             r'<button[^>]+data-tab="identity"[^>]+data-conditional-navigation="team-access"[^>]+hidden',
@@ -74,25 +74,16 @@ class NavigationConsoleContractTests(unittest.TestCase):
         self.assertIn('href="#mainContent"', body)
         self.assertIn('id="mainContent"', body)
 
-    def test_advanced_navigation_has_a_visible_disclosure_cue_and_scrolls_when_open(
-        self,
-    ) -> None:
+    def test_secondary_pages_are_top_level_sidebar_items(self) -> None:
         sidebar = (FRONTEND / "fragments/layout/sidebar.html").read_text(encoding="utf-8")
         shell = (FRONTEND / "css/shell.css").read_text(encoding="utf-8")
+        responsive = (FRONTEND / "css/responsive.css").read_text(encoding="utf-8")
 
-        self.assertRegex(
-            sidebar,
-            r'<summary>\s*<span[^>]+data-i18n="navigation\.advanced"[^>]*>Advanced</span>'
-            r'\s*<svg[^>]+class="sidebar-navigation-group-chevron"[^>]+aria-hidden="true"',
-        )
-        self.assertRegex(
-            shell,
-            r"(?s)\.dashboard-sidebar\s*\{[^}]*overflow-y:\s*auto;",
-        )
-        self.assertIn(
-            ".sidebar-navigation-group[open] > summary .sidebar-navigation-group-chevron",
-            shell,
-        )
+        self.assertRegex(sidebar, r'<button[^>]+data-tab="identity"[^>]*>')
+        self.assertRegex(sidebar, r'<button[^>]+data-tab="about"[^>]*>')
+        self.assertNotIn("sidebar-navigation-group", sidebar)
+        self.assertNotIn(".sidebar-navigation-group", shell)
+        self.assertNotIn(".sidebar-navigation-group", responsive)
 
     def test_activity_is_one_home_with_three_accessible_views(self) -> None:
         body = serve_control_panel().body.decode("utf-8")

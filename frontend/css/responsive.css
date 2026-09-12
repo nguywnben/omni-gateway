@@ -121,8 +121,7 @@
     }
 
     .dashboard-sidebar .tab,
-    .dashboard-sidebar .btn,
-    .sidebar-navigation-group > summary {
+    .dashboard-sidebar .btn {
         min-height: 44px;
     }
 

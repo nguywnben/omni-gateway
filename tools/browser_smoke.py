@@ -361,10 +361,7 @@ def install_fixtures(page: Page) -> None:
 
 def _open_tab(page: Page, name: str, target: str) -> None:
     tab = page.locator(f'[data-ui-action="switch-tab"][data-tab="{name}"]').first
-    if not tab.is_visible():
-        advanced = page.locator("#advancedNavigation")
-        if advanced.count() and advanced.get_attribute("open") is None:
-            advanced.locator("summary").click()
+    expect(tab).to_be_visible()
     tab.click()
     expect(page.locator(target)).to_be_visible()
 
