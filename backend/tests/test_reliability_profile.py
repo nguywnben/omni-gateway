@@ -155,6 +155,14 @@ class ReliabilityProfileContractTests(unittest.TestCase):
             source,
         )
 
+    def test_dashboard_warmup_settles_before_timed_reload(self) -> None:
+        from tools import reliability_profile
+
+        source = inspect.getsource(reliability_profile._measure_dashboard)
+        settled = source.index('page.wait_for_load_state("networkidle"')
+        timed = source.index("started = time.perf_counter()")
+        self.assertLess(settled, timed)
+
     def test_zero_exit_is_graceful_without_requiring_disabled_info_logs(self) -> None:
         from tools import reliability_profile
 

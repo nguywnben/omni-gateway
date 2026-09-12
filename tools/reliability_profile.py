@@ -947,6 +947,7 @@ def _measure_dashboard(base_url: str, profile: ReliabilityProfile) -> float:
         expect(page.locator("#dashboardReadiness")).to_have_attribute(
             "aria-busy", "false", timeout=10_000
         )
+        page.wait_for_load_state("networkidle", timeout=10_000)
         started = time.perf_counter()
         page.reload(wait_until="domcontentloaded")
         expect(page.locator("#dashboardReadiness")).to_have_attribute(
