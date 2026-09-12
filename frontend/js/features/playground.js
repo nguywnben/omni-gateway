@@ -397,10 +397,8 @@ function setPlaygroundRunning(running) {
     state.running = running;
     const run = document.getElementById('playgroundRun');
     const cancel = document.getElementById('playgroundCancel');
-    const clear = document.querySelector('[data-ui-action="playground-clear"]');
     if (run) run.disabled = running;
     if (cancel) cancel.disabled = !running;
-    if (clear) clear.disabled = running;
     document.querySelectorAll('#playgroundForm input, #playgroundForm select, #playgroundForm textarea, #playgroundAddMessage, [data-ui-action="playground-remove-message"]').forEach(control => {
         if (control.id !== 'playgroundCancel' && control.id !== 'playgroundRun') control.disabled = running;
     });
@@ -601,31 +599,6 @@ function cancelPlayground() {
     state.cancelReason = 'user';
     AppState.playground.controller.abort();
     setPlaygroundRunState('playground.cancelling');
-}
-
-function clearPlaygroundSession() {
-    const state = playgroundRuntimeState();
-    if (state.running) return;
-    state.messages = [{role: 'user', content: ''}];
-    state.hasRun = false;
-    for (const [id, value] of [
-        ['playgroundProtocol', 'openai_chat'], ['playgroundSystem', ''],
-        ['playgroundModel', 'omway'], ['playgroundTimeout', '60'],
-        ['playgroundMaxTokens', '1024'], ['playgroundTemperature', ''], ['playgroundTopP', '']
-    ]) {
-        const input = document.getElementById(id);
-        if (input) input.value = value;
-    }
-    const stream = document.getElementById('playgroundStream');
-    if (stream) stream.checked = false;
-    renderPlaygroundMessages();
-    renderPlaygroundError('');
-    renderPlaygroundValidation('');
-    renderPlaygroundMetadata(null);
-    replacePlaygroundText(document.getElementById('playgroundOutput'), t('playground.empty_prompt'));
-    setPlaygroundRunState('playground.ready');
-    setPlaygroundOutcome('playground.not_run', 'muted');
-    syncPlaygroundProtocol();
 }
 
 async function copyPlaygroundExample() {

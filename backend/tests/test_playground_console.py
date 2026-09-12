@@ -67,13 +67,20 @@ function assert(condition, message) {{ if (!condition) throw new Error(message);
             "playgroundMetadata",
             "playgroundExample",
             "playgroundCopyExample",
-            "playgroundQualityLink",
         ):
             self.assertIn(f'id="{element_id}"', fragment)
         self.assertIn('maxlength="65536"', fragment)
         self.assertIn('aria-live="polite"', fragment)
         self.assertIn('data-ui-action="playground-run"', fragment)
         self.assertIn('data-ui-action="playground-cancel"', fragment)
+        self.assertNotIn('data-ui-action="playground-clear"', fragment)
+        self.assertNotIn('data-ui-action="playground-open-quality"', fragment)
+
+        navigation = (ROOT / "frontend/js/features/navigation.js").read_text(encoding="utf-8")
+        source = SCRIPT.read_text(encoding="utf-8")
+        self.assertNotIn("'playground-clear'", navigation)
+        self.assertNotIn("'playground-open-quality'", navigation)
+        self.assertNotIn("function clearPlaygroundSession", source)
 
     def test_protocol_payloads_use_one_normalized_draft(self) -> None:
         self._run_contract(

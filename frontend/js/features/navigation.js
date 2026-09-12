@@ -99,8 +99,6 @@ function initStaticUiBindings() {
         'test-model-route': () => testModelRouteInPlayground(),
         'playground-add-message': () => addPlaygroundMessage(),
         'playground-remove-message': (element) => removePlaygroundMessage(element.dataset.messageIndex),
-        'playground-clear': () => clearPlaygroundSession(),
-        'playground-open-quality': () => navigate('/ai-quality'),
         'playground-cancel': () => cancelPlayground(),
         'playground-copy-example': () => copyPlaygroundExample(),
         'delete-model-route': () => deleteModelRoute(),
