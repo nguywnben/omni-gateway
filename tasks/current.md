@@ -2,23 +2,23 @@
 
 ## Resume Here
 
-- Updated: 2026-09-11 (Asia/Saigon)
+- Updated: 2026-09-12 (Asia/Saigon)
 - Active plan: `PROD-SELFHOST-R1`
 - Target: production-quality self-hosting for one person or a trusted team, not enterprise service
   operation.
-- Progress: **34/36 implementation tasks**; Phase 5 is in progress (4/6).
-- Completed: **P5.4 — Browser test harness and CI balance** in candidate `593eed2`.
-- The required Chromium harness now starts a disposable loopback runtime and automates all nine
-  critical journeys without real provider I/O. It also checks accessible page structure and
-  horizontal overflow across all 11 routes at 360/768/1024/1440 px.
-- CI installs the pinned browser dependency in a separate required job, preserves container smoke,
-  gates publication on both, and still excludes experimental HA and multi-browser matrices.
-- Browser execution exposed and fixed two production frontend defects: console bootstrap no longer
-  waits for external asset load, and Activity's request-ID HTML pattern is valid in modern Chromium.
-- Verification: the fixed task gate passed all static checks and **18 focused tests**; the browser
-  harness passed **9/9 journeys and 44 responsive route-width checks** with a clean console. An
-  intentionally wrong dashboard assertion returned exit code 1.
-- Next planned task: **P5.5 — Fixed reliability and performance evidence**. It has not begun.
+- Progress: **35/36 implementation tasks**; Phase 5 is in progress (5/6).
+- Completed: **P5.5 — Fixed reliability and performance evidence** against candidate `43a830a`.
+- The exact 600-second profile completed 6,000/6,000 deterministic requests at 10 offered RPS with
+  zero errors, p95 81.416 ms, bounded queue and memory, Dashboard usable in 610.596 ms, graceful
+  shutdown in 0.701 seconds, and restart readiness in 2.531 seconds.
+- The machine-readable result is `docs/evidence/artifacts/p5.5-reliability-profile.json`; all 15
+  frozen checks passed and the artifact names the exact Git candidate and profile digest.
+- Focused evidence corrected request-path persistence, SQLite aggregation/connection reuse,
+  Dashboard readiness, translation lookup, and runner measurement interference without relaxing a
+  threshold or adding an enterprise topology.
+- Verification: the fixed profile passed once; the P5.5 task gate passed all static checks and
+  **105/105 focused tests**.
+- Next planned task: **P5.6 — Release candidate, documentation, and handoff**. It has not begun.
 - Supported runtime today: standalone, one worker, one replica.
 - Redis coordination, multi-replica HA, and Helm are experimental and no longer R1 release blockers.
 
