@@ -13,66 +13,6 @@ function formatUsageCost(value) {
     });
 }
 
-function deriveDashboardState(aggregate = {}, health = null) {
-    const totalCredentials = Number(aggregate.total_files || 0);
-    const activeCredentials = Number(aggregate.active_files || 0);
-    const totalCalls = Number(aggregate.total_calls ?? aggregate.total_calls_24h ?? 0);
-    const failedCalls = Number(aggregate.failed_calls ?? aggregate.failed_calls_24h ?? 0);
-    const healthStatus = String(health?.status || 'no_data');
-
-    if (totalCredentials === 0 && totalCalls === 0) {
-        return {
-            state: 'first_time',
-            titleKey: 'dashboard.state_first_time_title',
-            descriptionKey: 'dashboard.state_first_time_description',
-            actionKey: 'dashboard.action_add_provider',
-            actionTab: 'providers',
-        };
-    }
-    if (activeCredentials === 0) {
-        return {
-            state: 'no_provider',
-            titleKey: 'dashboard.state_no_provider_title',
-            descriptionKey: 'dashboard.state_no_provider_description',
-            actionKey: 'dashboard.action_review_credentials',
-            actionTab: totalCredentials > 0 ? 'pool' : 'providers',
-        };
-    }
-    const errorRate = totalCalls > 0 ? failedCalls / totalCalls : 0;
-    const currentHealthNeedsAttention = ['warning', 'critical'].includes(healthStatus);
-    const historyIsOnlySignal = (!healthStatus || healthStatus === 'no_data') && errorRate >= 0.05;
-    if (currentHealthNeedsAttention || historyIsOnlySignal) {
-        return {
-            state: 'degraded',
-            titleKey: 'dashboard.state_degraded_title',
-            descriptionKey: 'dashboard.state_degraded_description',
-            actionKey: 'dashboard.action_investigate',
-            actionTab: 'activity',
-        };
-    }
-    return {
-        state: 'healthy',
-        titleKey: totalCalls > 0 ? 'dashboard.state_healthy_title' : 'dashboard.state_ready_title',
-        descriptionKey: totalCalls > 0 ? 'dashboard.state_healthy_description' : 'dashboard.state_ready_description',
-        actionKey: 'dashboard.action_activity',
-        actionTab: 'activity',
-    };
-}
-
-function renderDashboardReadiness() {
-    const container = document.getElementById('dashboardReadiness');
-    if (!container || !AppState.dashboardAggregate) return;
-    const guidance = deriveDashboardState(AppState.dashboardAggregate, AppState.operationalHealth);
-    container.dataset.state = guidance.state;
-    container.setAttribute('aria-busy', 'false');
-    document.getElementById('dashboardReadinessStatus').textContent = t(`dashboard.state_${guidance.state}`);
-    document.getElementById('dashboardReadinessTitle').textContent = t(guidance.titleKey);
-    document.getElementById('dashboardReadinessDescription').textContent = t(guidance.descriptionKey);
-    const action = document.getElementById('dashboardReadinessAction');
-    action.textContent = t(guidance.actionKey);
-    action.dataset.tab = guidance.actionTab;
-}
-
 function formatUsageNumber(value, options = {}) {
 
     const number = Number(value || 0);
@@ -265,7 +205,6 @@ async function refreshUsageStats(options = {}) {
             input: formatUsageNumber(aggData.input_tokens ?? aggData.input_tokens_24h),
             output: formatUsageNumber(aggData.output_tokens ?? aggData.output_tokens_24h)
         });
-        renderDashboardReadiness();
         renderTokenDistribution(aggData);
 
         const statsResponse = await fetch(`./api/usage/stats/page?${usagePeriodQuery}&page_size=100`, { headers: getAuthHeaders() });
@@ -307,7 +246,7 @@ async function refreshUsageStats(options = {}) {
 
         if (tableWrapper && !preserveContent) tableWrapper.hidden = false;
 
-        // The primary readiness and summary are the dashboard's usable state.
+        // The primary metrics and usage summary are the dashboard's usable state.
         // Load deeper health and activity cards afterwards so their bounded
         // history queries cannot delay first interaction on a populated ledger.
         void refreshOperationalHealth();
@@ -345,13 +284,6 @@ async function refreshOperationalHealth() {
         document.getElementById('sloExhaustion').textContent = formatUsageNumber(exhaustion);
         setOperationalHealthStatus(snapshot.status);
         renderOperationalRoutes(snapshot.routes || []);
-        const telemetry = snapshot.telemetry || {};
-        document.getElementById('sloPrometheusStatus').textContent = t(telemetry.prometheus?.enabled ? 'slo.enabled' : 'slo.disabled_default');
-        document.getElementById('sloOtelStatus').textContent = t(telemetry.opentelemetry?.enabled ? 'slo.enabled' : 'slo.disabled_default');
-        const notice = document.getElementById('sloSampleNotice');
-        notice.hidden = !snapshot.sample_truncated;
-        notice.textContent = snapshot.sample_truncated ? t('slo.sample_truncated', {count: formatUsageNumber(snapshot.sample_size)}) : '';
-        renderDashboardReadiness();
     } catch (error) {
         AppState.operationalHealth = {status: 'critical', unavailable: true};
         setOperationalHealthStatus('critical');
@@ -363,7 +295,6 @@ async function refreshOperationalHealth() {
             cell.colSpan = 4;
             cell.textContent = t('slo.load_failed');
         }
-        renderDashboardReadiness();
     } finally {
         card.setAttribute('aria-busy', 'false');
     }

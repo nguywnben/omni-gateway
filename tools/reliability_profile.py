@@ -944,13 +944,13 @@ def _measure_dashboard(base_url: str, profile: ReliabilityProfile) -> float:
         page.locator("#loginPassword").fill(OWNER_PASSWORD)
         page.locator('#loginForm button[type="submit"]').click()
         expect(page.locator("#dashboardTab")).to_be_visible(timeout=10_000)
-        expect(page.locator("#dashboardReadiness")).to_have_attribute(
+        expect(page.locator("#dashboardStats")).to_have_attribute(
             "aria-busy", "false", timeout=10_000
         )
         page.wait_for_load_state("networkidle", timeout=10_000)
         started = time.perf_counter()
         page.reload(wait_until="domcontentloaded")
-        expect(page.locator("#dashboardReadiness")).to_have_attribute(
+        expect(page.locator("#dashboardStats")).to_have_attribute(
             "aria-busy", "false", timeout=10_000
         )
         elapsed_ms = (time.perf_counter() - started) * 1000

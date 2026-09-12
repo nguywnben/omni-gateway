@@ -221,6 +221,7 @@ button.endpoint-code-card:hover {
 .health-matrix-legend,
 .chart-legend {
     display: inline-flex;
+    flex-wrap: wrap;
     align-items: center;
     gap: 12px;
     background: var(--bg-subtle);
@@ -681,7 +682,9 @@ button.endpoint-code-card:hover {
 }
 
 .usage-table-wrapper {
-    overflow-x: auto;
+    width: 100%;
+    min-width: 0;
+    overflow: hidden;
     border: 1px solid var(--border);
     border-radius: var(--radius);
 }
@@ -776,7 +779,8 @@ button.endpoint-code-card:hover {
 
 .usage-table {
     width: 100%;
-    min-width: 640px;
+    min-width: 0;
+    table-layout: fixed;
     border-collapse: collapse;
 }
 
@@ -797,6 +801,23 @@ button.endpoint-code-card:hover {
 
 .usage-table tr:last-child td {
     border-bottom: 0;
+}
+
+.usage-table th,
+.usage-table td,
+.usage-table code {
+    overflow-wrap: anywhere;
+    word-break: normal;
+}
+
+.usage-table th:first-child,
+.usage-table td:first-child {
+    width: 40%;
+}
+
+.usage-table th:not(:first-child),
+.usage-table td:not(:first-child) {
+    width: 20%;
 }
 
 .usage-cell-primary {

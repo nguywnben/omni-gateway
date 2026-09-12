@@ -36,8 +36,7 @@ class ProductionDashboardContractTests(unittest.TestCase):
 const fs = require('fs');
 const vm = require('vm');
 const source = fs.readFileSync({json.dumps(str(DASHBOARD_SCRIPT))}, 'utf8');
-vm.runInThisContext(source + `\n;globalThis.__dashboardState = deriveDashboardState; globalThis.__renderDashboardTimeline = renderTimelineChart;`);
-const derive = globalThis.__dashboardState;
+vm.runInThisContext(source + `\n;globalThis.__renderDashboardTimeline = renderTimelineChart;`);
 function assert(condition, message) {{ if (!condition) throw new Error(message); }}
 {assertions}
 """
@@ -51,46 +50,29 @@ function assert(condition, message) {{ if (!condition) throw new Error(message);
         )
         self.assertEqual(result.returncode, 0, result.stderr or result.stdout)
 
-    def test_state_fixtures_identify_one_clear_next_action(self):
-        self._run_state_contract(
-            """
-const fixtures = [
-    [{ total_files: 0, active_files: 0, total_calls: 0 }, { status: 'no_data' }, 'first_time', 'providers'],
-    [{ total_files: 2, active_files: 0, total_calls: 8 }, { status: 'no_data' }, 'no_provider', 'pool'],
-    [{ total_files: 2, active_files: 2, total_calls: 40 }, { status: 'healthy' }, 'healthy', 'activity'],
-    [{ total_files: 2, active_files: 2, total_calls: 100, failed_calls: 9 }, { status: 'healthy' }, 'healthy', 'activity'],
-    [{ total_files: 2, active_files: 1, total_calls: 40 }, { status: 'critical' }, 'degraded', 'activity'],
-];
-for (const [aggregate, health, expectedState, expectedTab] of fixtures) {
-    const result = derive(aggregate, health);
-    assert(result.state === expectedState, `${expectedState}: received ${result.state}`);
-    assert(result.actionTab === expectedTab, `${expectedState}: received ${result.actionTab}`);
-    assert(result.titleKey && result.descriptionKey && result.actionKey, `${expectedState}: incomplete guidance`);
-}
-"""
-        )
-
     def test_primary_dashboard_surfaces_match_the_production_information_order(self):
         fragment = self._source(DASHBOARD_FRAGMENT)
 
         for element_id in (
-            "dashboardReadiness",
-            "dashboardReadinessTitle",
-            "dashboardReadinessAction",
-            "dashboardQuickActions",
             "totalCostUsd",
             "dashboardP95Latency",
             "recentActivityList",
         ):
             self.assertIn(f'id="{element_id}"', fragment)
+        for removed_surface in (
+            "dashboardReadiness",
+            "dashboardQuickActions",
+            "sloSampleNotice",
+            "sloPrometheusStatus",
+            "sloOtelStatus",
+        ):
+            self.assertNotIn(f'id="{removed_surface}"', fragment)
         self.assertNotIn('data-i18n="slo.kicker"', fragment)
         self.assertNotIn("Service objectives", fragment)
-        self.assertRegex(fragment, r"<details[^>]+class=\"[^\"]*slo-export-status")
+        self.assertNotIn("slo-export-status", fragment)
+        self.assertNotIn("dashboard-readiness", fragment)
         self.assertLess(
-            fragment.index('id="dashboardReadiness"'), fragment.index('id="dashboardStats"')
-        )
-        self.assertLess(
-            fragment.index('id="providerHealthCard"'), fragment.index('id="operationalHealthCard"')
+            fragment.index('id="operationalHealthCard"'), fragment.index('id="providerHealthCard"')
         )
 
     def test_dashboard_load_has_a_fixed_request_budget_and_bounded_lists(self):
@@ -103,19 +85,39 @@ for (const [aggregate, health, expectedState, expectedTab] of fixtures) {
         self.assertIn("routes.slice(0, 10)", source)
         self.assertIn("traces.slice(0, DASHBOARD_RECENT_ACTIVITY_PAGE_SIZE)", source)
 
-    def test_primary_readiness_precedes_secondary_dashboard_queries(self):
+    def test_primary_metrics_precede_secondary_dashboard_queries(self):
         source = self._source(DASHBOARD_SCRIPT)
         refresh_body = source.split("async function refreshUsageStats", 1)[1].split(
             "function setOperationalHealthStatus", 1
         )[0]
 
         aggregate_fetch = refresh_body.index("const aggregatedResponse = await fetch")
-        readiness = refresh_body.index("renderDashboardReadiness();")
         detail_fetch = refresh_body.index("const statsResponse = await fetch")
-        self.assertLess(aggregate_fetch, readiness)
-        self.assertLess(readiness, detail_fetch)
-        self.assertLess(readiness, refresh_body.index("void refreshOperationalHealth();"))
-        self.assertLess(readiness, refresh_body.index("void refreshRecentActivity();"))
+        self.assertLess(aggregate_fetch, detail_fetch)
+        self.assertLess(detail_fetch, refresh_body.index("void refreshOperationalHealth();"))
+        self.assertLess(detail_fetch, refresh_body.index("void refreshRecentActivity();"))
+        self.assertNotIn("renderDashboardReadiness", source)
+
+    def test_dashboard_tables_fit_their_cards_without_horizontal_scrolling(self):
+        fragment = self._source(DASHBOARD_FRAGMENT)
+        styles = self._source(ROOT / "frontend/css/forms-and-data.css")
+        responsive = self._source(ROOT / "frontend/css/responsive.css")
+
+        self.assertIn('class="usage-table slo-route-table"', fragment)
+        self.assertRegex(
+            styles,
+            r"(?s)\.usage-table-wrapper\s*\{[^}]*overflow:\s*hidden;",
+        )
+        self.assertRegex(
+            styles,
+            r"(?s)\.usage-table\s*\{[^}]*min-width:\s*0;[^}]*table-layout:\s*fixed;",
+        )
+        self.assertNotIn("min-width: 640px", styles)
+        self.assertRegex(
+            styles,
+            r"(?s)\.health-matrix-legend,\s*\.chart-legend\s*\{[^}]*flex-wrap:\s*wrap;",
+        )
+        self.assertIn(".usage-table:not(.slo-route-table) tr", responsive)
 
     def test_dashboard_header_collapses_at_the_tablet_breakpoint(self):
         styles = self._source(DASHBOARD_STYLES)
