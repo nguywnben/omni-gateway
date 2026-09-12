@@ -8,7 +8,7 @@
   operation.
 - Progress: **36/36 implementation tasks**; all six phases are complete.
 - Completed: **P5.6 — Release candidate, documentation, and handoff** for release `1.5.0`.
-- Implementation candidate `494f35c` passed all required local release components: 50/50
+- Validated release candidate `7ffefd8` passed the complete release gate: 50/50
   configuration/inventory/compatibility contracts, all 1,284-key locale audits, dependency
   compatibility and vulnerability checks, 1,727 Core tests with 22 optional/live skips, 9/9
   critical browser journeys, and the 15-check fixed reliability profile.
@@ -18,6 +18,9 @@
 - Release documentation, version/changelog, current image, capability tiers, limitations, clean
   install, recovery/rollback, troubleshooting, and the 36 evidence records are reconciled in
   `docs/evidence/p5.6-release-candidate-handoff.md`.
+- The exact candidate also passed fresh setup, authenticated smoke, force-recreate persistence, and
+  graceful stop/start through the canonical Compose profile. The regenerated production lock
+  changed no package version or hash.
 - No planned implementation task remains. Tagging, pushing, remote CI confirmation, and image
   publication are operator release actions and were not performed.
 - Supported runtime today: standalone, one worker, one replica.
