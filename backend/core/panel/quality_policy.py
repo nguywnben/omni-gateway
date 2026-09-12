@@ -27,7 +27,7 @@ from core.storage_adapter import get_storage_adapter
 from core.utils import verify_panel_token
 from fastapi import APIRouter, Depends
 from log import log
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from .utils import get_env_locked_keys
 
@@ -40,8 +40,7 @@ class QualityPolicyUpdateRequest(BaseModel):
     profile: Literal["quality", "balanced", "capacity", "custom"]
     settings: dict[str, Any] | None = None
 
-    class Config:
-        extra = "forbid"
+    model_config = ConfigDict(extra="forbid")
 
 
 class QualityPolicyPreviewRequest(QualityPolicyUpdateRequest):

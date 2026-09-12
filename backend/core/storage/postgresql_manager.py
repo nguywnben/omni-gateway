@@ -68,7 +68,7 @@ class PostgreSQLManager:
                 log.info("PostgreSQL storage initialized")
 
             except Exception as e:
-                log.error(f"Error initializing PostgreSQL: {e}")
+                log.error(f"PostgreSQL initialization failed ({type(e).__name__}).")
                 if self._pool:
                     await self._pool.close()
                     self._pool = None

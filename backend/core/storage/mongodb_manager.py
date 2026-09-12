@@ -75,7 +75,7 @@ class MongoDBManager:
             log.info(f"MongoDB storage initialized (database: {database_name})")
 
         except Exception as e:
-            log.error(f"Error initializing MongoDB: {e}")
+            log.error(f"MongoDB initialization failed ({type(e).__name__}).")
             raise
 
     async def _create_indexes(self):

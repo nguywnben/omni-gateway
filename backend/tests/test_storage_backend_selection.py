@@ -93,12 +93,15 @@ class StorageBackendSelectionTests(unittest.IsolatedAsyncioTestCase):
 
         adapter = StorageAdapter()
         backend = AsyncMock()
-        backend.initialize.side_effect = RuntimeError("connection failed")
+        backend.initialize.side_effect = RuntimeError(
+            "postgresql://owner:super-secret@database/omni"
+        )
 
         with (
             patch.dict(os.environ, {"POSTGRESQL_URI": "postgresql://database", "MONGODB_URI": ""}),
             patch.object(postgresql_manager, "PostgreSQLManager", return_value=backend),
             patch("core.storage.sqlite_manager.SQLiteManager") as sqlite_manager,
+            patch("core.storage_adapter.log") as storage_log,
         ):
             with self.assertRaisesRegex(
                 RuntimeError, "PostgreSQL storage backend is unavailable.*requirements.lock"
@@ -109,18 +112,20 @@ class StorageBackendSelectionTests(unittest.IsolatedAsyncioTestCase):
         sqlite_manager.assert_not_called()
         self.assertIsNone(adapter._backend)
         self.assertFalse(adapter._initialized)
+        self.assertNotIn("super-secret", " ".join(str(call) for call in storage_log.mock_calls))
 
     async def test_mongodb_failure_does_not_fallback_to_sqlite(self):
         from core.storage import mongodb_manager
 
         adapter = StorageAdapter()
         backend = AsyncMock()
-        backend.initialize.side_effect = RuntimeError("connection failed")
+        backend.initialize.side_effect = RuntimeError("mongodb://owner:super-secret@database/omni")
 
         with (
             patch.dict(os.environ, {"POSTGRESQL_URI": "", "MONGODB_URI": "mongodb://database"}),
             patch.object(mongodb_manager, "MongoDBManager", return_value=backend),
             patch("core.storage.sqlite_manager.SQLiteManager") as sqlite_manager,
+            patch("core.storage_adapter.log") as storage_log,
         ):
             with self.assertRaisesRegex(
                 RuntimeError, "MongoDB storage backend is unavailable.*requirements.lock"
@@ -131,6 +136,7 @@ class StorageBackendSelectionTests(unittest.IsolatedAsyncioTestCase):
         sqlite_manager.assert_not_called()
         self.assertIsNone(adapter._backend)
         self.assertFalse(adapter._initialized)
+        self.assertNotIn("super-secret", " ".join(str(call) for call in storage_log.mock_calls))
 
 
 if __name__ == "__main__":

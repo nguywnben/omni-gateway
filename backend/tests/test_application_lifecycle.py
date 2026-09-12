@@ -56,6 +56,9 @@ class ApplicationLifecycleTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_shutdown_closes_runtime_manager_and_storage(self) -> None:
         config_module = self._configured_module()
+        runtime_log_patcher = patch("main.log")
+        runtime_log = runtime_log_patcher.start()
+        self.addCleanup(runtime_log_patcher.stop)
 
         with (
             patch.dict(sys.modules, {"config": config_module}),
@@ -78,6 +81,7 @@ class ApplicationLifecycleTests(unittest.IsolatedAsyncioTestCase):
             patch("main.keep_alive_service.stop", new=AsyncMock()) as stop_keep_alive,
             patch("main.shutdown_all_tasks", new=AsyncMock()) as shutdown_tasks,
         ):
+            close_usage.side_effect = RuntimeError("shutdown-secret")
             async with lifespan(app):
                 pass
 
@@ -90,10 +94,16 @@ class ApplicationLifecycleTests(unittest.IsolatedAsyncioTestCase):
         close_manager.assert_awaited_once_with()
         close_runtime.assert_awaited_once_with()
         close_storage.assert_awaited_once_with()
+        rendered_logs = " ".join(str(call) for call in runtime_log.mock_calls)
+        self.assertNotIn("shutdown-secret", rendered_logs)
+        self.assertIn("RuntimeError", rendered_logs)
 
     async def test_configuration_failure_aborts_startup(self) -> None:
         config_module = MagicMock()
         config_module.init_config = AsyncMock(side_effect=RuntimeError("database secret"))
+        runtime_log_patcher = patch("main.log")
+        runtime_log = runtime_log_patcher.start()
+        self.addCleanup(runtime_log_patcher.stop)
 
         with (
             patch.dict(sys.modules, {"config": config_module}),
@@ -106,6 +116,9 @@ class ApplicationLifecycleTests(unittest.IsolatedAsyncioTestCase):
 
         initialize_runtime.assert_not_awaited()
         initialize_manager.assert_not_awaited()
+        rendered_logs = " ".join(str(call) for call in runtime_log.mock_calls)
+        self.assertNotIn("database secret", rendered_logs)
+        self.assertIn("RuntimeError", rendered_logs)
 
     async def test_audit_failure_closes_runtime_before_aborting(self) -> None:
         config_module = self._configured_module()

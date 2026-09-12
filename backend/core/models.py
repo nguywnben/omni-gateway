@@ -1,16 +1,11 @@
 from typing import Annotated, Any, Dict, List, Literal, Optional, Union
 
-from pydantic import BaseModel, Field, SecretStr, WithJsonSchema, model_validator
+from pydantic import BaseModel, ConfigDict, Field, SecretStr, WithJsonSchema, model_validator
 from pydantic.json_schema import SkipJsonSchema
 
 
 def model_to_dict(model: BaseModel) -> Dict[str, Any]:
-    if hasattr(model, "model_dump"):
-        # Pydantic v2
-        return model.model_dump(exclude_none=True)
-    else:
-        # Pydantic v1
-        return model.dict(exclude_none=True)
+    return model.model_dump(exclude_none=True)
 
 
 def _reject_unknown_input_keys(value: Any, allowed: set[str], label: str) -> Any:
@@ -228,8 +223,7 @@ class OpenAIChatCompletionRequest(BaseModel):
             raise ValueError(f"Unsupported OpenAI tool_choice: {self.tool_choice}.")
         return self
 
-    class Config:
-        extra = "allow"
+    model_config = ConfigDict(extra="allow")
 
 
 ChatCompletionRequest = OpenAIChatCompletionRequest
@@ -383,8 +377,7 @@ class OpenAIResponsesRequest(BaseModel):
             return
         raise ValueError(f"Unsupported Responses input item type: {item_type}.")
 
-    class Config:
-        extra = "allow"
+    model_config = ConfigDict(extra="allow")
 
 
 class OpenAIChatCompletionChoice(BaseModel):
@@ -457,8 +450,7 @@ class GeminiPart(BaseModel):
             "Gemini part",
         )
 
-    class Config:
-        extra = "allow"
+    model_config = ConfigDict(extra="allow")
 
 
 class GeminiContent(BaseModel):
@@ -581,8 +573,7 @@ class GeminiRequest(BaseModel):
             "Gemini request",
         )
 
-    class Config:
-        extra = "allow"
+    model_config = ConfigDict(extra="allow")
 
 
 class GeminiCandidate(BaseModel):
@@ -804,8 +795,7 @@ class ClaudeRequest(BaseModel):
             raise ValueError("Anthropic tool_choice must be an object.")
         return self
 
-    class Config:
-        extra = "allow"
+    model_config = ConfigDict(extra="allow")
 
 
 class ClaudeUsage(BaseModel):
@@ -834,8 +824,7 @@ class ClaudeStreamEvent(BaseModel):
     delta: Optional[Dict[str, Any]] = None
     usage: Optional[ClaudeUsage] = None
 
-    class Config:
-        extra = "allow"
+    model_config = ConfigDict(extra="allow")
 
 
 # Error Models

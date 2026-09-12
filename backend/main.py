@@ -126,7 +126,7 @@ async def lifespan(app: FastAPI):
         )
         log.info("Configuration cache initialized.")
     except Exception as e:
-        log.critical(f"Failed to initialize the configuration cache: {e}")
+        log.critical(f"Configuration cache initialization failed ({type(e).__name__}).")
         raise RuntimeError("Configuration initialization failed.") from e
 
     try:
@@ -141,7 +141,7 @@ async def lifespan(app: FastAPI):
         await credential_manager._get_or_create()
         log.info("Credential manager initialized.")
     except Exception as e:
-        log.critical(f"Credential manager initialization failed: {e}")
+        log.critical(f"Credential manager initialization failed ({type(e).__name__}).")
         await close_runtime()
         await close_storage_adapter()
         raise RuntimeError("Credential storage initialization failed.") from e
@@ -218,7 +218,7 @@ async def lifespan(app: FastAPI):
     try:
         await keep_alive_service.start()
     except Exception as e:
-        log.error(f"Failed to start the keep-alive service: {e}")
+        log.error(f"Keep-alive service startup failed ({type(e).__name__}).")
 
     try:
         yield
@@ -228,67 +228,67 @@ async def lifespan(app: FastAPI):
         try:
             await keep_alive_service.stop()
         except Exception as e:
-            log.error(f"Error while shutting down the keep-alive service: {e}")
+            log.error(f"Keep-alive service shutdown failed ({type(e).__name__}).")
 
         try:
             await shutdown_all_tasks(timeout=10.0)
             log.info("All asynchronous tasks have been shut down.")
         except Exception as e:
-            log.error(f"Error while shutting down asynchronous tasks: {e}")
+            log.error(f"Asynchronous task shutdown failed ({type(e).__name__}).")
 
         try:
             await close_usage_ledger_service()
             log.info("Usage ledger service closed.")
         except Exception as e:
-            log.error(f"Error while closing the usage ledger service: {e}")
+            log.error(f"Usage ledger shutdown failed ({type(e).__name__}).")
 
         try:
             await close_request_trace_service()
             log.info("Request trace service closed.")
         except Exception as e:
-            log.error(f"Error while closing the request trace service: {e}")
+            log.error(f"Request trace shutdown failed ({type(e).__name__}).")
 
         try:
             await close_oidc_login_service()
             log.info("OIDC login service closed.")
         except Exception as e:
-            log.error(f"Error while closing the OIDC login service: {e}")
+            log.error(f"OIDC login shutdown failed ({type(e).__name__}).")
 
         try:
             await close_session_service()
             log.info("Management session service closed.")
         except Exception as e:
-            log.error(f"Error while closing the session service: {e}")
+            log.error(f"Session service shutdown failed ({type(e).__name__}).")
 
         try:
             await close_audit_service()
             log.info("Audit service closed.")
         except Exception as e:
-            log.error(f"Error while closing the audit service: {e}")
+            log.error(f"Audit service shutdown failed ({type(e).__name__}).")
 
         try:
             await credential_manager.close()
             log.info("Credential manager closed.")
         except Exception as e:
-            log.error(f"Error while shutting down the credential manager: {e}")
+            log.error(f"Credential manager shutdown failed ({type(e).__name__}).")
 
         try:
             await close_runtime()
             log.info("Process-local runtime lifecycle closed.")
         except Exception as e:
-            log.error(f"Error while closing the process-local runtime: {e}")
+            log.error(f"Process-local runtime shutdown failed ({type(e).__name__}).")
 
         try:
             await http_client.close()
             log.info("Outbound HTTP clients closed.")
         except Exception as e:
-            log.error(f"Error while closing outbound HTTP clients: {e}")
+            log.error(f"Outbound HTTP client shutdown failed ({type(e).__name__}).")
 
         try:
             await close_storage_adapter()
             log.info("Storage adapter closed.")
         except Exception as e:
-            log.error(f"Error while shutting down the storage adapter: {e}")
+            log.error(f"Storage adapter shutdown failed ({type(e).__name__}).")
 
         log.info("Omni Gateway stopped.")
 

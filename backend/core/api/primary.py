@@ -752,7 +752,11 @@ async def _stream_request_upstream(
                             if isinstance(chunk.body, bytes)
                             else str(chunk.body)
                         )
-                    except Exception:
+                    except Exception as exc:
+                        log.debug(
+                            "[provider stream] could not decode an upstream error body "
+                            f"({type(exc).__name__})."
+                        )
                         error_body = ""
 
                     if received_content:
@@ -814,12 +818,9 @@ async def _stream_request_upstream(
 
                         cooldown_until = None
                         if (status_code == 429 or status_code == 503) and error_body:
-                            try:
-                                cooldown_until = await parse_and_log_cooldown(
-                                    error_body, mode="primary"
-                                )
-                            except Exception:
-                                pass
+                            cooldown_until = await parse_and_log_cooldown(
+                                error_body, mode="primary"
+                            )
 
                         await record_api_call_error(
                             credential_manager,
@@ -1192,7 +1193,7 @@ async def non_stream_request(
         try:
             await store_response_cache(cache_key, response)
         except Exception as exc:
-            log.debug(f"[response-cache] failed to store response: {exc}")
+            log.debug(f"[response-cache] response store failed ({type(exc).__name__}).")
     return response
 
 
@@ -1508,8 +1509,11 @@ async def _non_stream_request_upstream(
                 error_text = ""
                 try:
                     error_text = response.text
-                except Exception:
-                    pass
+                except Exception as exc:
+                    log.debug(
+                        "[provider] could not decode an upstream error body "
+                        f"({type(exc).__name__})."
+                    )
 
                 if status_code == 404:
                     credential_route_exclusions.add((current_file, model_name))
@@ -1545,12 +1549,7 @@ async def _non_stream_request_upstream(
 
                     cooldown_until = None
                     if (status_code == 429 or status_code == 503) and error_text:
-                        try:
-                            cooldown_until = await parse_and_log_cooldown(
-                                error_text, mode="primary"
-                            )
-                        except Exception:
-                            pass
+                        cooldown_until = await parse_and_log_cooldown(error_text, mode="primary")
 
                     await record_api_call_error(
                         credential_manager,

@@ -141,6 +141,26 @@ class StreamingLifecycleTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertTrue(closed)
 
+    async def test_cascade_closer_observes_cleanup_failure_and_continues(self):
+        class BrokenCloser:
+            def __aiter__(self):
+                return self
+
+            async def __anext__(self):
+                raise StopAsyncIteration
+
+            async def aclose(self):
+                raise RuntimeError("provider-secret")
+
+        broken = BrokenCloser()
+        stream = cascade_close_async_iterator(broken, [])
+        with patch("core.router.stream_passthrough.log") as stream_log:
+            self.assertEqual([item async for item in stream], [])
+
+        rendered_logs = " ".join(str(call) for call in stream_log.mock_calls)
+        self.assertNotIn("provider-secret", rendered_logs)
+        self.assertIn("RuntimeError", rendered_logs)
+
     async def test_vertex_stream_does_not_succeed_or_retry_after_partial_failure(self):
         envelope = json.dumps(
             {"results": [{"data": {"candidates": [{"content": {"parts": [{"text": "partial"}]}}]}}]}

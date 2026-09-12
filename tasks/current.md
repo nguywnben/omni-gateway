@@ -3,9 +3,9 @@
 ## Active Production Balance Workstream
 
 - Active plan: `PROD-BALANCE-R2` in `tasks/production-balance-r2.md`.
-- Fixed progress: **3/7**; one workstream, no Waves or Phases.
+- Fixed progress: **4/7**; one workstream, no Waves or Phases.
 - Baseline audit: `docs/audits/production-balance-2026-09-12.md`.
-- Resume at: **PB4 — Normalize core correctness debt**.
+- Resume at: **PB5 — Apply one console and language quality level**.
 - R1 below remains completed historical state; it is not reopened or added to the new denominator.
 
 ## Resume Here
@@ -35,6 +35,8 @@
 - Redis coordination, multi-replica HA, and Helm were retired from the active product in PB2.
 - MongoDB now operates directly without Redis acceleration or coordinated-only mutation branches;
   SQLite remains the no-service default and optional backends still fail closed when selected.
+- Project-owned Pydantic deprecations are zero; critical lifecycle, storage, parser, cache, and
+  stream-cleanup failures now retain bounded observability without logging raw exception details.
 
 ## Why the Plan Was Reset
 

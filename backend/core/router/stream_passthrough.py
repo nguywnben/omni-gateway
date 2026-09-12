@@ -6,6 +6,7 @@ from core.router.protocol_errors import (
 )
 from fastapi import Response
 from fastapi.responses import StreamingResponse
+from log import log
 
 
 async def close_async_iterator(iterator: AsyncIterator[Any]) -> None:
@@ -52,8 +53,9 @@ async def cascade_close_async_iterator(
             seen.add(id(candidate))
             try:
                 await close_async_iterator(candidate)
-            except Exception:
+            except Exception as exc:
                 # Cleanup continues so one faulty wrapper cannot strand its provider stream.
+                log.debug(f"Provider stream cleanup failed ({type(exc).__name__}).")
                 continue
 
 

@@ -110,7 +110,7 @@ class SQLiteManager:
                 log.info(f"SQLite storage initialized at {self._db_path}")
 
             except Exception as e:
-                log.error(f"Error initializing SQLite: {e}")
+                log.error(f"SQLite initialization failed ({type(e).__name__}).")
                 raise
 
     async def _ensure_schema_compatibility(self, db: aiosqlite.Connection) -> None:

@@ -220,7 +220,9 @@ async def lookup_response_cache(
     try:
         settings = await get_response_cache_config()
     except Exception as exc:
-        log.error(f"[response-cache] failed to load config, failing open: {exc}")
+        log.error(
+            f"[response-cache] policy resolution failed ({type(exc).__name__}); failing open."
+        )
         trace_decision(
             category="cache",
             action="skipped",

@@ -115,7 +115,7 @@ class StorageAdapter:
                     await self._backend.initialize()
                     log.info("Using the PostgreSQL storage backend.")
                 except Exception as e:
-                    log.error(f"Failed to initialize PostgreSQL backend: {e}")
+                    log.error(f"PostgreSQL backend initialization failed ({type(e).__name__}).")
                     if self._backend:
                         try:
                             await self._backend.close()
@@ -136,7 +136,7 @@ class StorageAdapter:
                     await self._backend.initialize()
                     log.info("Using the SQLite storage backend.")
                 except Exception as e:
-                    log.error(f"Failed to initialize SQLite backend: {e}")
+                    log.error(f"SQLite backend initialization failed ({type(e).__name__}).")
                     raise RuntimeError("No storage backend is available.") from e
             else:
                 try:
@@ -146,7 +146,7 @@ class StorageAdapter:
                     await self._backend.initialize()
                     log.info("Using the MongoDB storage backend.")
                 except Exception as e:
-                    log.error(f"Failed to initialize MongoDB backend: {e}")
+                    log.error(f"MongoDB backend initialization failed ({type(e).__name__}).")
                     if self._backend:
                         try:
                             await self._backend.close()
@@ -334,7 +334,8 @@ class StorageAdapter:
             async with aiofiles.open(output_path, "w", encoding="utf-8") as f:
                 await f.write(json.dumps(credential_data, indent=2, ensure_ascii=False))
             return True
-        except Exception:
+        except Exception as exc:
+            log.warning(f"Credential export failed ({type(exc).__name__}).")
             return False
 
     async def import_credential_from_json(self, json_path: str, filename: str = None) -> bool:
@@ -354,7 +355,8 @@ class StorageAdapter:
                 filename = os.path.basename(json_path)
 
             return await self.store_credential(filename, credential_data)
-        except Exception:
+        except Exception as exc:
+            log.warning(f"Credential import failed ({type(exc).__name__}).")
             return False
 
     def get_backend_type(self) -> str:

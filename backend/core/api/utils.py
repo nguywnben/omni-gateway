@@ -487,8 +487,8 @@ async def parse_and_log_cooldown(error_text: str, mode: str = "code_assist") -> 
                 reason="quota_cooldown",
             )
             return cooldown_until
-    except Exception as parse_err:
-        log.debug(f"[{mode.upper()}] failed to parse cooldown time: {parse_err}")
+    except (AttributeError, TypeError, ValueError) as parse_err:
+        log.debug(f"[{mode.upper()}] failed to parse cooldown time ({type(parse_err).__name__})")
     return None
 
 
@@ -763,5 +763,5 @@ def parse_quota_reset_timestamp(error_response: dict) -> Optional[float]:
 
         return None
 
-    except Exception:
+    except (AttributeError, TypeError, ValueError):
         return None
