@@ -3,9 +3,9 @@
 ## Active Production Balance Workstream
 
 - Active plan: `PROD-BALANCE-R2` in `tasks/production-balance-r2.md`.
-- Fixed progress: **5/7**; one workstream, no Waves or Phases.
+- Fixed progress: **6/7**; one workstream, no Waves or Phases.
 - Baseline audit: `docs/audits/production-balance-2026-09-12.md`.
-- Resume at: **PB6 — Right-size verification for routine production work**.
+- Resume at: **PB7 — Reconcile and prove the production candidate**.
 - R1 below remains completed historical state; it is not reopened or added to the new denominator.
 
 ## Resume Here
@@ -40,6 +40,9 @@
 - All 11 console routes now share the no-overflow, compact advisory-copy, label-spacing, keyboard,
   and localized-feedback contract. Empty support tiers are hidden; only semantically maintained
   English and Vietnamese README files remain, while all 15 console locales retain complete keys.
+- The release reliability gate now uses a 120-second/600-request routine profile with unchanged
+  quality thresholds. The original 10-minute/6,000-request profile remains an explicitly optional
+  soak; obsolete executable HA runbook guidance is removed.
 
 ## Why the Plan Was Reset
 
@@ -77,6 +80,10 @@ Do not push unless the user requests it.
 
 ## Latest Evidence
 
+- `docs/evidence/pb6-right-sized-verification.md`
+- The routine signal passed 600/600 requests at p95 76.055 ms with dashboard usable in 565.491 ms
+  and all 15 checks green. The release dry-run selects routine; the preserved ten-minute soak is
+  listed separately as optional.
 - `docs/evidence/pb5-console-language.md`
 - All 112 focused console/localization contracts and 1,268-key audits passed. Browser evidence
   covered 9/9 journeys, 11 routes at four widths, keyboard navigation, and a clean console. PB5

@@ -31,6 +31,7 @@ class RetiredTopologyContractTests(unittest.TestCase):
             "deploy/evidence/redis-primary.conf",
             "deploy/evidence/redis-standby.conf",
             "deploy/helm/omni-gateway",
+            "docs/runbooks/high-availability.md",
         )
 
         remaining = []

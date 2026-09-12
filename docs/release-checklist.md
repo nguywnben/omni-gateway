@@ -7,6 +7,8 @@ Use this checklist when preparing a tagged Omni Gateway release.
 - Inspect the immutable release plan with `python tools/quality_gate.py release --dry-run` and resolve
   every `pending` entry through its existing owner task.
 - Run the single local command `python tools/quality_gate.py release` on the candidate commit.
+- Confirm its release-blocking routine completed through
+  `python tools/reliability_profile.py --profile routine --verify` (120 seconds at 5 RPS).
 - Confirm the required CI application, Chromium browser, and container smoke jobs passed for the
   same commit.
 - Regenerate `requirements.lock` and confirm that `git diff --exit-code requirements.lock` is clean.
@@ -18,6 +20,12 @@ Use this checklist when preparing a tagged Omni Gateway release.
 The separately listed optional storage and provider suites are not release gates. Report their
 latest result under their own classification only; an unavailable external environment cannot
 change the production result.
+
+### Optional soak
+
+For a major release or when investigating memory growth, run the preserved ten-minute profile with
+`python tools/reliability_profile.py --profile soak --verify`. It is useful supplementary evidence,
+not a release blocker for routine personal or trusted-team deployments.
 
 ## Manual Provider Checks
 

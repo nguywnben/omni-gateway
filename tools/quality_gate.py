@@ -121,9 +121,9 @@ BROWSER_SMOKE = GateStep(
 )
 RELIABILITY_PROFILE = GateStep(
     "reliability-profile",
-    "Fixed 10-minute reliability and performance profile",
-    ((PYTHON, "tools/reliability_profile.py", "--verify"),),
-    owner="P5.5",
+    "Routine production reliability and performance profile",
+    ((PYTHON, "tools/reliability_profile.py", "--profile", "routine", "--verify"),),
+    owner="PB6",
 )
 CONTAINER_SMOKE = GateStep(
     "container-smoke",
@@ -157,6 +157,12 @@ OPTIONAL_SUITES = {
         mode="manual",
         command="docs/release-checklist.md#manual-provider-checks",
         owner="P2.1/P2.2",
+    ),
+    "reliability-soak": OptionalSuite(
+        classification="optional",
+        mode="automated",
+        command="python tools/reliability_profile.py --profile soak --verify",
+        owner="PB6",
     ),
 }
 

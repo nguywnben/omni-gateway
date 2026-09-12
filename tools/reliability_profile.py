@@ -1,8 +1,9 @@
-"""Run the fixed production reliability profile against an exact Git candidate.
+"""Run a production reliability profile against an exact Git candidate.
 
 The runner exports ``HEAD`` into a disposable directory, starts one standalone
 Omni Gateway process with SQLite, and uses one loopback deterministic Ollama
-fixture. It never reads ``.env`` or contacts a real provider.
+fixture. The routine profile is release-blocking; the ten-minute soak is optional.
+Neither mode reads ``.env`` or contacts a real provider.
 """
 
 from __future__ import annotations
@@ -36,8 +37,12 @@ import httpx
 
 ROOT = Path(__file__).resolve().parents[1]
 PROFILE_PATH = ROOT / "tools" / "reliability-profile.json"
+PROFILE_PATHS = {
+    "routine": PROFILE_PATH,
+    "soak": ROOT / "tools" / "reliability-soak-profile.json",
+}
 MODEL_ID = "omni-p55-deterministic"
-OWNER_PASSWORD = "Omni-P5.5-Synthetic-Owner-2026"
+OWNER_PASSWORD = "Omni-Reliability-Synthetic-Owner-2026"
 MIB = 2**20
 
 
@@ -638,7 +643,7 @@ def _bootstrap(base_url: str, provider_url: str) -> tuple[str, dict[str, str]]:
         key_response = client.post(
             "/api/virtual-keys",
             json={
-                "name": "P5.5 deterministic profile",
+                "name": "Reliability profile",
                 "allowed_models": ["omway"],
                 "scopes": ["inference:openai"],
             },
@@ -997,7 +1002,7 @@ def run_profile(profile: ReliabilityProfile) -> dict[str, Any]:
                 raise RuntimeError("Candidate runtime process is unavailable.")
             api_key, _cookies = _bootstrap(runtime.base_url, provider_url)
             print(
-                f"[P5.5] running {profile.expected_requests} requests for "
+                f"[reliability] running {profile.expected_requests} requests for "
                 f"{profile.duration_seconds} seconds at {profile.offered_rps} RPS / "
                 f"{profile.concurrency} concurrency",
                 flush=True,
@@ -1093,6 +1098,12 @@ def _write_result(path: Path, result: Mapping[str, Any]) -> None:
 
 def main(arguments: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--profile",
+        choices=tuple(PROFILE_PATHS),
+        default="routine",
+        help="Run the release-blocking routine profile or the optional ten-minute soak.",
+    )
     mode = parser.add_mutually_exclusive_group(required=True)
     mode.add_argument(
         "--verify",
@@ -1106,17 +1117,21 @@ def main(arguments: Sequence[str] | None = None) -> int:
     )
     options = parser.parse_args(arguments)
     try:
-        profile = load_profile()
+        profile = load_profile(PROFILE_PATHS[options.profile])
         result = run_profile(profile)
+        result["profile"]["name"] = options.profile
         if options.output is not None:
             _write_result(options.output, result)
         failed = [check["id"] for check in result["checks"] if not check["passed"]]
         if failed:
-            print(f"P5.5 reliability profile failed: {', '.join(failed)}", file=sys.stderr)
+            print(
+                f"Reliability {options.profile} profile failed: {', '.join(failed)}",
+                file=sys.stderr,
+            )
             return 1
         workload = result["workload"]
         print(
-            "P5.5 reliability profile passed: "
+            f"Reliability {options.profile} profile passed: "
             f"{workload['succeeded']}/{workload['attempted']} requests, "
             f"p95={workload['p95_ms']:.3f} ms, "
             f"dashboard={result['dashboard']['usable_ms']:.3f} ms.",
@@ -1124,7 +1139,10 @@ def main(arguments: Sequence[str] | None = None) -> int:
         )
         return 0
     except Exception as exc:
-        print(f"P5.5 reliability profile could not complete: {exc}", file=sys.stderr)
+        print(
+            f"Reliability {options.profile} profile could not complete: {exc}",
+            file=sys.stderr,
+        )
         return 2
 
 

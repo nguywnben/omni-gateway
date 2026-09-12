@@ -1,12 +1,12 @@
 {
   "schema_version": "omni.reliability-profile.v1",
-  "duration_seconds": 120,
-  "offered_rps": 5,
-  "concurrency": 8,
+  "duration_seconds": 600,
+  "offered_rps": 10,
+  "concurrency": 16,
   "request_timeout_seconds": 5,
   "memory_sample_interval_seconds": 5,
-  "memory_warmup_seconds": 20,
-  "max_client_queue_depth": 8,
+  "memory_warmup_seconds": 60,
+  "max_client_queue_depth": 16,
   "dashboard_viewport": [1440, 900],
   "thresholds": {
     "gateway_p95_ms": 100,

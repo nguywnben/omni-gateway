@@ -67,9 +67,9 @@ python -m playwright install chromium
 python tools/browser_smoke.py
 ```
 
-CI labels production-blocking jobs and steps as `Required`. Live storage/provider checks and
-experimental HA are never part of the production result. See [Quality gates](docs/quality-gates.md)
-for the exact cadence and suite classifications.
+CI labels production-blocking jobs and steps as `Required`. Live storage/provider checks and the
+ten-minute soak are optional; retired Redis/HA/Kubernetes surfaces have no executable gate. See
+[Quality gates](docs/quality-gates.md) for the exact cadence and suite classifications.
 
 When `requirements.txt` changes, regenerate the production lock with Python 3.12:
 

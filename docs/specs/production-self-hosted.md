@@ -179,22 +179,23 @@ examples, Compose, and documentation derive from or are checked against it.
   migration is verified.
 - MongoDB and hosted-platform descriptors remain available but are documented as compatibility
   paths. They receive security/correctness repairs, not feature-parity expansion.
-- Coordinated/HA code and tests remain in the repository, clearly isolated as experimental. The
-  empty activation allowlist and one-replica deployment guard stay in force.
+- Coordinated Redis/HA implementation, executable evidence tooling, and Kubernetes assets are
+  retired. The runtime remains explicitly limited to one worker and one application replica.
 - Enterprise wording is removed from current product copy. Historical ADRs/specs remain as records
   and receive a superseded banner rather than revisionist edits.
 
 ## Release Definition
 
 R1 is complete only when all 36 tasks in `tasks/plan.md` are complete and the constraints in
-`CONSTRAINTS.md` pass. The release does not wait for experimental HA, Kubernetes, MongoDB parity,
-all-locale editorial review, or real credentials for every provider.
+`CONSTRAINTS.md` pass. The release does not wait for retired distributed topology, MongoDB parity,
+all-locale editorial review, optional soak evidence, or real credentials for every provider.
 
 The final evidence must include:
 
 - clean install and upgrade/rollback on the canonical Compose path;
 - required backend, contract, container, browser, security, and configuration gates;
-- one deterministic performance run at the fixed small-team profile;
+- one 120-second deterministic routine reliability run; the preserved ten-minute profile is an
+  optional soak for major releases or memory investigations;
 - provider capability matrix and opt-in live-smoke instructions;
 - backup/restore round trip with integrity and secret-redaction evidence;
 - complete English/Vietnamese copy audit and key completeness for compatibility locales;

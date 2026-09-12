@@ -66,6 +66,7 @@ class QualityGatePlanTests(unittest.TestCase):
             "core-suite",
             "application-smoke",
             "browser-smoke",
+            "reliability-profile",
             "container-smoke",
             "whitespace",
         }
@@ -82,10 +83,11 @@ class QualityGatePlanTests(unittest.TestCase):
     def test_optional_suites_are_separate_and_explicit(self) -> None:
         self.assertEqual(
             set(OPTIONAL_SUITES),
-            {"storage-live", "provider-live"},
+            {"storage-live", "provider-live", "reliability-soak"},
         )
         self.assertEqual(OPTIONAL_SUITES["storage-live"].classification, "optional")
         self.assertEqual(OPTIONAL_SUITES["provider-live"].mode, "manual")
+        self.assertEqual(OPTIONAL_SUITES["reliability-soak"].mode, "automated")
 
     def test_release_dry_run_and_suite_listing_do_not_execute_checks(self) -> None:
         dry_run = subprocess.run(
@@ -111,6 +113,7 @@ class QualityGatePlanTests(unittest.TestCase):
         self.assertEqual(suites.returncode, 0, suites.stderr)
         self.assertIn("storage-live [optional]", suites.stdout)
         self.assertIn("provider-live [optional; manual]", suites.stdout)
+        self.assertIn("reliability-soak [optional]", suites.stdout)
 
     def test_phase_cli_can_resolve_a_core_module_from_the_tools_entrypoint(self) -> None:
         completed = subprocess.run(
@@ -151,6 +154,10 @@ class QualityGateDocumentationTests(unittest.TestCase):
         self.assertNotIn("playwright install webkit", workflow)
         self.assertIn("python tools/quality_gate.py task --test-module", contributing)
         self.assertIn("python tools/quality_gate.py release", checklist)
+        self.assertIn("--profile routine --verify", checklist)
+        self.assertIn("--profile soak --verify", checklist)
+        self.assertIn("release-blocking routine", checklist)
+        self.assertIn("Optional soak", checklist)
 
     def test_browser_dependency_is_isolated_and_exactly_pinned(self) -> None:
         browser_requirements = (ROOT / "requirements-browser.txt").read_text(encoding="utf-8")
