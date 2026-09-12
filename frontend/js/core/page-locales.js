@@ -2515,8 +2515,11 @@ for (const locale of Object.keys(PAGE_LOCALE_TRANSLATIONS)) {
 const PRODUCTION_DASHBOARD_MESSAGES = {
     en: {
         'dashboard.metrics': 'Gateway metrics',
-        'dashboard.cost_period': 'Recorded cost {period}',
-        'dashboard.cost_recorded_hint': 'Based on recorded provider pricing',
+        'dashboard.cost_period': 'Estimated cost {period}',
+        'dashboard.cost_recorded_hint': 'Using configured and built-in model prices',
+        'dashboard.cost_pricing_current': 'LiteLLM catalog · {count} model prices',
+        'dashboard.cost_pricing_cached': 'Cached catalog · {count} model prices',
+        'dashboard.cost_pricing_fallback': 'Using configured and built-in model prices',
         'dashboard.p95_latency': 'P95 latency',
         'dashboard.last_15_minutes': 'Last 15 minutes',
         'dashboard.request_health_kicker': 'Last 15 minutes',
@@ -2540,8 +2543,11 @@ const PRODUCTION_DASHBOARD_MESSAGES = {
     },
     vi: {
         'dashboard.metrics': 'Chỉ số gateway',
-        'dashboard.cost_period': 'Chi phí đã ghi nhận {period}',
-        'dashboard.cost_recorded_hint': 'Dựa trên bảng giá nhà cung cấp đã ghi nhận',
+        'dashboard.cost_period': 'Chi phí ước tính {period}',
+        'dashboard.cost_recorded_hint': 'Dùng giá đã cấu hình và giá tích hợp sẵn',
+        'dashboard.cost_pricing_current': 'Catalog LiteLLM · giá của {count} mô hình',
+        'dashboard.cost_pricing_cached': 'Catalog đã lưu · giá của {count} mô hình',
+        'dashboard.cost_pricing_fallback': 'Dùng giá đã cấu hình và giá tích hợp sẵn',
         'dashboard.p95_latency': 'Độ trễ P95',
         'dashboard.last_15_minutes': '15 phút gần nhất',
         'dashboard.request_health_kicker': '15 phút gần nhất',

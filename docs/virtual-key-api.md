@@ -75,11 +75,14 @@ one million tokens. A key without a daily or monthly hard budget does not invent
 for unknown models. The durable ledger stores the fallback cost used by a budgeted request so a
 restart cannot erase that spend.
 
-The bundled table is a reviewed snapshot, not a live provider-price feed. Its review date and the
-presence/UTC modification time of `model_pricing.json` are exposed as the `pricing` object in
-`GET /api/usage/aggregated`; local file paths are never returned. The current bundled snapshot was
-reviewed on 2026-08-21. Operators should compare it with provider billing before relying on cost
-reports or hard budgets, and use the hot-reloaded override file for later prices.
+The resolver checks the hot-reloaded operator override first, then the last valid synchronized
+LiteLLM catalog entry for the selected provider, and finally the bundled reviewed snapshot.
+Synchronization runs at startup and periodically without blocking inference; an invalid or failed
+download leaves the prior snapshot active. The `pricing` object in `GET /api/usage/aggregated`
+exposes the sync state, bounded error code, source, model count, fetch time, bundled review date,
+and override-file freshness without returning local paths. The bundled snapshot was reviewed on
+2026-08-21. Provider billing remains authoritative, so use `model_pricing.json` whenever a contract
+or private endpoint differs from public list pricing.
 
 ## Reservation and settlement semantics
 

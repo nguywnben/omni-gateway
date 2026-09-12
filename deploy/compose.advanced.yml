@@ -56,6 +56,10 @@ services:
       GUARDRAILS_INJECTION_DETECTION_ENABLED: ${GUARDRAILS_INJECTION_DETECTION_ENABLED:-true}
       GUARDRAILS_BLOCKED_KEYWORDS: ${GUARDRAILS_BLOCKED_KEYWORDS:-}
 
+      # Dynamic public model pricing (cached; inference remains offline-safe)
+      PRICING_SYNC_ENABLED: ${PRICING_SYNC_ENABLED:-true}
+      PRICING_SYNC_INTERVAL_HOURS: ${PRICING_SYNC_INTERVAL_HOURS:-24}
+
       # File logging and opt-in aggregate telemetry
       LOG_FILE: ${LOG_FILE:-./backend/data/logs/omni-gateway.log}
       LOG_MAX_MB: ${LOG_MAX_MB:-10}

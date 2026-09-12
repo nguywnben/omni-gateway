@@ -89,6 +89,21 @@ function updateUsagePeriodLabels() {
 
 }
 
+function renderPricingSource(pricing = {}) {
+    const detail = document.getElementById('pricingSourceDetail');
+    if (!detail) return;
+    const count = Number(pricing.dynamic_model_count || 0);
+    if (pricing.dynamic_state === 'current' && count > 0) {
+        detail.textContent = t('dashboard.cost_pricing_current', {count: formatUsageNumber(count)});
+        return;
+    }
+    if ((pricing.dynamic_state === 'cached' || pricing.dynamic_state === 'stale') && count > 0) {
+        detail.textContent = t('dashboard.cost_pricing_cached', {count: formatUsageNumber(count)});
+        return;
+    }
+    detail.textContent = t('dashboard.cost_pricing_fallback');
+}
+
 function setUsagePeriod(period) {
 
     const nextPeriod = getUsagePeriodConfig(period).value;
@@ -200,6 +215,7 @@ async function refreshUsageStats(options = {}) {
         document.getElementById('activeFiles').textContent = formatUsageNumber(aggData.active_files);
         document.getElementById('disabledCredentialsDetail').textContent = t('dashboard.disabled_count', {count: formatUsageNumber(aggData.disabled_files)});
         document.getElementById('totalCostUsd').textContent = formatUsageCost(aggData.total_cost_usd);
+        renderPricingSource(aggData.pricing);
         document.getElementById('totalTokens24h').textContent = formatUsageNumber(aggData.total_tokens ?? aggData.total_tokens_24h);
         document.getElementById('inputOutputDetail').textContent = t('dashboard.input_output', {
             input: formatUsageNumber(aggData.input_tokens ?? aggData.input_tokens_24h),

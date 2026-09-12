@@ -55,6 +55,7 @@ function assert(condition, message) {{ if (!condition) throw new Error(message);
 
         for element_id in (
             "totalCostUsd",
+            "pricingSourceDetail",
             "dashboardP95Latency",
             "recentActivityList",
         ):
@@ -71,6 +72,7 @@ function assert(condition, message) {{ if (!condition) throw new Error(message);
         self.assertNotIn("Service objectives", fragment)
         self.assertNotIn("slo-export-status", fragment)
         self.assertNotIn("dashboard-readiness", fragment)
+        self.assertIn("renderPricingSource(aggData.pricing)", self._source(DASHBOARD_SCRIPT))
         self.assertLess(
             fragment.index('id="operationalHealthCard"'), fragment.index('id="providerHealthCard"')
         )

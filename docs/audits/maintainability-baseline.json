@@ -16,7 +16,7 @@
         },
         {
           "path": "frontend/js/core/page-locales.js",
-          "lines": 2935
+          "lines": 2891
         },
         {
           "path": "backend/core/state_store.py",
@@ -224,15 +224,15 @@
       }
     ],
     "broad_exception_handlers": {
-      "handlers": 500,
-      "without_reraise": 319,
-      "files": 102,
+      "handlers": 502,
+      "without_reraise": 321,
+      "files": 103,
       "by_area": {
         "access_security": 70,
         "experimental_coordination": 11,
         "protocol_routing": 59,
         "provider_credentials": 77,
-        "runtime_operations": 147,
+        "runtime_operations": 149,
         "storage": 136
       },
       "top_hotspots": [

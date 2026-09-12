@@ -16,6 +16,11 @@ from config import get_server_host, get_server_port, trust_proxy_headers_enabled
 # Import managers and utilities
 from core.audit_service import close_audit_service, get_audit_service, initialize_audit_service
 from core.credential_manager import credential_manager
+from core.dynamic_pricing import (
+    dynamic_pricing_service,
+    pricing_sync_enabled,
+    run_dynamic_pricing_sync_loop,
+)
 from core.ha_runtime import (
     close_ha_runtime,
     get_runtime_session_kwargs,
@@ -186,6 +191,11 @@ async def lifespan(app: FastAPI):
         await close_ha_runtime()
         await close_storage_adapter()
         raise RuntimeError("Usage ledger service initialization failed.") from e
+
+    dynamic_pricing_service.load_cache()
+    if pricing_sync_enabled():
+        create_managed_task(run_dynamic_pricing_sync_loop(), name="dynamic-pricing-sync")
+        log.info("Dynamic model pricing synchronization enabled.")
 
     try:
         telemetry_policy = get_telemetry_policy()

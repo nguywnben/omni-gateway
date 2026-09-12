@@ -1262,7 +1262,7 @@ class VirtualKeyManager:
         from core.usage_stats import normalize_token_usage
 
         tokens = normalize_token_usage(token_usage)
-        if find_model_pricing(model) is not None:
+        if find_model_pricing(model, provider=provider) is not None:
             return calculate_cost_usd(
                 model,
                 input_tokens=tokens["input_tokens"],

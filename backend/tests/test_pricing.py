@@ -7,7 +7,7 @@ import sys
 import unittest
 from datetime import date, datetime, timezone
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 
 BACKEND_DIR = Path(__file__).resolve().parents[1]
 TESTS_DIR = Path(__file__).resolve().parent
@@ -16,7 +16,7 @@ if str(BACKEND_DIR) not in sys.path:
 if str(TESTS_DIR) not in sys.path:
     sys.path.insert(0, str(TESTS_DIR))
 
-from core import pricing, usage_stats
+from core import dynamic_pricing, pricing, usage_stats
 from core.storage.usage_ledger_sqlite import SQLiteUsageLedgerRepository
 from core.usage_ledger_service import UsageLedgerService
 from support import workspace_temp_directory
@@ -140,6 +140,212 @@ class PricingOverridesTests(unittest.TestCase):
         ):
             with self.subTest(entry=entry):
                 self.assertIsNone(pricing._parse_override_entry(entry))
+
+
+class DynamicPricingTests(unittest.TestCase):
+    def test_litellm_catalog_is_converted_to_provider_qualified_prices(self):
+        catalog = {
+            "gpt-new": {
+                "litellm_provider": "openai",
+                "mode": "chat",
+                "input_cost_per_token": 0.000002,
+                "output_cost_per_token": 0.000008,
+                "cache_read_input_token_cost": 0.0000005,
+            },
+            "gemini/gemini-new": {
+                "litellm_provider": "gemini",
+                "mode": "chat",
+                "input_cost_per_token": 0.000001,
+                "output_cost_per_token": 0.000004,
+            },
+        }
+
+        parsed = dynamic_pricing.parse_litellm_catalog(catalog)
+
+        self.assertEqual(parsed[("openai", "gpt-new")].input_per_million, 2.0)
+        self.assertEqual(parsed[("openai", "gpt-new")].cache_read_per_million, 0.5)
+        self.assertEqual(parsed[("gemini", "gemini-new")].output_per_million, 4.0)
+
+    def test_catalog_rejects_untrusted_shapes_and_unbounded_prices(self):
+        with self.assertRaisesRegex(ValueError, "JSON object"):
+            dynamic_pricing.parse_litellm_catalog([])
+
+        parsed = dynamic_pricing.parse_litellm_catalog(
+            {
+                "embedding-only": {
+                    "litellm_provider": "openai",
+                    "mode": "embedding",
+                    "input_cost_per_token": 0.000001,
+                    "output_cost_per_token": 0.000001,
+                },
+                "negative": {
+                    "litellm_provider": "openai",
+                    "mode": "chat",
+                    "input_cost_per_token": -1,
+                    "output_cost_per_token": 0.000001,
+                },
+                "absurd": {
+                    "litellm_provider": "openai",
+                    "mode": "chat",
+                    "input_cost_per_token": 2,
+                    "output_cost_per_token": 2,
+                },
+            }
+        )
+        self.assertEqual(parsed, {})
+
+    def test_resolution_order_is_manual_then_dynamic_then_builtin(self):
+        with workspace_temp_directory() as temp_dir:
+            overrides_path = Path(temp_dir) / pricing.PRICING_OVERRIDES_FILENAME
+            overrides_path.write_text(
+                json.dumps({"gpt-5": {"input": 99, "output": 199}}),
+                encoding="utf-8",
+            )
+            table = pricing._PricingTable()
+            table.replace_dynamic(
+                {
+                    ("openai", "gpt-5"): pricing.ModelPricing(9, 19),
+                    ("openai", "brand-new-model"): pricing.ModelPricing(2, 8),
+                },
+                fetched_at="2026-09-12T00:00:00+00:00",
+            )
+            with patch.object(pricing, "_pricing_overrides_path", return_value=overrides_path):
+                self.assertEqual(table.lookup("gpt-5", provider="openai").input_per_million, 99)
+                self.assertEqual(
+                    table.lookup("brand-new-model", provider="openai").output_per_million,
+                    8,
+                )
+                self.assertEqual(table.lookup("gemini-2.5-pro").input_per_million, 1.25)
+
+    def test_provider_qualification_prevents_cross_provider_collision(self):
+        table = pricing._PricingTable()
+        table.replace_dynamic(
+            {
+                ("openai", "shared-model"): pricing.ModelPricing(1, 2),
+                ("xai", "shared-model"): pricing.ModelPricing(3, 4),
+            },
+            fetched_at="2026-09-12T00:00:00+00:00",
+        )
+        self.assertEqual(table.lookup("shared-model", provider="openai").input_per_million, 1)
+        self.assertEqual(table.lookup("shared-model", provider="xai").input_per_million, 3)
+        # Provider-less reservation estimates use the conservative maximum.
+        self.assertEqual(table.lookup("shared-model").input_per_million, 3)
+        self.assertEqual(table.lookup("shared-model").output_per_million, 4)
+
+    def test_valid_cache_survives_a_failed_refresh(self):
+        with workspace_temp_directory() as temp_dir:
+            cache_path = Path(temp_dir) / dynamic_pricing.PRICING_CACHE_FILENAME
+            cache_path.write_text(
+                json.dumps(
+                    {
+                        "schema_version": 1,
+                        "fetched_at": "2026-09-12T00:00:00+00:00",
+                        "models": {
+                            "openai/new-model": {
+                                "provider": "openai",
+                                "model": "new-model",
+                                "input": 1.0,
+                                "output": 4.0,
+                            }
+                        },
+                    }
+                ),
+                encoding="utf-8",
+            )
+            table = pricing._PricingTable()
+            service = dynamic_pricing.DynamicPricingService(table=table, cache_path=cache_path)
+
+            self.assertTrue(service.load_cache())
+            service.mark_refresh_failed("network_error")
+
+            self.assertEqual(table.lookup("new-model", provider="openai").output_per_million, 4.0)
+            status = table.status()
+            self.assertEqual(status["dynamic_state"], "stale")
+            self.assertEqual(status["dynamic_last_error"], "network_error")
+
+    def test_provider_is_used_by_cost_calculation(self):
+        table = pricing._PricingTable()
+        table.replace_dynamic(
+            {
+                ("openai", "shared-model"): pricing.ModelPricing(1, 2),
+                ("xai", "shared-model"): pricing.ModelPricing(3, 4),
+            },
+            fetched_at="2026-09-12T00:00:00+00:00",
+        )
+        with patch.object(pricing, "_pricing_table", table):
+            openai_cost = pricing.calculate_cost_usd(
+                "shared-model", provider="openai", input_tokens=1_000_000
+            )
+            xai_cost = pricing.calculate_cost_usd(
+                "shared-model", provider="xai", input_tokens=1_000_000
+            )
+        self.assertEqual(openai_cost, 1.0)
+        self.assertEqual(xai_cost, 3.0)
+
+    def test_missing_cache_discount_uses_full_input_price(self):
+        entry = pricing.ModelPricing(input_per_million=2.0, output_per_million=8.0)
+        self.assertEqual(entry.effective_cache_read(), 2.0)
+
+    def test_conflicting_catalog_aliases_are_rejected(self):
+        parsed = dynamic_pricing.parse_litellm_catalog(
+            {
+                "gpt-conflict": {
+                    "litellm_provider": "openai",
+                    "mode": "chat",
+                    "input_cost_per_token": 0.000001,
+                    "output_cost_per_token": 0.000004,
+                },
+                "openai/gpt-conflict": {
+                    "litellm_provider": "openai",
+                    "mode": "chat",
+                    "input_cost_per_token": 0.000002,
+                    "output_cost_per_token": 0.000008,
+                },
+            }
+        )
+        self.assertNotIn(("openai", "gpt-conflict"), parsed)
+
+
+class DynamicPricingRefreshTests(unittest.IsolatedAsyncioTestCase):
+    async def test_refresh_persists_and_installs_only_a_complete_catalog(self):
+        catalog = {
+            f"model-{index}": {
+                "litellm_provider": "openai",
+                "mode": "chat",
+                "input_cost_per_token": 0.000001,
+                "output_cost_per_token": 0.000004,
+            }
+            for index in range(dynamic_pricing.MIN_REMOTE_CATALOG_ENTRIES)
+        }
+        with workspace_temp_directory() as temp_dir:
+            cache_path = Path(temp_dir) / dynamic_pricing.PRICING_CACHE_FILENAME
+            table = pricing._PricingTable()
+            service = dynamic_pricing.DynamicPricingService(table=table, cache_path=cache_path)
+            service._download_catalog = AsyncMock(return_value=catalog)
+
+            self.assertTrue(await service.refresh())
+            self.assertTrue(cache_path.exists())
+            self.assertEqual(table.status()["dynamic_model_count"], len(catalog))
+            self.assertEqual(
+                table.lookup("model-4", provider="openai").output_per_million,
+                4.0,
+            )
+
+    async def test_failed_refresh_retains_last_good_snapshot(self):
+        table = pricing._PricingTable()
+        table.replace_dynamic(
+            {("openai", "existing"): pricing.ModelPricing(1, 4)},
+            fetched_at="2026-09-12T00:00:00+00:00",
+        )
+        service = dynamic_pricing.DynamicPricingService(
+            table=table,
+            cache_path=Path("unused-cache.json"),
+        )
+        service._download_catalog = AsyncMock(return_value={})
+
+        self.assertFalse(await service.refresh())
+        self.assertEqual(table.lookup("existing", provider="openai").output_per_million, 4)
+        self.assertEqual(table.status()["dynamic_state"], "stale")
 
 
 class CostLedgerIntegrationTests(unittest.IsolatedAsyncioTestCase):

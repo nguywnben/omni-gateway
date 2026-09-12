@@ -243,6 +243,8 @@ name; likely misspelled `OMNI_*` variables produce a warning.
 | `GUARDRAILS_PII_MASKING_ENABLED` | `true` | Mask emails, card numbers, and API keys in outbound request text. |
 | `GUARDRAILS_INJECTION_DETECTION_ENABLED` | `true` | Reject prompt-injection attempts with HTTP 400. |
 | `GUARDRAILS_BLOCKED_KEYWORDS` | empty | Comma-separated case-insensitive keywords that block a request. |
+| `PRICING_SYNC_ENABLED` | `true` | Refresh the public LiteLLM model-price catalog in the background; the last valid snapshot remains usable offline. |
+| `PRICING_SYNC_INTERVAL_HOURS` | `24` | Price-catalog refresh interval, bounded between 1 and 168 hours. |
 | `ANTI_TRUNCATION_MAX_ATTEMPTS` | `3` | Maximum continuation attempts for anti-truncation streaming. |
 | `TOKEN_COMPRESSION_ENABLED` | `true` | Compress oversized conversation history before provider routing. |
 | `TOKEN_COMPRESSION_THRESHOLD` | `32000` | Estimated input-token threshold that activates compression. |
@@ -416,7 +418,7 @@ Provider adapters normalize these feature names before sending upstream requests
 
 ## Usage and Cost Visibility
 
-Omni Gateway records request volume, success rate, credential attribution, provider-reported token usage, estimated context-compression savings, and an estimated USD cost per call computed from a maintained model pricing table. Override or extend prices by placing a `model_pricing.json` file in the credentials directory; prices are USD per one million tokens. Aggregates are available on the dashboard, per virtual key through the `/api/virtual-keys` management API, and for monitoring systems through the Prometheus `/metrics` endpoint. Compression savings and costs are labeled as estimates because provider tokenizers and billing rules remain authoritative.
+Omni Gateway records request volume, success rate, credential attribution, provider-reported token usage, estimated context-compression savings, and an estimated USD cost per call. At startup and every 24 hours by default, it refreshes the public [LiteLLM model-price catalog](https://github.com/BerriAI/litellm/blob/main/model_prices_and_context_window.json), validates direct OpenAI, Anthropic, Gemini, and xAI entries, and atomically caches the last valid snapshot. A failed refresh never blocks inference. Override or extend any price by placing a `model_pricing.json` file in the credentials directory; manual prices take precedence and are expressed in USD per one million tokens. Aggregates are available on the dashboard, per virtual key through the `/api/virtual-keys` management API, and through Prometheus `/metrics`. Compression savings and costs remain estimates because provider tokenizers and billing rules are authoritative.
 
 Virtual API keys let one gateway serve multiple clients under separate limits. Each key carries optional daily and monthly USD budgets enforced from the cost ledger, requests-per-minute and tokens-per-minute sliding windows, an expiry timestamp, and a model allowlist with glob patterns. Keys are stored as SHA-256 hashes; the plaintext secret is shown exactly once at creation time.
 

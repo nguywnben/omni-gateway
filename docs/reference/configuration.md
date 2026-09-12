@@ -106,6 +106,8 @@ Values marked `secret` never expose a default through the Settings API.
 | `GUARDRAILS_PII_MASKING_ENABLED` | advanced | boolean | `true` | live | quality |
 | `GUARDRAILS_INJECTION_DETECTION_ENABLED` | advanced | boolean | `true` | live | quality |
 | `GUARDRAILS_BLOCKED_KEYWORDS` | advanced | csv | `(empty)` | live | quality |
+| `PRICING_SYNC_ENABLED` | advanced | boolean | `true` | read_only | environment |
+| `PRICING_SYNC_INTERVAL_HOURS` | advanced | integer | `24` | read_only | environment |
 | `COMPATIBILITY_MODE` | advanced | boolean | `false` | live | quality |
 | `RETURN_THOUGHTS_TO_FRONTEND` | advanced | boolean | `true` | live | quality |
 | `STREAM_TO_NONSTREAM` | advanced | boolean | `true` | live | provider |
