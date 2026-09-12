@@ -117,6 +117,9 @@ class RequestTraceMiddlewareTests(unittest.IsolatedAsyncioTestCase):
             )
             self.assertEqual(service.record.await_count, 0)
             chunks = [chunk async for chunk in response.body_iterator]
+            service.record.assert_not_awaited()
+            self.assertIsNotNone(response.background)
+            await response.background()
 
         self.assertEqual(chunks, [b"one", b"two"])
         service.record.assert_awaited_once()
@@ -159,6 +162,9 @@ class RequestTraceMiddlewareTests(unittest.IsolatedAsyncioTestCase):
         with patch("main.get_request_trace_service", return_value=service):
             response = await add_security_headers(_request("/v1/messages"), next_handler)
             _ = [chunk async for chunk in response.body_iterator]
+            service.record.assert_not_awaited()
+            self.assertIsNotNone(response.background)
+            await response.background()
 
         service.record.assert_awaited_once()
         self.assertEqual(service.record.await_args.args[0].outcome, "upstream_error")

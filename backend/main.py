@@ -573,15 +573,17 @@ async def add_security_headers(request, call_next):
 
     trace_body_iterator = getattr(response, "body_iterator", None)
     if trace_collector is not None and trace_body_iterator is not None:
+        stream_cancelled = False
 
         async def tracing_body_iterator():
-            cancelled = False
+            nonlocal stream_cancelled
             try:
                 with bind_request_trace_collector(trace_collector):
                     async for chunk in trace_body_iterator:
                         yield chunk
             except (asyncio.CancelledError, GeneratorExit):
-                cancelled = True
+                stream_cancelled = True
+                await persist_inference_observability(cancelled=True)
                 raise
             except BaseException:
                 with bind_request_trace_collector(trace_collector):
@@ -592,6 +594,7 @@ async def add_security_headers(request, call_next):
                         reason="provider_error",
                         status_code=500,
                     )
+                await persist_inference_observability()
                 raise
             finally:
                 try:
@@ -601,10 +604,18 @@ async def add_security_headers(request, call_next):
                         "Failed to close streaming response during trace cleanup "
                         f"(request_id={request_id}, error_type={type(exc).__name__})."
                     )
-                finally:
-                    await persist_inference_observability(cancelled=cancelled)
 
         response.body_iterator = tracing_body_iterator()
+        existing_background = response.background
+
+        async def finalize_inference_observability() -> None:
+            try:
+                if existing_background is not None:
+                    await existing_background()
+            finally:
+                await persist_inference_observability(cancelled=stream_cancelled)
+
+        response.background = BackgroundTask(finalize_inference_observability)
     elif trace_collector is not None:
         await persist_inference_observability()
     response.headers["X-Request-ID"] = request_id
