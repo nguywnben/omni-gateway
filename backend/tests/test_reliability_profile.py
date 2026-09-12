@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import inspect
 import json
 import os
 import unittest
@@ -143,6 +144,15 @@ class ReliabilityProfileContractTests(unittest.TestCase):
                 ),
             ),
             {os.getpid(), 20_001, 20_002},
+        )
+
+    def test_memory_probe_cannot_pause_the_async_load_scheduler(self) -> None:
+        from tools import reliability_profile
+
+        source = inspect.getsource(reliability_profile._run_workload)
+        self.assertIn(
+            "await asyncio.to_thread(_process_tree_rss_bytes, pid)",
+            source,
         )
 
     def test_zero_exit_is_graceful_without_requiring_disabled_info_logs(self) -> None:

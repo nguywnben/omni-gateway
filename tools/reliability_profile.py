@@ -797,7 +797,8 @@ async def _run_workload(
     async def sample_memory() -> None:
         while True:
             elapsed = time.perf_counter() - started
-            memory_samples.append(MemorySample(elapsed, _process_tree_rss_bytes(pid)))
+            rss_bytes = await asyncio.to_thread(_process_tree_rss_bytes, pid)
+            memory_samples.append(MemorySample(elapsed, rss_bytes))
             if elapsed >= profile.duration_seconds:
                 return
             await asyncio.sleep(
