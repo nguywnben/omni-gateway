@@ -2,10 +2,10 @@
 
 ## Status and Scope
 
-Wave 4 slices W4.4–W4.5 provide the versioned storage-agnostic identity contract, implementations
-for SQLite, PostgreSQL, and MongoDB, and repository selection through the existing storage adapter.
-They do not activate OIDC login, add identity APIs, replace browser sessions, or change the
-supported single-worker/single-replica topology.
+The versioned storage-agnostic identity contract has implementations for SQLite, PostgreSQL, and
+MongoDB selected through the existing storage adapter. Repository selection does not activate OIDC
+login or change the supported single-worker/single-replica topology. SQLite is Core, PostgreSQL is
+Advanced, and MongoDB is Compatibility.
 
 ## Durable Records
 

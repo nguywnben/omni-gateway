@@ -1,8 +1,8 @@
 # Identity and Session Management API
 
-Wave 4 slice W4.11 adds a closed, typed control-plane API under `/api/identity`. It is designed for
-the localized Identity console in W4.12 and for human administrators; legacy broad management API
-keys receive none of the new identity permissions.
+The closed, typed control-plane API under `/api/identity` supports the localized Identity console
+and human administrators. Legacy broad management API keys receive none of the identity
+permissions, and enabling these routes does not enable OIDC or weaken local-owner recovery.
 
 ## Resource and permission matrix
 

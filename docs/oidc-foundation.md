@@ -1,11 +1,10 @@
 # OIDC Foundation and Security Boundary
 
-Wave 4 slices W4.7–W4.10 establish the configuration, discovery transport, metadata validation,
-JWKS cache, strict ID Token verifier, one-time Authorization Code protocol core, deny-by-default
-identity resolution, and revision-bound OIDC sessions. W4.10 exposes the browser flow only when
-`OIDC_ENABLED=true` and the complete trust configuration is valid. The bounded identity/session
-management APIs are active as of W4.11; the localized console remains gated by W4.12 and
-checkpoint W4-B.
+The optional OIDC boundary includes validated configuration, a hardened discovery transport, a
+bounded JWKS cache, strict ID Token verification, one-time Authorization Code + PKCE/state/nonce,
+deny-by-default identity resolution, and revision-bound sessions. The browser flow is exposed only
+when `OIDC_ENABLED=true` and the complete trust configuration is valid. Identity/session APIs and
+the localized console are active, but they do not enable OIDC on their own.
 
 The local-owner login and recovery path remain available and independent of the identity provider.
 `WORKERS=1` and one application replica remain the only supported topology.

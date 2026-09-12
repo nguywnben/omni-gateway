@@ -2,17 +2,15 @@
 
 ## Safety boundary
 
-The coordinated implementation is present, but W4.19 produced no activation record because the
-required external failure/load topology was unavailable and correctness blockers remain.
-`REDIS_URL` alone never enables HA. Keep
-`OMNI_RUNTIME_MODE=standalone`, `WORKERS=1`, and one replica unless the running release contains an
-accepted activation record for the exact documented topology.
+This is an experimental engineering runbook, not a production deployment guide. The coordinated
+implementation has no activation record and the Production Self-Hosted R1 allowlist is empty.
+`REDIS_URL` alone never enables HA. Keep `OMNI_RUNTIME_MODE=standalone`, `WORKERS=1`, and one replica.
 
 Back up the selected durable backend and Redis namespace before any planned transition. Never use
 `FLUSHDB`, `FLUSHALL`, `SCRIPT FLUSH`, wildcard deletion, manual epoch edits, or direct binding
 record edits.
 
-The W4-C external evidence runner isolates its host-side lifecycle administrator in a dedicated,
+The external evidence runner isolates its host-side lifecycle administrator in a dedicated,
 initially empty temporary credentials directory. Do not point that runner at a workstation or
 production credentials directory: legacy local SQLite files are not evidence inputs and the
 synthetic PostgreSQL inventory is the sole durable authority for the matrix.

@@ -2,11 +2,10 @@
 
 ## Current activation status
 
-W4.17 implements and tests the routing, quota, governance-invalidation, and exact-cache metadata
-boundary. It does **not** select Redis at runtime and does not authorize more than one application
-worker or replica. The supported runtime topology remains the standalone in-process store with
-`WORKERS=1` and one application replica until W4.18 validates lifecycle/readiness and W4.19 passes
-forced-failure and load gates.
+The routing, quota, governance-invalidation, and exact-cache metadata boundary has deterministic
+semantic coverage, but the production runtime does **not** select Redis or authorize more than one
+application worker or replica. The supported topology remains the standalone in-process store with
+`WORKERS=1` and one application replica. Experimental artifacts do not change that release limit.
 
 Do not treat the presence of `REDIS_URL`, an available Redis server, or passing unit parity tests
 as activation approval. Never place prompt, response, embedding, credential filename, model name,

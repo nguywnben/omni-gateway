@@ -1,8 +1,9 @@
 # Identity and Session Governance Console
 
-Wave 4 slice W4.12 adds a dedicated `/identity` destination over the closed W4.11 identity API.
-It keeps identity governance separate from API-key access and does not activate OIDC, change role
-definitions, or expose a new authentication path.
+The Advanced `/identity` destination manages the optional team-access boundary separately from
+virtual API keys. It uses the closed identity API, does not enable OIDC by itself, and cannot
+remove or replace local-owner recovery. OIDC remains disabled until the complete operator trust
+configuration is valid.
 
 ## Operator surfaces
 

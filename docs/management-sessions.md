@@ -2,15 +2,13 @@
 
 ## Scope and Status
 
-Wave 4 slices W4.6 and W4.10 replace newly issued browser JWTs with revocable opaque sessions, add
-an independently throttled local-owner recovery path, and issue deny-by-default OIDC sessions.
-This contract applies to the supported
-single-worker, single-replica standalone topology. Shared session coordination remains gated by
-W4.16 and HA activation remains gated by W4.18–W4.19.
+New browser authentication uses revocable opaque sessions, an independently throttled local-owner
+recovery path, and deny-by-default OIDC sessions. This contract applies to the supported
+single-worker, single-replica standalone topology. Shared session coordination and HA are not
+activated in the production profile; process restart therefore invalidates active sessions.
 
-The bounded identity/session inventory and revocation API is active as of W4.11; the localized
-console remains deferred to W4.12. The API exposes no bearer token or internal digest, and no
-recovery control is added to the browser UI before W4.12.
+The bounded identity/session inventory, revocation API, and localized console are active. The API
+exposes no bearer token or internal digest, and the console keeps local-owner recovery visible.
 
 ## Session Contract
 
