@@ -2,9 +2,9 @@
 
 ## Status
 
-Approved and scope-frozen on 2026-09-08. This specification supersedes the target and release
-criteria in `docs/specs/enterprise-overhaul.md`; previously delivered compatible work remains
-valid.
+Approved and scope-frozen on 2026-09-08, then reconciled with `PROD-BALANCE-R2` on 2026-09-12.
+This specification supersedes the target and release criteria in
+`docs/specs/enterprise-overhaul.md`; previously delivered compatible work remains valid.
 
 ## Product Definition
 
@@ -36,18 +36,18 @@ keys, usage accounting, audit/traces, identity, and defensive test coverage. The
 distributed coordination and enterprise identity received much deeper treatment than installation,
 configuration, recovery, browser verification, and day-to-day workflows.
 
-| Area | Current finding | R1 decision |
+| Area | Current state | Production disposition |
 | --- | --- | --- |
 | Runtime | Single worker/replica is the only activated topology and is adequate for the target | Make standalone the explicit production topology |
-| HA/Redis | Large coordinated-state and evidence surface; activation matrix has consumed disproportionate effort | Freeze as experimental; keep disabled; remove from core release gates |
-| Kubernetes | Helm, alerts, and ServiceMonitor exist but the chart intentionally permits one replica | Mark experimental/community; Docker Compose is canonical |
+| HA/Redis | No supported activation or user migration burden | Retired from runtime, dependencies, tools, tests, and active docs |
+| Kubernetes | No supported scale-out topology | Retired; Docker Compose is canonical |
 | Storage | SQLite, PostgreSQL, and MongoDB parity creates high maintenance cost | SQLite core; PostgreSQL advanced; MongoDB compatibility only |
 | Identity | Secure OIDC/RBAC exists but four-role enterprise language dominates the console | Keep as optional Team access; local owner remains the default and recovery root |
 | Observability | Audit, request traces, raw logs, Prometheus, OTLP, and Langfuse are capable but fragmented | Consolidate console navigation into Activity; keep exporters opt-in |
-| Configuration | `.env.example` and Compose expose too many advanced controls to first-time users | One schema, Basic/Advanced/Experimental grouping, validation and generated examples |
-| Frontend | Eleven pages and strong localization exist; no frontend package/test harness, Playground absent | Keep no-build JS; add small browser test harness and a complete Playground |
+| Configuration | One schema covers a bounded default and opt-in controls | Basic/Advanced/Compatibility grouping with validation and generated examples |
+| Frontend | Eleven destinations, Playground, shared components, and maintained browser evidence | Keep the no-build architecture and one common interface contract |
 | Localization | Fifteen complete catalogs are expensive to curate equally | English/Vietnamese production; other locales community compatibility |
-| Documentation | README claims enterprise/stable while activation work remains open | Reframe around supported production tiers and verified setup paths |
+| Documentation | English/Vietnamese guides match the shipped standalone product | Keep curated docs current; community locales remain console compatibility catalogs |
 
 ## Capability Map
 
@@ -57,7 +57,7 @@ Owns first-run setup, configuration validation, health, backup/restore, update, 
 
 - Canonical `docker compose` install with persistent data and safe container defaults.
 - Setup wizard checks writable data, required secrets, port/proxy configuration, and existing state.
-- Basic configuration contains only common self-host choices; advanced and experimental settings
+- Basic configuration contains only common self-host choices; advanced and compatibility settings
   remain discoverable without cluttering first run.
 - A versioned, integrity-checked portable backup contains configuration, credentials, identity,
   routes, keys, and durable ledgers only inside a passphrase-encrypted archive. A separate sanitized
@@ -113,7 +113,7 @@ Owns safe interactive verification of the gateway.
 - Display incremental output, latency, provider attempts, usage/cost estimate, compression action,
   request ID, normalized errors, and raw response metadata in separate views.
 - Copy equivalent cURL and minimal SDK examples with a placeholder key, never the active secret.
-- Keep prompt history in memory only by default; an explicit local opt-in is required to persist it.
+- Keep prompt history in browser memory only and clear it when the tab reloads or closes.
 - Enforce bounded input/output rendering and a single cancellable in-flight request per panel.
 
 ### 6. Access and small-team identity
@@ -143,7 +143,8 @@ Owns operational evidence useful to a self-hosting maintainer.
 
 ## Information Architecture
 
-The console uses one primary workflow section and one collapsible advanced section:
+The console uses one flat primary navigation. Advanced or compatibility complexity is disclosed
+inside the page that owns it, not hidden behind a separate sidebar section:
 
 1. Overview
 2. Playground
@@ -168,7 +169,7 @@ examples, Compose, and documentation derive from or are checked against it.
 - Basic: port, data directory, local owner/setup secret, public/base URL, CORS, reverse-proxy trust,
   log level, route strategy, and backup location/schedule.
 - Advanced: PostgreSQL, OIDC, exporters, guardrails, cache, detailed limits and timeouts.
-- Experimental: Redis coordination, workers/replicas, deployment fencing, Helm-specific settings.
+- Compatibility: legacy Code Assist controls and hosted keep-alive behavior.
 - Unknown keys warn; malformed or unsafe values fail startup with a precise remediation message.
 - The UI explains whether a change is live, requires restart, or is environment-owned/read-only.
 
@@ -186,8 +187,9 @@ examples, Compose, and documentation derive from or are checked against it.
 
 ## Release Definition
 
-R1 is complete only when all 36 tasks in `tasks/plan.md` are complete and the constraints in
-`CONSTRAINTS.md` pass. The release does not wait for retired distributed topology, MongoDB parity,
+The current production candidate is complete only when all seven tasks in
+`tasks/production-balance-r2.md` and the constraints in `CONSTRAINTS.md` pass. Historical R1 work
+remains complete. The release does not wait for retired distributed topology, MongoDB parity,
 all-locale editorial review, optional soak evidence, or real credentials for every provider.
 
 The final evidence must include:

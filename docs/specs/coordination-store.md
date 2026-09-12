@@ -2,6 +2,10 @@
 
 ## Status and scope
 
+Partially superseded on 2026-09-12 by `PROD-BALANCE-R2` PB2. The standalone in-memory semantics
+that remain in the product are authoritative in current code; Redis scripts, coordinated runtime,
+and multi-replica evidence described below were retired and are historical only.
+
 Wave 4 slice W4.15 defined the original coordination semantics. W4.16-W4.19 moved runtime callers,
 added the closed HA lifecycle, and removed process-local coordination authorities. The 2026-09-05
 Quota State v2 checkpoint replaces the original record-population quota aggregation with fixed

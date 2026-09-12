@@ -2,6 +2,10 @@
 
 ## Status
 
+Partially superseded on 2026-09-12 by `PROD-BALANCE-R2` PB2. Durable storage decisions remain
+applicable; Redis coordination and multi-replica work below are historical and not supported
+product surfaces.
+
 Accepted as the prerequisite for multi-worker and multi-replica support.
 
 ## Context

@@ -240,7 +240,7 @@ Current decisions:
 - [ADR-005: Provider-Declared Credential Operation Capabilities](decisions/005-provider-operation-capabilities.md)
 - [ADR-006: Separate Durable Data from Coordinated Runtime State](decisions/006-durable-and-coordinated-enterprise-state.md)
 - [ADR-007: Use Explicit Management Principals, RBAC, and OIDC](decisions/007-explicit-rbac-and-oidc-identity.md)
-- [ADR-008: Gate High Availability on Coordinated State and Failure Evidence](decisions/008-gated-high-availability-activation.md)
+- [ADR-008: historical gated-HA decision, superseded by topology retirement](decisions/008-gated-high-availability-activation.md)
 - [ADR-009: Use One Encrypted SQLite Artifact for Portable Recovery](decisions/009-encrypted-portable-sqlite-recovery.md)
 - [ADR-010: Return One Safe Provider Connection Diagnostic](decisions/010-safe-provider-connection-diagnostics.md)
 - [ADR-011: Use One Explicit Cross-Protocol Translation Contract](decisions/011-explicit-protocol-translation-contract.md)

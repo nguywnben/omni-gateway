@@ -1,11 +1,13 @@
 # Omni Gateway — Current State
 
-## Active Production Balance Workstream
+## Completed Production Balance Workstream
 
-- Active plan: `PROD-BALANCE-R2` in `tasks/production-balance-r2.md`.
-- Fixed progress: **6/7**; one workstream, no Waves or Phases.
+- Completed plan: `PROD-BALANCE-R2` in `tasks/production-balance-r2.md`.
+- Fixed progress: **7/7**; one workstream, no Waves or Phases.
 - Baseline audit: `docs/audits/production-balance-2026-09-12.md`.
-- Resume at: **PB7 — Reconcile and prove the production candidate**.
+- Candidate handoff: `docs/evidence/pb7-production-candidate.md`.
+- No implementation task remains. Tagging, pushing, publishing, and remote CI are operator release
+  actions and were not performed.
 - R1 below remains completed historical state; it is not reopened or added to the new denominator.
 
 ## Resume Here
@@ -80,6 +82,9 @@ Do not push unless the user requests it.
 
 ## Latest Evidence
 
+- `docs/evidence/pb7-production-candidate.md`
+- The R2 candidate reconciles code, support tiers, constraints, changelog, historical architecture
+  records, measured size, limitations, rollback, and the one required final verification path.
 - `docs/evidence/pb6-right-sized-verification.md`
 - The routine signal passed 600/600 requests at p95 76.055 ms with dashboard usable in 565.491 ms
   and all 15 checks green. The release dry-run selects routine; the preserved ten-minute soak is

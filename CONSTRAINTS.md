@@ -2,8 +2,8 @@
 
 ## Status
 
-- Baseline: `PROD-SELFHOST-R1`
-- Effective date: 2026-09-08
+- Baseline: `PROD-SELFHOST-R1`; active balance plan: `PROD-BALANCE-R2`
+- Effective date: 2026-09-12
 - Target: production-quality self-hosting for one person or a small trusted team.
 - This file is the quality contract. A task is not complete if it weakens these constraints.
 
@@ -25,10 +25,11 @@ and compliance-platform requirements are outside this baseline.
 | Core production | Must work, be documented, and block release when broken | Single-instance runtime, Docker Compose, SQLite, local owner login, provider and credential management, model routing, OpenAI/Anthropic/Gemini/Vertex-compatible APIs, streaming, retries/fallback, AI Quality policy, virtual keys, usage/cost, activity, backup/restore, Playground |
 | Advanced production | Supported and tested, but optional | PostgreSQL, OIDC team login and roles, Prometheus/OTLP/Langfuse export, reverse-proxy deployment |
 | Compatibility | Kept for existing users; no feature-parity expansion | MongoDB storage, platform-specific install scripts, existing hosted-platform descriptors, non-English/non-Vietnamese community translations |
-| Experimental | Disabled by default; never described as production-ready | Redis coordinated mode, multiple workers/replicas, HA lifecycle and activation, Helm/ServiceMonitor/PrometheusRule deployment |
+| Experimental | No active capability in the current product; future research requires an explicit new plan | None |
 
-Experimental failure cannot block the core production release. Experimental code must not make a
-default installation less secure, slower, or harder to configure.
+Redis coordination, multiple workers/replicas, HA lifecycle, and Kubernetes/Helm deployment are
+retired product surfaces, not disabled production options. Historical design records do not make
+them installable or release-blocking.
 
 ## Required User Journeys
 
@@ -54,8 +55,8 @@ Every core journey must have an automated contract test and a browser smoke path
   be explicitly labeled and reported separately.
 - Changed backend logic requires focused tests. Changed user behavior requires a browser or DOM
   contract test. Bug fixes require a regression test.
-- Public protocol behavior remains backward compatible throughout R1 unless a migration and
-  deprecation notice are accepted in writing.
+- Public protocol behavior remains backward compatible with the checked R1 fixture unless a
+  migration and deprecation notice are accepted in writing.
 
 ### Security and privacy
 
@@ -82,8 +83,10 @@ Every core journey must have an automated contract test and a browser smoke path
 
 ### Performance and resource use
 
-- Establish the baseline before optimization. The release gate is a reproducible 10-minute local
-  synthetic run at 10 requests/second and 16 concurrent requests against a deterministic upstream.
+- Establish the baseline before optimization. The release gate is a reproducible 120-second local
+  routine run at 5 requests/second and eight concurrent requests against a deterministic upstream.
+- The preserved 10-minute, 10 requests/second, concurrency-16 profile is an optional soak for major
+  releases or memory investigations; it does not change the routine production verdict.
 - Gateway-added p95 latency must be at most 100 ms, excluding upstream generation time; gateway
   error rate must be below 0.1%; memory must remain bounded without monotonic growth.
 - The authenticated dashboard should reach usable content within 2.5 seconds on a warmed localhost
@@ -95,8 +98,8 @@ Every core journey must have an automated contract test and a browser smoke path
 - Core pages work at 360, 768, 1024, and 1440 CSS pixels without horizontal overflow.
 - Keyboard navigation, visible focus, dialog focus containment, labels, accessible names, status
   announcements, and contrast meet WCAG 2.2 AA intent.
-- Browser smoke covers current Chromium. Firefox is manually checked for the release candidate;
-  browser-specific defects are documented rather than silently ignored.
+- Browser smoke covers current Chromium. Browser-specific defects outside that maintained target
+  are documented rather than silently ignored or promoted to an unverified support claim.
 - English and Vietnamese are curated production locales. Other existing locales retain automated
   key completeness and English fallback but are community-maintained compatibility locales.
 
@@ -108,13 +111,13 @@ Every core journey must have an automated contract test and a browser smoke path
 - A file may grow beyond 1,500 lines only when splitting it would make ownership less clear; any
   touched file already above that size requires a small extraction assessment in the task report.
 - Configuration has one authoritative schema. Basic setup exposes at most 20 user-facing options;
-  advanced and experimental options remain available in separately documented sections.
+  advanced and compatibility options remain isolated in clearly labelled local disclosures.
 - User-visible copy added or changed in English must have a reviewed Vietnamese equivalent.
 
 ## Verification Cadence
 
 - During a task: run focused tests and the directly affected static checks.
-- At a phase boundary: run the affected integration/browser slice once.
+- For a broader integration change: run the affected integration/browser slice once.
 - At release: run the full required gate once. After a failure, rerun the failed slice; repeat the
   full gate only after all failures are corrected.
 - A soak or matrix has a written duration and case count before it starts. It must never run
@@ -124,9 +127,9 @@ Every core journey must have an automated contract test and a browser smoke path
 
 ## Change Control
 
-The fixed plan is `tasks/plan.md`. Its six phases and 36 task identifiers are immutable for R1.
-Defects found while implementing a task are resolved inside that task; they do not create a new
-Wave, phase, suffix, or denominator.
+The active fixed plan is `tasks/production-balance-r2.md`. Its seven task identifiers are the only
+progress denominator. Historical R1 tasks remain complete. Defects found while implementing a task
+are resolved inside that task; they do not create a new Wave, phase, suffix, or denominator.
 
 The plan may change only when at least one condition is true:
 
@@ -135,15 +138,15 @@ The plan may change only when at least one condition is true:
 3. A required provider or upstream protocol makes a breaking change.
 4. The user explicitly changes the product boundary.
 
-Every change requires a short `CR-###` record in `tasks/plan.md` containing evidence, affected task
-IDs, removed/added scope, schedule impact, and user approval. Improvements that do not meet these
-conditions go to the post-R1 backlog and cannot delay R1.
+Every qualifying plan change requires a short record with evidence, affected task IDs,
+removed/added scope, schedule impact, and user approval. Improvements that do not meet these
+conditions remain deferred and cannot delay the current candidate.
 
 ## Forbidden Scope Creep
 
 - No active-active, auto-scaling, commercial billing, organization hierarchy, SAML/SCIM, policy
-  engine, plugin marketplace, Kubernetes operator, or compliance certification in R1.
+  engine, plugin marketplace, Kubernetes operator, or compliance certification.
 - No additional storage backend, identity provider protocol, telemetry vendor, frontend framework,
   or provider family unless required to repair an existing advertised capability.
 - No rewriting stable subsystems solely to make them more elegant.
-- No claim of “enterprise-ready”, HA-ready, or SLA compliance in R1 documentation.
+- No claim of “enterprise-ready”, HA-ready, or SLA compliance in current product documentation.

@@ -2,9 +2,8 @@
 
 ## Status
 
-Accepted implementation specification extended by W4-C. It defines configuration, ownership,
-readiness, reconciliation, and rollback without granting an activation record or production
-release.
+Superseded on 2026-09-12 by `PROD-BALANCE-R2` PB2. The implementation and executable evidence path
+described below were removed; this file is retained only as a historical design record.
 
 ## Closed runtime policy
 

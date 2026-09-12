@@ -2,8 +2,9 @@
 
 ## Status
 
-Accepted on 2026-08-26. This decision authorizes the staged implementation plan, not scale-out;
-ADR-002 remains active until the separate evidence-backed activation record described below.
+Superseded on 2026-09-12 by `PROD-BALANCE-R2` PB2. Redis coordination, HA activation/evidence, and
+Kubernetes deployment were retired from the active product. The content below is a historical
+decision record and is not an executable runbook or current support claim.
 
 ## Context
 

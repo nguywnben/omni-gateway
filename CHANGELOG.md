@@ -4,7 +4,35 @@ All notable user-facing changes are documented in this file. Omni Gateway follow
 
 ## [Unreleased]
 
-No user-facing changes yet.
+### Added
+
+- Added automatic model-pricing synchronization with a validated last-known-good snapshot and
+  manual `model_pricing.json` precedence, so newly priced models do not require an Omni Gateway
+  release while inference remains available during catalog outages.
+- Added a 120-second release-blocking reliability profile for routine self-hosted releases while
+  preserving the original ten-minute profile as an explicit optional soak.
+
+### Changed
+
+- Rebalanced the supported product around one worker and one replica: SQLite remains the Core
+  default, PostgreSQL and team OIDC remain Advanced opt-ins, and MongoDB remains Compatibility.
+- Unified console spacing, advisory copy, empty support-tier rendering, responsive coverage, and
+  keyboard smoke across all 11 destinations; only English and Vietnamese documentation is now
+  maintainer-curated while all 15 console locale catalogs remain complete.
+- Completed the project-owned Pydantic 2 configuration migration and made core lifecycle/storage
+  fallback logs observable without exposing raw exception details.
+
+### Removed
+
+- Removed the unreachable Redis coordinated runtime, multi-replica HA lifecycle/operator/evidence,
+  Kubernetes/Helm assets, Redis dependency, and their obsolete active runbook.
+- Removed Redis acceleration and coordinated-only write branches from the MongoDB Compatibility
+  backend, plus 13 stale community README snapshots that advertised retired deployment paths.
+
+### Fixed
+
+- Restored the frozen R1 API compatibility surface and strengthened default SQLite startup so
+  optional database drivers and external services are not loaded unless explicitly selected.
 
 ## [1.5.0] - 2026-09-12
 

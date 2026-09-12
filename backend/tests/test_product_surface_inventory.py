@@ -194,6 +194,18 @@ class ProductSurfaceInventoryTests(unittest.TestCase):
         }
         self.assertEqual(localized_readmes, {"README.vi.md"})
 
+    def test_current_constraints_and_spec_describe_the_balanced_product(self) -> None:
+        constraints = (ROOT / "CONSTRAINTS.md").read_text(encoding="utf-8")
+        specification = (ROOT / "docs/specs/production-self-hosted.md").read_text(encoding="utf-8")
+        changelog = (ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
+
+        self.assertIn("PROD-BALANCE-R2", constraints)
+        self.assertIn("120-second", constraints)
+        self.assertNotIn("release gate is a reproducible 10-minute", constraints)
+        self.assertNotIn("Freeze as experimental", specification)
+        self.assertNotIn("Helm, alerts, and ServiceMonitor exist", specification)
+        self.assertNotIn("No user-facing changes yet.", changelog)
+
 
 if __name__ == "__main__":
     unittest.main()
