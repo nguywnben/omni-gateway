@@ -4,6 +4,10 @@ All notable user-facing changes are documented in this file. Omni Gateway follow
 
 ## [Unreleased]
 
+No user-facing changes yet.
+
+## [1.5.0] - 2026-09-12
+
 ### Added
 
 - Added a canonical storage support/recovery contract that distinguishes SQLite Core, PostgreSQL
@@ -43,7 +47,7 @@ All notable user-facing changes are documented in this file. Omni Gateway follow
 - Added a localized Audit surface under Observability with safe category filters, cursor
   pagination, redacted event details, request-ID pivots, confirmed retention controls, and
   bounded JSONL/CSV export.
-- Added disabled-by-default enterprise OIDC browser login with Authorization Code + PKCE,
+- Added optional OIDC team login with Authorization Code + PKCE,
   exact issuer/subject identities, explicit non-owner group-to-role mappings, and revocable
   sessions bound to identity and policy authorization revisions.
 - Added selected-backend durable usage and cost repositories for SQLite, PostgreSQL, and
@@ -164,7 +168,8 @@ All notable user-facing changes are documented in this file. Omni Gateway follow
 - Prevented v1/corrupt/expiring or incompletely reconciled quota state from entering a ready epoch,
   and made quota reconciliation cursors, page bounds, identifiers, and pipeline replies fail closed.
 - Corrected the synthetic HA evidence output so it no longer reports provider, batch, pool, or
-  quota blockers that later Wave 4 checkpoints already resolved.
+  quota blockers that the completed semantic checks already resolved. Redis and multi-replica
+  operation remain experimental and outside the supported release topology.
 
 ## [1.4.0] - 2026-08-21
 
@@ -390,7 +395,8 @@ All notable user-facing changes are documented in this file. Omni Gateway follow
 - Provider credential pool, virtual model routing, context optimization, usage visibility, and the management console.
 - Docker Hub and GitHub Container Registry publishing.
 
-[Unreleased]: https://github.com/nguywnben/omni-gateway/compare/v1.4.0...HEAD
+[Unreleased]: https://github.com/nguywnben/omni-gateway/compare/v1.5.0...HEAD
+[1.5.0]: https://github.com/nguywnben/omni-gateway/compare/v1.4.0...v1.5.0
 [1.4.0]: https://github.com/nguywnben/omni-gateway/compare/v1.3.2...v1.4.0
 [1.3.2]: https://github.com/nguywnben/omni-gateway/compare/v1.3.1...v1.3.2
 [1.3.1]: https://github.com/nguywnben/omni-gateway/compare/v1.3.0...v1.3.1

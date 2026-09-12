@@ -48,7 +48,7 @@ community-maintained compatibility translations and fall back to English when a 
 
 A universal AI router for coding tools. Omni Gateway provides smart auto-fallback, token-aware request cleanup, usage visibility, and seamless format translation so local agents, IDE assistants, and automation scripts can use free and premium LLM capacity through one stable API surface.
 
-> **Product boundary:** Omni Gateway is being hardened for production self-hosting by one person or
+> **Product boundary:** Omni Gateway is production-ready for self-hosting by one person or
 > a trusted team. The supported production topology is one application worker and one replica;
 > Docker Compose, local-owner access, SQLite, provider routing, and the documented SDK routes form
 > the core profile. PostgreSQL, OIDC team access, reverse-proxy operation, and external telemetry
@@ -135,10 +135,14 @@ checks through the first authenticated Dashboard; its
 Linux, macOS, and architecture status without implying unsupported ARM64 coverage.
 
 The default profile needs no external database or Redis and stores all application data in the
-`omni-gateway-data` named volume. Its minimal environment template pins release `1.4.0`; production
+`omni-gateway-data` named volume. Its minimal environment template pins release `1.5.0`; production
 updates use the encrypted, health-checked [Compose update and rollback guide](docs/updating.md).
 External storage, Team access, proxy, guardrails, cache, and telemetry remain opt-in through
 `deploy/compose.advanced.yml` after the base installation is healthy.
+
+For diagnosis and safe recovery, use the [Production troubleshooting guide](docs/troubleshooting.md).
+It starts with health and readiness checks, preserves the data volume, and records the exact
+information needed for a redacted support bundle.
 
 Compatibility-only native scripts under `deploy/scripts`, direct `docker run`, Render, and Zeabur
 do not carry the full install/update/rollback evidence of the canonical path. The production image

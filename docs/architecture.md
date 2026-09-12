@@ -132,47 +132,16 @@ until the separate HA activation phase is approved.
 
 `WORKERS=1` and one application replica are the supported process model for the 1.x series. SQLite is the Core authority, PostgreSQL is an Advanced option, and MongoDB is retained for Compatibility. Shared storage alone does not coordinate reservations, cooldowns, sessions, or usage aggregation across workers. The service rejects `WORKERS` values other than `1` instead of presenting an unsafe scale-out configuration as supported.
 
-The accepted [Phase 6 specification](specs/enterprise-identity-and-ha.md),
-[ADR-007](decisions/007-explicit-rbac-and-oidc-identity.md), and
-[ADR-008](decisions/008-gated-high-availability-activation.md) govern explicit management
-principals, server-side permissions, OIDC, revocable sessions, coordinated state, and measured
-scale-out. W4.3 classifies every protected management OpenAPI operation and WebSocket in one
-immutable manifest and enforces the resolved typed principal against FastAPI's trusted route
-template before handler execution. Missing policy fails closed. Human roles use exact bundles;
-legacy management keys retain existing-route compatibility without receiving future identity,
-recovery, owner-assignment, or HA rights. W4.4 adds the strict
-[management identity repository](identity-repository.md) contract and an additive SQLite
-implementation: exact case-sensitive `(issuer, subject)` identities, independent optimistic
-revisions, authorization epochs, immutable local-owner bootstrap, and fail-closed stored-row
-validation. W4.5 implements the same contract for PostgreSQL and MongoDB and exposes the selected
-implementation through the existing storage adapter. PostgreSQL uses transactions and conditional
-revision updates across normalized tables; MongoDB keeps each identity/binding pair in one atomic
-document and uses an OIDC-only simple-collation unique index. The repository is not wired as a login
-source. W4.6 adds the standalone
-[management session and recovery contract](management-sessions.md): new browser authentication
-uses 256-bit opaque cookies backed by HMAC-indexed, authorization-epoch-aware, revocable in-process
-records; logout and password rotation revoke server-side state; and a separately throttled,
-audited local-owner recovery route remains available. Existing JWTs receive only a bounded
-migration window. Process restart invalidates active opaque sessions until W4.16 supplies shared
-coordination, so ADR-002/ADR-006 continue to enforce one worker and one replica.
-
-W4.7 adds the disabled-by-default [OIDC foundation](oidc-foundation.md). Its immutable policy keeps
-the client secret outside public configuration, restricts algorithms to `RS256`, `PS256`, and
-`ES256`, and applies exact issuer, redirect, origin, claim, timeout, and response-size bounds. The
-custom HTTPS discovery transport ignores proxies and redirects, validates every DNS answer before
-connecting to a pinned approved address, retains the original hostname for TLS verification, and
-rejects ambiguous or oversized HTTP/JSON. Discovery metadata and public JWKS keys are reduced to a
-strict internal contract; bounded single-flight refresh handles rotation without replacing a valid
-snapshot with poisoned data. W4.8–W4.9 add asymmetric ID Token verification and the one-time
-Authorization Code + PKCE/state/nonce core. W4.10 activates the disabled-by-default browser route
-with exact-subject/direct-binding precedence, bounded non-owner group mapping, and OIDC sessions
-bound independently to identity and policy authorization epochs. Discovery stays lazy so IdP
-failure cannot block startup or local recovery; bounded admission and shared failure backoff avoid
-serialized discovery storms. Session authorization accepts only a typed verified principal, and a
-failed claim-role re-evaluation advances the identity epoch so older sessions become stale.
-Identity management APIs and typed actor-aware audit are active as of W4.11. Console activation
-is implemented by the dedicated localized [Identity console](identity-console.md) in W4.12 and
-remains subject to checkpoint W4-B browser and release gates.
+The optional identity boundary is governed by
+[ADR-007](decisions/007-explicit-rbac-and-oidc-identity.md). Every protected management operation
+and WebSocket has an exact server-side permission; missing policy fails closed. Local-owner login
+and recovery remain available in every supported deployment. OIDC team login is an Advanced,
+disabled-by-default option using Authorization Code with PKCE, state, nonce, strict discovery and
+ID Token verification, exact issuer/subject identities, bounded non-owner group mapping, and
+revocable sessions. The [Identity console](identity-console.md) exposes identities, role bindings,
+sessions, and typed audit records without exposing reusable secrets. In the supported standalone
+topology, opaque sessions are process-local and a restart signs users out; this is expected and
+does not affect durable configuration or the local owner account.
 
 The Render Blueprint deliberately uses a paid persistent disk. Free Render services have ephemeral filesystems and are not suitable for durable credential storage.
 
@@ -247,21 +216,19 @@ backend/core/converter/{openai,anthropic}_to_gemini.py
 
 The storage drivers interpolate only table and column identifiers selected from internal allowlists; all credential values remain parameterized. Future storage work should consolidate those safe identifier builders, replace repeated broad exception handling with typed boundary errors, and add live integration suites for PostgreSQL and MongoDB.
 
+### Experimental coordination boundary
+
 Routing, quota, governance invalidation, exact-cache metadata, management sessions, security
-attempts, OIDC/provider/device authorization, and credential-batch idempotency share a fenced
-semantic coordination boundary. Store keys use
-domain-separated HMAC identifiers; exact response bytes stay inside the bounded local cache, while
-Redis-compatible metadata carries only closed, bounded decision state. W4.18 adds one runtime-owned
-lifecycle, durable/shared namespace binding, dependency-aware readiness, dry-run-first epoch and
-rollback operations, deployment validation, and alerts. W4.19 deliberately records no activation
-topology. Post-W4.19 closure moved credential-pool mutation into storage-owned transactions,
-bounded the batch domains, and replaced the record-population quota scan with a 61-slot Quota State
-v2 window plus bounded reconciliation. The remaining activation blocker is the unavailable real
-Redis plus shared-database two-replica failure/load/completeness/rollback matrix. ADR-002 therefore
-remains active and the compiled activation allowlist is empty.
+attempts, OIDC/provider/device authorization, and credential-batch idempotency have a fenced
+semantic coordination interface. The supported standalone runtime uses the in-memory adapter and
+keeps exact response bytes in its bounded local cache. Redis-compatible primitives, lifecycle
+commands, deployment validation, alerts, and HA runbooks are retained as experimental engineering
+assets only. Runtime Redis selection, multiple workers, and multiple replicas are inactive; the
+compiled activation allowlist is empty. They cannot be used to infer production scale-out support.
+ADR-002 remains the release authority for the one-worker, one-replica topology.
 Operational evidence is maintained in the [routing coordination runbook](runbooks/routing-coordination.md),
 [HA lifecycle runbook](runbooks/ha-lifecycle.md), and
-[W4.19 activation disposition](evidence/w4.19-ha-activation-disposition.md).
+[HA activation disposition](evidence/w4.19-ha-activation-disposition.md).
 
 Production dependencies are compiled into `requirements.lock` with hashes. `requirements.txt` remains the human-maintained input, and CI rejects stale lock output.
 

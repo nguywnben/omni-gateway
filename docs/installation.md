@@ -5,8 +5,8 @@ standalone topology—one application worker and one replica—through Docker Co
 one named volume. Do not add Redis, an external database, or the advanced override during the
 first installation.
 
-The commands below use the current `1.4.0` release. For a later release, replace both occurrences
-of `v1.4.0`/`1.4.0` with the same exact stable version; do not use `latest` or `edge` for a
+The commands below use the current `1.5.0` release. For a later release, replace both occurrences
+of `v1.5.0`/`1.5.0` with the same exact stable version; do not use `latest` or `edge` for a
 production install.
 
 ## 1. Check the host
@@ -37,7 +37,7 @@ continuing:
 Use a release tag so the checked-out Compose file and the image version stay reproducible:
 
 ```text
-git clone --branch v1.4.0 --depth 1 https://github.com/nguywnben/omni-gateway.git
+git clone --branch v1.5.0 --depth 1 https://github.com/nguywnben/omni-gateway.git
 cd omni-gateway
 ```
 
@@ -114,7 +114,9 @@ must satisfy all of these checks:
 
 Keep the `.env` file, the named volume, and the release tag together in the operator record. Use
 the [encrypted backup and restore guide](backup-and-restore.md) before moving data and the
-[health-checked update guide](updating.md) before changing versions.
+[health-checked update guide](updating.md) before changing versions. Use the
+[production troubleshooting guide](troubleshooting.md) before changing configuration or storage
+in response to an incident.
 
 ## Support matrix
 
