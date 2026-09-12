@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "profile": "PROD-SELFHOST-R1",
-  "captured_on": "2026-09-08",
+  "captured_on": "2026-09-12",
   "inventory": {
     "large_modules": {
       "threshold_lines": 1500,
@@ -15,20 +15,20 @@
           "lines": 4159
         },
         {
+          "path": "frontend/js/core/page-locales.js",
+          "lines": 2935
+        },
+        {
           "path": "backend/core/state_store.py",
           "lines": 2493
         },
         {
-          "path": "frontend/js/core/page-locales.js",
-          "lines": 2265
-        },
-        {
           "path": "backend/core/api/primary.py",
-          "lines": 1979
+          "lines": 2103
         },
         {
           "path": "backend/core/panel/credentials.py",
-          "lines": 1651
+          "lines": 1728
         },
         {
           "path": "backend/core/identity/sessions.py",
@@ -36,11 +36,11 @@
         },
         {
           "path": "backend/core/storage/mongodb_manager.py",
-          "lines": 1568
+          "lines": 1573
         },
         {
           "path": "backend/core/converter/openai_to_gemini.py",
-          "lines": 1510
+          "lines": 1513
         }
       ]
     },
@@ -61,7 +61,7 @@
           {
             "backend": "sqlite",
             "path": "backend/core/storage/audit_sqlite.py",
-            "lines": 217
+            "lines": 218
           }
         ]
       },
@@ -76,7 +76,7 @@
           {
             "backend": "sqlite",
             "path": "backend/core/storage/durable_family_sqlite.py",
-            "lines": 343
+            "lines": 344
           }
         ]
       },
@@ -96,7 +96,7 @@
           {
             "backend": "sqlite",
             "path": "backend/core/storage/identity_sqlite.py",
-            "lines": 590
+            "lines": 589
           }
         ]
       },
@@ -116,7 +116,7 @@
           {
             "backend": "sqlite",
             "path": "backend/core/storage/migration_sqlite.py",
-            "lines": 156
+            "lines": 157
           }
         ]
       },
@@ -136,7 +136,7 @@
           {
             "backend": "sqlite",
             "path": "backend/core/storage/request_trace_sqlite.py",
-            "lines": 212
+            "lines": 213
           }
         ]
       },
@@ -146,17 +146,17 @@
           {
             "backend": "mongodb",
             "path": "backend/core/storage/mongodb_manager.py",
-            "lines": 1568
+            "lines": 1573
           },
           {
             "backend": "postgresql",
             "path": "backend/core/storage/postgresql_manager.py",
-            "lines": 1230
+            "lines": 1236
           },
           {
             "backend": "sqlite",
             "path": "backend/core/storage/sqlite_manager.py",
-            "lines": 1461
+            "lines": 1471
           }
         ]
       },
@@ -176,7 +176,7 @@
           {
             "backend": "sqlite",
             "path": "backend/core/storage/usage_ledger_sqlite.py",
-            "lines": 1312
+            "lines": 1433
           }
         ]
       }
@@ -184,55 +184,55 @@
     "pydantic_deprecations": [
       {
         "path": "backend/core/models.py",
-        "line": 12,
+        "line": 13,
         "kind": "legacy_dict_call"
       },
       {
         "path": "backend/core/models.py",
-        "line": 71,
+        "line": 231,
         "kind": "class_based_config"
       },
       {
         "path": "backend/core/models.py",
-        "line": 94,
+        "line": 386,
         "kind": "class_based_config"
       },
       {
         "path": "backend/core/models.py",
-        "line": 144,
+        "line": 460,
         "kind": "class_based_config"
       },
       {
         "path": "backend/core/models.py",
-        "line": 196,
+        "line": 584,
         "kind": "class_based_config"
       },
       {
         "path": "backend/core/models.py",
-        "line": 264,
+        "line": 807,
         "kind": "class_based_config"
       },
       {
         "path": "backend/core/models.py",
-        "line": 294,
+        "line": 837,
         "kind": "class_based_config"
       },
       {
         "path": "backend/core/panel/quality_policy.py",
-        "line": 42,
+        "line": 43,
         "kind": "class_based_config"
       }
     ],
     "broad_exception_handlers": {
-      "handlers": 479,
-      "without_reraise": 303,
-      "files": 96,
+      "handlers": 500,
+      "without_reraise": 319,
+      "files": 102,
       "by_area": {
-        "access_security": 68,
+        "access_security": 70,
         "experimental_coordination": 11,
-        "protocol_routing": 58,
+        "protocol_routing": 59,
         "provider_credentials": 77,
-        "runtime_operations": 129,
+        "runtime_operations": 147,
         "storage": 136
       },
       "top_hotspots": [
@@ -242,19 +242,19 @@
           "without_reraise": 33
         },
         {
-          "path": "backend/core/storage/sqlite_manager.py",
-          "handlers": 25,
-          "without_reraise": 22
-        },
-        {
           "path": "backend/core/storage/postgresql_manager.py",
           "handlers": 24,
           "without_reraise": 22
         },
         {
           "path": "backend/main.py",
-          "handlers": 27,
-          "without_reraise": 19
+          "handlers": 29,
+          "without_reraise": 21
+        },
+        {
+          "path": "backend/core/storage/sqlite_manager.py",
+          "handlers": 26,
+          "without_reraise": 21
         },
         {
           "path": "backend/core/auth.py",
@@ -293,8 +293,8 @@
         },
         {
           "path": "backend/core/panel/virtual_keys.py",
-          "handlers": 7,
-          "without_reraise": 7
+          "handlers": 8,
+          "without_reraise": 8
         },
         {
           "path": "backend/log.py",
@@ -316,9 +316,19 @@
     "skipped_and_live_tests": {
       "skip_sites": [
         {
+          "path": "backend/tests/test_activity_console.py",
+          "line": 27,
+          "kind": "skipTest"
+        },
+        {
           "path": "backend/tests/test_coordination_redis_live.py",
           "line": 186,
           "kind": "skipUnless"
+        },
+        {
+          "path": "backend/tests/test_credential_fleet_console.py",
+          "line": 21,
+          "kind": "skipTest"
         },
         {
           "path": "backend/tests/test_durable_family_migration.py",
@@ -327,7 +337,7 @@
         },
         {
           "path": "backend/tests/test_frontend_i18n.py",
-          "line": 42,
+          "line": 46,
           "kind": "skipTest"
         },
         {
@@ -351,6 +361,16 @@
           "kind": "skipUnless"
         },
         {
+          "path": "backend/tests/test_navigation_console.py",
+          "line": 26,
+          "kind": "skipTest"
+        },
+        {
+          "path": "backend/tests/test_production_dashboard.py",
+          "line": 34,
+          "kind": "skipTest"
+        },
+        {
           "path": "backend/tests/test_routing_coordination_redis_live.py",
           "line": 31,
           "kind": "skipUnless"
@@ -359,6 +379,11 @@
           "path": "backend/tests/test_security_coordination_redis_live.py",
           "line": 43,
           "kind": "skipUnless"
+        },
+        {
+          "path": "backend/tests/test_ui_feedback_contract.py",
+          "line": 52,
+          "kind": "skipTest"
         },
         {
           "path": "backend/tests/test_usage_ledger_live.py",
@@ -382,14 +407,23 @@
       ]
     },
     "frontend_test_gaps": {
-      "javascript_modules": 45,
+      "javascript_modules": 51,
       "package_manifest_present": false,
       "native_javascript_tests": [],
       "backend_dom_contract_modules": [
         "backend/tests/test_access_virtual_keys_frontend.py",
+        "backend/tests/test_activity_console.py",
+        "backend/tests/test_credential_fleet_console.py",
         "backend/tests/test_frontend_i18n.py",
         "backend/tests/test_frontend_password_forms.py",
-        "backend/tests/test_identity_console.py"
+        "backend/tests/test_identity_console.py",
+        "backend/tests/test_model_routing_console.py",
+        "backend/tests/test_navigation_console.py",
+        "backend/tests/test_playground_console.py",
+        "backend/tests/test_production_dashboard.py",
+        "backend/tests/test_quality_policy_console.py",
+        "backend/tests/test_settings_about_console.py",
+        "backend/tests/test_ui_feedback_contract.py"
       ],
       "browser_harness_configs": []
     }
@@ -400,7 +434,9 @@
       "category": "large_modules",
       "severity": "medium",
       "summary": "The largest backend module is experimental Redis coordination code.",
-      "owners": ["POST-R1"],
+      "owners": [
+        "POST-R1"
+      ],
       "disposition": "Freeze feature expansion; retain only bounded security and correctness fixes.",
       "file_size_refactor_authorized": false
     },
@@ -409,7 +445,9 @@
       "category": "large_modules",
       "severity": "high",
       "summary": "Large state and storage managers concentrate persistence and migration risk.",
-      "owners": ["P5.1"],
+      "owners": [
+        "P5.1"
+      ],
       "disposition": "Assess and extract only when required by storage-tier or migration work.",
       "file_size_refactor_authorized": false
     },
@@ -418,7 +456,10 @@
       "category": "large_modules",
       "severity": "high",
       "summary": "Large protocol routing and conversion modules can amplify AI-output regressions.",
-      "owners": ["P2.3", "P2.4"],
+      "owners": [
+        "P2.3",
+        "P2.4"
+      ],
       "disposition": "Protect with protocol fixtures before task-local correction or extraction.",
       "file_size_refactor_authorized": false
     },
@@ -427,7 +468,9 @@
       "category": "large_modules",
       "severity": "high",
       "summary": "The large identity session module contains security-sensitive lifecycle logic.",
-      "owners": ["P5.2"],
+      "owners": [
+        "P5.2"
+      ],
       "disposition": "Change only behind targeted adversarial session tests.",
       "file_size_refactor_authorized": false
     },
@@ -436,7 +479,10 @@
       "category": "large_modules",
       "severity": "medium",
       "summary": "Large locale and credential-console modules raise review and regression cost.",
-      "owners": ["P3.5", "P4.6"],
+      "owners": [
+        "P3.5",
+        "P4.6"
+      ],
       "disposition": "Use workflow-owned, test-backed extraction only when those tasks touch them.",
       "file_size_refactor_authorized": false
     },
@@ -445,7 +491,9 @@
       "category": "storage_families",
       "severity": "high",
       "summary": "Seven persistence families have parallel backend implementations and parity cost.",
-      "owners": ["P5.1"],
+      "owners": [
+        "P5.1"
+      ],
       "disposition": "Make SQLite core, PostgreSQL advanced, and MongoDB compatibility without new parity scope.",
       "file_size_refactor_authorized": false
     },
@@ -454,7 +502,11 @@
       "category": "pydantic_deprecations",
       "severity": "medium",
       "summary": "Eight Pydantic v1-style sites remain in protocol and quality-policy models.",
-      "owners": ["P2.3", "P4.1", "P5.1"],
+      "owners": [
+        "P2.3",
+        "P4.1",
+        "P5.1"
+      ],
       "disposition": "Modernize only with the owning model contracts; do not perform a global rewrite.",
       "file_size_refactor_authorized": false
     },
@@ -463,7 +515,12 @@
       "category": "broad_exception_handlers",
       "severity": "high",
       "summary": "Broad catches can hide protocol, provider, storage, authentication, and shutdown failures.",
-      "owners": ["P2.2", "P2.4", "P5.1", "P5.2"],
+      "owners": [
+        "P2.2",
+        "P2.4",
+        "P5.1",
+        "P5.2"
+      ],
       "disposition": "Review task-local boundaries and preserve only deliberate, observable fallbacks.",
       "file_size_refactor_authorized": false
     },
@@ -472,7 +529,9 @@
       "category": "skipped_and_live_tests",
       "severity": "medium",
       "summary": "Optional PostgreSQL and MongoDB paths rely on environment-gated live coverage.",
-      "owners": ["P5.1"],
+      "owners": [
+        "P5.1"
+      ],
       "disposition": "Keep opt-in and report separately while adding deterministic tier-specific contracts.",
       "file_size_refactor_authorized": false
     },
@@ -481,7 +540,9 @@
       "category": "skipped_and_live_tests",
       "severity": "medium",
       "summary": "Redis and topology live tests depend on explicitly experimental infrastructure.",
-      "owners": ["POST-R1"],
+      "owners": [
+        "POST-R1"
+      ],
       "disposition": "Keep outside R1 gates under the P0.3 experimental suite partition.",
       "file_size_refactor_authorized": false
     },
@@ -489,18 +550,23 @@
       "id": "RISK-FRONTEND-001",
       "category": "frontend_test_gaps",
       "severity": "high",
-      "summary": "Forty-five JavaScript modules have no native runner or maintained browser harness.",
-      "owners": ["P5.4"],
-      "disposition": "Add the fixed minimal browser and DOM harness after product workflows stabilize.",
+      "summary": "Fifty-one JavaScript modules rely on recursive syntax, DOM contracts, and fixed browser journeys rather than native module-level JavaScript unit tests.",
+      "owners": [
+        "P5.4"
+      ],
+      "disposition": "Keep recursive syntax and the fixed browser gate required; add native unit coverage only when changing a stateful module boundary.",
       "file_size_refactor_authorized": false
     },
     {
       "id": "RISK-FRONTEND-002",
       "category": "frontend_test_gaps",
       "severity": "high",
-      "summary": "Existing Python/Node DOM contracts cover only four frontend-focused modules, not all core journeys.",
-      "owners": ["P3.2", "P5.4"],
-      "disposition": "Add shared-state contracts during P3 and complete required journey coverage in P5.4.",
+      "summary": "The maintained Playwright harness covers nine critical journeys and eleven routes at four widths, but remains journey-level rather than exhaustive module behavior coverage.",
+      "owners": [
+        "P3.2",
+        "P5.4"
+      ],
+      "disposition": "Keep the browser harness required and add focused DOM or contract coverage with each affected workflow without expanding the fixed release matrix.",
       "file_size_refactor_authorized": false
     }
   ]
