@@ -3,9 +3,9 @@
 ## Active Production Balance Workstream
 
 - Active plan: `PROD-BALANCE-R2` in `tasks/production-balance-r2.md`.
-- Fixed progress: **1/7**; one workstream, no Waves or Phases.
+- Fixed progress: **2/7**; one workstream, no Waves or Phases.
 - Baseline audit: `docs/audits/production-balance-2026-09-12.md`.
-- Resume at: **PB2 — Retire unreachable Redis/HA/Kubernetes topology**.
+- Resume at: **PB3 — Bound compatibility and optional dependencies**.
 - R1 below remains completed historical state; it is not reopened or added to the new denominator.
 
 ## Resume Here
@@ -32,7 +32,7 @@
 - No planned implementation task remains. Tagging, pushing, remote CI confirmation, and image
   publication are operator release actions and were not performed.
 - Supported runtime today: standalone, one worker, one replica.
-- Redis coordination, multi-replica HA, and Helm are experimental and no longer R1 release blockers.
+- Redis coordination, multi-replica HA, and Helm were retired from the active product in PB2.
 
 ## Why the Plan Was Reset
 

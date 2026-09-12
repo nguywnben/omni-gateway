@@ -96,7 +96,7 @@ class RuntimeAdmissionPipelineTests(unittest.IsolatedAsyncioTestCase):
 
     def test_runtime_admission_response_is_generic_and_fail_closed(self) -> None:
         lifecycle = type("Lifecycle", (), {"admission_available": False})()
-        with patch("core.ha_runtime.get_runtime_lifecycle", return_value=lifecycle):
+        with patch("core.runtime_lifecycle.get_runtime_lifecycle", return_value=lifecycle):
             response = gateway_pipeline.runtime_admission_response()
         self.assertIsNotNone(response)
         self.assertEqual(response.status_code, 503)

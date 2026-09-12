@@ -106,10 +106,6 @@
     {
       "path": "deploy/zeabur.yaml",
       "tier": "compatibility"
-    },
-    {
-      "path": "deploy/helm/omni-gateway",
-      "tier": "experimental"
     }
   ]
 }

@@ -52,8 +52,8 @@ A universal AI router for coding tools. Omni Gateway provides smart auto-fallbac
 > a trusted team. The supported production topology is one application worker and one replica;
 > Docker Compose, local-owner access, SQLite, provider routing, and the documented SDK routes form
 > the core profile. PostgreSQL, OIDC team access, reverse-proxy operation, and external telemetry
-> are advanced opt-ins. MongoDB and non-curated locales are compatibility surfaces. Redis
-> coordination and Kubernetes assets remain experimental and are not production guarantees. See
+> are advanced opt-ins. MongoDB and non-curated locales are compatibility surfaces. Coordinated
+> multi-replica operation and Kubernetes deployment are outside the product boundary. See
 > the [Production Self-Hosted R1 specification](docs/specs/production-self-hosted.md).
 
 ## Why Omni Gateway
@@ -134,7 +134,7 @@ checks through the first authenticated Dashboard; its
 [Installation support matrix](docs/installation.md#support-matrix) records the verified Windows,
 Linux, macOS, and architecture status without implying unsupported ARM64 coverage.
 
-The default profile needs no external database or Redis and stores all application data in the
+The default profile needs no external service and stores all application data in the
 `omni-gateway-data` named volume. Its minimal environment template pins release `1.5.0`; production
 updates use the encrypted, health-checked [Compose update and rollback guide](docs/updating.md).
 External storage, Team access, proxy, guardrails, cache, and telemetry remain opt-in through
@@ -148,21 +148,6 @@ Compatibility-only native scripts under `deploy/scripts`, direct `docker run`, R
 do not carry the full install/update/rollback evidence of the canonical path. The production image
 is published for `linux/amd64`; native `linux/arm64` publication remains paused until the complete
 locked dependency stack has equivalent build and runtime evidence.
-
-### Kubernetes / Helm (experimental)
-
-The existing chart at `deploy/helm/omni-gateway` is retained as an experimental community asset.
-It is useful for evaluation, but it is outside the Production Self-Hosted R1 support boundary and
-does not carry a production or horizontal-scaling guarantee. The chart includes a persistent volume,
-liveness/readiness probes, optional Ingress, and an optional Prometheus ServiceMonitor:
-
-```bash
-helm install omni-gateway deploy/helm/omni-gateway \
-  --set secrets.panelPassword=change-me
-```
-
-The chart deploys exactly one replica with a `Recreate` strategy because the runtime holds routing
-and rate-limit state in process memory. Do not scale this Deployment horizontally.
 
 ### Local Development
 
@@ -254,7 +239,6 @@ name; likely misspelled `OMNI_*` variables produce a warning.
 | `RETURN_THOUGHTS_TO_FRONTEND` | `true` | Include model reasoning fields when available. |
 | `MONGODB_URI` | empty | Selects the compatibility-only MongoDB storage path. |
 | `POSTGRESQL_URI` | empty | Selects optional Advanced PostgreSQL storage. |
-| `REDIS_URL` | empty | Experimental coordination dependency. It does not enable multi-replica operation; the R1 production profile leaves coordinated mode blocked. |
 | `CODE_ASSIST_CLIENT_ID` | bundled desktop client | Optional override for the Code Assist OAuth client ID. |
 | `CODE_ASSIST_CLIENT_SECRET` | bundled desktop client | Optional override for the Code Assist OAuth client secret. |
 | `ANTIGRAVITY_CLIENT_ID` | bundled desktop client | Optional override for the Google Antigravity OAuth client ID. It can also be managed from the Providers page. |
@@ -488,13 +472,7 @@ MONGODB_DATABASE=omni_gateway
 POSTGRESQL_URI=postgresql://user:password@localhost:5432/omni_gateway
 ```
 
-Redis configuration is retained only for experimental coordinated-runtime evaluation:
-
-```bash
-REDIS_URL=redis://127.0.0.1:6379/0
-```
-
-External storage or Redis does not make the R1 runtime horizontally scalable. Production deployments
+External storage does not make the runtime horizontally scalable. Production deployments
 must run one worker and one replica. Configure either MongoDB or PostgreSQL, not both; an explicit
 external-database initialization failure stops startup rather than silently falling back to SQLite.
 Portable encrypted backup/restore supports SQLite only, and R1 does not provide a supported live
@@ -521,10 +499,9 @@ python tools/quality_gate.py fast
 python tools/quality_gate.py task --test-module backend.tests.test_config_security
 ```
 
-Use [Quality gates](docs/quality-gates.md) to select task, phase, or release scope. The default and
-`core` suites exclude unfinished coordinated-runtime evidence. Optional live storage/provider checks
-and experimental HA are listed separately with `python tools/quality_gate.py --list-suites`; they
-cannot change the R1 production result.
+Use [Quality gates](docs/quality-gates.md) to select task, phase, or release scope. Optional live
+storage and provider checks are listed separately with
+`python tools/quality_gate.py --list-suites`; they cannot change the production result.
 
 Public SDK routes, console management routes, compatibility URLs, config migrations, stored schema
 versions, and client examples are protected by the versioned

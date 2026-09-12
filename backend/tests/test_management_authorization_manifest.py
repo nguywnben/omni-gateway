@@ -253,7 +253,7 @@ class ManagementRouteAuthorizationMatrixTests(unittest.TestCase):
                             ).allowed
                         )
 
-    def test_legacy_keys_gain_no_future_identity_or_ha_permission(self):
+    def test_legacy_keys_gain_no_future_identity_permissions(self):
         writer = ManagementPrincipal.virtual_key(
             "legacy-writer",
             scopes=("management:read", "management:write"),
@@ -263,7 +263,6 @@ class ManagementRouteAuthorizationMatrixTests(unittest.TestCase):
         self.assertNotIn(ManagementPermission.IDENTITY_MANAGE, writer.permissions)
         self.assertNotIn(ManagementPermission.OWNERS_MANAGE, writer.permissions)
         self.assertNotIn(ManagementPermission.RECOVERY_MANAGE, writer.permissions)
-        self.assertNotIn(ManagementPermission.HA_ACTIVATE, writer.permissions)
 
 
 if __name__ == "__main__":

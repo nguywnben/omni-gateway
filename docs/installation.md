@@ -152,8 +152,8 @@ a required operator check, not as independently CI-verified.
 
 The native Python installers and launchers in `deploy/scripts`, direct `docker run`, Render, and
 Zeabur are compatibility paths. They may help development, migration, or community deployments,
-but they do not receive the complete production install/update/rollback evidence. Kubernetes/Helm
-is experimental and is not an R1 production deployment path. These alternatives must not be used
+but they do not receive the complete production install/update/rollback evidence. Kubernetes is
+outside the product boundary. These alternatives must not be used
 to infer support for another architecture, multiple workers, or multiple replicas.
 
 To stop the canonical service while preserving data:

@@ -55,7 +55,10 @@ class ConfigurationSchemaTests(unittest.TestCase):
         names = [field.env_name for field in CONFIGURATION_FIELDS]
         self.assertEqual(len(names), len(set(names)))
         self.assertEqual(set(names), _example_variables())
-        self.assertEqual({field.group for field in CONFIGURATION_FIELDS}, set(ConfigGroup))
+        self.assertEqual(
+            {field.group for field in CONFIGURATION_FIELDS},
+            {ConfigGroup.BASIC, ConfigGroup.ADVANCED},
+        )
 
     def test_compose_environment_defaults_match_schema(self):
         compose_defaults = _compose_environment_defaults()

@@ -69,7 +69,7 @@ class SmartCredentialRouter:
         self._model_backoff_seconds = max(self._base_backoff_seconds, float(model_backoff_seconds))
         self._state_lock = asyncio.Lock()
         # Distributed CAS is the admission authority. Holding a process-wide
-        # mutex across Redis/storage I/O serializes every otherwise independent
+        # mutex across storage I/O serializes every otherwise independent
         # request, so only bound the number of concurrent routing operations.
         self._io_slots = asyncio.Semaphore(MAX_CREDENTIAL_LEASES)
         self._coordination = (

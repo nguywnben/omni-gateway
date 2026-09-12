@@ -1,4 +1,4 @@
-"""Run the fixed Production Self-Hosted R1 quality-gate layers."""
+"""Run the production self-hosted quality-gate layers."""
 
 from __future__ import annotations
 
@@ -49,7 +49,7 @@ PYTHON_COMPILE = GateStep(
 )
 TEST_PARTITION = GateStep(
     "test-partition",
-    "Production and experimental suite audit",
+    "Production test manifest audit",
     ((PYTHON, "-m", "backend.tests", "--audit"),),
 )
 JAVASCRIPT_SYNTAX = GateStep("javascript-syntax", "Recursive frontend JavaScript syntax")
@@ -157,12 +157,6 @@ OPTIONAL_SUITES = {
         mode="manual",
         command="docs/release-checklist.md#manual-provider-checks",
         owner="P2.1/P2.2",
-    ),
-    "experimental-ha": OptionalSuite(
-        classification="experimental",
-        mode="automated",
-        command="python -m backend.tests --suite experimental-ha",
-        owner="POST-R1",
     ),
 }
 

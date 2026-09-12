@@ -162,11 +162,11 @@ class RenderPrometheusMetricsTests(unittest.TestCase):
         self.assertIn("# HELP omni_coordination_operations_total", empty)
         self.assertIn("# TYPE omni_coordination_operations_total counter", empty)
 
-        record_coordination_operation_for_testing("redis", "reserve_quota", "rejected")
+        record_coordination_operation_for_testing("unknown", "reserve_quota", "rejected")
         record_coordination_operation_for_testing(["untrusted"], ["tenant/key"], ["top-secret"])
         output = render_prometheus_metrics([])
         self.assertIn(
-            'omni_coordination_operations_total{backend="redis",operation="reserve_quota",result="rejected"} 1',
+            'omni_coordination_operations_total{backend="unknown",operation="reserve_quota",result="rejected"} 1',
             output,
         )
         self.assertNotIn("untrusted", output)

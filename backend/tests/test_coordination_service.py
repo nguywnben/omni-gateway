@@ -26,7 +26,6 @@ from core.coordination_service import (
     clear_coordination_operation_metrics_for_testing,
     render_coordination_operation_metrics,
 )
-from core.redis_state_store import RedisStateStore
 from core.security_coordination import (
     AttemptReservationRequest,
     SecurityAttemptCategory,
@@ -36,7 +35,7 @@ from core.state_store import InMemoryStateStore
 
 class _UnavailableStore:
     async def read_epoch(self):
-        raise CoordinationUnavailableError("redis://person:secret@example.invalid/0")
+        raise CoordinationUnavailableError("backend://person:secret@example.invalid/state")
 
     async def close(self):
         return None
@@ -98,12 +97,6 @@ class CoordinationServiceTests(unittest.IsolatedAsyncioTestCase):
     async def test_backend_is_classified_from_a_closed_allowlist(self) -> None:
         self.assertEqual(
             CoordinationService(InMemoryStateStore()).health_snapshot()["backend"], "in_memory"
-        )
-        self.assertEqual(
-            CoordinationService(RedisStateStore("redis://localhost:6379/0")).health_snapshot()[
-                "backend"
-            ],
-            "redis",
         )
         self.assertEqual(
             CoordinationService(_RecoveringStore()).health_snapshot()["backend"], "unknown"

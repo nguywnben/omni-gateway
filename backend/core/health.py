@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from core.ha_runtime import get_runtime_lifecycle
+from core.runtime_lifecycle import get_runtime_lifecycle
 from core.storage_adapter import get_storage_adapter
 from core.usage_ledger_service import get_usage_ledger_service
 from fastapi import APIRouter

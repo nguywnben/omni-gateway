@@ -41,19 +41,11 @@ groups:
         annotations:
           summary: Budget enforcement encountered models without pricing
           runbook_url: https://github.com/nguywnben/omni-gateway/blob/main/docs/runbooks/unknown-pricing.md
-      - alert: OmniGatewayHARuntimeUnavailable
-        expr: omni_ha_runtime_ready == 0
+      - alert: OmniGatewayRuntimeUnavailable
+        expr: omni_runtime_ready == 0
         for: 2m
         labels:
           severity: critical
         annotations:
           summary: Gateway runtime lifecycle is not ready
-          runbook_url: https://github.com/nguywnben/omni-gateway/blob/main/docs/runbooks/ha-lifecycle.md
-      - alert: OmniGatewayCoordinationUnavailable
-        expr: omni_ha_coordination_available == 0 and on() omni_ha_runtime_info{mode="coordinated"} == 1
-        for: 1m
-        labels:
-          severity: critical
-        annotations:
-          summary: Coordinated runtime dependency is unavailable
-          runbook_url: https://github.com/nguywnben/omni-gateway/blob/main/docs/runbooks/ha-lifecycle.md
+          runbook_url: https://github.com/nguywnben/omni-gateway/blob/main/docs/troubleshooting.md

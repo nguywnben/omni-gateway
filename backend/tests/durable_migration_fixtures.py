@@ -1,4 +1,4 @@
-"""Synthetic, content-free migration evidence shared by HA contract tests."""
+"""Synthetic, content-free migration fixtures for durable-backend contracts."""
 
 from __future__ import annotations
 

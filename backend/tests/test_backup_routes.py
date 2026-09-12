@@ -252,7 +252,7 @@ class BackupRouteTests(unittest.IsolatedAsyncioTestCase):
             "core.identity.initialize_session_service": AsyncMock(),
             "core.request_trace_service.initialize_request_trace_service": AsyncMock(),
             "core.usage_ledger_service.initialize_usage_ledger_service": AsyncMock(),
-            "core.ha_runtime.get_runtime_session_kwargs": Mock(
+            "core.runtime_lifecycle.get_runtime_session_kwargs": Mock(
                 return_value={"coordination": object(), "fencing_epoch": 1, "hmac_key": b"x" * 32}
             ),
         }

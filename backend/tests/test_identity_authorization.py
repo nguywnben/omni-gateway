@@ -68,7 +68,6 @@ OWNER = (
         ManagementPermission.BACKUP_RESTORE,
         ManagementPermission.OWNERS_MANAGE,
         ManagementPermission.RECOVERY_MANAGE,
-        ManagementPermission.HA_ACTIVATE,
     }
 )
 
@@ -189,7 +188,6 @@ class VirtualKeyCompatibilityTests(unittest.TestCase):
             ManagementPermission.OIDC_MANAGE,
             ManagementPermission.OWNERS_MANAGE,
             ManagementPermission.RECOVERY_MANAGE,
-            ManagementPermission.HA_ACTIVATE,
         ):
             with self.subTest(permission=permission):
                 self.assertNotIn(permission, principal.permissions)
@@ -222,11 +220,11 @@ class AuthorizationDecisionTests(unittest.TestCase):
     def test_known_permission_returns_a_typed_allow_decision(self):
         principal = ManagementPrincipal.local_owner()
 
-        decision = evaluate_permission(principal, ManagementPermission.HA_ACTIVATE)
+        decision = evaluate_permission(principal, ManagementPermission.DASHBOARD_READ)
 
         self.assertTrue(decision.allowed)
         self.assertEqual(decision.reason, AuthorizationReason.ROLE_PERMISSION)
-        self.assertEqual(decision.permission, ManagementPermission.HA_ACTIVATE)
+        self.assertEqual(decision.permission, ManagementPermission.DASHBOARD_READ)
 
     def test_string_or_unknown_permission_fails_closed(self):
         principal = ManagementPrincipal.local_owner()

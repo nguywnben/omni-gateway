@@ -1,9 +1,4 @@
-"""Strict, versioned domain contract for coordination backends.
-
-This module deliberately contains no transport or runtime-selection logic.  It
-defines the small, fenced semantic boundary consumed by the in-memory and
-Redis implementations.
-"""
+"""Strict domain contracts for bounded coordination inside one process."""
 
 from __future__ import annotations
 

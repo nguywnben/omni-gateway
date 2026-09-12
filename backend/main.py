@@ -21,11 +21,6 @@ from core.dynamic_pricing import (
     pricing_sync_enabled,
     run_dynamic_pricing_sync_loop,
 )
-from core.ha_runtime import (
-    close_ha_runtime,
-    get_runtime_session_kwargs,
-    initialize_ha_runtime,
-)
 from core.health import router as health_router
 from core.http_server import configure_hypercorn
 from core.httpx_client import http_client
@@ -68,6 +63,11 @@ from core.router.stream_passthrough import close_async_iterator
 from core.router.vertex.gemini import router as vertex_gemini_router
 from core.router.vertex.model_list import router as vertex_model_list_router
 from core.router.vertex.openai import router as vertex_openai_router
+from core.runtime_lifecycle import (
+    close_runtime,
+    get_runtime_session_kwargs,
+    initialize_runtime,
+)
 from core.storage_adapter import close_storage_adapter
 from core.task_manager import create_managed_task, shutdown_all_tasks
 from core.telemetry_policy import get_telemetry_policy
@@ -130,8 +130,8 @@ async def lifespan(app: FastAPI):
         raise RuntimeError("Configuration initialization failed.") from e
 
     try:
-        await initialize_ha_runtime()
-        log.info("Runtime coordination lifecycle initialized.")
+        await initialize_runtime()
+        log.info("Process-local runtime lifecycle initialized.")
     except Exception as e:
         log.critical(f"Runtime coordination initialization failed: {type(e).__name__}")
         await close_storage_adapter()
@@ -142,7 +142,7 @@ async def lifespan(app: FastAPI):
         log.info("Credential manager initialized.")
     except Exception as e:
         log.critical(f"Credential manager initialization failed: {e}")
-        await close_ha_runtime()
+        await close_runtime()
         await close_storage_adapter()
         raise RuntimeError("Credential storage initialization failed.") from e
 
@@ -152,7 +152,7 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         log.critical(f"Audit service initialization failed: {type(e).__name__}")
         await credential_manager.close()
-        await close_ha_runtime()
+        await close_runtime()
         await close_storage_adapter()
         raise RuntimeError("Audit service initialization failed.") from e
 
@@ -163,7 +163,7 @@ async def lifespan(app: FastAPI):
         log.critical(f"Session service initialization failed: {type(e).__name__}")
         await close_audit_service()
         await credential_manager.close()
-        await close_ha_runtime()
+        await close_runtime()
         await close_storage_adapter()
         raise RuntimeError("Session service initialization failed.") from e
 
@@ -175,7 +175,7 @@ async def lifespan(app: FastAPI):
         await close_session_service()
         await close_audit_service()
         await credential_manager.close()
-        await close_ha_runtime()
+        await close_runtime()
         await close_storage_adapter()
         raise RuntimeError("Request trace service initialization failed.") from e
 
@@ -188,7 +188,7 @@ async def lifespan(app: FastAPI):
         await close_session_service()
         await close_audit_service()
         await credential_manager.close()
-        await close_ha_runtime()
+        await close_runtime()
         await close_storage_adapter()
         raise RuntimeError("Usage ledger service initialization failed.") from e
 
@@ -211,7 +211,7 @@ async def lifespan(app: FastAPI):
         await close_session_service()
         await close_audit_service()
         await credential_manager.close()
-        await close_ha_runtime()
+        await close_runtime()
         await close_storage_adapter()
         raise RuntimeError("External telemetry configuration failed.") from e
 
@@ -273,10 +273,10 @@ async def lifespan(app: FastAPI):
             log.error(f"Error while shutting down the credential manager: {e}")
 
         try:
-            await close_ha_runtime()
-            log.info("Runtime coordination lifecycle closed.")
+            await close_runtime()
+            log.info("Process-local runtime lifecycle closed.")
         except Exception as e:
-            log.error(f"Error while closing runtime coordination: {e}")
+            log.error(f"Error while closing the process-local runtime: {e}")
 
         try:
             await http_client.close()

@@ -1,8 +1,4 @@
-"""Distributed State Store Interface & Implementation.
-
-Enables seamless transition from in-memory single worker state
-to distributed Redis / Valkey state management for multi-worker scaling.
-"""
+"""Process-local state primitives used by the standalone runtime."""
 
 from __future__ import annotations
 
@@ -481,24 +477,43 @@ class InMemoryStateStore(BaseStateStore):
         entry = self._store.get(ADMISSION_FENCE_KEY)
         if entry is None:
             return None
-        from core.ha_coordination_binding import CoordinationBindingManager
-
         expiry, value = entry
         fence = AdmissionFence.decode(value)
         binding_expiry, binding_value = self._store.get(ADMISSION_BINDING_KEY, (None, None))
         try:
-            binding_value = decode_admission_json(binding_value)
-            if type(binding_value.get("schema_version")) is not int:
+            binding = decode_admission_json(binding_value)
+            if set(binding) != {
+                "schema_version",
+                "deployment_id",
+                "namespace_digest",
+                "identifier_key_fingerprint",
+                "fencing_epoch",
+                "manifest_checksum",
+                "activation_record",
+                "migration_plan_id",
+                "migration_checkpoint_revision",
+                "migration_source_revision",
+                "migration_target_revision",
+                "migration_checkpoint_checksum",
+            }:
                 raise ValueError
-            binding = CoordinationBindingManager.decode_record(binding_value, "binding_invalid")
-            validate_epoch(binding.fencing_epoch)
-        except (RuntimeError, ValueError, TypeError, RecursionError):
+            if type(binding["schema_version"]) is not int or binding["schema_version"] != 2:
+                raise ValueError
+            namespace_digest = binding["namespace_digest"]
+            if (
+                not isinstance(namespace_digest, str)
+                or len(namespace_digest) != 64
+                or any(character not in "0123456789abcdef" for character in namespace_digest)
+            ):
+                raise ValueError
+            binding_epoch = validate_epoch(binding["fencing_epoch"])
+        except (KeyError, ValueError, TypeError, RecursionError):
             raise CoordinationCorruptError("Coordination drain binding is invalid.") from None
         if (
             expiry is not None
             or binding_expiry is not None
-            or fence.namespace_digest != binding.namespace_digest
-            or binding.fencing_epoch != self._epoch.epoch
+            or fence.namespace_digest != namespace_digest
+            or binding_epoch != self._epoch.epoch
             or not (
                 fence.epoch == self._epoch.epoch
                 or (fence.epoch == self._epoch.epoch - 1 and fence.reconciliation_complete)
@@ -2486,8 +2501,3 @@ class InMemoryStateStore(BaseStateStore):
     async def close(self) -> None:
         async with self._async_lock:
             self._closed = True
-
-
-from core.redis_state_store import RedisStateStore  # noqa: E402
-
-BaseStateStore.register(RedisStateStore)

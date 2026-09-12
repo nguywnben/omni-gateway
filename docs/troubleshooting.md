@@ -2,8 +2,8 @@
 
 Use this guide for the supported single-machine, one-worker, one-replica Docker Compose deployment.
 Start with observation, preserve recovery options, and change only one documented setting at a
-time. Redis, multiple workers, multiple replicas, and Kubernetes remain experimental and are not
-part of this production support path.
+time. Coordinated state, multiple workers, multiple replicas, and Kubernetes are outside this
+production support path.
 
 ## First five minutes
 

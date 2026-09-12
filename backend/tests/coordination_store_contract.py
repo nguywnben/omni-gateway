@@ -28,28 +28,28 @@ class CoordinationStoreContract:
     store: CoordinationStore
 
     async def install_admission_fence(self, **changes: object) -> None:
-        from core.ha_coordination_binding import CoordinationBinding, CoordinationBindingManager
-
         namespace = getattr(self, "namespace", "production-east")
-        binding = CoordinationBinding(
-            "gateway-east-01",
-            hashlib.sha256(namespace.encode()).hexdigest(),
-            "a" * 64,
-            1,
-            "b" * 64,
-            "act_" + "c" * 32,
-            "dmg_" + "d" * 32,
-            4,
-            7,
-            11,
-            "e" * 64,
-        )
+        namespace_digest = hashlib.sha256(namespace.encode()).hexdigest()
+        binding = {
+            "schema_version": 2,
+            "deployment_id": "gateway-east-01",
+            "namespace_digest": namespace_digest,
+            "identifier_key_fingerprint": "a" * 64,
+            "fencing_epoch": 1,
+            "manifest_checksum": "b" * 64,
+            "activation_record": "act_" + "c" * 32,
+            "migration_plan_id": "dmg_" + "d" * 32,
+            "migration_checkpoint_revision": 4,
+            "migration_source_revision": 7,
+            "migration_target_revision": 11,
+            "migration_checkpoint_checksum": "e" * 64,
+        }
         await self.store.set(
-            CoordinationBindingManager.STORE_KEY, CoordinationBindingManager.encode_record(binding)
+            "ha-runtime-binding-v1", json.dumps(binding, separators=(",", ":"), sort_keys=True)
         )
         record = {
             "schema_version": 3,
-            "namespace_digest": binding.namespace_digest,
+            "namespace_digest": namespace_digest,
             "epoch": 1,
             "reconciliation_receipt_checksum": None,
             "reconciliation_complete": False,

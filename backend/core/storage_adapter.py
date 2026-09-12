@@ -242,14 +242,6 @@ class StorageAdapter:
             await publish_governance_invalidation(config_invalidation_scope(key))
         return stored
 
-    async def set_internal_config(self, key: str, value: Any) -> bool:
-        """Persist a lifecycle-owned record without publishing runtime invalidations."""
-
-        self._ensure_initialized()
-        if not isinstance(key, str) or not key.startswith("ha_"):
-            raise ValueError("Internal configuration key is invalid.")
-        return await self._backend.set_config(key, value)
-
     async def get_config(self, key: str, default: Any = None) -> Any:
         self._ensure_initialized()
         return await self._backend.get_config(key, default)

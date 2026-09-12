@@ -56,7 +56,6 @@ async def _reload_restored_runtime(storage) -> None:
     import config
     from core.audit_service import close_audit_service, initialize_audit_service
     from core.credential_manager import credential_manager
-    from core.ha_runtime import get_runtime_session_kwargs
     from core.identity import (
         close_oidc_login_service,
         close_session_service,
@@ -68,6 +67,7 @@ async def _reload_restored_runtime(storage) -> None:
         initialize_request_trace_service,
     )
     from core.response_cache import response_cache_coordinator
+    from core.runtime_lifecycle import get_runtime_session_kwargs
     from core.usage_ledger_service import (
         close_usage_ledger_service,
         initialize_usage_ledger_service,

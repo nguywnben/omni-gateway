@@ -53,8 +53,8 @@ Một router AI vạn năng dành cho các công cụ lập trình (coding tools
 > Docker Compose, quyền chủ sở hữu cục bộ, SQLite, định tuyến nhà cung cấp và các tuyến SDK đã ghi tài
 > liệu thuộc tier Core. PostgreSQL, truy cập nhóm qua OIDC, reverse proxy và telemetry bên ngoài là
 > các tùy chọn Advanced. MongoDB và các ngôn ngữ không được duy trì trực tiếp thuộc tier
-> Compatibility. Điều phối Redis và tài nguyên Kubernetes vẫn là Experimental, không phải cam kết
-> production. Xem [đặc tả Production Self-Hosted R1](../specs/production-self-hosted.md).
+> Compatibility. Điều phối nhiều replica và triển khai Kubernetes nằm ngoài phạm vi sản phẩm.
+> Xem [đặc tả Production Self-Hosted R1](../specs/production-self-hosted.md).
 
 ## Tại sao nên chọn Omni Gateway
 
@@ -122,8 +122,8 @@ Hãy đi theo [Hướng dẫn cài đặt chuẩn](../installation.md) từ bư�
 xác thực. [Ma trận hỗ trợ cài đặt](../installation.md#support-matrix) ghi rõ bằng chứng cho Windows,
 Linux, macOS và kiến trúc CPU; tài liệu không ngầm tuyên bố hỗ trợ ARM64.
 
-Profile mặc định không cần cơ sở dữ liệu ngoài hoặc Redis, đồng thời lưu toàn bộ dữ liệu ứng dụng
-trong volume `omni-gateway-data`. Mẫu môi trường tối thiểu ghim bản phát hành `1.4.0`; việc cập nhật
+Profile mặc định không cần dịch vụ bên ngoài, đồng thời lưu toàn bộ dữ liệu ứng dụng trong volume
+`omni-gateway-data`. Mẫu môi trường tối thiểu ghim bản phát hành `1.5.0`; việc cập nhật
 production phải theo [quy trình cập nhật và rollback Compose](../updating.md). Chỉ bật lưu trữ ngoài,
 Team access, proxy, guardrail, cache hoặc telemetry qua `deploy/compose.advanced.yml` sau khi bản cài
 đặt cơ bản đã hoạt động tốt.
@@ -132,21 +132,6 @@ Các script Python native trong `deploy/scripts`, `docker run` trực tiếp, Re
 tầng tương thích, không có đầy đủ bằng chứng cài đặt/cập nhật/rollback của đường chuẩn. Image
 production hiện chỉ phát hành cho `linux/amd64`; bản native `linux/arm64` chưa được phát hành vì
 toàn bộ stack phụ thuộc đã khóa chưa có bằng chứng build và runtime tương đương.
-
-### Kubernetes / Helm (thử nghiệm)
-
-Chart hiện có tại `deploy/helm/omni-gateway` được giữ lại như một tài nguyên thử nghiệm do cộng đồng
-sử dụng. Chart phù hợp để đánh giá nhưng nằm ngoài phạm vi hỗ trợ Production Self-Hosted R1 và không
-kèm cam kết production hoặc mở rộng ngang. Chart có ổ lưu trữ bền vững, probe liveness/readiness,
-Ingress tùy chọn và ServiceMonitor Prometheus:
-
-```bash
-helm install omni-gateway deploy/helm/omni-gateway \
-  --set secrets.panelPassword=change-me
-```
-
-Chart triển khai chính xác một replica với chiến lược `Recreate` vì runtime lưu trạng thái định tuyến
-và giới hạn tần suất trong bộ nhớ tiến trình. Không mở rộng Deployment này theo chiều ngang.
 
 ### Phát triển cục bộ
 
@@ -230,7 +215,6 @@ Omni Gateway đọc cấu hình ưu tiên từ các biến môi trường trư�
 | `RETURN_THOUGHTS_TO_FRONTEND` | `true` | Trả về trường suy nghĩ/lập luận của mô hình (reasoning) khi có sẵn. |
 | `MONGODB_URI` | trống | Chọn đường lưu trữ MongoDB chỉ thuộc tier Compatibility. |
 | `POSTGRESQL_URI` | trống | Chọn lưu trữ PostgreSQL tùy chọn thuộc tier Advanced. |
-| `REDIS_URL` | trống | Phụ thuộc điều phối thử nghiệm. Biến này không bật chế độ nhiều replica; profile production R1 vẫn chặn chế độ coordinated. |
 | `CODE_ASSIST_CLIENT_ID` | tích hợp sẵn | Ghi đè tùy chọn cho Client ID OAuth của Code Assist. |
 | `CODE_ASSIST_CLIENT_SECRET` | tích hợp sẵn | Ghi đè tùy chọn cho Client Secret OAuth của Code Assist. |
 | `ANTIGRAVITY_CLIENT_ID` | tích hợp sẵn | Ghi đè tùy chọn cho Client ID OAuth của Google Antigravity. Có thể quản lý từ trang Providers. |
@@ -465,13 +449,7 @@ MONGODB_DATABASE=omni_gateway
 POSTGRESQL_URI=postgresql://user:password@localhost:5432/omni_gateway
 ```
 
-Cấu hình Redis chỉ được giữ lại để đánh giá runtime điều phối thử nghiệm:
-
-```bash
-REDIS_URL=redis://127.0.0.1:6379/0
-```
-
-Bộ lưu trữ bên ngoài hoặc Redis không làm cho runtime R1 có thể mở rộng theo chiều ngang. Môi trường
+Bộ lưu trữ bên ngoài không làm cho runtime có thể mở rộng theo chiều ngang. Môi trường
 production phải chạy một worker và một replica. Chỉ cấu hình một trong hai: MongoDB hoặc PostgreSQL;
 lỗi khởi tạo cơ sở dữ liệu bên ngoài sẽ dừng quá trình khởi động thay vì âm thầm quay về SQLite.
 Quy trình backup/restore mã hóa di động chỉ hỗ trợ SQLite và R1 không cung cấp lệnh chuyển đổi trực

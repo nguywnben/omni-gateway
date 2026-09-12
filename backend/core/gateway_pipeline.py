@@ -31,7 +31,7 @@ CACHE_HIT_HEADER = "x-omni-cache"
 
 def runtime_admission_response() -> Optional[Response]:
     """Reject inference after the process lifecycle has closed admission."""
-    from core.ha_runtime import get_runtime_lifecycle
+    from core.runtime_lifecycle import get_runtime_lifecycle
 
     lifecycle = get_runtime_lifecycle()
     if lifecycle is None or lifecycle.admission_available:

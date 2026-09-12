@@ -13,7 +13,7 @@ ROOT = Path(__file__).resolve().parents[2]
 
 
 class QualityGatePlanTests(unittest.TestCase):
-    def test_fast_gate_is_static_and_does_not_run_the_core_or_experimental_suite(self) -> None:
+    def test_fast_gate_is_static_and_does_not_run_the_complete_core_suite(self) -> None:
         step_ids = {step.id for step in build_gate_plan("fast")}
 
         self.assertTrue(
@@ -29,13 +29,12 @@ class QualityGatePlanTests(unittest.TestCase):
             }.issubset(step_ids)
         )
         self.assertNotIn("core-suite", step_ids)
-        self.assertNotIn("experimental-ha", step_ids)
 
     def test_task_gate_requires_explicit_core_test_modules(self) -> None:
         with self.assertRaisesRegex(ValueError, "focused test module"):
             build_gate_plan("task")
         with self.assertRaisesRegex(ValueError, "production core suite"):
-            build_gate_plan("task", ("backend.tests.test_ha_evidence",))
+            build_gate_plan("task", ("backend.tests.test_missing_module",))
 
         plan = build_gate_plan("task", ("backend.tests.test_quality_gates",))
         self.assertEqual(plan[-1].id, "focused-tests")
@@ -83,11 +82,10 @@ class QualityGatePlanTests(unittest.TestCase):
     def test_optional_suites_are_separate_and_explicit(self) -> None:
         self.assertEqual(
             set(OPTIONAL_SUITES),
-            {"storage-live", "provider-live", "experimental-ha"},
+            {"storage-live", "provider-live"},
         )
         self.assertEqual(OPTIONAL_SUITES["storage-live"].classification, "optional")
         self.assertEqual(OPTIONAL_SUITES["provider-live"].mode, "manual")
-        self.assertEqual(OPTIONAL_SUITES["experimental-ha"].classification, "experimental")
 
     def test_release_dry_run_and_suite_listing_do_not_execute_checks(self) -> None:
         dry_run = subprocess.run(
@@ -110,11 +108,9 @@ class QualityGatePlanTests(unittest.TestCase):
         self.assertEqual(dry_run.returncode, 0, dry_run.stderr)
         self.assertIn("browser-smoke [active; owner=P5.4]", dry_run.stdout)
         self.assertIn("container-smoke [ci]", dry_run.stdout)
-        self.assertNotIn("experimental-ha", dry_run.stdout)
         self.assertEqual(suites.returncode, 0, suites.stderr)
         self.assertIn("storage-live [optional]", suites.stdout)
         self.assertIn("provider-live [optional; manual]", suites.stdout)
-        self.assertIn("experimental-ha [experimental]", suites.stdout)
 
     def test_phase_cli_can_resolve_a_core_module_from_the_tools_entrypoint(self) -> None:
         completed = subprocess.run(

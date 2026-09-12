@@ -8,7 +8,6 @@ from typing import Dict, List, Optional
 
 from core.coordination_service import render_coordination_operation_metrics
 from core.credential_operation_evidence import render_credential_operation_metrics
-from core.ha_runtime import render_ha_runtime_metrics
 from core.identity import render_management_session_metrics
 from core.operational_health import get_operational_health_snapshot
 from core.playground_metrics import render_playground_metrics
@@ -29,6 +28,7 @@ from core.provider_registry import (
 from core.request_trace_service import get_request_trace_service
 from core.response_cache import response_cache
 from core.routing_coordination import render_routing_coordination_metrics
+from core.runtime_lifecycle import render_runtime_metrics
 from core.storage_adapter import get_storage_adapter
 from core.telemetry_policy import TelemetryConfigurationError, get_telemetry_policy
 from core.usage_ledger_service import render_usage_ledger_metrics
@@ -152,7 +152,7 @@ def render_prometheus_metrics(
     lines.extend(render_credential_operation_metrics().rstrip().splitlines())
     lines.extend(render_coordination_operation_metrics().rstrip().splitlines())
     lines.extend(render_routing_coordination_metrics().rstrip().splitlines())
-    lines.extend(render_ha_runtime_metrics().rstrip().splitlines())
+    lines.extend(render_runtime_metrics().rstrip().splitlines())
     lines.extend(render_management_session_metrics().rstrip().splitlines())
     lines.extend(render_virtual_key_quota_metrics().rstrip().splitlines())
     lines.extend(render_usage_ledger_metrics().rstrip().splitlines())

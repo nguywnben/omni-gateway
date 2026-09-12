@@ -9,14 +9,9 @@ Values marked `secret` never expose a default through the Settings API.
 | `HOST` | basic | string | `0.0.0.0` | restart | system |
 | `PORT` | basic | integer | `4283` | restart | system |
 | `HOST_PORT` | basic | integer | `4283` | read_only | environment |
-| `OMNI_RUNTIME_MODE` | experimental | string | `standalone` | read_only | environment |
-| `OMNI_REPLICA_COUNT` | experimental | integer | `1` | read_only | environment |
-| `WORKERS` | experimental | integer | `1` | read_only | environment |
-| `OMNI_EXPERIMENTAL_COORDINATION` | experimental | boolean | `false` | read_only | environment |
-| `OMNI_COORDINATION_NAMESPACE` | experimental | string | `production-east` | read_only | environment |
-| `OMNI_DEPLOYMENT_ID` | experimental | string | `gateway-east-01` | read_only | environment |
-| `OMNI_COORDINATION_KEY` | experimental | string / secret | `(empty)` | read_only | environment |
-| `OMNI_COORDINATION_EPOCH` | experimental | integer | `1` | read_only | environment |
+| `OMNI_RUNTIME_MODE` | basic | string | `standalone` | read_only | environment |
+| `OMNI_REPLICA_COUNT` | basic | integer | `1` | read_only | environment |
+| `WORKERS` | basic | integer | `1` | read_only | environment |
 | `CORS_ORIGINS` | basic | csv | `(empty)` | read_only | environment |
 | `CORS_ORIGIN_REGEX` | basic | string | `(empty)` | read_only | environment |
 | `API_KEY` | basic | string / secret | `(empty)` | live | access |
@@ -56,7 +51,6 @@ Values marked `secret` never expose a default through the Settings API.
 | `MONGODB_URI` | advanced | string / secret | `(empty)` | read_only | environment |
 | `MONGODB_DATABASE` | advanced | string | `omni_gateway` | read_only | environment |
 | `POSTGRESQL_URI` | advanced | string / secret | `(empty)` | read_only | environment |
-| `REDIS_URL` | experimental | string / secret | `(empty)` | read_only | environment |
 | `CODE_ASSIST_CREDENTIALS_JSON` | advanced | json / secret | `(empty)` | read_only | environment |
 | `CREDENTIALS_JSON` | advanced | json / secret | `(empty)` | read_only | environment |
 | `CODE_ASSIST_CLIENT_ID` | advanced | string | `(empty)` | live | system |

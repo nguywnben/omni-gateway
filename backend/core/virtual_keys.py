@@ -379,6 +379,17 @@ class VirtualKeyManager:
         self._keys_by_hash = {}
         self._loaded = False
 
+    def reset_coordination(self) -> None:
+        """Restore process-local quota state after the runtime-owned store closes."""
+
+        if self._durable_reservation_ids or self._pending_durable_settlement_ids:
+            raise RuntimeError("Virtual-key coordination cannot reset with active reservations.")
+        self._state_store = InMemoryStateStore()
+        self._fencing_epoch = 1
+        self._generation = GovernanceGenerationObserver(GOVERNANCE_SCOPE_VIRTUAL_KEYS)
+        self._keys_by_hash = {}
+        self._loaded = False
+
     async def _ensure_loaded(self, *, force_generation_poll: bool = False) -> None:
         await self._generation.synchronize(
             self._invalidate_cached_keys,

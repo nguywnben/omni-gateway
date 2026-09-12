@@ -58,7 +58,6 @@ class ManagementPermission(StrEnum):
     ROOT_KEY_ROTATE = "root_key.rotate"
     OWNERS_MANAGE = "owners.manage"
     RECOVERY_MANAGE = "recovery.manage"
-    HA_ACTIVATE = "ha.activate"
 
 
 class OidcRoleSource(StrEnum):
@@ -125,7 +124,6 @@ _OWNER_PERMISSIONS = (
         ManagementPermission.BACKUP_RESTORE,
         ManagementPermission.OWNERS_MANAGE,
         ManagementPermission.RECOVERY_MANAGE,
-        ManagementPermission.HA_ACTIVATE,
     }
 )
 

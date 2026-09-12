@@ -1,9 +1,4 @@
-"""Lifecycle and safe operation evidence for one supplied coordination store.
-
-This module deliberately does not select or construct a backend.  Runtime
-activation belongs to a later deployment phase; callers supply the store they
-already selected.
-"""
+"""Observed access to the standalone runtime's process-local coordination store."""
 
 from __future__ import annotations
 
@@ -53,7 +48,7 @@ from core.security_coordination import (
 
 _Result = TypeVar("_Result")
 
-_BACKENDS = frozenset({"in_memory", "redis", "unknown"})
+_BACKENDS = frozenset({"in_memory", "unknown"})
 _OPERATIONS = frozenset(
     {
         "get",
@@ -106,8 +101,6 @@ def _backend_name(store: object) -> str:
     name = type(store).__name__.lower()
     if "inmemory" in name:
         return "in_memory"
-    if "redis" in name:
-        return "redis"
     return "unknown"
 
 
@@ -190,7 +183,7 @@ def _result_category(result: object) -> str:
 
 
 class CoordinationService:
-    """Observe one supplied coordination store without selecting its backend."""
+    """Observe one process-local coordination store without exposing record contents."""
 
     def __init__(self, store: Any) -> None:
         self._store = store

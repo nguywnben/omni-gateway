@@ -138,16 +138,20 @@ class AuthenticationAttemptService:
             ) from None
 
 
-_attempt_service = AuthenticationAttemptService(
-    InMemoryStateStore(
-        _security_attempt_limit_for_testing=min(
-            LOGIN_MAX_TRACKED_CLIENTS,
-            RECOVERY_MAX_TRACKED_CLIENTS,
-            OIDC_START_MAX_TRACKED_CLIENTS,
-        )
-    ),
-    hmac_key=secrets.token_bytes(32),
-)
+def _new_process_local_attempt_service() -> AuthenticationAttemptService:
+    return AuthenticationAttemptService(
+        InMemoryStateStore(
+            _security_attempt_limit_for_testing=min(
+                LOGIN_MAX_TRACKED_CLIENTS,
+                RECOVERY_MAX_TRACKED_CLIENTS,
+                OIDC_START_MAX_TRACKED_CLIENTS,
+            )
+        ),
+        hmac_key=secrets.token_bytes(32),
+    )
+
+
+_attempt_service = _new_process_local_attempt_service()
 
 
 def set_authentication_attempt_service_for_testing(
@@ -172,6 +176,13 @@ def configure_authentication_attempt_service(
     if type(service) is not AuthenticationAttemptService:
         raise ValueError("Authentication-attempt service is invalid.")
     _attempt_service = service
+
+
+def reset_authentication_attempt_service() -> None:
+    """Restore a usable process-local service after runtime shutdown."""
+
+    global _attempt_service
+    _attempt_service = _new_process_local_attempt_service()
 
 
 def _client_identity(request: Request) -> str:

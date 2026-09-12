@@ -103,8 +103,7 @@
     {"id": "external_telemetry", "pattern": "^(?:LANGFUSE_HOST|LANGFUSE_PUBLIC_KEY|LANGFUSE_SECRET_KEY|METRICS_TOKEN|OTEL_EXPORTER_OTLP_ENDPOINT|OTEL_EXPORTER_OTLP_HEADERS|OTEL_EXPORTER_OTLP_PROTOCOL|OTEL_EXPORT_ENABLED|OTEL_EXPORT_INTERVAL_SECONDS|PROMETHEUS_EXPORT_ENABLED)$", "tier": "advanced", "journey": "activity"},
     {"id": "postgresql", "pattern": "^POSTGRESQL_URI$", "tier": "advanced", "journey": "install_configure"},
     {"id": "reverse_proxy", "pattern": "^TRUST_PROXY_HEADERS$", "tier": "advanced", "journey": "install_configure"},
-    {"id": "mongodb", "pattern": "^MONGODB_(?:DATABASE|URI)$", "tier": "compatibility", "journey": "install_configure"},
-    {"id": "coordination", "pattern": "^(?:OMNI_COORDINATION_(?:EPOCH|KEY|NAMESPACE)|OMNI_DEPLOYMENT_ID|OMNI_EXPERIMENTAL_COORDINATION|REDIS_URL)$", "tier": "experimental", "journey": "install_configure"}
+    {"id": "mongodb", "pattern": "^MONGODB_(?:DATABASE|URI)$", "tier": "compatibility", "journey": "install_configure"}
   ],
   "translation_policy": [
     {"id": "english", "locale": "en", "tier": "core", "owner": "maintainers", "semantic_review": true},
@@ -126,8 +125,6 @@
     {"id": "oidc_team_access", "source": ".env.example", "tier": "advanced", "journey": "team_access"},
     {"id": "external_telemetry", "source": ".env.example", "tier": "advanced", "journey": "activity"},
     {"id": "community_locales", "source": "README.md", "tier": "compatibility", "journey": "support"},
-    {"id": "mongodb", "source": "README.md#storage", "tier": "compatibility", "journey": "install_configure"},
-    {"id": "helm", "source": "README.md#kubernetes-helm-experimental", "tier": "experimental", "journey": "install_configure"},
-    {"id": "redis_coordination", "source": "README.md#storage", "tier": "experimental", "journey": "install_configure"}
+    {"id": "mongodb", "source": "README.md#storage", "tier": "compatibility", "journey": "install_configure"}
   ]
 }

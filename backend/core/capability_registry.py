@@ -6,7 +6,6 @@ import os
 from enum import StrEnum
 from typing import Literal, Mapping
 
-from core.ha_activation import SUPPORTED_HA_ACTIVATION_RECORDS
 from core.provider_registry import list_provider_capabilities
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -85,14 +84,12 @@ def get_capability_snapshot(
     """Return a deterministic secret-free view of supported product boundaries."""
 
     selected = os.environ if environment is None else environment
-    runtime_mode = str(selected.get("OMNI_RUNTIME_MODE", "standalone")).strip().lower()
     postgresql_configured = _configured(selected, "POSTGRESQL_URI")
     mongodb_configured = _configured(selected, "MONGODB_URI")
     storage_conflict = postgresql_configured and mongodb_configured
     postgresql_selected = postgresql_configured and not storage_conflict
     mongodb_selected = mongodb_configured and not storage_conflict
     sqlite_selected = not postgresql_configured and not mongodb_configured
-    coordinated_accepted = bool(SUPPORTED_HA_ACTIVATION_RECORDS)
 
     capabilities = [
         _capability(
@@ -108,13 +105,6 @@ def get_capability_snapshot(
             SupportTier.CORE,
             CapabilityState.AVAILABLE,
             "Canonical single-machine production deployment.",
-        ),
-        _capability(
-            "deployment.kubernetes",
-            "Kubernetes manifests",
-            SupportTier.EXPERIMENTAL,
-            CapabilityState.AVAILABLE,
-            "Community deployment assets without an R1 production guarantee.",
         ),
         _capability(
             "deployment.platform_scripts",
@@ -212,30 +202,10 @@ def get_capability_snapshot(
             "Health-aware model routes, strategies, retry, and fallback.",
         ),
         _capability(
-            "runtime.coordinated",
-            "Coordinated runtime",
-            SupportTier.EXPERIMENTAL,
-            CapabilityState.ACTIVE
-            if runtime_mode == "coordinated" and coordinated_accepted
-            else CapabilityState.BLOCKED,
-            "Redis-backed coordination is not activated for the R1 production profile.",
-        ),
-        _capability(
-            "runtime.multiple_replicas",
-            "Multiple replicas",
-            SupportTier.EXPERIMENTAL,
-            CapabilityState.ACTIVE
-            if runtime_mode == "coordinated"
-            and coordinated_accepted
-            and str(selected.get("OMNI_REPLICA_COUNT", "1")).strip() != "1"
-            else CapabilityState.BLOCKED,
-            "Multi-replica operation has no accepted activation record in this build.",
-        ),
-        _capability(
             "runtime.standalone",
             "Standalone runtime",
             SupportTier.CORE,
-            CapabilityState.ACTIVE if runtime_mode == "standalone" else CapabilityState.AVAILABLE,
+            CapabilityState.ACTIVE,
             "Supported single-worker and single-replica production runtime.",
         ),
         _capability(

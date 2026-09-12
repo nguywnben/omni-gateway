@@ -26,7 +26,7 @@ class ProductCapabilityRegistryTests(unittest.TestCase):
         self.assertEqual(snapshot.profile, "self_hosted")
         self.assertEqual(
             {capability.tier for capability in snapshot.capabilities},
-            set(SupportTier),
+            {SupportTier.CORE, SupportTier.ADVANCED, SupportTier.COMPATIBILITY},
         )
         active = [
             capability
@@ -46,7 +46,6 @@ class ProductCapabilityRegistryTests(unittest.TestCase):
         self.assertEqual(len(identifiers), len(set(identifiers)))
         expected = {
             "deployment.docker_compose",
-            "deployment.kubernetes",
             "identity.local_owner",
             "identity.oidc",
             "protocol.anthropic_messages",
@@ -60,8 +59,7 @@ class ProductCapabilityRegistryTests(unittest.TestCase):
             "provider.ollama",
             "provider.openai",
             "provider.xai",
-            "runtime.coordinated",
-            "runtime.multiple_replicas",
+            "runtime.standalone",
             "storage.mongodb",
             "storage.postgresql",
             "storage.sqlite",
@@ -91,20 +89,16 @@ class ProductCapabilityRegistryTests(unittest.TestCase):
         for secret in ("database-secret", "oidc-secret", "metrics-secret"):
             self.assertNotIn(secret, rendered)
 
-    def test_experimental_coordination_is_never_reported_active_in_this_build(self) -> None:
-        snapshot = get_capability_snapshot(
-            {
-                "OMNI_RUNTIME_MODE": "coordinated",
-                "OMNI_REPLICA_COUNT": "2",
-                "REDIS_URL": "redis://secret@redis/0",
-                "POSTGRESQL_URI": "postgresql://secret@db/omni",
-            }
-        )
-        by_id = {capability.id: capability for capability in snapshot.capabilities}
+    def test_retired_topology_is_not_reported_as_a_product_capability(self) -> None:
+        identifiers = {item.id for item in get_capability_snapshot({}).capabilities}
 
-        self.assertIs(by_id["runtime.coordinated"].tier, SupportTier.EXPERIMENTAL)
-        self.assertIs(by_id["runtime.coordinated"].state, CapabilityState.BLOCKED)
-        self.assertIs(by_id["runtime.multiple_replicas"].state, CapabilityState.BLOCKED)
+        self.assertTrue(
+            {
+                "deployment.kubernetes",
+                "runtime.coordinated",
+                "runtime.multiple_replicas",
+            }.isdisjoint(identifiers)
+        )
 
     def test_conflicting_storage_selection_fails_closed(self) -> None:
         snapshot = get_capability_snapshot(

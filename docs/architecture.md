@@ -126,9 +126,8 @@ Constrained inference authenticates once and creates one atomic in-process reser
 all credential retries and model fallbacks. RPM, estimated TPM, and worst-case eligible-model cost
 are admitted together; success replaces the estimate with actual ledger-backed usage, while errors,
 disconnects, and cancellations release it. Cached spend is reconciled against unreconciled commits
-without double counting, and a budget-ledger outage fails closed. The same state-store semantics
-cover primary and Vertex surfaces; Redis implementations deliberately reject quota coordination
-until the separate HA activation phase is approved.
+without double counting, and a budget-ledger outage fails closed. The same process-local
+state-store semantics cover primary and Vertex surfaces.
 
 `WORKERS=1` and one application replica are the supported process model for the 1.x series. SQLite is the Core authority, PostgreSQL is an Advanced option, and MongoDB is retained for Compatibility. Shared storage alone does not coordinate reservations, cooldowns, sessions, or usage aggregation across workers. The service rejects `WORKERS` values other than `1` instead of presenting an unsafe scale-out configuration as supported.
 
@@ -216,19 +215,15 @@ backend/core/converter/{openai,anthropic}_to_gemini.py
 
 The storage drivers interpolate only table and column identifiers selected from internal allowlists; all credential values remain parameterized. Future storage work should consolidate those safe identifier builders, replace repeated broad exception handling with typed boundary errors, and add live integration suites for PostgreSQL and MongoDB.
 
-### Experimental coordination boundary
+### Standalone coordination boundary
 
 Routing, quota, governance invalidation, exact-cache metadata, management sessions, security
 attempts, OIDC/provider/device authorization, and credential-batch idempotency have a fenced
-semantic coordination interface. The supported standalone runtime uses the in-memory adapter and
-keeps exact response bytes in its bounded local cache. Redis-compatible primitives, lifecycle
-commands, deployment validation, alerts, and HA runbooks are retained as experimental engineering
-assets only. Runtime Redis selection, multiple workers, and multiple replicas are inactive; the
-compiled activation allowlist is empty. They cannot be used to infer production scale-out support.
-ADR-002 remains the release authority for the one-worker, one-replica topology.
-Operational evidence is maintained in the [routing coordination runbook](runbooks/routing-coordination.md),
-[HA lifecycle runbook](runbooks/ha-lifecycle.md), and
-[HA activation disposition](evidence/w4.19-ha-activation-disposition.md).
+semantic coordination interface. The runtime creates one in-memory adapter per process and keeps
+exact response bytes in its bounded local cache. This protects concurrent work inside the supported
+one-worker, one-replica topology; it is not a distributed-state or scale-out contract. Startup
+rejects coordinated mode, multiple workers, multiple replicas, and retired coordination settings.
+ADR-002 remains the release authority for this boundary.
 
 Production dependencies are compiled into `requirements.lock` with hashes. `requirements.txt` remains the human-maintained input, and CI rejects stale lock output.
 

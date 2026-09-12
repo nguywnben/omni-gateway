@@ -28,8 +28,8 @@ MAINTAINED_DOCUMENTS = (
     ROOT / "docs" / "quality-gates.md",
     ROOT / "docs" / "release-checklist.md",
     ROOT / "docs" / "reference" / "configuration.md",
-    ROOT / "docs" / "runbooks" / "ha-lifecycle.md",
-    ROOT / "docs" / "runbooks" / "routing-coordination.md",
+    ROOT / "docs" / "storage.md",
+    ROOT / "docs" / "observability.md",
     ROOT / "docs" / "compatibility.md",
 )
 
@@ -91,7 +91,7 @@ class ReleaseCandidateContractTests(unittest.TestCase):
         architecture = (ROOT / "docs" / "architecture.md").read_text(encoding="utf-8")
         self.assertNotIn("W4.", architecture)
         self.assertNotIn("remains subject to checkpoint", architecture)
-        self.assertIn("Experimental coordination boundary", architecture)
+        self.assertIn("Standalone coordination boundary", architecture)
 
 
 if __name__ == "__main__":

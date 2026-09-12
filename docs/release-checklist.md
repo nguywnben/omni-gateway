@@ -15,9 +15,9 @@ Use this checklist when preparing a tagged Omni Gateway release.
 - Confirm every public response includes a bounded `X-Request-ID`.
 - Confirm oversized fixed-length and chunked requests return `413` in the selected SDK envelope.
 
-The separately listed optional storage/provider suites, `experimental-ha` suite, and external
-two-replica evidence are not R1 release gates. Report their latest result under their own
-classification only; a failure or unavailable environment cannot change the production result.
+The separately listed optional storage and provider suites are not release gates. Report their
+latest result under their own classification only; an unavailable external environment cannot
+change the production result.
 
 ## Manual Provider Checks
 

@@ -13,8 +13,7 @@ the active project virtual environment.
 | Release candidate | `python tools/quality_gate.py release` | One complete required core, dependency, application, browser, and container gate |
 
 Repeat `--test-module` for every directly affected module. Task and phase commands reject empty
-test selections and reject modules assigned to the experimental HA suite. Use `--dry-run` or
-`--list` to inspect a gate without executing it.
+test selections. Use `--dry-run` or `--list` to inspect a gate without executing it.
 
 The required Chromium harness is `python tools/browser_smoke.py`. Install its isolated dependency
 with `python -m pip install -r requirements-browser.txt` and its browser with
@@ -40,7 +39,6 @@ plan never contains any of these separately reported suites:
 | --- | --- | --- | --- |
 | Live PostgreSQL/MongoDB contracts | Optional | `python -m unittest backend.tests.test_durable_family_migration backend.tests.test_identity_repository_live backend.tests.test_usage_ledger_live -v` | P5.1 |
 | Live provider checks | Optional/manual | `docs/release-checklist.md#manual-provider-checks` | P2.1/P2.2 |
-| Redis coordination and topology | Experimental | `python -m backend.tests --suite experimental-ha` | Post-R1 |
 
 List the canonical classifications at any time:
 
@@ -48,7 +46,7 @@ List the canonical classifications at any time:
 python tools/quality_gate.py --list-suites
 ```
 
-Skipping or failing an optional/experimental suite must be reported under that classification, but
+Skipping or failing an optional suite must be reported under that classification, but
 cannot change the Core production verdict. Conversely, no skipped test may cover a Core production
 journey.
 
@@ -59,5 +57,5 @@ journey.
   Core suite once, as specified in `tasks/plan.md`.
 - Release: one complete required gate on the immutable candidate. After failure, rerun only the
   failed slice until corrected, then repeat the complete gate once.
-- Experimental HA, two-replica matrices, live providers, and every optional storage backend are
-  always outside the required cadence.
+- Multi-replica and Kubernetes matrices are outside the product boundary; live providers and every
+  optional storage backend remain outside the required cadence.

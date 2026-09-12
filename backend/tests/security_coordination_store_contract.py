@@ -26,7 +26,7 @@ if TYPE_CHECKING:
 
 
 class SecurityCoordinationStoreContract:
-    """Behavioral fixture mixed into in-memory, stateful Redis, and live Redis tests."""
+    """Behavioral fixture for the process-local security coordination store."""
 
     store: IdentitySecurityCoordinationStore
     advance_clock: Callable[[float], None]
