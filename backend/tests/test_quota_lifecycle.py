@@ -110,6 +110,41 @@ class QuotaRequestCleanupTests(unittest.IsolatedAsyncioTestCase):
 
 
 class QuotaSuccessCommitTests(unittest.IsolatedAsyncioTestCase):
+    async def test_success_bookkeeping_runs_independent_writes_concurrently(self):
+        usage_started = asyncio.Event()
+        credential_started = asyncio.Event()
+        release = asyncio.Event()
+
+        async def record_usage(*args, **kwargs):
+            usage_started.set()
+            await release.wait()
+            return True
+
+        credential_manager = AsyncMock()
+
+        async def record_credential(*args, **kwargs):
+            credential_started.set()
+            await release.wait()
+
+        credential_manager.record_api_call_result.side_effect = record_credential
+        with patch("core.api.utils.record_call", side_effect=record_usage):
+            task = asyncio.create_task(
+                record_api_call_success(
+                    credential_manager,
+                    "credential.json",
+                    model_name="model-a",
+                    provider="ollama",
+                )
+            )
+            try:
+                await asyncio.wait_for(
+                    asyncio.gather(usage_started.wait(), credential_started.wait()),
+                    timeout=0.25,
+                )
+            finally:
+                release.set()
+                await task
+
     async def test_success_persists_policy_cost_before_committing_actual_usage(self):
         credential_manager = AsyncMock()
         cost = AsyncMock(return_value=0.125)

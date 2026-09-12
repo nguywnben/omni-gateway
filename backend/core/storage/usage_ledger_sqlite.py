@@ -123,6 +123,7 @@ _SQLITE_REQUIRED_INDEXES = {
     "idx_durable_usage_event": (1, 1, ("event_id",)),
     "idx_durable_usage_spend": (0, 1, ("api_key_id", "occurred_at")),
     "idx_durable_usage_active_budget": (0, 1, ("key_id", "state", "expires_at")),
+    "idx_durable_usage_expiry": (0, 1, ("expires_at", "record_id")),
     "idx_durable_usage_credential": (0, 1, ("credential_ref", "occurred_at")),
 }
 
@@ -201,6 +202,13 @@ class SQLiteUsageLedgerRepository:
                 CREATE INDEX IF NOT EXISTS idx_durable_usage_active_budget
                 ON durable_usage_ledger(key_id, state, expires_at)
                 WHERE kind = 'reservation'
+                """
+            )
+            await db.execute(
+                """
+                CREATE INDEX IF NOT EXISTS idx_durable_usage_expiry
+                ON durable_usage_ledger(expires_at, record_id)
+                WHERE kind = 'reservation' AND state = 'active'
                 """
             )
             await db.execute(

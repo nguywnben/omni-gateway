@@ -22,6 +22,7 @@ class FakeStorageAdapter:
     def __init__(self, states: Dict[str, Dict[str, Any]]) -> None:
         self.states = states
         self.state_reads = 0
+        self.credential_reads = 0
         self.credentials = {
             filename: {"token": f"token-{filename}", "project_id": filename} for filename in states
         }
@@ -31,6 +32,7 @@ class FakeStorageAdapter:
         return self.states
 
     async def get_credential(self, filename: str, mode: str = "primary"):
+        self.credential_reads += 1
         value = self.credentials.get(filename)
         return dict(value) if value else None
 
@@ -378,10 +380,11 @@ class SmartCredentialRouterTests(unittest.IsolatedAsyncioTestCase):
 
         first = await router.acquire(storage, mode="primary", model_name="model-a")
         await router.complete(first[0], mode="primary", success=True)
-        now[0] = 101.0
         second = await router.acquire(storage, mode="primary", model_name="model-a")
 
         self.assertEqual((first[0], second[0]), ("a.json", "b.json"))
+        self.assertEqual(storage.state_reads, 1)
+        self.assertEqual(storage.credential_reads, 2)
 
     async def test_disabled_and_model_cooldown_credentials_are_not_selected(self):
         now = [100.0]

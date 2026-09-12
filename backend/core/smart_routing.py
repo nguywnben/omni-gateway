@@ -83,6 +83,7 @@ class SmartCredentialRouter:
         )
         self._active_leases: Dict[CredentialKey, Deque[CredentialLease]] = {}
         self._providers: Dict[CredentialKey, str] = {}
+        self._credentials: Dict[CredentialKey, Dict[str, Any]] = {}
         self._state_cache: Dict[str, Tuple[float, Dict[str, Dict[str, Any]]]] = {}
         self._recent_decisions: Deque[RouteDecision] = deque(maxlen=100)
         self._provider_variants: Dict[CredentialKey, str] = {}
@@ -92,6 +93,7 @@ class SmartCredentialRouter:
     async def _invalidate_credential_views(self) -> None:
         self._providers.clear()
         self._provider_variants.clear()
+        self._credentials.clear()
         self._state_cache.clear()
 
     @staticmethod
@@ -333,6 +335,7 @@ class SmartCredentialRouter:
                 continue
             credential_data = await storage_adapter.get_credential(filename, mode=mode)
             if credential_data:
+                self._credentials[key] = dict(credential_data)
                 self._providers[key] = get_credential_provider(credential_data)
                 self._provider_variants[key] = get_credential_provider_variant(credential_data)
 
@@ -457,7 +460,7 @@ class SmartCredentialRouter:
 
             supported_candidates = []
             for score, filename in ranked:
-                credential_data = await storage_adapter.get_credential(filename, mode=mode)
+                credential_data = self._credentials.get((mode, filename))
                 if not credential_data:
                     candidate = decisions[filename]
                     decisions[filename] = RouteCandidate(
@@ -496,7 +499,7 @@ class SmartCredentialRouter:
                     consecutive_failures=candidate.consecutive_failures,
                 )
 
-                candidate = ((-support_level, *score), score, filename, credential_data)
+                candidate = ((-support_level, *score), score, filename, dict(credential_data))
                 supported_candidates.append(candidate)
 
             selected = None
@@ -665,7 +668,13 @@ class SmartCredentialRouter:
         """Release one reservation and update the short-lived health penalty."""
         async with self._io_slots:
             now = self._clock()
-            self._state_cache.pop(mode, None)
+            if not success:
+                # Failure handling may persist cooldown/disable state immediately;
+                # force the next admission to observe that mutation. Successful
+                # completions are already represented by coordination state and
+                # the bounded cache TTL, so invalidating every success only adds
+                # redundant storage reads to the hot path.
+                self._state_cache.pop(mode, None)
             key = (mode, filename)
             lease = self._take_active_lease(key)
             if lease is not None:
@@ -735,6 +744,7 @@ class SmartCredentialRouter:
                 leases = [lease for queue in self._active_leases.values() for lease in queue]
                 self._active_leases.clear()
                 self._providers.clear()
+                self._credentials.clear()
                 self._state_cache.clear()
                 self._recent_decisions.clear()
                 self._provider_variants.clear()

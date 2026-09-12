@@ -205,6 +205,23 @@ def percentile(values: Sequence[float], quantile: float) -> float:
     return ordered[max(0, math.ceil(len(ordered) * quantile) - 1)]
 
 
+def descendant_process_ids(root_pid: int, pairs: Sequence[tuple[int, int]]) -> set[int]:
+    """Return the transitive process tree rooted at ``root_pid``."""
+
+    descendants = {root_pid}
+    while True:
+        expanded = descendants | {pid for pid, parent in pairs if parent in descendants}
+        if expanded == descendants:
+            return descendants
+        descendants = expanded
+
+
+def graceful_exit_completed(return_code: int | None) -> bool:
+    """Use the portable process result when informational logging is disabled."""
+
+    return return_code == 0
+
+
 def analyze_memory(samples: Sequence[MemorySample], *, warmup_seconds: int) -> MemoryTrend:
     if len(samples) < 2:
         raise ValueError("Memory analysis requires at least two samples.")
@@ -573,8 +590,7 @@ class CandidateRuntime:
         if self._log_handle is not None:
             self._log_handle.close()
             self._log_handle = None
-        output = self.log_path.read_text(encoding="utf-8", errors="replace")
-        complete = "Omni Gateway stopped." in output
+        complete = graceful_exit_completed(return_code)
         self.process = None
         return elapsed, complete, return_code
 
@@ -636,41 +652,110 @@ def _bootstrap(base_url: str, provider_url: str) -> tuple[str, dict[str, str]]:
     return key, cookies
 
 
-def _rss_bytes(pid: int) -> int:
+class _ProcessMemoryCounters(ctypes.Structure):
+    _fields_ = [
+        ("cb", ctypes.c_ulong),
+        ("PageFaultCount", ctypes.c_ulong),
+        ("PeakWorkingSetSize", ctypes.c_size_t),
+        ("WorkingSetSize", ctypes.c_size_t),
+        ("QuotaPeakPagedPoolUsage", ctypes.c_size_t),
+        ("QuotaPagedPoolUsage", ctypes.c_size_t),
+        ("QuotaPeakNonPagedPoolUsage", ctypes.c_size_t),
+        ("QuotaNonPagedPoolUsage", ctypes.c_size_t),
+        ("PagefileUsage", ctypes.c_size_t),
+        ("PeakPagefileUsage", ctypes.c_size_t),
+    ]
+
+
+class _ProcessEntry32W(ctypes.Structure):
+    _fields_ = [
+        ("dwSize", ctypes.c_ulong),
+        ("cntUsage", ctypes.c_ulong),
+        ("th32ProcessID", ctypes.c_ulong),
+        ("th32DefaultHeapID", ctypes.c_size_t),
+        ("th32ModuleID", ctypes.c_ulong),
+        ("cntThreads", ctypes.c_ulong),
+        ("th32ParentProcessID", ctypes.c_ulong),
+        ("pcPriClassBase", ctypes.c_long),
+        ("dwFlags", ctypes.c_ulong),
+        ("szExeFile", ctypes.c_wchar * 260),
+    ]
+
+
+def _windows_process_pairs() -> tuple[tuple[int, int], ...]:
+    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    create_snapshot = kernel32.CreateToolhelp32Snapshot
+    create_snapshot.argtypes = (ctypes.c_ulong, ctypes.c_ulong)
+    create_snapshot.restype = ctypes.c_void_p
+    first = kernel32.Process32FirstW
+    first.argtypes = (ctypes.c_void_p, ctypes.POINTER(_ProcessEntry32W))
+    first.restype = ctypes.c_int
+    next_entry = kernel32.Process32NextW
+    next_entry.argtypes = (ctypes.c_void_p, ctypes.POINTER(_ProcessEntry32W))
+    next_entry.restype = ctypes.c_int
+    close_handle = kernel32.CloseHandle
+    close_handle.argtypes = (ctypes.c_void_p,)
+    close_handle.restype = ctypes.c_int
+    snapshot = create_snapshot(0x00000002, 0)
+    if snapshot == ctypes.c_void_p(-1).value:
+        raise OSError("Unable to enumerate the candidate process tree.")
+    pairs: list[tuple[int, int]] = []
+    entry = _ProcessEntry32W()
+    entry.dwSize = ctypes.sizeof(entry)
+    try:
+        available = bool(first(snapshot, ctypes.byref(entry)))
+        while available:
+            pairs.append((int(entry.th32ProcessID), int(entry.th32ParentProcessID)))
+            available = bool(next_entry(snapshot, ctypes.byref(entry)))
+    finally:
+        close_handle(snapshot)
+    return tuple(pairs)
+
+
+def _unix_process_pairs() -> tuple[tuple[int, int], ...]:
+    proc = Path("/proc")
+    if not proc.is_dir():
+        return ()
+    pairs: list[tuple[int, int]] = []
+    for entry in proc.iterdir():
+        if not entry.name.isdigit():
+            continue
+        try:
+            fields = (entry / "stat").read_text(encoding="ascii").rsplit(")", 1)[1].split()
+            pairs.append((int(entry.name), int(fields[1])))
+        except (IndexError, OSError, ValueError):
+            continue
+    return tuple(pairs)
+
+
+def _single_process_rss_bytes(pid: int) -> int:
     if os.name == "nt":
-
-        class ProcessMemoryCounters(ctypes.Structure):
-            _fields_ = [
-                ("cb", ctypes.c_ulong),
-                ("PageFaultCount", ctypes.c_ulong),
-                ("PeakWorkingSetSize", ctypes.c_size_t),
-                ("WorkingSetSize", ctypes.c_size_t),
-                ("QuotaPeakPagedPoolUsage", ctypes.c_size_t),
-                ("QuotaPagedPoolUsage", ctypes.c_size_t),
-                ("QuotaPeakNonPagedPoolUsage", ctypes.c_size_t),
-                ("QuotaNonPagedPoolUsage", ctypes.c_size_t),
-                ("PagefileUsage", ctypes.c_size_t),
-                ("PeakPagefileUsage", ctypes.c_size_t),
-            ]
-
-        process_query_information = 0x0400
-        process_vm_read = 0x0010
-        handle = ctypes.windll.kernel32.OpenProcess(  # type: ignore[attr-defined]
-            process_query_information | process_vm_read, False, pid
+        kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+        open_process = kernel32.OpenProcess
+        open_process.argtypes = (ctypes.c_ulong, ctypes.c_int, ctypes.c_ulong)
+        open_process.restype = ctypes.c_void_p
+        close_handle = kernel32.CloseHandle
+        close_handle.argtypes = (ctypes.c_void_p,)
+        close_handle.restype = ctypes.c_int
+        psapi = ctypes.WinDLL("psapi", use_last_error=True)
+        get_memory = psapi.GetProcessMemoryInfo
+        get_memory.argtypes = (
+            ctypes.c_void_p,
+            ctypes.POINTER(_ProcessMemoryCounters),
+            ctypes.c_ulong,
         )
+        get_memory.restype = ctypes.c_int
+        handle = open_process(0x0400 | 0x0010, False, pid)
         if not handle:
             raise OSError("Unable to inspect candidate process memory.")
-        counters = ProcessMemoryCounters()
+        counters = _ProcessMemoryCounters()
         counters.cb = ctypes.sizeof(counters)
         try:
-            ok = ctypes.windll.psapi.GetProcessMemoryInfo(  # type: ignore[attr-defined]
-                handle, ctypes.byref(counters), counters.cb
-            )
-            if not ok:
+            if not get_memory(handle, ctypes.byref(counters), counters.cb):
                 raise OSError("Unable to read candidate process memory.")
             return int(counters.WorkingSetSize)
         finally:
-            ctypes.windll.kernel32.CloseHandle(handle)  # type: ignore[attr-defined]
+            close_handle(handle)
     status = Path(f"/proc/{pid}/status")
     if status.is_file():
         for line in status.read_text(encoding="ascii", errors="replace").splitlines():
@@ -684,6 +769,17 @@ def _rss_bytes(pid: int) -> int:
         timeout=5,
     )
     return int(completed.stdout.strip()) * 1024
+
+
+def _process_tree_rss_bytes(root_pid: int) -> int:
+    pairs = _windows_process_pairs() if os.name == "nt" else _unix_process_pairs()
+    total = 0
+    for pid in descendant_process_ids(root_pid, pairs):
+        with contextlib.suppress(OSError, subprocess.SubprocessError, ValueError):
+            total += _single_process_rss_bytes(pid)
+    if total <= 0:
+        raise OSError("Candidate process-tree memory is unavailable.")
+    return total
 
 
 async def _run_workload(
@@ -701,7 +797,7 @@ async def _run_workload(
     async def sample_memory() -> None:
         while True:
             elapsed = time.perf_counter() - started
-            memory_samples.append(MemorySample(elapsed, _rss_bytes(pid)))
+            memory_samples.append(MemorySample(elapsed, _process_tree_rss_bytes(pid)))
             if elapsed >= profile.duration_seconds:
                 return
             await asyncio.sleep(

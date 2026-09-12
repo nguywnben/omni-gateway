@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import unittest
 from dataclasses import replace
 from pathlib import Path
@@ -127,6 +128,29 @@ class ReliabilityProfileContractTests(unittest.TestCase):
                 "restart.post_request",
             }.issubset(failed_ids)
         )
+
+    def test_process_tree_closure_includes_nested_children_only(self) -> None:
+        from tools import reliability_profile
+
+        self.assertEqual(
+            reliability_profile.descendant_process_ids(
+                os.getpid(),
+                (
+                    (os.getpid(), 1),
+                    (20_001, os.getpid()),
+                    (20_002, 20_001),
+                    (30_001, 99),
+                ),
+            ),
+            {os.getpid(), 20_001, 20_002},
+        )
+
+    def test_zero_exit_is_graceful_without_requiring_disabled_info_logs(self) -> None:
+        from tools import reliability_profile
+
+        self.assertTrue(reliability_profile.graceful_exit_completed(0))
+        self.assertFalse(reliability_profile.graceful_exit_completed(None))
+        self.assertFalse(reliability_profile.graceful_exit_completed(1))
 
 
 class ReliabilityProfileReleaseGateTests(unittest.TestCase):

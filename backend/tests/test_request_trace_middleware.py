@@ -34,6 +34,41 @@ def _request(path: str, *, request_id="request-123") -> Request:
 
 
 class RequestTraceMiddlewareTests(unittest.IsolatedAsyncioTestCase):
+    async def test_inference_audit_and_trace_persist_concurrently(self):
+        trace_started = asyncio.Event()
+        audit_started = asyncio.Event()
+        release = asyncio.Event()
+
+        async def record_trace(_trace):
+            trace_started.set()
+            await release.wait()
+
+        async def record_audit(**_fields):
+            audit_started.set()
+            await release.wait()
+
+        trace_service = Mock(record=AsyncMock(side_effect=record_trace))
+        audit_service = Mock(record_inference=AsyncMock(side_effect=record_audit))
+
+        async def next_handler(_request):
+            return JSONResponse({"ok": True})
+
+        with (
+            patch("main.get_request_trace_service", return_value=trace_service),
+            patch("main.get_audit_service", return_value=audit_service),
+        ):
+            task = asyncio.create_task(
+                add_security_headers(_request("/v1/chat/completions"), next_handler)
+            )
+            try:
+                await asyncio.wait_for(
+                    asyncio.gather(trace_started.wait(), audit_started.wait()),
+                    timeout=0.25,
+                )
+            finally:
+                release.set()
+                await task
+
     async def test_cancellation_before_response_persists_one_cancelled_trace(self):
         service = Mock(record=AsyncMock())
 

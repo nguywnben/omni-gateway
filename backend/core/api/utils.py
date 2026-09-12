@@ -270,13 +270,18 @@ async def record_api_call_success(
     provider: Optional[str] = None,
 ) -> None:
     if credential_manager and credential_name:
-        request_metrics = await _record_success_usage(
-            filename=credential_name,
-            model_name=model_name or "",
-            provider=provider or mode,
-            status_code=status_code,
-            token_usage=token_usage,
-            request_metrics=request_metrics,
+        request_metrics, _ = await asyncio.gather(
+            _record_success_usage(
+                filename=credential_name,
+                model_name=model_name or "",
+                provider=provider or mode,
+                status_code=status_code,
+                token_usage=token_usage,
+                request_metrics=request_metrics,
+            ),
+            credential_manager.record_api_call_result(
+                credential_name, True, mode=mode, model_name=model_name
+            ),
         )
 
         trace_decision(
@@ -299,10 +304,6 @@ async def record_api_call_success(
             token_usage=token_usage,
             latency_ms=int(request_metrics.get("latency_ms") or 0),
             request_metrics=request_metrics,
-        )
-
-        await credential_manager.record_api_call_result(
-            credential_name, True, mode=mode, model_name=model_name
         )
 
 

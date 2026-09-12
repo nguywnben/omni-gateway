@@ -193,6 +193,35 @@ class SQLiteUsageLedgerTests(unittest.IsolatedAsyncioTestCase):
         with self.assertRaises(sqlite3.OperationalError):
             await self.repository.check_available()
 
+    async def test_expiry_lookup_uses_its_bounded_partial_index(self):
+        connection = sqlite3.connect(self.database_path)
+        try:
+            plan = connection.execute(
+                """
+                EXPLAIN QUERY PLAN
+                SELECT record_id FROM durable_usage_ledger
+                WHERE kind = 'reservation' AND state = 'active' AND expires_at <= ?
+                ORDER BY expires_at, record_id
+                LIMIT ?
+                """,
+                (NOW, 100),
+            ).fetchall()
+            columns = connection.execute("PRAGMA index_info(idx_durable_usage_expiry)").fetchall()
+            definition = connection.execute(
+                "SELECT sql FROM sqlite_master WHERE type = 'index' "
+                "AND name = 'idx_durable_usage_expiry'"
+            ).fetchone()
+        finally:
+            connection.close()
+
+        rendered_plan = " ".join(str(row) for row in plan)
+        self.assertIn("SEARCH durable_usage_ledger", rendered_plan)
+        self.assertIn("idx_durable_usage_expiry", rendered_plan)
+        self.assertNotIn("TEMP B-TREE", rendered_plan)
+        self.assertEqual([row[2] for row in columns], ["expires_at", "record_id"])
+        self.assertIsNotNone(definition)
+        self.assertIn("kind = 'reservation' AND state = 'active'", definition[0])
+
     async def test_concurrent_reservations_cannot_knowingly_overspend(self):
         first, second = await asyncio.gather(
             self.repository.reserve_budget(_reservation("a")),

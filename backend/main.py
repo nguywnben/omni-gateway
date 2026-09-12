@@ -455,20 +455,8 @@ async def add_security_headers(request, call_next):
                 "Durable management audit append failed "
                 f"(request_id={request_id}, error_type={type(exc).__name__})."
             )
-        if protocol is not None:
-            try:
-                await get_audit_service().record_inference(
-                    request_id=request_id,
-                    protocol=protocol,
-                    status_code=response.status_code,
-                )
-            except Exception as exc:
-                log.critical(
-                    "Durable inference audit append failed "
-                    f"(request_id={request_id}, error_type={type(exc).__name__})."
-                )
-
     trace_recorded = False
+    audit_recorded = False
 
     async def persist_request_trace(*, cancelled: bool = False) -> None:
         nonlocal trace_recorded
@@ -487,6 +475,32 @@ async def add_security_headers(request, call_next):
                 "Failed to persist bounded request trace "
                 f"(request_id={request_id}, error_type={type(exc).__name__})."
             )
+
+    async def persist_inference_audit() -> None:
+        nonlocal audit_recorded
+        if audit_recorded or protocol is None:
+            return
+        audit_recorded = True
+        try:
+            await get_audit_service().record_inference(
+                request_id=request_id,
+                protocol=protocol,
+                status_code=response.status_code,
+            )
+        except Exception as exc:
+            log.critical(
+                "Durable inference audit append failed "
+                f"(request_id={request_id}, error_type={type(exc).__name__})."
+            )
+
+    async def persist_inference_observability(*, cancelled: bool = False) -> None:
+        # These repositories are independent. Persisting them concurrently keeps
+        # both durable records without serializing two storage round trips onto
+        # every response.
+        await asyncio.gather(
+            persist_request_trace(cancelled=cancelled),
+            persist_inference_audit(),
+        )
 
     reservation_id = getattr(request.state, "virtual_key_reservation_id", "")
     if reservation_id:
@@ -588,11 +602,11 @@ async def add_security_headers(request, call_next):
                         f"(request_id={request_id}, error_type={type(exc).__name__})."
                     )
                 finally:
-                    await persist_request_trace(cancelled=cancelled)
+                    await persist_inference_observability(cancelled=cancelled)
 
         response.body_iterator = tracing_body_iterator()
     elif trace_collector is not None:
-        await persist_request_trace()
+        await persist_inference_observability()
     response.headers["X-Request-ID"] = request_id
     if localize_console:
         response.headers["Content-Language"] = locale
