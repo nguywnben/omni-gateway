@@ -38,9 +38,7 @@ class ReleaseCandidateContractTests(unittest.TestCase):
     def test_release_version_is_consistent_across_runtime_install_and_changelog(self):
         self.assertEqual(DEFAULT_APPLICATION_VERSION, RELEASE_VERSION)
 
-        compose_environment = (ROOT / "deploy" / "compose.env.example").read_text(
-            encoding="utf-8"
-        )
+        compose_environment = (ROOT / "deploy" / "compose.env.example").read_text(encoding="utf-8")
         self.assertIn(f"IMAGE=nguywnben/omni-gateway:{RELEASE_VERSION}", compose_environment)
 
         installation = (ROOT / "docs" / "installation.md").read_text(encoding="utf-8")
@@ -75,9 +73,7 @@ class ReleaseCandidateContractTests(unittest.TestCase):
                     continue
                 linked_path = (document.parent / target).resolve()
                 if not linked_path.is_file() and not linked_path.is_dir():
-                    missing.append(
-                        f"{document.relative_to(ROOT).as_posix()} -> {raw_target}"
-                    )
+                    missing.append(f"{document.relative_to(ROOT).as_posix()} -> {raw_target}")
 
         self.assertEqual(missing, [])
 
