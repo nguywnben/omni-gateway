@@ -1,6 +1,6 @@
 from typing import Annotated, Any, Dict, List, Literal, Optional, Union
 
-from pydantic import BaseModel, ConfigDict, Field, SecretStr, WithJsonSchema, model_validator
+from pydantic import BaseModel, Field, SecretStr, WithJsonSchema, model_validator
 from pydantic.json_schema import SkipJsonSchema
 
 
@@ -1065,4 +1065,3 @@ class AccessCredentialsUpdateRequest(BaseModel):
 class VirtualModelPoolUpdateRequest(BaseModel):
     selected_models: List[str] = Field(default_factory=list, max_length=64)
     enabled: bool = True
-    model_config = ConfigDict(extra="forbid")

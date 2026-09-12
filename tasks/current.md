@@ -1,5 +1,13 @@
 # Omni Gateway — Current State
 
+## Active Production Balance Workstream
+
+- Active plan: `PROD-BALANCE-R2` in `tasks/production-balance-r2.md`.
+- Fixed progress: **1/7**; one workstream, no Waves or Phases.
+- Baseline audit: `docs/audits/production-balance-2026-09-12.md`.
+- Resume at: **PB2 — Retire unreachable Redis/HA/Kubernetes topology**.
+- R1 below remains completed historical state; it is not reopened or added to the new denominator.
+
 ## Resume Here
 
 - Updated: 2026-09-12 (Asia/Saigon)

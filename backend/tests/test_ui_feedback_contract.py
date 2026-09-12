@@ -186,7 +186,9 @@ assert(host.hidden === true && host.children.length === 0, 'state did not clear'
         self.assertIn("transition-duration", reduced_motion.group("body"))
         self.assertIn("scroll-behavior", reduced_motion.group("body"))
 
-    def test_console_layout_uses_compact_badges_and_never_creates_horizontal_scrollers(self) -> None:
+    def test_console_layout_uses_compact_badges_and_never_creates_horizontal_scrollers(
+        self,
+    ) -> None:
         styles = "\n".join(
             path.read_text(encoding="utf-8") for path in (FRONTEND / "css").glob("*.css")
         )
@@ -221,7 +223,8 @@ assert(host.hidden === true && host.children.length === 0, 'state did not clear'
 
     def test_pages_do_not_use_standalone_advisory_panels(self) -> None:
         fragments = "\n".join(
-            path.read_text(encoding="utf-8") for path in (FRONTEND / "fragments/pages").glob("*.html")
+            path.read_text(encoding="utf-8")
+            for path in (FRONTEND / "fragments/pages").glob("*.html")
         )
 
         self.assertNotIn('class="config-note', fragments)
