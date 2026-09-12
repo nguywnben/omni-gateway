@@ -226,9 +226,18 @@ function createPlaygroundMessageRow(message, index) {
     row.className = 'playground-message';
     row.dataset.playgroundMessage = String(index);
 
+    const header = document.createElement('div');
+    header.className = 'playground-message-header';
+    const title = document.createElement('strong');
+    title.className = 'playground-message-title';
+    title.textContent = t('playground.message_number', {number: index + 1});
+    const actions = document.createElement('div');
+    actions.className = 'playground-message-actions';
+
     const roleLabel = document.createElement('label');
+    roleLabel.className = 'playground-message-role';
     const roleText = document.createElement('span');
-    roleText.className = 'playground-message-label';
+    roleText.className = 'visually-hidden';
     roleText.textContent = t('playground.role');
     const role = document.createElement('select');
     role.dataset.playgroundRole = String(index);
@@ -240,9 +249,10 @@ function createPlaygroundMessageRow(message, index) {
     roleLabel.append(roleText, role);
 
     const contentLabel = document.createElement('label');
+    contentLabel.className = 'playground-message-content';
     const contentText = document.createElement('span');
     contentText.className = 'playground-message-label';
-    contentText.textContent = t('playground.message_number', {number: index + 1});
+    contentText.textContent = t('playground.content');
     const content = document.createElement('textarea');
     content.rows = 4;
     content.maxLength = PLAYGROUND_MAX_MESSAGE_CHARS;
@@ -262,7 +272,9 @@ function createPlaygroundMessageRow(message, index) {
     remove.textContent = t('playground.remove');
     remove.setAttribute('aria-label', t('playground.remove_message', {number: index + 1}));
 
-    row.append(roleLabel, contentLabel, remove);
+    actions.append(roleLabel, remove);
+    header.append(title, actions);
+    row.append(header, contentLabel);
     return row;
 }
 

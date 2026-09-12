@@ -229,6 +229,27 @@ assert(state.runStateKey === 'playground.ready', 'first visit status');
         self.assertIn("white-space: pre-wrap", styles)
         self.assertIn(".playground-stream-control small", styles)
 
+    def test_message_editor_prioritizes_full_width_content(self) -> None:
+        source = SCRIPT.read_text(encoding="utf-8")
+        styles = STYLES.read_text(encoding="utf-8")
+
+        for class_name in (
+            "playground-message-header",
+            "playground-message-title",
+            "playground-message-actions",
+            "playground-message-role",
+            "playground-message-content",
+        ):
+            self.assertIn(class_name, source)
+        self.assertIn("t('playground.content')", source)
+        self.assertIn("row.append(header, contentLabel)", source)
+        self.assertIn(".playground-message-content", styles)
+        self.assertIn("width: 100%", styles)
+        self.assertRegex(
+            styles,
+            r"(?s)@media \(max-width: 600px\).*?\.playground-message-header.*?display: grid",
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

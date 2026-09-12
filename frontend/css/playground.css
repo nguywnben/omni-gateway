@@ -90,17 +90,43 @@
 
 .playground-message {
     display: grid;
-    grid-template-columns: 132px minmax(0, 1fr) auto;
-    gap: 8px;
-    align-items: start;
-    padding: 10px;
+    gap: 12px;
+    padding: 14px;
     border: 1px solid var(--border);
     border-radius: var(--radius);
-    background: var(--bg-subtle);
+    background: var(--surface);
 }
 
-.playground-message label {
+.playground-message-header,
+.playground-message-actions {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.playground-message-header {
+    justify-content: space-between;
+}
+
+.playground-message-title {
+    color: var(--text);
+    font-size: 13px;
+    font-weight: 700;
+}
+
+.playground-message-actions {
+    justify-content: flex-end;
+}
+
+.playground-message-role,
+.playground-message-content {
     min-width: 0;
+    margin: 0;
+}
+
+.playground-message-role select {
+    width: auto;
+    min-width: 132px;
 }
 
 .playground-message-label {
@@ -117,16 +143,30 @@
     min-width: 0;
 }
 
+.playground-message-content {
+    width: 100%;
+}
+
 .playground-message textarea {
     min-height: 92px;
     resize: vertical;
 }
 
 .playground-message-remove {
-    min-width: 36px;
+    width: auto;
     min-height: 36px;
-    margin-top: 24px;
-    padding: 7px;
+    margin: 0;
+    padding: 7px 10px;
+    border-color: transparent;
+    background: transparent;
+    color: var(--text-muted);
+}
+
+.playground-message-remove:not(:disabled):hover,
+.playground-message-remove:not(:disabled):focus-visible {
+    border-color: var(--danger-border-hover);
+    background: var(--danger-bg);
+    color: var(--danger);
 }
 
 .playground-parameters {
@@ -318,16 +358,20 @@
         grid-template-columns: minmax(0, 1fr);
     }
 
-    .playground-message {
-        grid-template-columns: minmax(0, 1fr) auto;
+    .playground-message-header {
+        display: grid;
     }
 
-    .playground-message label:first-child {
-        grid-column: 1 / -1;
+    .playground-message-actions {
+        justify-content: stretch;
     }
 
-    .playground-message-remove {
-        margin-top: 24px;
+    .playground-message-role {
+        flex: 1 1 auto;
+    }
+
+    .playground-message-role select {
+        width: 100%;
     }
 
     .playground-run-actions,
