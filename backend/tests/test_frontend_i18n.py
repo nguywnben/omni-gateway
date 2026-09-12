@@ -408,6 +408,14 @@ class FrontendLocaleContractTests(unittest.TestCase):
         self.assertIn("const AUTO_TRANSLATED_TEXT = new WeakMap()", I18N_SOURCE)
         self.assertIn("locale === 'en'", I18N_SOURCE)
 
+    def test_translation_lookup_reuses_prebuilt_message_catalogs(self):
+        self.assertIn("const MESSAGE_CATALOGS = Object.fromEntries", I18N_SOURCE)
+        translation_lookup = I18N_SOURCE.split("function t(key, vars = {})", 1)[1].split(
+            "function formatCountLabel", 1
+        )[0]
+        self.assertIn("MESSAGE_CATALOGS[lang]", translation_lookup)
+        self.assertNotIn("...COMMON_UI_TRANSLATIONS", translation_lookup)
+
     def test_runtime_ui_does_not_embed_known_english_copy(self):
         runtime_source = "\n".join(
             path.read_text(encoding="utf-8")
