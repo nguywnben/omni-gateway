@@ -1,6 +1,6 @@
 from typing import Annotated, Any, Dict, List, Literal, Optional, Union
 
-from pydantic import BaseModel, ConfigDict, Field, SecretStr, WithJsonSchema, model_validator
+from pydantic import BaseModel, Field, SecretStr, WithJsonSchema, model_validator
 from pydantic.json_schema import SkipJsonSchema
 
 
