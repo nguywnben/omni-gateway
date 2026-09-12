@@ -170,11 +170,6 @@ function setUsagePeriod(period) {
 }
 
 async function refreshUsageStats(options = {}) {
-
-    void refreshOperationalHealth();
-
-    void refreshRecentActivity();
-
     const loading = document.getElementById('usageLoading');
 
     const list = document.getElementById('usageList');
@@ -293,10 +288,10 @@ async function refreshUsageStats(options = {}) {
                 output: formatUsageNumber(aggData.output_tokens ?? aggData.output_tokens_24h)
             });
 
+            renderDashboardReadiness();
             renderTokenDistribution(aggData);
             renderProviderHealthMatrix();
             renderUsageList();
-            renderDashboardReadiness();
 
             // showStatus(t('loaded_usage_statistics_for_aggdata', {aggData_total_files____Object_keys_AppState_usageStatsData__length: aggData.total_files || Object.keys(AppState.usageStatsData).length}), 'success');
 
@@ -327,6 +322,12 @@ async function refreshUsageStats(options = {}) {
         if (statsContainer && !preserveContent) statsContainer.setAttribute('aria-busy', 'false');
 
         if (tableWrapper && !preserveContent) tableWrapper.hidden = false;
+
+        // The primary readiness and summary are the dashboard's usable state.
+        // Load deeper health and activity cards afterwards so their bounded
+        // history queries cannot delay first interaction on a populated ledger.
+        void refreshOperationalHealth();
+        void refreshRecentActivity();
 
     }
 

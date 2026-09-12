@@ -24,6 +24,7 @@ from core.routing_coordination import RoutingCoordinationAdapter
 from core.routing_decision import RouteDecision
 from core.smart_routing import SmartCredentialRouter
 from core.storage_adapter import get_storage_adapter
+from core.task_manager import create_managed_task
 from core.usage_stats import retire_credential_usage
 from log import log
 
@@ -360,8 +361,15 @@ class CredentialManager:
         await self._ensure_initialized()
         try:
             if success:
-                await self._storage_adapter._backend.record_success(
-                    credential_name, model_name=model_name, mode=mode
+                # Exact request accounting is committed to the durable usage
+                # ledger before the response completes. Credential success fields
+                # are routing/UI hints, so persist them outside the response hot
+                # path while releasing the coordination lease immediately.
+                create_managed_task(
+                    self._storage_adapter._backend.record_success(
+                        credential_name, model_name=model_name, mode=mode
+                    ),
+                    name="persist-credential-success",
                 )
 
             elif error_code:

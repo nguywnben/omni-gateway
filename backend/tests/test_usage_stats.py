@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import sys
 import time
 import unittest
@@ -40,6 +41,25 @@ class UsageStatsTests(unittest.IsolatedAsyncioTestCase):
     async def asyncTearDown(self):
         self.service_patch.stop()
         self.temp_dir.__exit__(None, None, None)
+
+    async def test_concurrent_period_reads_share_one_inflight_aggregation(self):
+        async def load(_period):
+            await asyncio.sleep(0.01)
+            return {"credential.json": {"calls": 1}}
+
+        loader = AsyncMock(side_effect=load)
+        with patch.object(
+            usage_stats,
+            "_load_stats_for_period",
+            loader,
+            create=True,
+        ):
+            first = asyncio.create_task(usage_stats.get_stats_for_period("1d"))
+            second = asyncio.create_task(usage_stats.get_stats_for_period("1d"))
+            results = await asyncio.gather(first, second)
+
+        self.assertEqual(results[0], results[1])
+        loader.assert_awaited_once_with("1d")
 
     def test_provider_display_names_preserve_google_ai_capitalization(self):
         self.assertEqual(

@@ -1,3 +1,4 @@
+import asyncio
 import json
 import math
 import os
@@ -32,6 +33,7 @@ USAGE_PERIODS = {
     "30d": {"seconds": 30 * 86400, "label": "Last 30 days"},
     "all": {"seconds": None, "label": "All time"},
 }
+_stats_inflight: Dict[str, asyncio.Task[Dict[str, Dict[str, Any]]]] = {}
 
 
 def _int_value(value: Any) -> int:
@@ -495,8 +497,7 @@ async def get_all_credential_filenames() -> List[str]:
         return []
 
 
-async def get_stats_for_period(period: str = "1d") -> Dict[str, Dict[str, Any]]:
-    normalized_period = normalize_usage_period(period)
+async def _load_stats_for_period(normalized_period: str) -> Dict[str, Dict[str, Any]]:
     seconds = USAGE_PERIODS[normalized_period]["seconds"]
     since = time.time() - int(seconds) if seconds is not None else None
     res = {}
@@ -555,6 +556,22 @@ async def get_stats_for_period(period: str = "1d") -> Dict[str, Dict[str, Any]]:
         )
 
     return res
+
+
+async def get_stats_for_period(period: str = "1d") -> Dict[str, Dict[str, Any]]:
+    """Share an in-flight period scan across concurrent dashboard consumers."""
+
+    normalized_period = normalize_usage_period(period)
+    task = _stats_inflight.get(normalized_period)
+    if task is None:
+        task = asyncio.create_task(_load_stats_for_period(normalized_period))
+        _stats_inflight[normalized_period] = task
+        task.add_done_callback(
+            lambda completed, key=normalized_period: (
+                _stats_inflight.pop(key, None) if _stats_inflight.get(key) is completed else None
+            )
+        )
+    return await asyncio.shield(task)
 
 
 async def get_time_series_stats(period: str = "1d", points: int = 24) -> List[Dict[str, Any]]:

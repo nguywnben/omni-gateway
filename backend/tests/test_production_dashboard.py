@@ -103,6 +103,16 @@ for (const [aggregate, health, expectedState, expectedTab] of fixtures) {
         self.assertIn("routes.slice(0, 10)", source)
         self.assertIn("traces.slice(0, DASHBOARD_RECENT_ACTIVITY_PAGE_SIZE)", source)
 
+    def test_primary_readiness_precedes_secondary_dashboard_queries(self):
+        source = self._source(DASHBOARD_SCRIPT)
+        refresh_body = source.split("async function refreshUsageStats", 1)[1].split(
+            "function setOperationalHealthStatus", 1
+        )[0]
+
+        readiness = refresh_body.index("renderDashboardReadiness();")
+        self.assertLess(readiness, refresh_body.index("void refreshOperationalHealth();"))
+        self.assertLess(readiness, refresh_body.index("void refreshRecentActivity();"))
+
     def test_dashboard_header_collapses_at_the_tablet_breakpoint(self):
         styles = self._source(DASHBOARD_STYLES)
 

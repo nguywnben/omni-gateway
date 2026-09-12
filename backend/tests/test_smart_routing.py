@@ -7,11 +7,13 @@ import sys
 import unittest
 from pathlib import Path
 from typing import Any, Dict
+from unittest.mock import AsyncMock, Mock, patch
 
 BACKEND_DIR = Path(__file__).resolve().parents[1]
 if str(BACKEND_DIR) not in sys.path:
     sys.path.insert(0, str(BACKEND_DIR))
 
+from core.credential_manager import CredentialManager
 from core.request_context import request_scope
 from core.routing_coordination import RoutingCoordinationAdapter
 from core.smart_routing import SmartCredentialRouter
@@ -624,6 +626,53 @@ class SmartCredentialRouterTests(unittest.IsolatedAsyncioTestCase):
         )
 
         self.assertEqual(result[0], "second.json")
+
+
+class CredentialSuccessLifecycleTests(unittest.IsolatedAsyncioTestCase):
+    async def test_success_releases_route_without_waiting_for_hint_persistence(self):
+        release_persistence = asyncio.Event()
+        persistence_started = asyncio.Event()
+        tasks = []
+
+        async def persist_success(*args, **kwargs):
+            persistence_started.set()
+            await release_persistence.wait()
+
+        def schedule(coroutine, *, name=None):
+            task = asyncio.create_task(coroutine, name=name)
+            tasks.append(task)
+            return task
+
+        manager = CredentialManager()
+        manager._initialized = True
+        manager._storage_adapter = Mock(
+            _backend=Mock(record_success=AsyncMock(side_effect=persist_success))
+        )
+        manager._routing = Mock(complete=AsyncMock())
+
+        with patch("core.credential_manager.create_managed_task", side_effect=schedule):
+            await asyncio.wait_for(
+                manager.record_api_call_result(
+                    "credential.json",
+                    True,
+                    mode="primary",
+                    model_name="model-a",
+                ),
+                timeout=0.25,
+            )
+            await asyncio.wait_for(persistence_started.wait(), timeout=0.25)
+
+        manager._routing.complete.assert_awaited_once_with(
+            "credential.json",
+            mode="primary",
+            success=True,
+            cooldown_until=None,
+            model_name="model-a",
+            error_code=None,
+        )
+        self.assertFalse(tasks[0].done())
+        release_persistence.set()
+        await tasks[0]
 
 
 if __name__ == "__main__":

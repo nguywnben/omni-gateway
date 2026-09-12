@@ -1,3 +1,5 @@
+import asyncio
+
 from core.i18n import LocalizedJSONResponse as JSONResponse
 from core.pricing import get_pricing_table_status
 from core.usage_stats import (
@@ -62,6 +64,10 @@ async def get_aggregated_stats(period: str = Query("1d"), token: str = Depends(v
     try:
         normalized_period = normalize_usage_period(period)
         usage_data = await get_stats_for_period(normalized_period)
+        credential_counts, timeline = await asyncio.gather(
+            get_credential_counts(),
+            get_time_series_stats(normalized_period, points=24),
+        )
         total_calls = sum(item["calls"] for item in usage_data.values())
         successful_calls = sum(item.get("successful_calls", 0) for item in usage_data.values())
         failed_calls = sum(item.get("failed_calls", 0) for item in usage_data.values())
@@ -86,7 +92,6 @@ async def get_aggregated_stats(period: str = Query("1d"), token: str = Depends(v
             item.get("compressed_messages", 0) for item in usage_data.values()
         )
         total_cost_usd = round(sum(item.get("cost_usd", 0.0) for item in usage_data.values()), 6)
-        credential_counts = await get_credential_counts()
         total_files = credential_counts["total"]
         active_files = credential_counts["active"]
         disabled_files = credential_counts["disabled"]
@@ -128,7 +133,7 @@ async def get_aggregated_stats(period: str = Query("1d"), token: str = Depends(v
                 "avg_tokens_per_successful_request": avg_tokens,
                 "total_cost_usd": total_cost_usd,
                 "pricing": get_pricing_table_status(),
-                "timeline": await get_time_series_stats(normalized_period, points=24),
+                "timeline": timeline,
             },
         }
     except Exception as exc:
