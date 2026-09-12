@@ -420,6 +420,25 @@ def _verify_responsive_routes(page: Page) -> None:
     print("[browser-smoke] responsive/accessibility sweep: 11 routes x 4 widths", flush=True)
 
 
+def _verify_keyboard_navigation(page: Page) -> None:
+    page.set_viewport_size({"width": 1024, "height": 900})
+    page.evaluate("navigate('/dashboard', false)")
+    playground_tab = page.locator('[data-ui-action="switch-tab"][data-tab="playground"]')
+    playground_tab.focus()
+    page.keyboard.press("Enter")
+    expect(page.locator("#playgroundTab")).to_be_visible()
+    expect(playground_tab).to_have_attribute("aria-current", "page")
+
+    page.evaluate("navigate('/providers', false)")
+    first_provider = page.locator("#providerSelectorGoogleAntigravity")
+    next_provider = page.locator("#providerSelectorGoogleAiStudio")
+    first_provider.focus()
+    page.keyboard.press("ArrowRight")
+    expect(next_provider).to_be_focused()
+    expect(next_provider).to_have_attribute("aria-selected", "true")
+    print("[browser-smoke] keyboard navigation: sidebar and provider selector", flush=True)
+
+
 def run_journeys(page: Page, base_url: str, expected_dashboard_title: str) -> list[str]:
     completed: list[str] = []
 
@@ -550,6 +569,7 @@ def run_journeys(page: Page, base_url: str, expected_dashboard_title: str) -> li
     _complete(completed, 8)
 
     _verify_responsive_routes(page)
+    _verify_keyboard_navigation(page)
     return completed
 
 

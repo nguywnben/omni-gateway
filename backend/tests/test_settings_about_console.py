@@ -92,9 +92,18 @@ class AboutAndIdentityConsoleContractTests(unittest.TestCase):
         source = ABOUT_SCRIPT.read_text(encoding="utf-8")
         self.assertIn("validateAboutVersion", source)
         self.assertIn("validateCapabilitySnapshot", source)
+        self.assertIn("visibleAboutTiers", source)
         self.assertIn("loadAboutPage", source)
         self.assertIn("textContent", source)
         self.assertNotIn("innerHTML", source)
+
+    def test_about_hides_support_tiers_without_capabilities(self) -> None:
+        source = ABOUT_SCRIPT.read_text(encoding="utf-8")
+        self.assertRegex(
+            source,
+            r"ABOUT_TIERS\.filter\(\(tier\)\s*=>\s*capabilities\.some",
+        )
+        self.assertIn("visibleAboutTiers(capabilities).map", source)
 
     def test_optional_team_access_keeps_local_recovery_visible(self) -> None:
         fragment = IDENTITY.read_text(encoding="utf-8")

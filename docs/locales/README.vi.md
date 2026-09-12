@@ -22,29 +22,15 @@
   </p>
 
   <p>
-    <b>Ngôn ngữ Console & Tài liệu:</b><br>
-    <a href="../../README.md">English</a> •
-    <b>Tiếng Việt</b> •
-    <a href="README.zh-CN.md">中文(简体)</a> •
-    <a href="README.zh-TW.md">中文(繁體)</a> •
-    <a href="README.ja.md">日本語</a> •
-    <a href="README.ko.md">한국어</a> •
-    <a href="README.es.md">Español</a> •
-    <a href="README.fr.md">Français</a> •
-    <a href="README.de.md">Deutsch</a> •
-    <a href="README.it.md">Italiano</a> •
-    <a href="README.pt.md">Português</a> •
-    <a href="README.ru.md">Русский</a> •
-    <a href="README.id.md">Indonesia</a> •
-    <a href="README.th.md">ภาษาไทย</a> •
-    <a href="README.tr.md">Türkçe</a>
+    <b>Tài liệu được duy trì:</b><br>
+    <a href="../../README.md">English</a> • <b>Tiếng Việt</b>
   </p>
 </div>
 
 ---
 
-Tiếng Anh và tiếng Việt là hai ngôn ngữ sản phẩm được đội ngũ duy trì trực tiếp. Các ngôn ngữ còn
-lại là bản dịch tương thích do cộng đồng duy trì và sẽ dùng nội dung tiếng Anh khi thiếu thông điệp.
+Console hỗ trợ 15 ngôn ngữ. Tiếng Anh và tiếng Việt được rà soát ngữ nghĩa; 13 ngôn ngữ cộng đồng
+còn lại thuộc lớp tương thích và sẽ dùng nội dung tiếng Anh khi thiếu thông điệp.
 
 Một router AI vạn năng dành cho các công cụ lập trình (coding tools). Omni Gateway cung cấp khả năng tự động chuyển đổi dự phòng thông minh (smart auto-fallback), dọn dẹp ngữ cảnh nhận biết token, minh bạch hóa mức độ sử dụng và chuyển đổi định dạng liền mạch để các agent cục bộ, trợ lý IDE và script tự động hóa có thể tận dụng dung lượng LLM miễn phí lẫn trả phí thông qua một giao diện API ổn định duy nhất.
 

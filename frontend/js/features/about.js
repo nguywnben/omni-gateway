@@ -68,10 +68,14 @@ function renderAboutVersion(version) {
     facts.setAttribute('aria-busy', 'false');
 }
 
+function visibleAboutTiers(capabilities) {
+    return ABOUT_TIERS.filter((tier) => capabilities.some((item) => item.tier === tier));
+}
+
 function renderAboutCapabilities(capabilities) {
     const container = document.getElementById('aboutSupportTiers');
     if (!container) return;
-    const rows = ABOUT_TIERS.map((tier) => {
+    const rows = visibleAboutTiers(capabilities).map((tier) => {
         const row = document.createElement('article');
         row.className = `support-tier support-tier-${tier}`;
         row.setAttribute('role', 'listitem');

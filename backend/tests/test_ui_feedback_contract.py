@@ -230,6 +230,8 @@ assert(host.hidden === true && host.children.length === 0, 'state did not clear'
         self.assertNotIn('class="config-note', fragments)
         self.assertNotIn("playground-privacy-note", fragments)
         self.assertNotIn("trace-privacy-note", fragments)
+        self.assertNotIn("model-policy-note", fragments)
+        self.assertNotIn("quality-safety-note", fragments)
 
 
 if __name__ == "__main__":

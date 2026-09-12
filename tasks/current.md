@@ -3,9 +3,9 @@
 ## Active Production Balance Workstream
 
 - Active plan: `PROD-BALANCE-R2` in `tasks/production-balance-r2.md`.
-- Fixed progress: **4/7**; one workstream, no Waves or Phases.
+- Fixed progress: **5/7**; one workstream, no Waves or Phases.
 - Baseline audit: `docs/audits/production-balance-2026-09-12.md`.
-- Resume at: **PB5 — Apply one console and language quality level**.
+- Resume at: **PB6 — Right-size verification for routine production work**.
 - R1 below remains completed historical state; it is not reopened or added to the new denominator.
 
 ## Resume Here
@@ -37,6 +37,9 @@
   SQLite remains the no-service default and optional backends still fail closed when selected.
 - Project-owned Pydantic deprecations are zero; critical lifecycle, storage, parser, cache, and
   stream-cleanup failures now retain bounded observability without logging raw exception details.
+- All 11 console routes now share the no-overflow, compact advisory-copy, label-spacing, keyboard,
+  and localized-feedback contract. Empty support tiers are hidden; only semantically maintained
+  English and Vietnamese README files remain, while all 15 console locales retain complete keys.
 
 ## Why the Plan Was Reset
 
@@ -74,6 +77,11 @@ Do not push unless the user requests it.
 
 ## Latest Evidence
 
+- `docs/evidence/pb5-console-language.md`
+- All 112 focused console/localization contracts and 1,268-key audits passed. Browser evidence
+  covered 9/9 journeys, 11 routes at four widths, keyboard navigation, and a clean console. PB5
+  removed 7,447 net lines, chiefly stale community README copies that advertised retired runtime
+  paths without maintainer semantic review.
 - `docs/evidence/p5.6-release-candidate-handoff.md`
 - Omni Gateway 1.5.0 is prepared for single-worker/single-replica production self-hosting. The
   release evidence records all local gate results, clean-install rehearsal, rollback command,

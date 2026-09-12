@@ -188,6 +188,12 @@ class ProductSurfaceInventoryTests(unittest.TestCase):
             identity_locales,
         )
 
+    def test_only_semantically_reviewed_readmes_are_published(self) -> None:
+        localized_readmes = {
+            document.name for document in (ROOT / "docs" / "locales").glob("README.*.md")
+        }
+        self.assertEqual(localized_readmes, {"README.vi.md"})
+
 
 if __name__ == "__main__":
     unittest.main()

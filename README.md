@@ -22,29 +22,15 @@
   </p>
 
   <p>
-    <b>Console & Documentation Languages:</b><br>
-    <b>English</b> •
-    <a href="docs/locales/README.vi.md">Tiếng Việt</a> •
-    <a href="docs/locales/README.zh-CN.md">中文(简体)</a> •
-    <a href="docs/locales/README.zh-TW.md">中文(繁體)</a> •
-    <a href="docs/locales/README.ja.md">日本語</a> •
-    <a href="docs/locales/README.ko.md">한국어</a> •
-    <a href="docs/locales/README.es.md">Español</a> •
-    <a href="docs/locales/README.fr.md">Français</a> •
-    <a href="docs/locales/README.de.md">Deutsch</a> •
-    <a href="docs/locales/README.it.md">Italiano</a> •
-    <a href="docs/locales/README.pt.md">Português</a> •
-    <a href="docs/locales/README.ru.md">Русский</a> •
-    <a href="docs/locales/README.id.md">Indonesia</a> •
-    <a href="docs/locales/README.th.md">ภาษาไทย</a> •
-    <a href="docs/locales/README.tr.md">Türkçe</a>
+    <b>Maintained Documentation:</b><br>
+    <b>English</b> • <a href="docs/locales/README.vi.md">Tiếng Việt</a>
   </p>
 </div>
 
 ---
 
-English and Vietnamese are the maintainer-curated product languages. The other listed locales are
-community-maintained compatibility translations and fall back to English when a message is absent.
+The console supports 15 languages. English and Vietnamese receive semantic review; the other 13
+community locales are compatibility translations and fall back to English when a message is absent.
 
 A universal AI router for coding tools. Omni Gateway provides smart auto-fallback, token-aware request cleanup, usage visibility, and seamless format translation so local agents, IDE assistants, and automation scripts can use free and premium LLM capacity through one stable API surface.
 

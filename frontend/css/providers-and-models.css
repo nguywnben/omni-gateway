@@ -405,24 +405,21 @@
     font-size: 22px;
 }
 
-.model-policy-note {
-    display: grid;
-    gap: 4px;
-    margin: 18px 0;
-    padding: 12px 14px;
-    background: var(--bg-subtle);
-    border: 1px solid var(--border);
-    border-radius: var(--radius);
+.model-policy-summary {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px 8px;
+    margin: 14px 0 18px;
 }
 
-.model-policy-note strong,
+.model-policy-summary strong,
 .model-section-heading h3 {
     color: var(--text);
     font-size: 13px;
     font-weight: 680;
 }
 
-.model-policy-note span,
+.model-policy-summary span,
 .model-section-heading p {
     color: var(--text-muted);
     font-size: 12px;
