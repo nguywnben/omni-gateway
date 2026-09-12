@@ -88,7 +88,17 @@ class SQLiteUsageLedgerTests(unittest.IsolatedAsyncioTestCase):
         await self.repository.initialize()
 
     async def asyncTearDown(self):
+        await self.repository.close()
         self.temp_dir.__exit__(None, None, None)
+
+    async def test_runtime_operations_reuse_one_bounded_connection(self):
+        self.assertIsNotNone(self.repository._database)
+        with patch(
+            "core.storage.usage_ledger_sqlite.open_sqlite",
+            side_effect=AssertionError("runtime operation opened another SQLite connection"),
+        ):
+            await self.repository.append_usage(_usage("a"))
+            await self.repository.append_usage(_usage("b"))
 
     async def test_append_is_exactly_idempotent_and_conflict_safe(self):
         entry = _usage()
@@ -269,6 +279,7 @@ class SQLiteUsageLedgerTests(unittest.IsolatedAsyncioTestCase):
                 dataclasses.replace(entry, cost_nanos=usd_to_nanos("0.71")),
                 transitioned_at=NOW + 20,
             )
+        await restarted.close()
 
     async def test_committed_operation_admits_bounded_delivery_replay(self):
         request = _reservation("a")

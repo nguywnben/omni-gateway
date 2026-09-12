@@ -494,11 +494,10 @@ async def add_security_headers(request, call_next):
             )
 
     async def persist_inference_observability(*, cancelled: bool = False) -> None:
-        # SQLite is the default self-hosted tier and permits one writer. These
-        # writes run after a successful response, so serialize them to avoid two
-        # independent repositories competing for the same database lock.
-        await persist_request_trace(cancelled=cancelled)
-        await persist_inference_audit()
+        await asyncio.gather(
+            persist_request_trace(cancelled=cancelled),
+            persist_inference_audit(),
+        )
 
     reservation_id = getattr(request.state, "virtual_key_reservation_id", "")
     if reservation_id:

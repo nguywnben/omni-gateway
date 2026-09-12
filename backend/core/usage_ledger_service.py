@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import inspect
 import threading
 import time
 from collections.abc import Awaitable
@@ -89,6 +90,13 @@ class UsageLedgerService:
 
     async def check_available(self) -> None:
         await self._run("health", self._repository.check_available())
+
+    async def close(self) -> None:
+        close = getattr(self._repository, "close", None)
+        if callable(close):
+            result = close()
+            if inspect.isawaitable(result):
+                await result
 
     async def append_usage(self, entry: UsageLedgerEntry) -> UsageAppendResult:
         return await self._run("append", self._repository.append_usage(entry))
@@ -229,4 +237,7 @@ def get_usage_ledger_service() -> UsageLedgerService:
 async def close_usage_ledger_service() -> None:
     global _usage_ledger_service
     async with _usage_ledger_service_lock:
+        service = _usage_ledger_service
         _usage_ledger_service = None
+        if service is not None:
+            await service.close()

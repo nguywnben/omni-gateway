@@ -40,6 +40,7 @@ class UsageStatsTests(unittest.IsolatedAsyncioTestCase):
 
     async def asyncTearDown(self):
         self.service_patch.stop()
+        await self.service.close()
         self.temp_dir.__exit__(None, None, None)
 
     async def test_concurrent_period_reads_share_one_inflight_aggregation(self):

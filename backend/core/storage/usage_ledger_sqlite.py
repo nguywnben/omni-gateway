@@ -14,7 +14,11 @@ from pathlib import Path
 
 import aiosqlite
 from core.quality_decision import normalize_quality_decision
-from core.storage.sqlite_runtime import open_sqlite
+from core.storage.sqlite_runtime import (
+    SQLITE_BUSY_TIMEOUT_MS,
+    SQLITE_BUSY_TIMEOUT_SECONDS,
+    open_sqlite,
+)
 from core.usage_ledger import (
     DAILY_WINDOW_SECONDS,
     MAX_COST_NANOS,
@@ -144,6 +148,8 @@ class SQLiteUsageLedgerRepository:
             raise ValueError("Usage ledger database path is invalid.")
         self._database_path = database_path
         self._initialized = False
+        self._database: aiosqlite.Connection | None = None
+        self._connection_lock = asyncio.Lock()
 
     async def initialize(self) -> None:
         Path(self._database_path).parent.mkdir(parents=True, exist_ok=True)
@@ -243,7 +249,28 @@ class SQLiteUsageLedgerRepository:
                 raise UsageLedgerCorrupt("Usage migration schema is incompatible.")
             await self._validate_schema_locked(db)
             await db.commit()
+        database = await aiosqlite.connect(
+            self._database_path,
+            timeout=SQLITE_BUSY_TIMEOUT_SECONDS,
+            isolation_level=None,
+        )
+        try:
+            database.row_factory = aiosqlite.Row
+            await database.execute(f"PRAGMA busy_timeout={SQLITE_BUSY_TIMEOUT_MS}")
+            await database.execute("PRAGMA foreign_keys=ON")
+        except BaseException:
+            await database.close()
+            raise
+        self._database = database
         self._initialized = True
+
+    async def close(self) -> None:
+        async with self._connection_lock:
+            database = self._database
+            self._database = None
+            self._initialized = False
+            if database is not None:
+                await database.close()
 
     async def check_available(self) -> None:
         self._ensure_initialized()
@@ -1054,9 +1081,16 @@ class SQLiteUsageLedgerRepository:
     @asynccontextmanager
     async def _connection(self, *, allow_initializing: bool = False):
         self._ensure_initialized(allow_initializing=allow_initializing)
-        async with open_sqlite(self._database_path, isolation_level=None) as connection:
-            connection.row_factory = aiosqlite.Row
-            yield connection
+        if allow_initializing:
+            async with open_sqlite(self._database_path, isolation_level=None) as connection:
+                connection.row_factory = aiosqlite.Row
+                yield connection
+            return
+        async with self._connection_lock:
+            database = self._database
+            if database is None:
+                raise RuntimeError("Usage ledger repository is not initialized.")
+            yield database
 
     def _ensure_initialized(self, *, allow_initializing: bool = False) -> None:
         if not self._initialized and not allow_initializing:
