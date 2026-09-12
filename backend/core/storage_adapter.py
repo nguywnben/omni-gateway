@@ -54,6 +54,7 @@ class StorageBackend(Protocol):
         filename: str,
         model_name: Optional[str] = None,
         mode: str = "code_assist",
+        call_increment: int = 1,
     ) -> None:
         """Record a completed provider attempt."""
         ...

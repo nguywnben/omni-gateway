@@ -1513,10 +1513,15 @@ class MongoDBManager:
             return False
 
     async def record_success(
-        self, filename: str, model_name: Optional[str] = None, mode: str = "code_assist"
+        self,
+        filename: str,
+        model_name: Optional[str] = None,
+        mode: str = "code_assist",
+        call_increment: int = 1,
     ) -> None:
         self._ensure_initialized()
         filename = os.path.basename(filename)
+        call_increment = max(1, int(call_increment))
 
         try:
             collection_name = self._get_collection_name(mode)
@@ -1532,7 +1537,7 @@ class MongoDBManager:
                         "error_messages": {},
                         "updated_at": now,
                     },
-                    "$inc": {"call_count": 1},
+                    "$inc": {"call_count": call_increment},
                 },
             )
 

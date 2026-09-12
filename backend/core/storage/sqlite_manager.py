@@ -1397,10 +1397,15 @@ class SQLiteManager:
             return False
 
     async def record_success(
-        self, filename: str, model_name: Optional[str] = None, mode: str = "code_assist"
+        self,
+        filename: str,
+        model_name: Optional[str] = None,
+        mode: str = "code_assist",
+        call_increment: int = 1,
     ) -> None:
         self._ensure_initialized()
         filename = os.path.basename(filename)
+        call_increment = max(1, int(call_increment))
 
         try:
             table_name = self._get_table_name(mode)
@@ -1409,13 +1414,13 @@ class SQLiteManager:
                     f"""
                     UPDATE {table_name}
                     SET last_success = unixepoch(),
-                        call_count = COALESCE(call_count, 0) + 1,
+                        call_count = COALESCE(call_count, 0) + ?,
                         error_codes = '[]',
                         error_messages = '{{}}',
                         updated_at = unixepoch()
                     WHERE filename = ?
                 """,
-                    (filename,),
+                    (call_increment, filename),
                 )
 
                 if model_name:

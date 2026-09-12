@@ -629,50 +629,37 @@ class SmartCredentialRouterTests(unittest.IsolatedAsyncioTestCase):
 
 
 class CredentialSuccessLifecycleTests(unittest.IsolatedAsyncioTestCase):
-    async def test_success_releases_route_without_waiting_for_hint_persistence(self):
-        release_persistence = asyncio.Event()
-        persistence_started = asyncio.Event()
-        tasks = []
-
-        async def persist_success(*args, **kwargs):
-            persistence_started.set()
-            await release_persistence.wait()
-
-        def schedule(coroutine, *, name=None):
-            task = asyncio.create_task(coroutine, name=name)
-            tasks.append(task)
-            return task
-
+    async def test_success_hints_are_batched_exactly_and_flushed_on_close(self):
         manager = CredentialManager()
         manager._initialized = True
-        manager._storage_adapter = Mock(
-            _backend=Mock(record_success=AsyncMock(side_effect=persist_success))
-        )
-        manager._routing = Mock(complete=AsyncMock())
+        backend = Mock(record_success=AsyncMock())
+        manager._storage_adapter = Mock(_backend=backend)
+        manager._routing = Mock(complete=AsyncMock(), reset=AsyncMock())
 
-        with patch("core.credential_manager.create_managed_task", side_effect=schedule):
-            await asyncio.wait_for(
-                manager.record_api_call_result(
+        with patch(
+            "core.credential_manager.time.monotonic",
+            side_effect=[100.0, 100.0, 106.0, 106.0],
+        ):
+            for _ in range(4):
+                await manager.record_api_call_result(
                     "credential.json",
                     True,
                     mode="primary",
                     model_name="model-a",
-                ),
-                timeout=0.25,
-            )
-            await asyncio.wait_for(persistence_started.wait(), timeout=0.25)
+                )
 
-        manager._routing.complete.assert_awaited_once_with(
-            "credential.json",
-            mode="primary",
-            success=True,
-            cooldown_until=None,
-            model_name="model-a",
-            error_code=None,
+        self.assertEqual(
+            [call.kwargs["call_increment"] for call in backend.record_success.await_args_list],
+            [1, 2],
         )
-        self.assertFalse(tasks[0].done())
-        release_persistence.set()
-        await tasks[0]
+        self.assertEqual(manager._routing.complete.await_count, 4)
+
+        await manager.close()
+
+        self.assertEqual(
+            [call.kwargs["call_increment"] for call in backend.record_success.await_args_list],
+            [1, 2, 1],
+        )
 
 
 if __name__ == "__main__":
