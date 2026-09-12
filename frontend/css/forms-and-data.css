@@ -481,6 +481,22 @@ button.endpoint-code-card:hover {
     transform: translateX(-50%) translateY(-2px);
 }
 
+.timeline-bar-col:first-child .timeline-tooltip {
+    left: 0;
+    transform: translateY(-6px);
+}
+
+.timeline-bar-col:last-child .timeline-tooltip {
+    right: 0;
+    left: auto;
+    transform: translateY(-6px);
+}
+
+.timeline-bar-col:first-child:hover .timeline-tooltip,
+.timeline-bar-col:last-child:hover .timeline-tooltip {
+    transform: translateY(-2px);
+}
+
 .timeline-labels-row {
     display: flex;
     justify-content: space-between;

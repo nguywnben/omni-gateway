@@ -118,6 +118,8 @@ function assert(condition, message) {{ if (!condition) throw new Error(message);
             r"(?s)\.health-matrix-legend,\s*\.chart-legend\s*\{[^}]*flex-wrap:\s*wrap;",
         )
         self.assertIn(".usage-table:not(.slo-route-table) tr", responsive)
+        self.assertIn(".timeline-bar-col:first-child .timeline-tooltip", styles)
+        self.assertIn(".timeline-bar-col:last-child .timeline-tooltip", styles)
 
     def test_dashboard_header_collapses_at_the_tablet_breakpoint(self):
         styles = self._source(DASHBOARD_STYLES)
