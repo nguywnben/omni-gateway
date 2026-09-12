@@ -213,7 +213,7 @@ def get_capability_snapshot(
             "MongoDB storage",
             SupportTier.COMPATIBILITY,
             _storage_state(selected=mongodb_selected, conflict=storage_conflict),
-            "Existing MongoDB storage path retained without feature-parity expansion.",
+            "Existing direct MongoDB storage path retained without Redis or parity expansion.",
         ),
         _capability(
             "storage.postgresql",

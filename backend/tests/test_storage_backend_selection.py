@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import builtins
 import os
 import sys
 import unittest
@@ -33,6 +34,28 @@ class FailingPostgreSQLBackend(PostgreSQLBackend):
 
 
 class StorageBackendSelectionTests(unittest.IsolatedAsyncioTestCase):
+    async def test_default_sqlite_selection_does_not_import_optional_drivers(self):
+        from core.storage import sqlite_manager
+
+        adapter = StorageAdapter()
+        backend = AsyncMock()
+        original_import = builtins.__import__
+
+        def guarded_import(name, globals=None, locals=None, fromlist=(), level=0):
+            if name.endswith(("storage.postgresql_manager", "storage.mongodb_manager")):
+                raise AssertionError(f"default startup imported optional driver: {name}")
+            return original_import(name, globals, locals, fromlist, level)
+
+        with (
+            patch.dict(os.environ, {"POSTGRESQL_URI": "", "MONGODB_URI": ""}),
+            patch.object(sqlite_manager, "SQLiteManager", return_value=backend),
+            patch("builtins.__import__", side_effect=guarded_import),
+        ):
+            await adapter.initialize()
+
+        backend.initialize.assert_awaited_once_with()
+        self.assertIs(adapter._backend, backend)
+
     async def test_backend_info_never_exposes_postgresql_connection_metadata(self):
         adapter = StorageAdapter()
         adapter._backend = PostgreSQLBackend()
@@ -77,7 +100,9 @@ class StorageBackendSelectionTests(unittest.IsolatedAsyncioTestCase):
             patch.object(postgresql_manager, "PostgreSQLManager", return_value=backend),
             patch("core.storage.sqlite_manager.SQLiteManager") as sqlite_manager,
         ):
-            with self.assertRaisesRegex(RuntimeError, "PostgreSQL storage backend is unavailable"):
+            with self.assertRaisesRegex(
+                RuntimeError, "PostgreSQL storage backend is unavailable.*requirements.lock"
+            ):
                 await adapter.initialize()
 
         backend.close.assert_awaited_once_with()
@@ -97,7 +122,9 @@ class StorageBackendSelectionTests(unittest.IsolatedAsyncioTestCase):
             patch.object(mongodb_manager, "MongoDBManager", return_value=backend),
             patch("core.storage.sqlite_manager.SQLiteManager") as sqlite_manager,
         ):
-            with self.assertRaisesRegex(RuntimeError, "MongoDB storage backend is unavailable"):
+            with self.assertRaisesRegex(
+                RuntimeError, "MongoDB storage backend is unavailable.*requirements.lock"
+            ):
                 await adapter.initialize()
 
         backend.close.assert_awaited_once_with()

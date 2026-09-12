@@ -125,7 +125,8 @@ class StorageAdapter:
                             )
                     self._backend = None
                     raise RuntimeError(
-                        "The configured PostgreSQL storage backend is unavailable."
+                        "The configured PostgreSQL storage backend is unavailable. Verify "
+                        "POSTGRESQL_URI and install the dependencies from requirements.lock."
                     ) from e
             elif not mongodb_uri:
                 try:
@@ -155,7 +156,8 @@ class StorageAdapter:
                             )
                     self._backend = None
                     raise RuntimeError(
-                        "The configured MongoDB storage backend is unavailable."
+                        "The configured MongoDB storage backend is unavailable. Verify "
+                        "MONGODB_URI and install the dependencies from requirements.lock."
                     ) from e
 
             self._initialized = True

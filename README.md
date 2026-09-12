@@ -194,8 +194,8 @@ name; likely misspelled `OMNI_*` variables produce a warning.
 | `HOST` | `0.0.0.0` | Bind address. |
 | `PORT` | `4283` | HTTP port. |
 | `HOST_PORT` | `4283` | Host-side port used only by Docker Compose. |
-| `WORKERS` | `1` | Supported worker count. Values above one require an exact activation record compiled into the running release; the current allowlist is empty. |
-| `OMNI_RUNTIME_MODE` | `standalone` | Runtime coordination mode. `coordinated` is experimental, requires an explicit maintainer opt-in, and remains blocked in this build because the activation allowlist is empty. |
+| `WORKERS` | `1` | Supported worker count. This release accepts one only. |
+| `OMNI_RUNTIME_MODE` | `standalone` | Runtime mode. This release supports `standalone` only. |
 | `OMNI_REPLICA_COUNT` | `1` | Declared application replica count. The current release accepts one only. |
 | `CORS_ORIGINS` | empty | Comma-separated browser origins allowed to call the API cross-origin. Leave empty for same-origin console usage. |
 | `CORS_ORIGIN_REGEX` | empty | Optional regex for managed dynamic browser origins. |
@@ -461,7 +461,8 @@ durable host paths such as `/opt/omni-gateway/creds` and `/opt/omni-gateway/logs
 
 SQLite is the Core storage authority and the recommended production default. PostgreSQL is an
 Advanced option for operators who manage their own database lifecycle. MongoDB is retained as a
-Compatibility path for existing deployments; R1 does not expand its feature parity:
+Compatibility path for existing deployments. It reads and writes MongoDB directly and does not
+require or use Redis:
 
 ```bash
 MONGODB_URI=mongodb://localhost:27017

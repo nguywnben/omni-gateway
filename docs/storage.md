@@ -1,20 +1,20 @@
 # Storage Support and Recovery
 
-Omni Gateway R1 supports one application worker and one replica. Choosing an external database
+Omni Gateway supports one application worker and one replica. Choosing an external database
 does not enable horizontal scaling. The selected backend owns credentials, configuration,
 identities, audit events, request traces, usage/cost records, and budget reservations.
 
 ## Support tiers
 
-| Backend | Tier | Select it with | R1 operating contract |
+| Backend | Tier | Select it with | Operating contract |
 | --- | --- | --- | --- |
 | SQLite | **Core** | Leave both external database URIs empty | Default and recommended for personal or trusted-team self-hosting. Covered by the complete install, encrypted backup, restore, update, and rollback path. |
 | PostgreSQL | **Advanced** | `POSTGRESQL_URI` | Optional for operators who already manage PostgreSQL. Repository contracts are qualified independently, but database-native backup, TLS, capacity, and upgrades remain operator responsibilities. |
-| MongoDB | **Compatibility** | `MONGODB_URI` and optional `MONGODB_DATABASE` | Existing deployments remain usable and receive correctness/security fixes. R1 does not expand parity or require MongoDB live evidence. Transaction-capable deployment is required by the durable usage ledger. |
+| MongoDB | **Compatibility** | `MONGODB_URI` and optional `MONGODB_DATABASE` | Existing deployments remain usable and receive correctness/security fixes. MongoDB is accessed directly without a Redis cache; live MongoDB evidence is not a release blocker. Transaction-capable deployment is required by the durable usage ledger. |
 
 Configure at most one external URI. If the selected PostgreSQL or MongoDB instance is unavailable,
 startup fails closed; Omni Gateway never silently writes to a new SQLite database. Redis is not a
-storage backend and remains outside the R1 production profile.
+storage backend or cache dependency of the supported runtime.
 
 ## Core SQLite behavior
 
@@ -47,7 +47,7 @@ running.
   point. Portable restore is intentionally exact-schema and SQLite-only.
 - PostgreSQL and MongoDB require database-native, point-in-time-consistent backups tested by the
   operator. The `.ogb` workflow cannot restore those backends.
-- R1 has no supported live SQLite/PostgreSQL/MongoDB conversion command. Durable-family migration
+- There is no supported live SQLite/PostgreSQL/MongoDB conversion command. Durable-family migration
   components retained from HA research are experimental evidence, not an operator workflow. Do not
   switch `POSTGRESQL_URI` or `MONGODB_URI` expecting existing data to move automatically.
 

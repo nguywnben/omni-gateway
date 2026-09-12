@@ -5,7 +5,7 @@ from __future__ import annotations
 import sys
 import unittest
 from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock
 
 BACKEND_DIR = Path(__file__).resolve().parents[1]
 if str(BACKEND_DIR) not in sys.path:
@@ -33,72 +33,25 @@ class MongoDBDriverTests(unittest.IsolatedAsyncioTestCase):
         self.assertIsNone(manager._db)
         self.assertFalse(manager._initialized)
 
-    async def test_coordinated_runtime_never_reuses_coordination_redis_as_legacy_cache(self):
+    def test_driver_has_no_redis_acceleration_surface(self):
         manager = MongoDBManager()
-        with patch.dict(
-            "os.environ",
-            {
-                "OMNI_RUNTIME_MODE": "coordinated",
-                "REDIS_URL": "redis://coordination-secret/0",
-            },
-            clear=False,
-        ):
-            await manager._init_redis()
+        self.assertFalse(hasattr(manager, "_redis"))
+        self.assertFalse(hasattr(manager, "_redis_enabled"))
+        self.assertFalse(hasattr(manager, "_init_redis"))
 
-        self.assertIsNone(manager._redis)
-        self.assertFalse(manager._redis_enabled)
-
-    async def test_coordinated_pool_mutation_uses_transactional_durable_gate(self):
-        manager = MongoDBManager()
-        manager._initialized = True
-        manager._db = {"credential_pool_write_gates": AsyncMock()}
-        session = AsyncMock()
-
-        async def with_transaction(callback):
-            return await callback(session)
-
-        session.with_transaction = AsyncMock(side_effect=with_transaction)
-
-        class SessionContext:
-            async def __aenter__(self):
-                return session
-
-            async def __aexit__(self, exc_type, exc, traceback):
-                return False
-
-        client = MagicMock()
-        client.start_session.return_value = SessionContext()
-        manager._client = client
-        manager._mutate_credential_pool_in_session = AsyncMock(
-            return_value=CredentialPoolMutation((), (), {"action": "none"})
-        )
-
-        with patch.dict("os.environ", {"OMNI_RUNTIME_MODE": "coordinated"}, clear=False):
-            result = await manager.mutate_credential_pool(
-                "primary", lambda records: CredentialPoolMutation((), (), {"action": "none"})
-            )
-
-        self.assertEqual(result.result, {"action": "none"})
-        session.with_transaction.assert_awaited_once()
-        manager._db["credential_pool_write_gates"].update_one.assert_awaited_once()
-        gate_filter = manager._db["credential_pool_write_gates"].update_one.await_args.args[0]
-        self.assertEqual(gate_filter, {"_id": "primary"})
-
-    async def test_standalone_pool_mutation_rebuilds_the_legacy_routing_cache(self):
+    async def test_pool_mutation_uses_process_local_lock(self):
         manager = MongoDBManager()
         manager._initialized = True
         mutation = CredentialPoolMutation((), (), {"action": "none"})
         manager._mutate_credential_pool_in_session = AsyncMock(return_value=mutation)
-        manager._redis_enabled = True
-        manager._rebuild_redis_cache = AsyncMock()
 
-        with patch.dict("os.environ", {"OMNI_RUNTIME_MODE": "standalone"}, clear=False):
-            result = await manager.mutate_credential_pool(
-                "primary", lambda records: CredentialPoolMutation((), (), {"action": "none"})
-            )
+        def planner(records):
+            return CredentialPoolMutation((), (), {"action": "none"})
+
+        result = await manager.mutate_credential_pool("primary", planner)
 
         self.assertIs(result, mutation)
-        manager._rebuild_redis_cache.assert_awaited_once_with("primary")
+        manager._mutate_credential_pool_in_session.assert_awaited_once_with("primary", planner)
 
 
 if __name__ == "__main__":

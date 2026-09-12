@@ -542,7 +542,6 @@ class CandidateRuntime:
             LOG_FILE=str(self.state / "runtime.log"),
             POSTGRESQL_URI="",
             MONGODB_URI="",
-            REDIS_URL="",
             HOST="127.0.0.1",
             PORT=str(self.port),
             WORKERS="1",

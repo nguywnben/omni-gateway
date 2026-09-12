@@ -109,7 +109,6 @@ def disposable_runtime():
             LOG_FILE=str(runtime / "runtime.log"),
             POSTGRESQL_URI="",
             MONGODB_URI="",
-            REDIS_URL="",
             PORT=str(port),
             HOST="127.0.0.1",
             PANEL_PASSWORD="",
